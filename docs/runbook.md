@@ -74,14 +74,15 @@ Placeholder artwork: `configs/branding/vimma/*.svg`, rendered by `tools/branding
 
 ## CI and automation (spec m0-pipeline)
 
-| Workflow       | Trigger                          | Runner                    | Needs from you                             |
-| -------------- | -------------------------------- | ------------------------- | ------------------------------------------ |
-| `ci.yml`       | push to `main`, PRs, manual      | `ubuntu-latest`           | nothing                                    |
-| `e2e.yml`      | PRs touching the browser, manual | `ubuntu-24.04`            | nothing (ADR-010)                          |
-| `nightly.yml`  | 03:00 UTC, manual                | self-hosted `vimma-build` | register the runner, set `NIGHTLY_ENABLED` |
-| `upstream.yml` | every 6 h (`:17`), manual        | `ubuntu-latest`           | allow Actions to open PRs; optional token  |
-| `claude.yml`   | `@claude`, `spec`+`claude:go`    | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
-| Renovate       | Mondays before 07:00 Helsinki    | Renovate's own            | install the Renovate app                   |
+| Workflow             | Trigger                          | Runner                    | Needs from you                             |
+| -------------------- | -------------------------------- | ------------------------- | ------------------------------------------ |
+| `ci.yml`             | push to `main`, PRs, manual      | `ubuntu-latest`           | nothing                                    |
+| `e2e.yml`            | PRs touching the browser, manual | `ubuntu-24.04`            | nothing (ADR-010)                          |
+| `nightly.yml`        | 03:00 UTC, manual                | self-hosted `vimma-build` | register the runner, set `NIGHTLY_ENABLED` |
+| `upstream.yml`       | every 6 h (`:17`), manual        | `ubuntu-latest`           | allow Actions to open PRs; optional token  |
+| `claude.yml`         | `@claude`, `spec`+`claude:go`    | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
+| `release-please.yml` | push to `main`, manual           | `ubuntu-latest`           | Actions may open PRs; optional token       |
+| Renovate             | Mondays before 07:00 Helsinki    | Renovate's own            | install the Renovate app                   |
 
 Locally, before pushing: `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:py`,
 `npm run license-check`, `npx surfer license-check`, `npx commitlint --from main`.
@@ -97,7 +98,7 @@ review and green checks, by hand; no approval count is configured. Revisit if th
 or moves to a paid plan (then: CI required, signed commits, one approval, via `gh api`).
 
 **Residual risk:** any job token with `contents: write` (`spec-pr` in claude.yml, upstream.yml,
-nightly.yml) could push to `main`, since nothing protects it. Mitigations: those jobs run no
+nightly.yml, release-please.yml) could push to `main`, since nothing protects it. Mitigations: those jobs run no
 Claude-written code with that token (claude.yml's Claude job is read-only), Claude runs only for
 the owner (`claude:go` added by the owner; `@claude` from owner/member/collaborator), and GitHub
 Actions minutes and logs show every push. Check `git log origin/main` if anything looks off.
@@ -244,6 +245,50 @@ pinned to commit SHAs. npm patch/minor PRs automerge once all checks pass; Renov
 itself (`platformAutomerge: false`, since there is no branch protection for GitHub auto-merge to
 wait on). Majors, `@zen-browser/surfer` and every GitHub Actions update (workflows hold write
 tokens and the Claude secret) stay open for review.
+
+### Releases (`release-please.yml`)
+
+Plan §4/§7: [release-please](https://github.com/googleapis/release-please-action) (v5.0.0, pinned
+by SHA) keeps one release PR open, `chore(main): release X.Y.Z`, updated on every push to `main`.
+It holds the next version and that release's `CHANGELOG.md` entry. **Merging it is the release**:
+release-please tags `vX.Y.Z` and creates the GitHub Release with the same notes. Nothing is built
+or uploaded yet; `release.yml` (packages, signatures, AUR) is M6.
+
+- **Version source:** `surfer.json` `brands.vimma.release.displayVersion`, the version
+  `vimma --version` and the About dialog show (spec m0-app-version). The release PR bumps it
+  through `extra-files` (jsonpath `$.brands.vimma.release.displayVersion`), plus
+  `.release-please-manifest.json`, which must always match it. The Firefox pin
+  `version.version` is never touched; `upstream.yml` owns it. Release type `simple`: there is no
+  root `version.txt`, so nothing else is written.
+- **Bumps** (`release-please-config.json`): `0.x` until M6 (plan §7), so `feat` bumps the minor
+  version, `fix` the patch, and a breaking change (`!`, `BREAKING CHANGE:`) the minor
+  (`bump-minor-pre-major`). Changelog sections: `feat` → Added, `fix` → Fixed; `perf`, `deps`,
+  `upstream` and `revert` → Changed; `docs`, `test`, `build`, `ci`, `chore` and `refactor` are
+  left out.
+- **The changelog line is the commit subject.** release-please writes the subject, not the body
+  (it has no body option). Keep subjects readable as changelog lines; the body still carries the
+  detail (CLAUDE.md).
+- **First release (one-time).** No tag exists yet, so the first release PR proposes `0.1.0`
+  (`initial-version`), listing every `feat`/`fix` since the first commit, and puts its entry
+  above the hand-written `## [Unreleased]` section. Just before merging it, edit `CHANGELOG.md` on
+  the release branch: replace the generated `0.1.0` list with the `[Unreleased]` sections and
+  delete that heading. release-please rewrites the branch on every push to `main`, so make the
+  edit last. From then on, every entry is generated.
+
+One-time setup:
+
+1. Settings → Actions → General → Workflow permissions → tick "Allow GitHub Actions to create and
+   approve pull requests" (the same setting as for upstream bumps).
+2. Optional: the release PR, opened with `GITHUB_TOKEN`, triggers no CI. Run
+   `gh workflow run ci.yml --ref release-please--branches--main` before merging, or store a
+   fine-grained token for this repo only (Contents, Pull requests and Issues: read/write) as
+   `gh secret set RELEASE_PLEASE_TOKEN`; the workflow uses it when present.
+3. M6: tags created with `GITHUB_TOKEN` trigger no workflows either, so `release.yml` cannot rely
+   on `on: push: tags`. Call it from `release-please.yml` when `release_created` is set, or use
+   the token above.
+
+The job's token has `contents`, `pull-requests` and `issues: write` (labels go through the issues
+API). It runs no repository code.
 
 ### Licences
 
