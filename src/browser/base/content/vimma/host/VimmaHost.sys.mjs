@@ -15,6 +15,7 @@ import { chordFromEvent, formatKey } from "../core/keys.mjs";
 import { compileKeymap } from "../core/keymap.mjs";
 import { notImplementedText } from "../core/actions.mjs";
 import { HelpOverlay } from "../ui/help-overlay.mjs";
+import { StatusBar } from "../ui/statusbar.mjs";
 import { Notice } from "../ui/notice.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
 import { closeTab, newTab, selectTab } from "./tab-ops.mjs";
@@ -40,6 +41,8 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {Notice} notice  "<action>: not implemented yet" (m2-tab-keys)
  * @property {TabStrip | null} tabStrip  hides Firefox's tab strip (m0-tabstrip-hidden)
  * @property {number | null} timer   pending-sequence timeout (dispatcher.flush)
+ * @property {Set<() => void>} listeners  told after mode or pending keys may have changed
+ * @property {StatusBar | null} statusBar  m2-statusbar-whichkey
  */
 
 /**
@@ -153,6 +156,8 @@ export const VimmaHost = {
       notice: new Notice(win),
       tabStrip: null,
       timer: null,
+      listeners: new Set(),
+      statusBar: null,
     };
     states.set(win, state);
     win.addEventListener("keydown", state.onKeyDown, true);
@@ -164,6 +169,18 @@ export const VimmaHost = {
       state.tabStrip = tabStrip;
     } catch (e) {
       console.error("vimma: tab strip not hidden", e);
+    }
+    try {
+      const statusBar = new StatusBar(win, {
+        status: () => this.status(win),
+        subscribe: (fn) => this.onStateChange(win, fn),
+        runnable: () => this.runnable(),
+        keymap,
+      });
+      statusBar.init();
+      state.statusBar = statusBar;
+    } catch (e) {
+      console.error("vimma: no status bar", e);
     }
   },
 
@@ -177,19 +194,55 @@ export const VimmaHost = {
     state.help.destroy();
     state.notice.destroy();
     state.tabStrip?.uninit();
+    state.statusBar?.uninit();
+    state.listeners.clear();
     states.delete(win);
   },
 
   /**
-   * The window's mode and pending sequence, for the control socket's `state`
-   * (docs/specs/m0-control-server.md), or null for a window without Vimma.
+   * What the status bar and which-key strip show: the mode keys are dispatched in and the keys
+   * of a pending sequence (dispatcher.pending() labels).
    * @param {Window} win
-   * @returns {{ mode: Mode, pending: string[] } | null}
+   * @returns {{ mode: Mode, pending: string[] }}
    */
-  controlState(win) {
+  status(win) {
     const state = states.get(win);
-    if (!state) return null;
+    if (!state) return { mode: "insert", pending: [] };
     return { mode: this._mode(state), pending: state.dispatcher.pending() };
+  },
+
+  /**
+   * Calls `fn` after anything that may change `status(win)`. Cheap to call often: listeners
+   * debounce. Whatever changes the mode (focus detection, a content actor) calls `_emit`.
+   * @param {Window} win
+   * @param {() => void} fn
+   * @returns {() => void} unsubscribe
+   */
+  onStateChange(win, fn) {
+    const state = states.get(win);
+    if (!state) return () => {};
+    state.listeners.add(fn);
+    return () => state.listeners.delete(fn);
+  },
+
+  /**
+   * Action ids the host implements (RUNNABLE): the which-key strip greys the rest, as the help
+   * overlay dims them.
+   * @returns {ReadonlySet<string>}
+   */
+  runnable() {
+    return RUNNABLE;
+  },
+
+  /** @param {WindowState} state */
+  _emit(state) {
+    for (const fn of state.listeners) {
+      try {
+        fn();
+      } catch (e) {
+        console.error("vimma: state listener failed", e);
+      }
+    }
   },
 
   /**
@@ -204,11 +257,18 @@ export const VimmaHost = {
   },
 
   /**
-   * Hook: called after a tab's page mode changes (normal ↔ insert), whatever caused it (a focus
-   * report, `i`, `Esc`). A no-op until the status bar (M2) emits its state change from here.
+   * Called after a tab's page mode changes (normal ↔ insert), whatever caused it (a focus
+   * report, `i`, `Esc`): tells the owning window's state listeners (the status bar).
+   * The listeners read the mode back through `status(win)`, so the mode argument is unused.
    * @type {(browser: any, mode: "normal" | "insert") => void}
    */
-  onModeChange: () => {},
+  onModeChange: (browser) => {
+    // defaultView is the WindowProxy init() was given; ownerGlobal is the inner window, a
+    // different object as a WeakMap key.
+    const win = browser?.ownerDocument?.defaultView;
+    const state = win && states.get(win);
+    if (state) VimmaHost._emit(state);
+  },
 
   /**
    * The page mode keys get while `browser` has focus. A page without our actor (extension
@@ -295,6 +355,7 @@ export const VimmaHost = {
     const typing = !chord.ctrl && !chord.alt && !chord.meta && chord.key !== "esc";
     if (typing && state.help.filterFocused && state.dispatcher.pending().length === 0) return;
     this._dispatch(win, state, e, mode, chord);
+    this._emit(state);
   },
 
   /**
@@ -332,6 +393,7 @@ export const VimmaHost = {
           state.timer = win.setTimeout(() => {
             state.timer = null;
             this._run(state, state.dispatcher.flush());
+            this._emit(state);
           }, state.dispatcher.timeoutMs);
         }
         return;
@@ -380,6 +442,7 @@ export const VimmaHost = {
   _cancelPending(win, state) {
     this._clearTimer(win, state);
     state.dispatcher.reset();
+    this._emit(state);
   },
 
   /**

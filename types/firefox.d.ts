@@ -19,13 +19,16 @@ declare const Services: {
       observer: (subject: unknown, topic: string, data: string) => void,
     ): void;
   };
+  // engine/netwerk/base/nsIIOService.idl
+  io: {
+    createExposableURI(uri: { spec: string }): { spec: string; displaySpec: string };
+    newURI(spec: string): { readonly scheme: string; readonly spec: string };
+  };
   // engine/dom/interfaces/base/nsIFocusManager.idl
   focus: {
     readonly focusedElement: Element | null;
     readonly focusedContentBrowsingContext: any;
   };
-  // engine/netwerk/base/nsIIOService.idl
-  io: { newURI(spec: string): { readonly scheme: string; readonly spec: string } };
   // engine/caps/nsIScriptSecurityManager.idl
   scriptSecurityManager: { getSystemPrincipal(): unknown };
   // engine/xpcom/threads/nsIThreadManager.idl

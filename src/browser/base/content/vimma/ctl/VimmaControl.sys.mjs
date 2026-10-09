@@ -197,11 +197,11 @@ const COMMANDS = {
 
   state() {
     const win = /** @type {any} */ (topWindow());
-    const host = VimmaHost.controlState(win);
+    const host = VimmaHost.status(win);
     const { gBrowser } = win;
     return {
-      mode: host?.mode ?? "insert",
-      pending: host?.pending.length ? host.pending.join(" ") : null,
+      mode: host.mode,
+      pending: host.pending.length ? host.pending.join(" ") : null,
       workspace: null,
       tabs: gBrowser.visibleTabs.map((/** @type {any} */ tab, /** @type {number} */ index) => ({
         id: String(tab.linkedBrowser.browserId),

@@ -24,7 +24,9 @@ running browser, and with it off nothing listens and no token file exists.
   constant-time token check (`tokensEqual`), every message checked with `validateMessage`.
 - Commands `send-keys`, `state`, `open`; `list-tabs`, `screenshot`, `reload-config` answer
   `not-implemented`.
-- Host seam: `VimmaHost.controlState(win)` → `{ mode, pending }` (one additive method).
+- Host seam: none of our own. `state` reads `VimmaHost.status(win)` (`{ mode, pending }`, added
+  for the status bar by m2-statusbar-whichkey), so the socket and the status bar cannot disagree.
+  An earlier `controlState(win)` doing the same was dropped when that landed.
 
 ## Settled
 
@@ -38,7 +40,7 @@ running browser, and with it off nothing listens and no token file exists.
   would test something users never do. Cost: keys go where focus is; for page-bound keys that is
   the page only while the window has focus, as with a real keyboard. `?` is sent without shift
   (vimma-core's canonical chord), which the host treats the same.
-- **`state.pending`** is `dispatcher.pending().join(" ")`, what the status bar shows: `"prefix"`
+- **`state.pending`** is `VimmaHost.status(win).pending.join(" ")`, what the status bar shows: `"prefix"`
   after `ctrl+b`, `null` when empty. `mode` is the host's `_mode`: `help` with the overlay
   open, else the focused page's mode (`normal` on a page with Vimma's actor, `insert` in a text
   field, a page without the actor, or chrome; m1-actor-insert-scroll). Each tab also
@@ -130,6 +132,8 @@ Every response is checked with `validateMessage(kind: response, command)`.
   page now starts in `normal` and takes `j`; the tests now expect `normal` and the page to see
   only `Shift`, `K`. Green: full build 903 passed, artifact build 886 passed, 0 failed. The e2e
   workflow's existing `vimma-ctl` build (debug) serves the mochitest too.
+- Merged main again (#34 status bar): `state` now reads `VimmaHost.status(win)` instead of our
+  own `controlState`. Full build 981 passed, artifact build 964 passed, 0 failed.
 
 ## For the e2e harness (PR #35)
 
