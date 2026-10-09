@@ -65,5 +65,6 @@ jobs:
             --body "Firefox $VERSION is out (was $old). Opened by upstream.yml.
 
           Before merging: \`npm run import && npx surfer build\` on the build machine and check the
-          patches still apply (nightly.yml does this once merged), then mark it ready for review,
-          which starts CI. ADR-002."
+          patches still apply (nightly.yml does this once merged), run
+          \`npm run mochitest -- tests/browser/\` on the built engine, then mark it ready for
+          review, which starts CI. ADR-002."
