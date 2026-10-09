@@ -18,12 +18,18 @@
  * @property {string | null} [role]        the role attribute (its first token is used)
  * @property {boolean} [ariaReadOnly]      aria-readonly="true" on the element
  * @property {boolean} [ariaDisabled]      aria-disabled="true" on the element or an ancestor
+ *                                         (blocks ARIA-role widgets only, not native editables)
  * @property {boolean} [designMode]        `ownerDocument.designMode === "on"`
- * @property {readonly string[]} [ancestorClasses] class tokens of the element and its ancestors
+ * @property {readonly string[]} [classes] the element's own class tokens
  */
 /** @typedef {{ editable: boolean, reason: string }} EditableResult */
 /** @typedef {"auto" | "never" | "always"} InsertSiteMode */
 /** @typedef {{ match: string, insert: InsertSiteMode }} InsertSiteRule */
+/**
+ * `focusin`: an element received focus. `recheck`: anything else (focusout, a blur, a page
+ * change), which may leave insert mode but never enters it.
+ * @typedef {"focusin" | "recheck"} InsertTrigger
+ */
 
 /** `<input>` types that take no typed characters. Every other type, known or not, is text. */
 export const TEXT_INPUT_EXCLUDED_TYPES = Object.freeze([
@@ -50,18 +56,39 @@ export const EDITABLE_ROLES = Object.freeze([
 ]);
 const ROLES = new Set(EDITABLE_ROLES);
 
-/** Code and rich-text editors recognised by a class on the element or an ancestor. */
+/**
+ * Code and rich-text editors, recognised by a class on the focused element itself: the element
+ * the editor focuses to receive keys. Most are also a textarea or contenteditable; the class
+ * catches the ones that are neither (Monaco's EditContext `native-edit-context` div).
+ */
 export const KNOWN_EDITORS = Object.freeze(
   [
-    { name: "monaco", className: "monaco-editor" },
-    { name: "codemirror6", className: "cm-editor" },
-    { name: "codemirror5", className: "CodeMirror" },
-    { name: "ace", className: "ace_editor" },
-    { name: "prosemirror", className: "ProseMirror" },
-    { name: "quill", className: "ql-editor" },
-  ].map((e) => Object.freeze(e)),
+    { name: "monaco", classes: ["native-edit-context", "inputarea"] },
+    { name: "codemirror6", classes: ["cm-content"] },
+    { name: "ace", classes: ["ace_text-input"] },
+    { name: "prosemirror", classes: ["ProseMirror"] },
+    { name: "quill", classes: ["ql-editor"] },
+  ].map((e) => Object.freeze({ name: e.name, classes: Object.freeze(e.classes) })),
 );
-const EDITOR_BY_CLASS = new Map(KNOWN_EDITORS.map((e) => [e.className, e.name]));
+/** @type {Map<string, string>} */
+const EDITOR_BY_CLASS = new Map(KNOWN_EDITORS.flatMap((e) => e.classes.map((c) => [c, e.name])));
+
+/** Native controls: an editor focus class on one of these (a search-panel button) means nothing. */
+const NATIVE_CONTROLS = new Set([
+  "a",
+  "button",
+  "details",
+  "input",
+  "label",
+  "optgroup",
+  "option",
+  "select",
+  "summary",
+  "textarea",
+]);
+
+/** @type {readonly InsertTrigger[]} */
+export const INSERT_TRIGGERS = Object.freeze(["focusin", "recheck"]);
 
 /** @type {readonly InsertSiteMode[]} */
 export const INSERT_SITE_MODES = Object.freeze(["auto", "never", "always"]);
@@ -78,19 +105,26 @@ const result = (editable, reason) => Object.freeze({ editable, reason });
 /**
  * Whether keys typed into the described element belong to the page (insert mode).
  * @param {EditableDescriptor} d
- * @param {{ site?: InsertSiteMode }} [options] the matched `[[insert.sites]]` rule's mode
+ * @param {{ site?: InsertSiteMode, trigger?: InsertTrigger }} [options] `site`: the matched
+ *   `[sites."<host>"]` table's `insert`; `trigger`: what made the host ask
  * @returns {EditableResult}
  */
-export function isEditable(d, { site = "auto" } = {}) {
+export function isEditable(d, { site = "auto", trigger = "focusin" } = {}) {
   if (!INSERT_SITE_MODES.includes(site)) throw new TypeError(`unknown insert site mode "${site}"`);
+  if (!INSERT_TRIGGERS.includes(trigger))
+    throw new TypeError(`unknown insert trigger "${trigger}"`);
   if (site === "never") return result(false, "site:never");
+  const tag = d.tagName.toLowerCase();
+  // Esc blurs the element and focus falls to <body>: that must not read as "always editable".
+  const root = tag === "body" || tag === "html";
+  if (trigger === "recheck" && root && (site === "always" || d.designMode)) {
+    return result(false, "document-root");
+  }
   if (site === "always") return result(true, "site:always");
   if (d.designMode) return result(true, "design-mode");
   if (d.disabled) return result(false, "disabled");
-  if (d.ariaDisabled) return result(false, "aria-disabled");
   if (d.readOnly) return result(false, "readonly");
 
-  const tag = d.tagName.toLowerCase();
   if (tag === "input") {
     const type = (d.type ?? "").toLowerCase() || "text";
     return result(!EXCLUDED.has(type), `input:${type}`);
@@ -103,37 +137,66 @@ export function isEditable(d, { site = "auto" } = {}) {
     (d.contentEditable !== undefined && EDITABLE_CE.has(d.contentEditable.toLowerCase()));
   if (ce) return result(true, "contenteditable");
 
-  for (const cls of d.ancestorClasses ?? []) {
-    const editor = EDITOR_BY_CLASS.get(cls);
-    if (editor) return result(true, `editor:${editor}`);
-  }
-
+  const editor =
+    NATIVE_CONTROLS.has(tag) || d.contentEditable?.toLowerCase() === "false"
+      ? undefined
+      : (d.classes ?? []).map((c) => EDITOR_BY_CLASS.get(c)).find(Boolean);
   const role = (d.role ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
-  if (ROLES.has(role)) {
-    return d.ariaReadOnly ? result(false, "aria-readonly") : result(true, `role:${role}`);
+  if (editor || ROLES.has(role)) {
+    if (d.ariaDisabled) return result(false, "aria-disabled");
+    if (d.ariaReadOnly) return result(false, "aria-readonly");
+    return result(true, editor ? `editor:${editor}` : `role:${role}`);
   }
   return result(false, "none");
 }
 
+/**
+ * The mode after a focus change, for the host's focus tracking. Only a `focusin` of an editable
+ * element enters insert (or the explicit `i` action, which the host handles); a `recheck` can
+ * only leave it. Modes other than normal and insert are left alone.
+ * @param {{ mode: import("./modes.mjs").Mode, trigger: InsertTrigger,
+ *   descriptor: EditableDescriptor, site?: InsertSiteMode }} change
+ * @returns {import("./modes.mjs").Mode}
+ */
+export function insertModeAfterFocus({ mode, trigger, descriptor, site = "auto" }) {
+  if (mode !== "normal" && mode !== "insert") return mode;
+  const { editable } = isEditable(descriptor, { site, trigger });
+  if (mode === "insert") return editable ? "insert" : "normal";
+  return editable && trigger === "focusin" ? "insert" : "normal";
+}
+
 /** @param {string} host */
-const normaliseHost = (host) => host.toLowerCase().replace(/\.$/, "");
+const normaliseHost = (host) =>
+  host
+    .toLowerCase()
+    .replace(/\.$/, "")
+    .replace(/^\[(.*)\]$/, "$1");
+
+/** IPv4 and IPv6 literals (and anything with a colon, such as a stray port) match exactly. */
+/** @param {string} host */
+const isLiteral = (host) => host.includes(":") || /^\d+(\.\d+){3}$/.test(host);
 
 /**
- * The `[[insert.sites]]` rule for a host: the one whose `match` is the host or a dot-suffix of
- * it, the longest match winning, the earlier rule on a tie.
+ * The `[sites."<host>"]` rule for a hostname (`URL.hostname`: no port; IPv6 in brackets).
+ * A domain rule matches the host or any subdomain, on label boundaries (`example.com` matches
+ * `www.example.com`, not `badexample.com`); IP literals match only exactly. The longest match
+ * wins, the earlier rule on a tie. Case and a trailing dot are ignored. A host with a port
+ * (`example.com:8080`) is not a hostname and matches only a rule written exactly so.
  * @param {string} host
  * @param {readonly InsertSiteRule[]} rules
  * @returns {InsertSiteRule | undefined}
  */
 export function matchSiteRule(host, rules) {
   const h = normaliseHost(host);
+  const literal = isLiteral(h);
   /** @type {InsertSiteRule | undefined} */
   let best;
   let bestLength = -1;
   for (const rule of rules) {
     const m = normaliseHost(rule.match);
     if (!m) continue;
-    if ((h === m || h.endsWith(`.${m}`)) && m.length > bestLength) {
+    const hit = h === m || (!literal && !isLiteral(m) && h.endsWith(`.${m}`));
+    if (hit && m.length > bestLength) {
       best = rule;
       bestLength = m.length;
     }

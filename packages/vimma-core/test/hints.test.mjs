@@ -53,6 +53,14 @@ describe("hintLabels", () => {
     expect(l82.slice(80)).toEqual(["lla", "lls"]);
   });
 
+  test.each(["ab", "asdf", "jkl;"])(
+    "charset %s: n = 1 and n = k give single characters",
+    (chars) => {
+      expect(hintLabels(1, chars)).toEqual([chars[0]]);
+      expect(hintLabels(chars.length, chars)).toEqual([...chars]);
+    },
+  );
+
   test("a custom charset is used in its own order", () => {
     expect(hintLabels(4, "ab")).toEqual(["aa", "ab", "ba", "bb"]);
     expect(hintLabels(3, "ab")).toEqual(["a", "ba", "bb"]);
@@ -86,17 +94,19 @@ describe("hintLabels", () => {
         expect(labels).toHaveLength(n);
         expect(new Set(labels).size).toBe(n);
         expect(labels.every((l) => [...l].every((c) => chars.includes(c)))).toBe(true);
+        expect(labels.every((l) => l.length >= 1)).toBe(true);
         // prefix-free: in sorted order a prefix would sit right before an extension of it
         const sorted = [...labels].sort();
         expect(sorted.some((l, i) => i > 0 && l.startsWith(sorted[i - 1]))).toBe(false);
-        if (n >= 2) {
-          const L = ceilLog(n, k);
+        if (n >= 1) {
+          const L = Math.max(1, ceilLog(n, k));
           expect(labels.every((l) => l.length === L - 1 || l.length === L)).toBe(true);
           const short = labels.filter((l) => l.length === L - 1).length;
           const long = n - short;
           // Kraft: the code fits in a k-ary tree of depth L, and no further label can be shortened.
           expect(short * k + long).toBeLessThanOrEqual(k ** L);
-          if (long > 0) expect((short + 1) * k + (long - 1)).toBeGreaterThan(k ** L);
+          if (long > 0 && L > 1) expect((short + 1) * k + (long - 1)).toBeGreaterThan(k ** L);
+          if (n <= k) expect(labels).toEqual([...chars].slice(0, n));
         }
         // ordered by length, then charset order
         const before = (a, b) => {

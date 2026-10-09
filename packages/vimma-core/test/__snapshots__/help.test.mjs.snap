@@ -34,7 +34,7 @@ Panes
   swap_pane_up         prefix+shift+k, <C-w>K          Swap with pane above
   swap_pane_right      prefix+shift+l, <C-w>L          Swap with pane to the right
   zoom                 prefix+z, <C-w>o                Zoom pane
-  close_pane           prefix+x                        Close pane
+  close_pane           prefix+x                        Close pane; the last pane closes the tab
   resize_mode          prefix+r                        Resize mode
   resize_narrower      <C-w><                          Make pane narrower
   resize_wider         <C-w>>                          Make pane wider

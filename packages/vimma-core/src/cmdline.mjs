@@ -19,7 +19,7 @@ import { ACTIONS, closest, resolveActionName } from "./actions.mjs";
  * @property {string} [textAction] the action id when text is given, if it differs
  * @property {string} description
  */
-/** @typedef {{ code: string, message: string, suggestions: readonly string[], column?: number }} CommandError */
+/** @typedef {{ code: string, message: string, suggestions: readonly string[] }} CommandError */
 /**
  * @typedef {{ kind: "run", command: string, action: Action, text?: string }
  *   | { kind: "empty" }
@@ -88,74 +88,29 @@ for (const c of COMMANDS) for (const w of [c.name, ...c.aliases]) byWord.set(w, 
 const ACTION_NAMES = [...new Set(ACTIONS.map((a) => a.name))];
 
 /**
- * Split arguments on whitespace. `"…"` groups, with `\"` and `\\` escapes; `'…'` groups
- * literally; quoted and bare text next to each other join.
- * @param {string} text
- * @returns {{ ok: true, tokens: string[], starts: number[] } | { ok: false, column: number }}
+ * A free-text argument: the rest of the line, trimmed, unquoted only when one pair of quotes
+ * wraps all of it (`"my  tab"`), so apostrophes inside text (`Juuso's tab`) stay as typed.
+ * @param {string} raw
  */
-function scan(text) {
-  /** @type {string[]} */
-  const tokens = [];
-  /** @type {number[]} */
-  const starts = [];
-  let i = 0;
-  while (i < text.length) {
-    while (i < text.length && /\s/.test(/** @type {string} */ (text[i]))) i++;
-    if (i >= text.length) break;
-    starts.push(i);
-    let token = "";
-    while (i < text.length && !/\s/.test(/** @type {string} */ (text[i]))) {
-      const ch = /** @type {string} */ (text[i]);
-      if (ch === '"' || ch === "'") {
-        const open = i++;
-        for (;;) {
-          if (i >= text.length) return { ok: false, column: open };
-          const c = /** @type {string} */ (text[i]);
-          if (c === ch) break;
-          if (ch === '"' && c === "\\" && (text[i + 1] === '"' || text[i + 1] === "\\")) {
-            token += text[i + 1];
-            i += 2;
-          } else {
-            token += c;
-            i++;
-          }
-        }
-        i++; // closing quote
-      } else {
-        token += ch;
-        i++;
-      }
-    }
-    tokens.push(token);
+function unwrap(raw) {
+  const q = raw[0];
+  if (raw.length >= 2 && (q === '"' || q === "'") && raw.endsWith(q)) {
+    const inner = raw.slice(1, -1);
+    if (!inner.includes(q)) return inner;
   }
-  return { ok: true, tokens, starts };
-}
-
-/**
- * @param {string} text
- * @returns {{ ok: true, tokens: string[] } | { ok: false, column: number }}
- */
-export function tokenize(text) {
-  const r = scan(text);
-  return r.ok ? { ok: true, tokens: r.tokens } : r;
+  return raw;
 }
 
 /**
  * @param {string} code
  * @param {string} message
  * @param {string[]} [suggestions]
- * @param {number} [column]
  * @returns {CommandResult}
  */
-const fail = (code, message, suggestions = [], column) =>
+const fail = (code, message, suggestions = []) =>
   Object.freeze({
     kind: "error",
-    error: Object.freeze({
-      code,
-      message,
-      suggestions: Object.freeze(suggestions),
-      ...(column !== undefined ? { column } : {}),
-    }),
+    error: Object.freeze({ code, message, suggestions: Object.freeze(suggestions) }),
   });
 
 /**
@@ -184,27 +139,22 @@ const commandsWithPrefix = (word) => [
 ];
 
 /**
- * Parse one command line (with or without its leading `:`).
+ * Parse one command line (with or without leading colons, which Vim also accepts).
  * @param {string} line
  * @returns {CommandResult}
  */
 export function parseCommandLine(line) {
-  const head = /^\s*:?/.exec(line);
-  const offset = head ? head[0].length : 0;
-  const scanned = scan(line.slice(offset));
-  if (!scanned.ok) {
-    return fail("unterminated-quote", "unterminated quote", [], offset + scanned.column);
-  }
-  const [first, ...args] = scanned.tokens;
-  if (first === undefined) return Object.freeze({ kind: "empty" });
-  const word = first.toLowerCase();
-  const text = args.join(" ");
+  const m = /^[\s:]*([^\s:]\S*)([\s\S]*)$/.exec(line);
+  if (!m) return Object.freeze({ kind: "empty" });
+  const word = /** @type {string} */ (m[1]).toLowerCase();
+  const raw = /** @type {string} */ (m[2]).trim();
+  const text = unwrap(raw);
 
   let command = byWord.get(word);
   if (!command) {
     const def = resolveActionName(word);
     if (def) {
-      if (args.length) return unexpected(word);
+      if (raw) return unexpected(word);
       /** @type {Action} */
       const action = { id: def.id };
       if (def.arg !== undefined) action.arg = def.arg;
@@ -224,7 +174,7 @@ export function parseCommandLine(line) {
     return fail("unknown-command", `not a command: "${word}"`, suggestions);
   }
 
-  if (command.argument === "none" && args.length) {
+  if (command.argument === "none" && raw) {
     return unexpected(
       command.name,
       command.name === "map" ? "; bindings are set in config.toml" : "",
@@ -288,7 +238,7 @@ const CANDIDATES = [
  * @returns {{ word: string, candidates: Candidate[] }}
  */
 export function completeCommandLine(line, { limit = 20 } = {}) {
-  const rest = line.replace(/^\s*:?\s*/, "");
+  const rest = line.replace(/^[\s:]*/, "");
   const m = /^(\S*)(\s?)/.exec(rest);
   const word = (m?.[1] ?? "").toLowerCase();
   if (m?.[2]) return { word, candidates: [] };
