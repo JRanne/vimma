@@ -25,6 +25,7 @@ declare const Services: {
   io: {
     createExposableURI(uri: { spec: string }): { spec: string; displaySpec: string };
     newURI(spec: string): { readonly scheme: string; readonly spec: string };
+    newChannelFromURIWithLoadInfo(uri: unknown, loadInfo: unknown): any;
   };
   // engine/dom/interfaces/base/nsIFocusManager.idl
   focus: {
@@ -43,7 +44,7 @@ declare const Services: {
   // engine/xpcom/threads/nsIThreadManager.idl
   tm: { readonly mainThread: unknown };
   // engine/xpcom/system/nsIXULRuntime.idl
-  appinfo: { readonly processID: number };
+  appinfo: { readonly processID: number; readonly version: string; readonly appBuildID: string };
   // engine/xpcom/ds/nsIObserverService.idl
   obs: {
     addObserver(observer: (subject: unknown, topic: string) => void, topic: string): void;
@@ -69,6 +70,7 @@ declare const Cr: Record<string, number>;
 declare const PathUtils: {
   readonly profileDir: string;
   join(...components: string[]): string;
+  parent(path: string, depth?: number): string | null;
 };
 
 // engine/dom/chrome-webidl/IOUtils.webidl
@@ -89,7 +91,11 @@ declare const IOUtils: {
 
 // XPCOM in system modules: interface constants and component constructors.
 declare const Ci: any;
-declare const Components: { Constructor(cid: string, iface: string, init?: string): any };
+declare const Components: {
+  Constructor(cid: string, iface: string, init?: string): any;
+  ID(id: string): unknown;
+  readonly manager: any;
+};
 
 // engine/dom/chrome-webidl/BrowsingContext.webidl
 declare const BrowsingContext: { get(id: number): any };
@@ -104,8 +110,14 @@ declare const ChromeUtils: {
   importESModule(url: string): any;
   defineESModuleGetters(target: object, modules: Record<string, string>): void;
   registerWindowActor(name: string, options: object): void;
+  generateQI(interfaces: string[]): (iid: unknown) => any;
   now(): number;
 };
+
+// engine/dom/webidl/Window.webidl (chrome-only part)
+interface Window {
+  readonly browsingContext: any;
+}
 
 // engine/dom/chrome-webidl/JSWindowActor.webidl
 declare class JSWindowActorParent {

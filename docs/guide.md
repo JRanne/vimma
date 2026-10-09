@@ -291,8 +291,6 @@ normal mode (`3 ctrl+w >` by three), as in Vim. A config can rebind the mode's k
   workspace, and `ctrl+b b` or `<leader>n` for the side panel. `ctrl+i` / `ctrl+u` and restoring
   workspaces after a restart work now (see [Workspaces](#workspaces)).
 - **M4, split panes:** click focus.
-- **M5, config:** errors listed in `about:vimma` (the file itself works: see
-  [config.toml](#configtoml)).
 
 ## Workspaces
 
@@ -389,8 +387,33 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:workspace name`, `:workspace 2` | Switches to the workspace with that name, or that number in `ctrl+i` order.                                    |
 | `:workspace`, `:sidebar`          | Not built yet (M3: the workspace picker and the side panel).                                                   |
 | `:source`                         | Reads `config.toml` now instead of within 2 seconds (see [config.toml](#configtoml)).                          |
+| `:about`, `:vimma`                | Opens [about:vimma](#aboutvimma) in a new tab.                                                                 |
+| `:bug`                            | Opens about:vimma and copies its redacted report to the clipboard, for a bug report.                           |
 
 A command that is not built yet says so for a moment, as its keys do.
+
+## about:vimma
+
+`about:vimma` (or `:about`) shows what Vimma is doing, read when the page opens: press `r` or
+Refresh for the current state. It is an ordinary page, so `j` / `k` scroll it.
+
+- **Version:** Vimma's version, the Firefox release it is built on, the build ID and the update
+  channel.
+- **Upstream patches:** how many patches to Firefox's own files the build carries, each with its
+  hunk count (the fewer, the easier a Firefox update).
+- **Modes and keys:** each window's mode, and the last 20 keys Vimma saw with what each did
+  (`j → scroll.down`, `pass` when the key went to the page). Letters typed into a text field or
+  the command line show as `·`, so nothing you type is kept.
+- **Config:** the `config.toml` path, whether it was read, its `schema`, every error with its
+  line, and the full binding table with the keys your file changes marked `*`.
+- **Theme:** the colour source, the Omarchy theme directory, the theme's name and its
+  `colors.toml` time, and why the last theme file was rejected, if one was.
+- **Workspaces:** how many there are, and this window's with their tab and pane counts.
+- **Control socket:** on or off, and its port. The token is never shown.
+
+**Copy redacted report** (or `:bug`) copies all of that as text, without the binding table's
+defaults, with every URL replaced by `<url>` and your home directory by `~`. It never contains
+page titles or addresses.
 
 ## Settings (about:config)
 

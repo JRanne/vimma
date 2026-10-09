@@ -42,6 +42,7 @@ import {
 import { PaneViews } from "../split/PaneView.mjs";
 import { leaves } from "../core/panes.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
+import { KeyLog } from "../about/key-log.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
 /** @import { ConfigError } from "../core/config.mjs" */
@@ -739,6 +740,7 @@ export const VimmaHost = {
     const first = state.dispatcher.pending().length === 0;
     this._clearTimer(win, state);
     const result = state.dispatcher.dispatch(mode, chord);
+    if (!("replay" in result)) KeyLog.record(mode, chord, result); // about:vimma's last keys
     // The overlay is modal: in help mode every key is ours, handled or not, so nothing reaches
     // the browser underneath (ctrl+w would close the tab behind it). Hint mode too: every key
     // is a label key or ignored, never the page's. Resize mode too (ADR-014).

@@ -82,8 +82,8 @@ not passing `[panes] max` to the pane view fails `panes_max_refuses_a_third_spli
 - `[workspaces]` applies live since M3 persistence (PR #59): `apply` passes it to
   `WorkspaceStore.setConfig`, which reconciles the definitions as `init()` does (a workspace
   removed from the file becomes runtime), creates containers, saves and notifies the windows.
-- Only the first error is shown in the bar; `about:vimma` (all errors, theme warnings) is a
-  later M5 spec.
+- Only the first error is shown in the bar; `about:vimma` lists all of them and the theme's
+  warnings ([m5-about-vimma](m5-about-vimma.md)).
 - User overrides are not marked in `ctrl+b ?` (plan §2); `:source <path>` and `:config` (open the
   file in a tab) are not built.
 - Not covered by a browser test: `[modal] hint_chars` and `[sites]` (core tests cover their
