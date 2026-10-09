@@ -66,6 +66,13 @@ export default [
     },
   },
   {
+    // JSWindowActor base classes, globals in the system modules that define actors.
+    files: ["src/**/vimma/actors/**"],
+    languageOptions: {
+      globals: { JSWindowActorChild: "readonly", JSWindowActorParent: "readonly" },
+    },
+  },
+  {
     files: ["src/**/vimma/**/*.js"],
     languageOptions: { sourceType: "script" },
   },

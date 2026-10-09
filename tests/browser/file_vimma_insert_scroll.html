@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Fixture for browser_vimma_insert_scroll.js: a long page with every kind of editable. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vimma insert and scroll</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      #tall {
+        height: 20000px;
+        width: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <p>
+      <input id="check" type="checkbox" />
+      <button id="button" type="button">button</button>
+      <input id="text" />
+      <textarea id="area"></textarea>
+    </p>
+    <div id="ce" contenteditable="true">editable</div>
+    <div id="aria" role="textbox" tabindex="0">aria</div>
+    <div id="open-host"></div>
+    <div id="closed-host"></div>
+    <iframe
+      id="frame"
+      src="https://example.org/browser/browser/base/zen-components/tests/browser/file_vimma_frame.html"
+    ></iframe>
+    <div id="tall"></div>
+    <script>
+      document.getElementById("open-host").attachShadow({ mode: "open" }).innerHTML =
+        '<input id="shadow">';
+      window.closedRoot = document.getElementById("closed-host").attachShadow({ mode: "closed" });
+      window.closedRoot.innerHTML = '<input id="closed">';
+    </script>
+  </body>
+</html>
