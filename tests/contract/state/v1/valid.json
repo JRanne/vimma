@@ -15,19 +15,32 @@
           "axis": "x",
           "ratios": [0.5, 0.5],
           "children": [
-            { "type": "leaf", "pane": "p1", "tab": "tab-a" },
+            {
+              "type": "leaf",
+              "pane": "p1",
+              "tab": "tab-a"
+            },
             {
               "type": "split",
               "axis": "y",
               "ratios": [0.6, 0.4],
               "children": [
-                { "type": "leaf", "pane": "p2", "tab": "tab-b" },
-                { "type": "leaf", "pane": "p3", "tab": "tab-c" }
+                {
+                  "type": "leaf",
+                  "pane": "p2",
+                  "tab": "tab-b"
+                },
+                {
+                  "type": "leaf",
+                  "pane": "p3",
+                  "tab": "tab-c"
+                }
               ]
             }
           ]
         },
         "focus": "p3",
+        "mru": ["p3", "p2", "p1"],
         "zoom": null,
         "next": 4
       }
@@ -39,8 +52,13 @@
       "tabs": ["tab-d"],
       "activeTab": "tab-d",
       "panes": {
-        "root": { "type": "leaf", "pane": "p1", "tab": "tab-d" },
+        "root": {
+          "type": "leaf",
+          "pane": "p1",
+          "tab": "tab-d"
+        },
         "focus": "p1",
+        "mru": ["p1"],
         "zoom": "p1",
         "next": 2
       }

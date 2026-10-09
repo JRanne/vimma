@@ -19,7 +19,7 @@ import {
   workspaceOfTab,
   WorkspaceError,
 } from "../src/workspaces.mjs";
-import { focus, leaves, setPaneTab, toggleZoom } from "../src/panes.mjs";
+import { closePane, focus, leaves, resize, setPaneTab, swap, toggleZoom } from "../src/panes.mjs";
 import { toSnapshot, fromSnapshot } from "../src/snapshot.mjs";
 
 /** @param {() => unknown} fn @param {string} code */
@@ -237,6 +237,21 @@ describe("tab bookkeeping", () => {
     expectWsError(() => moveTab(u, "a", { index: 2 }, { newTabId: "b" }), "duplicate-tab");
   });
 
+  test("moveTab accepts a new tab the host already registered in the target (TabOpen first)", () => {
+    // the host reopens the page in the target container; its TabOpen handler registers it there
+    let s = openTab(abc(), "a2", { workspace: { name: "personal" }, activate: false });
+    s = moveTab(s, "a", { name: "personal" }, { newTabId: "a2" });
+    expect(ws(s).tabs).toEqual(["b", "c"]);
+    expect(findWorkspace(s, { name: "personal" })).toMatchObject({ tabs: ["a2"], activeTab: "a2" });
+  });
+
+  test("moveTab still rejects a new tab registered anywhere but the target", () => {
+    let s = addWorkspace(abc(), { name: "admin", container: "c-admin" }, { activate: false });
+    s = openTab(s, "x", { workspace: { name: "admin" } });
+    expectWsError(() => moveTab(s, "a", { name: "personal" }, { newTabId: "x" }), "duplicate-tab");
+    expectWsError(() => moveTab(s, "a", { name: "personal" }, { newTabId: "c" }), "duplicate-tab");
+  });
+
   test("moveTab appends to a target that already has tabs without changing its active tab", () => {
     let s = openTab(abc(), "p", { workspace: { index: 2 } });
     s = moveTab(s, "a", { index: 2 });
@@ -286,7 +301,27 @@ const opArb = fc.oneof(
   },
   { weight: 3, arbitrary: fc.record({ op: fc.constant("close"), pick: fc.nat() }) },
   { weight: 2, arbitrary: fc.record({ op: fc.constant("select"), pick: fc.nat() }) },
-  { weight: 2, arbitrary: fc.record({ op: fc.constant("move"), pick: fc.nat(), w: fc.nat() }) },
+  {
+    weight: 2,
+    arbitrary: fc.record({
+      op: fc.constant("move"),
+      pick: fc.nat(),
+      w: fc.nat(),
+      id: fc.constantFrom("same", "new", "registered"),
+    }),
+  },
+  {
+    weight: 3,
+    arbitrary: fc.record({
+      op: fc.constant("pane"),
+      kind: fc.constantFrom("close", "swap", "zoom", "resize"),
+      pick: fc.nat(),
+      dir: fc.constantFrom("left", "down", "up", "right"),
+      grow: fc.constantFrom("wider", "narrower", "taller", "shorter"),
+      amount: fc.double({ min: 0.01, max: 1, noNaN: true }),
+    }),
+  },
+  { weight: 1, arbitrary: fc.record({ op: fc.constant("previous") }) },
   {
     weight: 2,
     arbitrary: fc.record({
@@ -329,8 +364,31 @@ function run(ops) {
       case "select":
         if (tab) s = selectTab(s, tab);
         break;
-      case "move":
-        if (tab) s = moveTab(s, tab, wref, { newTabId: `t${n++}` });
+      case "move": {
+        if (!tab) break;
+        if (o.id === "same") s = moveTab(s, tab, wref);
+        else if (o.id === "new") s = moveTab(s, tab, wref, { newTabId: `t${n++}` });
+        else if (workspaceOfTab(s, tab) !== findWorkspace(s, wref)) {
+          const id = `t${n++}`;
+          s = openTab(s, id, { workspace: wref, activate: false });
+          s = moveTab(s, tab, wref, { newTabId: id });
+        }
+        break;
+      }
+      case "pane": {
+        if (!activeWorkspace(s).panes) break;
+        s = withPanes(s, (p) => {
+          const ls = leaves(p);
+          const target = /** @type {any} */ (ls[o.pick % ls.length]).pane;
+          if (o.kind === "close") return ls.length > 1 ? closePane(p, target) : p;
+          if (o.kind === "swap") return swap(p, o.dir);
+          if (o.kind === "zoom") return toggleZoom(p);
+          return resize(p, o.grow, o.amount);
+        });
+        break;
+      }
+      case "previous":
+        s = previousWorkspace(s);
         break;
       case "split":
         s = splitPane(s, o.dir, `t${n++}`);

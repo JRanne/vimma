@@ -372,7 +372,9 @@ export function selectTab(s, tabId) {
 
 /**
  * Moves a tab to the end of another workspace, not activated. The host reopens the page in the
- * target container and passes the new tab's id (default: the same id).
+ * target container and passes the new tab's id (default: the same id). If the host's TabOpen
+ * handler already registered the new tab in the target, it stays where it is and only the old
+ * tab is removed, so the order of the two host events does not matter.
  * @param {Workspaces} s
  * @param {string} tabId
  * @param {WorkspaceRef} ref
@@ -383,8 +385,9 @@ export function moveTab(s, tabId, ref, { newTabId = tabId } = {}) {
   const from = indexOfTab(s, tabId);
   const to = mustIndex(s, ref);
   if (from === to) return s;
-  checkNewTab(s, newTabId, tabId);
   const target = /** @type {Workspace} */ (s.workspaces[to]);
+  if (newTabId !== tabId && target.tabs.includes(newTabId)) return closeTab(s, tabId);
+  checkNewTab(s, newTabId, tabId);
   return openTab(closeTab(s, tabId), newTabId, { workspace: { id: target.id }, activate: false });
 }
 

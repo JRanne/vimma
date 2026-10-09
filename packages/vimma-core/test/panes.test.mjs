@@ -13,6 +13,7 @@ import {
   layout,
   leaves,
   paneOfTab,
+  splitRefusal,
   MIN_RATIO,
   PaneError,
 } from "../src/panes.mjs";
@@ -137,7 +138,7 @@ describe("focus", () => {
     /** @type {Array<[string, import("../src/panes.mjs").Direction, string]>} */ ([
       ["p3", "left", "p1"],
       ["p2", "left", "p1"],
-      ["p1", "right", "p2"], // covers p1's top edge
+      ["p1", "right", "p3"], // p2 and p3 both border p1; p3 was used more recently
       ["p2", "down", "p3"],
       ["p3", "up", "p2"],
       ["p1", "up", "p1"], // no wrap
@@ -152,13 +153,28 @@ describe("focus", () => {
     if (from === to) expect(t).toBe(s);
   });
 
-  test("prefers the neighbour in line with the pane's start edge", () => {
-    // y[x[p1,p2], p3] where p3 spans the bottom; from p3 up → p1 (covers left edge)
+  test("picks the most recently used of several bordering panes (tmux)", () => {
+    // y[x[p1,p3], p2]: p2 spans the bottom, p1 and p3 both border its top edge
     let s = split(createPanes("t1"), "p1", "horizontal", "t3");
     s = split(s, "p1", "vertical", "t2");
     expect(shape(s.root)).toBe("y[x[p1,p3],p2]");
-    s = focusPane(s, "p2");
+    expect(s.mru).toEqual(["p3", "p2", "p1"]);
+    expect(focus(focusPane(s, "p2"), "up").focus).toBe("p3");
+    s = focusPane(focusPane(s, "p1"), "p2");
+    expect(s.mru).toEqual(["p2", "p1", "p3"]);
     expect(focus(s, "up").focus).toBe("p1");
+  });
+
+  test("left then right is a round trip: from p3 in x[p1, y[p2, p3]] back to p3", () => {
+    const s = threePanes();
+    const left = focus(s, "left");
+    expect(left.focus).toBe("p1");
+    expect(focus(left, "right").focus).toBe("p3");
+    expect(focus(focus(focusPane(s, "p2"), "left"), "right").focus).toBe("p2");
+  });
+
+  test("closing a pane drops it from the MRU order", () => {
+    expect(closePane(threePanes(), "p2").mru).toEqual(["p3", "p1"]);
   });
 
   test("a bad direction is an error", () => {
@@ -217,9 +233,54 @@ describe("zoom", () => {
     expect(resize(z, "wider", 0.1).zoom).toBeNull();
   });
 
+  test("a no-op focus, focusPane, swap, resize or refused split keeps the zoom", () => {
+    const z = toggleZoom(threePanes()); // focus p3
+    expect(focus(z, "right")).toBe(z);
+    expect(focusPane(z, "p3")).toBe(z);
+    expect(swap(z, "down")).toBe(z);
+    const two = toggleZoom(split(createPanes("t1"), "p1", "vertical", "t2"));
+    expect(resize(two, "taller", 0.1)).toBe(two);
+    const atMax = toggleZoom(resize(two, "wider", 1));
+    expect(resize(atMax, "wider", 0.1)).toBe(atMax);
+    const full = toggleZoom(fourAcross());
+    expect(split(full, "p4", "vertical", "t9")).toBe(full);
+  });
+
   test("zooming a single pane is allowed and harmless", () => {
     const s = toggleZoom(createPanes("t1"));
     expect(layout(s, RECT)).toEqual([{ pane: "p1", tab: "t1", rect: RECT }]);
+  });
+});
+
+/** x[p1 .5, p2 .25, p3 .125, p4 .125] (three `prefix+v`), focus on p4 */
+function fourAcross() {
+  let s = split(createPanes("t1"), "p1", "vertical", "t2");
+  s = split(s, "p2", "vertical", "t3");
+  return split(s, "p3", "vertical", "t4");
+}
+
+describe("split refusal (tmux: no space for new pane)", () => {
+  test("a split that would leave a pane below MIN_RATIO returns the input unchanged", () => {
+    const s = fourAcross();
+    expect(/** @type {any} */ (s.root).ratios).toEqual([0.5, 0.25, 0.125, 0.125]);
+    expect(split(s, "p4", "vertical", "t5")).toBe(s);
+    expect(splitRefusal(s, "p4", "vertical")).toEqual({
+      code: "no-space",
+      message: expect.stringMatching(/no space/),
+    });
+  });
+
+  test("the same pane can still split across, and a wide pane along, the axis", () => {
+    const s = fourAcross();
+    expect(splitRefusal(s, "p4", "horizontal")).toBeNull();
+    expect(splitRefusal(s, "p1", "vertical")).toBeNull();
+    expect(shape(split(s, "p4", "horizontal", "t5").root)).toBe("x[p1,p2,p3,y[p4,p5]]");
+  });
+
+  test("splitRefusal checks its arguments like split", () => {
+    expectPaneError(() => splitRefusal(fourAcross(), "p9", "vertical"), "unknown-pane");
+    // @ts-expect-error bad direction
+    expectPaneError(() => splitRefusal(fourAcross(), "p1", "diagonal"), "bad-direction");
   });
 });
 
@@ -243,6 +304,18 @@ describe("resize", () => {
     expect(ratios(resize(two(), "narrower", 1))).toEqual([MIN_RATIO, 1 - MIN_RATIO]);
     const atMax = resize(two(), "wider", 1);
     expect(resize(atMax, "wider", 0.1)).toBe(atMax);
+  });
+
+  test("borrows from further siblings, nearest first, when the neighbour is at MIN_RATIO", () => {
+    const r = ratios(resize(fourAcross(), "wider", 0.3)); // p4 is last: p3, then p2, then p1
+    [0.375, 0.1, 0.1, 0.425].forEach((v, i) => expect(r[i]).toBeCloseTo(v, 12));
+    const mid = ratios(resize(focusPane(fourAcross(), "p3"), "wider", 0.1)); // p4, then p2
+    [0.5, 0.175, 0.225, 0.1].forEach((v, i) => expect(mid[i]).toBeCloseTo(v, 12));
+  });
+
+  test("grows up to 1 − (n − 1)·MIN_RATIO when every sibling gives way", () => {
+    const r = ratios(resize(fourAcross(), "wider", 1));
+    [0.1, 0.1, 0.1, 0.7].forEach((v, i) => expect(r[i]).toBeCloseTo(v, 12));
   });
 
   test("without an ancestor on that axis the state is unchanged", () => {
@@ -272,6 +345,19 @@ describe("layout, setPaneTab, leaves", () => {
       { pane: "p2", tab: "t2", rect: { x: 50, y: 0, width: 50, height: 40 } },
       { pane: "p3", tab: "t3", rect: { x: 50, y: 40, width: 50, height: 40 } },
     ]);
+  });
+
+  test("edges are rounded, not widths, so neighbours share an integer edge", () => {
+    const s = split(split(createPanes("t1"), "p1", "vertical", "t2"), "p2", "vertical", "t3");
+    // [.5, .25, .25] of 101 px: edges 0, 51 (50.5 rounds up), 76 (75.75), 101
+    expect(layout(s, { x: 0, y: 0, width: 101, height: 10 }).map((l) => l.rect.x)).toEqual([
+      0, 51, 76,
+    ]);
+    expect(layout(s, { x: 0, y: 0, width: 101, height: 10 }).map((l) => l.rect.width)).toEqual([
+      51, 25, 25,
+    ]);
+    const exact = layout(s, { x: 0, y: 0, width: 101, height: 10 }, { round: false });
+    expect(exact.map((l) => l.rect.x)).toEqual([0, 50.5, 75.75]);
   });
 
   test("setPaneTab shows another tab in a pane", () => {
@@ -325,7 +411,7 @@ function run(ops) {
     const target = /** @type {any} */ (ls[(o.pick ?? 0) % ls.length]).pane;
     switch (o.op) {
       case "split":
-        s = split(s, target, o.dir, `t${n++}`);
+        s = split(s, target, o.dir, `t${n++}`); // may be refused (unchanged)
         break;
       case "close":
         if (ls.length > 1) s = closePane(s, target);
@@ -349,6 +435,29 @@ function run(ops) {
 
 const stateArb = fc.array(opArb, { maxLength: 40 }).map(run);
 
+/**
+ * The nearest split on `axis` above `pane`, and the index of the child holding it.
+ * @param {any} root @param {string} pane @param {"x" | "y"} axis
+ * @returns {{ node: any, index: number } | null}
+ */
+function nearestSplit(root, pane, axis) {
+  /** @type {{ node: any, index: number } | null} */
+  let found = null;
+  /** @param {any} n @returns {boolean} */
+  const visit = (n) => {
+    if (n.type === "leaf") return n.pane === pane;
+    for (let i = 0; i < n.children.length; i++) {
+      if (visit(n.children[i])) {
+        if (!found && n.axis === axis) found = { node: n, index: i };
+        return true;
+      }
+    }
+    return false;
+  };
+  visit(root);
+  return found;
+}
+
 /** @param {any} node @param {(n: any, parent: any) => void} visit @param {any} [parent] */
 function walk(node, visit, parent = null) {
   visit(node, parent);
@@ -356,18 +465,52 @@ function walk(node, visit, parent = null) {
 }
 
 describe("pane tree properties", () => {
-  test("every split has ≥ 2 children whose ratios are positive and sum to 1, in canonical form", () => {
+  test("every split has ≥ 2 children, ratios ≥ MIN_RATIO summing to 1, in canonical form", () => {
     fc.assert(
       fc.property(stateArb, (s) => {
         walk(s.root, (n, parent) => {
           if (n.type !== "split") return;
           expect(n.children.length).toBeGreaterThanOrEqual(2);
           expect(n.ratios.length).toBe(n.children.length);
-          for (const r of n.ratios) expect(r).toBeGreaterThan(0);
+          for (const r of n.ratios) expect(r).toBeGreaterThanOrEqual(MIN_RATIO - 1e-9);
           expect(Math.abs(n.ratios.reduce((a, b) => a + b, 0) - 1)).toBeLessThan(1e-9);
-          if (parent) expect(n.axis).not.toBe(parent.axis);
+          if (parent && n.axis === parent.axis) {
+            // the one exception: flattening would push a pane below MIN_RATIO
+            const r = parent.ratios[parent.children.indexOf(n)];
+            expect(n.ratios.some((/** @type {number} */ cr) => cr * r < MIN_RATIO - 1e-9)).toBe(
+              true,
+            );
+          }
         });
       }),
+    );
+  });
+
+  test("any pane can grow until its siblings reach MIN_RATIO; nothing goes below it", () => {
+    fc.assert(
+      fc.property(
+        stateArb,
+        fc.nat(),
+        fc.constantFrom("wider", "taller"),
+        fc.double({ min: 0.01, max: 0.5, noNaN: true }),
+        (s0, pick, grow, step) => {
+          const ls = leaves(s0);
+          const p = /** @type {any} */ (ls[pick % ls.length]).pane;
+          const axis = grow === "wider" ? "x" : "y";
+          let s = focusPane(s0, p);
+          if (!nearestSplit(s.root, p, axis)) return;
+          for (let k = 0; k < 500; k++) {
+            const t = resize(s, /** @type {any} */ (grow), step);
+            if (t === s) break;
+            s = t;
+          }
+          const found = /** @type {any} */ (nearestSplit(s.root, p, axis));
+          found.node.ratios.forEach((/** @type {number} */ r, /** @type {number} */ i) => {
+            if (i !== found.index) expect(r).toBeLessThan(MIN_RATIO + 1e-9);
+            expect(r).toBeGreaterThanOrEqual(MIN_RATIO - 1e-9);
+          });
+        },
+      ),
     );
   });
 
@@ -387,6 +530,8 @@ describe("pane tree properties", () => {
         expect(new Set(tabs).size).toBe(tabs.length);
         expect(panes).toContain(s.focus);
         if (s.zoom !== null) expect(panes).toContain(s.zoom);
+        expect([...s.mru].sort()).toEqual([...panes].sort());
+        expect(s.mru[0]).toBe(s.focus);
       }),
     );
   });
@@ -397,6 +542,10 @@ describe("pane tree properties", () => {
         const ls = leaves(s);
         const p = /** @type {any} */ (ls[pick % ls.length]).pane;
         const t = split(s, p, /** @type {any} */ (dir), "fresh-tab");
+        if (splitRefusal(s, p, /** @type {any} */ (dir))) {
+          expect(t).toBe(s);
+          return;
+        }
         const back = closePane(t, t.focus);
         expect(back.root).toEqual(s.root);
         expect(back.focus).toBe(p);
@@ -411,7 +560,7 @@ describe("pane tree properties", () => {
     height: fc.integer({ min: 1, max: 4000 }),
   });
 
-  test("layout tiles the rect: inside it, areas sum to it, every point in exactly one pane", () => {
+  test("layout tiles the rect in integer pixels: inside it, areas sum to it, no gap or overlap", () => {
     fc.assert(
       fc.property(
         stateArb,
@@ -425,16 +574,18 @@ describe("pane tree properties", () => {
         ),
         (s, r, points) => {
           const ls = layout(s, r);
-          const eps = 1e-6 * Math.max(r.width, r.height);
           let area = 0;
           for (const { rect } of ls) {
-            expect(rect.x).toBeGreaterThanOrEqual(r.x - eps);
-            expect(rect.y).toBeGreaterThanOrEqual(r.y - eps);
-            expect(rect.x + rect.width).toBeLessThanOrEqual(r.x + r.width + eps);
-            expect(rect.y + rect.height).toBeLessThanOrEqual(r.y + r.height + eps);
+            for (const v of Object.values(rect)) expect(Number.isInteger(v)).toBe(true);
+            expect(rect.width).toBeGreaterThanOrEqual(0);
+            expect(rect.height).toBeGreaterThanOrEqual(0);
+            expect(rect.x).toBeGreaterThanOrEqual(r.x);
+            expect(rect.y).toBeGreaterThanOrEqual(r.y);
+            expect(rect.x + rect.width).toBeLessThanOrEqual(r.x + r.width);
+            expect(rect.y + rect.height).toBeLessThanOrEqual(r.y + r.height);
             area += rect.width * rect.height;
           }
-          expect(Math.abs(area - r.width * r.height)).toBeLessThan(1e-6 * r.width * r.height);
+          expect(area).toBe(r.width * r.height);
           for (const [u, v] of points) {
             const px = r.x + u * r.width;
             const py = r.y + v * r.height;
@@ -454,12 +605,12 @@ describe("pane tree properties", () => {
     );
   });
 
-  test("focus(d) lands on a pane touching the start pane's d edge, and stays only when none does", () => {
+  test("focus(d) lands on the most recently used pane touching the d edge, or stays if none", () => {
     const unit = { x: 0, y: 0, width: 1, height: 1 };
     fc.assert(
       fc.property(stateArb, fc.constantFrom(...DIRS), (s0, d) => {
         const s = s0.zoom ? toggleZoom(s0) : s0;
-        const rects = new Map(layout(s, unit).map((l) => [l.pane, l.rect]));
+        const rects = new Map(layout(s, unit, { round: false }).map((l) => [l.pane, l.rect]));
         const a = /** @type {any} */ (rects.get(s.focus));
         const eps = 1e-9;
         /** @param {any} b */
@@ -485,9 +636,9 @@ describe("pane tree properties", () => {
           return Math.abs(a.y + a.height - b.y) < eps && ov(a.x, a.x + a.width, b.x, b.x + b.width);
         };
         const t = focus(s, d);
-        const any = [...rects].some(([p, b]) => p !== s.focus && touches(b));
-        if (t.focus === s.focus) expect(any).toBe(false);
-        else expect(touches(rects.get(t.focus))).toBe(true);
+        const touching = [...rects].filter(([p, b]) => p !== s.focus && touches(b)).map(([p]) => p);
+        if (t.focus === s.focus) expect(touching).toEqual([]);
+        else expect(t.focus).toBe(s.mru.find((p) => touching.includes(p)));
       }),
     );
   });
