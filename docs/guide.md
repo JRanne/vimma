@@ -55,7 +55,8 @@ Where Vimma keeps its files on Linux:
 | `~/.config/vimma/vimma/`      | Profiles and `profiles.ini`. If `~/.vimma/vimma/` already exists, Firefox's legacy rule uses that instead. |
 
 On first launch you see Firefox's interface without the tab strip: the window starts with the
-navigation bar and URL bar at the top. Press `ctrl+b`, then `?`, to see the bindings.
+navigation bar and URL bar at the top, and Vimma's status bar at the bottom. Press `ctrl+b`, then
+`?`, to see the bindings.
 
 ## The two layers
 
@@ -127,6 +128,30 @@ The labels are drawn by the browser, over the page, not inside it: the page cann
 restyle them or hide them. Apps that draw their own controls on a canvas (Google Docs, Figma,
 maps, games) have nothing to label.
 
+## Status bar and which-key
+
+The status bar is the window's last line, always there (it hides only while a page is in
+fullscreen, such as a video; browser fullscreen with `F11` keeps it). From the left:
+
+- the **mode** badge in the mode's colour: `NORMAL` on a page, `INSERT` while a text field has
+  focus (or after `i`), `HELP` while the `ctrl+b ?` overlay is open, and later `VISUAL`, …;
+- the **pending keys**, e.g. `prefix` after `ctrl+b`;
+- `tab 2/5`: the selected tab and how many there are;
+- the page **title** (your rename, once tab rename lands);
+- on the right, `loading` while the page loads, then its **URL** without `https://`.
+
+On a narrow window the least important parts give way first: the URL is shortened in the middle,
+then dropped, then the title is shortened, and so on. The mode badge always stays. Screen
+readers announce the mode when it changes, including when focus moves into or out of a text
+field, but not every title change.
+
+After `ctrl+b` (or any key that starts a longer sequence) a **which-key strip** opens above the
+bar, listing every key you can press next with what it does, grouped like the `ctrl+b ?`
+overlay. Keys whose action is not built yet are greyed. The strip closes when the sequence
+completes, or on `Esc`.
+
+Colours are Tokyo Night until theming arrives (M5), which will follow your Omarchy theme.
+
 ## Keys
 
 [bindings.md](bindings.md) lists the full default keymap. It is generated from the same table
@@ -163,8 +188,7 @@ digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
   reach the page as before.
 - **M2, the rest of tabs:** `ctrl+b shift+t` rename (kept across restarts; an empty name
   restores the page title), the `ctrl+b g` picker (`j`/`k` to move, `/` to search titles, URLs,
-  workspaces and renames, `Enter` to go, `Esc` to back out), the status bar and the which-key
-  strip.
+  workspaces and renames, `Enter` to go, `Esc` to back out).
 - **M3, workspaces and the side panel:** `ctrl+i`/`ctrl+u` next/previous workspace, the
   `ctrl+b w` picker, new/rename/close workspace, and `ctrl+b b` or `<leader>n` for the side panel.
   Until then `ctrl+i` and `ctrl+u` keep Firefox's meaning (page info, view source).

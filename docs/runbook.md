@@ -104,6 +104,65 @@ kill $(jobs -p)
 Pass `--repeat=N` with `=`: `tools/mochitest.mjs` treats a bare `N` as a test path. Plan §5: no
 retries in CI; a flaky test gets quarantined and an issue the same day.
 
+### End-to-end tests (`npm run e2e`, spec m0-e2e-harness)
+
+Scenarios in `tests/e2e/scenarios/*.json` run against a real build, each in a fresh temp profile
+(`vimma.control.enabled=true`, no first-run pages, no telemetry), driven through `vimma-ctl`.
+Names: `m<N>-<slug>` for a milestone happy path, `issue-<N>-<slug>` (plus `"issue": N`) for a
+regression test. **Until the control server spec lands every scenario is pending**: the run
+reports them as `PENDING`, launches nothing and passes nothing.
+
+```sh
+(cd tools/vimma-ctl && cargo build --locked)     # the driver runs this binary
+npx vitest run tools/e2e/                        # the harness's own tests (fake server)
+npm run e2e                                      # all scenarios, full objdir build
+npm run e2e -- --filter m0-happy-path            # names containing the text
+npm run e2e -- --artifact                        # engine/obj-artifact, as CI does
+npm run e2e -- --build path/to/dist/bin | --tarball vimma-0.1.0-linux-x86_64.tar.xz
+npm run e2e -- --xvfb --keep                     # own Xvfb on a desktop; keep the profiles
+npm run e2e -- --run-pending --filter m0         # run a pending scenario anyway (to watch it fail)
+```
+
+Without `DISPLAY` (CI) the harness starts its own Xvfb at 1280×800×24; with a desktop, pass
+`--xvfb` for screenshots and to keep the window off your screen. The browser never inherits
+your desktop's environment: it gets an allowlisted env (no `GDK_SCALE`, `QT_*`, `GTK_THEME`,
+Wayland or locale; `HOME` and `TMPDIR` inside the temp profile) and the profile pins
+`layout.css.devPixelsPerPx=1.0` and a light theme, so local screenshots match CI's. Timeouts are
+hard: a scenario's deadline kills its launch and any running `vimma-ctl`. The whole suite has a
+5-minute budget (`--budget SECS`).
+Exit 0: nothing failed (pending is not failure, nor a pass); 1: a failure; 2: usage.
+
+**Baselines.** Screenshots are compared with `tests/e2e/baselines/<name>.png`; more than 0.5 % of
+differing pixels fails, and the actual and diff images land in `e2e-output/`. To change a
+baseline:
+
+```sh
+npm run e2e -- --xvfb --update-baselines --filter <scenario>   # refused when CI is set
+```
+
+look at the new PNG, and commit it with a changelog line saying which baseline changed and why
+(CLAUDE.md: never edit a baseline without one). A missing baseline fails; nothing creates one
+silently. Fonts differ between machines: if CI's diff exceeds 0.5 % on a baseline made locally,
+take CI's actual image from the `e2e-output` artifact of the failed run (kept 7 days) instead. Baselines are plain git blobs, not LFS
+(the spec's "LFS: not now" says when to revisit).
+
+**Troubleshooting Xvfb.**
+
+- `Xvfb not found`: install `xvfb` (Ubuntu/Debian), `xorg-server-xvfb` (Arch) or
+  `xorg-x11-server-Xvfb` (Fedora). GitHub's `ubuntu-24.04` image has it.
+- `Xvfb exited with code 1`: read the stderr in the message. The harness picks a free display
+  with `-displayfd`, so a stale `/tmp/.X*-lock` should not matter; a sandbox without
+  `/tmp/.X11-unix` write access does.
+- The browser opens on your desktop: you have `DISPLAY` set and did not pass `--xvfb`.
+- `no usable control socket within 30000 ms`: the build has no control server yet, the pref did
+  not apply (check `user.js` with `--keep`), or the browser is stuck; the message ends with the
+  browser's stderr. `--discovery-timeout SECS` for a slow machine.
+- A black screenshot: the window has not painted; the capture waits for two identical frames
+  200 ms apart (at most 2 s), so check the scenario waits for the state it photographs.
+- Leftovers after a crash of the harness itself: `pkill -f vimma-e2e-profile-` and
+  `rm -rf /tmp/vimma-e2e-*`. Normally SIGINT/SIGTERM kill the browser's process group, stop Xvfb
+  and remove the profile.
+
 ## Parallel browser lanes
 
 A lane is a git worktree (e.g. an agent's under `.claude/worktrees/`) with its own `engine/` and
@@ -217,7 +276,9 @@ npm run mochitest -- --artifact tests/browser/
 ```
 
 It runs only when a PR touches `src/`, `tests/browser/`, `packages/vimma-core/`, `configs/`,
-`surfer.json`, `package*.json`, the tools it uses or `e2e.yml` (paths filter). For a PR opened
+`surfer.json`, `package*.json`, the tools it uses (including `tools/e2e/`, `tools/vimma-ctl/`),
+`tests/e2e/` or `e2e.yml` (paths filter). Before the Firefox download it builds `vimma-ctl` and
+runs the e2e harness's tests; after the mochitests, `npm run e2e -- --artifact`. For a PR opened
 with `GITHUB_TOKEN`, mark it ready for review or `gh workflow run e2e.yml --ref <branch>`.
 
 What it does not cover: compiled-in build config (C++ defines such as `--version`'s display
