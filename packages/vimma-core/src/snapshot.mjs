@@ -13,9 +13,11 @@
 /** @import { WorkspaceState } from "./workspaces.mjs" */
 /** @import { Panes } from "./panes.mjs" */
 /** @import { PaneNode } from "./panes.mjs" */
+/** @import { TabLabels, TabLabelWarning } from "./tablabels.mjs" */
 /** @typedef {(raw: any) => any} SnapshotMigration a step from schema n to n + 1 */
 
 import { MIN_RATIO } from "./panes.mjs";
+import { pruneTabLabels, readTabLabels, writeTabLabels } from "./tablabels.mjs";
 
 export const SCHEMA_VERSION = 1;
 
@@ -84,10 +86,21 @@ function checkNext(next, ids, prefix, path) {
 }
 
 /**
- * Plain JSON for persistence.
+ * Plain JSON for persistence. `tabLabels` (tab renames, spec m2-core-logic) is written as the
+ * optional `tabLabels` field, only for tabs that are still open and only when there are any, so
+ * a snapshot without renames is plain v1.
  * @param {Workspaces} s
+ * @param {{ tabLabels?: TabLabels }} [options]
  */
-export function toSnapshot(s) {
+export function toSnapshot(s, { tabLabels } = {}) {
+  const labels =
+    tabLabels &&
+    writeTabLabels(
+      pruneTabLabels(
+        tabLabels,
+        s.workspaces.flatMap((w) => w.tabs),
+      ),
+    );
   return {
     schema: SCHEMA_VERSION,
     active: s.active,
@@ -100,6 +113,7 @@ export function toSnapshot(s) {
       activeTab: w.activeTab,
       panes: w.panes && JSON.parse(JSON.stringify(w.panes)),
     })),
+    ...(labels ? { tabLabels: labels } : {}),
   };
 }
 
@@ -241,7 +255,19 @@ function readPanes(raw, path, tabs) {
  * @param {{ migrations?: Readonly<Record<number, SnapshotMigration>> }} [options]
  * @returns {Workspaces}
  */
-export function fromSnapshot(input, { migrations } = {}) {
+export function fromSnapshot(input, options) {
+  return readSnapshot(input, options).state;
+}
+
+/**
+ * `fromSnapshot` plus the tab renames. The workspace state is validated strictly (a broken file
+ * throws `SnapshotError`); the optional `tabLabels` field is read leniently: stale or invalid
+ * entries are dropped with a warning, so one bad label never fails a restore.
+ * @param {unknown} input
+ * @param {{ migrations?: Readonly<Record<number, SnapshotMigration>> }} [options]
+ * @returns {{ state: Workspaces, tabLabels: TabLabels, warnings: TabLabelWarning[] }}
+ */
+export function readSnapshot(input, { migrations } = {}) {
   let raw = input;
   if (typeof input === "string") {
     try {
@@ -302,11 +328,13 @@ export function fromSnapshot(input, { migrations } = {}) {
   });
   if (!ids.has(doc.active)) fail("active", "must name a workspace");
   checkNext(doc.next, ids, "w", "next");
-  return Object.freeze({
+  const state = Object.freeze({
     workspaces: Object.freeze(workspaces),
     active: doc.active,
     next: doc.next,
   });
+  const { labels, warnings } = readTabLabels(doc.tabLabels, allTabs);
+  return { state, tabLabels: labels, warnings };
 }
 
 /**
