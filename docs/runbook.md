@@ -26,14 +26,25 @@ npx surfer run
 ## Smoke check
 
 ```sh
-engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma --version   # "Mozilla vimma 1.0.0"
-engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma --headless --no-remote --profile "$(mktemp -d)" \
-  --screenshot /tmp/shot.png "data:text/html,<h1>ok</h1>"
+bin=engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma
+$bin --version   # "Vimma Vimma 0.1.0" (vendor, name, surfer.json brands.vimma.release.displayVersion)
+p=$(mktemp -d)
+timeout 20 $bin --headless --no-remote --profile "$p" about:blank   # first run: profile + bookmarks
+$bin --headless --no-remote --profile "$p" --screenshot /tmp/shot.png "data:text/html,<h1>ok</h1>"
 ```
 
-Known after first build (branding not done yet, brand defaults to `unofficial`): version string is
-`Mozilla vimma 1.0.0`, and a fresh profile logs "Failed to import bookmarks from
-chrome://browser/content/default-bookmarks.html". Both belong to the M0 branding task.
+The brand is `vimma` (spec m0-branding): `npm run import` selects it (`surfer config brand vimma`)
+and rewrites `engine/mozconfig`, so `npm run import && (cd engine && ./mach build)` builds it.
+Changing branding needs a full `./mach build`, not `--ui`. Profiles now live under the Vimma
+vendor/name, so profiles from the old `unofficial` builds are not picked up.
+
+`--screenshot` on a brand-new profile quits while Places is still importing the default
+bookmarks and logs "Failed to import bookmarks … 0x8046001e" (`NS_ERROR_ILLEGAL_DURING_SHUTDOWN`).
+That is an upstream shutdown race, not a broken import: hence the warm-up run above.
+`tests/browser/browser_vimma_branding.js` checks the import itself.
+
+Placeholder artwork: `configs/branding/vimma/*.svg`, rendered by `tools/branding/render.sh`
+(`rsvg-convert`, ImageMagick). Replace the SVGs, re-run the script, commit the PNG/ICO outputs.
 
 ## CI and automation (spec m0-pipeline)
 

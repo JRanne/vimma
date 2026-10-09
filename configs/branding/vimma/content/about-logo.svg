@@ -1,0 +1,8 @@
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- vimma-placeholder: plain "V" monogram until real artwork exists (spec m0-branding). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="#1a1b26"/>
+  <path d="M120 128h64l72 196 72-196h64L284 392h-56z" fill="#7aa2f7"/>
+</svg>
