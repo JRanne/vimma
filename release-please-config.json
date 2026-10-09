@@ -20,7 +20,6 @@
   ],
   "packages": {
     ".": {
-      "package-name": "vimma",
       "release-as": "0.1.0",
       "extra-files": [
         {
