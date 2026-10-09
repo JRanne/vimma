@@ -12,3 +12,5 @@ support-files = ["file_vimma_test.pdf"]
 ["browser_vimma_mozilla_services.js"]
 
 ["browser_vimma_app_version.js"]
+
+["browser_vimma_tabstrip.js"]
