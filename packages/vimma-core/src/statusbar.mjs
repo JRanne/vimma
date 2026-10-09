@@ -8,6 +8,9 @@
  */
 import { formatConfigError } from "./config.mjs";
 import { displayLabel } from "./tablabels.mjs";
+import { clusterWidth, graphemes, textWidth } from "./textwidth.mjs";
+
+export { textWidth };
 
 /** @import { Mode } from "./modes.mjs" */
 /** @import { ConfigError } from "./config.mjs" */
@@ -55,14 +58,6 @@ export const WORKSPACE_COLOR_TOKENS = Object.freeze({
 const ELLIPSIS = "…";
 
 /**
- * Width in code points (East Asian wide characters are not counted twice).
- * @param {string} text
- */
-export function textWidth(text) {
-  return [...text].length;
-}
-
-/**
  * Total width with one separator column between neighbours.
  * @param {readonly Segment[]} segments
  */
@@ -72,20 +67,42 @@ export function statusWidth(segments) {
 }
 
 /**
- * Cuts `text` to `width` code points with one ellipsis; `middle` keeps head and tail.
+ * @param {[string, number][]} parts clusters with their widths
+ * @param {number} max columns
+ */
+function take(parts, max) {
+  /** @type {string[]} */
+  const out = [];
+  let used = 0;
+  for (const [cluster, w] of parts) {
+    if (used + w > max) break;
+    out.push(cluster);
+    used += w;
+  }
+  return { out, used };
+}
+
+/**
+ * Cuts `text` to at most `width` columns with one ellipsis, never inside a grapheme cluster;
+ * `middle` keeps head and tail. At one column it keeps the first character if that fits.
  * @param {string} text
  * @param {number} width
  * @param {"end" | "middle"} how
  */
 export function truncate(text, width, how) {
-  const points = [...text];
-  if (points.length <= width) return text;
+  if (textWidth(text) <= width) return text;
   if (width <= 0) return "";
-  const keep = width - 1;
-  if (how === "end") return points.slice(0, keep).join("") + ELLIPSIS;
-  const head = Math.ceil(keep / 2);
-  const tail = keep - head;
-  return points.slice(0, head).join("") + ELLIPSIS + (tail ? points.slice(-tail).join("") : "");
+  /** @type {[string, number][]} */
+  const parts = graphemes(text).map(({ segment }) => [segment, clusterWidth(segment)]);
+  if (width === 1) {
+    const first = /** @type {[string, number]} */ (parts[0]);
+    return first[1] === 1 ? first[0] : ELLIPSIS;
+  }
+  const budget = width - 1;
+  if (how === "end") return take(parts, budget).out.join("") + ELLIPSIS;
+  const head = take(parts, Math.ceil(budget / 2));
+  const tail = take(parts.slice().reverse(), budget - head.used);
+  return head.out.join("") + ELLIPSIS + tail.out.reverse().join("");
 }
 
 /**
@@ -230,13 +247,14 @@ export function statusSegments(input) {
 
 /**
  * Fits segments into `width` columns: least important first, each is shrunk as far as needed
- * (down to its `min`), else dropped; `mode` (priority 0) is cut, never dropped. Returns the input
- * itself when it fits.
+ * (down to its `min`), else dropped; `mode` (priority 0) is cut, never dropped, and keeps at least
+ * one column. Returns the input itself when it fits, and no segments at width 0 or less.
  * @param {readonly Segment[]} segments
  * @param {number} width
  * @returns {Segment[]}
  */
 export function fitStatus(segments, width) {
+  if (width <= 0) return [];
   if (statusWidth(segments) <= width) return /** @type {Segment[]} */ (segments);
   /** @type {(Segment | null)[]} */
   const out = segments.slice();
@@ -254,8 +272,8 @@ export function fitStatus(segments, width) {
     const s = /** @type {Segment} */ (segments[i]);
     const w = textWidth(s.text);
     if (s.priority === 0) {
-      // never dropped: cut as far as needed
-      const room = Math.max(0, w - excess);
+      // never dropped: cut as far as needed, but to one column at least
+      const room = Math.max(1, w - excess);
       out[i] =
         room === w
           ? s

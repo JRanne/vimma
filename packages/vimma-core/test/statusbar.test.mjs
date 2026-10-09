@@ -129,10 +129,34 @@ describe("truncation", () => {
     expect(truncate("abcdef", 4, "end")).toBe("abc…");
     expect(truncate("abcdef", 4, "middle")).toBe("ab…f");
     expect(truncate("abcdef", 6, "end")).toBe("abcdef");
-    expect(truncate("abcdef", 1, "middle")).toBe("…");
+    expect(truncate("abcdef", 1, "middle")).toBe("a");
+    expect(truncate("家族", 1, "end")).toBe("…");
     expect(truncate("abcdef", 0, "end")).toBe("");
-    expect(truncate("😀😀😀", 2, "end")).toBe("😀…");
-    expect(textWidth("😀a")).toBe(2);
+    expect(truncate("😀😀😀", 3, "end")).toBe("😀…");
+    expect(truncate("😀😀😀", 2, "end")).toBe("…");
+  });
+
+  test("width is terminal columns over grapheme clusters", () => {
+    expect(textWidth("家族の写真")).toBe(10);
+    expect(textWidth("😀a")).toBe(3);
+    const family = "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}";
+    expect(textWidth(family)).toBe(2);
+    expect(textWidth("\u{1F1EB}\u{1F1EE}")).toBe(2);
+    expect(textWidth("e\u0301a\u0308")).toBe(2);
+    expect(textWidth("\u2764\uFE0F")).toBe(2);
+    expect(textWidth("●")).toBe(1);
+    expect(textWidth("ｆｕｌｌ")).toBe(8);
+    expect(textWidth("a\u200Bb")).toBe(2);
+    expect(textWidth("")).toBe(0);
+  });
+
+  test("truncation never splits a grapheme cluster", () => {
+    const family = "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}";
+    expect(truncate(family.repeat(3), 3, "end")).toBe(`${family}…`);
+    expect(truncate("e\u0301".repeat(4), 3, "middle")).toBe("e\u0301…e\u0301");
+    expect(truncate("家族の写真", 5, "end")).toBe("家族…");
+    expect(truncate("家族の写真", 6, "middle")).toBe("家…真");
+    expect(truncate("\u{1F1EB}\u{1F1EE}\u{1F1F8}\u{1F1EA}", 3, "end")).toBe("\u{1F1EB}\u{1F1EE}…");
   });
 
   test("fits: identity", () => {
@@ -157,11 +181,17 @@ describe("truncation", () => {
     const c = renderStatusBar(input, statusWidth(full.filter((s) => s.id !== "url")) - 5);
     expect(texts(c).title).toBe("A fairly long page…");
     expect(renderStatusBar(input, 3).map((s) => s.text)).toEqual(["NO…"]);
+    expect(renderStatusBar(input, 1).map((s) => s.text)).toEqual(["N"]);
+    expect(renderStatusBar(input, 0)).toEqual([]);
   });
 
   test("properties: fits, keeps mode and order, gives way least important first", () => {
     const seg = fc.record({
-      text: fc.string({ minLength: 1, maxLength: 30 }),
+      text: fc.string({
+        unit: fc.constantFrom("a", "b", " ", "家", "e\u0301", "😀"),
+        minLength: 1,
+        maxLength: 30,
+      }),
       priority: fc.integer({ min: 1, max: 9 }),
       min: fc.integer({ min: 1, max: 12 }),
       cut: fc.constantFrom("end", "middle", "none"),
@@ -198,7 +228,12 @@ describe("truncation", () => {
             const o = kept.get(s.id);
             if (o && o.text !== s.text) {
               expect(s.cut).not.toBe("none");
-              expect(textWidth(o.text)).toBeGreaterThanOrEqual(Math.min(s.min, textWidth(s.text)));
+              // a wide character that does not fit may leave one column unused
+              expect(textWidth(o.text)).toBeGreaterThanOrEqual(
+                Math.min(s.min, textWidth(s.text)) - 1,
+              );
+              // a segment is shortened only as far as needed: no space is left unused
+              expect(statusWidth(out)).toBeGreaterThanOrEqual(width - 1);
             }
             if (!o || o.text !== s.text) {
               // every less important segment (ties: later ones) is gone
