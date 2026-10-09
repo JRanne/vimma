@@ -4,8 +4,8 @@ Status: proposed (research and plan; no implementation) · Milestone: M4 · Area
 (`src/browser/base/content/vimma/split/`, `host/`), CSS (`browser/themes/shared/vimma/`)
 
 This is the umbrella spec for M4. It records the research, the decision
-([ADR-013](../adr/013-split-on-firefox-split-view.md), proposed pending the sub-spec 1 spike;
-it would supersede ADR-006), the
+([ADR-013](../adr/013-split-on-firefox-split-view.md), accepted after the sub-spec 1 spike;
+it supersedes ADR-006), the
 architecture, the patch list, the test plan and the breakdown into sub-specs. Each sub-spec
 (§ Breakdown) is one session, gets its own `docs/specs/m4-split-<name>.md` when it starts, and
 links back here.
@@ -291,6 +291,53 @@ e2e once the perf gate (issue #17) exists.
 | Many live panes cost memory and CPU (every visible pane's docshell is active)                   | Medium     | `MIN_RATIO` alone does not bound it: nesting allows many panes. A host-enforced maximum of live panes per workspace (config `panes.max`, default 4 as Zen's `MAX_TABS`) refuses further splits with a status-bar message; zoomed-away docshells are deactivated. |
 | Plan §9: split view destabilises tab selection, focus and the URL bar                           | High       | The selection model is upstream's and tested; one invariant (`selectedTab` = focused pane) asserted after every op; `ctrl+b z` and `ctrl+b x` as escape hatches; sub-specs land one op at a time.                                                                |
 
+## Sub-spec 1 results (`m4-split-contract` spike)
+
+Done in `tests/browser/browser_vimma_split_contract.js` (12 tasks, 234 checks) with a spike
+module, `split/spike-layout.mjs` and `browser/themes/shared/vimma/split-spike.css`, both marked
+SPIKE and not wired into the host. Local artifact build of Firefox 157.0.1, headless, window
+1280 × 800 (content area 1280 × 760). Pane trees come from core's pane ops and
+rectangles from core's `layout()`. The numbers are in
+[ADR-013 § Spike results](../adr/013-split-on-firefox-split-view.md#spike-results); in short:
+
+| Scope item                                          | Result                                                                                                                        |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| L shape and 2 × 2 grid, 3 and 4 tabs, ±1 px         | Pass, Δ 0 px for panels and browsers; every member's docshell active whichever member is selected                             |
+| DOM fullscreen from one pane, then exit             | Pass: the pane fills the screen (Δ 0), the others stay active and are covered; every rect is back after exit (Δ 0)            |
+| Focus outline, find bar (`accel+f`), notification   | Pass: outline on the focused pane only; find bar and notification inside their own pane's panel and rect                      |
+| Focus or click selects the tab, URL bar follows     | Pass, for `focus()` and a synthesized click                                                                                   |
+| `removeTab` on a 3-split member, next `TabSelect`   | Pass: no exception, no stale panel; the closed tab stays in the private `#tabs` but is skipped                                |
+| Rebuild, with and without the host deactivating     | Kept members active at every sample, scroll kept; the dropped tab stays **active** unless the host sets it inactive           |
+| Zoom with `-moz-subtree-hidden-only-visually`       | Pass: zoomed pane fills the area, the others are not drawn or hit, keep their scroll; their docshells stay active (CSS alone) |
+| Tab-key panel order (3+ panes)                      | Upstream orders panels 0 and 1 only; `moveBefore` in reading order fixes it without reload, deactivation or scroll loss       |
+| `browser.tabs.splitView.enabled = false`, `hideTab` | API still works; `hideTab` on one member hides all                                                                            |
+
+Decision: ADR-013 is Accepted; no contingency patch; leaves are rebuilds.
+
+What sub-spec 2 (`m4-split-layout`) takes from this:
+
+- Start from `split-spike.css`: scope to `:root:not([inDOMFullscreen])
+#tabbrowser-tabpanels[vimma-panes][splitview]`, give `#tabbrowser-tabpanels`
+  `position: relative`, and override `position`, `inset`, `width`, `height`, `min-width`,
+  `max-width`, `margin` and `flex` with `!important` (upstream's panel `margin` is
+  `--space-xsmall`, so the gap token must be ours). Then delete the spike files.
+- `reconcile` also reorders panels with `moveBefore` into `leaves()` order after membership
+  changes, and sets the dropped tab's `docShellIsActive = false` on every leave, in the same task
+  as the rebuild. It tolerates the late `TabSplitViewDeactivate` whose `detail.tabs` lists the old
+  wrapper's members, kept ones included.
+- Zoom: the CSS hides; the host must still set `docShellIsActive = false` on zoomed-away
+  browsers, since the CSS alone leaves them active. `content-area.css` gives column 0 and the
+  deck-selected browserContainer `z-index: 1`, so overlap without the hiding is visible.
+- Test notes: `getComputedStyle` does not expose `-moz-subtree-hidden-only-visually` (use a hit
+  test with a control); `Assert.deepEqual` treats any two DOM elements as equal (compare ids or
+  labels); the unfocused panels' `browserContainer` has a 1 px separator outline, so check the
+  outline colour, not its style.
+- Not done here, carried to sub-spec 2: `browser.tabs.splitView.enabled = false` in the branding
+  prefs (the contract test already shows the API works with it off), hiding
+  `#split-view-button`, and the accessible label for a third tab on. Flicker was measured as
+  "no state change between synchronous samples"; the e2e screenshot in sub-spec 7 is the visual
+  check.
+
 ## Breakdown into sub-specs
 
 Each sub-spec is one session, ordered by dependencies. "Core" means PR #10 merged.
@@ -316,8 +363,11 @@ picker for a new pane (ours opens the new-tab page).
 
 ## Settled
 
-- **Firefox's split view, not Zen's**, subject to the sub-spec 1 spike meeting ADR-013's
-  acceptance criteria ([ADR-013](../adr/013-split-on-firefox-split-view.md)).
+- **Firefox's split view, not Zen's.** The sub-spec 1 spike met all four of ADR-013's
+  acceptance criteria ([ADR-013](../adr/013-split-on-firefox-split-view.md), Accepted).
+- **Leaves are rebuilds; no contingency patch.** `removeTab` on a member of three does not
+  throw, and a rebuild keeps the kept members active and scrolled (Sub-spec 1 results).
+- **The host reorders panels** into reading order with `moveBefore` (Tab-key order).
 - **Geometry is core's.** Firefox's two-column CSS is overridden, never patched.
 - **Fullscreen does not touch the model.** It is upstream's transient visual zoom of the
   focused pane.
@@ -335,9 +385,6 @@ the label for a third tab on), `TabsList` drag targets and `tabs.move` (limits),
 
 ## Open questions
 
-- Rebuild vs contingency patch: answered by sub-spec 1's spike, with numbers.
-- Tab-key focus order across three or more panes: reorder panels in the host, or accept the
-  limit (sub-spec 1).
 - The default for `panes.max` (4 proposed), and whether it belongs in core's `splitRefusal`.
 - Divider appearance and gap size: M5 theme tokens; M4 uses a 2 px gap and Firefox's focus
   outline.
