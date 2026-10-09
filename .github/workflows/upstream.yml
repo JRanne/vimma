@@ -1,5 +1,5 @@
 # Spec m0-pipeline, ADR-002: poll Firefox release versions; on a new release open
-# `chore(upstream): Firefox X.Y` bumping surfer.json. Cheap on purpose (Python stdlib, no
+# `upstream: update to Firefox X.Y` bumping surfer.json. Cheap on purpose (Python stdlib, no
 # npm ci): it runs 4 times a day on the free plan's minutes.
 #
 # PRs opened with the default GITHUB_TOKEN do not trigger other workflows, so CI would not run on
@@ -56,12 +56,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -C "$branch"
-          git commit -am "chore(upstream): Firefox $VERSION" \
+          git commit -am "upstream: update to Firefox $VERSION" \
             -m "Bump surfer.json from Firefox $old to $VERSION (ADR-002)."
           git push --force origin "$branch"
           gh label create upstream --color 1D76DB --description "Firefox upstream bump" --force
           gh pr create --draft --base main --head "$branch" --label upstream \
-            --title "chore(upstream): Firefox $VERSION" \
+            --title "upstream: update to Firefox $VERSION" \
             --body "Firefox $VERSION is out (was $old). Opened by upstream.yml.
 
           Before merging: \`npm run import && npx surfer build\` on the build machine and check the
