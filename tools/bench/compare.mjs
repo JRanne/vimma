@@ -26,10 +26,13 @@ export const THRESHOLD = 0.1;
  */
 export const CASE_THRESHOLD = 0.25;
 /**
- * Added to both limits when comparing with another CPU model's entry: the two recorded hosted
- * runner CPUs (Intel Xeon 8573C, AMD EPYC 9V74) differ by up to 5.5 % per case in their ratios.
+ * Added to both limits when comparing with another CPU model's entry (50 % suite, 65 % per case).
+ * Ratios do not carry across microarchitectures: the hosted Xeon 8573C and EPYC 9V74 differ by up
+ * to 5.5 % per case, but unchanged code on an EPYC 7763 measured +19 % suite and up to +30 % per
+ * case against the 9V74 (CI run 37966135702). A fallback then still catches a gross regression
+ * without failing on the hardware difference; the warning asks for the machine to be recorded.
  */
-export const FALLBACK_MARGIN = 0.06;
+export const FALLBACK_MARGIN = 0.4;
 /** Floating-point slack, so a change of exactly the limit passes. */
 const EPSILON = 1e-9;
 export const DEFAULT_BASELINE = fileURLToPath(

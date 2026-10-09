@@ -360,8 +360,11 @@ a motion, a two-key sequence, and applying a pane-focus action to a 30-tab works
 - on a machine the baseline knows: the **suite**, the geometric mean of the cases' changes, is
   more than **10 %** slower, or one case is more than **25 %** slower, or a baseline case is gone.
 - on a machine it does not know (a new runner CPU, a Node bump): the same, against the **most
-  demanding entry of the same arch and Node major**, with both limits widened by 6 points (16 %
-  suite, 31 % per case; the two hosted CPUs' entries differ by up to 5.5 % per case). The step
+  demanding entry of the same arch and Node major**, with both limits widened by 40 points (50 %
+  suite, 65 % per case). Ratios do not carry across CPU generations: the Xeon 8573C and EPYC 9V74
+  entries differ by up to 5.5 % per case, but unchanged code on an EPYC 7763 measured +19 %
+  suite and up to +30 % per case against the 9V74 (run 37966135702), so a tighter fallback would
+  fail on hardware, not code. It still catches a gross regression. The step
   then emits a `::warning::` and a step-summary line naming that entry. Only with no entry of the
   same arch and Node major does it fall back to the budget alone, also with a warning. It never
   passes silently.
@@ -380,7 +383,7 @@ Why it does not flake (plan §5: no retries; flaky means quarantine):
   ratios do not carry exactly across microarchitectures or V8 versions.
 - **Several samples per entry.** An entry's `cases` are the per-case median of its `samples`, one
   per CI run, so one unlucky recording run does not set the bar. Currently: AMD EPYC 9V74 has 2
-  samples, Intel Xeon 8573C 1 (add the next Intel run's numbers, see below).
+  samples, Intel Xeon 8573C 1 and AMD EPYC 7763 1 (add later runs' numbers, see below).
 - **Suite-level 10 %.** Measured noise between whole runs on a 2-CPU-pinned laptop: the suite's
   geometric mean within 6 % (max−min over 8 runs), single cases up to 14 %. So 10 % on the suite
   and 25 % per case leave a margin of about two on the worst pair. Two CI runs on the same AMD

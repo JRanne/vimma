@@ -200,10 +200,12 @@ describe("compare on an unrecorded runner of a recorded architecture and Node ma
   const NEW = "AMD EPYC 7763 64-Core Processor | x64 | node 22.24.0";
 
   it("falls back to the most demanding entry of the same arch and Node major, and says so", () => {
-    expect(FALLBACK_MARGIN).toBe(0.06);
-    const r = compare(result({ a: { us: 1, ratio: 2.1 }, b: { us: 1, ratio: 4.2 } }, NEW), two);
+    expect(FALLBACK_MARGIN).toBe(0.4);
+    // CI run 37966135702: unchanged code on an EPYC 7763 measured +19 % on the suite, cases up
+    // to +30 %, against the EPYC 9V74 entry. A fallback must pass that.
+    const r = compare(result({ a: { us: 1, ratio: 2.6 }, b: { us: 1, ratio: 4.76 } }, NEW), two);
     expect(r.fallback).toBe(AMD);
-    expect(r.ok).toBe(true); // +5 % on the AMD entry, inside the widened 16 %
+    expect(r.ok).toBe(true);
     expect(r.warnings).toEqual([
       expect.stringMatching(
         new RegExp(`^no baseline for machine "${NEW}".*compared with "${AMD}"`),
@@ -212,10 +214,10 @@ describe("compare on an unrecorded runner of a recorded architecture and Node ma
   });
 
   it("still fails a fallback comparison once the suite is more than 10 % plus the margin slower", () => {
-    const r = compare(result({ a: { us: 1, ratio: 2.34 }, b: { us: 1, ratio: 4.68 } }, NEW), two);
+    const r = compare(result({ a: { us: 1, ratio: 3.02 }, b: { us: 1, ratio: 6.04 } }, NEW), two);
     expect(r.fallback).toBe(AMD);
     expect(r.ok).toBe(false);
-    expect(r.failures).toEqual([expect.stringMatching(/^suite: \+17\.0 % .*16\.0 % limit/)]);
+    expect(r.failures).toEqual([expect.stringMatching(/^suite: \+51\.0 % .*50\.0 % limit/)]);
   });
 
   it("does not fail a fallback comparison for a baseline case the run lacks", () => {
