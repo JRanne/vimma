@@ -76,6 +76,9 @@ export default [
         ...globals.browser,
         ChromeUtils: "readonly",
         Services: "readonly",
+        Cc: "readonly",
+        ContentTaskUtils: "readonly", // inside SpecialPowers.spawn
+        NewTabPagePreloading: "readonly",
         add_task: "readonly",
         info: "readonly",
         registerCleanupFunction: "readonly",
