@@ -12,8 +12,8 @@
 
 "use strict";
 
-const { applyLayout, setZoom, clearLayout } = ChromeUtils.importESModule(
-  "chrome://browser/content/vimma/split/spike-layout.mjs",
+const { applyLayout, setHidden, clearLayout } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/split/layout.mjs",
 );
 const { DOMFullscreenTestUtils } = ChromeUtils.importESModule(
   "resource://testing-common/DOMFullscreenTestUtils.sys.mjs",
@@ -437,7 +437,7 @@ add_task(async function zoom_hides_the_other_panes_visually_and_unzoom_restores_
   applyLayout(window, new Map([[z3, full]]));
   Assert.ok(panelOf(z1).contains(hitAt(z1)), "control: unhidden, z1 is on top of z3");
 
-  setZoom(window, z3, tabs, full, rects);
+  for (const tab of [z1, z2]) setHidden(window, tab, true);
   await nextFrame();
   assertRects(new Map([[z3, full]]), "zoomed");
   for (const tab of [z1, z2]) {
@@ -454,7 +454,8 @@ add_task(async function zoom_hides_the_other_panes_visually_and_unzoom_restores_
   await nextFrame();
   assertRects(new Map([[z3, full]]), "zoomed, z3 selected");
 
-  setZoom(window, null, tabs, full, rects);
+  for (const tab of [z1, z2]) setHidden(window, tab, false);
+  applyLayout(window, rects);
   await nextFrame();
   assertRects(rects, "unzoomed");
   assertActive(tabs, "unzoomed");

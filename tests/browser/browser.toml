@@ -55,6 +55,8 @@ skip-if = ["artifact"]
 
 ["browser_vimma_split_contract.js"]
 
+["browser_vimma_split_layout.js"]
+
 ["browser_vimma_control.js"]
 
 ["browser_vimma_statusbar.js"]
@@ -72,6 +74,8 @@ support-files = [
 ["browser_vimma_picker.js"]
 
 ["browser_vimma_rename.js"]
+
+["browser_vimma_start_page.js"]
 
 ["browser_vimma_workspace_store.js"]
 

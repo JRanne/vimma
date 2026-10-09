@@ -9,6 +9,14 @@
 pref("startup.homepage_override_url", "");
 pref("startup.homepage_welcome_url", "");
 pref("startup.homepage_welcome_url.additional", "");
+
+// The Vimma start page (spec start-page): the home page (new windows; startup, while
+// browser.startup.page is 1) and, while vimma.startpage.newtab is true, the new-tab page
+// (vimma/start/StartPage.sys.mjs). Settings > Home changes the home page; the new tab goes back
+// to Firefox's with vimma.startpage.newtab = false.
+pref("browser.startup.homepage", "chrome://browser/content/vimma/start/start.html");
+pref("vimma.startpage.newtab", true);
+
 // The time interval between checks for a new version (in seconds)
 pref("app.update.interval", 86400); // 24 hours
 // Give the user x seconds to react before showing the big UI. default=24 hours
@@ -109,3 +117,8 @@ pref("accessibility.typeaheadfind.casesensitive", 2);
 // Workspaces (spec m3-workspaces, decision 13): every tab is in a workspace's container, and
 // Firefox only uses a preloaded about:newtab for tabs in no container, so it would never be used.
 pref("browser.newtab.preload", false);
+
+// Split panes (spec m4-split-panes, ADR-013): Vimma's keys are the only way into a split. This
+// hides Firefox's tab and link context-menu items and alt-click; the split-view API keeps
+// working. split.css hides the URL bar button.
+pref("browser.tabs.splitView.enabled", false);
