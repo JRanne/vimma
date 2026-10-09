@@ -24,8 +24,12 @@ disk). The repo becomes public (MPL-2.0); until then Actions minutes are limited
 (`gecko.v2.mozilla-release.shippable.revision.<rev>.firefox.linux64-opt`: `target.tar.xz`,
 `target.common.tests.tar.zst`) and builds our front end on top.
 
-Tests that only a full build can pass carry `skip-if = ["artifact"]` in `browser.toml`. The
-nightly (full build, self-hosted) runs the whole suite, so they stay covered.
+Tests that only a full build can pass carry `skip-if = ["artifact"]` in `browser.toml`.
+**Until the nightly runner is live (none is registered and `NIGHTLY_ENABLED` is unset), those
+tests and all compiled-in build-config behaviour run only on local full builds.** A PR that
+touches `*.patch`, `configs/`, `moz.configure` or branding must therefore report a local
+`npm run mochitest -- tests/browser/` on the full build (PR template checkbox). Once the nightly
+runs, it also runs the whole suite on the full build.
 
 ## Reasoning
 
@@ -34,15 +38,18 @@ Measured on Firefox 157.0.1 (docs/specs/m0-build-strategy.md has the numbers):
 - **Artifact builds work from a release tarball.** `artifacts.py` normally walks VCS history to
   find pushheads, which a tarball lacks, but `MOZ_ARTIFACT_REVISION=<40-hex>` skips that, and
   `sourcestamp.txt` holds exactly the mozilla-release revision Mozilla's release build used.
-  Our version display (0.x) selects the `mozilla-release` tree. Release tasks are indexed for a
-  year, so the current release always resolves.
+  Our version display (0.x) selects the `mozilla-release` tree (`select_candidate_trees` reads
+  `MOZ_APP_VERSION_DISPLAY`; mach has no switch to force it, so the tool refuses a display
+  version that would steer it to beta, central or ESR). Release tasks are indexed for a year;
+  the tool checks the index first and prints the expiry.
 - **Fits a hosted runner.** 163 MB of artifacts; `obj-artifact` 0.6 GB; tree 4.7 GB unpacked.
   On `ubuntu-24.04` (2 CPU, private) the whole job is 5 min 27 s: unpack 66 s, artifact build
-  198 s (CPU-bound front-end build), suite 27 s, with 6.3 GB disk left at the end. Locally a
+  198 s (CPU-bound front-end build), suite 27 s, with 7.1 GB disk left at the end. Locally a
   warm rebuild is 23 s.
 - **Faithful for front-end code.** Everything we write (chrome JS, CSS, FTL, prefs, branding,
   patches to front-end files, `application.ini`, `AppConstants`) is built from our tree. 158 of
   159 assertions pass unchanged; the one left (`MOZ_CRASHREPORTER`) is compiled into libxul.
+  Compiled-in values are not ours, though: see the gaps below.
 - **Safe once public.** Hosted runner, read-only token, no secrets, `pull_request` (not
   `pull_request_target`): a fork PR can run code only on GitHub's disposable VM.
 - **Free once public.** Standard hosted runners are unlimited for public repos.
@@ -58,8 +65,23 @@ What an artifact build cannot carry, and how the tool adapts (each in `artifact-
 | App data (`Name`, `Vendor`)                     | the launcher's compiled-in data is Mozilla's (`Firefox`, `Mozilla`)                 | tests run with `XUL_APP_FILE=dist/bin/browser/application.ini` (ours)                         |
 | `MOZ_APP_UA_NAME=Firefox` (moz-configure.patch) | Mozilla's libxul has `""`, so the UA would end `Vimma/157.0.1`                      | that `application.ini` gets `UAName=Firefox`, the runtime field `nsHttpHandler` falls back to |
 
-`MOZ_APP_VENDOR` and the version files are not compiled into libxul on Linux (they reach the
-binary through `application.ini` and `AppConstants`), so they need nothing.
+**Known gaps** (not adapted; Mozilla's values are compiled into libxul, so PRs cannot see a
+regression here, only a local full build or the nightly can):
+
+| Define                    | Used in                                                                                                        | Artifact build                                                                                                         | Full build                                            |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `MOZ_APP_VERSION_DISPLAY` | `nsAppRunner.cpp` `DumpVersion` (`--version`) and the `-v` path; `xpcom/FOG.cpp` (Glean's app display version) | `vimma --version` prints `… 157.0.1` (measured: `Mozilla Firefox 157.0.1`, or `Vimma Vimma 157.0.1` with our app file) | `Vimma Vimma 0.1.0`                                   |
+| `MOZ_APP_NAME`            | `widget/gtk` (window class, sound, D-Bus names), `nsGNOMEShellService.cpp`                                     | `firefox`                                                                                                              | `vimma`                                               |
+| `MOZ_CRASHREPORTER`       | libxul                                                                                                         | on                                                                                                                     | off (`browser_vimma_crash_reporter.js`, skipped here) |
+
+Not a gap: `MOZ_USER_DIR` (`nsXREDirProvider.cpp`, the legacy profile-root fallback) is
+`"mozilla"` in both builds; the full build's `mozilla-config.h` has it too, so the
+`export MOZ_USER_DIR="Vimma"` in `configs/common/mozconfig` has no effect. The profile path
+itself comes from the app data's vendor and name, which tests take from our `application.ini`.
+
+`AppConstants.MOZ_APP_VERSION_DISPLAY` (JS) is ours in both builds, which is why
+`browser_vimma_app_version.js` passes; the C++ copy is the gap. `MOZ_APP_VENDOR` reaches the
+runtime only through `application.ini` on Linux (its C++ uses are Windows-only).
 
 ## Alternatives rejected
 
@@ -69,8 +91,8 @@ binary through `application.ini` and `AppConstants`), so they need nothing.
 - **Self-hosted runner for PR mochitests.** Runs PR code on the maintainer's machine. Acceptable
   only for same-repo PRs, never for forks once public; needs the machine online for every PR and
   a runner not yet registered; personal repos have no runner groups to fence it to one workflow.
-  It would test the real build, but the artifact build already passes all but one compiled-in
-  assertion, which the nightly covers.
+  It would test the real build, but the artifact build already passes all but one assertion;
+  the compiled-in gaps are covered by the full-build checkbox (and the nightly once live).
 - **Prebuilt package plus test package from the nightly.** A PR would have to overlay changed
   chrome files into `omni.ja`: our files go through `jar.mn`, the preprocessor, chrome manifests
   and the startup cache, i.e. the build system we would be re-implementing, plus a packaged
@@ -85,11 +107,15 @@ binary through `application.ini` and `AppConstants`), so they need nothing.
 - Every PR touching the browser runs the browser-chrome suite; PRs touching only docs or CI
   tooling skip it (paths filter), to save minutes while private.
 - A test that needs a compiled-in define marks itself `skip-if = ["artifact"]` with a reason
-  comment, and the nightly is where it runs. Keep that list short; review it in the patch audit.
+  comment. It runs only on full builds: locally (PR template checkbox) and, once live, in the
+  nightly. Keep that list short; review it in the patch audit.
 - Depends on Mozilla's Taskcluster index for the release in `surfer.json`. Release tasks expire
-  after a year, far longer than we stay on a release (ADR-002). If a lookup fails, the build
-  fails loudly ("no built artifacts found"); it never falls back to a different revision.
-- A patch to C++ or to compiled-in build config is not exercised by PRs, only by the nightly
-  and local full builds. Such a patch needs an ADR line anyway (ADR-003).
+  after a year, far longer than we stay on a release (ADR-002). The tool queries the index
+  before building and fails with the revision, the expiry and a remedy; it never falls back to
+  a different revision.
+- A patch to C++ or to compiled-in build config is not exercised by PRs, only by local full
+  builds (and the nightly once live). Such a patch needs an ADR line anyway (ADR-003).
+- The job is path-filtered, so it does not report on docs-only PRs. Making it a required status
+  check (once branch protection exists) needs handling for skipped runs, or those PRs hang.
 - `engine/obj-artifact` also works locally, next to the full objdir: a front-end check in about
   half a minute instead of a full rebuild.

@@ -118,11 +118,19 @@ It runs only when a PR touches `src/`, `tests/browser/`, `packages/vimma-core/`,
 `surfer.json`, `package*.json`, the tools it uses or `e2e.yml` (paths filter). For a PR opened
 with `GITHUB_TOKEN`, mark it ready for review or `gh workflow run e2e.yml --ref <branch>`.
 
-What it does not cover: compiled-in build config (C++ defines, `--disable-crashreporter`). Tests
-of that carry `skip-if = ["artifact"]` in `tests/browser/browser.toml` and run in the nightly
-(full build) and locally with plain `npm run mochitest`. If the job fails with "no built
-artifacts found", Mozilla's index has no shippable linux64 build for `engine/sourcestamp.txt`'s
-revision (release tasks are kept a year): check `surfer.json` points at a real release.
+What it does not cover: compiled-in build config (C++ defines such as `--version`'s display
+version and `MOZ_APP_NAME`, `--disable-crashreporter`; ADR-010 "Known gaps"). Tests of that carry
+`skip-if = ["artifact"]` in `tests/browser/browser.toml`. **Until the nightly runner is live they
+run only locally**, so a PR touching `*.patch`, `configs/`, `moz.configure` or branding must
+report plain `npm run mochitest -- tests/browser/` on the full build (PR template checkbox).
+
+The tool checks Mozilla's index first and prints how long the release build stays indexed. If it
+fails, the message names the revision from `engine/sourcestamp.txt` and the expiry: check that
+`surfer.json` points at a real release. It also refuses a display version ending in `aN`/`bN`
+or containing `esr`, which would make mach search the wrong tree.
+
+The job is path-filtered: it does not report on docs-only PRs. Do not make it a required status
+check (once branch protection exists) without handling skipped runs, or those PRs hang.
 
 Fork PRs (once public) run the same job with a read-only token and no secrets; GitHub asks you
 to approve the first run of a first-time contributor (Settings → Actions → General).
