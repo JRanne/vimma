@@ -1,0 +1,718 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+//! Protocol version 1 messages: encoding what the client sends (`hello`, requests) and decoding
+//! what it receives (`welcome`, responses, results) and the discovery file. The rules mirror
+//! `packages/vimma-core/src/control.mjs`; both are tested against `tests/contract/control/v1/`.
+
+use crate::json::Value;
+use std::collections::BTreeMap;
+use std::fmt;
+
+/// The protocol version this client speaks.
+pub const PROTOCOL: u64 = 1;
+/// Longest line accepted from the server, in bytes, excluding the newline.
+pub const MAX_LINE: usize = 1024 * 1024;
+/// Largest request id (2^53 - 1, exact in a JSON number).
+pub const MAX_ID: u64 = (1 << 53) - 1;
+/// vimma-core's `MODES` (packages/vimma-core/src/modes.mjs; a test keeps them in step).
+pub const MODES: [&str; 7] = [
+    "normal", "insert", "visual", "command", "hint", "help", "panel",
+];
+/// vimma-core's `ERROR_CODES`.
+pub const ERROR_CODES: [&str; 8] = [
+    "bad-request",
+    "unauthorized",
+    "unsupported-protocol",
+    "unknown-command",
+    "invalid-args",
+    "not-implemented",
+    "failed",
+    "internal",
+];
+
+/// Where `open` loads the URL.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Where {
+    Tab,
+    Current,
+}
+
+/// A command the client can send.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Command {
+    SendKeys { keys: String },
+    State,
+    Open { url: String, place: Option<Where> },
+}
+
+/// The server's `welcome`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Welcome {
+    pub protocol: u64,
+    pub app: String,
+    pub version: String,
+}
+
+/// A response's `error`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ErrorBody {
+    pub code: String,
+    pub message: String,
+}
+
+/// A decoded response envelope; `id` is `None` for handshake errors.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Response {
+    Ok { id: Option<u64>, result: Value },
+    Err { id: Option<u64>, error: ErrorBody },
+}
+
+/// One tab in `state`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Tab {
+    pub id: String,
+    pub url: String,
+    pub title: String,
+    pub selected: bool,
+}
+
+/// The `state` result. `raw` keeps the whole object, unknown fields included, for `--json`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct State {
+    pub mode: String,
+    pub pending: Option<String>,
+    pub workspace: Option<String>,
+    pub tabs: Vec<Tab>,
+    pub raw: Value,
+}
+
+/// A command's decoded result.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CommandResult {
+    SendKeys { sent: u64 },
+    State(State),
+    Open { tab: String },
+}
+
+/// The discovery file `<profile>/vimma-control.json`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Discovery {
+    pub protocol: u64,
+    pub port: u16,
+    pub token: String,
+    pub pid: u64,
+}
+
+/// Why a message does not follow the protocol.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecodeError(pub String);
+
+impl fmt::Display for DecodeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for DecodeError {}
+
+/// The `hello` line's value.
+#[must_use]
+pub fn hello(token: &str) -> Value {
+    object([
+        ("type", text("hello")),
+        ("protocol", Value::Number(1.0)),
+        ("token", text(token)),
+    ])
+}
+
+/// A request's value. Ids are `u32`: a CLI invocation sends a handful, and every `u32` is exact
+/// as a JSON number.
+#[must_use]
+pub fn request(id: u32, command: &Command) -> Value {
+    let (name, args) = match command {
+        Command::SendKeys { keys } => ("send-keys", object([("keys", text(keys))])),
+        Command::State => ("state", object([])),
+        Command::Open { url, place } => {
+            let mut args = BTreeMap::from([("url".to_string(), text(url))]);
+            if let Some(place) = place {
+                let place = match place {
+                    Where::Tab => "tab",
+                    Where::Current => "current",
+                };
+                args.insert("where".to_string(), text(place));
+            }
+            ("open", Value::Object(args))
+        }
+    };
+    object([
+        ("type", text("request")),
+        ("id", Value::Number(f64::from(id))),
+        ("command", text(name)),
+        ("args", args),
+    ])
+}
+
+/// Decode a `welcome`.
+///
+/// # Errors
+/// When the value is not a v1 `welcome`.
+pub fn decode_welcome(value: &Value) -> Result<Welcome, DecodeError> {
+    let map = as_object(value, "welcome")?;
+    expect_type(map, "welcome")?;
+    Ok(Welcome {
+        protocol: protocol_field(map)?,
+        app: string_field(map, "app")?.to_string(),
+        version: string_field(map, "version")?.to_string(),
+    })
+}
+
+/// Decode a response envelope (not its result; see [`decode_result`]).
+///
+/// # Errors
+/// When the value is not a v1 response.
+pub fn decode_response(value: &Value) -> Result<Response, DecodeError> {
+    let map = as_object(value, "response")?;
+    expect_type(map, "response")?;
+    only_fields(map, &["type", "id", "ok", "result", "error"], "")?;
+    let id = match map.get("id") {
+        Some(Value::Null) => None,
+        Some(id) => Some(
+            id.as_u64()
+                .filter(|id| *id >= 1)
+                .ok_or_else(|| fail("id must be an integer from 1 to 2^53-1 or null"))?,
+        ),
+        None => return Err(fail("id must be an integer from 1 to 2^53-1 or null")),
+    };
+    let Some(Value::Bool(ok)) = map.get("ok") else {
+        return Err(fail("ok must be a boolean"));
+    };
+    match (ok, map.get("result"), map.get("error")) {
+        (true, Some(result), None) => Ok(Response::Ok {
+            id,
+            result: result.clone(),
+        }),
+        (true, _, _) => Err(fail("ok: true needs result and no error")),
+        (false, None, Some(error)) => {
+            let error = as_object(error, "error")?;
+            only_fields(error, &["code", "message"], "error.")?;
+            let code = string_field(error, "code")
+                .ok()
+                .filter(|code| ERROR_CODES.contains(code))
+                .ok_or_else(|| {
+                    fail(&format!(
+                        "error.code must be one of {}",
+                        ERROR_CODES.join(", ")
+                    ))
+                })?;
+            let message = string_field(error, "message")
+                .map_err(|_| fail("error.message must be a string"))?;
+            Ok(Response::Err {
+                id,
+                error: ErrorBody {
+                    code: code.to_string(),
+                    message: message.to_string(),
+                },
+            })
+        }
+        (false, _, _) => Err(fail("ok: false needs error and no result")),
+    }
+}
+
+/// Decode the result of `command`.
+///
+/// # Errors
+/// When the result does not have the command's shape.
+pub fn decode_result(command: &Command, result: &Value) -> Result<CommandResult, DecodeError> {
+    let map = as_object(result, "result")?;
+    match command {
+        Command::SendKeys { .. } => map
+            .get("sent")
+            .and_then(Value::as_u64)
+            .map(|sent| CommandResult::SendKeys { sent })
+            .ok_or_else(|| fail("result.sent must be an integer >= 0")),
+        Command::Open { .. } => match map.get("tab") {
+            Some(Value::String(tab)) => Ok(CommandResult::Open { tab: tab.clone() }),
+            _ => Err(fail("result.tab must be a string")),
+        },
+        Command::State => decode_state(map, result).map(CommandResult::State),
+    }
+}
+
+fn decode_state(map: &BTreeMap<String, Value>, raw: &Value) -> Result<State, DecodeError> {
+    let mode = string_field(map, "mode")
+        .ok()
+        .filter(|mode| MODES.contains(mode))
+        .ok_or_else(|| fail(&format!("result.mode must be one of {}", MODES.join(", "))))?;
+    let nullable = |key: &str| match map.get(key) {
+        Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) => Ok(Some(s.clone())),
+        _ => Err(fail(&format!("result.{key} must be a string or null"))),
+    };
+    let pending = nullable("pending")?;
+    let workspace = nullable("workspace")?;
+    let Some(Value::Array(items)) = map.get("tabs") else {
+        return Err(fail("result.tabs must be an array"));
+    };
+    let mut tabs = Vec::with_capacity(items.len());
+    for (i, item) in items.iter().enumerate() {
+        let tab = as_object(item, &format!("result.tabs[{i}]"))?;
+        let field = |key: &str| {
+            string_field(tab, key)
+                .map(String::from)
+                .map_err(|_| fail(&format!("result.tabs[{i}].{key} must be a string")))
+        };
+        let Some(Value::Bool(selected)) = tab.get("selected") else {
+            return Err(fail(&format!(
+                "result.tabs[{i}].selected must be a boolean"
+            )));
+        };
+        tabs.push(Tab {
+            id: field("id")?,
+            url: field("url")?,
+            title: field("title")?,
+            selected: *selected,
+        });
+    }
+    if tabs.iter().filter(|tab| tab.selected).count() > 1 {
+        return Err(fail("result.tabs must have at most one selected tab"));
+    }
+    if !map.contains_key("panes") {
+        return Err(fail(
+            "result.panes must be present (null before split view)",
+        ));
+    }
+    Ok(State {
+        mode: mode.to_string(),
+        pending,
+        workspace,
+        tabs,
+        raw: raw.clone(),
+    })
+}
+
+/// Decode the discovery file.
+///
+/// # Errors
+/// When a field is missing or out of range.
+pub fn decode_discovery(value: &Value) -> Result<Discovery, DecodeError> {
+    let map = as_object(value, "discovery file")?;
+    let protocol = protocol_field(map)?;
+    let port = map
+        .get("port")
+        .and_then(Value::as_u64)
+        .and_then(|port| u16::try_from(port).ok())
+        .filter(|port| *port >= 1)
+        .ok_or_else(|| fail("port must be an integer from 1 to 65535"))?;
+    let token = match map.get("token") {
+        Some(Value::String(token)) if is_token(token) => token.clone(),
+        _ => return Err(fail("token must be 64 lowercase hex characters")),
+    };
+    let pid = map
+        .get("pid")
+        .and_then(Value::as_u64)
+        .filter(|pid| *pid >= 1)
+        .ok_or_else(|| fail("pid must be an integer >= 1"))?;
+    Ok(Discovery {
+        protocol,
+        port,
+        token,
+        pid,
+    })
+}
+
+fn fail(message: &str) -> DecodeError {
+    DecodeError(message.to_string())
+}
+
+fn text(s: &str) -> Value {
+    Value::String(s.to_string())
+}
+
+fn object<const N: usize>(pairs: [(&str, Value); N]) -> Value {
+    Value::Object(pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+}
+
+fn is_token(token: &str) -> bool {
+    token.len() == 64
+        && token
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+fn as_object<'a>(value: &'a Value, what: &str) -> Result<&'a BTreeMap<String, Value>, DecodeError> {
+    match value {
+        Value::Object(map) => Ok(map),
+        _ => Err(fail(&format!("{what} must be an object"))),
+    }
+}
+
+fn expect_type(map: &BTreeMap<String, Value>, kind: &str) -> Result<(), DecodeError> {
+    match map.get("type") {
+        Some(Value::String(t)) if t == kind => Ok(()),
+        _ => Err(fail(&format!("type must be \"{kind}\""))),
+    }
+}
+
+fn only_fields(
+    map: &BTreeMap<String, Value>,
+    allowed: &[&str],
+    prefix: &str,
+) -> Result<(), DecodeError> {
+    match map.keys().find(|key| !allowed.contains(&key.as_str())) {
+        Some(key) => Err(fail(&format!("unknown field \"{prefix}{key}\""))),
+        None => Ok(()),
+    }
+}
+
+fn string_field<'a>(map: &'a BTreeMap<String, Value>, key: &str) -> Result<&'a str, DecodeError> {
+    match map.get(key) {
+        Some(Value::String(s)) => Ok(s),
+        _ => Err(fail(&format!("{key} must be a string"))),
+    }
+}
+
+fn protocol_field(map: &BTreeMap<String, Value>) -> Result<u64, DecodeError> {
+    map.get("protocol")
+        .and_then(Value::as_u64)
+        .filter(|p| *p >= 1)
+        .ok_or_else(|| fail("protocol must be an integer >= 1"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::json::parse;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    const TOKEN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    fn fixtures_dir() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/contract/control/v1")
+    }
+
+    /// (file name, fixture value)
+    fn fixtures() -> Vec<(String, Value)> {
+        let mut out: Vec<(String, Value)> = fs::read_dir(fixtures_dir())
+            .expect("fixtures directory")
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .filter(|name| Path::new(name).extension().is_some_and(|ext| ext == "json"))
+            .map(|name| {
+                let text = fs::read_to_string(fixtures_dir().join(&name)).unwrap();
+                let value = parse(&text).unwrap_or_else(|e| panic!("{name}: {e}"));
+                (name, value)
+            })
+            .collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    }
+
+    fn str_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
+        match value.get(key) {
+            Some(Value::String(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    fn command_named(name: &str) -> Command {
+        match name {
+            "send-keys" => Command::SendKeys { keys: "j".into() },
+            "state" => Command::State,
+            "open" => Command::Open {
+                url: "about:blank".into(),
+                place: None,
+            },
+            other => panic!("no client command {other}"),
+        }
+    }
+
+    /// Decode a server-direction fixture the way the client would.
+    fn decode_fixture(fixture: &Value) -> Result<(), DecodeError> {
+        let message = fixture.get("message").unwrap();
+        match str_field(fixture, "kind").unwrap() {
+            "welcome" => decode_welcome(message).map(drop),
+            "discovery" => decode_discovery(message).map(drop),
+            "response" => match decode_response(message)? {
+                Response::Ok { result, .. } => match str_field(fixture, "command") {
+                    Some(name) => decode_result(&command_named(name), &result).map(drop),
+                    None => Ok(()),
+                },
+                Response::Err { .. } => Ok(()),
+            },
+            other => panic!("not a server-direction kind: {other}"),
+        }
+    }
+
+    /// The request a valid client-direction fixture describes, built with our encoder.
+    fn encode_fixture(fixture: &Value) -> Value {
+        let message = fixture.get("message").unwrap();
+        if str_field(fixture, "kind") == Some("hello") {
+            return hello(str_field(message, "token").unwrap());
+        }
+        let id = u32::try_from(message.get("id").and_then(Value::as_u64).unwrap()).unwrap();
+        let args = message.get("args").unwrap();
+        let command = match str_field(message, "command").unwrap() {
+            "send-keys" => Command::SendKeys {
+                keys: str_field(args, "keys").unwrap().into(),
+            },
+            "state" => Command::State,
+            "open" => Command::Open {
+                url: str_field(args, "url").unwrap().into(),
+                place: match str_field(args, "where") {
+                    Some("tab") => Some(Where::Tab),
+                    Some("current") => Some(Where::Current),
+                    _ => None,
+                },
+            },
+            other => panic!("client does not send {other}"),
+        };
+        request(id, &command)
+    }
+
+    /// Client-direction fixtures the client never decodes, and requests it never sends: the
+    /// server (vimma-core's validator) owns them. Listed so a new fixture cannot go untested.
+    const SERVER_ONLY: [&str; 6] = [
+        "hello.invalid.json",
+        "request-open.invalid.json",
+        "request-reserved.invalid.json",
+        "request-reserved.valid.json",
+        "request-send-keys.invalid.json",
+        "request-state.invalid.json",
+    ];
+
+    #[test]
+    fn every_fixture_is_covered() {
+        let all = fixtures();
+        assert!(all.len() >= 22, "only {} fixtures", all.len());
+        for (name, fixture) in &all {
+            let kind = str_field(fixture, "kind").unwrap();
+            let client_direction = kind == "hello" || kind == "request";
+            if client_direction && !name.ends_with(".valid.json") {
+                assert!(SERVER_ONLY.contains(&name.as_str()), "{name} untested");
+            }
+        }
+    }
+
+    #[test]
+    fn decodes_server_direction_fixtures_as_named() {
+        for (name, fixture) in fixtures() {
+            let kind = str_field(&fixture, "kind").unwrap();
+            if kind == "hello" || kind == "request" {
+                continue;
+            }
+            let result = decode_fixture(&fixture);
+            if name.ends_with(".valid.json") {
+                assert_eq!(result, Ok(()), "{name}");
+            } else {
+                assert!(result.is_err(), "{name} decoded but is invalid");
+            }
+        }
+    }
+
+    #[test]
+    fn encodes_client_direction_fixtures_exactly() {
+        for (name, fixture) in fixtures() {
+            let kind = str_field(&fixture, "kind").unwrap();
+            if (kind != "hello" && kind != "request") || SERVER_ONLY.contains(&name.as_str()) {
+                continue;
+            }
+            assert_eq!(
+                &encode_fixture(&fixture),
+                fixture.get("message").unwrap(),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn modes_and_error_codes_match_vimma_core() {
+        let src = |file: &str| {
+            fs::read_to_string(
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../packages/vimma-core/src")
+                    .join(file),
+            )
+            .unwrap()
+        };
+        let quoted_after = |text: &str, marker: &str| -> Vec<String> {
+            let start = text.find(marker).expect(marker);
+            let rest = &text[start..];
+            let end = rest.find("])").unwrap();
+            rest[..end]
+                .split('"')
+                .skip(1)
+                .step_by(2)
+                .map(String::from)
+                .collect()
+        };
+        assert_eq!(
+            quoted_after(&src("modes.mjs"), "MODES = Object.freeze(["),
+            MODES
+        );
+        assert_eq!(
+            quoted_after(&src("control.mjs"), "ERROR_CODES = Object.freeze(["),
+            ERROR_CODES
+        );
+    }
+
+    #[test]
+    fn request_omits_where_when_unset() {
+        let value = request(
+            9,
+            &Command::Open {
+                url: "about:blank".into(),
+                place: None,
+            },
+        );
+        assert_eq!(
+            value.to_string(),
+            r#"{"args":{"url":"about:blank"},"command":"open","id":9,"type":"request"}"#
+        );
+        let current = request(
+            1,
+            &Command::Open {
+                url: "about:blank".into(),
+                place: Some(Where::Current),
+            },
+        );
+        assert_eq!(
+            current.get("args").unwrap().get("where"),
+            Some(&Value::String("current".into()))
+        );
+    }
+
+    #[test]
+    fn hello_is_a_single_line() {
+        assert_eq!(
+            hello(TOKEN).to_string(),
+            format!(r#"{{"protocol":1,"token":"{TOKEN}","type":"hello"}}"#)
+        );
+    }
+
+    #[test]
+    fn decode_response_reads_ok_and_error() {
+        let ok = parse(r#"{"type":"response","id":3,"ok":true,"result":{"tab":"7"}}"#).unwrap();
+        let Response::Ok { id, result } = decode_response(&ok).unwrap() else {
+            panic!()
+        };
+        assert_eq!(id, Some(3));
+        assert_eq!(
+            decode_result(&command_named("open"), &result),
+            Ok(CommandResult::Open { tab: "7".into() })
+        );
+        let err = parse(
+            r#"{"type":"response","id":null,"ok":false,"error":{"code":"unauthorized","message":"no"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            decode_response(&err),
+            Ok(Response::Err {
+                id: None,
+                error: ErrorBody {
+                    code: "unauthorized".into(),
+                    message: "no".into()
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn decode_response_rejects_broken_envelopes() {
+        for bad in [
+            r"[]",
+            r#"{"type":"welcome","id":1,"ok":true,"result":{}}"#,
+            r#"{"type":"response","ok":true,"result":{}}"#,
+            r#"{"type":"response","id":0,"ok":true,"result":{}}"#,
+            r#"{"type":"response","id":1.5,"ok":true,"result":{}}"#,
+            r#"{"type":"response","id":9007199254740992,"ok":true,"result":{}}"#,
+            r#"{"type":"response","id":1,"ok":"yes","result":{}}"#,
+            r#"{"type":"response","id":1,"ok":true}"#,
+            r#"{"type":"response","id":1,"ok":false,"result":{}}"#,
+            r#"{"type":"response","id":1,"ok":false,"error":"x"}"#,
+            r#"{"type":"response","id":1,"ok":false,"error":{"code":"failed"}}"#,
+            r#"{"type":"response","id":1,"ok":true,"result":{},"extra":1}"#,
+        ] {
+            assert!(
+                decode_response(&parse(bad).unwrap()).is_err(),
+                "accepted {bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn decode_state_keeps_raw_and_ignores_unknown_fields() {
+        let raw = parse(
+            r#"{"mode":"insert","pending":null,"workspace":"work","tabs":[{"id":"1","url":"about:blank","title":"","selected":true}],"panes":null,"future":1}"#,
+        )
+        .unwrap();
+        let Ok(CommandResult::State(state)) = decode_result(&Command::State, &raw) else {
+            panic!()
+        };
+        assert_eq!(state.mode, "insert");
+        assert_eq!(state.pending, None);
+        assert_eq!(state.workspace.as_deref(), Some("work"));
+        assert_eq!(state.tabs.len(), 1);
+        assert!(state.tabs[0].selected);
+        assert_eq!(state.raw, raw);
+    }
+
+    #[test]
+    fn decode_state_rejects_broken_fields() {
+        for bad in [
+            r#"{"mode":"normal","pending":null,"workspace":null,"tabs":[]}"#,
+            r#"{"mode":"normal","pending":1,"workspace":null,"tabs":[],"panes":null}"#,
+            r#"{"mode":"normal","pending":null,"workspace":null,"tabs":{},"panes":null}"#,
+            r#"{"mode":"normal","pending":null,"workspace":null,"tabs":[1],"panes":null}"#,
+            r#"{"mode":"normal","pending":null,"workspace":null,"tabs":[{"id":"1","url":"u","title":"t","selected":1}],"panes":null}"#,
+            r#"{"pending":null,"workspace":null,"tabs":[],"panes":null}"#,
+            r#""state""#,
+        ] {
+            assert!(
+                decode_result(&Command::State, &parse(bad).unwrap()).is_err(),
+                "accepted {bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn decode_send_keys_result() {
+        let sent = |text: &str| {
+            decode_result(
+                &Command::SendKeys { keys: "j".into() },
+                &parse(text).unwrap(),
+            )
+        };
+        assert_eq!(
+            sent(r#"{"sent":2}"#),
+            Ok(CommandResult::SendKeys { sent: 2 })
+        );
+        assert!(sent(r#"{"sent":-1}"#).is_err());
+        assert!(sent(r#"{"sent":"2"}"#).is_err());
+    }
+
+    #[test]
+    fn decode_discovery_checks_ranges() {
+        let file = |port: &str, token: &str, pid: &str| {
+            parse(&format!(
+                r#"{{"protocol":1,"port":{port},"token":"{token}","pid":{pid}}}"#
+            ))
+            .unwrap()
+        };
+        assert_eq!(
+            decode_discovery(&file("1", TOKEN, "1")),
+            Ok(Discovery {
+                protocol: 1,
+                port: 1,
+                token: TOKEN.into(),
+                pid: 1
+            })
+        );
+        assert!(decode_discovery(&file("0", TOKEN, "1")).is_err());
+        assert!(decode_discovery(&file("65536", TOKEN, "1")).is_err());
+        assert!(decode_discovery(&file("1", &TOKEN.to_uppercase(), "1")).is_err());
+        assert!(decode_discovery(&file("1", "abc", "1")).is_err());
+        assert!(decode_discovery(&file("1", TOKEN, "0")).is_err());
+    }
+}
