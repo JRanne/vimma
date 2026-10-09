@@ -16,3 +16,6 @@ export * from "./editable.mjs";
 export * from "./hints.mjs";
 export * from "./cmdline.mjs";
 export * from "./escape.mjs";
+export * from "./panes.mjs";
+export * from "./workspaces.mjs";
+export * from "./snapshot.mjs";
