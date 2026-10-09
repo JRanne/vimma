@@ -9,6 +9,12 @@
 const { bindingTable, compileKeymap, filterBindings } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/core/index.mjs",
 );
+const { VimmaHost } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
+);
+const { HelpOverlay } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/ui/help-overlay.mjs",
+);
 
 const OVERLAY_ID = "vimma-help";
 const TEST_ROOT = getRootDirectory(gTestPath).replace(
@@ -173,4 +179,161 @@ add_task(async function page_receives_no_keydown_for_the_chord() {
     Assert.deepEqual(keys, ["j"], "the page saw neither ctrl+b nor ? (nor Esc)");
     Assert.ok(!SidebarController.isOpen, "ctrl+b no longer toggles the bookmarks sidebar");
   });
+});
+
+/** Records every keydown the page sees, with whether something upstream prevented it. */
+async function recordPageKeys(browser) {
+  await SpecialPowers.spawn(browser, [], () => {
+    content.wrappedJSObject.vimmaKeys = [];
+    content.addEventListener(
+      "keydown",
+      (e) => content.wrappedJSObject.vimmaKeys.push(e.defaultPrevented ? `!${e.key}` : e.key),
+      true,
+    );
+  });
+}
+
+/**
+ * Presses j (never ours outside help) and returns the page's keys, ending with "j". Gives up
+ * after 5 s, so a swallowed j fails the assertion instead of timing out the whole file.
+ */
+async function pageKeysThenJ(browser) {
+  const sentinel = BrowserTestUtils.waitForContentEvent(browser, "keydown", true, (e) => {
+    return e.key === "j";
+  });
+  EventUtils.synthesizeKey("j");
+  await Promise.race([sentinel, wait(5000)]);
+  return SpecialPowers.spawn(browser, [], () => [...content.wrappedJSObject.vimmaKeys]);
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+add_task(async function bare_prefix_does_not_time_out() {
+  await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
+    await recordPageKeys(browser);
+    browser.focus();
+    EventUtils.synthesizeKey("b", { ctrlKey: true });
+    await wait(compileKeymap().timeoutMs + 400);
+    EventUtils.synthesizeKey("?", { shiftKey: true });
+    await TestUtils.waitForCondition(isShown, "ctrl+b, a pause, then ? still opens help");
+    await closeHelp();
+    Assert.deepEqual(await pageKeysThenJ(browser), ["j"], "the page saw neither key");
+  });
+});
+
+add_task(async function unrunnable_single_key_action_reaches_the_page() {
+  await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
+    await recordPageKeys(browser);
+    browser.focus();
+    // Esc is bound to mode.normal, which the host cannot run before M1.
+    EventUtils.synthesizeKey("KEY_Escape");
+    Assert.deepEqual(
+      await pageKeysThenJ(browser),
+      ["Escape", "j"],
+      "Esc reaches the page, not default-prevented",
+    );
+  });
+});
+
+add_task(async function unrunnable_key_inside_a_prefix_sequence_is_consumed() {
+  await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
+    await recordPageKeys(browser);
+    browser.focus();
+    const tabs = gBrowser.tabs.length;
+    EventUtils.synthesizeKey("b", { ctrlKey: true });
+    EventUtils.synthesizeKey("c"); // new_tab: not runnable yet
+    Assert.deepEqual(await pageKeysThenJ(browser), ["j"], "ctrl+b c leaks no c to the page");
+    Assert.equal(gBrowser.tabs.length, tabs, "and does nothing else yet");
+  });
+});
+
+add_task(async function tab_select_resets_a_pending_prefix() {
+  await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
+    await recordPageKeys(browser);
+    browser.focus();
+    const tab = gBrowser.selectedTab;
+    EventUtils.synthesizeKey("b", { ctrlKey: true });
+    await BrowserTestUtils.switchTab(gBrowser, gBrowser.tabs[0]);
+    await BrowserTestUtils.switchTab(gBrowser, tab);
+    browser.focus();
+    EventUtils.synthesizeKey("?", { shiftKey: true });
+    Assert.deepEqual(
+      await pageKeysThenJ(browser),
+      ["?", "j"],
+      "after a tab switch ? is typed, not ctrl+b ?",
+    );
+    Assert.ok(!isShown(), "help did not open");
+  });
+});
+
+add_task(async function q_closes_the_overlay() {
+  await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
+    browser.focus();
+    await openHelp();
+    EventUtils.synthesizeKey("q");
+    await TestUtils.waitForCondition(() => !isShown(), "q closes the overlay");
+    Assert.equal(document.activeElement, browser, "focus returns to content");
+  });
+});
+
+add_task(async function help_mode_consumes_unbound_chords() {
+  await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
+    browser.focus();
+    const tabs = gBrowser.tabs.length;
+    await openHelp();
+    EventUtils.synthesizeKey("w", { ctrlKey: true });
+    await wait(500); // tab closing is asynchronous; give a leaked ctrl+w time to land
+    Assert.equal(gBrowser.tabs.length, tabs, "ctrl+w does not close the tab under the overlay");
+    Assert.ok(isShown(), "the overlay stays open");
+    await closeHelp();
+    Assert.equal(document.activeElement, browser, "focus returns to content");
+  });
+});
+
+add_task(async function closing_the_tab_underneath_closes_help_and_refocuses() {
+  const tab = await BrowserTestUtils.openNewForegroundTab(gBrowser, "https://example.com/");
+  tab.linkedBrowser.focus();
+  await openHelp();
+  BrowserTestUtils.removeTab(tab);
+  await TestUtils.waitForCondition(() => !isShown(), "help closes with its tab");
+  Assert.equal(
+    document.activeElement,
+    gBrowser.selectedBrowser,
+    "focus lands on the now-selected browser",
+  );
+});
+
+add_task(async function reinit_leaves_one_overlay() {
+  await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
+    browser.focus();
+    await openHelp();
+    await closeHelp();
+    VimmaHost.uninit(window);
+    Assert.equal(document.querySelectorAll(`#${OVERLAY_ID}`).length, 0, "uninit removes it");
+    VimmaHost.init(window);
+    await openHelp();
+    Assert.equal(
+      document.querySelectorAll(`#${OVERLAY_ID}`).length,
+      1,
+      "one overlay after re-init",
+    );
+    await closeHelp();
+  });
+});
+
+add_task(async function overrides_are_marked() {
+  const help = new HelpOverlay(window, compileKeymap({ keys: { new_tab: ["ctrl+alt+c"] } }));
+  gBrowser.selectedBrowser.focus();
+  help.open();
+  try {
+    const marker = (name) =>
+      help.dialog.querySelector(`[data-action="${name}"] .vimma-help-override`).textContent;
+    Assert.equal(marker("new_tab"), "*", "an overridden action is marked *");
+    Assert.equal(marker("close_tab"), "", "a default one is not");
+  } finally {
+    help.close();
+    help.destroy();
+  }
 });

@@ -12,15 +12,15 @@ exactly the bindings the dispatcher uses.
 
 `packages/vimma-core/src/`:
 
-| Module           | Exports                                                                     |
-| ---------------- | --------------------------------------------------------------------------- |
-| `keys.mjs`       | `parseKey`, `formatKey`, `parseBinding`, `formatBinding`, `chordFromEvent`  |
-| `actions.mjs`    | `ACTIONS` (closed set), `getAction`, `resolveActionName`                    |
-| `defaults.mjs`   | `DEFAULT_CONFIG`, `formatDefaultsToml`                                      |
-| `keymap.mjs`     | `compileKeymap` (defaults + user overrides → per-mode tries), `KeymapError` |
-| `dispatcher.mjs` | `createDispatcher` → `{ dispatch, flush, reset, pending }`                  |
-| `help.mjs`       | `bindingTable`, `filterBindings`, `renderHelpText`                          |
-| `index.mjs`      | re-exports                                                                  |
+| Module           | Exports                                                                         |
+| ---------------- | ------------------------------------------------------------------------------- |
+| `keys.mjs`       | `parseKey`, `formatKey`, `parseBinding`, `formatBinding`, `chordFromEvent`      |
+| `actions.mjs`    | `ACTIONS` (closed set), `getAction`, `resolveActionName`                        |
+| `defaults.mjs`   | `DEFAULT_CONFIG`, `formatDefaultsToml`                                          |
+| `keymap.mjs`     | `compileKeymap` (defaults + user overrides → per-mode tries), `KeymapError`     |
+| `dispatcher.mjs` | `createDispatcher` → `{ dispatch, flush, reset, pending, ambiguous }` (ADR-009) |
+| `help.mjs`       | `bindingTable`, `filterBindings`, `renderHelpText`                              |
+| `index.mjs`      | re-exports                                                                      |
 
 `packages/vimma-core/defaults.toml` is generated (`npm run gen-docs`) and snapshot-tested.
 
@@ -50,6 +50,8 @@ dispatch(mode, chord) →
   | { kind: "cancel" }    // key consumed; sequence aborted (unknown key after prefix, Esc in prefix)
   | { kind: "pass" }      // not ours; host lets the event continue
 flush() → same union | null   // called by host after timeout_ms; resolves an ambiguous pending
+ambiguous() → boolean         // true iff flush() would resolve to an action; only then does
+                              // the host arm the timeout_ms timer (ADR-009)
 ```
 
 `replay: true` means: run the action, then dispatch the same key again (see rule 5).

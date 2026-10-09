@@ -128,6 +128,12 @@ export function createDispatcher(keymap) {
     dispatch,
     flush,
     reset,
+    /**
+     * True when the pending buffer is itself a complete binding, i.e. flush() would resolve it to
+     * an action. Only then should the host arm the timeout_ms timer; a bare prefix waits for
+     * the next key or Esc.
+     */
+    ambiguous: () => !!node?.action,
     /** Pending keys for the status bar, e.g. ["prefix"] or ["2", "g"]. */
     pending: () => [...count, ...labels],
     timeoutMs: keymap.timeoutMs,

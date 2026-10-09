@@ -30,8 +30,9 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
 
 /**
  * What the host can execute so far. An action without an entry here is left to Firefox when it
- * is a single key (Esc, ctrl+i, ctrl+u keep working until their milestones land); inside a
- * sequence it is consumed, so `ctrl+b <key>` never leaks the second key to the page.
+ * is a single key outside help (Esc, ctrl+i, ctrl+u keep working until their milestones land;
+ * revisit in M1 once `normal` mode is real); inside a sequence it is consumed, so
+ * `ctrl+b <key>` never leaks the second key to the page.
  * @type {Record<string, (state: WindowState, action: Action) => void>}
  */
 const RUNNERS = {
@@ -63,7 +64,12 @@ export const VimmaHost = {
     /** @type {WindowState} */
     const state = {
       onKeyDown: (e) => this._onKeyDown(win, state, e),
-      onTabSelect: () => this._cancelPending(win, state),
+      // The overlay is modal, but tabs can still change underneath it (a script closes the
+      // selected tab): close it and focus the newly selected browser.
+      onTabSelect: () => {
+        this._cancelPending(win, state);
+        state.help.close({ tabChanged: true });
+      },
       dispatcher: createDispatcher(keymap),
       help: new HelpOverlay(win, keymap),
       timer: null,
@@ -80,6 +86,7 @@ export const VimmaHost = {
     this._cancelPending(win, state);
     win.removeEventListener("keydown", state.onKeyDown, true);
     win.removeEventListener("TabSelect", state.onTabSelect, true);
+    state.help.destroy();
     states.delete(win);
   },
 
@@ -127,18 +134,25 @@ export const VimmaHost = {
     const first = state.dispatcher.pending().length === 0;
     this._clearTimer(win, state);
     const result = state.dispatcher.dispatch(mode, chord);
+    // The overlay is modal: in help mode every key is ours, handled or not, so nothing reaches
+    // the browser underneath (ctrl+w would close the tab behind it).
+    const modal = mode === "help";
     switch (result.kind) {
       case "pass":
+        if (modal) consume(e);
         return;
       case "cancel":
         consume(e);
         return;
       case "pending":
         consume(e);
-        state.timer = win.setTimeout(() => {
-          state.timer = null;
-          this._run(state, state.dispatcher.flush());
-        }, state.dispatcher.timeoutMs);
+        // Only an ambiguous sequence (g vs gg) times out; a bare prefix waits for the next key.
+        if (state.dispatcher.ambiguous()) {
+          state.timer = win.setTimeout(() => {
+            state.timer = null;
+            this._run(state, state.dispatcher.flush());
+          }, state.dispatcher.timeoutMs);
+        }
         return;
       case "action": {
         if (result.replay) {
@@ -148,7 +162,7 @@ export const VimmaHost = {
           this._dispatch(win, state, e, this._mode(state), chord);
           return;
         }
-        if (first && !(result.action.id in RUNNERS)) return;
+        if (first && !modal && !(result.action.id in RUNNERS)) return;
         consume(e);
         this._run(state, result);
       }

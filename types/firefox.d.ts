@@ -5,6 +5,10 @@ declare const Services: {
   prefs: {
     getBoolPref(name: string, defaultValue?: boolean): boolean;
   };
+  // engine/dom/interfaces/base/nsIFocusManager.idl
+  focus: {
+    readonly focusedElement: Element | null;
+  };
 };
 
 // engine/dom/interfaces/base/nsIDOMWindowUtils.idl
