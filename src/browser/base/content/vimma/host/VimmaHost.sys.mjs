@@ -4,7 +4,7 @@
 
 // Chrome-window key capture and dispatch (specs: docs/specs/m0-key-capture.md,
 // docs/specs/m0-help-overlay.md, docs/specs/m1-actor-insert-scroll.md,
-// docs/specs/m2-tab-keys.md, docs/specs/m1-cmdline.md). Sees every keydown
+// docs/specs/m2-tab-keys.md, docs/specs/m1-cmdline.md, docs/specs/m2-picker-rename.md). Sees every keydown
 // before the URL bar, about: pages and the PDF viewer, runs it through the vimma-core
 // dispatcher and consumes the keys that are ours.
 
@@ -24,6 +24,10 @@ import { Find } from "./find.mjs";
 import { copyModeRunners } from "./copy-mode.mjs";
 import { Notice } from "../ui/notice.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
+import { GotoPicker } from "../ui/picker.mjs";
+import { RenamePrompt } from "../ui/rename-prompt.mjs";
+import { gotoItems, tabById } from "./goto.mjs";
+import { getTabLabel, setTabLabel } from "./tab-labels.mjs";
 import { BLOCKED_URL_TEXT, closeTab, newTab, openUrl, selectTab } from "./tab-ops.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
@@ -67,8 +71,26 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {HintOverlay} hintOverlay
  * @property {Set<() => void>} listeners  told after mode or pending keys may have changed
  * @property {StatusBar | null} statusBar  m2-statusbar-whichkey (the bar; no which-key strip)
+ * @property {GotoPicker} picker  the prefix+g overlay (m2-picker-rename)
+ * @property {RenamePrompt} rename  the prefix+shift+t prompt (m2-picker-rename)
  * @property {Find} find  `/`, `?`, `n`, `N` over Firefox's find bar (m1-find)
  */
+
+/**
+ * `tab.rename`: with a name (`:tabrename foo`) sets the label at once, else opens the prompt.
+ * @param {WindowState} s
+ * @param {string} [text]
+ */
+function renameTab(s, text) {
+  const tab = /** @type {{ gBrowser: { selectedTab: Element } }} */ (/** @type {unknown} */ (s.win))
+    .gBrowser.selectedTab;
+  if (text) {
+    setTabLabel(tab, text);
+    VimmaHost._emit(s);
+  } else {
+    s.rename.open(tab, getTabLabel(tab) ?? "");
+  }
+}
 
 /**
  * `:open` / `:tabnew` text, or the notice saying why not.
@@ -111,6 +133,12 @@ export const RUNNERS = Object.freeze({
     text ? openOrSay(s, text, "current") : s.cmdline.open("open "),
   "command.open": (/** @type {WindowState} */ s) => s.cmdline.open(),
   "command.cancel": (/** @type {WindowState} */ s) => s.cmdline.close(),
+  "goto.picker": (/** @type {WindowState} */ s) => {
+    s.notice.hide();
+    s.picker.open();
+  },
+  "tab.rename": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
+    renameTab(s, text),
 });
 
 /**
@@ -233,6 +261,8 @@ export const VimmaHost = {
         this._cancelHints(state);
         state.help.close({ tabChanged: true });
         state.cmdline.close({ tabChanged: true });
+        state.picker.close({ tabChanged: true });
+        state.rename.close({ tabChanged: true });
       },
       dispatcher: createDispatcher(keymap),
       help: new HelpOverlay(win, keymap, RUNNABLE),
@@ -248,6 +278,27 @@ export const VimmaHost = {
       hintOverlay: new HintOverlay(win),
       listeners: new Set(),
       statusBar: null,
+      picker: new GotoPicker(win, {
+        items: () => gotoItems(win),
+        activeTabId: () =>
+          /** @type {{ gBrowser: { selectedTab: { linkedPanel: string } } }} */ (
+            /** @type {unknown} */ (win)
+          ).gBrowser.selectedTab.linkedPanel,
+        select: (tabId) => {
+          const tab = tabById(win, tabId);
+          if (!tab) return;
+          /** @type {{ gBrowser: { selectedTab: Element } }} */ (
+            /** @type {unknown} */ (win)
+          ).gBrowser.selectedTab = tab;
+        },
+      }),
+      rename: new RenamePrompt(win, {
+        apply: (tab, text) => {
+          setTabLabel(tab, text);
+          this._emit(state);
+        },
+        changed: () => this._emit(state),
+      }),
       find: new Find(win, () => this._emit(state)),
     };
     states.set(win, state);
@@ -268,6 +319,7 @@ export const VimmaHost = {
       const statusBar = new StatusBar(win, {
         status: () => this.status(win),
         subscribe: (fn) => this.onStateChange(win, fn),
+        labelFor: getTabLabel,
       });
       statusBar.init();
       state.statusBar = statusBar;
@@ -289,6 +341,8 @@ export const VimmaHost = {
     state.help.destroy();
     state.notice.destroy();
     state.cmdline.destroy();
+    state.picker.destroy();
+    state.rename.destroy();
     state.tabStrip?.uninit();
     state.statusBar?.uninit();
     state.find.destroy();
@@ -388,13 +442,14 @@ export const VimmaHost = {
   },
 
   /**
-   * `help` while the overlay is open; `command` while the `:` line is; the focused page's mode;
+   * `help` while the overlay or the goto picker (modal too) is open; `command` while the `:` line
+   * is; the focused page's mode;
    * `insert` in chrome, so chrome text fields keep their keys and only global chords are ours.
    * @param {WindowState} state
    * @returns {Mode}
    */
   _mode(state) {
-    if (state.help.isOpen) return "help";
+    if (state.help.isOpen || state.picker.isOpen) return "help";
     if (state.cmdline.isOpen) return "command";
     const browser = this._focusedBrowser(state.win);
     if (state.hint && state.hint.browser === browser) return "hint";
@@ -451,6 +506,14 @@ export const VimmaHost = {
     if (Services.prefs.getBoolPref(DEBUG_PREF, false)) {
       const mods = MODIFIERS.filter((m) => chord[m]);
       console.debug("vimma key", { key, mods, mode });
+    }
+    // The goto picker takes every key, bare ones too, before any binding: nothing reaches the
+    // page or Firefox underneath (ctrl+w would close a tab), and its j / q are not keymap keys.
+    if (state.picker.isOpen) {
+      consume(e);
+      state.picker.key(key);
+      this._emit(state);
+      return;
     }
     // Enter and Esc in a `/` search, and keys typed before its input exists (m1-find).
     if (state.dispatcher.pending().length === 0 && state.find.onKeyDown(e)) {

@@ -64,7 +64,13 @@ add_task(async function bar_is_visible_at_the_window_bottom() {
   const b = bar();
   Assert.ok(b, "#vimma-statusbar exists");
   Assert.ok(hasSize(b), "the bar has a size");
-  Assert.equal(b.previousElementSibling?.id, "browser", "it follows #browser in the body");
+  // Only our zero-height prompt rows (the command line, the rename prompt) may sit between.
+  let prev = b.previousElementSibling;
+  while (prev && ["vimma-cmdline", "vimma-rename"].includes(prev.id)) {
+    Assert.equal(prev.getBoundingClientRect().height, 0, `#${prev.id} takes no height`);
+    prev = prev.previousElementSibling;
+  }
+  Assert.equal(prev?.id, "browser", "it follows #browser in the body");
   const browserBox = $("browser").getBoundingClientRect();
   const r = b.getBoundingClientRect();
   Assert.lessOrEqual(Math.abs(r.top - browserBox.bottom), 1, "directly below the browser area");
