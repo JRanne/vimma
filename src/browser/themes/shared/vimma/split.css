@@ -1,0 +1,57 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* Split panes (docs/specs/m4-split-panes.md sub-spec 2, ADR-013), loaded by split/layout.mjs
+ * into every window. Places Firefox's active split-view panels at core layout() rectangles,
+ * given in --vimma-pane-{x,y,w,h} by the host, overriding content-area.css's two-column rules.
+ * Off under DOM fullscreen, where Firefox's own rule makes the deck-selected panel fill the
+ * window. */
+
+/* Vimma's keys are the only way into a split (spec: Firefox's own split-view entry points). The
+ * pref browser.tabs.splitView.enabled = false hides the tab and link context-menu items; these
+ * are what it leaves: the URL bar button and the tab-group items of a split. */
+#split-view-button,
+#context_moveSplitViewToNewGroup,
+#context_ungroupSplitView {
+  display: none !important;
+}
+
+:root:not([inDOMFullscreen]) #tabbrowser-tabpanels[vimma-panes][splitview] {
+  /* Space between neighbouring panes; M5's theme sets it. It goes on interior edges only, half
+   * from each side: --vimma-pane-i{l,t,r,b} are 1 on an interior edge, 0 on the area's border. */
+  --vimma-pane-gap: 2px;
+  position: relative;
+
+  & > .split-view-panel.split-view-panel-active {
+    --vimma-half-gap: calc(var(--vimma-pane-gap) / 2);
+    position: absolute !important;
+    inset: auto !important;
+    left: calc(var(--vimma-pane-x) + var(--vimma-pane-il, 0) * var(--vimma-half-gap)) !important;
+    top: calc(var(--vimma-pane-y) + var(--vimma-pane-it, 0) * var(--vimma-half-gap)) !important;
+    width: calc(
+      var(--vimma-pane-w) - (var(--vimma-pane-il, 0) + var(--vimma-pane-ir, 0)) *
+        var(--vimma-half-gap)
+    ) !important;
+    height: calc(
+      var(--vimma-pane-h) - (var(--vimma-pane-it, 0) + var(--vimma-pane-ib, 0)) *
+        var(--vimma-half-gap)
+    ) !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+    flex: none !important;
+  }
+
+  /* Zoom: every pane but the zoomed one keeps its frame (and scroll position) but is not drawn
+   * or hit, as content-area.css does for the other panels under DOM fullscreen. The host also
+   * deactivates their docshells, which this alone does not. */
+  & > .split-view-panel-active[vimma-zoomed-away] {
+    -moz-subtree-hidden-only-visually: 1;
+  }
+
+  & > .split-view-splitter,
+  & split-view-footer {
+    display: none !important;
+  }
+}

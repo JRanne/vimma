@@ -1,6 +1,6 @@
 # Spec: m4-split-panes
 
-Status: proposed (research and plan; no implementation) · Milestone: M4 · Area: host
+Status: in progress (sub-specs 1 and 2 done, keys next) · Milestone: M4 · Area: host
 (`src/browser/base/content/vimma/split/`, `host/`), CSS (`browser/themes/shared/vimma/`)
 
 This is the umbrella spec for M4. It records the research, the decision
@@ -337,6 +337,34 @@ What sub-spec 2 (`m4-split-layout`) takes from this:
   `#split-view-button`, and the accessible label for a third tab on. Flicker was measured as
   "no state change between synchronous samples"; the e2e screenshot in sub-spec 7 is the visual
   check.
+
+## Sub-spec 2 results (`m4-split-layout`)
+
+Done: `split/PaneView.mjs` (the window's pane tree and `reconcile`), `split/layout.mjs` (CSS
+custom properties; replaces `spike-layout.mjs`), `browser/themes/shared/vimma/split.css`
+(replaces `split-spike.css`), pref `browser.tabs.splitView.enabled = false`, tested by
+`browser_vimma_split_layout.js` (8 tasks) with the contract test kept green.
+
+- **Host API** for sub-spec 3: `PaneViews.get(window)` gives the window's `PaneView`, with
+  `split("vertical" | "horizontal", { tab? })`, `close()` and `zoom()`, each returning
+  `{ ok: true }` or `{ ok: false, reason }` (core's `splitRefusal` message, e.g. "at most 4
+  panes"); `panes` (the tree, `null` for one pane), `max` (config `[panes] max`, default 4) and
+  `reconcile()`. `PaneViews.init` runs from `vimma.js`; no change to `VimmaHost`.
+- **Reconcile** applies `planSplit` in its documented order: select the focus tab first when it
+  is already a member, membership (a rebuild on any leave, `addTabs` or `addTabSplitView` on a
+  join), `moveBefore` into reading order, select, show/hide visually, activate/deactivate (never
+  the selected tab), geometry, then accessible names for panes 3+. It runs on every tree change,
+  on `TabClose` of a member (in a later task, once Firefox has removed it) and after a
+  `TabSplitViewActivate` it did not cause (Firefox's `showSplitViewPanels` re-activates every
+  member, including zoomed-away ones). The late `TabSplitViewDeactivate` is not listened to.
+- **Geometry**: a `ResizeObserver` on `#tabbrowser-tabpanels` re-lays out on any size change.
+  `--vimma-pane-gap` (2 px, M5's theme token later) goes on interior edges only, half from each
+  side, so panels and browsers sit within 1 px of `layout()`'s rect: measured Δ ≤ 1 px for the
+  L shape, after close, after resize (1280 → 1000 px wide and back), and Δ 0 for zoom
+  (1280 × 740 content area, headless artifact build).
+- **Not here** (later sub-specs): keys and the status-bar refusal message (3); `TabSelect` /
+  click focus sync (4); hiding a closed pane's tab and per-workspace trees (6). A split made
+  outside Vimma is left alone until adoption (6).
 
 ## Breakdown into sub-specs
 

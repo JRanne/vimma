@@ -27,6 +27,12 @@
   );
   VimmaHost.init(window);
 
+  // Split panes (spec m4-split-panes): the window's pane tree; sub-spec 3's keys drive it.
+  const { PaneViews } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/split/PaneView.mjs",
+  );
+  PaneViews.init(window);
+
   // One control server per app (spec m0-control-server); off unless vimma.control.enabled.
   const { VimmaControl } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/ctl/VimmaControl.sys.mjs",

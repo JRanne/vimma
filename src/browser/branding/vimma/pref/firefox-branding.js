@@ -113,3 +113,8 @@ pref("vimma.control.enabled", false);
 // Find (spec m1-find): Vim's smartcase for `/` and Firefox's own find bar alike. 2 is the find
 // bar's "auto" mode: a query with a capital letter matches case, an all lower-case one does not.
 pref("accessibility.typeaheadfind.casesensitive", 2);
+
+// Split panes (spec m4-split-panes, ADR-013): Vimma's keys are the only way into a split. This
+// hides Firefox's tab and link context-menu items and alt-click; the split-view API keeps
+// working. split.css hides the URL bar button.
+pref("browser.tabs.splitView.enabled", false);
