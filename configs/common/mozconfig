@@ -22,3 +22,8 @@ ac_add_options --enable-bootstrap
 ac_add_options --disable-crashreporter
 # Telemetry does not upload because MOZILLA_OFFICIAL is unset (MOZ_TELEMETRY_REPORTING defaults
 # to it). MOZ_DATA_REPORTING is computed by configure, so neither can be set with mk_add_options.
+
+# App version (docs/specs/m0-app-version.md). Surfer writes displayVersion into both stock
+# browser/config/version{,_display}.txt; configure reads these instead (npm run version-files):
+# version.txt is the Firefox version (appinfo.version), version_display.txt is Vimma's.
+ac_add_options --with-version-file-path=browser/config/vimma
