@@ -4,13 +4,14 @@
 
 // Chrome-window key capture and dispatch (specs: docs/specs/m0-key-capture.md,
 // docs/specs/m0-help-overlay.md, docs/specs/m1-actor-insert-scroll.md,
-// docs/specs/m2-tab-keys.md, docs/specs/m1-cmdline.md, docs/specs/m2-picker-rename.md). Sees every keydown
+// docs/specs/m2-tab-keys.md, docs/specs/m1-cmdline.md, docs/specs/m2-picker-rename.md,
+// docs/specs/m5-config-load.md). Sees every keydown
 // before the URL bar, about: pages and the PDF viewer, runs it through the vimma-core
 // dispatcher and consumes the keys that are ours.
 
 import { VimmaActors } from "../actors/VimmaActors.sys.mjs";
 import { createDispatcher } from "../core/dispatcher.mjs";
-import { insertModeAfterFocus } from "../core/editable.mjs";
+import { insertModeAfterFocus, matchSiteRule } from "../core/editable.mjs";
 import { HintError, hintKey, startHints } from "../core/hints.mjs";
 import { chordFromEvent, formatKey } from "../core/keys.mjs";
 import { compileKeymap } from "../core/keymap.mjs";
@@ -35,6 +36,8 @@ import { leaves } from "../core/panes.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
+/** @import { ConfigError } from "../core/config.mjs" */
+/** @import { InsertSiteRule } from "../core/editable.mjs" */
 /** @import { Mode } from "../core/modes.mjs" */
 /** @import { FindStatus } from "../core/find.mjs" */
 /** @import { Action, DispatchResult } from "../core/dispatcher.mjs" */
@@ -210,6 +213,8 @@ export const RUNNERS = Object.freeze({
   "workspace.previous": workspaceStep("previous"),
   "workspace.switch": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
     switchWorkspace(s, text),
+  // `:source` (m5-config-load): ConfigHost reads config.toml now instead of at the next poll.
+  "config.reload": () => Services.obs.notifyObservers(null, CONFIG_RELOAD_TOPIC),
 });
 
 /**
@@ -296,6 +301,36 @@ export const RUNNABLE = Object.freeze(
 
 /** @type {WeakMap<Window, WindowState>} */
 const states = new WeakMap();
+/** The windows in `states`, for `configure` (a WeakMap cannot be iterated). */
+/** @type {Set<Window>} */
+const windows = new Set();
+
+/**
+ * What config.toml sets for every window (m5-config-load; ConfigHost calls `configure`). Null
+ * keymap: the built-in one, compiled per window as before M5.
+ * @type {{ keymap: Keymap | null, hintChars: string | undefined,
+ *   sites: readonly InsertSiteRule[], configErrors: readonly ConfigError[] }}
+ */
+const settings = { keymap: null, hintChars: undefined, sites: [], configErrors: [] };
+
+/** Told by `:source` (config.reload); ConfigHost observes it, so the host never imports it. */
+export const CONFIG_RELOAD_TOPIC = "vimma-config-reload";
+
+/**
+ * The `[sites."<host>"] insert` rule for the page in `browser`, "auto" without one.
+ * @param {any} browser
+ */
+function siteInsert(browser) {
+  if (!settings.sites.length) return "auto";
+  /** @type {string} */
+  let host;
+  try {
+    host = browser.currentURI?.host ?? "";
+  } catch {
+    return "auto"; // about:, data:, file: have no host
+  }
+  return (host && matchSiteRule(host, settings.sites)?.insert) || "auto";
+}
 
 /**
  * The focused pane's 1-based place in reading order and the pane count, or null with one pane.
@@ -330,7 +365,7 @@ export const VimmaHost = {
   /** @param {Window} win */
   init(win) {
     if (states.has(win)) return;
-    const keymap = compileKeymap();
+    const keymap = settings.keymap ?? compileKeymap();
     /** @type {WindowState} */
     const state = {
       win,
@@ -384,6 +419,7 @@ export const VimmaHost = {
       find: new Find(win, () => this._emit(state)),
     };
     states.set(win, state);
+    windows.add(win);
     win.addEventListener("keydown", state.onKeyDown, true);
     win.addEventListener("TabSelect", state.onTabSelect, true);
     // The labels are drawn for one layout of the page: a resize or a click moves on.
@@ -437,6 +473,7 @@ export const VimmaHost = {
     state.find.destroy();
     state.listeners.clear();
     states.delete(win);
+    windows.delete(win);
   },
 
   /**
@@ -446,7 +483,7 @@ export const VimmaHost = {
    * place among two or more (m4-split-panes); the active workspace (m3-workspaces).
    * @param {Window} win
    * @returns {{ mode: Mode, pending: string[], find?: FindStatus | null,
-   *   pane?: { index: number, count: number } | null,
+   *   pane?: { index: number, count: number } | null, configErrors?: readonly ConfigError[],
    *   workspace?: { name: string, index: number, color?: string } | null }}
    */
   status(win) {
@@ -459,7 +496,34 @@ export const VimmaHost = {
       find: browser ? state.find.status(browser) : null,
       pane: paneStatus(win),
       workspace: WindowWorkspaces.get(win)?.status() ?? null,
+      configErrors: settings.configErrors,
     };
+  },
+
+  /**
+   * What config.toml sets (m5-config-load), for every window now and every later one. Each
+   * field is optional: absent keeps the current value. A new keymap drops a pending sequence
+   * and closes the bindings overlay, which is rebuilt from it.
+   * @param {{ keymap?: Keymap, hintChars?: string, sites?: readonly InsertSiteRule[],
+   *   configErrors?: readonly ConfigError[] }} next
+   */
+  configure(next) {
+    if (next.hintChars !== undefined) settings.hintChars = next.hintChars;
+    if (next.sites) settings.sites = next.sites;
+    if (next.configErrors) settings.configErrors = next.configErrors;
+    const keymap = next.keymap && next.keymap !== settings.keymap ? next.keymap : null;
+    if (keymap) settings.keymap = keymap;
+    for (const win of windows) {
+      const state = states.get(win);
+      if (!state) continue;
+      if (keymap) {
+        this._cancelPending(win, state);
+        state.keymap = keymap;
+        state.dispatcher = createDispatcher(keymap);
+        state.help.setKeymap(keymap);
+      }
+      this._emit(state);
+    }
   },
 
   /**
@@ -496,7 +560,8 @@ export const VimmaHost = {
     const mode = browserModes.get(browser) ?? "normal";
     // Copy mode lasts until a text field takes focus (m1-copy-mode).
     const copy = mode === "visual";
-    const next = insertModeAfterFocus({ mode: copy ? "normal" : mode, trigger, descriptor });
+    const site = siteInsert(browser);
+    const next = insertModeAfterFocus({ mode: copy ? "normal" : mode, trigger, descriptor, site });
     if (copy && next !== "insert") return;
     setBrowserMode(browser, next === "insert" ? "insert" : "normal");
   },
@@ -759,7 +824,7 @@ export const VimmaHost = {
       .then((targets) => {
         if (state.hint !== session) return;
         try {
-          session.hs = startHints(targets, { action: id });
+          session.hs = startHints(targets, { action: id, chars: settings.hintChars });
         } catch (e) {
           if (!(e instanceof HintError && e.code === "no-targets")) throw e;
           state.hint = null;
