@@ -298,7 +298,8 @@ to approve the first run of a first-time contributor (Settings → Actions → G
 
 The free plan has a limited monthly budget of minutes for private repos, billed per job and rounded
 up to the minute. Rough use: CI ≈ 2 min per PR push, e2e ≈ 6 min per PR push that touches the
-browser (5.5 min wall, ADR-010); upstream 4 × 1 min a day (≈ 120 min a month); claude.yml only
+browser (5.5 min wall, ADR-010); upstream 4 × 1 min a day (≈ 120 min a month), plus ≈ 3 min
+(patch check + PR job) when a release is found; claude.yml only
 when triggered. `nightly.yml` uses the self-hosted runner, which costs no hosted minutes. Check usage in Settings → Billing → Usage. Once the repo is public,
 standard hosted runners are free and unlimited; the e2e paths filter can then go.
 
@@ -339,15 +340,26 @@ The job keeps `engine/` between runs (`clean: false`) and re-downloads Firefox o
 
 ### Upstream bumps (`upstream.yml`)
 
+**The procedure for a bump, from this PR to merge, is [docs/rebase.md](rebase.md)** (the rebase
+playbook: patch failures, builds and tests, the security fast path, rollback).
+
 `tools/upstream/check-release.py` prints `LATEST_FIREFOX_VERSION` from product-details when it
-is newer than `surfer.json`; `bump-surfer-json.py` rewrites only that version. The workflow then
-opens a draft PR `upstream: update to Firefox X.Y` on branch `upstream/firefox-X.Y`. If a PR for
+is newer than `surfer.json`. The `check` job (read-only token) then streams that release's source
+tarball through `tools/upstream/patch-check.py`, which dry-runs every `src/**/*.patch` and writes
+a summary (clean / offset / fuzz / failed, with the failing hunks) plus a JSON report, uploaded as
+the run's `patch-check` artifact. It also checks the stream's SHA-512 against Mozilla's
+`SHA512SUMS`. A mismatch fails the job and opens no PR, and "did not run" is reported apart from
+"patches fail". The `pr` job (the only one with write permissions) runs
+`bump-surfer-json.py`, which rewrites only that version, and opens a draft PR
+`upstream: update to Firefox X.Y` on branch `upstream/firefox-X.Y`, with the summary in its body.
+If a PR for
 that branch is already open it does nothing; a branch left by a failed or closed run is rebuilt
 from `main` and force-pushed, so a failed run is retried 6 h later.
 
 Every bump PR: refresh the copy of `browser.newtabpage.activity-stream.asrouter.providers.cfr`
 in `src/browser/branding/vimma/pref/firefox-branding.js` from `engine/browser/app/profile/firefox.js`,
 keeping `"enabled":false` (spec m0-mozilla-services). A stale copy shadows upstream's provider.
+docs/rebase.md, step 6, has a one-line comparison.
 
 One-time setup:
 
@@ -358,9 +370,11 @@ One-time setup:
 <branch>`; or store a fine-grained token for this repo only (Contents + Pull requests:
    read/write) as `gh secret set UPSTREAM_PR_TOKEN`, which the workflow uses when present.
 
-Before merging a bump: `npm run import && npx surfer build` on the build machine (the nightly does
-this once merged), then `npm run mochitest -- tests/browser/` on the built engine (our patches
-change upstream behaviour, e.g. `tab-bar-visibility-js.patch`), then mark the PR ready for review.
+Before merging a bump, follow [docs/rebase.md](rebase.md): `npm run import && npx surfer build` on
+the build machine (the nightly does this once merged), `npm run mochitest -- tests/browser/` on the
+built engine (our patches change upstream behaviour, e.g. `tab-bar-visibility-js.patch`) and on an
+artifact build, the branding and cfr checks, then mark the PR ready for review. Its checklist is
+"8. Ready, CI, merge". Patch-size review (plan §4, Sunday): `python3 tools/upstream/patch-audit.py`.
 
 ### Claude Code in GitHub (`claude.yml`)
 
