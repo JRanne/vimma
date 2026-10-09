@@ -1,8 +1,11 @@
-import bodyRequired from "./tools/commitlint/body-required.mjs";
+import bodyRequired, { ignoreCommit } from "./tools/commitlint/body-required.mjs";
 
 export default {
   extends: ["@commitlint/config-conventional"],
   plugins: [bodyRequired],
+  // The defaults skip every `Revert "…"`; ours lint body-less reverts (tools/commitlint).
+  defaultIgnores: false,
+  ignores: [ignoreCommit],
   rules: {
     "type-enum": [
       2,
@@ -22,7 +25,8 @@ export default {
         "revert",
       ],
     ],
-    // The body is the changelog line (CLAUDE.md); feat and fix must have one.
-    "body-required-for-types": [2, "always", ["feat", "fix"]],
+    // The body is the changelog line (CLAUDE.md); feat, fix and reverts must have one.
+    // Footers (`Closes #3`, `BREAKING CHANGE:`) and trailers do not count as a body.
+    "body-required-for-types": [2, "always", ["feat", "fix", "revert"]],
   },
 };
