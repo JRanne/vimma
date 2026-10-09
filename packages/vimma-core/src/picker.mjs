@@ -10,13 +10,7 @@ import { displayLabel } from "./tablabels.mjs";
 import { graphemes } from "./textwidth.mjs";
 
 /** @import { TabLabels } from "./tablabels.mjs" */
-
-/**
- * The workspace model's shape (workspaces.mjs), taken structurally.
- * @typedef {{ readonly active: string, readonly workspaces: readonly { readonly id: string,
- *   readonly name: string, readonly tabs: readonly string[],
- *   readonly activeTab: string | null }[] }} WorkspacesLike
- */
+/** @import { Workspaces } from "./workspaces.mjs" */
 /**
  * @typedef {object} PickerItem
  * @property {string} tabId
@@ -303,7 +297,7 @@ export function filterItems(items, query) {
 
 /**
  * Every tab of every workspace, in workspace order then tab order.
- * @param {WorkspacesLike} state
+ * @param {Workspaces} state
  * @param {(tabId: string) => { title?: string | null, url?: string | null } | undefined} info
  * @param {TabLabels} labels
  * @returns {PickerItem[]}
