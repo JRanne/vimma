@@ -1,6 +1,6 @@
 # Spec: m4-split-panes
 
-Status: in progress (sub-specs 1 and 2 done, keys next) · Milestone: M4 · Area: host
+Status: in progress (sub-specs 1 to 3 done) · Milestone: M4 · Area: host
 (`src/browser/base/content/vimma/split/`, `host/`), CSS (`browser/themes/shared/vimma/`)
 
 This is the umbrella spec for M4. It records the research, the decision
@@ -365,6 +365,35 @@ custom properties; replaces `spike-layout.mjs`), `browser/themes/shared/vimma/sp
 - **Not here** (later sub-specs): keys and the status-bar refusal message (3); `TabSelect` /
   click focus sync (4); hiding a closed pane's tab and per-workspace trees (6). A split made
   outside Vimma is left alone until adoption (6).
+
+## Sub-spec 3 results (`m4-split-keys`)
+
+Done: `host/pane-ops.mjs` (runners over `PaneViews.get(window)`), `PaneView.focus(direction)`,
+`RUNNERS` entries for `pane.split_vertical`, `pane.split_horizontal`, `pane.focus_*`,
+`pane.zoom` and `pane.close` (so the overlay stops dimming them), the status bar's `pane n/m`
+segment, tested by `browser_vimma_pane_keys.js` (7 tasks).
+
+- **Keys:** `prefix+v` / `prefix+-` (and `:vsplit`, `:split`), `prefix+h/j/k/l`, `prefix+z`,
+  `prefix+x` (and `:q`); in normal mode `<C-w>h/j/k/l` and `<C-w>o`. Swap and resize stay
+  dimmed (sub-spec 5).
+- **Split** opens the new-tab page (the start page) in the new pane, focused, with the URL bar
+  selected as after `ctrl+b c`. A refusal (`max-panes`, `no-space`) opens no tab and shows the
+  notice "<action>: <core's reason>", e.g. "Split right: at most 4 panes".
+- **Focus** moves select the pane's tab and then focus its browser (not after a tab-modal
+  dialog); the URL bar follows `selectedBrowser`. No neighbour is a no-op that keeps the zoom,
+  so zoomed-away panes stay inactive; a move unzooms (core).
+- **Close:** `pane.close` closes the focused pane and keeps its tab (hidden in sub-spec 6); with
+  one pane it is `tab.close` (pinned: select the first unpinned tab). `PaneView` now selects
+  the remaining tab when a close leaves one pane (it stayed on the closed pane's tab).
+- **`<C-w>` vs Firefox's `ctrl+w`:** the `<C-w>` actions are runnable only with two panes or
+  more, so with one pane the first `ctrl+w` still passes and closes the tab (plan §2,
+  m1-actor-insert-scroll's rule). With a split, normal-mode `ctrl+w` is Vim's window prefix.
+  `<C-w>v/s/c` are not added: a split key would make `ctrl+w` ours in every window.
+- **Workspaces** (m3 decision 14): the window is still the workspace; `PaneViews.get(window)` is
+  the seam a per-workspace tree replaces in sub-spec 6.
+- Tests that used `ctrl+b v` / `:vsplit` as the example of an unbuilt action now use `ctrl+b w`
+  / `:sidebar`. Test note: a key sent to a pane while its new-tab document is still replacing
+  `about:blank` is lost, so the test waits for the start page before moving focus into it.
 
 ## Breakdown into sub-specs
 

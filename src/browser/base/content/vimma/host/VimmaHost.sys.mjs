@@ -29,6 +29,9 @@ import { RenamePrompt } from "../ui/rename-prompt.mjs";
 import { gotoItems, tabById } from "./goto.mjs";
 import { getTabLabel, setTabLabel } from "./tab-labels.mjs";
 import { BLOCKED_URL_TEXT, closeTab, newTab, openUrl, selectTab } from "./tab-ops.mjs";
+import { closePane, focusPane, hasPanes, splitPane, zoomPane } from "./pane-ops.mjs";
+import { PaneViews } from "../split/PaneView.mjs";
+import { leaves } from "../core/panes.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
 /** @import { Mode } from "../core/modes.mjs" */
@@ -103,6 +106,32 @@ function openOrSay(s, text, where) {
 }
 
 /**
+ * Runs a pane op (pane-ops.mjs) and shows its refusal, if any, as the notice.
+ * @param {(win: Window, action: Action) => string | null} op
+ * @returns {(state: WindowState, action: Action) => void}
+ */
+function paneRunner(op) {
+  return (s, a) => {
+    const refused = op(s.win, a);
+    if (refused) s.notice.show(refused);
+    VimmaHost._emit(s);
+  };
+}
+
+/**
+ * Pane actions that do something only with two panes or more: as single keys they are
+ * runnable only then, so the first ctrl+w of `<C-w>h` passes to Firefox (close tab) while the
+ * window has one pane (plan §2). `prefix+h` is consumed either way (ctrl+b is ours).
+ */
+const MULTI_PANE = new Set([
+  "pane.focus_left",
+  "pane.focus_down",
+  "pane.focus_up",
+  "pane.focus_right",
+  "pane.zoom",
+]);
+
+/**
  * What the host can execute so far, with CONTENT_RUNNERS. An action without an entry is left to
  * Firefox when it is a single key outside help (ctrl+i, ctrl+u keep working until their
  * milestones land); inside a sequence (or after a count) it is consumed and shows "<action>: not
@@ -126,8 +155,15 @@ export const RUNNERS = Object.freeze({
   "tab.previous": (/** @type {WindowState} */ s, /** @type {Action} */ a) => selectTab(s.win, a),
   "tab.goto": (/** @type {WindowState} */ s, /** @type {Action} */ a) => selectTab(s.win, a),
   "tab.close": (/** @type {WindowState} */ s) => closeTab(s.win),
-  // Until M4's panes every tab is one pane, so closing the pane closes the tab (`:q`, prefix+x).
-  "pane.close": (/** @type {WindowState} */ s) => closeTab(s.win),
+  // The focused pane; the last pane closes the tab (`:q`, prefix+x; m4-split-panes).
+  "pane.close": paneRunner(closePane),
+  "pane.split_vertical": paneRunner(splitPane),
+  "pane.split_horizontal": paneRunner(splitPane),
+  "pane.focus_left": paneRunner(focusPane),
+  "pane.focus_down": paneRunner(focusPane),
+  "pane.focus_up": paneRunner(focusPane),
+  "pane.focus_right": paneRunner(focusPane),
+  "pane.zoom": paneRunner(zoomPane),
   // Without text (a key bound to open_url) it asks for the URL on the command line.
   "page.open": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
     text ? openOrSay(s, text, "current") : s.cmdline.open("open "),
@@ -225,6 +261,17 @@ export const RUNNABLE = Object.freeze(
 
 /** @type {WeakMap<Window, WindowState>} */
 const states = new WeakMap();
+
+/**
+ * The focused pane's 1-based place in reading order and the pane count, or null with one pane.
+ * @param {Window} win
+ */
+function paneStatus(win) {
+  const panes = PaneViews.get(win)?.panes;
+  if (!panes) return null;
+  const order = leaves(panes);
+  return { index: order.findIndex((l) => l.pane === panes.focus) + 1, count: order.length };
+}
 
 /** @param {Event} e */
 function consume(e) {
@@ -353,9 +400,11 @@ export const VimmaHost = {
   /**
    * What the status bar shows: the mode keys are dispatched in and the keys of a pending
    * sequence (dispatcher.pending() labels); `command` while a `/` or `?` search is typed (Vim's
-   * command-line mode), and that search or the page's last one (m1-find).
+   * command-line mode), and that search or the page's last one (m1-find); the focused pane's
+   * place among two or more (m4-split-panes).
    * @param {Window} win
-   * @returns {{ mode: Mode, pending: string[], find?: FindStatus | null }}
+   * @returns {{ mode: Mode, pending: string[], find?: FindStatus | null,
+   *   pane?: { index: number, count: number } | null }}
    */
   status(win) {
     const state = states.get(win);
@@ -365,6 +414,7 @@ export const VimmaHost = {
       mode: state.find.typing ? "command" : this._mode(state),
       pending: state.dispatcher.pending(),
       find: browser ? state.find.status(browser) : null,
+      pane: paneStatus(win),
     };
   },
 
@@ -462,6 +512,7 @@ export const VimmaHost = {
    */
   _runnable(state, id) {
     if (!RUNNABLE.has(id)) return false;
+    if (MULTI_PANE.has(id)) return hasPanes(state.win);
     if (id in RUNNERS) return true;
     return !!this._contentBrowser(state);
   },
