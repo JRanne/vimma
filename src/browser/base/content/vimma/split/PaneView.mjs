@@ -7,12 +7,14 @@
 // planSplit says which tabs join, leave, move, show, hide, (de)activate; layout() gives each
 // pane its rectangle. Firefox's wrapper keeps deciding which browsers are live and which tab is
 // selected; the tree decides the geometry. Until M3's workspace host owns the tree, the window
-// is the workspace. Sub-spec 3's keys call split / close / zoom; nothing here binds a key.
+// is the workspace. The pane keys (host/pane-ops.mjs, sub-spec 3) call split / focus / close /
+// zoom; nothing here binds a key.
 
 import { mergeWithDefaults } from "../core/config.mjs";
 import {
   closePane,
   createPanes,
+  focus as focusToward,
   layout,
   leaves,
   paneOfTab,
@@ -30,7 +32,7 @@ import {
   setHidden,
 } from "./layout.mjs";
 
-/** @import { Panes, SplitDirection, SplitRefusal } from "../core/panes.mjs" */
+/** @import { Direction, Panes, SplitDirection, SplitRefusal } from "../core/panes.mjs" */
 /** @import { SplitPlan } from "../core/splitplan.mjs" */
 
 /**
@@ -148,6 +150,19 @@ export class PaneView {
   }
 
   /**
+   * Moves focus to the focused pane's geometric neighbour (core: the most recently used one when
+   * several touch), which unzooms; with no neighbour nothing changes, the zoom included.
+   * @param {Direction} direction
+   * @returns {PaneResult}
+   */
+  focus(direction) {
+    if (!this.#panes) return { ok: true };
+    const next = focusToward(this.#panes, direction);
+    if (next !== this.#panes) this.#set(next);
+    return { ok: true };
+  }
+
+  /**
    * Zooms the focused pane to the whole content area, or unzooms.
    * @returns {PaneResult}
    */
@@ -162,8 +177,12 @@ export class PaneView {
    * @param {Panes | null} panes
    */
   #set(panes) {
-    this.#panes = panes && leaves(panes).length >= 2 ? panes : null;
+    const order = panes ? leaves(panes) : [];
+    this.#panes = order.length >= 2 ? panes : null;
     this.reconcile();
+    // Down to one pane: the split is gone and the pane left shows its tab, selected.
+    const last = order.length === 1 && order[0] ? this.#tab(order[0].tab) : null;
+    if (last) this.#select(last);
   }
 
   /** @param {Tab} tab */
