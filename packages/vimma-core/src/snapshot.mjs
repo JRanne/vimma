@@ -10,10 +10,10 @@
  */
 
 /** @import { Workspaces } from "./workspaces.mjs" */
-/** @import { Workspace } from "./workspaces.mjs" */
+/** @import { WorkspaceState } from "./workspaces.mjs" */
 /** @import { Panes } from "./panes.mjs" */
 /** @import { PaneNode } from "./panes.mjs" */
-/** @typedef {(raw: any) => any} Migration a step from schema n to n + 1 */
+/** @typedef {(raw: any) => any} SnapshotMigration a step from schema n to n + 1 */
 
 import { MIN_RATIO } from "./panes.mjs";
 
@@ -21,7 +21,7 @@ export const SCHEMA_VERSION = 1;
 
 /**
  * `SNAPSHOT_MIGRATIONS[n]` upgrades a schema-n snapshot to n + 1. Schema 1 is the first.
- * @type {Readonly<Record<number, Migration>>}
+ * @type {Readonly<Record<number, SnapshotMigration>>}
  */
 export const SNAPSHOT_MIGRATIONS = Object.freeze({});
 
@@ -106,7 +106,7 @@ export function toSnapshot(s) {
 /**
  * Upgrades `raw` step by step to SCHEMA_VERSION; returns `raw` itself when it is current.
  * @param {unknown} raw
- * @param {Readonly<Record<number, Migration>>} [migrations]
+ * @param {Readonly<Record<number, SnapshotMigration>>} [migrations]
  * @returns {Record<string, any>}
  */
 export function migrateSnapshot(raw, migrations = SNAPSHOT_MIGRATIONS) {
@@ -238,7 +238,7 @@ function readPanes(raw, path, tabs) {
 /**
  * Parses, migrates and validates a snapshot (object or JSON text).
  * @param {unknown} input
- * @param {{ migrations?: Readonly<Record<number, Migration>> }} [options]
+ * @param {{ migrations?: Readonly<Record<number, SnapshotMigration>> }} [options]
  * @returns {Workspaces}
  */
 export function fromSnapshot(input, { migrations } = {}) {
@@ -259,7 +259,7 @@ export function fromSnapshot(input, { migrations } = {}) {
   const names = new Set();
   const containers = new Set();
   const allTabs = new Set();
-  /** @type {Workspace[]} */
+  /** @type {WorkspaceState[]} */
   const workspaces = list.map((w, k) => {
     const at = `workspaces[${k}]`;
     if (!isObject(w)) return fail(at, "must be an object");
