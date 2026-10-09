@@ -1,0 +1,11 @@
+{
+  "name": "vimma-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure ES module core of vimma: key notation, dispatcher, keymaps, actions. No Firefox imports.",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "license": "MPL-2.0"
+}
