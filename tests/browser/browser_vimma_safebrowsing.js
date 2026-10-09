@@ -24,8 +24,15 @@ const HAS_KEY = typeof KEY === "string" && KEY.trim() !== "" && KEY !== NO_KEY;
 const KEY_GATED_PREFS = [
   "browser.safebrowsing.phishing.enabled",
   "browser.safebrowsing.malware.enabled",
-  "browser.safebrowsing.downloads.remote.enabled",
 ];
+
+/**
+ * Google serves these only to Mozilla's key: ours gets 404 (v5 `mwb-4b`, `csdda-32b`) or 403 (v4
+ * MALICIOUS_BINARY), and one refused list fails the whole batch, so no list would update.
+ */
+const MOZILLA_ONLY_TABLES = ["goog-badbinurl-proto", "goog-downloadwhite-proto"];
+/** The lists our key fetches: phishing (unofficial builds use googpub-), malware, unwanted. */
+const FETCHED_TABLES = ["googpub-phish-proto", "goog-malware-proto", "goog-unwanted-proto"];
 
 const defaults = Services.prefs.getDefaultBranch("");
 
@@ -47,6 +54,26 @@ add_task(function test_build_has_the_expected_key() {
     return;
   }
   Assert.strictEqual(HAS_KEY, expected === "1", `build has a Safe Browsing key: ${HAS_KEY}`);
+});
+
+add_task(function test_providers_ask_only_for_lists_our_key_gets() {
+  for (const provider of ["google4", "google5"]) {
+    const lists = defaults
+      .getCharPref(`browser.safebrowsing.provider.${provider}.lists`)
+      .split(",");
+    for (const table of MOZILLA_ONLY_TABLES) {
+      Assert.ok(!lists.includes(table), `${provider} does not ask for ${table}`);
+    }
+    for (const table of FETCHED_TABLES) {
+      Assert.ok(lists.includes(table), `${provider} still asks for ${table}`);
+    }
+  }
+  // Google's remote download check answers our key 403 (and the placeholder 400).
+  Assert.strictEqual(
+    defaultBool("browser.safebrowsing.downloads.remote.enabled"),
+    false,
+    "no remote download checks",
+  );
 });
 
 add_task(async function test_keyed_build_fetches_google_lists() {
@@ -73,6 +100,9 @@ add_task(async function test_keyed_build_fetches_google_lists() {
   // The harness points the provider URLs at a local dummy (testing/profiles/unittest-required),
   // so only whether SafeBrowsing kept them is meaningful here.
   Assert.ok(SafeBrowsing.providers.google4.updateURL !== "", "SafeBrowsing kept google4's URL");
+  for (const table of FETCHED_TABLES) {
+    Assert.equal(SafeBrowsing.listToProvider[table], "google5", `${table} updates from google5`);
+  }
   for (const name of KEY_GATED_PREFS) {
     Assert.strictEqual(defaultBool(name), true, `default ${name} is Firefox's true`);
   }
