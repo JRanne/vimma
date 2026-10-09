@@ -12,7 +12,8 @@ There are no packages or binaries yet. Tarballs, an AppImage, a `.deb` and AUR `
 planned for M6. Until then, build from source as the [README](../README.md#build-and-run)
 describes: `npm ci`, `npx surfer download`, `npx surfer bootstrap`, `npm run import`,
 `npx surfer build`. The first build takes about 40 minutes on a 16-thread machine and needs
-about 25 GB of disk space.
+about 35 GB of disk space (`engine/` 27 GB, the sccache compiler cache 6.8 GB, `~/.mozbuild`
+3.1 GB, `.surfer/` 0.8 GB).
 
 ### First launch, with its own profile
 
@@ -24,9 +25,15 @@ mkdir -p ~/.cache/vimma-dev-profile
 engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma --no-remote --profile ~/.cache/vimma-dev-profile
 ```
 
-Without `--profile`, Vimma creates its default profile under `~/.config/vimma/vimma/` on Linux,
-next to (not inside) Firefox's. `npx surfer run` launches with a scratch profile in the build
-directory.
+Without `--profile`, Vimma keeps its profiles apart from Firefox's. `npx surfer run` launches
+with a scratch profile in the build directory.
+
+Where Vimma keeps its files on Linux:
+
+| Path                          | What                                                                                                       |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `~/.config/vimma/config.toml` | Your config (planned, M5). Vimma reads only this file there and never scans the folder.                    |
+| `~/.config/vimma/vimma/`      | Profiles and `profiles.ini`. If `~/.vimma/vimma/` already exists, Firefox's legacy rule uses that instead. |
 
 On first launch you see Firefox's interface without the tab strip: the window starts with the
 navigation bar and URL bar at the top. Press `ctrl+b`, then `?`, to see the bindings.
@@ -99,16 +106,16 @@ Vimma changes Firefox's defaults, without locking them: each one can be changed 
 `about:config` (search for the name, then toggle or edit it). Spec:
 [m0-mozilla-services](specs/m0-mozilla-services.md).
 
-| Off in Vimma                             | Turn it back on                                                                                                                                                              |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Normandy studies and rollouts            | `app.normandy.enabled` = `true`, `app.normandy.api_url` = `https://normandy.cdn.mozilla.net/api/v1`                                                                          |
-| Nimbus studies and rollouts              | `app.shield.optoutstudies.enabled`, `nimbus.rollouts.enabled` = `true` (studies also need `datareporting.healthreport.uploadEnabled`)                                        |
-| Sponsored new-tab stories and shortcuts  | `browser.newtabpage.activity-stream.showSponsored`, `…showSponsoredTopSites`, `browser.topsites.contile.enabled`; stories: `…feeds.section.topstories` (or New Tab settings) |
-| Sponsored address-bar suggestions        | Settings: search for "sponsors" and tick "Suggestions from sponsors"                                                                                                         |
-| Feature and add-on recommendations       | `browser.newtabpage.activity-stream.asrouter.userprefs.cfr.addons`, `…cfr.features`                                                                                          |
-| Mozilla promos (VPN, Relay, Pin, mobile) | `browser.vpn_promo.enabled`, `browser.promo.relay.enabled`, `browser.promo.pin.enabled`, `browser.preferences.moreFromMozilla`                                               |
-| Crash reporter                           | Not built in. A crash leaves a local core dump (`coredumpctl list vimma`). Opt-in reporting to Vimma's own server is planned for M6.                                         |
-| Telemetry upload                         | Not built in (no official telemetry). The data-collection switches in Settings are off to match.                                                                             |
+| Off in Vimma                             | Turn it back on                                                                                                                                                                                       |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Normandy studies and rollouts            | `app.normandy.enabled` = `true`, `app.normandy.api_url` = `https://normandy.cdn.mozilla.net/api/v1`                                                                                                   |
+| Nimbus studies and rollouts              | `app.shield.optoutstudies.enabled`, `nimbus.rollouts.enabled` = `true` (studies also need `datareporting.healthreport.uploadEnabled`)                                                                 |
+| Sponsored new-tab stories and shortcuts  | `browser.newtabpage.activity-stream.showSponsored`, `…system.showSponsored`, `…showSponsoredTopSites`, `browser.topsites.contile.enabled`; stories: `…feeds.section.topstories` (or New Tab settings) |
+| Sponsored address-bar suggestions        | Settings: search for "sponsors" and tick "Suggestions from sponsors"                                                                                                                                  |
+| Feature and add-on recommendations       | `browser.newtabpage.activity-stream.asrouter.providers.cfr`: change `"enabled":false` to `true` in its JSON value; then `…asrouter.userprefs.cfr.addons`, `…cfr.features` = `true`                    |
+| Mozilla promos (VPN, Relay, Pin, mobile) | `browser.vpn_promo.enabled`, `browser.promo.relay.enabled`, `browser.promo.pin.enabled`, `browser.preferences.moreFromMozilla`                                                                        |
+| Crash reporter                           | Not built in. A crash leaves a local core dump (`coredumpctl list vimma`). Opt-in reporting to Vimma's own server is planned for M6.                                                                  |
+| Telemetry upload                         | Not built in (no official telemetry). The data-collection switches in Settings are off to match.                                                                                                      |
 
 Kept as in Firefox: Remote Settings (CRLite certificate revocation, intermediate certificates),
 the add-on blocklist, Firefox Sync and add-ons from addons.mozilla.org. Safe Browsing is switched

@@ -68,6 +68,13 @@ delete its line in the same PR.
 - `vimma --version` prints `Vimma Vimma 0.1.0` (vendor and name are both Vimma)
   ([m0-branding](specs/m0-branding.md), Settled).
 
+## Files and profiles
+
+- `~/.config/vimma/` holds both `config.toml` (M5) and the profiles (`vimma/`). The M5 config
+  loader must read only `config.toml` and never scan the folder
+  ([m5-core-config-and-theme](specs/m5-core-config-and-theme.md), host spec;
+  [m0-branding](specs/m0-branding.md), Settled).
+
 ## Branding
 
 - The logo is a placeholder "V" ([m0-branding](specs/m0-branding.md)).
@@ -107,5 +114,7 @@ delete its line in the same PR.
   themselves ([runbook](runbook.md)).
 - No branch protection on `main` (free private plan); write-token jobs could push to it
   ([m0-pipeline](specs/m0-pipeline.md), [runbook](runbook.md)).
-- A full build changing build config takes 15–30 min, and the first full build 39 min on 16
-  threads ([runbook](runbook.md)).
+- A change to build config needs a full rebuild of 15–30 min on 16 threads: 927 s
+  ([m0-app-version](specs/m0-app-version.md)), 977 s ([m0-branding](specs/m0-branding.md)),
+  1763 s ([m0-mozilla-services](specs/m0-mozilla-services.md)) and 1805 s (`m0-updater`, PR #15),
+  all Settled. The first full build took 39 min ([runbook](runbook.md)).
