@@ -136,9 +136,19 @@ Workspaces are not built yet; these are the limits their design accepts
 - Planned for M4: a pinned tab cannot be shown in a pane; Firefox's split view refuses pinned
   tabs, so Vimma unpins a tab before it joins a split
   ([ADR-013](adr/013-split-on-firefox-split-view.md)).
-- Planned for M4: Firefox's own split-view menus (tab and link context menu, alt-click) are off
-  (`browser.tabs.splitView.enabled` false); splits come from Vimma's keys
+- Firefox's own split-view UI is off: the tab and link context-menu items and alt-click
+  (`browser.tabs.splitView.enabled` false), the URL bar's split button and the tab-group items of
+  a split (hidden by `split.css`); splits come from Vimma's keys
   ([ADR-013](adr/013-split-on-firefox-split-view.md)).
+- At most `[panes] max` panes (default 4, up to 16) in a window: a further split is refused with
+  "at most N panes". Every visible pane's page stays live, so each one costs memory and CPU;
+  a zoomed-away pane is paused (its docshell inactive) until unzoom
+  ([m4-split-panes](specs/m4-split-panes.md), sub-spec 2).
+- Planned for M4: until workspaces own panes (sub-spec 6), a window has one pane tree, and a
+  tab whose pane is closed stays open in the background rather than hidden.
+- The accessible name of the third pane on ("<title>, pane 3 of 4") is English only; Firefox
+  names the first two panes "left" and "right" whatever the layout
+  ([m4-split-panes](specs/m4-split-panes.md), sub-spec 2).
 - Planned for M4: with three or more panes, extensions that move a split tab (`tabs.move`) and
   the all-tabs list's drag targets assume two tabs per split and may misplace them
   ([ADR-013](adr/013-split-on-firefox-split-view.md)).
