@@ -9,3 +9,5 @@ browser.jar:
         content/browser/vimma/core                        (core/**/*.mjs)
         content/browser/vimma/ui/help-overlay.mjs         (ui/help-overlay.mjs)
         skin/classic/browser/vimma/help-overlay.css       (/browser/themes/shared/vimma/help-overlay.css)
+        content/browser/vimma/ui/tabstrip.mjs             (ui/tabstrip.mjs)
+        skin/classic/browser/vimma/tabstrip.css           (/browser/themes/shared/vimma/tabstrip.css)

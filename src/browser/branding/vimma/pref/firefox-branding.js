@@ -65,3 +65,7 @@ pref("browser.promo.relay.enabled", false);
 // about:protections: the Firefox mobile app card and the VPN banner.
 pref("browser.contentblocking.report.show_mobile_app", false);
 pref("browser.contentblocking.report.hide_vpn_banner", true);
+
+// Vimma UI (spec m0-tabstrip-hidden): Firefox's tab strip is hidden until M2 brings Vimma's own
+// tab UI; false shows it again, live.
+pref("vimma.ui.tabstrip.hidden", true);
