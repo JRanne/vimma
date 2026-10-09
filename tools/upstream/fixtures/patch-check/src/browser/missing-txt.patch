@@ -1,0 +1,13 @@
+diff --git a/browser/missing.txt b/browser/missing.txt
+index d72a4b60a81634996b604199b18d3120790e8e2c..34ac3c9f6d0fd59706aa2f030efd4ab980971973 100644
+--- a/browser/missing.txt
++++ b/browser/missing.txt
+@@ -7,7 +7,7 @@ missing line 6
+ missing line 7
+ missing line 8
+ missing line 9
+-missing line 10
++missing line 10, patched by Vimma
+ missing line 11
+ missing line 12
+ missing line 13
