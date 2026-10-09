@@ -19,3 +19,11 @@ skip-if = ["artifact"]
 ["browser_vimma_app_version.js"]
 
 ["browser_vimma_tabstrip.js"]
+
+["browser_vimma_system_addons.js"]
+support-files = ["head_vimma_aus.js"]
+
+["browser_vimma_updater.js"]
+support-files = ["head_vimma_aus.js"]
+# Artifact builds run Mozilla's libxul, built with the updater (ADR-010).
+skip-if = ["artifact"]
