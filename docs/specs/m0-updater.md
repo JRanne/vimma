@@ -104,7 +104,9 @@ Both share `tests/browser/head_vimma_aus.js` (the request watcher).
 ## Out of scope
 
 - Our update manifest, server and signing (M6): set `MOZ_APPUPDATE_HOST` (needs a configure
-  hunk, the CONFIG value is never set) or patch `application.ini.in`, drop `--disable-updater`.
+  hunk, the CONFIG value is never set) or patch `application.ini.in`, drop `--disable-updater`,
+  and replace Mozilla's update-signing (MAR) certificates under `toolkit/mozapps/update/updater/`
+  with ours; re-enabling is more than flipping the flag.
 - GMP and Widevine policy (kept as Firefox has it); DRM prompts.
 - Remote Settings (kept, m0-mozilla-services).
 
@@ -131,7 +133,11 @@ once live). ADR-010 lists it. The system add-on half is prefs and runs in CI.
 - **What the user sees** (full build): About shows "Vimma", the version (`0.1.0 (64-bit)`) and the
   usual blurbs, no update box. Settings > General > "Vimma updates" shows only the bar "Updates
   are managed by your operating system" (accurate for a package-managed install; for a source
-  build it means "not by Vimma"); the security card omits its update bullet
+  build it means "not by Vimma"). **Known gap for M6:** tarball and AppImage users (plan §6) get
+  no updates at all, and this wording implies someone else handles them. No pref or Fluent
+  override changes it without a patch (`update-application-updates-managed-by-os` takes no brand
+  variable, and a duplicate Fluent id does not override); M6 replaces it with our updater or a
+  one-string ftl patch ("Vimma does not update itself yet; see releases on GitHub"); the security card omits its update bullet
   (`#okUpdateStatus` treats no updater as OK). No button, no error.
 - **Build cost**: after `npm run import`, `./mach build` with `--disable-updater` took 1805 s
   (30 min, reconfigure plus a libxul rebuild); no clobber. The artifact build with the flag
