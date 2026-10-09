@@ -68,8 +68,8 @@ in the URL bar, `about:` pages and the PDF viewer.
   The prefix works in every mode and waits for the next key with no timeout. `Esc` cancels it.
 - **The modal layer (Neovim).** Bare keys act on the page depending on the mode: `j`/`k` scroll
   in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page. Planned
-  modes: `visual`/copy (caret and selection), `hint` (link hints) and `panel` (the side
-  panel); `help` is the bindings overlay and `command` the `:` line.
+  modes: `visual`/copy (caret and selection) and `panel` (the side panel); `hint` is link
+  hints, `help` the bindings overlay and `command` the `:` line.
 
 ### Normal and insert mode
 
@@ -107,8 +107,26 @@ cancels it.
 **A binding that does not work yet is never silent once it is Vimma's.** A `ctrl+b` sequence, or
 a count followed by a key (`3H`), whose command is not built yet shows "… not implemented yet"
 in the bottom-right corner for 1.5 s (not while a video or page is fullscreen). A single key
-that is not built yet (`f`, `/`, `ctrl+i`, …) is not Vimma's yet: it reaches the page or
+that is not built yet (`/`, `ctrl+i`, …) is not Vimma's yet: it reaches the page or
 Firefox, with no message. The `ctrl+b ?` overlay dims the bindings that do not work yet.
+
+### Link hints
+
+`f` puts a yellow label on everything you could click on screen: links, buttons, form fields,
+and elements the page made clickable (ARIA buttons and tabs, elements with a click handler),
+also inside web components and in frames from other sites. Things off screen, hidden or covered
+by something else (a fixed header, a cookie banner) get no label. Type a label to pick its
+target: a link is followed, a button is pressed, a text field gets focus and the tab is in
+insert mode. Labels use the home row (`a s d f g h j k l`), in reading order: targets near the
+top get the shortest. As you type, labels that no longer match disappear. `Backspace` takes
+back a key and `Esc` leaves hints without doing anything.
+
+`F` labels links only and opens the one you pick in a new tab in the background, so you stay
+on the page and can pick more.
+
+The labels are drawn by the browser, over the page, not inside it: the page cannot see them,
+restyle them or hide them. Apps that draw their own controls on a canvas (Google Docs, Figma,
+maps, games) have nothing to label.
 
 ## Status bar and which-key
 
@@ -116,7 +134,8 @@ The status bar is the window's last line, always there (it hides only while a pa
 fullscreen, such as a video; browser fullscreen with `F11` keeps it). From the left:
 
 - the **mode** badge in the mode's colour: `NORMAL` on a page, `INSERT` while a text field has
-  focus (or after `i`), `HELP` while the `ctrl+b ?` overlay is open, and later `VISUAL`, …;
+  focus (or after `i`), `HELP` while the `ctrl+b ?` overlay is open, `HINT` while link hints
+  are up, and later `VISUAL`, …;
 - the **pending keys**, e.g. `prefix` after `ctrl+b`;
 - `tab 2/5`: the selected tab and how many there are;
 - the page **title** (your rename, once tab rename lands);
@@ -147,6 +166,7 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `d` / `u`                   | Normal mode: scroll half a page down / up (`ctrl+u` is reserved for workspaces).                                                                              |
 | `gg` / `G`                  | Normal mode: go to the top / bottom of the page.                                                                                                              |
 | `i`                         | Normal mode: focus the first text field and enter insert mode.                                                                                                |
+| `f` / `F`                   | Normal mode: link hints. Type a label to follow it, or, with `F`, to open the link in a background tab. `Backspace` undoes a key, `Esc` cancels.              |
 | `Esc`                       | Insert mode: leave the text field, back to normal mode. In normal mode the page gets `Esc`.                                                                   |
 | `ctrl+b ?`                  | Opens the bindings overlay over any page, including `about:preferences` and the PDF viewer. Press it again to close.                                          |
 | `/` (in the overlay)        | Filters the list as you type.                                                                                                                                 |
@@ -166,8 +186,8 @@ digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 
 **Planned:**
 
-- **M1, the rest of the modal page layer:** back and forward (`H`/`L`), reload (`r`), link
-  hints (`f`/`F`), find (`/ ? n N`) and copy mode (`v`, `ctrl+b [`). Until then these keys
+- **M1, the rest of the modal page layer:** back and forward (`H`/`L`), reload (`r`), find
+  (`/ ? n N`) and copy mode (`v`, `ctrl+b [`). Until then these keys
   reach the page as before.
 - **M2, the rest of tabs:** `ctrl+b shift+t` rename (kept across restarts; an empty name
   restores the page title), the `ctrl+b g` picker (`j`/`k` to move, `/` to search titles, URLs,
