@@ -5,6 +5,7 @@
 //! Argument parsing, output and exit codes of `vimma-ctl`.
 
 use crate::client::Client;
+pub use crate::client::MAX_TIMEOUT;
 use crate::discovery::{Env, find_profile, read_discovery};
 use crate::protocol::{Command, CommandResult, PROTOCOL, State, Where};
 use std::io::Write;
@@ -28,7 +29,7 @@ Commands:
 
 Options:
   --profile DIR       the Vimma profile (default: VIMMA_PROFILE, else profiles.ini's default)
-  --timeout SECS      give up after SECS seconds (default 5)
+  --timeout SECS      give up after SECS seconds (default 5, at most 3600)
   -h, --help          show this help
   -V, --version       show the version
 
@@ -90,6 +91,12 @@ pub fn parse_args(args: &[String]) -> Result<Parsed, String> {
                     .and_then(|secs| Duration::try_from_secs_f64(secs).ok())
                     .filter(|d| !d.is_zero())
                     .ok_or("--timeout needs a positive number of seconds")?;
+                if timeout > MAX_TIMEOUT {
+                    return Err(format!(
+                        "--timeout must be at most {} seconds",
+                        MAX_TIMEOUT.as_secs()
+                    ));
+                }
             }
             option if option.starts_with('-') && option.len() > 1 => {
                 return Err(format!("unknown option \"{option}\""));
@@ -248,6 +255,10 @@ mod tests {
         let o = run_opts(&["--profile", "/p", "state", "--timeout", "1.5"]);
         assert_eq!(o.profile, Some(PathBuf::from("/p")));
         assert_eq!(o.timeout, Duration::from_millis(1500));
+        assert_eq!(
+            run_opts(&["state", "--timeout", "3600"]).timeout,
+            MAX_TIMEOUT
+        );
         let o = run_opts(&["state", "--profile=/q", "--timeout=2"]);
         assert_eq!(o.profile, Some(PathBuf::from("/q")));
         assert_eq!(o.timeout, Duration::from_secs(2));
@@ -293,6 +304,14 @@ mod tests {
             (
                 &["state", "--timeout", "inf"][..],
                 "--timeout needs a positive number of seconds",
+            ),
+            (
+                &["state", "--timeout", "1e19"][..],
+                "--timeout must be at most 3600 seconds",
+            ),
+            (
+                &["state", "--timeout", "3600.5"][..],
+                "--timeout must be at most 3600 seconds",
             ),
             (&["state", "--bogus"][..], "unknown option \"--bogus\""),
         ] {

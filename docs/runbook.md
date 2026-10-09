@@ -363,17 +363,17 @@ vimma-ctl state                     # mode, pending keys, workspace, tabs (* = s
 vimma-ctl state --json | jq .tabs   # the raw result; unknown fields pass through
 vimma-ctl send-keys ctrl+b c        # chords in Herdr notation, space-separated
 vimma-ctl open https://example.com  # new tab; prints its id
-vimma-ctl --profile /tmp/p --timeout 2 state
+vimma-ctl --profile /tmp/p --timeout 2 state   # --timeout: seconds, at most 3600
 ```
 
 Profile: `--profile DIR`, else `VIMMA_PROFILE`, else the default in
 `~/.config/vimma/vimma/profiles.ini` (`$XDG_CONFIG_HOME` honoured; legacy `~/.vimma/vimma` if
 present): the `[Install…]` section's `Default`, else the `[Profile…]` with `Default=1`.
 
-| Exit | Meaning                                       | Typical fix                                                     |
-| ---- | --------------------------------------------- | --------------------------------------------------------------- |
-| 1    | server answered with an error (`code: msg`)   | fix the arguments (e.g. `invalid-args` for a `javascript:` URL) |
-| 2    | usage                                         | `vimma-ctl --help`                                              |
-| 3    | not reachable: no profile/file, stale, unsafe | start Vimma, set the pref, `chmod 600` the file, `--profile`    |
-| 4    | token or protocol refused                     | the file is from another run; restart Vimma                     |
-| 5    | malformed reply or timeout                    | a server bug; `--timeout` for a busy browser                    |
+| Exit | Meaning                                             | Typical fix                                                               |
+| ---- | --------------------------------------------------- | ------------------------------------------------------------------------- |
+| 1    | server answered with an error (`code: msg`)         | fix the arguments (e.g. `invalid-args` for a `javascript:` URL)           |
+| 2    | usage                                               | `vimma-ctl --help`                                                        |
+| 3    | not reachable: no profile/file, stale, unsafe, busy | start Vimma, set the pref, `chmod 600` the file, `--profile`; busy: retry |
+| 4    | token or protocol refused                           | the file is from another run; restart Vimma                               |
+| 5    | malformed reply or timeout                          | a server bug; `--timeout` for a busy browser                              |

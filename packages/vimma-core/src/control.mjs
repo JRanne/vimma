@@ -25,6 +25,7 @@ export const ERROR_CODES = Object.freeze([
   "not-implemented",
   "failed",
   "internal",
+  "busy",
 ]);
 
 const MAX_ID = 2 ** 53 - 1;

@@ -7,10 +7,13 @@
 use crate::json;
 use crate::protocol::{Discovery, decode_discovery};
 use std::fmt;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 /// The discovery file's name inside the profile.
 pub const FILE_NAME: &str = "vimma-control.json";
+/// Largest discovery file read; the real one is under 200 bytes.
+pub const MAX_FILE_SIZE: usize = 64 * 1024;
 /// The pref that turns the control socket on.
 pub const PREF: &str = "vimma.control.enabled";
 
@@ -176,8 +179,26 @@ pub fn read_discovery(profile: &Path) -> Result<Discovery, DiscoveryError> {
         ))
     })?;
     check_mode(&path, &metadata)?;
-    let text = std::fs::read_to_string(&path)
+    let too_big = || {
+        DiscoveryError(format!(
+            "refusing {}: larger than {MAX_FILE_SIZE} bytes",
+            path.display()
+        ))
+    };
+    if metadata.len() > MAX_FILE_SIZE as u64 {
+        return Err(too_big());
+    }
+    // Read at most one byte past the limit, in case the file grew since the metadata call.
+    let mut text = String::new();
+    std::fs::File::open(&path)
+        .and_then(|file| {
+            file.take(MAX_FILE_SIZE as u64 + 1)
+                .read_to_string(&mut text)
+        })
         .map_err(|e| DiscoveryError(format!("cannot read {}: {e}", path.display())))?;
+    if text.len() > MAX_FILE_SIZE {
+        return Err(too_big());
+    }
     let value = json::parse(&text)
         .map_err(|e| DiscoveryError(format!("{} is not valid JSON: {e}", path.display())))?;
     decode_discovery(&value)
@@ -347,6 +368,17 @@ mod tests {
         write_mode(&dir.join(FILE_NAME), &text, 0o644);
         let err = read_discovery(&dir).unwrap_err();
         assert!(err.0.contains("chmod 600"), "{err}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_an_oversized_file_without_reading_it() {
+        let dir = temp_dir();
+        let padding = " ".repeat(MAX_FILE_SIZE);
+        let text = format!(r#"{{"protocol":1,"port":4000,"token":"{TOKEN}","pid":7}}{padding}"#);
+        write_mode(&dir.join(FILE_NAME), &text, 0o600);
+        let err = read_discovery(&dir).unwrap_err();
+        assert!(err.0.contains("larger than 65536 bytes"), "{err}");
     }
 
     #[cfg(unix)]

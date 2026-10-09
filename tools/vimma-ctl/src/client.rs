@@ -25,14 +25,19 @@ pub enum Error {
     Auth(ErrorBody),
     /// The server broke the protocol, closed early, or was too slow (exit 5).
     Protocol(String),
+    /// The server is at its connection limit (exit 3, like not reachable: retry later).
+    Busy(ErrorBody),
 }
+
+/// Longest allowed timeout; [`Client::connect`] clamps to it so the deadline cannot overflow.
+pub const MAX_TIMEOUT: Duration = Duration::from_secs(3600);
 
 impl Error {
     #[must_use]
     pub fn exit_code(&self) -> i32 {
         match self {
             Error::Server(_) => 1,
-            Error::NotRunning(_) => 3,
+            Error::NotRunning(_) | Error::Busy(_) => 3,
             Error::Auth(_) => 4,
             Error::Protocol(_) => 5,
         }
@@ -46,6 +51,11 @@ impl fmt::Display for Error {
             Error::NotRunning(message) => f.write_str(message),
             Error::Auth(e) => write!(f, "authentication failed: {}: {}", e.code, e.message),
             Error::Protocol(message) => write!(f, "protocol error: {message}"),
+            Error::Busy(e) => write!(
+                f,
+                "Vimma's control socket is busy ({}: {}); try again",
+                e.code, e.message
+            ),
         }
     }
 }
@@ -69,7 +79,10 @@ impl Client {
     /// [`Error::NotRunning`] when nothing listens, [`Error::Auth`] when the token or protocol is
     /// refused, [`Error::Protocol`] on a malformed or late reply.
     pub fn connect(discovery: &Discovery, timeout: Duration) -> Result<Self, Error> {
-        let deadline = Instant::now() + timeout;
+        let timeout = timeout.min(MAX_TIMEOUT);
+        let deadline = Instant::now()
+            .checked_add(timeout)
+            .ok_or_else(|| Error::Protocol("timeout out of range".to_string()))?;
         let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, discovery.port));
         let stream = TcpStream::connect_timeout(&addr, timeout).map_err(|e| {
             Error::NotRunning(format!(
@@ -88,6 +101,7 @@ impl Client {
         let reply = client.receive()?;
         if reply.get("type") == Some(&Value::String("response".into())) {
             return match protocol::decode_response(&reply).map_err(protocol_error)? {
+                Response::Err { error, .. } if error.code == "busy" => Err(Error::Busy(error)),
                 Response::Err { error, .. } => Err(Error::Auth(error)),
                 Response::Ok { .. } => Err(Error::Protocol(
                     "expected welcome, got a result".to_string(),
@@ -226,6 +240,31 @@ mod tests {
         assert_eq!(Error::NotRunning("x".into()).exit_code(), 3);
         assert_eq!(Error::Auth(body("unauthorized")).exit_code(), 4);
         assert_eq!(Error::Protocol("x".into()).exit_code(), 5);
+        assert_eq!(Error::Busy(body("busy")).exit_code(), 3);
+    }
+
+    #[test]
+    fn busy_says_to_retry() {
+        assert_eq!(
+            Error::Busy(body("busy")).to_string(),
+            "Vimma's control socket is busy (busy: m); try again"
+        );
+    }
+
+    #[test]
+    fn a_huge_timeout_does_not_overflow_the_deadline() {
+        let port = {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.local_addr().unwrap().port()
+        };
+        let discovery = Discovery {
+            protocol: 1,
+            port,
+            token: "0".repeat(64),
+            pid: 1,
+        };
+        let result = Client::connect(&discovery, Duration::MAX);
+        assert!(matches!(result, Err(Error::NotRunning(_))), "{result:?}");
     }
 
     #[test]

@@ -51,6 +51,7 @@ describe("constants", () => {
     expect([...CONTROL_COMMANDS]).toEqual(["send-keys", "state", "open"]);
     expect([...RESERVED_COMMANDS]).toEqual(["list-tabs", "screenshot", "reload-config"]);
     expect(ERROR_CODES).toContain("not-implemented");
+    expect(ERROR_CODES).toContain("busy");
     expect(MAX_LINE_LENGTH).toBe(1024 * 1024);
   });
 });

@@ -349,6 +349,53 @@ fn finds_the_default_profile_through_profiles_ini() {
 }
 
 #[test]
+fn rejects_a_huge_timeout_without_panicking() {
+    let out = vimma_ctl(Path::new("/nonexistent"), &["--timeout", "1e19", "state"]);
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    assert!(
+        stderr(&out).starts_with("vimma-ctl: --timeout must be at most 3600 seconds\n"),
+        "{}",
+        stderr(&out)
+    );
+}
+
+#[test]
+fn reports_a_busy_server_with_exit_3() {
+    let server = Server::start(|_, _| {
+        Some(vec![
+            r#"{"type":"response","id":null,"ok":false,"error":{"code":"busy","message":"8 connections open"}}"#
+                .into(),
+        ])
+    });
+    let out = vimma_ctl(&server.profile, &["state"]);
+    assert_eq!(out.status.code(), Some(3), "{}", stderr(&out));
+    assert_eq!(
+        stderr(&out),
+        "vimma-ctl: Vimma's control socket is busy (busy: 8 connections open); try again\n"
+    );
+    drop(server.lines());
+}
+
+#[test]
+fn reports_a_drop_after_the_handshake_with_exit_5() {
+    // The server's idle timeout or connection cap closing an authenticated connection.
+    let server = Server::start(|n, _| {
+        if n == 0 {
+            Some(vec![WELCOME.into()])
+        } else {
+            None
+        }
+    });
+    let out = vimma_ctl(&server.profile, &["state"]);
+    assert_eq!(out.status.code(), Some(5), "{}", stderr(&out));
+    assert_eq!(
+        stderr(&out),
+        "vimma-ctl: protocol error: connection closed before a complete reply\n"
+    );
+    drop(server.lines());
+}
+
+#[test]
 fn usage_errors_exit_2() {
     let out = vimma_ctl(Path::new("/nonexistent"), &["frobnicate"]);
     assert_eq!(out.status.code(), Some(2));

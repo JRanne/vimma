@@ -21,7 +21,7 @@ pub const MODES: [&str; 7] = [
     "normal", "insert", "visual", "command", "hint", "help", "panel",
 ];
 /// vimma-core's `ERROR_CODES`.
-pub const ERROR_CODES: [&str; 8] = [
+pub const ERROR_CODES: [&str; 9] = [
     "bad-request",
     "unauthorized",
     "unsupported-protocol",
@@ -30,6 +30,7 @@ pub const ERROR_CODES: [&str; 8] = [
     "not-implemented",
     "failed",
     "internal",
+    "busy",
 ];
 
 /// Where `open` loads the URL.

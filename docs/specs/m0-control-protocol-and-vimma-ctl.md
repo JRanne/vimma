@@ -21,7 +21,8 @@ or `vimma-ctl open https://example.com` against a running Vimma, and the browser
 3. `tools/vimma-ctl/`: the Rust client (ADR-011). Subcommands `send-keys <keys>`,
    `state [--json]`, `open <url>`; options `--profile <dir>`, `--timeout <secs>`. Its unit tests
    decode and encode against the same fixtures; integration tests run it against a fake server.
-4. CI: a `rust` job (fmt, clippy `-D warnings`, tests) and a crate licence check.
+4. CI: Rust steps (fmt, clippy `-D warnings`, tests) in the existing `ci.yml` job (ADR-011:
+   one job on purpose, minutes are billed per job) and a crate licence check.
 
 ## Protocol, version 1
 
@@ -112,6 +113,7 @@ and a malformed `hello` (`bad-request`) all end the connection.
 | `not-implemented`      | a reserved command (below)                                       |
 | `failed`               | the command was valid but could not be carried out (e.g. no tab) |
 | `internal`             | a bug in the server; the message says what threw                 |
+| `busy`                 | at the connection limit (handshake only; see Security)           |
 
 ### Commands
 
@@ -173,6 +175,21 @@ the tab's id, as in `state`.
   token, and a non-JSON first line (an HTTP request) is rejected.
 - `open` refuses `javascript:` and `data:` URLs, so a client cannot run script in a page's
   context through it.
+- **Connection limits.** Any local user can connect before proving the token, so the server
+  bounds what a connection may hold:
+  - **At most 8 open connections** (handshaking or authenticated together). Real use is one
+    short-lived `vimma-ctl` per command plus the e2e harness; 8 leaves room for scripts running
+    in parallel while capping the sockets, buffers and timers another local user can pin.
+  - **Handshake deadline 5 s** (above): no complete `hello` in 5 s → close.
+  - **Idle timeout 60 s after the handshake**: no complete request line for 60 s → the server
+    closes the connection without a message. A client that wants a long-lived connection sends
+    a request (e.g. `state`) at least every 60 s.
+  - **At the limit**, the server accepts the 9th connection, writes one line
+    `{"type":"response","id":null,"ok":false,"error":{"code":"busy","message":"…"}}` and closes
+    it, so the client can tell "busy" from "not running". It never queues connections.
+  - `vimma-ctl` reports `busy` as "Vimma's control socket is busy (…); try again" with exit 3;
+    a refused connection is exit 3 ("not running"); a connection dropped mid-reply (idle
+    timeout, shutdown) is exit 5 "connection closed before a complete reply".
 
 **Plan §9 open question, decided for now:** the token lives in `<profile>/vimma-control.json`
 (0600), and the socket is **off by default in all builds**, release included. Revisit when the
@@ -217,16 +234,16 @@ vimma-ctl [--profile DIR] [--timeout SECS] state [--json]
 vimma-ctl [--profile DIR] [--timeout SECS] open URL
 ```
 
-| Exit | Meaning                                                                      |
-| ---- | ---------------------------------------------------------------------------- |
-| 0    | success                                                                      |
-| 1    | the server answered with an error (code and message printed to stderr)       |
-| 2    | usage error                                                                  |
-| 3    | Vimma not reachable: no profile, no discovery file, insecure file, no server |
-| 4    | authentication failed (`unauthorized`, `unsupported-protocol`)               |
-| 5    | protocol error: malformed response, wrong id, connection closed, timeout     |
+| Exit | Meaning                                                                              |
+| ---- | ------------------------------------------------------------------------------------ |
+| 0    | success                                                                              |
+| 1    | the server answered with an error (code and message printed to stderr)               |
+| 2    | usage error                                                                          |
+| 3    | Vimma not reachable: no profile, no discovery file, insecure file, no server, `busy` |
+| 4    | authentication failed (`unauthorized`, `unsupported-protocol`)                       |
+| 5    | protocol error: malformed response, wrong id, connection closed, timeout             |
 
-The timeout (default 5 s) covers connect, handshake and the response.
+The timeout (default 5 s, at most 3600 s) covers connect, handshake and the response.
 
 ## Tests (written first)
 
@@ -257,6 +274,7 @@ profile discovery, `list-tabs`/`screenshot`/`reload-config` beyond reserving the
   atomically (to `.tmp`, set 0600, rename; check in the engine tree whether `IOUtils` can create
   the file with a mode, else rely on the 0700 profile directory for the short window) and delete
   it at `quit-application`. Token from `crypto.getRandomValues` (32 bytes, hex).
+- Enforce the connection limits in § Security: 8 connections, 5 s handshake, 60 s idle, `busy`.
 - Validate every line with `validateMessage` from vimma-core; compare tokens with `tokensEqual`;
   enforce the 1 MiB line limit and the 5 s hello deadline; answer in the formats of the fixtures.
 - Implement `send-keys` through the same dispatcher path as real keydowns, `state` from the host's
@@ -280,4 +298,9 @@ profile discovery, `list-tabs`/`screenshot`/`reload-config` beyond reserving the
 - Checked `profiles.ini` against a real Firefox profile directory on the dev box: its
   `[Install…] Default` and the `[Profile…] Default=1` name different profiles; Firefox starts the
   install's, and so does the client.
+- Review follow-up: `--timeout` capped at 3600 s (a huge value overflowed the deadline and
+  panicked); connection limits and the `busy` code specified; discovery file read capped at
+  64 KiB. Red: lib tests did not compile (`Busy`, `MAX_TIMEOUT`, `MAX_FILE_SIZE` missing),
+  integration "18 passed; 2 failed", Vitest "1 failed" (`busy`); green: 47 unit,
+  20 integration, 89 Vitest.
 - Not done here: the server; `npx surfer license-check` needs `engine/`.
