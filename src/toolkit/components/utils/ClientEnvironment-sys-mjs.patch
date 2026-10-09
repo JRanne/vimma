@@ -1,0 +1,13 @@
+diff --git a/toolkit/components/utils/ClientEnvironment.sys.mjs b/toolkit/components/utils/ClientEnvironment.sys.mjs
+index 701fa41a4fc0c83cab5fdda8b9b216181f1ecee6..8cf32fa3bccf6a3fce1ab8cce1ec46424eb4a29a 100644
+--- a/toolkit/components/utils/ClientEnvironment.sys.mjs
++++ b/toolkit/components/utils/ClientEnvironment.sys.mjs
+@@ -132,7 +132,7 @@ export class ClientEnvironmentBase {
+   }
+ 
+   static get version() {
+-    return AppConstants.MOZ_APP_VERSION_DISPLAY;
++    return AppConstants.MOZ_APP_VERSION;
+   }
+ 
+   static get channel() {
