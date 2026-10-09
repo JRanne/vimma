@@ -6,6 +6,16 @@
    the --vimma-* theme tokens. Widths are counted in columns of the bar's monospace font, so
    separators and badge padding are in ch. */
 
+:root {
+  /* The bar's height, for other UI at the window's foot (the notice); 0 where it is hidden. */
+  --vimma-statusbar-height: 20px;
+
+  &[inDOMFullscreen],
+  &[customizing] {
+    --vimma-statusbar-height: 0px;
+  }
+}
+
 #vimma-statusbar {
   position: relative;
   /* above the tabbox and an expanded sidebar (--browser-area-z-index-*), for the strip */
@@ -18,7 +28,8 @@
   white-space: pre;
   font-family: var(--vimma-font, monospace);
   font-size: 12px;
-  line-height: 20px;
+  height: var(--vimma-statusbar-height);
+  line-height: var(--vimma-statusbar-height);
   color-scheme: var(--vimma-color-scheme, dark);
   background-color: var(--vimma-statusbar-bg);
   color: var(--vimma-statusbar-fg);
@@ -133,4 +144,13 @@
   [aria-disabled="true"] > & {
     color: inherit;
   }
+}
+
+.vimma-wk-clipped {
+  position: absolute;
+  inset-inline-end: 1ch;
+  bottom: 2px;
+  padding: 0 0.5ch;
+  background-color: var(--vimma-bg-dark);
+  color: var(--vimma-accent);
 }

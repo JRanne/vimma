@@ -24,11 +24,11 @@ sequence completes, is cancelled, or I press `Esc`.
   (Tokyo Night, font `monospace`) through `tokensToCss()`, loaded once per window as an author
   sheet. Both elements colour themselves only from `--vimma-*` tokens.
 - Host seam (additive, small): `VimmaHost.status(win)` → `{ mode, pending }`,
-  `VimmaHost.onStateChange(win, fn)` → unsubscribe, and `VimmaHost.runnable()` → the set of
-  action ids in `RUNNERS`. The host emits after every keydown it sees, after a timeout flush and
-  after a cancel/reset. Other host work (content actor, mode detection, tab keys) calls the same
-  `_emit` when it changes mode; the bar also refreshes on focus changes, so focus-driven mode
-  detection shows without extra wiring.
+  `VimmaHost.onStateChange(win, fn)` → unsubscribe, and `VimmaHost.runnable()` → `RUNNABLE`
+  (m2-tab-keys: `RUNNERS` ∪ `CONTENT_RUNNERS`, the help overlay's set too). The host emits after
+  every keydown it sees, after a timeout flush (`_run`, then `_emit`), after a cancel/reset, and
+  from `VimmaHost.onModeChange(browser, mode)` (m1-actor-insert-scroll) for the window owning
+  the browser, so a focus report from a page moves the badge with no key pressed.
 - Live updates: `TabSelect`, `TabOpen`, `TabClose`, `TabMove`, `TabAttrModified` (title, busy),
   the tabbrowser's location change (`onLocationChange` on the selected browser), host state
   changes, focus changes, and the bar's own size (`ResizeObserver`).
@@ -38,9 +38,13 @@ sequence completes, is cancelled, or I press `Esc`.
 `tests/browser/browser_vimma_statusbar.js`:
 
 - The bar is visible at the bottom of the window, below `#browser`, with the mode badge.
-- Mode: `INSERT` outside the overlay (M0/M1's base mode until the insert-detection PR lands; then
-  `NORMAL` on a page and `INSERT` in an input), `HELP` while `ctrl+b ?` is open, back after `Esc`.
+- Mode: the host's mode (`NORMAL` on a page), `HELP` while `ctrl+b ?` is open, back after `Esc`.
   The badge's background is `--vimma-mode-<mode>`.
+- Focusing a page input with no key pressed tells the host's listeners and shows `INSERT`, and
+  the live region announces it; `Esc` brings back `NORMAL`.
+- A font change at the same bar size (only the probe resizes) re-fits the segments.
+- The not-implemented notice (m2-tab-keys) sits above the bar and is hidden while the strip is
+  open.
 - `tab n/N` after opening tabs and selecting another one.
 - The title after a page loads, and the URL without its scheme.
 - Width fitting: in a bar narrower than the content, the URL is dropped first and the mode stays.
@@ -53,8 +57,10 @@ sequence completes, is cancelled, or I press `Esc`.
 
 - `ctrl+b` shows the strip and the `pending` segment `prefix` in the bar; it lists `c` with
   `new_tab`'s description and `?`.
-- Greying follows `VimmaHost.runnable()` (the `RUNNERS` table, the help overlay's source): `?` is
+- Greying follows `VimmaHost.runnable()` (`RUNNABLE`, the help overlay's source): `?` is
   runnable, every entry outside the set is greyed.
+- A strip clipped by its max-height shows `…N more`, N being the entries outside it; none when
+  everything fits.
 - The strip hides after the second key, and after `Esc`.
 - Nothing pending: no strip.
 
@@ -80,26 +86,31 @@ screenshot baselines (the e2e harness).
   chrome there. Browser fullscreen (F11, `:root[inFullscreen]` alone) keeps it: it is the one line
   Vimma promises is always visible, and the toolbox already auto-hides. Kiosk mode follows F11.
 - **Width.** Columns = `floor(bar content width / one monospace column)`, with the column
-  measured once from a hidden 10-character probe in the bar's font and re-measured when the
-  bar's size changes. The font is `var(--vimma-font, monospace)`; M5's `[theme] font` replaces
+  measured from a hidden 10-character probe in the bar's font. The ResizeObserver watches the
+  probe as well as the bar, so a font change (M5's `[theme] font`, zoom) re-measures even when
+  the bar keeps its size. The font is `var(--vimma-font, monospace)`; M5's `[theme] font` replaces
   the token. The budget subtracts one column for each badge's padding (`0 0.5ch` both sides).
   The bar never wraps (`white-space: pre`, `overflow: clip`) even if a font draws a wide
   character wider than two columns.
 - **Performance.** Every trigger only marks the bar dirty; one `requestAnimationFrame` renders.
   The width comes from `ResizeObserver` (no layout read in the render path), and the DOM is
   rebuilt only when the fitted segments differ from the last render. A keypress therefore costs
-  the core calls and, while a sequence is pending, the strip.
+  the core calls and, while a sequence is pending, the strip. The strip's "…N more" hint reads
+  layout only when its content or size changes (a rAF after a rebuild, and its ResizeObserver).
+- **Bottom UI.** `statusbar.css` sets `--vimma-statusbar-height` on the root (20px; 0 in DOM
+  fullscreen and customize mode). The notice (`notice.css`) sits that far plus 0.5rem above the
+  window bottom, and hides while the root has `vimma-whichkey-open` (set by the strip), so the
+  two never overlap.
 - **Accessibility.** The bar is `role="status"` with `aria-live="off"`, so title and URL changes
   are not announced; a visually hidden child with `aria-live="polite"` holds the mode name and
   changes only when the mode does. The strip is plain text with
   `aria-label="Next keys"`; greyed entries carry `aria-disabled="true"`.
-- **Runnable set.** `VimmaHost.runnable()` is `new Set(Object.keys(RUNNERS))`, the same table
-  m0-help-overlay names as the runnable set, read each time so a PR that adds runners greys less
-  without touching the UI. The help overlay does not grey yet (it renders `bindingTable(keymap)`
-  without a set); passing the same set there is a one-line follow-up.
-- **Mode.** The host still dispatches as `insert` outside the overlay (m0-help-overlay); the bar
-  shows what the host reports, so `NORMAL` appears once the insert-detection work makes the host
-  report it. The test asserts the host's mode, whatever it is, plus `INSERT`/`HELP` today.
+- **Runnable set.** `VimmaHost.runnable()` returns `RUNNABLE` from m2-tab-keys, the one set
+  the help overlay dims by and the notice checks; there is no other definition.
+- **Mode.** The bar shows `status(win).mode`: the focused page's mode (m1-actor-insert-scroll),
+  `help` with the overlay open, `insert` in chrome fields. `onModeChange` finds the window with
+  `browser.ownerDocument.defaultView`: `ownerGlobal` is the inner window, a different object
+  from the WindowProxy `init()` keys its state by, so it never matched.
 - **Title and URL.** Title is the browser's `contentTitle`, else the tab's label (lazy tabs,
   `New Tab`); the URL is `Services.io.createExposableURI(uri).displaySpec` (no credentials, IDN
   shown decoded), none for `about:blank`. Loading is the tab's `busy` attribute; Firefox exposes
@@ -109,7 +120,10 @@ screenshot baselines (the e2e harness).
 - **Typecheck.** `tools/sync-core.mjs` now also copies the vendored `smol-toml.d.mts` into the
   chrome copy of core (jar.mn packs only `*.mjs`), since `ui/statusbar.mjs` is the first chrome
   module to import `theme.mjs`, which reaches the vendored TOML parser.
-- **Verified (artifact lane):** red: 16 unexpected (no `#vimma-statusbar`, no
+- **Review round 1 (after #32 and #28 merged):** red for the new tests: 7 unexpected (no emit on
+  a focus report, no re-measure on a font change, notice over the bar and the strip, no clipped
+  hint). Green: both files 80/0.
+- **Verified (artifact lane, first round):** red: 16 unexpected (no `#vimma-statusbar`, no
   `VimmaHost.status`/`runnable`, no strip). Green: both files 69/0; full `tests/browser/` 513
   expected, 0 unexpected, 2 skipped (artifact). Mutation: fitting to `columns + 40` instead of
   `columns - badges` fails "title fits in the narrow bar" (504 <= 209.8); reverted. The first

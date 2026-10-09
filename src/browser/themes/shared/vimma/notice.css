@@ -6,7 +6,8 @@
 
 #vimma-notice {
   position: fixed;
-  inset: auto 1rem 1rem auto;
+  /* above the status bar (statusbar.css sets the height; 0 where the bar is hidden) */
+  inset: auto 1rem calc(var(--vimma-statusbar-height, 0px) + 0.5rem) auto;
   margin: 0;
   max-width: min(32rem, calc(100vw - 2rem));
   padding: 0.4rem 0.75rem;
@@ -18,4 +19,9 @@
   font-size: 12px;
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
   pointer-events: none;
+}
+
+/* The which-key strip owns the window's foot while a sequence is pending. */
+:root[vimma-whichkey-open] #vimma-notice {
+  visibility: hidden;
 }

@@ -18,6 +18,8 @@ import { whichKey } from "../core/whichkey.mjs";
 
 export const STATUSBAR_ID = "vimma-statusbar";
 export const WHICHKEY_ID = "vimma-whichkey";
+/** Root attribute while the which-key strip is open, so other bottom UI (the notice) gives way. */
+export const WHICHKEY_OPEN_ATTR = "vimma-whichkey-open";
 const STYLESHEET = "chrome://browser/skin/vimma/statusbar.css";
 const HTML_NS = "http://www.w3.org/1999/xhtml";
 /** Characters in the probe that measures one column of the bar's font. */
@@ -77,6 +79,8 @@ export class StatusBar {
     this.live = null;
     /** @type {HTMLElement | null} */
     this.probe = null;
+    /** @type {HTMLElement | null} "…N more" when the strip cannot show every entry */
+    this.moreHint = null;
     /** bar content width in CSS px, from the ResizeObserver */
     this.width = 0;
     /** one column of the bar's font in CSS px; 0 until measured */
@@ -119,7 +123,9 @@ export class StatusBar {
       win.gBrowser?.removeProgressListener(this.progress);
     }
     this.bar?.remove();
+    win.document.documentElement?.removeAttribute(WHICHKEY_OPEN_ATTR);
     this.bar = this.strip = this.left = this.right = this.live = this.probe = null;
+    this.moreHint = null;
   }
 
   /** Mark dirty; one render per frame however many triggers fire. */
@@ -173,23 +179,38 @@ export class StatusBar {
     strip.id = WHICHKEY_ID;
     strip.hidden = true;
     strip.setAttribute("aria-label", "Next keys");
+    this.moreHint = el("div", "vimma-wk-clipped");
+    this.moreHint.hidden = true;
 
     bar.append(this.left, this.right, this.live, this.probe, strip);
     anchor.after(bar);
     this.bar = bar;
     this.strip = strip;
 
+    // Layout is fresh inside a ResizeObserver callback: measuring here forces no extra reflow.
+    // The probe is observed too, so a font change (M5's [theme] font, a zoom) re-measures the
+    // column even when the bar keeps its width.
     this.resize = new win.ResizeObserver((entries) => {
-      const entry = entries.at(-1);
-      if (!entry) return;
-      this.width = entry.contentBoxSize[0]?.inlineSize ?? entry.contentRect.width;
-      // Layout is fresh inside a ResizeObserver callback: measuring here forces no extra reflow.
-      const probe = /** @type {HTMLElement} */ (this.probe);
-      const w = probe.getBoundingClientRect().width / PROBE_CHARS;
-      if (w > 0) this.column = w;
-      this.schedule();
+      let refit = false;
+      for (const entry of entries) {
+        if (entry.target === this.bar) {
+          this.width = entry.contentBoxSize[0]?.inlineSize ?? entry.contentRect.width;
+          refit = true;
+        } else if (entry.target === this.probe) {
+          const w = entry.contentRect.width / PROBE_CHARS;
+          if (w > 0 && w !== this.column) {
+            this.column = w;
+            refit = true;
+          }
+        } else if (entry.target === this.strip) {
+          this.markClipped();
+        }
+      }
+      if (refit) this.schedule();
     });
     this.resize.observe(bar);
+    this.resize.observe(this.probe);
+    this.resize.observe(strip);
 
     for (const type of TAB_EVENTS) win.addEventListener(type, this.update, true);
     // Focus moving into or out of a field changes the mode once the host detects it.
@@ -284,13 +305,39 @@ export class StatusBar {
     const key = wk ? JSON.stringify(wk) : "";
     if (key === this.lastStrip) return;
     this.lastStrip = key;
+    const root = this.win.document.documentElement;
     if (!wk) {
       strip.hidden = true;
       strip.replaceChildren();
+      root.removeAttribute(WHICHKEY_OPEN_ATTR);
       return;
     }
-    strip.replaceChildren(...this.stripSections(wk));
+    const hint = /** @type {HTMLElement} */ (this.moreHint);
+    hint.hidden = true;
+    strip.replaceChildren(...this.stripSections(wk), hint);
     strip.hidden = false;
+    root.setAttribute(WHICHKEY_OPEN_ATTR, "true");
+    // New entries in a strip already at its max-height do not resize it: check after layout.
+    this.win.requestAnimationFrame(() => this.markClipped());
+  }
+
+  /**
+   * Shows "…N more" when entries fall outside the strip (a short window, a long keymap). Reads
+   * layout, so it runs only when the strip's content or size changed, not per keypress.
+   * @private
+   */
+  markClipped() {
+    const strip = this.strip;
+    const hint = this.moreHint;
+    if (!strip || !hint || strip.hidden) return;
+    const box = strip.getBoundingClientRect();
+    let clipped = 0;
+    for (const e of strip.querySelectorAll(".vimma-wk-entry")) {
+      const r = e.getBoundingClientRect();
+      if (r.bottom > box.bottom + 0.5 || r.right > box.right + 0.5) clipped++;
+    }
+    hint.textContent = clipped ? `…${clipped} more` : "";
+    hint.hidden = clipped === 0;
   }
 
   /**
