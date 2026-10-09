@@ -11,7 +11,17 @@
     "windowsUseSymbolicLinks": false
   },
   "addons": {},
-  "brands": {},
+  "brands": {
+    "vimma": {
+      "backgroundColor": "#1a1b26",
+      "brandShorterName": "Vimma",
+      "brandShortName": "Vimma",
+      "brandFullName": "Vimma",
+      "release": {
+        "displayVersion": "0.1.0"
+      }
+    }
+  },
   "license": {
     "ignoredFiles": [
       ".*\\.json"
