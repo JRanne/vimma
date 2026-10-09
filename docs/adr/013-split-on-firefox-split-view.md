@@ -136,8 +136,8 @@ rejected and M4 returns to ADR-006.
 `tests/browser/browser_vimma_split_contract.js` with the spike module
 `src/browser/base/content/vimma/split/spike-layout.mjs` and `split-spike.css`, on a local artifact
 build of Firefox 157.0.1 (headless, Linux), window 1280 × 800, content area 1280 × 760. The
-rectangles follow `vimma-core`'s `layout()` edge rounding (PR #10's `layoutNode`, copied into the
-test until core is on main). 12 tasks, 232 checks, green on three consecutive runs and in the full
+pane trees are built with `vimma-core`'s pane ops (`split`, `resize`, `toggleZoom`) and the
+rectangles come from its `layout()`. 12 tasks, 234 checks, green on repeated runs and in the full
 `tests/browser/` suite.
 
 | #   | Criterion                                           | Result   | Measured                                                                                                                                                                                                                                                                                                                                                                                                                                                     |

@@ -293,11 +293,11 @@ e2e once the perf gate (issue #17) exists.
 
 ## Sub-spec 1 results (`m4-split-contract` spike)
 
-Done in `tests/browser/browser_vimma_split_contract.js` (12 tasks, 232 checks) with a spike
+Done in `tests/browser/browser_vimma_split_contract.js` (12 tasks, 234 checks) with a spike
 module, `split/spike-layout.mjs` and `browser/themes/shared/vimma/split-spike.css`, both marked
 SPIKE and not wired into the host. Local artifact build of Firefox 157.0.1, headless, window
-1280 × 800 (content area 1280 × 760). Rectangles use a copy of core's `layoutNode` rounding in
-the test, since PR #10 is not on main. The numbers are in
+1280 × 800 (content area 1280 × 760). Pane trees come from core's pane ops and
+rectangles from core's `layout()`. The numbers are in
 [ADR-013 § Spike results](../adr/013-split-on-firefox-split-view.md#spike-results); in short:
 
 | Scope item                                          | Result                                                                                                                        |

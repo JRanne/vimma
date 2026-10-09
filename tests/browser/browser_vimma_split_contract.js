@@ -5,8 +5,8 @@
 // Contract and spike for split panes on Firefox's own split view (docs/specs/m4-split-panes.md,
 // sub-spec 1; ADR-013's acceptance criteria). It pins the upstream behaviour we build on with
 // wrappers of three and four tabs, never only two, so a Firefox update that narrows the split
-// view fails here. The rectangles come from layoutRects below, a copy of vimma-core's layout()
-// edge rounding (PR #10, not on main yet); sub-spec 2 switches to core's layout().
+// view fails here. The pane trees are built with vimma-core's pane ops and the rectangles come
+// from its layout(), as PaneView's will (sub-spec 2).
 
 /* global focusContent -- from head.js */
 
@@ -25,39 +25,47 @@ const HEIGHT = 800;
 const TOLERANCE = 1;
 const SCROLL_Y = 600;
 
+const Panes = ChromeUtils.importESModule("chrome://browser/content/vimma/core/panes.mjs");
+
+/** Pane trees use each tab's linkedPanel as its tab id. */
+function idOf(tab) {
+  return tab.linkedPanel;
+}
+
+/** x[a, y[b, c]]: split a right, then split the new pane down. */
+function lShape([a, b, c]) {
+  const s = Panes.split(Panes.createPanes(idOf(a)), "p1", "vertical", idOf(b));
+  return Panes.split(s, "p2", "horizontal", idOf(c));
+}
+
+/** a | b | c: split right twice (core halves the focused pane, so .5 / .25 / .25). */
+function row([a, b, c]) {
+  const s = Panes.split(Panes.createPanes(idOf(a)), "p1", "vertical", idOf(b));
+  return Panes.split(s, "p2", "vertical", idOf(c));
+}
+
 /**
- * vimma-core layout() (packages/vimma-core/src/panes.mjs on PR #10): split edges are rounded to
- * whole px, so neighbours share one edge and the last child ends at the parent's edge.
- * @param {object} node  { axis: "x" | "y", ratios: number[], children } or a leaf (a tab)
- * @param {{x: number, y: number, width: number, height: number}} rect
- * @param {Map<object, object>} [out]
+ * x[y[g1, g3], y[g2, g4]], resized to uneven ratios so the edges are rounded
+ * (1280 × .37 = 473.6, 760 × .61 = 463.6).
  */
-function layoutRects(node, rect, out = new Map()) {
-  if (!node.axis) {
-    out.set(node, rect);
-    return out;
-  }
-  const horizontal = node.axis === "x";
-  const start = horizontal ? rect.x : rect.y;
-  const size = horizontal ? rect.width : rect.height;
-  const edges = [start];
-  let cum = 0;
-  for (let i = 0; i < node.children.length - 1; i++) {
-    cum += node.ratios[i];
-    edges.push(Math.round(start + size * cum));
-  }
-  edges.push(start + size);
-  node.children.forEach((child, i) => {
-    const [a, b] = [edges[i], edges[i + 1]];
-    layoutRects(
-      child,
-      horizontal
-        ? { x: a, y: rect.y, width: b - a, height: rect.height }
-        : { x: rect.x, y: a, width: rect.width, height: b - a },
-      out,
-    );
-  });
-  return out;
+function grid([g1, g2, g3, g4]) {
+  let s = Panes.split(Panes.createPanes(idOf(g1)), "p1", "vertical", idOf(g2));
+  s = Panes.split(s, "p1", "horizontal", idOf(g3));
+  s = Panes.split(s, "p2", "horizontal", idOf(g4));
+  s = Panes.focusPane(s, "p1");
+  s = Panes.resize(s, "narrower", 0.13);
+  s = Panes.resize(s, "shorter", 0.05);
+  s = Panes.focusPane(s, "p2");
+  return Panes.resize(s, "taller", 0.11);
+}
+
+/**
+ * core layout() of a pane state over the content area, keyed by tab.
+ * @returns {Map<object, {x: number, y: number, width: number, height: number}>}
+ */
+function rectsOf(state, tabs) {
+  const byId = new Map(tabs.map((t) => [idOf(t), t]));
+  return new Map(Panes.layout(state, area()).map((r) => [byId.get(r.tab), r.rect]));
 }
 
 /**
@@ -214,13 +222,7 @@ add_task(async function an_L_shape_of_three_tabs_puts_every_active_panel_at_its_
   await setWindowSize();
   const [p1, p2, p3] = await openTabs("p1", "p2", "p3");
   await split([p1, p2, p3]);
-  // x[p1, y[p2, p3]]
-  const tree = {
-    axis: "x",
-    ratios: [0.5, 0.5],
-    children: [p1, { axis: "y", ratios: [0.5, 0.5], children: [p2, p3] }],
-  };
-  const rects = layoutRects(tree, area());
+  const rects = rectsOf(lShape([p1, p2, p3]), [p1, p2, p3]);
   applyLayout(window, rects);
   assertActive([p1, p2, p3], "L shape");
   const delta = assertRects(rects, "L shape");
@@ -236,18 +238,8 @@ add_task(async function an_L_shape_of_three_tabs_puts_every_active_panel_at_its_
 add_task(async function a_two_by_two_grid_of_four_tabs_puts_every_active_panel_at_its_rect() {
   await setWindowSize();
   const tabs = await openTabs("g1", "g2", "g3", "g4");
-  const [g1, g2, g3, g4] = tabs;
   await split(tabs);
-  // x[y[g1, g3], y[g2, g4]] at uneven ratios, so the edges are rounded (1280 × .37 = 473.6).
-  const tree = {
-    axis: "x",
-    ratios: [0.37, 0.63],
-    children: [
-      { axis: "y", ratios: [0.45, 0.55], children: [g1, g3] },
-      { axis: "y", ratios: [0.61, 0.39], children: [g2, g4] },
-    ],
-  };
-  const rects = layoutRects(tree, area());
+  const rects = rectsOf(grid(tabs), tabs);
   applyLayout(window, rects);
   assertActive(tabs, "grid");
   const delta = assertRects(rects, "grid");
@@ -266,10 +258,7 @@ add_task(async function focusing_or_clicking_a_pane_selects_its_tab_and_the_url_
   const tabs = await openTabs("f1", "f2", "f3");
   const [f1, f2, f3] = tabs;
   await split(tabs);
-  applyLayout(
-    window,
-    layoutRects({ axis: "x", ratios: [1 / 3, 1 / 3, 1 / 3], children: tabs }, area()),
-  );
+  applyLayout(window, rectsOf(row(tabs), tabs));
 
   await focusContent(f3.linkedBrowser);
   Assert.equal(gBrowser.selectedTab, f3, "focusing f3's browser selects f3");
@@ -292,12 +281,8 @@ add_task(async function the_focus_outline_find_bar_and_notifications_belong_to_t
   const tabs = await openTabs("n1", "n2", "n3");
   const [n1, n2, n3] = tabs;
   await split(tabs);
-  const tree = {
-    axis: "x",
-    ratios: [0.5, 0.5],
-    children: [n1, { axis: "y", ratios: [0.5, 0.5], children: [n2, n3] }],
-  };
-  const rects = layoutRects(tree, area());
+  const state = lShape(tabs);
+  const rects = rectsOf(state, tabs);
   applyLayout(window, rects);
 
   // Focus outline: only the selected (deck-selected) panel's browserContainer draws
@@ -378,12 +363,8 @@ add_task(
     const tabs = await openTabs("s1", "s2", "s3");
     const [s1, s2, s3] = tabs;
     await split(tabs);
-    const tree = {
-      axis: "x",
-      ratios: [0.5, 0.5],
-      children: [s1, { axis: "y", ratios: [0.5, 0.5], children: [s2, s3] }],
-    };
-    const rects = layoutRects(tree, area());
+    const state = lShape(tabs);
+    const rects = rectsOf(state, tabs);
     applyLayout(window, rects);
     await focusContent(s2.linkedBrowser);
     Assert.equal(gBrowser.selectedTab, s2, "s2 is the focused pane");
@@ -416,7 +397,7 @@ add_task(
     );
     await setWindowSize();
     await nextFrame();
-    const after = layoutRects(tree, area());
+    const after = rectsOf(state, tabs);
     Assert.deepEqual([...after.values()], [...rects.values()], "the content area is the same size");
     const delta = assertRects(rects, "after fullscreen");
     info(`after fullscreen: max Δ ${delta} px`);
@@ -430,13 +411,13 @@ add_task(async function zoom_hides_the_other_panes_visually_and_unzoom_restores_
   const tabs = await openTabs("z1", "z2", "z3");
   const [z1, z2, z3] = tabs;
   await split(tabs);
-  const tree = {
-    axis: "x",
-    ratios: [0.5, 0.5],
-    children: [z1, { axis: "y", ratios: [0.5, 0.5], children: [z2, z3] }],
-  };
-  const full = area();
-  const rects = layoutRects(tree, full);
+  const state = lShape(tabs);
+  const rects = rectsOf(state, tabs);
+  // core's zoomed layout: one rectangle, the whole area.
+  const zoomed = rectsOf(Panes.toggleZoom(Panes.focusPane(state, "p3")), tabs);
+  Assert.deepEqual(names(zoomed.keys()), ["z3"], "core zooms z3 alone");
+  const full = zoomed.get(z3);
+  Assert.deepEqual(full, area(), "core gives the zoomed z3 the whole area");
   applyLayout(window, rects);
   await scrollPage(z1.linkedBrowser, SCROLL_Y);
   await scrollPage(z2.linkedBrowser, SCROLL_Y);
@@ -546,10 +527,7 @@ async function rebuild(hostDeactivates) {
   const tabs = await openTabs("a", "b", "c");
   const [a, b, c] = tabs;
   const wrapper = await split(tabs);
-  applyLayout(
-    window,
-    layoutRects({ axis: "x", ratios: [1 / 3, 1 / 3, 1 / 3], children: tabs }, area()),
-  );
+  applyLayout(window, rectsOf(row(tabs), tabs));
   await scrollPage(a.linkedBrowser, SCROLL_Y);
   await scrollPage(c.linkedBrowser, SCROLL_Y);
   gBrowser.selectedTab = c;
