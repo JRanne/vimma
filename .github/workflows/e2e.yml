@@ -126,3 +126,14 @@ jobs:
       # under Xvfb, with screenshots compared at 0.5 %.
       - name: e2e scenarios (npm run e2e -- --artifact)
         run: npm run e2e -- --artifact
+
+      # The actual and diff screenshots of a failed comparison (tools/e2e/screenshot.mjs), for
+      # judging a regression or taking a new baseline from the runner's fonts (runbook).
+      - name: Upload e2e-output/ (screenshots of failed comparisons)
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-output
+          path: e2e-output/
+          if-no-files-found: ignore
+          retention-days: 7
