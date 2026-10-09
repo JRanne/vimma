@@ -1,0 +1,12 @@
+node_modules/
+coverage/
+engine/
+.surfer/
+dist/
+*.log
+
+.dotbuild/
+.surfer/
+engine/
+firefox-*/
+node_modules/

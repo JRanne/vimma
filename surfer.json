@@ -1,0 +1,13 @@
+{
+  "name": "Vimma",
+  "vendor": "Vimma",
+  "appId": "dev.vimma.browser",
+  "binaryName": "vimma",
+  "version": {
+    "product": "firefox",
+    "version": "157.0.1"
+  },
+  "buildOptions": {
+    "windowsUseSymbolicLinks": false
+  }
+}

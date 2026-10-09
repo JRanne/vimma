@@ -1,0 +1,6 @@
+plan.md
+coverage/
+engine/
+.surfer/
+package-lock.json
+packages/vimma-core/test/__snapshots__/
