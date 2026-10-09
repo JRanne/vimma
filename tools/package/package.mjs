@@ -36,6 +36,9 @@ const APP = "vimma";
 const DESCRIPTION =
   "Keyboard-first web browser built on Firefox, with Neovim-style modes and a tmux-style prefix keymap";
 
+/** GNU LGPL 2.1 text (gnu.org/licenses/old-licenses/lgpl-2.1.txt), for the AppImage runtime. */
+const LGPL_TEXT = fileURLToPath(new URL("notices/LGPL-2.1.txt", import.meta.url));
+
 /** hicolor sizes we ship, all rendered into configs/branding/vimma/ (spec m0-branding). */
 export const ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512];
 
@@ -133,8 +136,66 @@ export function releaseVersion(config, tag) {
 /** @param {string} version SemVer; a pre-release sorts before its release with `~` in dpkg */
 export const debVersion = (version) => version.replace("-", "~");
 
-/** @param {string} version SemVer; pacman's pkgver cannot contain hyphens */
-export const pkgver = (version) => version.replaceAll("-", "_");
+/**
+ * The AUR gets releases only: release.yml accepts vX.Y.Z tags only, and a pre-release would need
+ * a pkgver without its hyphen but a download URL with it.
+ * @param {string} version
+ */
+function aurVersion(version) {
+  if (version.includes("-")) throw new Error(`AUR: ${version} is a pre-release; releases only`);
+  return version;
+}
+
+/**
+ * cosign keyless identity of a genuine release signature: release.yml of this repo, run for a
+ * vX.Y.Z tag (a published release) or from main (a manual re-run). docs/runbook.md uses it.
+ */
+export const IDENTITY_REGEXP =
+  "^https://github\\.com/JRanne/vimma/\\.github/workflows/release\\.yml@refs/(heads/main|tags/v[0-9]+\\.[0-9]+\\.[0-9]+)$";
+
+/** The AppImage runtime release fetch-appimagetool.sh pins (its single source). */
+export const RUNTIME_RELEASE = (() => {
+  const script = readFileSync(new URL("fetch-appimagetool.sh", import.meta.url), "utf8");
+  const release = /^RUNTIME_RELEASE=(\S+)$/m.exec(script)?.[1];
+  if (!release) throw new Error("fetch-appimagetool.sh: no RUNTIME_RELEASE=");
+  return release;
+})();
+const RUNTIME_SOURCE = `https://github.com/AppImage/type2-runtime/tree/${RUNTIME_RELEASE}`;
+
+/** usr/share/doc/vimma/APPIMAGE-RUNTIME-NOTICE.txt in the AppImage (LGPL-2.1 section 6). */
+export function runtimeNotice() {
+  return `The first part of this AppImage file is the AppImage type-2 runtime, unmodified, from
+type2-runtime ${RUNTIME_RELEASE} (MIT): ${RUNTIME_SOURCE}
+
+The runtime is statically linked with:
+  - libfuse 3.15.0 (GNU LGPL-2.1-or-later; full text in LGPL-2.1.txt next to this file),
+    with the patch in that repository's patches/libfuse/
+  - squashfuse 0.5.2 (BSD-2-Clause), musl libc (MIT), zstd (BSD-3-Clause)
+
+Source: the complete corresponding source of the runtime and the scripts that build it are at
+the URL above (scripts/common/install-dependencies.sh names and checksums the libfuse and
+squashfuse sources it builds). Vimma passes no changes to them.
+
+You may modify libfuse and relink the runtime, or replace the runtime altogether: run
+  ./vimma-<version>-x86_64.AppImage --appimage-extract
+to unpack the application into squashfs-root/, then build a new AppImage from that directory
+with appimagetool --runtime-file <your runtime> squashfs-root <new>.AppImage, or run
+squashfs-root/AppRun directly. Vimma itself is MPL-2.0; see about:license for its other
+components.
+`;
+}
+
+/** Appended to the GitHub Release notes by release.yml's publish job. */
+export function thirdPartyNotes() {
+  return `### Third-party notice
+
+The AppImage starts with the unmodified AppImage type-2 runtime ${RUNTIME_RELEASE} (MIT), which
+statically links libfuse 3.15.0 under the LGPL-2.1-or-later. Its source:
+${RUNTIME_SOURCE}. The licence text and how to relink or replace the runtime are in
+\`usr/share/doc/vimma/\` inside the AppImage (\`--appimage-extract\`). Vimma is MPL-2.0; the
+CycloneDX SBOM lists the other components.
+`;
+}
 
 /** @param {string} version */
 export function artifactNames(version) {
@@ -266,7 +327,8 @@ export function appRun() {
     "# install path, so without this every launch would open a fresh profile.",
     "export MOZ_LEGACY_PROFILES=1",
     '# "Make default browser" and remoting record the .AppImage, not the temporary mount.',
-    'export MOZ_APP_LAUNCHER="$APPIMAGE"',
+    "# Set only when the AppImage runtime started us ($APPIMAGE), never to an empty value.",
+    'if [ -n "${APPIMAGE:-}" ]; then export MOZ_APP_LAUNCHER="$APPIMAGE"; fi',
     `exec "$HERE/usr/lib/${APP}/${APP}" "$@"`,
     "",
   ].join("\n");
@@ -339,7 +401,7 @@ License: MPL-2.0
 
 /**
  * @typedef {{ version: string, maintainer: string, repo: string, tarballSha256: string,
- *   desktopSha256: string }} AurInput
+ *   desktopSha256: string, desktopId: string }} AurInput
  */
 
 const AUR_DEPENDS = [
@@ -359,7 +421,7 @@ const AUR_OPTDEPENDS = [
 
 /** @param {AurInput} input */
 function aurSource(input) {
-  const v = pkgver(input.version);
+  const v = aurVersion(input.version);
   const url = `https://github.com/${input.repo}/releases/download/v${v}/${APP}-${v}-linux-x86_64.tar.xz`;
   return { file: `${APP}-${v}-linux-x86_64.tar.xz`, url };
 }
@@ -376,7 +438,7 @@ export function pkgbuild(input) {
   return `# Maintainer: ${input.maintainer}
 # Generated by tools/package/package.mjs in ${input.repo} (spec m6-packaging); edit it there.
 pkgname=${APP}-bin
-pkgver=${pkgver(input.version)}
+pkgver=${aurVersion(input.version)}
 pkgrel=1
 pkgdesc="${DESCRIPTION}"
 arch=('x86_64')
@@ -388,7 +450,7 @@ provides=('${APP}')
 conflicts=('${APP}')
 options=('!strip' '!debug')
 source=("${APP}-\${pkgver}-linux-x86_64.tar.xz::https://github.com/${input.repo}/releases/download/v\${pkgver}/${APP}-\${pkgver}-linux-x86_64.tar.xz"
-        '${APP}.desktop')
+        '${input.desktopId}.desktop')
 sha256sums=('${input.tarballSha256}'
             '${input.desktopSha256}')
 
@@ -396,7 +458,8 @@ package() {
   install -d "$pkgdir/opt" "$pkgdir/usr/bin"
   cp -a "$srcdir/${APP}" "$pkgdir/opt/${APP}"
   ln -s /opt/${APP}/${APP} "$pkgdir/usr/bin/${APP}"
-  install -Dm644 "$srcdir/${APP}.desktop" "$pkgdir/usr/share/applications/${APP}.desktop"
+  install -Dm644 "$srcdir/${input.desktopId}.desktop" \\
+    "$pkgdir/usr/share/applications/${input.desktopId}.desktop"
   local size
   for size in 16 32 48 64 128; do
     install -Dm644 "$srcdir/${APP}/browser/chrome/icons/default/default\${size}.png" \\
@@ -415,7 +478,7 @@ export function srcinfo(input) {
   const { file, url } = aurSource(input);
   const fields = [
     ["pkgdesc", DESCRIPTION],
-    ["pkgver", pkgver(input.version)],
+    ["pkgver", aurVersion(input.version)],
     ["pkgrel", "1"],
     ["url", `https://github.com/${input.repo}`],
     ["arch", "x86_64"],
@@ -427,7 +490,7 @@ export function srcinfo(input) {
     ["options", "!strip"],
     ["options", "!debug"],
     ["source", `${file}::${url}`],
-    ["source", `${APP}.desktop`],
+    ["source", `${input.desktopId}.desktop`],
     ["sha256sums", input.tarballSha256],
     ["sha256sums", input.desktopSha256],
   ];
@@ -485,9 +548,10 @@ function copyApp(appDir, to) {
  * @param {string} root
  * @param {string} brandDir
  * @param {string} desktop
+ * @param {string} desktopId
  */
-function installShare(root, brandDir, desktop) {
-  writeFile(join(root, `usr/share/applications/${APP}.desktop`), desktop);
+function installShare(root, brandDir, desktop, desktopId) {
+  writeFile(join(root, `usr/share/applications/${desktopId}.desktop`), desktop);
   for (const size of ICON_SIZES) {
     installFile(
       join(brandDir, `logo${size}.png`),
@@ -550,6 +614,9 @@ export function packageRelease(options) {
     throw new Error(`${options.tarball}: application.ini has Name=${ini.name}, want Vimma`);
   }
   const desktop = desktopEntry({ wmClass: ini.remotingName });
+  // Desktop file ID = RemotingName (X11 WM_CLASS, Wayland app_id, MPRIS), so shells match the
+  // window to it without guessing (spec m6-packaging, Settled).
+  const desktopId = ini.remotingName;
   const problems = checkDesktopEntry(desktop);
   if (problems.length) throw new Error(`desktop file: ${problems.join("; ")}`);
 
@@ -565,9 +632,11 @@ export function packageRelease(options) {
   rmSync(appDir, { recursive: true, force: true });
   mkdirSync(appDir, { recursive: true, mode: 0o755 });
   copyApp(app, join(appDir, `usr/lib/${APP}`));
-  installShare(appDir, options.brandDir, desktop);
+  installShare(appDir, options.brandDir, desktop, desktopId);
   writeFile(join(appDir, "AppRun"), appRun(), 0o755);
-  writeFile(join(appDir, `${APP}.desktop`), desktop);
+  writeFile(join(appDir, `${desktopId}.desktop`), desktop);
+  installFile(LGPL_TEXT, join(appDir, `usr/share/doc/${APP}/LGPL-2.1.txt`));
+  writeFile(join(appDir, `usr/share/doc/${APP}/APPIMAGE-RUNTIME-NOTICE.txt`), runtimeNotice());
   installFile(join(options.brandDir, "logo256.png"), join(appDir, `${APP}.png`));
   if (options.appimagetool) {
     if (!options.runtime) throw new Error("--appimagetool needs --runtime (the pinned runtime)");
@@ -586,7 +655,7 @@ export function packageRelease(options) {
   rmSync(debRoot, { recursive: true, force: true });
   mkdirSync(debRoot, { recursive: true, mode: 0o755 });
   copyApp(app, join(debRoot, `usr/lib/${APP}`));
-  installShare(debRoot, options.brandDir, desktop);
+  installShare(debRoot, options.brandDir, desktop, desktopId);
   mkdirSync(join(debRoot, "usr/bin"), { recursive: true, mode: 0o755 });
   symlinkSync(`../lib/${APP}/${APP}`, join(debRoot, `usr/bin/${APP}`));
   writeFile(join(debRoot, `usr/share/doc/${APP}/copyright`), COPYRIGHT);
@@ -613,19 +682,25 @@ export function packageRelease(options) {
     files.push(sbom);
   }
 
-  // AUR: not a release asset; release.yml pushes it to aur.archlinux.org/vimma-bin.git.
+  // AUR (releases only): not a release asset; release.yml pushes it to the AUR.
   const aurDir = join(out, "aur");
   rmSync(aurDir, { recursive: true, force: true });
-  writeFile(join(aurDir, `${APP}.desktop`), desktop);
-  const aur = {
-    version,
-    maintainer: options.maintainer,
-    repo: options.repo,
-    tarballSha256: sha256File(tarball),
-    desktopSha256: sha256File(join(aurDir, `${APP}.desktop`)),
-  };
-  writeFile(join(aurDir, "PKGBUILD"), pkgbuild(aur));
-  writeFile(join(aurDir, ".SRCINFO"), srcinfo(aur));
+  if (!version.includes("-")) {
+    writeFile(join(aurDir, `${desktopId}.desktop`), desktop);
+    const aur = {
+      version,
+      maintainer: options.maintainer,
+      repo: options.repo,
+      tarballSha256: sha256File(tarball),
+      desktopSha256: sha256File(join(aurDir, `${desktopId}.desktop`)),
+      desktopId,
+    };
+    writeFile(join(aurDir, "PKGBUILD"), pkgbuild(aur));
+    writeFile(join(aurDir, ".SRCINFO"), srcinfo(aur));
+  }
+
+  // Not an asset either: release.yml appends it to the release notes.
+  writeFile(join(out, "notes/third-party.md"), thirdPartyNotes());
 
   writeFile(join(out, names.checksums), sha256sums(files));
   return { version, files: [...files, join(out, names.checksums)], appDir, debRoot, aurDir };
@@ -665,5 +740,5 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   });
   console.log(`package: Vimma ${result.version}`);
   for (const file of result.files) console.log(`  ${file}`);
-  console.log(`  ${result.aurDir}/ (PKGBUILD, .SRCINFO, ${APP}.desktop)`);
+  console.log(`  ${result.aurDir}/ (PKGBUILD, .SRCINFO, desktop file)`);
 }

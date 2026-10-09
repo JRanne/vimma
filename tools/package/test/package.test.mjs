@@ -27,7 +27,9 @@ import {
   packageRelease,
   parseIni,
   pkgbuild,
-  pkgver,
+  IDENTITY_REGEXP,
+  RUNTIME_RELEASE,
+  thirdPartyNotes,
   readAppIni,
   releaseVersion,
   sha256sums,
@@ -130,11 +132,9 @@ describe("version and names", () => {
     expect(() => releaseVersion(surfer(v))).toThrow(/displayVersion/);
   });
 
-  it("maps a pre-release for dpkg (~ sorts first) and pacman (no hyphen)", () => {
+  it("maps a pre-release for dpkg (~ sorts first)", () => {
     expect(debVersion("0.2.0")).toBe("0.2.0");
     expect(debVersion("0.2.0-rc.1")).toBe("0.2.0~rc.1");
-    expect(pkgver("0.2.0")).toBe("0.2.0");
-    expect(pkgver("0.2.0-nightly.20261009")).toBe("0.2.0_nightly.20261009");
   });
 
   it("names every artifact after the Vimma version, not Firefox's", () => {
@@ -206,8 +206,8 @@ describe("desktop entry", () => {
 
   it.skipIf(!has("desktop-file-validate"))("passes desktop-file-validate", () => {
     const dir = mkdtempSync(join(tmpdir(), "vimma-desktop-"));
-    writeFileSync(join(dir, "vimma.desktop"), text);
-    const result = spawnSync("desktop-file-validate", [join(dir, "vimma.desktop")], {
+    writeFileSync(join(dir, "vimma-vimma.desktop"), text);
+    const result = spawnSync("desktop-file-validate", [join(dir, "vimma-vimma.desktop")], {
       encoding: "utf8",
     });
     expect(result.stdout + result.stderr).toBe("");
@@ -221,6 +221,27 @@ describe("AppRun", () => {
     expect(script.startsWith("#!/bin/sh\n")).toBe(true);
     expect(script).toMatch(/^export MOZ_LEGACY_PROFILES=1$/m);
     expect(script).toMatch(/MOZ_APP_LAUNCHER="\$APPIMAGE"/);
+  });
+  it("leaves MOZ_APP_LAUNCHER alone when not started by the AppImage runtime", () => {
+    const dir = mkdtempSync(join(tmpdir(), "vimma-apprun-"));
+    mkdirSync(join(dir, "usr/lib/vimma"), { recursive: true });
+    writeFileSync(join(dir, "AppRun"), script);
+    writeFileSync(
+      join(dir, "usr/lib/vimma/vimma"),
+      '#!/bin/sh\necho "launcher=${MOZ_APP_LAUNCHER-unset} legacy=$MOZ_LEGACY_PROFILES"\n',
+    );
+    chmodSync(join(dir, "AppRun"), 0o755);
+    chmodSync(join(dir, "usr/lib/vimma/vimma"), 0o755);
+    const env = { PATH: process.env.PATH ?? "" };
+    expect(execFileSync(join(dir, "AppRun"), { env, encoding: "utf8" })).toBe(
+      "launcher=unset legacy=1\n",
+    );
+    expect(
+      execFileSync(join(dir, "AppRun"), {
+        env: { ...env, APPIMAGE: "/x/v.AppImage" },
+        encoding: "utf8",
+      }),
+    ).toBe("launcher=/x/v.AppImage legacy=1\n");
     expect(script).toMatch(/exec "\$HERE\/usr\/lib\/vimma\/vimma" "\$@"/);
   });
   it("is valid sh", () => {
@@ -260,6 +281,7 @@ describe("PKGBUILD and .SRCINFO", () => {
     repo: REPO,
     tarballSha256: "a".repeat(64),
     desktopSha256: "b".repeat(64),
+    desktopId: "vimma-vimma",
   };
   const build = pkgbuild(input);
   const info = srcinfo(input);
@@ -278,6 +300,17 @@ describe("PKGBUILD and .SRCINFO", () => {
 
   it("is valid bash", () => {
     expect(spawnSync("bash", ["-n"], { input: build }).status).toBe(0);
+  });
+
+  it("installs the desktop file under the remoting name", () => {
+    expect(build).toContain("'vimma-vimma.desktop'");
+    expect(build).toContain('"$pkgdir/usr/share/applications/vimma-vimma.desktop"');
+    expect(info).toContain("\tsource = vimma-vimma.desktop\n");
+  });
+
+  it("refuses a pre-release: the AUR gets releases only", () => {
+    expect(() => pkgbuild({ ...input, version: "0.2.0-rc.1" })).toThrow(/pre-release/);
+    expect(() => srcinfo({ ...input, version: "0.2.0-rc.1" })).toThrow(/pre-release/);
   });
 
   it("has .SRCINFO fields matching the PKGBUILD", () => {
@@ -350,7 +383,8 @@ describe("packageRelease on a fake ./mach package tarball", () => {
     const app = result.appDir;
     expect(mode(join(app, "AppRun"))).toBe(0o755);
     expect(readFileSync(join(app, "AppRun"), "utf8")).toBe(appRun());
-    expect(readFileSync(join(app, "vimma.desktop"), "utf8")).toMatch(
+    expect(existsSync(join(app, "vimma.desktop"))).toBe(false);
+    expect(readFileSync(join(app, "vimma-vimma.desktop"), "utf8")).toMatch(
       /^StartupWMClass=vimma-vimma$/m,
     );
     expect(readFileSync(join(app, "vimma.png"))).toEqual(
@@ -359,13 +393,34 @@ describe("packageRelease on a fake ./mach package tarball", () => {
     expect(mode(join(app, "usr/lib/vimma/vimma"))).toBe(0o755);
     expect(mode(join(app, "usr/lib/vimma/libxul.so"))).toBe(0o755);
     expect(mode(join(app, "usr/lib/vimma/omni.ja"))).toBe(0o644);
-    expect(existsSync(join(app, "usr/share/applications/vimma.desktop"))).toBe(true);
+    expect(existsSync(join(app, "usr/share/applications/vimma-vimma.desktop"))).toBe(true);
     for (const size of ICON_SIZES) {
       const icon = join(app, `usr/share/icons/hicolor/${size}x${size}/apps/vimma.png`);
       expect(readFileSync(icon)).toEqual(readFileSync(join(BRAND_DIR, `logo${size}.png`)));
       expect(mode(icon)).toBe(0o644);
     }
     expect(existsSync(join(app, "usr/share/icons/hicolor/scalable/apps/vimma.svg"))).toBe(true);
+  });
+
+  it("ships the LGPL-2.1 text and a notice for the statically linked runtime", () => {
+    const doc = join(result.appDir, "usr/share/doc/vimma");
+    const lgpl = readFileSync(join(doc, "LGPL-2.1.txt"), "utf8");
+    expect(lgpl).toMatch(/GNU LESSER GENERAL PUBLIC LICENSE\s+Version 2\.1, February 1999/);
+    expect(mode(join(doc, "LGPL-2.1.txt"))).toBe(0o644);
+    const notice = readFileSync(join(doc, "APPIMAGE-RUNTIME-NOTICE.txt"), "utf8");
+    expect(notice).toContain(`type2-runtime ${RUNTIME_RELEASE}`);
+    expect(notice).toContain(`https://github.com/AppImage/type2-runtime/tree/${RUNTIME_RELEASE}`);
+    expect(notice).toMatch(/libfuse 3\.15\.0/);
+    expect(notice).toMatch(/LGPL-2\.1/);
+    expect(notice).toMatch(/--appimage-extract/);
+    expect(notice).toMatch(/replace/i);
+  });
+
+  it("writes third-party release notes naming the runtime and its source", () => {
+    const notes = readFileSync(join(out, "notes/third-party.md"), "utf8");
+    expect(notes).toBe(thirdPartyNotes());
+    expect(notes).toContain(RUNTIME_RELEASE);
+    expect(notes).toMatch(/LGPL-2\.1/);
   });
 
   it("runs appimagetool with the pinned runtime, no AppStream and ARCH=x86_64", () => {
@@ -391,7 +446,7 @@ describe("packageRelease on a fake ./mach package tarball", () => {
     expect(lstatSync(join(root, "usr/bin/vimma")).isSymbolicLink()).toBe(true);
     expect(readlinkSync(join(root, "usr/bin/vimma"))).toBe("../lib/vimma/vimma");
     expect(mode(join(root, "usr/lib/vimma/vimma"))).toBe(0o755);
-    expect(existsSync(join(root, "usr/share/applications/vimma.desktop"))).toBe(true);
+    expect(existsSync(join(root, "usr/share/applications/vimma-vimma.desktop"))).toBe(true);
     expect(existsSync(join(root, "usr/share/icons/hicolor/512x512/apps/vimma.png"))).toBe(true);
     expect(readFileSync(join(root, "usr/share/doc/vimma/copyright"), "utf8")).toMatch(/MPL-2\.0/);
     const installed = Number(
@@ -414,7 +469,7 @@ describe("packageRelease on a fake ./mach package tarball", () => {
   it("writes the AUR files with the release tarball's SHA-256", () => {
     const aur = result.aurDir;
     const tarSum = sha256(readFileSync(join(out, "vimma-0.1.0-linux-x86_64.tar.xz")));
-    const desktopSum = sha256(readFileSync(join(aur, "vimma.desktop")));
+    const desktopSum = sha256(readFileSync(join(aur, "vimma-vimma.desktop")));
     const build = readFileSync(join(aur, "PKGBUILD"), "utf8");
     expect(build).toContain(`sha256sums=('${tarSum}'\n            '${desktopSum}')`);
     expect(readFileSync(join(aur, ".SRCINFO"), "utf8")).toContain(`\tsha256sums = ${tarSum}\n`);
@@ -436,7 +491,7 @@ describe("packageRelease on a fake ./mach package tarball", () => {
   it("leaves only release files in the output dir", () => {
     const files = readdirSync(out).sort();
     expect(files).toContain("SHA256SUMS");
-    expect(files.every((f) => /^(vimma|SHA256SUMS|aur$)/.test(f))).toBe(true);
+    expect(files.every((f) => /^(vimma|SHA256SUMS|aur$|notes$)/.test(f))).toBe(true);
   });
 });
 
@@ -479,5 +534,42 @@ describe("packageRelease refuses bad input", () => {
 
   it("a tarball of another brand", () => {
     expect(run(fakeMachTarball({ name: "Firefox" }))).toThrow(/Name=Firefox/);
+  });
+});
+
+describe("RUNTIME_RELEASE", () => {
+  it("is the runtime fetch-appimagetool.sh pins", () => {
+    const script = readFileSync(new URL("../fetch-appimagetool.sh", import.meta.url), "utf8");
+    expect(script).toContain(`RUNTIME_RELEASE=${RUNTIME_RELEASE}\n`);
+  });
+});
+
+describe("cosign identity", () => {
+  const re = new RegExp(IDENTITY_REGEXP);
+  const wf = "https://github.com/JRanne/vimma/.github/workflows/release.yml@";
+
+  it.each(["refs/tags/v0.1.0", "refs/tags/v12.34.56", "refs/heads/main"])("accepts %s", (ref) => {
+    expect(re.test(wf + ref)).toBe(true);
+  });
+
+  it.each([
+    [`${wf}refs/heads/evil`],
+    [`${wf}refs/heads/main-evil`],
+    [`${wf}refs/tags/v0.1.0-rc.1`],
+    [`${wf}refs/tags/v0.1.0x`],
+    [`${wf}refs/pull/1/merge`],
+    ["https://github.com/JRanne/vimma/.github/workflows/nightly.yml@refs/heads/main"],
+    ["https://github.com/evil/vimma/.github/workflows/release.yml@refs/heads/main"],
+    [`x${wf}refs/heads/main`],
+  ])("refuses %s", (identity) => {
+    expect(re.test(identity)).toBe(false);
+  });
+
+  it("is the regexp the runbook tells users to verify with", () => {
+    const runbook = readFileSync(new URL("../../../docs/runbook.md", import.meta.url), "utf8");
+    expect(runbook).toContain(`--certificate-identity-regexp '${IDENTITY_REGEXP}'`);
+    expect(runbook).toContain(
+      "--certificate-oidc-issuer https://token.actions.githubusercontent.com",
+    );
   });
 });
