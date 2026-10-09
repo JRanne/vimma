@@ -53,7 +53,7 @@ Where Vimma keeps its files on Linux:
 
 | Path                          | What                                                                                                       |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `~/.config/vimma/config.toml` | Your config (planned, M5). Vimma reads only this file there and never scans the folder.                    |
+| `~/.config/vimma/config.toml` | Your config (see [config.toml](#configtoml)). Vimma reads only this file there and never scans the folder. |
 | `~/.config/vimma/vimma/`      | Profiles and `profiles.ini`. If `~/.vimma/vimma/` already exists, Firefox's legacy rule uses that instead. |
 
 On first launch you see Firefox's interface without the tab strip: the window starts with the
@@ -274,8 +274,8 @@ digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
   workspace, and `ctrl+b b` or `<leader>n` for the side panel. `ctrl+i` / `ctrl+u` and restoring
   workspaces after a restart work now (see [Workspaces](#workspaces)).
 - **M4, split panes:** swap (`ctrl+b shift+h j k l`), resize (`ctrl+b r`), click focus.
-- **M5, config:** rebinding in `~/.config/vimma/config.toml`, `:source`. (Omarchy colours
-  work already: see [Colours](#colours-your-omarchy-theme).)
+- **M5, config:** errors listed in `about:vimma` (the file itself works: see
+  [config.toml](#configtoml)).
 
 ## Workspaces
 
@@ -371,7 +371,7 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:wsnext`, `:wsprev`              | Next / previous workspace, as `ctrl+i` / `ctrl+u`.                                                             |
 | `:workspace name`, `:workspace 2` | Switches to the workspace with that name, or that number in `ctrl+i` order.                                    |
 | `:workspace`, `:sidebar`          | Not built yet (M3: the workspace picker and the side panel).                                                   |
-| `:source`                         | Not built yet (M5).                                                                                            |
+| `:source`                         | Reads `config.toml` now instead of within 2 seconds (see [config.toml](#configtoml)).                          |
 
 A command that is not built yet says so for a moment, as its keys do.
 
@@ -388,12 +388,51 @@ Vimma's own preferences today:
 | `vimma.theme.source`       | `omarchy`                              | `omarchy` follows your Omarchy theme (see [Colours](#colours-your-omarchy-theme)); `builtin` forces the built-in Tokyo Night. Applies at once.             |
 | `vimma.theme.omarchyPath`  | `~/.local/state/omarchy/current/theme` | The Omarchy theme directory to read `colors.toml` and `light.mode` from. Applies at once.                                                                  |
 
-**Planned:** `~/.config/vimma/config.toml` (M5) for keys, workspaces and theme. Its validator
-already exists, but the browser does not read the file yet. Schema 2 (`schema = 2` at the top)
-also takes `[panes] max` (most panes per workspace, 1 to 16, default 4), `[modal] hint_chars`
-(the characters hint labels are made of, default `"asdfghjkl"`) and `[sites."<host>"] insert`
-(`auto`, `never` or `always`, per site and its subdomains); `packages/vimma-core/defaults.toml`
-lists every key with its default.
+| `vimma.config.path` | unset | A different config file than `$XDG_CONFIG_HOME/vimma/config.toml` (tests use it). Applies at once. |
+| `vimma.config.pollMs` | `2000` | How often Vimma checks `config.toml` for a change, in milliseconds. Applies at once. |
+
+## config.toml
+
+Vimma reads `~/.config/vimma/config.toml` (`$XDG_CONFIG_HOME/vimma/config.toml` when that is
+set), and nothing else in that folder. No file means the defaults; Vimma never creates or writes
+it. A small example:
+
+```toml
+schema = 2
+
+[keys]
+new_tab = ["prefix+t"]        # replaces ctrl+b c
+
+[modal.normal]
+"<leader>ff" = "goto.picker"
+
+[panes]
+max = 2
+
+[theme]
+source = "file"               # Tokyo Night instead of your Omarchy theme
+[theme.colors]
+accent = "#ff9e64"
+```
+
+- **Reload:** save the file and Vimma picks it up within 2 seconds, in every window, without a
+  restart. `:source` reads it at once.
+- **Errors:** a file with a mistake is not applied at all: the config you had keeps working,
+  and the status bar shows the first mistake in red on the right, with its line, e.g.
+  `config.toml:3: keys.new_tabb: unknown action "new_tabb" (did you mean "new_tab"?)` (or
+  `3 errors: …`). The Browser Console (`ctrl+shift+j`) lists them all. Fix the file and the
+  message goes away at the next check.
+- **What applies live:** `[keys]`, `[modal]` (leader, `timeout_ms`, per-mode keys, `hint_chars`)
+  and `[unbind]`; `[panes] max` (most panes in a window, 1 to 16, default 4; it limits new
+  splits); `[sites."<host>"] insert` (`auto`, `never` or `always`: whether a text field on that
+  site and its subdomains takes insert mode); `[theme]` `source` (`omarchy` or `file`, the
+  built-in Tokyo Night), `font` and `[theme.colors]` (single colours over either source);
+  `[workspaces]` (a new one gets its container at once; one removed from the file stays, as a
+  workspace you can close yourself).
+- **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]` and `hint_chars`; every key,
+  its type and default are in [m5-core-config-and-theme](specs/m5-core-config-and-theme.md#schema-v1)
+  and [m3-m4-core-prep](specs/m3-m4-core-prep.md#config-schema-2), and
+  `packages/vimma-core/defaults.toml` lists them with their defaults.
 
 ## Scripting with vimma-ctl
 
