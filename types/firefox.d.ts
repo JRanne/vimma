@@ -18,6 +18,10 @@ declare const Services: {
       observer: (subject: unknown, topic: string, data: string) => void,
     ): void;
   };
+  // engine/netwerk/base/nsIIOService.idl
+  io: {
+    createExposableURI(uri: { spec: string }): { spec: string; displaySpec: string };
+  };
   // engine/dom/interfaces/base/nsIFocusManager.idl
   focus: {
     readonly focusedElement: Element | null;

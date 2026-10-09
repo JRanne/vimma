@@ -8,9 +8,13 @@ const to = new URL("src/browser/base/content/vimma/core/", root);
 const linked = new URL("engine/browser/base/content/vimma/core/", root);
 
 rmSync(to, { recursive: true, force: true });
-// Only what jar.mn packs (core/**/*.mjs): vendored LICENSE/README and our .d.mts types stay in
-// packages/ (the .mjs files carry their own licence headers).
-const wanted = (p) => !p.endsWith(".test.mjs") && (statSync(p).isDirectory() || p.endsWith(".mjs"));
+// What jar.mn packs (core/**/*.mjs), plus the vendored .d.mts types so `npm run typecheck` of
+// chrome code that imports theme.mjs or config.mjs sees the same types as packages/ (jar.mn
+// does not pack them). Vendored LICENSE/README stay in packages/ (the .mjs files carry their
+// own licence headers).
+const wanted = (p) =>
+  !p.endsWith(".test.mjs") &&
+  (statSync(p).isDirectory() || p.endsWith(".mjs") || p.endsWith(".d.mts"));
 cpSync(from, to, { recursive: true, filter: wanted });
 if (existsSync(linked)) {
   for (const f of readdirSync(linked)) {
