@@ -6,9 +6,11 @@ delete its line in the same PR.
 
 ## Features
 
-- Only `ctrl+b ?`, scrolling (`j k h l d u gg G`), `i` and `Esc` run. Every other binding in
-  the overlay and in [bindings.md](bindings.md) is planned, and other `ctrl+b` sequences are
-  consumed and do nothing ([m0-help-overlay](specs/m0-help-overlay.md), Settled).
+- Only `ctrl+b ?`, the tab keys (`ctrl+b c`, `n`, `p`, `1..9`, `shift+x`; `t`, `x`, `gt`, `gT`
+  in normal mode), scrolling (`j k h l d u gg G`), `i` and `Esc` run. The other bindings are
+  dimmed in the overlay; their `ctrl+b` sequences (or a count before them) are consumed and show
+  "… not implemented yet" ([m2-tab-keys](specs/m2-tab-keys.md), Settled).
+- Tab keys count Firefox's visible tabs; workspaces (M3) will narrow them to the current one.
 - Single-key actions the host cannot run yet (`f`, `/`, `r`, `ctrl+i`, `ctrl+u`, …) pass through
   to the page or Firefox, and so does the first key of a sequence with nothing runnable under it
   (`ctrl+w`, the M4 pane keys) ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md),

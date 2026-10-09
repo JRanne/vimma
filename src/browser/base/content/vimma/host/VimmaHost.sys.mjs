@@ -3,7 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Chrome-window key capture and dispatch (specs: docs/specs/m0-key-capture.md,
-// docs/specs/m0-help-overlay.md, docs/specs/m1-actor-insert-scroll.md). Sees every keydown
+// docs/specs/m0-help-overlay.md, docs/specs/m1-actor-insert-scroll.md,
+// docs/specs/m2-tab-keys.md). Sees every keydown
 // before the URL bar, about: pages and the PDF viewer, runs it through the vimma-core
 // dispatcher and consumes the keys that are ours.
 
@@ -12,8 +13,11 @@ import { createDispatcher } from "../core/dispatcher.mjs";
 import { insertModeAfterFocus } from "../core/editable.mjs";
 import { chordFromEvent, formatKey } from "../core/keys.mjs";
 import { compileKeymap } from "../core/keymap.mjs";
+import { notImplementedText } from "../core/actions.mjs";
 import { HelpOverlay } from "../ui/help-overlay.mjs";
+import { Notice } from "../ui/notice.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
+import { closeTab, newTab, selectTab } from "./tab-ops.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
 /** @import { Mode } from "../core/modes.mjs" */
@@ -33,6 +37,7 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {() => void} onTabSelect
  * @property {ReturnType<typeof createDispatcher>} dispatcher
  * @property {HelpOverlay} help
+ * @property {Notice} notice  "<action>: not implemented yet" (m2-tab-keys)
  * @property {TabStrip | null} tabStrip  hides Firefox's tab strip (m0-tabstrip-hidden)
  * @property {number | null} timer   pending-sequence timeout (dispatcher.flush)
  */
@@ -40,14 +45,20 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
 /**
  * What the host can execute so far, with CONTENT_RUNNERS. An action without an entry is left to
  * Firefox when it is a single key outside help (ctrl+i, ctrl+u keep working until their
- * milestones land); inside a sequence it is consumed, so `ctrl+b <key>` never leaks the second
- * key to the page. Unbound keys always pass (m1-actor-insert-scroll, Settled).
+ * milestones land); inside a sequence (or after a count) it is consumed and shows "<action>: not
+ * implemented yet", so `ctrl+b <key>` never leaks the second key to the page and is never silent
+ * (m2-tab-keys). Unbound keys always pass (m1-actor-insert-scroll, Settled).
  * @type {Record<string, (state: WindowState, action: Action) => void>}
  */
 export const RUNNERS = Object.freeze({
   "help.show": (/** @type {WindowState} */ s) => s.help.toggle(),
   "help.close": (/** @type {WindowState} */ s) => s.help.close(),
   "help.filter": (/** @type {WindowState} */ s) => s.help.focusFilter(),
+  "tab.new": (/** @type {WindowState} */ s) => newTab(s.win),
+  "tab.next": (/** @type {WindowState} */ s, /** @type {Action} */ a) => selectTab(s.win, a),
+  "tab.previous": (/** @type {WindowState} */ s, /** @type {Action} */ a) => selectTab(s.win, a),
+  "tab.goto": (/** @type {WindowState} */ s, /** @type {Action} */ a) => selectTab(s.win, a),
+  "tab.close": (/** @type {WindowState} */ s) => closeTab(s.win),
 });
 
 /**
@@ -95,6 +106,17 @@ export const CONTENT_RUNNERS = Object.freeze({
   },
 });
 
+/**
+ * Every action id the host implements: the one source for the help overlay's dimmed rows, the
+ * not-implemented notice and (when wired) the which-key strip. Whether one runs right now is
+ * `VimmaHost._runnable(state, id)`, which adds "a page with our actor has focus" for
+ * CONTENT_RUNNERS.
+ * @type {ReadonlySet<string>}
+ */
+export const RUNNABLE = Object.freeze(
+  new Set([...Object.keys(RUNNERS), ...Object.keys(CONTENT_RUNNERS)]),
+);
+
 /** @type {WeakMap<Window, WindowState>} */
 const states = new WeakMap();
 
@@ -127,7 +149,8 @@ export const VimmaHost = {
         state.help.close({ tabChanged: true });
       },
       dispatcher: createDispatcher(keymap),
-      help: new HelpOverlay(win, keymap),
+      help: new HelpOverlay(win, keymap, RUNNABLE),
+      notice: new Notice(win),
       tabStrip: null,
       timer: null,
     };
@@ -152,6 +175,7 @@ export const VimmaHost = {
     win.removeEventListener("keydown", state.onKeyDown, true);
     win.removeEventListener("TabSelect", state.onTabSelect, true);
     state.help.destroy();
+    state.notice.destroy();
     state.tabStrip?.uninit();
     states.delete(win);
   },
@@ -211,9 +235,18 @@ export const VimmaHost = {
    * @param {string} id
    */
   _runnable(state, id) {
+    if (!RUNNABLE.has(id)) return false;
     if (id in RUNNERS) return true;
+    return !!this._contentBrowser(state);
+  },
+
+  /**
+   * The focused content <browser> when it has our actor, else null.
+   * @param {WindowState} state
+   */
+  _contentBrowser(state) {
     const browser = this._focusedBrowser(state.win);
-    return id in CONTENT_RUNNERS && !!browser && VimmaActors.has(browser);
+    return browser && VimmaActors.has(browser) ? browser : null;
   },
 
   /**
@@ -307,18 +340,25 @@ export const VimmaHost = {
   },
 
   /**
-   * @param {WindowState} state
+   * Runs a completed action: on the focused page (CONTENT_RUNNERS), else in chrome (RUNNERS),
+   * else says it is not implemented yet. A content action with no page of ours focused does
+   * nothing: it is built, just not applicable here. A single key the host cannot run never gets
+   * here: `_dispatch` leaves it to Firefox, without a notice.
+   * @param {WindowState} state  carries `win` for the runners
    * @param {DispatchResult | null} result
    */
   _run(state, result) {
     if (result?.kind !== "action") return;
     const { action } = result;
-    if (action.id in RUNNERS) {
-      RUNNERS[action.id]?.(state, action);
+    const contentRunner = CONTENT_RUNNERS[action.id];
+    if (contentRunner) {
+      const browser = this._contentBrowser(state);
+      if (browser) contentRunner(browser, action);
       return;
     }
-    const browser = this._focusedBrowser(state.win);
-    if (browser && VimmaActors.has(browser)) CONTENT_RUNNERS[action.id]?.(browser, action);
+    const runner = RUNNERS[action.id];
+    if (runner) runner(state, action);
+    else state.notice.show(notImplementedText(action));
   },
 
   /**
