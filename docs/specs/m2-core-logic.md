@@ -366,6 +366,10 @@ UI, timers and the state file. For the host:
 
 ## Settled (2026-10-09)
 
+- **Which-key dropped (user decision, 2026-10-09: "which-key is not needed").** Only `prefix+?`
+  shows the bindings; `whichkey.mjs` and its tests are removed. `isRunnable` stays in
+  `actions.mjs` for the help overlay. The which-key notes in this spec are history.
+
 - **Which-key order is alphanumeric, not binding order**, grouped by `ACTIONS` group so the strip
   and `prefix+?` read the same way; `prefix+1..9` sort numerically before letters.
 - **`runnable` is an optional input** (a set of action ids), never hard-coded in core: the host

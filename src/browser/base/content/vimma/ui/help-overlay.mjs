@@ -22,7 +22,7 @@ export class HelpOverlay {
    * @param {Window} win  a browser window
    * @param {Keymap} keymap  the keymap the dispatcher uses, so help cannot drift from behaviour
    * @param {ReadonlySet<string>} [runnable]  action ids the host runs (VimmaHost's RUNNABLE);
-   *   the others are dimmed, under a legend (core's isRunnable, the which-key strip's rule).
+   *   the others are dimmed, under a legend (core's isRunnable).
    *   Without it every row counts as runnable and there is no legend.
    */
   constructor(win, keymap, runnable) {

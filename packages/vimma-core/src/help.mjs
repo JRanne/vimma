@@ -23,7 +23,7 @@ import { ACTIONS, isRunnable } from "./actions.mjs";
 /**
  * @param {Keymap} keymap
  * @param {{ runnable?: ReadonlySet<string> }} [options] action ids the host implements;
- *   undefined marks every row runnable (the same default as the which-key strip)
+ *   undefined marks every row runnable (isRunnable's default)
  * @returns {BindingRow[]}
  */
 export function bindingTable(keymap, { runnable } = {}) {
