@@ -5,4 +5,4 @@
 browser.jar:
         content/browser/vimma/vimma.js                    (vimma.js)
         content/browser/vimma/host/VimmaHost.sys.mjs      (host/VimmaHost.sys.mjs)
-        content/browser/vimma/core                        (core/*.mjs)
+        content/browser/vimma/core                        (core/**/*.mjs)

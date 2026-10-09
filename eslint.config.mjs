@@ -77,6 +77,7 @@ export default [
         BrowserTestUtils: "readonly",
         EventUtils: "readonly",
         SpecialPowers: "readonly",
+        SimpleTest: "readonly",
         gBrowser: "readonly",
         gURLBar: "readonly",
         SidebarController: "readonly",

@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 /**
  * The closed set of actions. Single source of truth for the dispatcher, config validation,
  * `prefix+?`, the `:` completion list and docs/bindings.md (`npm run gen-docs`).

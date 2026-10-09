@@ -10,7 +10,7 @@ Read plan.md once per milestone; read docs/specs/<current>.md every session.
 - npm run typecheck # tsc --checkJs over src/**/vimma/** and packages/**
 - npm run lint # eslint + prettier check
 - npm run gen-docs # regenerate docs/bindings.md from actions.mjs
-- npm run import # sync-core + surfer import: symlink src/ and tests/ into engine/
+- npm run import # sync-core + surfer import: symlink src/ and tests/ into engine/; rerun after editing packages/vimma-core
 - npx surfer build --ui && npx surfer run # rebuild our UI only, launch (plain ./mach build after a moz.build change)
 - npm run mochitest -- tests/browser/browser_vimma_<name>.js
 - npm run e2e -- --filter <name> # socket-driven e2e under Xvfb
