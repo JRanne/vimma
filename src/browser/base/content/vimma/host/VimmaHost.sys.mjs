@@ -103,6 +103,18 @@ export const VimmaHost = {
   },
 
   /**
+   * The window's mode and pending sequence, for the control socket's `state`
+   * (docs/specs/m0-control-server.md), or null for a window without Vimma.
+   * @param {Window} win
+   * @returns {{ mode: Mode, pending: string[] } | null}
+   */
+  controlState(win) {
+    const state = states.get(win);
+    if (!state) return null;
+    return { mode: this._mode(state), pending: state.dispatcher.pending() };
+  },
+
+  /**
    * M0 has no content actor to report focus in editable elements (M1), so outside the help
    * overlay every key is treated as typed into the page: `insert` mode, where only global
    * chords (prefix sequences, ctrl/alt/meta bindings) are ours.

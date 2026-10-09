@@ -14,5 +14,11 @@
     "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
   );
   VimmaHost.init(window);
+
+  // One control server per app (spec m0-control-server); off unless vimma.control.enabled.
+  const { VimmaControl } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/ctl/VimmaControl.sys.mjs",
+  );
+  VimmaControl.init(window);
   window.addEventListener("unload", () => VimmaHost.uninit(window), { once: true });
 }

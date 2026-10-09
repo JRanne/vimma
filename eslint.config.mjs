@@ -62,7 +62,17 @@ export default [
     // Chrome-privileged code inside the Firefox window.
     files: ["src/**/vimma/**"],
     languageOptions: {
-      globals: { ...globals.browser, ChromeUtils: "readonly", Services: "readonly" },
+      globals: {
+        ...globals.browser,
+        ChromeUtils: "readonly",
+        Services: "readonly",
+        // XPCOM and file I/O, for system modules (ctl/VimmaControl.sys.mjs)
+        Cc: "readonly",
+        Ci: "readonly",
+        Cr: "readonly",
+        IOUtils: "readonly",
+        PathUtils: "readonly",
+      },
     },
   },
   {
@@ -104,6 +114,10 @@ export default [
         L10nRegistry: "readonly",
         FluentResource: "readonly",
         getRootDirectory: "readonly",
+        getChromeDir: "readonly",
+        getResolvedURI: "readonly",
+        IOUtils: "readonly",
+        PathUtils: "readonly",
         gTestPath: "readonly",
         WebExtensionPolicy: "readonly",
         ExtensionTestUtils: "readonly",
