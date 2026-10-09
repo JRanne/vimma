@@ -89,5 +89,8 @@ support-files = ["file_vimma_cookie.html"]
 
 ["browser_vimma_workspace_switching.js"]
 
+["browser_vimma_workspace_restore.js"]
+support-files = ["file_vimma_insert_scroll.html"]
+
 ["browser_vimma_theme.js"]
 run-if = ["os == 'linux'"] # ln -s for the omarchy-theme-set symlink swap

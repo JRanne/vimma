@@ -121,8 +121,15 @@ accepts
 - Pinned tabs belong to no workspace: they show in every workspace, and a tab opened pinned
   stays in no container (decision 11 plans to unpin them). A tab sharing camera, microphone or
   screen cannot be hidden and stays visible in other workspaces while it shares.
-- Workspaces and their tabs are not kept across a restart yet (M3 sub-spec 3); the `foreign`
-  mark is kept but not shown until the workspace picker and side panel.
+- The `foreign` mark is kept but not shown until the workspace picker and side panel.
+- Workspaces are saved with Firefox's session, so a crash loses what the session file has not
+  caught yet: up to 15 seconds of changes while you are active, and up to an hour after 3
+  minutes without input (`browser.sessionstore.interval.idle`). Tabs then come back in the
+  workspace that owns their container, but a workspace's selected tab, its panes and new tab
+  names may be older.
+- A window saved by a newer Vimma keeps its saved workspaces untouched: this version starts it
+  with its tabs sorted into workspaces by container, without its panes, and does not save over
+  it.
 - Tabs of hidden workspaces keep playing audio and are never unloaded automatically.
 - Closing the last tab opens a new tab instead of closing the window
   (`browser.tabs.closeWindowWithLastTab` is `false`); setting it to `true` lets the window close

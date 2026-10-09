@@ -126,3 +126,10 @@ pref("browser.tabs.closeWindowWithLastTab", false);
 // hides Firefox's tab and link context-menu items and alt-click; the split-view API keeps
 // working. split.css hides the URL bar button.
 pref("browser.tabs.splitView.enabled", false);
+
+// Workspaces (spec m3-workspaces, decision 9): a restart restores the session, so each window's
+// workspaces, tabs, pane layouts and scroll positions come back. Firefox Sync must not turn that
+// off, nor containers (turning them off deletes every workspace's data), from another device.
+pref("browser.startup.page", 3);
+pref("services.sync.prefs.sync.browser.startup.page", false);
+pref("services.sync.prefs.sync.privacy.userContext.enabled", false);
