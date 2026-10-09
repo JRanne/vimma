@@ -166,7 +166,8 @@ One-time setup:
    read/write) as `gh secret set UPSTREAM_PR_TOKEN`, which the workflow uses when present.
 
 Before merging a bump: `npm run import && npx surfer build` on the build machine (the nightly does
-this once merged), then mark the PR ready for review.
+this once merged), then `npm run mochitest -- tests/browser/` on the built engine (our patches
+change upstream behaviour, e.g. `tab-bar-visibility-js.patch`), then mark the PR ready for review.
 
 ### Claude Code in GitHub (`claude.yml`)
 
