@@ -79,10 +79,9 @@ not passing `[panes] max` to the pane view fails `panes_max_refuses_a_third_spli
 
 - Up to 2 s latency (polling, plan §3). Two saves in the same millisecond with the same size
   are seen as one.
-- `[workspaces]` is validated but not applied: `WorkspaceStore` takes its `config` in its
-  constructor and reads it once in `init()`, which runs before the async config read, and has
-  no setter. Wiring it needs a small `WorkspaceStore.setConfig(workspaces)` (reconcile and save)
-  in the M3 persistence work, which owns those files now.
+- `[workspaces]` applies live since M3 persistence (PR #59): `apply` passes it to
+  `WorkspaceStore.setConfig`, which reconciles the definitions as `init()` does (a workspace
+  removed from the file becomes runtime), creates containers, saves and notifies the windows.
 - Only the first error is shown in the bar; `about:vimma` (all errors, theme warnings) is a
   later M5 spec.
 - User overrides are not marked in `ctrl+b ?` (plan §2); `:source <path>` and `:config` (open the
@@ -92,5 +91,5 @@ not passing `[panes] max` to the pane view fails `panes_max_refuses_a_third_spli
 
 ## Handover
 
-Next: `WorkspaceStore.setConfig` once M3 persistence has merged; `about:vimma` with
+Next: `about:vimma` with
 `ConfigHost.errors` and theme warnings.

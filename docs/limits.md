@@ -48,8 +48,8 @@ delete its line in the same PR.
   frame that takes over 150 ms to answer (busy) gets none that time. `F` does not open `blob:`
   links ([m1-hints](specs/m1-hints.md), Limits).
 - `config.toml` changes show up to 2 s late (the poll; `:source` is at once). Two saves within
-  one millisecond that keep the file's size are seen as one. `[workspaces]` is validated but not
-  applied: the workspace store reads its definitions once at startup and has no runtime seam yet.
+  one millisecond that keep the file's size are seen as one. A workspace removed from
+  `[workspaces]` stays, as a runtime workspace with its tabs and container.
   Only the first error is in the status bar (all are in the Browser Console; `about:vimma` is
   later). Overridden bindings are not marked in `ctrl+b ?`; `:source <path>` and `:config` do not
   exist ([m5-config-load](specs/m5-config-load.md)).
