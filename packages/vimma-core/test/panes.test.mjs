@@ -277,6 +277,43 @@ describe("split refusal (tmux: no space for new pane)", () => {
     expect(shape(split(s, "p4", "horizontal", "t5").root)).toBe("x[p1,p2,p3,y[p4,p5]]");
   });
 
+  test("a split past `max` live panes is refused with max-panes, whatever the direction", () => {
+    const s = threePanes();
+    for (const dir of /** @type {const} */ (["vertical", "horizontal"])) {
+      expect(split(s, "p1", dir, "t9", { max: 3 })).toBe(s);
+      expect(splitRefusal(s, "p1", dir, { max: 3 })).toEqual({
+        code: "max-panes",
+        message: "at most 3 panes",
+      });
+    }
+    expect(leaves(split(s, "p1", "vertical", "t9", { max: 4 }))).toHaveLength(4);
+    expect(splitRefusal(s, "p1", "vertical", { max: 4 })).toBeNull();
+  });
+
+  test("max 1 refuses every split; without max only MIN_RATIO limits", () => {
+    const one = createPanes("t1");
+    expect(splitRefusal(one, "p1", "vertical", { max: 1 })?.code).toBe("max-panes");
+    expect(splitRefusal(one, "p1", "vertical")).toBeNull();
+    expect(splitRefusal(fourAcross(), "p4", "horizontal", { max: Infinity })).toBeNull();
+  });
+
+  test("the pane count is checked before the space", () => {
+    expect(splitRefusal(fourAcross(), "p4", "vertical", { max: 4 })?.code).toBe("max-panes");
+    expect(splitRefusal(fourAcross(), "p4", "vertical", { max: 5 })?.code).toBe("no-space");
+  });
+
+  test.each([[0], [-1], [1.5], [NaN], ["4"]])("max = %s is bad-max", (max) => {
+    const one = createPanes("t1");
+    expectPaneError(
+      () => split(one, "p1", "vertical", "t2", { max: /** @type {any} */ (max) }),
+      "bad-max",
+    );
+    expectPaneError(
+      () => splitRefusal(one, "p1", "vertical", { max: /** @type {any} */ (max) }),
+      "bad-max",
+    );
+  });
+
   test("splitRefusal checks its arguments like split", () => {
     expectPaneError(() => splitRefusal(fourAcross(), "p9", "vertical"), "unknown-pane");
     // @ts-expect-error bad direction
@@ -483,6 +520,33 @@ describe("pane tree properties", () => {
           }
         });
       }),
+    );
+  });
+
+  test("split never takes the leaf count past max; a refusal is exactly when it would", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 6 }),
+        fc.array(opArb, { maxLength: 40 }),
+        (max, ops) => {
+          let s = createPanes("t0");
+          let n = 1;
+          for (const o of ops) {
+            const ls = leaves(s);
+            const target = /** @type {any} */ (ls[(o.pick ?? 0) % ls.length]).pane;
+            if (o.op === "split") {
+              const refusal = splitRefusal(s, target, o.dir, { max });
+              const t = split(s, target, o.dir, `t${n++}`, { max });
+              expect(t === s).toBe(refusal !== null);
+              if (ls.length >= max) expect(refusal?.code).toBe("max-panes");
+              s = t;
+            } else if (o.op === "close" && ls.length > 1) s = closePane(s, target);
+            else if (o.op === "zoom") s = toggleZoom(s);
+            else if (o.op === "focus") s = focus(s, o.dir);
+            expect(leaves(s).length).toBeLessThanOrEqual(max);
+          }
+        },
+      ),
     );
   });
 

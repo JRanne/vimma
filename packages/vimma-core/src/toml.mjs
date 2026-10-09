@@ -275,7 +275,8 @@ export function locateKeys(text) {
       i += array ? 2 : 1;
       table = key();
       i += array ? 2 : 1;
-      record(table, at);
+      // implicit parent tables (`[sites."a.com"]` alone) are located at their first header
+      for (let n = 1; n <= table.length; n++) record(table.slice(0, n), at);
     } else {
       keyval(table);
     }
