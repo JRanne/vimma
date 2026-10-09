@@ -1,3 +1,6 @@
 [DEFAULT]
 
+["browser_vimma_help_overlay.js"]
+support-files = ["file_vimma_test.pdf"]
+
 ["browser_vimma_key_capture.js"]
