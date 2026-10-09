@@ -12,5 +12,5 @@
     "types": []
   },
   "include": ["packages/*/src/**/*.mjs", "src/**/vimma/**/*.mjs", "types/*.d.ts"],
-  "exclude": ["src/browser/base/content/vimma/core/"]
+  "exclude": ["src/browser/base/content/vimma/core/", "packages/vimma-core/src/vendor/"]
 }
