@@ -500,7 +500,7 @@ export const VimmaHost = {
     if (!state.hint) return;
     state.hint = null;
     state.hintOverlay.hide();
-    VimmaActors.cancelHints();
+    VimmaActors.cancelHints(state.win);
   },
 
   /**

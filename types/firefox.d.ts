@@ -4,6 +4,7 @@
 declare const Services: {
   prefs: {
     getBoolPref(name: string, defaultValue?: boolean): boolean;
+    getIntPref(name: string, defaultValue?: number): number;
     setBoolPref(name: string, value: boolean): void;
     prefHasUserValue(name: string): boolean;
     getDefaultBranch(root: string): {
@@ -73,6 +74,18 @@ interface Window {
   readonly windowUtils: {
     readonly AUTHOR_SHEET: number;
     loadSheetUsingURIString(sheetURI: string, type: number): void;
+    nodesFromRect(
+      x: number,
+      y: number,
+      top: number,
+      right: number,
+      bottom: number,
+      left: number,
+      ignoreRootScrollFrame: boolean,
+      flushLayout: boolean,
+      onlyVisible: boolean,
+      transparencyThreshold?: number,
+    ): NodeList;
   };
 }
 

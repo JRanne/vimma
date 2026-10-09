@@ -7,6 +7,11 @@
 
 import { HINT_REPLY_MAX_TARGETS, parseHintReply } from "../core/hints.mjs";
 
+// System modules have no timer globals; Firefox's actors import them the same way.
+const { clearTimeout, setTimeout } = ChromeUtils.importESModule(
+  "resource://gre/modules/Timer.sys.mjs",
+);
+
 const NAME = "Vimma";
 const BASE = "chrome://browser/content/vimma/actors/";
 
@@ -29,6 +34,15 @@ let registered = false;
 
 /** Hint collections so far; a reply or an activation from an older one is ignored. */
 let hintGen = 0;
+/** The live collection of each window; another window's `f` must not void it. */
+/** @type {WeakMap<object, number>} */
+const liveGen = new WeakMap();
+
+/** How long a subframe may take to answer (ms) before its targets are left out. */
+const FRAME_TIMEOUT_PREF = "vimma.hints.frameTimeoutMs";
+const FRAME_TIMEOUT_DEFAULT = 150;
+/** The top frame gets longer: without it there are no hints at all. */
+const TOP_TIMEOUT_MS = 2000;
 
 /** At most this many targets in all frames (each frame: core HINT_REPLY_MAX_TARGETS). */
 const MAX_HINTS = HINT_REPLY_MAX_TARGETS;
@@ -162,6 +176,12 @@ export const VimmaActors = {
    */
   async collectHints(browser, action) {
     const gen = ++hintGen;
+    const win = browser.ownerDocument.defaultView;
+    liveGen.set(win, gen);
+    const live = () => liveGen.get(win) === gen;
+    const frameTimeout = Services.prefs.getIntPref(FRAME_TIMEOUT_PREF, FRAME_TIMEOUT_DEFAULT);
+    /** Each frame at most once, whatever its embedder reports. */
+    const visited = new Set();
     const linksOnly = action === "hint.follow_new_tab";
     /** @type {HintTarget[]} */
     const out = [];
@@ -173,17 +193,28 @@ export const VimmaActors = {
      * @param {number} depth
      */
     const visit = async (bc, frame, origin, depth) => {
+      if (visited.has(bc.id)) return;
+      visited.add(bc.id);
       const wg = bc.currentWindowGlobal;
       /** @type {unknown} */
       let raw;
+      /** @type {number | undefined} */
+      let timer;
       try {
-        raw = await actorFor(bc)?.sendQuery("Vimma:CollectHints", { gen, linksOnly });
+        // A busy or hung frame (its process spinning) must not hold up the others' labels.
+        const late = new Promise((resolve) => {
+          timer = setTimeout(resolve, depth === 0 ? TOP_TIMEOUT_MS : frameTimeout, null);
+        });
+        const query = actorFor(bc)?.sendQuery("Vimma:CollectHints", { gen, linksOnly });
+        raw = await Promise.race([query, late]);
       } catch {
         return; // the frame navigated or its process went away
+      } finally {
+        clearTimeout(timer);
       }
       // From a content process, which may be compromised: a fresh, checked copy or nothing.
       const reply = parseHintReply(raw);
-      if (!reply || gen !== hintGen) return;
+      if (!reply || !live()) return;
       ms += reply.ms;
       for (const t of reply.targets) {
         if (out.length >= MAX_HINTS) break;
@@ -206,7 +237,7 @@ export const VimmaActors = {
     const all = { x: 0, y: 0, width: Infinity, height: Infinity };
     await visit(top, all, { x: 0, y: 0 }, 0);
     this._lastCollectMs = ms;
-    return gen === hintGen ? out : [];
+    return live() ? out : [];
   },
 
   /**
@@ -258,9 +289,12 @@ export const VimmaActors = {
     return true;
   },
 
-  /** Drops any collection in flight (Esc, tab switch): its reply is ignored. */
-  cancelHints() {
-    hintGen++;
+  /**
+   * Drops the window's collection in flight (Esc, tab switch): its reply is ignored.
+   * @param {object} win
+   */
+  cancelHints(win) {
+    liveGen.delete(win);
   },
 
   /**
