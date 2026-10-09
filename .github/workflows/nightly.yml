@@ -78,10 +78,15 @@ jobs:
           npm run mochitest -- tests/browser/ 2>&1 | tee -a "$LOG"
 
       - name: Package
+        # `./mach package`, not `surfer package`: Surfer's then reads locales/supported-languages,
+        # which this repo does not have, and builds a MAR for an updater we compile out
+        # (spec m6-packaging, Findings). Release packages: release.yml.
         run: |
           set -o pipefail
-          rm -rf dist
-          npx surfer package 2>&1 | tee -a "$LOG"
+          rm -rf dist && mkdir dist
+          rm -f engine/obj-x86_64-pc-linux-gnu/dist/vimma-*.tar.xz
+          (cd engine && ./mach package) 2>&1 | tee -a "$LOG"
+          cp engine/obj-x86_64-pc-linux-gnu/dist/vimma-*.en-US.linux-x86_64.tar.xz dist/
           ls -l dist
 
       - name: Publish rolling nightly release
