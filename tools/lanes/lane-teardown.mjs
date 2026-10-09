@@ -8,13 +8,14 @@
 import { spawnSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { mainWorktree, teardownTarget } from "./lanes.mjs";
+import { gitEnv, mainWorktree, teardownTarget } from "./lanes.mjs";
 
 /** @param {string} root this worktree */
 function main(root) {
   const res = spawnSync("git", ["worktree", "list", "--porcelain"], {
     cwd: root,
     encoding: "utf8",
+    env: gitEnv(),
   });
   if (res.status !== 0) throw new Error(`git worktree list failed: ${res.stderr}`);
   const engine = teardownTarget(root, mainWorktree(res.stdout));
