@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// The pane keys (docs/specs/m4-split-panes.md, sub-spec 3) over the window's PaneView
+// The pane keys (docs/specs/m4-split-panes.md, sub-specs 3 and 5) over the window's PaneView
 // (split/PaneView.mjs). Each returns the refusal text to show, or null.
 
 import { describeAction } from "../core/actions.mjs";
@@ -10,8 +10,11 @@ import { PaneViews } from "../split/PaneView.mjs";
 import { closeTab } from "./tab-ops.mjs";
 
 /** @import { Action } from "../core/dispatcher.mjs" */
-/** @import { Direction } from "../core/panes.mjs" */
+/** @import { Direction, ResizeDirection } from "../core/panes.mjs" */
 /** @import { PaneResult } from "../split/PaneView.mjs" */
+
+/** One resize key's step: a share of the split (m3-m4-core-models, For the host specs). */
+export const RESIZE_STEP = 0.05;
 
 /** @param {Window} win */
 function gBrowserOf(win) {
@@ -103,4 +106,32 @@ export function closePane(win, action) {
   const result = view.close();
   if (result.ok) focusPage(win);
   return refusal(action, result);
+}
+
+/**
+ * pane.swap_left / _down / _up / _right: the focused pane trades places with its neighbour and
+ * keeps focus; no neighbour changes nothing.
+ * @param {Window} win
+ * @param {Action} action
+ */
+export function swapPane(win, action) {
+  const view = PaneViews.get(win);
+  if (!view?.panes) return null;
+  const direction = /** @type {Direction} */ (action.id.slice("pane.swap_".length));
+  const result = view.swapPane(direction);
+  if (result.ok) focusPage(win);
+  return refusal(action, result);
+}
+
+/**
+ * pane.resize_wider / _narrower / _taller / _shorter (resize mode, <C-w> <>+-): one step per
+ * key, `count` steps after a count (3l, 3<C-w>>).
+ * @param {Window} win
+ * @param {Action} action
+ */
+export function resizePane(win, action) {
+  const view = PaneViews.get(win);
+  if (!view?.panes) return null;
+  const direction = /** @type {ResizeDirection} */ (action.id.slice("pane.resize_".length));
+  return refusal(action, view.resize(direction, RESIZE_STEP * (action.count ?? 1)));
 }

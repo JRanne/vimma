@@ -284,6 +284,7 @@ text. These belong to the host specs (see below).
   `pane.focus_*` / `pane.swap_*` / `pane.zoom` / `pane.close` / `pane.resize_*` →
   `withPanes(s, p => …)`; resize steps of `0.05`.
 - `resize_mode` needs a `resize` mode in `MODES` (a dispatcher contract change: ADR).
+  Done in m4-split-panes sub-spec 5, [ADR-014](../adr/014-resize-mode.md).
 - Tab ids must survive a restart (e.g. a uuid in `SessionStore.setCustomTabValue`), since Firefox's
   own tab ids do not; the snapshot stores whatever the host passes.
 - Before restoring a snapshot, drop tab ids the session did not restore (via `closeTab`).

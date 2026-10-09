@@ -100,6 +100,7 @@ const BADGE_COLORS = Object.freeze({
   hint: "orange",
   help: "cyan",
   panel: "blue",
+  resize: "brown",
   prefix: "red",
 });
 

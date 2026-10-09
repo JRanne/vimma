@@ -1,6 +1,6 @@
 # Spec: m4-split-panes
 
-Status: in progress (sub-specs 1 to 3 done) · Milestone: M4 · Area: host
+Status: in progress (sub-specs 1, 2, 3 and 5 done) · Milestone: M4 · Area: host
 (`src/browser/base/content/vimma/split/`, `host/`), CSS (`browser/themes/shared/vimma/`)
 
 This is the umbrella spec for M4. It records the research, the decision
@@ -394,6 +394,28 @@ segment, tested by `browser_vimma_pane_keys.js` (7 tasks).
 - Tests that used `ctrl+b v` / `:vsplit` as the example of an unbuilt action now use `ctrl+b w`
   / `:sidebar`. Test note: a key sent to a pane while its new-tab document is still replacing
   `about:blank` is lost, so the test waits for the start page before moving focus into it.
+
+## Sub-spec 5 results (`m4-split-swap-resize`)
+
+Done: `PaneView.swapPane(direction)` (core `swap`; `swap(from, to)` is the workspace park) and
+`PaneView.resize(direction, amount)` (core `resize`, clamped at `MIN_RATIO`); `swapPane` and
+`resizePane` in `host/pane-ops.mjs`; the `resize` dispatcher mode
+([ADR-014](../adr/014-resize-mode.md)), tested by `browser_vimma_pane_swap_resize.js` (3 tasks)
+and `resize-mode.test.mjs`.
+
+- **Keys:** `prefix+shift+h/j/k/l` and `<C-w>H/J/K/L` swap; focus stays with the moved pane and
+  its page keeps focus. `prefix+r` enters resize mode (status bar `RESIZE`): `h/l` narrower /
+  wider, `j/k` taller / shorter, the arrows and `< > + -` the same, `Esc` / `Enter` / `q` leave
+  (`resize_exit`, a new action). `<C-w> < > + -` resize directly in normal mode. Steps of 0.05
+  (`RESIZE_STEP`); a count multiplies the step (`3l`, `3<C-w>>`), so no shifted big-step keys.
+- **Mode:** window-wide and modal (every key is consumed, as in help and hint mode); it ends by
+  itself when the window is down to one pane. One pane: `prefix+r` shows "Resize mode: only one
+  pane". The `<C-w>` swap and resize keys are runnable only with two panes, like the others.
+- **Contract:** `resize` in `MODES` and `COUNT_MODES`, `[modal.resize]` in config, a `resize`
+  status-bar badge (`--vimma-mode-resize`, from `brown`), `vimma-ctl`'s mode list, and Esc's exit
+  (`resolveEscape`) returning to the mode resize was entered from.
+- Which-key is gone (m2-statusbar-whichkey); the help overlay lists the mode's keys as
+  `l [resize]` and no longer dims the swap and resize rows.
 
 ## Breakdown into sub-specs
 

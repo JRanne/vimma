@@ -65,9 +65,11 @@ Rules:
    mode). Other `[keys]` bindings (e.g. `<leader>n`) apply in `normal` mode only.
 2. `[modal.<mode>]` bindings apply only in that mode and take precedence over globals there.
 3. In `insert` mode only global bindings and `esc` (→ `mode.normal`) are consumed.
-4. Counts: in `normal`/`visual`, digits `1-9` (then `0-9`) before a sequence become `count`,
+4. Counts: in `normal`/`visual`/`resize` (`resize` since [ADR-014](../adr/014-resize-mode.md)), digits `1-9` (then `0-9`) before a sequence become `count`,
    unless a binding in that mode starts with that digit. `3gt` → `{ id: "tab.next", count: 3 }`; the host gives a counted
    `tab.next` Vim semantics (go to tab 3).
+   Modes: `normal`, `insert`, `visual`, `command`, `hint`, `help`, `panel` and, since ADR-014,
+   `resize` (pane resize mode, `prefix+r`).
 5. Ambiguity: if the buffer is a complete binding _and_ a prefix of a longer one, return
    `pending`; the next key decides, or `flush()` resolves to the shorter one. If the next key
    does not continue the sequence, the shorter binding's action is returned with `replay: true`.
