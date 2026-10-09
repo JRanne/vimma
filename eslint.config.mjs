@@ -9,6 +9,8 @@ export default [
       "engine/",
       ".surfer/",
       "dist/",
+      "reports/",
+      ".stryker-tmp/",
       // copies of packages/vimma-core/src, linted there (npm run sync-core)
       "src/browser/base/content/vimma/core/",
     ],
