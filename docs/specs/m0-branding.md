@@ -48,6 +48,14 @@ local or CI build picks this brand without anyone remembering a flag.
     (contains `vimma-placeholder`).
   - Given an emptied bookmarks tree and `browser.bookmarks.restore_default_bookmarks`, when
     Places init is re-run, then `bookmarks-restore-success` fires, not `bookmarks-restore-failed`.
+- Given the default branch, then every pref the stock brands' `firefox-branding.js` define has a
+  default (`app.update.checkInstallTime.days` and `app.update.badgeWaitTime` as ints); given
+  `app.update.checkInstallTime` true, BrowserGlue's `_checkForOldBuildUpdates` does not throw;
+  `about:home` and `about:newtab` render `body.activity-stream` with no `AboutNewTabRedirector`
+  console error.
+- `tools/branding/test/branding-prefs.test.mjs` (Vitest): our prefs file sets every pref name
+  upstream's `unofficial/pref/firefox-branding.js` sets. Needs `engine/`, so it skips in the CI
+  job and runs in the e2e job after `npm run import`.
 - `--version` smoke check (runbook): `engine/obj-*/dist/bin/vimma --version` prints
   `Vimma Vimma 0.1.0`.
 
@@ -92,5 +100,23 @@ of the default bookmarks (still Mozilla's links; see Settled).
   runbook smoke check no longer uses `--screenshot` on a fresh profile.
 - **Placeholder logo**: drawn by us, released under the repo's MPL-2.0 like the rest; no
   Mozilla/Firefox artwork in the files we supply.
+- **Startup errors (fixed 2026-10-09).** Our prefs file dropped two prefs every stock brand
+  sets, `app.update.checkInstallTime.days` and `app.update.badgeWaitTime` (now unofficial's 2 and
+  0). `BrowserGlue._checkForOldBuildUpdates` reads the first with a bare `getIntPref`; it threw
+  in `_onFirstWindowLoaded`, which then skipped the `browser-first-window-ready` category, whose
+  `AboutNewTab.init` maps `resource://newtab/`. Hence the second error,
+  `AboutNewTabRedirector … NS_ERROR_NOT_AVAILABLE`: ours, not a dev-build quirk, and about:home
+  and about:newtab never loaded. The harness hides it (`testing/profiles/common/user.js` turns
+  `app.update.checkInstallTime` off), so the mochitest turns it on and calls the check directly.
+  `--screenshot about:home` still logs the newtab error and hangs on any Firefox build: the
+  headless shell loads into a windowless browser, so no first window, no newtab mapping. Smoke
+  checks screenshot a `data:` URL.
+- **No `MOZ_USER_DIR`.** Surfer's mozconfig template exports it, but configure only reads
+  `--with-user-appdir` (`toolkit/moz.configure`), so `mozilla-config.h` keeps `"mozilla"`; the
+  line is removed. On Linux it only names a legacy-home probe (`$HOME/mozilla`) and
+  `nsAppFileLocationProvider`'s product dir; native-messaging hosts hard-code `.mozilla`. Profiles
+  come from vendor and name (`~/.config/vimma/vimma`, or `~/.vimma/vimma` if that exists). Making
+  it effective has no user benefit and any non-default `--with-user-appdir` sets
+  `MOZ_LEGACY_HOME`, which would move every profile to `~/.vimma/vimma`.
 - **Build cost**: the first `./mach build` after switching brand, basename and vendor took 977 s
   (16.3 min, reconfigure plus a large C++/Rust rebuild); no clobber was needed.
