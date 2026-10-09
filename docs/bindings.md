@@ -79,6 +79,7 @@ Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm 
 | Go back                                   | `history_back`     | `H`                     |
 | Go forward                                | `history_forward`  | `L`                     |
 | Reload page                               | `reload`           | `r`                     |
+| Open a URL or search in this tab          | `open_url`         | —                       |
 
 ## Hints
 

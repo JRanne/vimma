@@ -1,0 +1,106 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* The `:` command line (ui/cmdline.mjs, spec m1-cmdline). M5's theme tokens when the token
+   sheet is loaded (the status bar loads it), legible system colours otherwise. */
+
+/* A zero-height row in the chrome body's flex column, after #browser (before the status bar):
+   the panel overlays the bottom of the content, so opening the line never reflows the page. */
+#vimma-cmdline {
+  position: relative;
+  flex: none;
+  height: 0;
+  z-index: 10;
+
+  &[hidden],
+  & [hidden] {
+    display: none !important;
+  }
+}
+
+/* While a prefix is pending the which-key strip (a child of the status bar, z-index 5) owns the
+   window's foot: drop the line under it so the strip is never covered. */
+:root[vimma-whichkey-open] #vimma-cmdline {
+  z-index: 4;
+}
+
+/* A fullscreen page (a video) gets the whole screen, as the status bar does (statusbar.css). */
+:root[inDOMFullscreen] #vimma-cmdline {
+  display: none !important;
+}
+
+/* The notice (notice.css) sits above the status bar; while the line is open, above the line. */
+:root[vimma-cmdline-open] #vimma-notice {
+  bottom: calc(var(--vimma-statusbar-height, 0px) + var(--vimma-cmdline-height, 0px) + 0.5rem);
+}
+
+.vimma-cmdline-panel {
+  position: absolute;
+  inset: auto 0 0 0;
+  border-top: 1px solid var(--vimma-muted, color-mix(in srgb, CanvasText 25%, transparent));
+  background: var(--vimma-bg-dark, Canvas);
+  color: var(--vimma-fg, CanvasText);
+  font-family: var(--vimma-font, monospace);
+  font-size: 13px;
+  color-scheme: var(--vimma-color-scheme, light dark);
+}
+
+#vimma-cmdline-completions {
+  max-height: calc(10 * 1.6em);
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.2rem 0;
+  list-style: none;
+  border-bottom: 1px solid var(--vimma-muted, color-mix(in srgb, CanvasText 15%, transparent));
+
+  & > li {
+    display: grid;
+    grid-template-columns: minmax(12rem, max-content) 1fr;
+    gap: 1.5rem;
+    padding: 0.1rem 0.75rem;
+    line-height: 1.4;
+  }
+
+  & > li[aria-selected="true"] {
+    background: var(--vimma-selection, SelectedItem);
+    color: var(--vimma-fg-bright, SelectedItemText);
+  }
+
+  & .vimma-cmdline-description {
+    color: var(--vimma-fg-dim, GrayText);
+  }
+
+  & > li[aria-selected="true"] .vimma-cmdline-description {
+    color: inherit;
+  }
+}
+
+.vimma-cmdline-row {
+  display: flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+}
+
+.vimma-cmdline-prompt {
+  color: var(--vimma-accent, AccentColor);
+  padding-inline-end: 0.15rem;
+}
+
+#vimma-cmdline-input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  appearance: none;
+}
+
+.vimma-cmdline-error {
+  padding: 0.15rem 0.5rem 0.25rem;
+  color: var(--vimma-error, #c01c28);
+}

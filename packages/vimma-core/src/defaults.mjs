@@ -7,6 +7,9 @@
  * packages/vimma-core/defaults.toml is generated from this (npm run gen-docs).
  */
 
+import { DEFAULT_HINT_CHARS } from "./hints.mjs";
+import { PANES_MAX_DEFAULT } from "./panes.mjs";
+
 /**
  * @typedef {object} UserConfig
  * @property {Record<string, string | string[]>} [keys]
@@ -15,6 +18,8 @@
  * @property {number} [schema]
  * @property {Record<string, WorkspaceInput>} [workspaces]
  * @property {ThemeInput} [theme]
+ * @property {{ max?: number }} [panes]
+ * @property {Record<string, { insert?: import("./editable.mjs").InsertSiteMode }>} [sites]
  */
 
 /**
@@ -71,6 +76,7 @@ const keys = {
 const modal = {
   leader: " ",
   timeout_ms: 800,
+  hint_chars: DEFAULT_HINT_CHARS,
   normal: {
     j: "scroll.down",
     k: "scroll.up",
@@ -142,7 +148,15 @@ export const WORKSPACE_DEFAULTS = Object.freeze({ color: "gray", icon: "circle",
 const theme = { source: /** @type {const} */ ("omarchy"), font: "monospace", colors: {} };
 
 /** @type {Readonly<UserConfig>} */
-export const DEFAULT_CONFIG = Object.freeze({ keys, modal, unbind: {}, workspaces: {}, theme });
+export const DEFAULT_CONFIG = Object.freeze({
+  keys,
+  modal,
+  unbind: {},
+  workspaces: {},
+  theme,
+  panes: { max: PANES_MAX_DEFAULT },
+  sites: {},
+});
 
 /** @param {string} s */
 const tomlString = (s) => JSON.stringify(s);
@@ -159,7 +173,7 @@ export function formatDefaultsToml() {
     "# vimma default configuration.",
     "# Generated from packages/vimma-core/src/defaults.mjs by `npm run gen-docs`; do not edit.",
     "# Copy any line into ~/.config/vimma/config.toml to change it.",
-    "schema = 1",
+    "schema = 2",
     "",
     "[keys]",
   ];
@@ -172,6 +186,8 @@ export function formatDefaultsToml() {
     "[modal]",
     `leader = ${tomlString(modal.leader)}`,
     `timeout_ms = ${modal.timeout_ms}`,
+    "# Hint labels are made of these characters, the first ones most often.",
+    `hint_chars = ${tomlString(modal.hint_chars)}`,
   );
   for (const [mode, table] of Object.entries(modal)) {
     if (typeof table !== "object") continue;
@@ -198,6 +214,15 @@ export function formatDefaultsToml() {
     "# Overrides on top of the palette, with the keys of Omarchy's colors.toml.",
     "[theme.colors]",
     '# accent = "#7aa2f7"',
+    "",
+    "# The most panes (live pages) one workspace shows at once, 1 to 16.",
+    "[panes]",
+    `max = ${PANES_MAX_DEFAULT}`,
+    "",
+    "# Per-site insert mode: auto (detect text fields), never (keys stay vimma's), always.",
+    "# A host also covers its subdomains. None by default.",
+    '# [sites."docs.google.com"]',
+    '# insert = "always"',
     "",
   );
   return lines.join("\n");

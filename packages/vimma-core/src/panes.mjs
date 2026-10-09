@@ -28,14 +28,25 @@
 /** @typedef {"wider" | "narrower" | "taller" | "shorter"} ResizeDirection */
 /** @typedef {{ x: number, y: number, width: number, height: number }} LayoutRect */
 /** @typedef {{ pane: string, tab: string, rect: LayoutRect }} PaneRect */
-/** @typedef {{ code: "no-space", message: string }} SplitRefusal */
+/** @typedef {{ code: "no-space" | "max-panes", message: string }} SplitRefusal */
+/**
+ * `max`: the most live panes (leaves) a tree may have; a split past it is refused. Unbounded by
+ * default; the host passes config `[panes] max` (default PANES_MAX_DEFAULT).
+ * @typedef {{ max?: number }} SplitOptions
+ */
 
 /** Smallest share of a split a pane can have: splits and resizes never go below it. */
 export const MIN_RATIO = 0.1;
 
+/** Default of config `[panes] max`: Zen's `MAX_TABS`, Firefox's split view tested up to it. */
+export const PANES_MAX_DEFAULT = 4;
+/** Largest `[panes] max` the config accepts. */
+export const PANES_MAX_LIMIT = 16;
+
 export class PaneError extends Error {
   /**
-   * @param {"unknown-pane" | "tab-shown" | "last-pane" | "bad-direction" | "bad-amount"} code
+   * @param {"unknown-pane" | "tab-shown" | "last-pane" | "bad-direction" | "bad-amount" |
+   *   "bad-max"} code
    * @param {string} message
    */
   constructor(code, message) {
@@ -234,16 +245,33 @@ function splitAxis(direction) {
 }
 
 /**
- * Why `split` would refuse (tmux: "no space for new pane"), or null when it would not. Splitting
- * along the parent's axis halves the pane's share; that must not fall below MIN_RATIO.
+ * @param {unknown} max
+ * @returns {number}
+ */
+function checkMax(max) {
+  if (max === Infinity || (Number.isInteger(max) && /** @type {number} */ (max) >= 1)) {
+    return /** @type {number} */ (max);
+  }
+  throw new PaneError("bad-max", `max panes must be a positive integer, got ${String(max)}`);
+}
+
+/**
+ * Why `split` would refuse, or null when it would not: `max-panes` when the tree already has
+ * `max` leaves (checked first), `no-space` (tmux: "no space for new pane") when splitting along
+ * the parent's axis would halve the pane's share below MIN_RATIO.
  * @param {Panes} s
  * @param {string} paneId
  * @param {SplitDirection} direction
+ * @param {SplitOptions} [options]
  * @returns {SplitRefusal | null}
  */
-export function splitRefusal(s, paneId, direction) {
+export function splitRefusal(s, paneId, direction, { max = Infinity } = {}) {
   const axis = splitAxis(direction);
   const path = mustPath(s, paneId);
+  const limit = checkMax(max);
+  if (leaves(s).length >= limit) {
+    return { code: "max-panes", message: `at most ${limit} pane${limit === 1 ? "" : "s"}` };
+  }
   if (path.length === 0) return null;
   const parent = /** @type {Split} */ (nodeAt(s.root, path.slice(0, -1)));
   const share = /** @type {number} */ (parent.ratios[/** @type {number} */ (path.at(-1))]);
@@ -255,20 +283,21 @@ export function splitRefusal(s, paneId, direction) {
 /**
  * Splits `paneId`; the new pane shows `newTabId`, goes right after it and gets focus.
  * `vertical` = split right (`:vsplit`), `horizontal` = split down (`:split`). Returns the input
- * unchanged when `splitRefusal` gives a reason.
+ * unchanged when `splitRefusal` gives a reason (`max` live panes, or no space).
  * @param {Panes} s
  * @param {string} paneId
  * @param {SplitDirection} direction
  * @param {string} newTabId
+ * @param {SplitOptions} [options]
  * @returns {Panes}
  */
-export function split(s, paneId, direction, newTabId) {
+export function split(s, paneId, direction, newTabId, options = {}) {
   const axis = splitAxis(direction);
   const path = mustPath(s, paneId);
   if (paneOfTab(s, newTabId) !== undefined) {
     throw new PaneError("tab-shown", `tab "${newTabId}" is already shown in a pane`);
   }
-  if (splitRefusal(s, paneId, direction)) return s;
+  if (splitRefusal(s, paneId, direction, options)) return s;
   const id = `p${s.next}`;
   const fresh = leafNode(id, newTabId);
   const leaf = nodeAt(s.root, path);

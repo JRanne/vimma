@@ -1,0 +1,20 @@
+{
+  "$comment": "Errors each invalid-*.toml must produce, in order: line, path and suggestion (null = none).",
+  "invalid-schema.toml": [
+    { "line": 5, "path": "modal.hint_chars", "suggestion": null },
+    { "line": 8, "path": "panes.max", "suggestion": null },
+    { "line": 9, "path": "panes.maks", "suggestion": "max" },
+    {
+      "line": 11,
+      "path": "sites.\"https://docs.google.com/document\"",
+      "suggestion": "docs.google.com"
+    },
+    { "line": 15, "path": "sites.\"example.com\".insert", "suggestion": "always" },
+    { "line": 17, "path": "sites.\"EXAMPLE.com.\"", "suggestion": null }
+  ],
+  "invalid-old-schema.toml": [
+    { "line": 4, "path": "panes", "suggestion": null },
+    { "line": 8, "path": "modal.hint_chars", "suggestion": null }
+  ],
+  "invalid-newer.toml": [{ "line": 2, "path": "schema", "suggestion": null }]
+}

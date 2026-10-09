@@ -1,0 +1,40 @@
+# Contract fixture: a valid schema-2 config touching every section. Must parse without errors.
+schema = 2
+
+[keys]
+prefix = "ctrl+b"
+new_tab = ["prefix+c", "ctrl+alt+c"]
+split_vertical = ["prefix+v"]
+
+[workspaces]
+work     = { color = "blue",  icon = "briefcase", home = "https://intranet.example" }
+personal = { color = "turquoise" }
+
+[modal]
+leader = " "
+timeout_ms = 800
+hint_chars = "jfkdls"
+
+[modal.normal]
+"j" = "scroll.down"
+
+[unbind]
+normal = ["d"]
+
+[theme]
+source = "omarchy"
+font = "JetBrainsMono Nerd Font"
+
+[theme.colors]
+accent = "#7aa2f7"
+
+[panes]
+max = 6
+
+[sites."docs.google.com"]
+insert = "always"
+
+[sites."example.com"]
+insert = "never"
+
+[sites."[::1]"]

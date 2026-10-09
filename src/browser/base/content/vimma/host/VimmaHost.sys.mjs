@@ -4,7 +4,7 @@
 
 // Chrome-window key capture and dispatch (specs: docs/specs/m0-key-capture.md,
 // docs/specs/m0-help-overlay.md, docs/specs/m1-actor-insert-scroll.md,
-// docs/specs/m2-tab-keys.md). Sees every keydown
+// docs/specs/m2-tab-keys.md, docs/specs/m1-cmdline.md). Sees every keydown
 // before the URL bar, about: pages and the PDF viewer, runs it through the vimma-core
 // dispatcher and consumes the keys that are ours.
 
@@ -15,18 +15,21 @@ import { HintError, hintKey, startHints } from "../core/hints.mjs";
 import { chordFromEvent, formatKey } from "../core/keys.mjs";
 import { compileKeymap } from "../core/keymap.mjs";
 import { notImplementedText } from "../core/actions.mjs";
+import { PENDING_ACTIONS } from "../core/cmdline.mjs";
+import { CommandLine } from "../ui/cmdline.mjs";
 import { HelpOverlay } from "../ui/help-overlay.mjs";
 import { HintOverlay } from "../ui/hint-overlay.mjs";
 import { StatusBar } from "../ui/statusbar.mjs";
 import { Notice } from "../ui/notice.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
-import { closeTab, newTab, selectTab } from "./tab-ops.mjs";
+import { BLOCKED_URL_TEXT, closeTab, newTab, openUrl, selectTab } from "./tab-ops.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
 /** @import { Mode } from "../core/modes.mjs" */
 /** @import { Action, DispatchResult } from "../core/dispatcher.mjs" */
 /** @import { EditableDescriptor, InsertTrigger } from "../core/editable.mjs" */
 /** @import { Keymap, TrieNode } from "../core/keymap.mjs" */
+/** @import { CommandResult } from "../core/cmdline.mjs" */
 /** @import { HintAction, HintState } from "../core/hints.mjs" */
 /** @import { HintTarget } from "../actors/VimmaActors.sys.mjs" */
 
@@ -53,6 +56,7 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {ReturnType<typeof createDispatcher>} dispatcher
  * @property {HelpOverlay} help
  * @property {Notice} notice  "<action>: not implemented yet" (m2-tab-keys)
+ * @property {CommandLine} cmdline  the `:` line (m1-cmdline)
  * @property {TabStrip | null} tabStrip  hides Firefox's tab strip (m0-tabstrip-hidden)
  * @property {number | null} timer   pending-sequence timeout (dispatcher.flush)
  * @property {() => void} onCancelHints  resize, a mouse click in chrome
@@ -63,23 +67,42 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  */
 
 /**
+ * `:open` / `:tabnew` text, or the notice saying why not.
+ * @param {WindowState} s
+ * @param {string} text
+ * @param {"current" | "tab"} where
+ */
+function openOrSay(s, text, where) {
+  if (!openUrl(s.win, text, where)) s.notice.show(BLOCKED_URL_TEXT);
+}
+
+/**
  * What the host can execute so far, with CONTENT_RUNNERS. An action without an entry is left to
  * Firefox when it is a single key outside help (ctrl+i, ctrl+u keep working until their
  * milestones land); inside a sequence (or after a count) it is consumed and shows "<action>: not
  * implemented yet", so `ctrl+b <key>` never leaks the second key to the page and is never silent
- * (m2-tab-keys). Unbound keys always pass (m1-actor-insert-scroll, Settled).
- * @type {Record<string, (state: WindowState, action: Action) => void>}
+ * (m2-tab-keys). Unbound keys always pass (m1-actor-insert-scroll, Settled). `text` is a
+ * command's free-text argument (`:open example.com`, m1-cmdline); keys never carry one.
+ * @type {Record<string, (state: WindowState, action: Action, text?: string) => void>}
  */
 export const RUNNERS = Object.freeze({
   "help.show": (/** @type {WindowState} */ s) => s.help.toggle(),
   "help.close": (/** @type {WindowState} */ s) => s.help.close(),
   "help.filter": (/** @type {WindowState} */ s) => s.help.focusFilter(),
   "hint.cancel": (/** @type {WindowState} */ s) => VimmaHost._cancelHints(s),
-  "tab.new": (/** @type {WindowState} */ s) => newTab(s.win),
+  "tab.new": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
+    text ? openOrSay(s, text, "tab") : newTab(s.win),
   "tab.next": (/** @type {WindowState} */ s, /** @type {Action} */ a) => selectTab(s.win, a),
   "tab.previous": (/** @type {WindowState} */ s, /** @type {Action} */ a) => selectTab(s.win, a),
   "tab.goto": (/** @type {WindowState} */ s, /** @type {Action} */ a) => selectTab(s.win, a),
   "tab.close": (/** @type {WindowState} */ s) => closeTab(s.win),
+  // Until M4's panes every tab is one pane, so closing the pane closes the tab (`:q`, prefix+x).
+  "pane.close": (/** @type {WindowState} */ s) => closeTab(s.win),
+  // Without text (a key bound to open_url) it asks for the URL on the command line.
+  "page.open": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
+    text ? openOrSay(s, text, "current") : s.cmdline.open("open "),
+  "command.open": (/** @type {WindowState} */ s) => s.cmdline.open(),
+  "command.cancel": (/** @type {WindowState} */ s) => s.cmdline.close(),
 });
 
 /**
@@ -177,10 +200,15 @@ export const VimmaHost = {
         this._cancelPending(win, state);
         this._cancelHints(state);
         state.help.close({ tabChanged: true });
+        state.cmdline.close({ tabChanged: true });
       },
       dispatcher: createDispatcher(keymap),
       help: new HelpOverlay(win, keymap, RUNNABLE),
       notice: new Notice(win),
+      cmdline: new CommandLine(win, {
+        run: (result) => this._runCommand(state, result),
+        changed: () => this._emit(state),
+      }),
       tabStrip: null,
       timer: null,
       onCancelHints: () => this._cancelHints(state),
@@ -229,6 +257,7 @@ export const VimmaHost = {
     this._cancelHints(state);
     state.help.destroy();
     state.notice.destroy();
+    state.cmdline.destroy();
     state.tabStrip?.uninit();
     state.statusBar?.uninit();
     state.listeners.clear();
@@ -327,13 +356,14 @@ export const VimmaHost = {
   },
 
   /**
-   * `help` while the overlay is open; the focused page's mode; `insert` in chrome, so chrome
-   * text fields keep their keys and only global chords are ours.
+   * `help` while the overlay is open; `command` while the `:` line is; the focused page's mode;
+   * `insert` in chrome, so chrome text fields keep their keys and only global chords are ours.
    * @param {WindowState} state
    * @returns {Mode}
    */
   _mode(state) {
     if (state.help.isOpen) return "help";
+    if (state.cmdline.isOpen) return "command";
     const browser = this._focusedBrowser(state.win);
     if (state.hint && state.hint.browser === browser) return "hint";
     return browser ? this._browserMode(browser) : "insert";
@@ -463,8 +493,9 @@ export const VimmaHost = {
    * here: `_dispatch` leaves it to Firefox, without a notice.
    * @param {WindowState} state  carries `win` for the runners
    * @param {DispatchResult | null} result
+   * @param {string} [text]  a command's free-text argument (m1-cmdline)
    */
-  _run(state, result) {
+  _run(state, result, text) {
     if (result?.kind !== "action") return;
     const { action } = result;
     const contentRunner = CONTENT_RUNNERS[action.id];
@@ -474,8 +505,23 @@ export const VimmaHost = {
       return;
     }
     const runner = RUNNERS[action.id];
-    if (runner) runner(state, action);
+    if (runner) runner(state, action, text);
     else state.notice.show(notImplementedText(action));
+  },
+
+  /**
+   * Runs a parsed `:` line through `_run`, as if its action had been keyed, after the line has
+   * closed. An action core lists as pending (`workspace.switch`) is refused, never run
+   * (m1-core-logic, Missing actions).
+   * @param {WindowState} state
+   * @param {Extract<CommandResult, { kind: "run" }>} result
+   */
+  _runCommand(state, { command, action, text }) {
+    if (PENDING_ACTIONS.includes(action.id)) {
+      state.notice.show(`:${command}${text ? ` ${text}` : ""}: not available yet`);
+      return;
+    }
+    this._run(state, { kind: "action", action }, text);
   },
 
   /**

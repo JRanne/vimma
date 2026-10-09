@@ -385,6 +385,7 @@ the label for a third tab on), `TabsList` drag targets and `tabs.move` (limits),
 
 ## Open questions
 
-- The default for `panes.max` (4 proposed), and whether it belongs in core's `splitRefusal`.
+- ~~The default for `panes.max`~~: settled in [m3-m4-core-prep](m3-m4-core-prep.md): config
+  `[panes] max`, default 4, 1 to 16, refused by core's `splitRefusal` (`max-panes`).
 - Divider appearance and gap size: M5 theme tokens; M4 uses a 2 px gap and Firefox's focus
   outline.
