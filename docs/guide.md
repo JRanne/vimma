@@ -29,7 +29,7 @@ x86_64 (`X.Y.Z` is the Vimma version):
 
 The `.deb` and the AUR package add Vimma to your application menu and offer it for web links,
 but never make it your default browser on their own: `xdg-settings set default-web-browser
-vimma.desktop` does that. Vimma has no in-app updater: update through apt, your AUR helper, or by
+vimma-vimma.desktop` does that. Vimma has no in-app updater: update through apt, your AUR helper, or by
 downloading the next AppImage or tarball. Next to the files are `SHA256SUMS`, a CycloneDX SBOM
 (`vimma-X.Y.Z.cdx.json`) and cosign signatures (`*.sigstore.json`); how to check them is in
 [runbook.md](runbook.md#release-packages-releaseyml-spec-m6-packaging) ("Verify a release").
