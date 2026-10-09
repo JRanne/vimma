@@ -21,7 +21,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { cpus } from "node:os";
-import { readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { CASES, reference } from "../../packages/vimma-core/bench/cases.mjs";
 import {
@@ -30,6 +30,7 @@ import {
   combine,
   compare,
   formatTable,
+  githubAnnotations,
   median,
   minOfMedians,
   withBaselineEntry,
@@ -45,10 +46,14 @@ const PROCESSES = 15;
 /** @type {unknown} */
 let sink;
 
-/** One key per runner class: ratios are comparable only on the same CPU model and Node major. */
+/**
+ * One key per runner class: CPU model, arch and the exact Node version (pinned in .nvmrc), since
+ * a V8 update can move these numbers. A Node bump finds no entry, falls back to the same Node
+ * major's (compare.mjs) with a warning, and its PR records the new key.
+ */
 export function machineKey() {
   const model = (cpus()[0]?.model ?? "unknown cpu").replace(/\s+/g, " ").trim();
-  return `${model} | ${process.arch} | node ${process.versions.node.split(".")[0]}`;
+  return `${model} | ${process.arch} | node ${process.versions.node}`;
 }
 
 /**
@@ -182,6 +187,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     results.push(JSON.parse(child.stdout));
   }
   const result = combine(results);
+  const date = new Date().toISOString().slice(0, 10);
+  const source = process.env.GITHUB_RUN_ID
+    ? `ci.yml run ${process.env.GITHUB_RUN_ID}`
+    : `local, ${date}`;
   const json = valueOf("--json");
   if (json) writeFileSync(json, `${JSON.stringify(result, null, 2)}\n`);
 
@@ -192,11 +201,13 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       process.exit(2);
     }
     const path = args[args.indexOf("--record") + 2] ?? DEFAULT_BASELINE;
-    const date = new Date().toISOString().slice(0, 10);
     const before = JSON.parse(readFileSync(path, "utf8"));
-    const after = withBaselineEntry(before, result.machine, baselineEntry(result, { date, notes }));
-    writeFileSync(path, `${JSON.stringify(after, null, 2)}\n`);
-    console.log(`bench: recorded "${result.machine}" in ${path}`);
+    const entry = baselineEntry(result, { date, notes, source }, before.machines[result.machine]);
+    writeFileSync(
+      path,
+      `${JSON.stringify(withBaselineEntry(before, result.machine, entry), null, 2)}\n`,
+    );
+    console.log(`bench: recorded "${result.machine}" in ${path} (${entry.samples.length} samples)`);
   }
 
   const baselinePath = valueOf("--check") ?? DEFAULT_BASELINE;
@@ -205,12 +216,20 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   console.log(`machine: ${result.machine} (reference ${result.referenceUs.toFixed(3)} µs)`);
   console.log(formatTable(r));
   for (const note of r.notes) console.log(`note: ${note}`);
-  if (!baseline.machines[result.machine]) {
-    // What `--record` would write, for a runner where recording in place is not possible (CI).
-    const date = new Date().toISOString().slice(0, 10);
-    const entry = baselineEntry(result, { date, notes: "<runner, image, why recorded>" });
-    console.log(`baseline entry:\n${JSON.stringify({ [result.machine]: entry }, null, 2)}`);
+  for (const warning of r.warnings) console.log(`warning: ${warning}`);
+  if (process.env.GITHUB_ACTIONS === "true") {
+    const { log, summary } = githubAnnotations(r.warnings);
+    for (const line of log) console.log(line);
+    if (summary && process.env.GITHUB_STEP_SUMMARY) {
+      appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+    }
   }
+  // What `--record` would write, for a runner where recording in place is not possible (CI):
+  // a new entry, or this run as one more sample of the existing one (docs/runbook.md).
+  const own = baseline.machines[result.machine];
+  const notes = own?.notes ?? "<runner, image, why recorded>";
+  const entry = baselineEntry(result, { date, notes, source }, own);
+  console.log(`baseline entry:\n${JSON.stringify({ [result.machine]: entry }, null, 2)}`);
   if (args.includes("--check")) {
     for (const failure of r.failures) console.error(failure);
     process.exit(r.ok ? 0 : 1);

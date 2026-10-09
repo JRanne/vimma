@@ -7,17 +7,19 @@ import { fileURLToPath } from "node:url";
 import {
   BUDGET_US,
   CASE_THRESHOLD,
+  FALLBACK_MARGIN,
   THRESHOLD,
   baselineEntry,
   combine,
   compare,
+  githubAnnotations,
   median,
   minOfMedians,
   withBaselineEntry,
 } from "../compare.mjs";
 
 const script = fileURLToPath(new URL("../compare.mjs", import.meta.url));
-const MACHINE = "AMD EPYC 7763 64-Core Processor | x64 | node 22";
+const MACHINE = "AMD EPYC 7763 64-Core Processor | x64 | node 22.23.3";
 
 /**
  * A bench result as bench.mjs writes it.
@@ -138,15 +140,114 @@ describe("compare", () => {
     expect(r.failures).toEqual([expect.stringMatching(/^slow: 50\.10 µs .*50 µs budget/)]);
   });
 
-  it("only advises, without failing, on a machine the baseline has not recorded", () => {
+  it("fails a case of exactly 50.0 µs: the plan's budget is under 50 µs", () => {
+    const r = compare(
+      result({ edge: { us: 50, ratio: 2 } }),
+      baseline({ edge: { us: 50, ratio: 2 } }),
+    );
+    expect(r.ok).toBe(false);
+    expect(r.failures).toEqual([expect.stringMatching(/^edge: 50\.00 µs .*50 µs budget/)]);
+    expect(compare(result({ edge: { us: 49.99, ratio: 2 } }), baseline({})).ok).toBe(true);
+  });
+
+  it("passes one case exactly 25 % slower, the per-case limit itself", () => {
+    const r = compare(
+      result({ a: { us: 1, ratio: 2.5 }, b: { us: 1, ratio: 3 }, c: { us: 1, ratio: 3 } }),
+      baseline({ a: { us: 1, ratio: 2 }, b: { us: 1, ratio: 3.3 }, c: { us: 1, ratio: 3.3 } }),
+    );
+    expect(r.failures).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("warns, never silently, on a machine with no comparable baseline, and keeps the budget", () => {
     const r = compare(
       result({ a: { us: 1, ratio: 9 } }, "other cpu"),
       baseline({ a: { us: 1, ratio: 2 } }),
     );
     expect(r.ok).toBe(true);
-    expect(r.notes).toEqual([expect.stringMatching(/no baseline for machine "other cpu"/)]);
+    expect(r.fallback).toBeNull();
+    expect(r.warnings).toEqual([expect.stringMatching(/no baseline for machine "other cpu"/)]);
+  });
+});
+
+describe("compare on an unrecorded runner of a recorded architecture and Node major", () => {
+  const INTEL = "INTEL(R) XEON(R) PLATINUM 8573C | x64 | node 22.23.3";
+  const AMD = "AMD EPYC 9V74 80-Core Processor | x64 | node 22.23.3";
+  const two = {
+    machines: {
+      [INTEL]: {
+        recorded: "x",
+        notes: "",
+        cases: { a: { us: 1, ratio: 2.1 }, b: { us: 1, ratio: 4.2 } },
+      },
+      [AMD]: {
+        recorded: "x",
+        notes: "",
+        cases: { a: { us: 1, ratio: 2 }, b: { us: 1, ratio: 4 } },
+      },
+      "Some ARM core | arm64 | node 22.23.3": {
+        recorded: "x",
+        notes: "",
+        cases: { a: { us: 1, ratio: 1 }, b: { us: 1, ratio: 1 } },
+      },
+      "Old box | x64 | node 20.1.0": {
+        recorded: "x",
+        notes: "",
+        cases: { a: { us: 1, ratio: 1 }, b: { us: 1, ratio: 1 } },
+      },
+    },
+  };
+  const NEW = "AMD EPYC 7763 64-Core Processor | x64 | node 22.24.0";
+
+  it("falls back to the most demanding entry of the same arch and Node major, and says so", () => {
+    expect(FALLBACK_MARGIN).toBe(0.06);
+    const r = compare(result({ a: { us: 1, ratio: 2.1 }, b: { us: 1, ratio: 4.2 } }, NEW), two);
+    expect(r.fallback).toBe(AMD);
+    expect(r.ok).toBe(true); // +5 % on the AMD entry, inside the widened 16 %
+    expect(r.warnings).toEqual([
+      expect.stringMatching(
+        new RegExp(`^no baseline for machine "${NEW}".*compared with "${AMD}"`),
+      ),
+    ]);
   });
 
+  it("still fails a fallback comparison once the suite is more than 10 % plus the margin slower", () => {
+    const r = compare(result({ a: { us: 1, ratio: 2.34 }, b: { us: 1, ratio: 4.68 } }, NEW), two);
+    expect(r.fallback).toBe(AMD);
+    expect(r.ok).toBe(false);
+    expect(r.failures).toEqual([expect.stringMatching(/^suite: \+17\.0 % .*16\.0 % limit/)]);
+  });
+
+  it("does not fail a fallback comparison for a baseline case the run lacks", () => {
+    const r = compare(result({ a: { us: 1, ratio: 2 } }, NEW), two);
+    expect(r.ok).toBe(true);
+  });
+
+  it("does not fall back across an architecture or a Node major", () => {
+    expect(
+      compare(result({ a: { us: 1, ratio: 9 } }, "X | riscv64 | node 22.23.3"), two).fallback,
+    ).toBeNull();
+    expect(
+      compare(result({ a: { us: 1, ratio: 9 } }, "X | x64 | node 24.0.0"), two).fallback,
+    ).toBeNull();
+  });
+});
+
+describe("githubAnnotations", () => {
+  it("turns each warning into a ::warning:: line and a step-summary line", () => {
+    const { log, summary } = githubAnnotations(['no baseline for machine "m"; compared with "e"']);
+    expect(log).toEqual([
+      '::warning title=bench baseline::no baseline for machine "m"; compared with "e"',
+    ]);
+    expect(summary).toBe('- ⚠️ bench: no baseline for machine "m"; compared with "e"\n');
+  });
+
+  it("writes nothing when there is nothing to warn about", () => {
+    expect(githubAnnotations([])).toEqual({ log: [], summary: "" });
+  });
+});
+
+describe("compare, continued", () => {
   it("notes, without failing, a case the baseline does not have yet", () => {
     const r = compare(result({ fresh: { us: 1, ratio: 2 } }), baseline({}));
     expect(r.ok).toBe(true);
@@ -167,16 +268,27 @@ describe("compare", () => {
 });
 
 describe("baselineEntry and withBaselineEntry", () => {
-  it("records µs and ratio per case, the date and the notes, keyed by machine", () => {
+  it("records µs and ratio per case, the date, the notes and the run as its one sample", () => {
     const entry = baselineEntry(result({ a: { us: 1.234567, ratio: 2.345678 } }), {
       date: "2026-10-09",
       notes: "ubuntu-24.04 hosted runner",
+      source: "ci.yml run 1",
     });
     expect(entry).toEqual({
       recorded: "2026-10-09",
       notes: "ubuntu-24.04 hosted runner",
       cases: { a: { us: 1.235, ratio: 2.346 } },
+      samples: [{ source: "ci.yml run 1", cases: { a: { us: 1.235, ratio: 2.346 } } }],
     });
+  });
+
+  it("adds a run to an existing entry and gates on the per-case median of its samples", () => {
+    const meta = { date: "2026-10-10", notes: "n", source: "run 2" };
+    const one = baselineEntry(result({ a: { us: 1, ratio: 2 } }), { ...meta, source: "run 1" });
+    const two = baselineEntry(result({ a: { us: 3, ratio: 2.2 } }), meta, one);
+    expect(two.samples.map((s) => s.source)).toEqual(["run 1", "run 2"]);
+    expect(two.cases).toEqual({ a: { us: 2, ratio: 2.1 } });
+    expect(two.recorded).toBe("2026-10-10");
   });
 
   it("replaces only the current machine's entry and keeps the others", () => {

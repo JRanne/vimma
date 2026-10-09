@@ -1,27 +1,61 @@
 {
-  "$comment": "Key-to-action bench baseline, one entry per runner class (CPU model | arch | Node major). Gate: tools/bench/compare.mjs. Change only deliberately, with a changelog line in the commit body (docs/runbook.md, Bench baseline).",
+  "$comment": "Key-to-action bench baseline, one entry per runner class (CPU model | arch | exact Node version, pinned in .nvmrc). `cases` is the per-case median of `samples`, one per recording run. Gate: tools/bench/compare.mjs. Change only deliberately, with a changelog line in the commit body (docs/runbook.md, Bench baseline).",
   "machines": {
-    "AMD EPYC 9V74 80-Core Processor | x64 | node 22": {
+    "AMD EPYC 9V74 80-Core Processor | x64 | node 22.23.3": {
       "recorded": "2026-10-09",
-      "notes": "GitHub-hosted ubuntu-latest (24.04), 2 vCPU, private repo; ci.yml run 37963723494 on PR #36",
+      "notes": "GitHub-hosted ubuntu-latest (24.04), 2 vCPU, private repo, Node 22.23.3; ci.yml on PR #36",
       "cases": {
-        "single key: j → scroll.down": { "us": 0.2, "ratio": 0.389 },
-        "prefix + key: ctrl+b c → tab.new": { "us": 0.49, "ratio": 0.914 },
-        "count + motion: 5 j → scroll.down ×5": { "us": 0.39, "ratio": 0.743 },
-        "sequence: g t → tab.next": { "us": 0.4, "ratio": 0.754 },
-        "apply: pane focus + selectTab, 8 panes, 30 tabs": { "us": 13.45, "ratio": 24.753 }
-      }
+        "single key: j → scroll.down": { "us": 0.2, "ratio": 0.394 },
+        "prefix + key: ctrl+b c → tab.new": { "us": 0.49, "ratio": 0.927 },
+        "count + motion: 5 j → scroll.down ×5": { "us": 0.39, "ratio": 0.737 },
+        "sequence: g t → tab.next": { "us": 0.4, "ratio": 0.752 },
+        "apply: pane focus + selectTab, 8 panes, 30 tabs": { "us": 13.475, "ratio": 25.008 }
+      },
+      "samples": [
+        {
+          "source": "ci.yml run 37963723494",
+          "cases": {
+            "single key: j → scroll.down": { "us": 0.2, "ratio": 0.389 },
+            "prefix + key: ctrl+b c → tab.new": { "us": 0.49, "ratio": 0.914 },
+            "count + motion: 5 j → scroll.down ×5": { "us": 0.39, "ratio": 0.743 },
+            "sequence: g t → tab.next": { "us": 0.4, "ratio": 0.754 },
+            "apply: pane focus + selectTab, 8 panes, 30 tabs": { "us": 13.45, "ratio": 24.753 }
+          }
+        },
+        {
+          "source": "ci.yml run 37964439439",
+          "cases": {
+            "single key: j → scroll.down": { "us": 0.2, "ratio": 0.399 },
+            "prefix + key: ctrl+b c → tab.new": { "us": 0.49, "ratio": 0.94 },
+            "count + motion: 5 j → scroll.down ×5": { "us": 0.39, "ratio": 0.73 },
+            "sequence: g t → tab.next": { "us": 0.4, "ratio": 0.749 },
+            "apply: pane focus + selectTab, 8 panes, 30 tabs": { "us": 13.5, "ratio": 25.263 }
+          }
+        }
+      ]
     },
-    "INTEL(R) XEON(R) PLATINUM 8573C | x64 | node 22": {
+    "INTEL(R) XEON(R) PLATINUM 8573C | x64 | node 22.23.3": {
       "recorded": "2026-10-09",
-      "notes": "GitHub-hosted ubuntu-latest (24.04), 2 vCPU, private repo; ci.yml run 37962965080 on PR #36",
+      "notes": "GitHub-hosted ubuntu-latest (24.04), 2 vCPU, private repo, Node 22.23.3; ci.yml on PR #36",
       "cases": {
         "single key: j → scroll.down": { "us": 0.203, "ratio": 0.391 },
         "prefix + key: ctrl+b c → tab.new": { "us": 0.497, "ratio": 0.963 },
         "count + motion: 5 j → scroll.down ×5": { "us": 0.408, "ratio": 0.768 },
         "sequence: g t → tab.next": { "us": 0.425, "ratio": 0.806 },
         "apply: pane focus + selectTab, 8 panes, 30 tabs": { "us": 12.59, "ratio": 23.535 }
-      }
+      },
+      "samples": [
+        {
+          "source": "ci.yml run 37962965080",
+          "cases": {
+            "single key: j → scroll.down": { "us": 0.203, "ratio": 0.391 },
+            "prefix + key: ctrl+b c → tab.new": { "us": 0.497, "ratio": 0.963 },
+            "count + motion: 5 j → scroll.down ×5": { "us": 0.408, "ratio": 0.768 },
+            "sequence: g t → tab.next": { "us": 0.425, "ratio": 0.806 },
+            "apply: pane focus + selectTab, 8 panes, 30 tabs": { "us": 12.59, "ratio": 23.535 }
+          }
+        }
+      ]
     }
   }
 }
