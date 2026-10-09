@@ -20,7 +20,7 @@ import {
 } from "./panes.mjs";
 
 /** @import { Panes } from "./panes.mjs" */
-/** @import { SplitDirection } from "./panes.mjs" */
+/** @import { SplitDirection, SplitOptions } from "./panes.mjs" */
 /** @import { Leaf } from "./panes.mjs" */
 /**
  * @typedef {{ readonly id: string, readonly name: string, readonly container: string,
@@ -426,19 +426,23 @@ export function moveTab(s, tabId, ref, { newTabId = tabId } = {}) {
 
 /**
  * `prefix+v` / `prefix+-`: opens `newTabId` after the active tab and splits the focused pane with
- * it. In an empty workspace the tab simply becomes its only pane.
+ * it. In an empty workspace the tab simply becomes its only pane. A refused split (`max` panes,
+ * no space: `splitRefusal`) returns the input itself and registers no tab, so the host checks
+ * `splitRefusal` before creating the tab.
  * @param {Workspaces} s
  * @param {SplitDirection} direction
  * @param {string} newTabId
+ * @param {SplitOptions} [options]
  * @returns {Workspaces}
  */
-export function splitPane(s, direction, newTabId) {
+export function splitPane(s, direction, newTabId, options = {}) {
   const w = activeWorkspace(s);
   if (!w.panes) return openTab(s, newTabId);
   checkNewTab(s, newTabId);
+  const panes = split(w.panes, w.panes.focus, direction, newTabId, options);
+  if (panes === w.panes) return s;
   const tabs = w.tabs.slice();
   tabs.splice(tabs.indexOf(/** @type {string} */ (w.activeTab)) + 1, 0, newTabId);
-  const panes = split(w.panes, w.panes.focus, direction, newTabId);
   return replaceWs(s, activeIndex(s), updateWs(w, { tabs, panes, activeTab: newTabId }));
 }
 

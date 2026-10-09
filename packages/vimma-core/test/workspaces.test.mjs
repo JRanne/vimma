@@ -332,6 +332,18 @@ describe("panes inside workspaces", () => {
     expect(paneTabs(ws(s))).toEqual(["b", "d"]);
   });
 
+  test("a refused splitPane (max panes or no space) returns the state itself", () => {
+    const s = splitPane(abc(), "vertical", "d", { max: 2 });
+    expect(splitPane(s, "horizontal", "e", { max: 2 })).toBe(s);
+    let t = splitPane(abc(), "vertical", "d"); // .5 .5
+    t = splitPane(t, "vertical", "e"); // .5 .25 .25
+    t = splitPane(t, "vertical", "f"); // .5 .25 .125 .125
+    expect(splitPane(t, "vertical", "g")).toBe(t); // no-space
+    expect(
+      leaves(/** @type {any} */ (ws(splitPane(s, "horizontal", "e", { max: 3 })).panes)),
+    ).toHaveLength(3);
+  });
+
   test("withPanes applies a pane op and syncs the active tab", () => {
     let s = splitPane(abc(), "vertical", "d");
     s = withPanes(s, (p) => focus(p, "left"));
@@ -392,6 +404,7 @@ const opArb = fc.oneof(
     arbitrary: fc.record({
       op: fc.constant("split"),
       dir: fc.constantFrom("vertical", "horizontal"),
+      max: fc.option(fc.integer({ min: 1, max: 5 }), { nil: undefined }),
     }),
   },
   {
@@ -462,7 +475,7 @@ function run(ops) {
         s = previousWorkspace(s);
         break;
       case "split":
-        s = splitPane(s, o.dir, `t${n++}`);
+        s = splitPane(s, o.dir, `t${n++}`, { max: o.max });
         break;
       case "focus":
         if (activeWorkspace(s).panes) s = withPanes(s, (p) => focus(p, o.dir));
