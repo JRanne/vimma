@@ -6,6 +6,9 @@ declare const Services: {
     getBoolPref(name: string, defaultValue?: boolean): boolean;
     setBoolPref(name: string, value: boolean): void;
     prefHasUserValue(name: string): boolean;
+    getDefaultBranch(root: string): {
+      setBoolPref(name: string, value: boolean): void;
+    };
     addObserver(
       name: string,
       observer: (subject: unknown, topic: string, data: string) => void,

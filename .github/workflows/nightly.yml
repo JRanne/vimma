@@ -48,6 +48,22 @@ jobs:
             echo "$want" > engine/.vimma-firefox-version
           fi
 
+      # Spec m0-safebrowsing-key. The secret goes to a mode-600 file in RUNNER_TEMP (emptied by
+      # the runner per job) through a shell builtin, so it is never echoed nor on a command line;
+      # configs/common/mozconfig reads VIMMA_SAFEBROWSING_KEYFILE. It stays until every mach call
+      # (build, tests, package) is done: mach re-reads the mozconfig, which fails on a missing file.
+      - name: Safe Browsing key file
+        env:
+          SAFEBROWSING_API_KEY: ${{ secrets.SAFEBROWSING_API_KEY }}
+        run: |
+          if [ -z "$SAFEBROWSING_API_KEY" ]; then
+            echo "::error::secret SAFEBROWSING_API_KEY is not set; a nightly must have the key"
+            exit 1
+          fi
+          keyfile="$RUNNER_TEMP/vimma-safebrowsing.key"
+          (umask 077 && printf '%s' "$SAFEBROWSING_API_KEY" > "$keyfile")
+          echo "VIMMA_SAFEBROWSING_KEYFILE=$keyfile" >> "$GITHUB_ENV"
+
       - name: Import patches and our sources
         run: |
           set -o pipefail
@@ -73,6 +89,8 @@ jobs:
       - name: Mochitests on the full build
         # PRs run them on an artifact build (e2e.yml, ADR-010), which skips what only a full
         # build has (skip-if = ["artifact"], e.g. browser_vimma_crash_reporter.js).
+        env:
+          VIMMA_EXPECT_SAFEBROWSING_KEY: "1" # browser_vimma_safebrowsing.js fails without it
         run: |
           set -o pipefail
           npm run mochitest -- tests/browser/ 2>&1 | tee -a "$LOG"
@@ -88,6 +106,10 @@ jobs:
           (cd engine && ./mach package) 2>&1 | tee -a "$LOG"
           cp engine/obj-x86_64-pc-linux-gnu/dist/vimma-*.en-US.linux-x86_64.tar.xz dist/
           ls -l dist
+
+      - name: Delete the Safe Browsing key file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/vimma-safebrowsing.key"
 
       - name: Publish rolling nightly release
         env:
