@@ -50,9 +50,9 @@ What works today:
 - **Herdr tab keys.** `ctrl+b c` new tab, `ctrl+b n`/`p` next/previous (wrapping),
   `ctrl+b 1..9` tab N, `ctrl+b shift+x` close tab, from any page and the URL bar; in normal
   mode also `t`, `x`, `gt`/`gT`.
-- **Status bar and which-key.** A one-line status bar at the foot of the window shows the mode,
-  pending keys, `tab 2/5`, the page title, its URL and whether it is loading. After `ctrl+b` a
-  strip above it lists the keys you can press next; keys that do nothing yet are greyed.
+- **Status bar.** A one-line status bar at the foot of the window shows the mode, pending keys
+  (`prefix` after `ctrl+b`), `tab 2/5`, the page title, its URL and whether it is loading.
+  `ctrl+b ?` is the one place that lists the bindings.
 - **Hidden tab strip.** Firefox's tab strip is hidden. Firefox's own tab keys (`ctrl+t`,
   `ctrl+w`, `ctrl+tab`, `alt+1..9`, …) still work. Set `vimma.ui.tabstrip.hidden` to `false` in
   `about:config` to bring the strip back.

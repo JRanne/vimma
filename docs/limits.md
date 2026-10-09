@@ -43,7 +43,7 @@ delete its line in the same PR.
 - `config.toml` is not read by the browser. Its validator and theme tokens exist in `vimma-core`,
   but loading, polling, `:source` and theming wait for the M5 host spec
   ([m5-core-config-and-theme](specs/m5-core-config-and-theme.md)).
-- The overlay has legible defaults only: no theme tokens and no which-key strip (M2, M5)
+- The overlay has legible defaults only: no theme tokens yet (M5)
   ([m0-help-overlay](specs/m0-help-overlay.md)).
 
 ## Tabs and window

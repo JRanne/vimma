@@ -59,7 +59,7 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {HintSession | null} hint
  * @property {HintOverlay} hintOverlay
  * @property {Set<() => void>} listeners  told after mode or pending keys may have changed
- * @property {StatusBar | null} statusBar  m2-statusbar-whichkey
+ * @property {StatusBar | null} statusBar  m2-statusbar-whichkey (the bar; no which-key strip)
  */
 
 /**
@@ -71,7 +71,11 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @type {Record<string, (state: WindowState, action: Action) => void>}
  */
 export const RUNNERS = Object.freeze({
-  "help.show": (/** @type {WindowState} */ s) => s.help.toggle(),
+  // The overlay is the one list of bindings on screen: a toast from an earlier key gives way.
+  "help.show": (/** @type {WindowState} */ s) => {
+    s.notice.hide();
+    s.help.toggle();
+  },
   "help.close": (/** @type {WindowState} */ s) => s.help.close(),
   "help.filter": (/** @type {WindowState} */ s) => s.help.focusFilter(),
   "hint.cancel": (/** @type {WindowState} */ s) => VimmaHost._cancelHints(s),
@@ -131,7 +135,7 @@ export const CONTENT_RUNNERS = Object.freeze({
 
 /**
  * Every action id the host implements: the one source for the help overlay's dimmed rows, the
- * not-implemented notice and (when wired) the which-key strip. Whether one runs right now is
+ * not-implemented notice. Whether one runs right now is
  * `VimmaHost._runnable(state, id)`, which adds "a page with our actor has focus" for
  * CONTENT_RUNNERS.
  * @type {ReadonlySet<string>}
@@ -207,8 +211,6 @@ export const VimmaHost = {
       const statusBar = new StatusBar(win, {
         status: () => this.status(win),
         subscribe: (fn) => this.onStateChange(win, fn),
-        runnable: () => this.runnable(),
-        keymap,
       });
       statusBar.init();
       state.statusBar = statusBar;
@@ -236,7 +238,7 @@ export const VimmaHost = {
   },
 
   /**
-   * What the status bar and which-key strip show: the mode keys are dispatched in and the keys
+   * What the status bar shows: the mode keys are dispatched in and the keys
    * of a pending sequence (dispatcher.pending() labels).
    * @param {Window} win
    * @returns {{ mode: Mode, pending: string[] }}
@@ -259,15 +261,6 @@ export const VimmaHost = {
     if (!state) return () => {};
     state.listeners.add(fn);
     return () => state.listeners.delete(fn);
-  },
-
-  /**
-   * Action ids the host implements (RUNNABLE): the which-key strip greys the rest, as the help
-   * overlay dims them.
-   * @returns {ReadonlySet<string>}
-   */
-  runnable() {
-    return RUNNABLE;
   },
 
   /** @param {WindowState} state */
