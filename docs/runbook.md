@@ -451,10 +451,12 @@ node tools/package/sbom.mjs --engine engine --out dist/vimma-$(node -p 'require(
 RELEASE_ENABLED`). Try it on the next release, or re-run the last one with
    `gh workflow run release.yml -f tag=vX.Y.Z` (assets are replaced, `--clobber`).
 
-**Before the repo goes public:** fork PRs could add a workflow with `runs-on: vimma-build`.
-Keep the runner stopped except during nightly and release runs, and set Settings → Actions →
-General → "Require approval for all outside collaborators", or move releases to a machine that
-is only online for them. Release jobs themselves cannot be started from a fork.
+**Runner rule:** until Settings → Actions → General has "Require approval for all outside
+collaborators" set, the `vimma-build` runner must stay offline outside nightly and release
+builds (fork PRs could add a workflow with `runs-on: vimma-build`). Release jobs themselves
+cannot be started from a fork, and a manual run does nothing unless started from `main`. The
+release build uses its own fresh objdir (`engine/obj-release`) and an empty sccache directory,
+so nothing left on the runner by a nightly or another job reaches signed binaries.
 
 **Verify a release** (the user guide's "Installing" points here):
 
@@ -462,16 +464,17 @@ is only online for them. Release jobs themselves cannot be started from a fork.
 v=0.1.0
 gh release download "v$v" -R JRanne/vimma
 sha256sum -c SHA256SUMS              # every file OK
-cosign verify-blob --bundle "vimma-$v-x86_64.AppImage.sigstore.json" \
-  --certificate-identity "https://github.com/JRanne/vimma/.github/workflows/release.yml@refs/tags/v$v" \
+cosign verify-blob --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/JRanne/vimma/\.github/workflows/release\.yml@refs/(heads/main|tags/v[0-9]+\.[0-9]+\.[0-9]+)$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  "vimma-$v-x86_64.AppImage"         # "Verified OK"
+  SHA256SUMS                         # "Verified OK"
 ```
 
-A release re-run by hand from the Actions tab signs with the ref it was started from
-(`@refs/heads/main`); verify those with `--certificate-identity-regexp
-'^https://github.com/JRanne/vimma/\.github/workflows/release\.yml@refs/'`. `SHA256SUMS` has its
-own bundle, so checking that one signature and then `sha256sum -c` covers every file.
+The identity accepts only this repository's `release.yml`, run for a `vX.Y.Z` tag (a published
+release) or from `main` (a manual re-run); `release.yml` refuses to run from any other branch.
+The issuer pins GitHub Actions' OIDC. Checking `SHA256SUMS`'s signature and then `sha256sum -c`
+covers every file; each asset also has its own `<file>.sigstore.json`, verified the same way.
+The regexp is `IDENTITY_REGEXP` in `tools/package/package.mjs`, and a test keeps the two equal.
 
 **When it fails:** a `release-failure` issue links the run. Fix on `main`, then re-run for the
 same tag. The tag is not deleted (plan §4 said so): release-please has already moved its
