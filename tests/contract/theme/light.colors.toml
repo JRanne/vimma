@@ -1,0 +1,33 @@
+# Omarchy 4 colors.toml format, written by hand for vimma's tests: a light theme (Catppuccin
+# Latte palette) without orange and brown, and with an extra Hyprland key, as some stock themes have.
+mode = "light"
+
+accent = "#1e66f5"
+selection = "#ccd0da"
+muted = "#acb0be"
+
+background = "#eff1f5"
+dark_background = "#e6e9ef"
+darker_background = "#dce0e8"
+lighter_background = "#f5f6f9"
+
+foreground = "#4c4f69"
+dark_foreground = "#9ca0b0"
+light_foreground = "#5c5f77"
+bright_foreground = "#4c4f69"
+
+red = "#d20f39"
+yellow = "#df8e1d"
+green = "#40a02b"
+cyan = "#179299"
+blue = "#1e66f5"
+magenta = "#ea76cb"
+
+bright_red = "#d20f39"
+bright_yellow = "#df8e1d"
+bright_green = "#40a02b"
+bright_cyan = "#179299"
+bright_blue = "#1e66f5"
+bright_magenta = "#ea76cb"
+
+hyprland_active_border = "rgba(1e66f5ee) rgba(ea76cbee) 45deg"

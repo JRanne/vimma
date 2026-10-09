@@ -1,0 +1,44 @@
+# Contract fixture: a valid schema-1 config touching every section. Must parse without errors.
+schema = 1
+
+[keys]                                  # Herdr syntax: action = [chords]
+prefix = "ctrl+b"
+new_tab = ["prefix+c", "ctrl+alt+c"]
+split_vertical = ["prefix+v"]
+show_keybinds = "prefix+?"
+prev_workspace = ["ctrl+u"]
+toggle_sidebar = [
+  "prefix+b",
+  "<leader>n",
+]
+
+[workspaces]                            # order = ctrl+i order; each is a Firefox container
+work     = { color = "blue",  icon = "briefcase", home = "https://intranet.example" }
+admin    = { color = "red",   autofill = false }
+personal = { color = "turquoise" }
+
+[workspaces."side project"]
+color = "purple"
+home = "about:blank"
+
+[modal]
+leader = " "
+timeout_ms = 800
+
+[modal.normal]
+"j" = "scroll.down"
+"gt" = "tab.next"
+"<leader>ff" = "goto.picker"
+
+[modal.visual]
+"Y" = "selection.yank"
+
+[theme]
+source = "omarchy"
+font = "CaskaydiaMono Nerd Font"
+
+[theme.colors]
+accent = "#BB9AF7"
+
+[unbind]
+normal = ["x"]
