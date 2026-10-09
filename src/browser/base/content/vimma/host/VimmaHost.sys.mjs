@@ -9,8 +9,11 @@
 import { createDispatcher } from "../core/dispatcher.mjs";
 import { chordFromEvent, formatKey } from "../core/keys.mjs";
 import { compileKeymap } from "../core/keymap.mjs";
+import { notImplementedText } from "../core/actions.mjs";
 import { HelpOverlay } from "../ui/help-overlay.mjs";
+import { Notice } from "../ui/notice.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
+import { closeTab, newTab, selectTab } from "./tab-ops.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
 /** @import { Mode } from "../core/modes.mjs" */
@@ -26,6 +29,7 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {() => void} onTabSelect
  * @property {ReturnType<typeof createDispatcher>} dispatcher
  * @property {HelpOverlay} help
+ * @property {Notice} notice  "<action>: not implemented yet" (m2-tab-keys)
  * @property {TabStrip | null} tabStrip  hides Firefox's tab strip (m0-tabstrip-hidden)
  * @property {number | null} timer   pending-sequence timeout (dispatcher.flush)
  */
@@ -33,15 +37,28 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
 /**
  * What the host can execute so far. An action without an entry here is left to Firefox when it
  * is a single key outside help (Esc, ctrl+i, ctrl+u keep working until their milestones land;
- * revisit in M1 once `normal` mode is real); inside a sequence it is consumed, so
- * `ctrl+b <key>` never leaks the second key to the page.
- * @type {Record<string, (state: WindowState, action: Action) => void>}
+ * revisit in M1 once `normal` mode is real); inside a sequence it is consumed and shows
+ * "<action>: not implemented yet", so `ctrl+b <key>` never leaks the second key to the page and
+ * is never silent (m2-tab-keys).
+ * @type {Record<string, (state: WindowState, action: Action, win: Window) => void>}
  */
 const RUNNERS = {
   "help.show": (s) => s.help.toggle(),
   "help.close": (s) => s.help.close(),
   "help.filter": (s) => s.help.focusFilter(),
+  "tab.new": (_s, _a, win) => newTab(win),
+  "tab.next": (_s, a, win) => selectTab(win, a),
+  "tab.previous": (_s, a, win) => selectTab(win, a),
+  "tab.goto": (_s, a, win) => selectTab(win, a),
+  "tab.close": (_s, _a, win) => closeTab(win),
 };
+
+/**
+ * Action ids the host runs: the one source for the not-implemented notice and the help
+ * overlay's dimmed rows.
+ * @type {ReadonlySet<string>}
+ */
+export const RUNNABLE = Object.freeze(new Set(Object.keys(RUNNERS)));
 
 /** @type {WeakMap<Window, WindowState>} */
 const states = new WeakMap();
@@ -73,7 +90,8 @@ export const VimmaHost = {
         state.help.close({ tabChanged: true });
       },
       dispatcher: createDispatcher(keymap),
-      help: new HelpOverlay(win, keymap),
+      help: new HelpOverlay(win, keymap, RUNNABLE),
+      notice: new Notice(win),
       tabStrip: null,
       timer: null,
     };
@@ -98,6 +116,7 @@ export const VimmaHost = {
     win.removeEventListener("keydown", state.onKeyDown, true);
     win.removeEventListener("TabSelect", state.onTabSelect, true);
     state.help.destroy();
+    state.notice.destroy();
     state.tabStrip?.uninit();
     states.delete(win);
   },
@@ -162,7 +181,7 @@ export const VimmaHost = {
         if (state.dispatcher.ambiguous()) {
           state.timer = win.setTimeout(() => {
             state.timer = null;
-            this._run(state, state.dispatcher.flush());
+            this._run(win, state, state.dispatcher.flush());
           }, state.dispatcher.timeoutMs);
         }
         return;
@@ -170,24 +189,29 @@ export const VimmaHost = {
         if (result.replay) {
           // The earlier keys completed an action; this key starts over (core rule 5) and decides
           // for itself whether it is consumed.
-          this._run(state, result);
+          this._run(win, state, result);
           this._dispatch(win, state, e, this._mode(state), chord);
           return;
         }
-        if (first && !modal && !(result.action.id in RUNNERS)) return;
+        if (first && !modal && !RUNNABLE.has(result.action.id)) return;
         consume(e);
-        this._run(state, result);
+        this._run(win, state, result);
       }
     }
   },
 
   /**
+   * Runs a completed action, or says it is not implemented yet. Single keys the host cannot run
+   * never get here: `_dispatch` leaves them to Firefox, without a notice.
+   * @param {Window} win
    * @param {WindowState} state
    * @param {DispatchResult | null} result
    */
-  _run(state, result) {
+  _run(win, state, result) {
     if (result?.kind !== "action") return;
-    RUNNERS[result.action.id]?.(state, result.action);
+    const runner = RUNNERS[result.action.id];
+    if (runner) runner(state, result.action, win);
+    else state.notice.show(notImplementedText(result.action));
   },
 
   /**

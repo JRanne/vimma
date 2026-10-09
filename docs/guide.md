@@ -44,7 +44,7 @@ Vimma has two key layers and one dispatcher, which sees every key before Firefox
 in the URL bar, `about:` pages and the PDF viewer.
 
 - **The prefix layer (Herdr).** `ctrl+b` is the prefix. The next key is a command: `ctrl+b ?`
-  shows the bindings, and later `ctrl+b c` opens a tab, `ctrl+b v` splits the pane, and so on.
+  shows the bindings, `ctrl+b c` opens a tab, and later `ctrl+b v` splits the pane, and so on.
   The prefix works in every mode and waits for the next key with no timeout. `Esc` cancels it.
 - **The modal layer (Neovim) — planned, M1.** Bare keys act on the page depending on the mode:
   `j`/`k` scroll in `normal` mode, while in `insert` mode (focus in a text field) keys go to the
@@ -53,7 +53,8 @@ in the URL bar, `about:` pages and the PDF viewer.
 
 **Today** every page is in `insert` mode, because nothing can yet tell whether focus is in a
 text field. Bare keys and Firefox's own shortcuts reach the page as in Firefox. Only `ctrl+b`
-sequences are Vimma's.
+sequences are Vimma's. A single-key binding that does not run yet (`Esc`, `ctrl+i`, `ctrl+u`)
+still does what it does in Firefox.
 
 ## Keys
 
@@ -67,19 +68,24 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `ctrl+b ?`                  | Opens the bindings overlay over any page, including `about:preferences` and the PDF viewer. Press it again to close.                                          |
 | `/` (in the overlay)        | Filters the list as you type.                                                                                                                                 |
 | `Esc` or `q` (overlay)      | Closes the overlay. Focus returns to where it was.                                                                                                            |
-| `ctrl+b` then anything else | Consumed and does nothing yet (the key never leaks to the page). `ctrl+b` no longer opens Firefox's bookmarks sidebar.                                        |
+| `ctrl+b c`                  | Opens a new tab (Firefox's new-tab page, URL bar focused), as `ctrl+t` does.                                                                                  |
+| `ctrl+b n` / `ctrl+b p`     | Next / previous tab, wrapping around at the ends. Hidden tabs are skipped.                                                                                    |
+| `ctrl+b 1..9`               | Tab 1 to 9, counting visible tabs. With fewer tabs than N, nothing happens.                                                                                   |
+| `ctrl+b shift+x`            | Closes the selected tab, pinned or not. The last tab closes the window, as `ctrl+w` does (`browser.tabs.closeWindowWithLastTab`).                             |
+| `ctrl+b` then anything else | Never leaks to the page. A binding that does not run yet shows "… not implemented yet" for 1.5 s; an unbound key does nothing. No more bookmarks sidebar.     |
 | Firefox's own keys          | Unchanged: `ctrl+t`, `ctrl+w`, `ctrl+tab`, `ctrl+shift+tab`, `ctrl+pagedown`, `alt+1..9` (tab N on Linux), `ctrl+l`, `ctrl+f`, `ctrl+u`, `ctrl+i`, and so on. |
 
-While the overlay is open it takes every key, so `ctrl+w` cannot close the tab behind it.
+While the overlay is open it takes every key, so `ctrl+w` cannot close the tab behind it. Rows
+for bindings that do not run yet are dimmed, under a legend that says so.
 
 **Planned:**
 
 - **M1, the modal page layer:** scrolling (`j k h l`, `d`/`u`, `gg`/`G`), back and forward
   (`H`/`L`), reload (`r`), link hints (`f`/`F`), find (`/ ? n N`), the `:` command line, copy mode
   (`v`, `ctrl+b [`), `i` to focus the first input, and `Esc` back to normal mode.
-- **M2, tabs:** `ctrl+b c` new tab, `ctrl+b 1..9`, `ctrl+b n`/`p`, `ctrl+b shift+t` rename,
-  `ctrl+b shift+x` close, `t`, `x`, `gt`/`gT`, the `ctrl+b g` picker, the status bar and the
-  which-key strip.
+- **M2, the rest of tabs:** `ctrl+b shift+t` rename, the `ctrl+b g` picker, the status bar and
+  the which-key strip. `t`, `x`, `gt`/`gT` and `3gt` already run the same tab commands once M1's
+  normal mode exists.
 - **M3, workspaces and the side panel:** `ctrl+i`/`ctrl+u` next/previous workspace, the
   `ctrl+b w` picker, new/rename/close workspace, and `ctrl+b b` or `<leader>n` for the side panel.
   Until then `ctrl+i` and `ctrl+u` keep Firefox's meaning (page info, view source).
@@ -153,8 +159,8 @@ Firefox. On GNOME or KDE with client-side decorations they move to the navigatio
 **Did `ctrl+b` stop opening bookmarks?** Yes, it is Vimma's prefix. Use `ctrl+shift+o` for the
 bookmarks library.
 
-**`ctrl+b c` (or another binding) does nothing.** Only `ctrl+b ?` runs today. See
-[Keys](#keys) for when each binding arrives.
+**A binding says "not implemented yet".** Only `ctrl+b ?` and the tab keys run today; the
+overlay dims the rest. See [Keys](#keys) for when each binding arrives.
 
 **Where are crash reports?** Nothing is sent anywhere. Use `coredumpctl list vimma`, then
 `coredumpctl info` on the entry.

@@ -6,9 +6,10 @@ delete its line in the same PR.
 
 ## Features
 
-- Only `ctrl+b ?` runs. Every other binding in the overlay and in [bindings.md](bindings.md) is
-  planned, and other `ctrl+b` sequences are consumed and do nothing
-  ([m0-help-overlay](specs/m0-help-overlay.md), Settled).
+- Only `ctrl+b ?` and the tab keys (`ctrl+b c`, `n`, `p`, `1..9`, `shift+x`) run. The other
+  bindings are dimmed in the overlay; their `ctrl+b` sequences are consumed and show "… not
+  implemented yet" ([m2-tab-keys](specs/m2-tab-keys.md), Settled).
+- Tab keys count Firefox's visible tabs; workspaces (M3) will narrow them to the current one.
 - Every page is in `insert` mode until M1's content actor can detect editable focus. Bare keys go
   to the page ([m0-help-overlay](specs/m0-help-overlay.md)).
 - Single-key actions the host cannot run yet (`Esc`, `ctrl+i`, `ctrl+u`) pass through to Firefox.
