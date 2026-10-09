@@ -226,12 +226,12 @@ add_task(async function unimplemented_prefix_action_shows_a_notice_that_hides() 
 
 add_task(async function passed_through_single_key_shows_no_notice() {
   const tabs = await openTabs(1);
-  EventUtils.synthesizeKey("f"); // hint.follow: not built yet, so left to the page
+  EventUtils.synthesizeKey("r"); // reload: not built yet, so left to the page
   EventUtils.synthesizeKey("KEY_Escape"); // unbound in normal mode
   Assert.deepEqual(
     await pageKeysThenZ(tabs[0]),
-    ["f", "Escape", "z"],
-    "f and Esc reach the page, not default-prevented",
+    ["r", "Escape", "z"],
+    "r and Esc reach the page, not default-prevented",
   );
   Assert.ok(!noticeShown(), "and show no notice");
   closeTabs(tabs);

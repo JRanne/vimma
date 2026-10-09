@@ -28,7 +28,7 @@ Status: implemented (core), awaiting review; host wiring pending · Milestone: M
 | Module         | Exports                                                                                                                                                          |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `editable.mjs` | `isEditable`, `insertModeAfterFocus`, `matchSiteRule`, `TEXT_INPUT_EXCLUDED_TYPES`, `EDITABLE_ROLES`, `KNOWN_EDITORS`, `INSERT_SITE_MODES`, `INSERT_TRIGGERS`    |
-| `hints.mjs`    | `DEFAULT_HINT_CHARS`, `HINT_ACTIONS`, `hintLabels`, `orderTargets`, `startHints`, `hintKey`, `visibleHints`, `HintError`                                         |
+| `hints.mjs`    | `DEFAULT_HINT_CHARS`, `HINT_ACTIONS`, `hintLabels`, `orderTargets`, `startHints`, `hintKey`, `visibleHints`, `HintError`, `parseHintReply` (m1-hints)            |
 | `cmdline.mjs`  | `COMMANDS`, `PENDING_ACTIONS`, `parseCommandLine`, `completeCommandLine`, `createHistory`, `pushHistory`, `historyPrevious`, `historyNext`, `resetHistoryCursor` |
 | `escape.mjs`   | `resolveEscape`                                                                                                                                                  |
 | `actions.mjs`  | changed: `close_pane` reads "Close pane; the last pane closes the tab"                                                                                           |
