@@ -2,7 +2,9 @@
 # GitHub-hosted runner. The engine is the Firefox release source tarball with our patches and
 # front end; the compiled binaries are Mozilla's own build of that exact release (the revision
 # in engine/sourcestamp.txt), downloaded from Taskcluster by `mach build`. No self-hosted runner,
-# no secrets: safe for pull requests from forks once the repo is public (read-only token).
+# no secrets: safe for pull requests from forks once the repo is public (read-only token). So no
+# Google Safe Browsing key either: the build is keyless, as browser_vimma_safebrowsing.js checks
+# (spec m0-safebrowsing-key). Never add SAFEBROWSING_API_KEY here.
 # The socket-driven e2e and screenshot diffs (plan §4) join this job when they exist.
 name: e2e
 

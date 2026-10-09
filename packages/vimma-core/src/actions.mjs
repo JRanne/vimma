@@ -248,3 +248,23 @@ export function closest(text, pool) {
   }
   return bestD <= Math.max(2, Math.floor(text.length / 3)) ? best : undefined;
 }
+
+/**
+ * The human label of a dispatched action: the description of the action with its id and arg,
+ * else the id itself.
+ * @param {{ id: string, arg?: number }} action
+ * @returns {string}
+ */
+export function describeAction(action) {
+  const def = byId.get(action.id)?.find((a) => a.arg === action.arg);
+  return def?.description ?? action.id;
+}
+
+/**
+ * What the host shows for a bound action it cannot run yet (spec: docs/specs/m2-tab-keys.md).
+ * @param {{ id: string, arg?: number }} action
+ * @returns {string}
+ */
+export function notImplementedText(action) {
+  return `${describeAction(action)}: not implemented yet`;
+}

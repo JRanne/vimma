@@ -63,7 +63,7 @@ Vimma has two key layers and one dispatcher, which sees every key before Firefox
 in the URL bar, `about:` pages and the PDF viewer.
 
 - **The prefix layer (Herdr).** `ctrl+b` is the prefix. The next key is a command: `ctrl+b ?`
-  shows the bindings, and later `ctrl+b c` opens a tab, `ctrl+b v` splits the pane, and so on.
+  shows the bindings, `ctrl+b c` opens a tab, and later `ctrl+b v` splits the pane, and so on.
   The prefix works in every mode and waits for the next key with no timeout. `Esc` cancels it.
 - **The modal layer (Neovim).** Bare keys act on the page depending on the mode: `j`/`k` scroll
   in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page. Planned
@@ -103,6 +103,12 @@ starts the planned `ctrl+w h/j/k/l` pane keys (M4), but until they work `ctrl+w`
 the tab. `g` starts `gg`, which works, so `g` is Vimma's: the page does not see it, and `Esc`
 cancels it.
 
+**A binding that does not work yet is never silent once it is Vimma's.** A `ctrl+b` sequence, or
+a count followed by a key (`3H`), whose command is not built yet shows "… not implemented yet"
+in the bottom-right corner for 1.5 s (not while a video or page is fullscreen). A single key
+that is not built yet (`/`, `ctrl+i`, …) is not Vimma's yet: it reaches the page or
+Firefox, with no message. The `ctrl+b ?` overlay dims the bindings that do not work yet.
+
 ### Link hints
 
 `f` puts a yellow label on everything you could click on screen: links, buttons, form fields,
@@ -139,21 +145,26 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `ctrl+b ?`                  | Opens the bindings overlay over any page, including `about:preferences` and the PDF viewer. Press it again to close.                                          |
 | `/` (in the overlay)        | Filters the list as you type.                                                                                                                                 |
 | `Esc` or `q` (overlay)      | Closes the overlay. Focus returns to where it was.                                                                                                            |
-| `ctrl+b` then anything else | Consumed and does nothing yet (the key never leaks to the page). `ctrl+b` no longer opens Firefox's bookmarks sidebar.                                        |
+| `ctrl+b c`, `t`             | Opens a new tab (Firefox's new-tab page, URL bar focused), as `ctrl+t` does. `t` in normal mode.                                                              |
+| `ctrl+b n` / `ctrl+b p`     | Next / previous tab, wrapping around at the ends. Hidden tabs are skipped. `gt` / `gT` in normal mode; `3gt` goes to tab 3.                                   |
+| `ctrl+b 1..9`               | Tab 1 to 9, counting visible tabs (pinned tabs first). With fewer tabs than N, nothing happens.                                                               |
+| `ctrl+b shift+x`, `x`       | Closes the tab, as `ctrl+w` does: on a pinned tab it selects the first unpinned tab instead; the last tab closes the window. `x` in normal mode.              |
+| `ctrl+b` then anything else | Never leaks to the page. A binding that does not run yet shows "… not implemented yet" for 1.5 s; an unbound key does nothing. No more bookmarks sidebar.     |
 | Firefox's own keys          | Unchanged: `ctrl+t`, `ctrl+w`, `ctrl+tab`, `ctrl+shift+tab`, `ctrl+pagedown`, `alt+1..9` (tab N on Linux), `ctrl+l`, `ctrl+f`, `ctrl+u`, `ctrl+i`, and so on. |
 
-While the overlay is open it takes every key, so `ctrl+w` cannot close the tab behind it. In
-normal mode bare digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
+While the overlay is open it takes every key, so `ctrl+w` cannot close the tab behind it. Rows
+for bindings that do not run yet are dimmed, under a legend that says so. In normal mode bare
+digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 
 **Planned:**
 
 - **M1, the rest of the modal page layer:** back and forward (`H`/`L`), reload (`r`), find
   (`/ ? n N`), the `:` command line and copy mode (`v`, `ctrl+b [`). Until then these keys
   reach the page as before.
-- **M2, tabs:** `ctrl+b c` new tab, `ctrl+b 1..9`, `ctrl+b n`/`p`, `ctrl+b shift+t` rename
-  (kept across restarts; an empty name restores the page title), `ctrl+b shift+x` close, `t`, `x`,
-  `gt`/`gT`, the `ctrl+b g` picker (`j`/`k` to move, `/` to search titles, URLs, workspaces and
-  renames, `Enter` to go, `Esc` to back out), the status bar and the which-key strip.
+- **M2, the rest of tabs:** `ctrl+b shift+t` rename (kept across restarts; an empty name
+  restores the page title), the `ctrl+b g` picker (`j`/`k` to move, `/` to search titles, URLs,
+  workspaces and renames, `Enter` to go, `Esc` to back out), the status bar and the which-key
+  strip.
 - **M3, workspaces and the side panel:** `ctrl+i`/`ctrl+u` next/previous workspace, the
   `ctrl+b w` picker, new/rename/close workspace, and `ctrl+b b` or `<leader>n` for the side panel.
   Until then `ctrl+i` and `ctrl+u` keep Firefox's meaning (page info, view source).
@@ -192,13 +203,37 @@ Vimma changes Firefox's defaults, without locking them: each one can be changed 
 | Telemetry upload                         | Not built in (no official telemetry). The data-collection switches in Settings are off to match.                                                                                                      |
 
 Kept as in Firefox: Remote Settings (CRLite certificate revocation, intermediate certificates),
-the add-on blocklist, Firefox Sync and add-ons from addons.mozilla.org. Safe Browsing is switched
-on but **does not work yet**: see the FAQ. Firefox's app updater and system add-on updates still
-contact Mozilla's update server; see [limits.md](limits.md).
+the add-on blocklist, Firefox Sync, add-ons from addons.mozilla.org and Google Safe Browsing
+(see below). Firefox's app updater and system add-on updates still contact Mozilla's update
+server; see [limits.md](limits.md).
 
 Sites see Firefox 157's user agent, with no Vimma token, and add-ons see Firefox's version
 (`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. `vimma --version` and the About
 dialog show Vimma's own version (`0.1.0`).
+
+### Safe Browsing
+
+Google Safe Browsing is on by default, as in Firefox: Vimma downloads Google's lists of phishing,
+malware and unwanted-software sites and warns before you open one. Your browsing stays local:
+only when an address matches the local list does Vimma send Google a short hash prefix of it to
+confirm. Spec: [m0-safebrowsing-key](specs/m0-safebrowsing-key.md).
+
+Firefox's extra download checks (Google's lists of bad and known-good downloads, and its file
+reputation service) are open only to Mozilla's own key, so Vimma does not use them: the "Block
+dangerous downloads" box adds nothing beyond the site lists ([limits.md](limits.md)).
+
+To turn Safe Browsing off: Settings → Privacy & Security → untick "Block dangerous
+and deceptive content". In `about:config` that is `browser.safebrowsing.phishing.enabled` and
+`browser.safebrowsing.malware.enabled` = `false`.
+
+A Vimma you build yourself has Safe Browsing only if you build it with a Google API key
+([runbook](runbook.md)). Without one it fetches no lists, and Settings shows the protection off.
+
+Whether or not you use Safe Browsing, we recommend [uBlock Origin](https://ublockorigin.com/)
+from addons.mozilla.org as a second line: in its dashboard → Filter lists, keep "uBlock filters
+– Badware risks" on and tick the lists under "Malware protection, security" (Online Malicious URL
+Blocklist, Phishing URL Blocklist). They block known malware and phishing sites without asking
+any server about the pages you visit.
 
 ## Firefox behaviour Vimma changes
 
@@ -221,9 +256,10 @@ the version that last used them. Builds from before the app-version change repor
 instead of `157.0.1`, so they treat any newer profile as a downgrade. Give each build its own
 `--profile`, or start with `--allow-downgrade` if you accept the risk.
 
-**Does Safe Browsing protect me?** Not yet. The phishing and malware lists need a Google API key
-that the build does not have yet, so no lists are fetched, even though Settings shows "Block
-dangerous and deceptive content" ticked. Mozilla's tracking-protection lists do update.
+**Does Safe Browsing protect me?** Yes, in builds made with a Google API key, which are on by
+default (see [Safe Browsing](#safe-browsing)). A build without a key fetches no phishing or
+malware lists; Settings then shows "Block dangerous and deceptive content" unticked, and ticking
+it does not help. Mozilla's tracking-protection lists update either way.
 
 **Does Vimma update itself?** No. There are no releases yet, so build a newer `main` yourself.
 Firefox's updater is still built in and asks Mozilla's update server (`aus5.mozilla.org`), which
@@ -241,8 +277,8 @@ Firefox. On GNOME or KDE with client-side decorations they move to the navigatio
 **Did `ctrl+b` stop opening bookmarks?** Yes, it is Vimma's prefix. Use `ctrl+shift+o` for the
 bookmarks library.
 
-**`ctrl+b c` (or another binding) does nothing.** Only `ctrl+b ?` runs today. See
-[Keys](#keys) for when each binding arrives.
+**A binding says "not implemented yet".** Only the keys under [Keys](#keys) run today; the
+overlay dims the rest. See [Keys](#keys) for when each binding arrives.
 
 **Where are crash reports?** Nothing is sent anywhere. Use `coredumpctl list vimma`, then
 `coredumpctl info` on the entry.

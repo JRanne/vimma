@@ -46,23 +46,27 @@ What works today:
   other sites; typing a label follows or focuses it. `F` opens a link in a background tab.
 - **`ctrl+b ?`** opens an overlay listing every binding, over any page, including
   `about:preferences` and the PDF viewer. `/` filters the list and `Esc` or `q` closes it.
+  Bindings that do not run yet are dimmed.
+- **Herdr tab keys.** `ctrl+b c` new tab, `ctrl+b n`/`p` next/previous (wrapping),
+  `ctrl+b 1..9` tab N, `ctrl+b shift+x` close tab, from any page and the URL bar; in normal
+  mode also `t`, `x`, `gt`/`gT`.
 - **Hidden tab strip.** Firefox's tab strip is hidden. Firefox's own tab keys (`ctrl+t`,
   `ctrl+w`, `ctrl+tab`, `alt+1..9`, …) still work. Set `vimma.ui.tabstrip.hidden` to `false` in
   `about:config` to bring the strip back.
 - **Privacy defaults.** Mozilla studies, experiments and rollouts (Normandy, Nimbus) are off, and
   so are sponsored new-tab content, sponsored suggestions and Mozilla promos. The build has no
   crash reporter and no official telemetry, so nothing is uploaded. Remote Settings, CRLite,
-  the add-on blocklist, Sync and AMO work as in Firefox. Each default can be turned back on in
-  `about:config`.
+  the add-on blocklist, Sync and AMO work as in Firefox. Google Safe Browsing is on in builds
+  made with a Google API key; a build without one shows it off in Settings. Each default can be
+  turned back on, or off, in `about:config`.
 - **Firefox-compatible.** Sites see Firefox 157's user agent, byte for byte. Add-ons, webcompat
   fixes and Remote Settings see Firefox's version number.
 
-What does not work yet: every other binding in the overlay. The overlay lists the full planned
-keymap, but only `ctrl+b ?`, scrolling, insert mode and link hints run today. Other `ctrl+b`
-sequences do nothing. The rest of the modal page layer (find, `:` command line, copy mode) is
-M1. Vimma's own tab keys, the
-status bar, the which-key strip and the `ctrl+b g` picker are M2. Workspaces, split panes,
-`config.toml` and theming come later. The parser and validator for `config.toml` exist in
+What does not work yet: the dimmed bindings in the overlay. The overlay lists the full planned
+keymap; a `ctrl+b` sequence that does not run yet shows "… not implemented yet" for a moment.
+The rest of the modal page layer (find, `:` command line, copy mode) is M1. Tab
+rename, the status bar, the which-key strip and the `ctrl+b g` picker are M2. Workspaces, split
+panes, `config.toml` and theming come later. The parser and validator for `config.toml` exist in
 `vimma-core`, but the browser does not read the file yet. See [docs/guide.md](docs/guide.md) and
 [docs/limits.md](docs/limits.md).
 
