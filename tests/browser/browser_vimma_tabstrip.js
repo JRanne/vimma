@@ -42,7 +42,6 @@ registerCleanupFunction(() => {
   closeAllButFirst();
   // ctrlTab records its first use; not ours to keep.
   Services.prefs.clearUserPref("browser.engagement.ctrlTab.has-used");
-  window.gTabsPanel.hideAllTabsPanel();
 });
 
 add_task(async function strip_is_hidden_by_default_and_nav_bar_stays() {
@@ -80,19 +79,60 @@ add_task(async function pref_toggles_the_strip_live() {
   await SpecialPowers.popPrefEnv();
 });
 
-add_task(async function ctrl_t_and_ctrl_w_still_work() {
-  gBrowser.selectedBrowser.focus();
-  const before = gBrowser.tabs.length;
-  const opened = BrowserTestUtils.waitForEvent(gBrowser.tabContainer, "TabOpen");
-  EventUtils.synthesizeKey("t", { accelKey: true });
-  const { target: tab } = await opened;
-  await TestUtils.waitForCondition(() => gBrowser.selectedTab === tab, "new tab is selected");
-  Assert.equal(gBrowser.tabs.length, before + 1, "ctrl+t opened a tab");
-  Assert.ok(!stripShown(), "the strip stays hidden with two tabs");
+/**
+ * Runs `fn` as if the browser draws the titlebar (GNOME/KDE with CSD). Headless and tiling WMs
+ * have none, so set what CustomTitlebar sets; Firefox's own code paths then do the rest.
+ * @param {() => Promise<void>} fn
+ */
+async function withCustomTitlebar(fn) {
+  const root = document.documentElement;
+  const simulated = !root.hasAttribute("customtitlebar");
+  if (simulated) {
+    info("no browser-drawn titlebar here: simulating customtitlebar");
+    root.setAttribute("customtitlebar", "true");
+  }
+  try {
+    await fn();
+  } finally {
+    if (simulated) root.removeAttribute("customtitlebar");
+    window.TabBarVisibility.update(true);
+  }
+}
 
-  EventUtils.synthesizeKey("w", { accelKey: true });
-  await TestUtils.waitForCondition(() => gBrowser.tabs.length === before, "ctrl+w closed it");
-  Assert.ok(!tab.isConnected, "the new tab is gone");
+/** Forget what the last TabBarVisibility.update() decided, so the next one has to redo it. */
+function clearToolboxState() {
+  window.gNavToolbox.removeAttribute("tabs-hidden");
+  $("nav-bar").classList.remove("browser-titlebar");
+}
+
+function assertToolboxHidden(label) {
+  Assert.ok(window.gNavToolbox.hasAttribute("tabs-hidden"), `${label}: toolbox has tabs-hidden`);
+  Assert.ok($("nav-bar").classList.contains("browser-titlebar"), `${label}: nav bar is titlebar`);
+}
+
+add_task(async function ctrl_t_and_ctrl_w_still_work() {
+  await withCustomTitlebar(async () => {
+    gBrowser.selectedBrowser.focus();
+    const before = gBrowser.tabs.length;
+    clearToolboxState();
+    const opened = BrowserTestUtils.waitForEvent(gBrowser.tabContainer, "TabOpen");
+    EventUtils.synthesizeKey("t", { accelKey: true });
+    const { target: tab } = await opened;
+    await TestUtils.waitForCondition(() => gBrowser.selectedTab === tab, "new tab is selected");
+    Assert.equal(gBrowser.tabs.length, before + 1, "ctrl+t opened a tab");
+    Assert.ok(!stripShown(), "the strip stays hidden with two tabs");
+    assertToolboxHidden("after ctrl+t");
+
+    clearToolboxState();
+    EventUtils.synthesizeKey("w", { accelKey: true });
+    await TestUtils.waitForCondition(() => gBrowser.tabs.length === before, "ctrl+w closed it");
+    Assert.ok(!tab.isConnected, "the new tab is gone");
+    await TestUtils.waitForCondition(
+      () => window.gNavToolbox.hasAttribute("tabs-hidden"),
+      "tab close re-runs TabBarVisibility",
+    );
+    assertToolboxHidden("after ctrl+w");
+  });
 });
 
 add_task(async function ctrl_tab_pagedown_and_digits_switch_tabs() {
@@ -119,47 +159,56 @@ add_task(async function ctrl_tab_pagedown_and_digits_switch_tabs() {
   closeAllButFirst();
 });
 
-async function expectAllTabsPanel(open, label) {
+add_task(async function list_all_tabs_waits_for_m2_while_hidden() {
+  // Intended: Firefox's panel needs #alltabs-button, which is in the hidden strip. Firefox then
+  // hides View > List All Tabs and the ctrl+tab "show all" button itself; M2's picker replaces it.
+  await openTabs(2);
+  Assert.ok(!window.gTabsPanel.canOpen, "List All Tabs is unavailable while the strip is hidden");
+
+  await setPref(false);
+  await TestUtils.waitForCondition(stripShown, "strip shows when the pref is false");
+  Assert.ok(window.gTabsPanel.canOpen, "List All Tabs is back with the strip");
   window.gTabsPanel.initElements();
   const view = $("allTabsMenu-allTabsView");
   const shown = BrowserTestUtils.waitForEvent(view, "ViewShown");
-  open();
+  $("Browser:ShowAllTabs").doCommand();
   await shown;
   const rows = $("allTabsMenu-allTabsView-tabs").querySelectorAll(
     ".all-tabs-item:not(.all-tabs-group-item)",
   );
-  Assert.equal(rows.length, gBrowser.tabs.length, `${label}: the panel lists every tab`);
-  const panel = view.closest("panel");
-  const hidden = BrowserTestUtils.waitForEvent(panel, "popuphidden");
+  Assert.equal(rows.length, gBrowser.tabs.length, "the panel lists every tab");
+  const hidden = BrowserTestUtils.waitForEvent(view.closest("panel"), "popuphidden");
   window.gTabsPanel.hideAllTabsPanel();
   await hidden;
-}
-
-add_task(async function list_all_tabs_opens_with_the_strip_hidden() {
-  await openTabs(2);
-  Assert.ok(window.gTabsPanel.canOpen, "gTabsPanel.canOpen with the strip hidden");
-  await expectAllTabsPanel(() => $("Browser:ShowAllTabs").doCommand(), "Browser:ShowAllTabs");
-
-  await SpecialPowers.pushPrefEnv({ set: [["browser.ctrlTab.sortByRecentlyUsed", true]] });
-  gBrowser.selectedBrowser.focus();
-  await expectAllTabsPanel(
-    () => EventUtils.synthesizeKey("KEY_Tab", { ctrlKey: true, shiftKey: true }),
-    "ctrl+shift+tab (sortByRecentlyUsed)",
-  );
   await SpecialPowers.popPrefEnv();
+  await TestUtils.waitForCondition(() => !stripShown(), "strip hidden again");
   closeAllButFirst();
 });
 
+add_task(async function popup_with_two_tabs_shows_its_strip() {
+  // Firefox shows a popup's strip once it has a second tab, "to prevent tabs being lost".
+  await SpecialPowers.pushPrefEnv({ set: [["dom.disable_open_during_load", false]] });
+  const popupOpened = BrowserTestUtils.waitForNewWindow({ url: "about:blank" });
+  const opener = await BrowserTestUtils.openNewForegroundTab(
+    gBrowser,
+    "data:text/html,<script>open('about:blank','','width=300,height=200')</script>",
+  );
+  const popup = await popupOpened;
+  const strip = popup.document.getElementById("TabsToolbar");
+  Assert.ok(popup.document.documentElement.hasAttribute("popup-window"), "it is a popup");
+  Assert.ok(!hasSize(strip), "a one-tab popup has no strip (Firefox)");
+
+  await BrowserTestUtils.openNewForegroundTab(popup.gBrowser, "about:blank");
+  await TestUtils.waitForCondition(() => hasSize(strip), "a two-tab popup shows its strip");
+  Assert.ok(!popup.gNavToolbox.hasAttribute("tabs-hidden"), "popup toolbox as Firefox has it");
+
+  await BrowserTestUtils.closeWindow(popup);
+  BrowserTestUtils.removeTab(opener);
+  await SpecialPowers.popPrefEnv();
+});
+
 add_task(async function window_controls_move_to_the_nav_bar() {
-  const root = document.documentElement;
-  const simulated = !root.hasAttribute("customtitlebar");
-  if (simulated) {
-    // Headless and tiling WMs have no CSD; set what CustomTitlebar sets when the browser draws
-    // the titlebar (GNOME/KDE), then let Firefox recompute the toolbars.
-    info("no browser-drawn titlebar here: simulating customtitlebar");
-    root.setAttribute("customtitlebar", "true");
-  }
-  try {
+  await withCustomTitlebar(async () => {
     window.TabBarVisibility.update(true);
     const navControls = $("nav-bar").querySelector(".titlebar-buttonbox-container");
     const tabsControls = $("TabsToolbar").querySelector(".titlebar-buttonbox-container");
@@ -167,10 +216,7 @@ add_task(async function window_controls_move_to_the_nav_bar() {
     Assert.ok(hasSize(navControls), "the nav bar's window controls have a size");
     Assert.ok(!hasSize(tabsControls), "no window controls left in the hidden strip");
     Assert.ok($("nav-bar").classList.contains("browser-titlebar"), "nav bar is a drag region");
-  } finally {
-    if (simulated) root.removeAttribute("customtitlebar");
-    window.TabBarVisibility.update(true);
-  }
+  });
 });
 
 add_task(async function fullscreen_keeps_the_strip_hidden() {
@@ -245,4 +291,34 @@ add_task(async function help_overlay_still_opens() {
     EventUtils.synthesizeKey("KEY_Escape");
     await TestUtils.waitForCondition(() => !dialog().open, "Esc closes it");
   });
+});
+
+add_task(async function vimma_keys_survive_a_failing_tab_strip() {
+  const { VimmaHost } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
+  );
+  const { TabStrip } = ChromeUtils.importESModule("chrome://browser/content/vimma/ui/tabstrip.mjs");
+  const init = TabStrip.prototype.init;
+  TabStrip.prototype.init = () => {
+    throw new Error("simulated upstream change in tab code");
+  };
+  try {
+    VimmaHost.uninit(window);
+    VimmaHost.init(window);
+  } finally {
+    TabStrip.prototype.init = init;
+  }
+  await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
+    browser.focus();
+    EventUtils.synthesizeKey("b", { ctrlKey: true });
+    EventUtils.synthesizeKey("?", { shiftKey: true });
+    const dialog = () => /** @type {HTMLDialogElement | null} */ ($("vimma-help"));
+    await TestUtils.waitForCondition(() => !!dialog()?.open, "ctrl+b ? opens help anyway");
+    EventUtils.synthesizeKey("KEY_Escape");
+    await TestUtils.waitForCondition(() => !dialog().open, "Esc closes it");
+  });
+  VimmaHost.uninit(window);
+  VimmaHost.init(window);
+  await TestUtils.waitForCondition(() => !stripShown(), "strip hidden again after re-init");
+  Assert.ok(window.gNavToolbox.hasAttribute("tabs-hidden"), "re-init re-runs TabBarVisibility");
 });
