@@ -48,6 +48,8 @@ describe("parseCommandLine: plan §2 commands", () => {
     [":ls", run("ls", "goto.picker")],
     [":sidebar", run("sidebar", "sidebar.toggle")],
     [":map", run("map", "help.show")],
+    [":help", run("help", "help.show")],
+    [":h", run("help", "help.show")],
     [":source", run("source", "config.reload")],
     [":open example.com", run("open", "page.open", { text: "example.com" })],
     ["  :  open   example.com  ", run("open", "page.open", { text: "example.com" })],
@@ -151,8 +153,12 @@ describe("command table", () => {
   });
 
   test("PENDING_ACTIONS are exactly the missing ones, not yet in actions.mjs", () => {
-    expect(PENDING_ACTIONS).toEqual(["page.open", "workspace.switch"]);
+    expect(PENDING_ACTIONS).toEqual(["workspace.switch"]);
     for (const id of PENDING_ACTIONS) expect(ids.has(id)).toBe(false);
+  });
+
+  test(":open's page.open is an action now (m1-cmdline): open_url, unbound by default", () => {
+    expect(getAction("open_url")).toMatchObject({ id: "page.open", group: "Navigation" });
   });
 
   test("command names and aliases are unique and every command has a description", () => {

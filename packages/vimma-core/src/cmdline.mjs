@@ -71,6 +71,7 @@ export const COMMANDS = Object.freeze([
   cmd("ls", "none", "goto.picker", "Goto picker: every tab in every workspace"),
   cmd("sidebar", "none", "sidebar.toggle", "Open / close the side panel"),
   cmd("map", "none", "help.show", "Show all bindings"),
+  cmd("help", "none", "help.show", "Show all bindings", { aliases: ["h"] }),
   cmd("source", "none", "config.reload", "Reload config"),
 ]);
 
@@ -78,7 +79,7 @@ export const COMMANDS = Object.freeze([
  * Action ids the commands use that actions.mjs does not define yet. The host spec adds them
  * (with `npm run gen-docs`) and empties this list.
  */
-export const PENDING_ACTIONS = Object.freeze(["page.open", "workspace.switch"]);
+export const PENDING_ACTIONS = Object.freeze(["workspace.switch"]);
 
 /** @type {Map<string, CommandDef>} */
 const byWord = new Map();
