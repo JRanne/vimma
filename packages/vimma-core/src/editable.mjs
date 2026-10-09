@@ -102,6 +102,68 @@ const EDITABLE_CE = new Set(["true", "", "plaintext-only"]);
  */
 const result = (editable, reason) => Object.freeze({ editable, reason });
 
+/** Longest string field `parseDescriptor` accepts (tag names, types, roles, classes). */
+export const DESCRIPTOR_MAX_STRING = 256;
+/** Most class tokens `parseDescriptor` accepts. */
+export const DESCRIPTOR_MAX_CLASSES = 64;
+
+/** @param {unknown} v */
+const isShortString = (v) => typeof v === "string" && v.length <= DESCRIPTOR_MAX_STRING;
+/** @type {readonly ["readOnly", "disabled", "isContentEditable", "ariaReadOnly", "ariaDisabled", "designMode"]} */
+const BOOLEAN_FIELDS = Object.freeze([
+  "readOnly",
+  "disabled",
+  "isContentEditable",
+  "ariaReadOnly",
+  "ariaDisabled",
+  "designMode",
+]);
+
+/**
+ * A descriptor received from a content process, which may be compromised: a fresh copy with
+ * only the known fields, each of its exact type and within the length caps, or null if any
+ * field is wrong. Never throws.
+ * @param {unknown} value
+ * @returns {EditableDescriptor | null}
+ */
+export function parseDescriptor(value) {
+  try {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+    const v = /** @type {Record<string, unknown>} */ (value);
+    const { tagName, type, contentEditable, role, classes } = v;
+    if (!isShortString(tagName) || tagName === "") return null;
+    /** @type {EditableDescriptor} */
+    const d = { tagName: /** @type {string} */ (tagName) };
+    if (type !== undefined) {
+      if (!isShortString(type)) return null;
+      d.type = /** @type {string} */ (type);
+    }
+    if (contentEditable !== undefined) {
+      if (!isShortString(contentEditable)) return null;
+      d.contentEditable = /** @type {string} */ (contentEditable);
+    }
+    if (role !== undefined) {
+      if (role !== null && !isShortString(role)) return null;
+      d.role = /** @type {string | null} */ (role);
+    }
+    for (const key of BOOLEAN_FIELDS) {
+      const b = v[key];
+      if (b === undefined) continue;
+      if (typeof b !== "boolean") return null;
+      d[key] = b;
+    }
+    if (classes !== undefined) {
+      if (!Array.isArray(classes) || classes.length > DESCRIPTOR_MAX_CLASSES) return null;
+      const copy = [...classes];
+      if (!copy.every(isShortString)) return null;
+      d.classes = /** @type {string[]} */ (copy);
+    }
+    return d;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Whether keys typed into the described element belong to the page (insert mode).
  * @param {EditableDescriptor} d

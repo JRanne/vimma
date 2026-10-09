@@ -54,6 +54,31 @@ function describe(el) {
   return d;
 }
 
+/** Overflow values that lock an axis: a site's modal sets one on <html> or <body>. */
+const LOCKED = new Set(["hidden", "clip"]);
+
+/**
+ * @param {Element} el
+ * @param {boolean} vertical
+ */
+function overflowOf(el, vertical) {
+  const style = el.ownerDocument.defaultView?.getComputedStyle(el);
+  return (vertical ? style?.overflowY : style?.overflowX) ?? "visible";
+}
+
+/**
+ * Whether the page itself is scroll-locked on this axis. <body>'s overflow applies to the
+ * viewport only while <html>'s is `visible` (CSS Overflow 3, § 3.3).
+ * @param {Document} doc
+ * @param {boolean} vertical
+ */
+function documentLocked(doc, vertical) {
+  const html = doc.documentElement;
+  const root = html ? overflowOf(html, vertical) : "visible";
+  if (LOCKED.has(root)) return true;
+  return root === "visible" && !!doc.body && LOCKED.has(overflowOf(doc.body, vertical));
+}
+
 /**
  * @param {Element} el
  * @param {boolean} vertical
@@ -61,11 +86,16 @@ function describe(el) {
 function canScroll(el, vertical) {
   const max = vertical ? el.scrollTopMax : el.scrollLeftMax;
   if (!(max > 0)) return false;
-  if (el === el.ownerDocument.scrollingElement) return true;
-  const style = el.ownerGlobal.getComputedStyle(el);
-  const overflow = vertical ? style?.overflowY : style?.overflowX;
+  const doc = el.ownerDocument;
+  if (el === doc.scrollingElement) return !documentLocked(doc, vertical);
+  const overflow = overflowOf(el, vertical);
   return overflow === "auto" || overflow === "scroll" || overflow === "overlay";
 }
+
+/** At most this many elements are searched for the largest scrollable. */
+const SEARCH_LIMIT = 10000;
+/** A search that found nothing is not repeated for this long (holding j). */
+const SEARCH_BACKOFF_MS = 1000;
 
 /**
  * The parent element, stepping out of a shadow root to its host.
@@ -81,24 +111,54 @@ function parentOf(el) {
 export class VimmaChild extends JSWindowActorChild {
   /** @type {WeakRef<Element> | null} the last largest scrollable, reused while it can scroll */
   #largest = null;
+  /** When a search for the largest scrollable last found nothing (0: not since focus moved). */
+  #emptySearchAt = 0;
 
   /** @param {Event} event */
   handleEvent(event) {
     const doc = this.document;
     switch (event.type) {
       case "focusin": {
+        this.#emptySearchAt = 0;
         // Unretargeted: the element itself, also inside an open or closed shadow root.
         const target = /** @type {Element | null} */ (event.originalTarget);
         this.#report(target?.nodeType === 1 ? target : deepActiveElement(doc), "focusin");
         return;
       }
       case "focusout":
+        // Focus moving to another element of this document reports its own focusin; checking
+        // in between would flicker insert → normal → insert.
+        if (/** @type {FocusEvent} */ (event).relatedTarget) return;
         this.#recheck();
         return;
-      case "focus":
-        // The window regained focus (from a subframe or another window): elements fire focusin.
-        if (event.originalTarget === this.contentWindow) this.#recheck();
+      case "focus": {
+        // The window gained focus (a click into this frame, back from a subframe or another
+        // tab): the user is back on its focused element, which counts as a focusin. An editable
+        // document root (designMode, contenteditable <body>) gets only this event.
+        if (event.originalTarget !== this.contentWindow) return;
+        this.#emptySearchAt = 0;
+        this.#report(deepActiveElement(doc) ?? doc.body, "focusin");
+        return;
+      }
+      case "mousedown": {
+        // A click into an editable root whose window already has focus fires no focus event.
+        const root = this.#editableRoot();
+        if (root) this.#report(root, "focusin");
+      }
     }
+  }
+
+  /**
+   * The focused document root when it is editable as a whole (designMode, or a contenteditable
+   * <body>/<html>), else null.
+   * @returns {Element | null}
+   */
+  #editableRoot() {
+    const doc = this.document;
+    const el = deepActiveElement(doc) ?? doc.body;
+    if (!el || (el !== doc.body && el !== doc.documentElement)) return null;
+    const editable = doc.designMode === "on" || /** @type {HTMLElement} */ (el).isContentEditable;
+    return editable ? el : null;
   }
 
   #recheck() {
@@ -154,17 +214,24 @@ export class VimmaChild extends JSWindowActorChild {
       el = parentOf(el);
     }
     if (root && canScroll(root, vertical)) return root;
-    // App shells and pdf.js scroll an inner element: take the largest visible one.
+    // App shells, pdf.js and a locked page's modal scroll an inner element: take the largest
+    // visible one. Cached; a search is bounded, and one that found nothing is not repeated
+    // until focus moves or a second has passed.
     const last = this.#largest?.deref();
     if (last?.isConnected && canScroll(last, vertical)) return last;
+    const now = Date.now();
+    if (this.#emptySearchAt && now - this.#emptySearchAt < SEARCH_BACKOFF_MS) return null;
     let best = null;
     let area = 0;
-    for (const el of doc.querySelectorAll("*")) {
+    const all = doc.getElementsByTagName("*");
+    for (let i = 0; i < Math.min(all.length, SEARCH_LIMIT); i++) {
+      const el = /** @type {Element} */ (all[i]);
       if (!canScroll(el, vertical)) continue;
       const r = el.getBoundingClientRect();
       if (r.width * r.height > area) [best, area] = [el, r.width * r.height];
     }
     this.#largest = best ? new WeakRef(best) : null;
+    this.#emptySearchAt = best ? 0 : now;
     return best;
   }
 
