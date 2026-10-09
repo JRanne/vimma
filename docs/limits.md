@@ -154,6 +154,9 @@ Workspaces are not built yet; these are the limits their design accepts
 - No binaries, packages or releases: build from source. Tarball, AppImage, `.deb` and AUR are M6
   ([plan.md](../plan.md) §6).
 - The smol-toml BSD-3-Clause notice is not in `about:license` yet (M6, issue #16).
+- `vimma-ctl` checks the discovery file's permissions on Unix only; on Windows `check_mode`
+  does nothing (ACLs, not mode bits)
+  ([m0-control-protocol-and-vimma-ctl](specs/m0-control-protocol-and-vimma-ctl.md)).
 
 ## Build and CI
 

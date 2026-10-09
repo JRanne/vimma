@@ -139,7 +139,7 @@ Rules the config engine enforces: actions are a closed set generated from `actio
 │                              │                 Omarchy adapter                      │
 │                              └─ ctl/           control socket (nsIServerSocket)    │
 └───────────────────────────────────────────────────────────────────────────────────┘
-          ▲ config.toml, theme files            ▲ vimma-ctl (Python/Node CLI) and the e2e harness
+          ▲ config.toml, theme files            ▲ vimma-ctl (Rust CLI, ADR-011) and the e2e harness
 ```
 
 Key mechanics:
@@ -171,7 +171,7 @@ vimma/
     browser/branding/vimma/                        # name, icons
   configs/                        # mozconfigs: linux, macos, ci-artifact
   tools/
-    vimma-ctl/                    # CLI client for the control socket
+    vimma-ctl/                    # Rust CLI client for the control socket (ADR-011)
     e2e/                          # harness: launch build with temp profile, drive via socket
     upstream/                     # check-release.py, bump-surfer-json.py, rebase helpers
   tests/
@@ -322,7 +322,7 @@ Open questions to settle in M0 (each becomes an ADR or a line in `docs/limits.md
 
 - [x] PR build strategy: `surfer build --ui` on a cached engine vs Firefox artifact builds — which works with release tarballs? Artifact builds, on hosted runners (ADR-010).
 - [x] Side panel: custom box in the window layout or Firefox's sidebar framework (`SidebarController`)? Our own box, inserted from JS (`docs/specs/m3-workspaces.md`).
-- [ ] Where does the control socket's auth token live, and should it be off by default in release builds?
+- [x] Where does the control socket's auth token live, and should it be off by default in release builds? In `<profile>/vimma-control.json` (0600); off by default in all builds, pref `vimma.control.enabled` (spec m0-control-protocol-and-vimma-ctl).
 - [x] Omarchy adapter: neither; read the theme's `colors.toml`, which every Omarchy 4 theme ships (`docs/notes/omarchy-theming.md`).
 - [x] Starter workspaces (work/admin/personal) created on first run, or only shipped as the commented example? Commented example; first run creates one `main` (`docs/specs/m3-workspaces.md`).
 - [ ] Flatpak alongside AUR from M6, or later?

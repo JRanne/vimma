@@ -1,0 +1,17 @@
+{
+  "description": "ok and error together",
+  "kind": "response",
+  "command": "send-keys",
+  "message": {
+    "type": "response",
+    "id": 1,
+    "ok": true,
+    "result": {
+      "sent": 2
+    },
+    "error": {
+      "code": "failed",
+      "message": "x"
+    }
+  }
+}
