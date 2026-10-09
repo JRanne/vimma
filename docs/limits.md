@@ -24,6 +24,11 @@ delete its line in the same PR.
 - Closed shadow roots in pages are seen (the actor is privileged), but a page script that moves
   focus from a frame to the top page's `<body>` can leave insert on until `Esc`
   ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Limits).
+- `Esc` in a text field leaves insert and does not reach the page; press `Esc` again for the
+  site's own `Esc` (closing an autocomplete or a dialog)
+  ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled).
+- After `Esc` in a `designMode` page, it stays in normal until the next click into it
+  ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled).
 - `config.toml` is not read by the browser. Its validator and theme tokens exist in `vimma-core`,
   but loading, polling, `:source` and theming wait for the M5 host spec
   ([m5-core-config-and-theme](specs/m5-core-config-and-theme.md)).

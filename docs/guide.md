@@ -84,10 +84,24 @@ out of the field and the tab is back in normal. `i` enters insert explicitly: it
 first text field on the page, or, on a page without one (a game), lets every key through until
 `Esc`.
 
+Clicking into a page that is editable as a whole (a `designMode` document, such as some rich
+text editors' frames) also enters insert.
+
 Each tab keeps its own mode. Settings (`about:preferences`) and the PDF viewer work the same
-way. Pages Vimma does not reach (extension pages, `data:` and `view-source:` pages) stay in
-insert, so their keys are untouched. With focus in the URL bar or the find bar, keys belong to
-that field; only `ctrl+b` sequences are Vimma's there.
+way, but Settings focuses its search box when it opens, so it starts in insert: press `Esc`
+before `j`/`k`. Pages Vimma does not reach (extension pages, `data:` and `view-source:` pages)
+stay in insert, so their keys are untouched. With focus in the URL bar or the find bar, keys
+belong to that field; only `ctrl+b` sequences are Vimma's there.
+
+**`Esc` in a text field is Vimma's.** It leaves insert, so the page does not see that `Esc`: a
+site's own `Esc` (closing an autocomplete list or a dialog) does not fire from the field. Press
+`Esc` again: in normal mode `Esc` has no binding, so it reaches the page (the field no longer
+has focus, so the page's document gets it, not the field).
+
+**A key that starts a sequence passes when nothing in that sequence works yet.** `ctrl+w`
+starts the planned `ctrl+w h/j/k/l` pane keys (M4), but until they work `ctrl+w` still closes
+the tab. `g` starts `gg`, which works, so `g` is Vimma's: the page does not see it, and `Esc`
+cancels it.
 
 ## Keys
 

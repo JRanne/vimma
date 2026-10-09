@@ -41,9 +41,17 @@ explicitly.
 - Unbound bare keys in normal mode reach the page.
 - The actor reaches Settings (search box focused: insert, `Esc`: normal) and the PDF viewer; a
   `data:` page has none and stays in insert.
+- Review round 1: clicking into a `designMode` page, or a cross-origin `designMode` iframe,
+  enters insert (`j` is typed, nothing scrolls) and `Esc` leaves it. An unfocused frame's report
+  is ignored. Malformed descriptors are dropped. A page locked with `overflow: hidden` does not
+  scroll: its modal's list does, or nothing does. `i` on a page with no text field lets `j`
+  through. `ctrl+w` closes the tab in normal mode, and `g` (the first key of `gg`) is
+  consumed. Each mode change calls `onModeChange` once. Fixtures: `file_vimma_design.html`,
+  `file_vimma_design_host.html`, `file_vimma_plain.html`.
 
 Mutation check: dropping `isContentEditable` from the child's descriptor fails the
-contenteditable case only (reverted). Stress: `--repeat=9` on two busy CPUs, 0 unexpected.
+contenteditable case only (reverted). Stress: `--repeat=9` on two busy CPUs, 0 unexpected;
+after review round 1, `--repeat=19`, 0 unexpected.
 
 Existing tests: `pageKeysThenJ` in the help overlay test and the key-capture test used `j` as
 "a key that is never ours"; `j` is ours in normal mode now, so they use `z`, which is unbound.
@@ -119,6 +127,43 @@ actions that are not implemented yet (parallel spec).
 - **Content-only actions in chrome.** `scroll.*`, `mode.normal` and `mode.insert` run only when a
   content browser has focus; elsewhere (URL bar) they count as not runnable, so `Esc` still
   reverts the URL bar.
+
+- **Review round 1 (2026-10-09, PR #32).**
+  - **designMode and editable roots.** Clicking into a `designMode` document (or one whose
+    `<body>`/`<html>` is contenteditable) fires no focusin, only a window `focus`, and a
+    recheck cannot enter insert. A window `focus` now reports the document's focused element
+    (or `<body>`) as a `focusin`: the user is back on it. A `mousedown` (capture,
+    `createActor: false`) does the same for an editable root whose window already has focus.
+    Esc still blurs to normal there, and no focusout or focus follows, so it stays normal until
+    the next click.
+  - **Only the focused frame reports.** The parent drops a report unless the actor's
+    `browsingContext` is `Services.focus.focusedContentBrowsingContext`
+    (`nsIFocusManager.idl`), which is the top when no subframe has focus. The focus change
+    reaches the parent before the report, on the same channel. Exception: parent-process pages
+    (`this.manager.isInProcess`, Settings), which are privileged and focus their search box
+    while their tab is still being selected, before the focus manager moves.
+  - **Strict descriptors.** Core's `parseDescriptor` (pure, unit-tested) copies only the known
+    fields, each of its exact type (strings at most 256 characters, booleans, `role` a string or
+    null, `classes` at most 64 strings), or returns null; it never throws. The parent drops
+    anything else quietly.
+  - **Scroll locks.** The document does not scroll on an axis whose computed overflow is
+    `hidden` or `clip` on `<html>`, or on `<body>` while `<html>`'s is `visible` (CSS Overflow 3
+    § 3.3, where `<body>`'s overflow applies to the viewport). The largest-scrollable fallback
+    then finds a modal's inner list, or nothing scrolls.
+  - **Bounded search.** The largest-scrollable search reads at most 10,000 elements
+    (`getElementsByTagName("*")`, a live collection read lazily). A search that found nothing
+    is not repeated for a second, or until focus moves.
+  - **No field-to-field flicker.** A `focusout` with a `relatedTarget` (focus moving to another
+    element of the same document) is not reported; that element's focusin follows. Moving
+    between two text fields no longer goes insert → normal → insert.
+  - **Hooks for M2.** `RUNNERS` and `CONTENT_RUNNERS` are exported and frozen (the runnable set is
+    their keys; `VimmaHost._runnable(state, id)` says whether one runs now).
+    `VimmaHost.onModeChange(browser, mode)` is called once per change of a tab's mode; it is a
+    no-op until the status bar emits from it.
+  - **`3x`** (a count, then an action the host cannot run yet) is consumed silently. The "not
+    implemented" notice from the tab-keys spec (PR #28) will cover it when it lands.
+  - **Esc in a field** stays Vimma's (it leaves insert). A second `Esc` reaches the page, since
+    `Esc` is unbound in normal mode (`esc_in_normal_mode_reaches_the_page`).
 
 ## Limits
 
