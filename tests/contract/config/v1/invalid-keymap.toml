@@ -1,0 +1,6 @@
+# Contract fixture: the schema is fine, but [keys] names an action that does not exist.
+schema = 1
+
+[keys]
+new_tab = ["prefix+c"]
+new_tabb = ["ctrl+alt+c"]

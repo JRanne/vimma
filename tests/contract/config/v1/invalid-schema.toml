@@ -1,0 +1,21 @@
+# Contract fixture: schema errors in several sections, all reported at once with their lines.
+schema = 1
+
+[modal]
+timeout_ms = 20000
+
+[workspaces]
+work = { color = "blu", home = "ftp://files.example" }
+
+[theme]
+source = "omarchi"
+
+[theme.colors]
+acent = "#7aa2f7"
+background = "navy"
+
+[unbind]
+insrt = ["j"]
+
+[sidebar]
+width = 30

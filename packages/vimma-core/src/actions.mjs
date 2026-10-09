@@ -217,7 +217,16 @@ function editDistance(a, b) {
  * @returns {string | undefined}
  */
 export function suggestAction(text) {
-  const pool = text.includes(".") ? [...byId.keys()] : [...byName.keys()];
+  return closest(text, text.includes(".") ? [...byId.keys()] : [...byName.keys()]);
+}
+
+/**
+ * The candidate nearest to `text` by edit distance, if it is near enough to be a likely typo.
+ * @param {string} text
+ * @param {Iterable<string>} pool
+ * @returns {string | undefined}
+ */
+export function closest(text, pool) {
   let best;
   let bestD = Infinity;
   for (const cand of pool) {

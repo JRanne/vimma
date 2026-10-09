@@ -1,0 +1,16 @@
+{
+  "$comment": "Errors each invalid-*.toml must produce, in order: line, path and suggestion (null = none).",
+  "invalid-schema.toml": [
+    { "line": 5, "path": "modal.timeout_ms", "suggestion": null },
+    { "line": 8, "path": "workspaces.work.color", "suggestion": "blue" },
+    { "line": 8, "path": "workspaces.work.home", "suggestion": null },
+    { "line": 11, "path": "theme.source", "suggestion": "omarchy" },
+    { "line": 14, "path": "theme.colors.acent", "suggestion": "accent" },
+    { "line": 15, "path": "theme.colors.background", "suggestion": null },
+    { "line": 18, "path": "unbind.insrt", "suggestion": "insert" },
+    { "line": 20, "path": "sidebar", "suggestion": null }
+  ],
+  "invalid-keymap.toml": [{ "line": 6, "path": "keys.new_tabb", "suggestion": "new_tab" }],
+  "invalid-syntax.toml": [{ "line": 5, "path": "", "suggestion": null }],
+  "invalid-newer.toml": [{ "line": 2, "path": "schema", "suggestion": null }]
+}
