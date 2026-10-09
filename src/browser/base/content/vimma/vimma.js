@@ -21,6 +21,14 @@
   );
   VimmaHost.init(window);
 
+  // The workspace definitions, once per app (m3-workspaces, sub-spec 2a): Tabbrowser-sys-mjs.patch
+  // asks the store for the container of a tab or window opened without one. Not awaited: until
+  // it is loaded, the store reads its file synchronously on the first such question.
+  const { WorkspaceStore } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/workspaces/WorkspaceStore.sys.mjs",
+  );
+  WorkspaceStore.init().catch((e) => console.error("vimma: workspaces not loaded", e));
+
   // One control server per app (spec m0-control-server); off unless vimma.control.enabled.
   const { VimmaControl } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/ctl/VimmaControl.sys.mjs",

@@ -117,7 +117,12 @@ Workspaces are not built yet; these are the limits their design accepts
 - Restoring workspaces needs `browser.startup.page = 3` (Vimma's default); with any other value
   tabs are not restored and workspaces start empty.
 - New tabs get no preloaded `about:newtab`: Firefox preloads only for tabs without a container,
-  so Vimma turns preloading off (`browser.newtab.preload`).
+  so Vimma turns preloading off (`browser.newtab.preload`). A new tab paints about 40 ms later
+  than with a preload (measured 76 ms against 35 ms, median of 20).
+- On a new profile the very first tab opens before the first workspace exists, so it has no
+  container and is marked `foreign`; later tabs and windows open in the workspace's container.
+- `browser.link.force_default_user_context_id_for_external_opens` sends links from other apps to
+  the active workspace's container, not to "no container".
 - Firefox Sync no longer syncs `browser.startup.page` or `privacy.userContext.enabled` to Vimma.
 - After 3 minutes without input, the session is saved hourly, so a crash can lose an hour of
   changes made by pages (tabs they opened), as in Firefox.

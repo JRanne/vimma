@@ -105,3 +105,7 @@ pref("vimma.control.enabled", false);
 // Find (spec m1-find): Vim's smartcase for `/` and Firefox's own find bar alike. 2 is the find
 // bar's "auto" mode: a query with a capital letter matches case, an all lower-case one does not.
 pref("accessibility.typeaheadfind.casesensitive", 2);
+
+// Workspaces (spec m3-workspaces, decision 13): every tab is in a workspace's container, and
+// Firefox only uses a preloaded about:newtab for tabs in no container, so it would never be used.
+pref("browser.newtab.preload", false);

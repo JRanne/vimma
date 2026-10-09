@@ -266,7 +266,7 @@ export class WorkspaceStoreImpl {
    * The container a tab or window opened without one takes (decision 3): the window's active
    * workspace's, else the most recent browser window's, else `lastActive`'s. Null for private
    * windows and popups, and when workspaces are disabled, so upstream behaviour stays there.
-   * Before init it reads the file synchronously (as ContextualIdentityService does).
+   * Before init has loaded the file it reads it synchronously (as ContextualIdentityService does).
    * @param {any} win
    * @returns {number | null}
    */
@@ -275,7 +275,8 @@ export class WorkspaceStoreImpl {
     if (win && (lazy.PrivateBrowsingUtils.isWindowPrivate(win) || win.toolbar?.visible === false)) {
       return null;
     }
-    if (!this.#ready && !this.#file?.dataReady) this.#readSync();
+    // Also while init() is still loading: a window's first tab at startup is set up before it ends.
+    if (!this.#file?.dataReady) this.#readSync();
     const top = lazy.BrowserWindowTracker.getTopWindow({ private: false });
     const id =
       (win && this.#active.get(win)) ??
