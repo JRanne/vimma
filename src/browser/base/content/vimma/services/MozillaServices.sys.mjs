@@ -22,14 +22,13 @@ const SUGGEST_MIGRATION_VERSION = "browser.urlbar.quicksuggest.migrationVersion"
 
 /**
  * Without a Google key the build fetches no Safe Browsing lists (SafeBrowsing.sys.mjs,
- * `checkGoogleSafeBrowsingKey`), and download reputation asks Google with a placeholder key that
- * cannot work. These are Firefox's switches for both; keyless, Vimma defaults them to false so
- * Settings shows the protection off (spec docs/specs/m0-safebrowsing-key.md).
+ * `checkGoogleSafeBrowsingKey`). These are the "Block dangerous and deceptive content" switches;
+ * keyless, Vimma defaults them to false so Settings shows the protection off (spec
+ * docs/specs/m0-safebrowsing-key.md). The remote download check is off in every build (prefs).
  */
 const KEY_GATED_SAFEBROWSING_PREFS = [
   "browser.safebrowsing.phishing.enabled",
   "browser.safebrowsing.malware.enabled",
-  "browser.safebrowsing.downloads.remote.enabled",
 ];
 
 /** configure's value when the build has no `--with-google-safebrowsing-api-keyfile`. */
