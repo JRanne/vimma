@@ -60,3 +60,8 @@ pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.addons", false);
 pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features", false);
 pref("browser.vpn_promo.enabled", false);
 pref("browser.preferences.moreFromMozilla", false);
+pref("browser.promo.pin.enabled", false);
+pref("browser.promo.relay.enabled", false);
+// about:protections: the Firefox mobile app card and the VPN banner.
+pref("browser.contentblocking.report.show_mobile_app", false);
+pref("browser.contentblocking.report.hide_vpn_banner", true);
