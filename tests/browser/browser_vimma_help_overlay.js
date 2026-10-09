@@ -219,8 +219,8 @@ add_task(async function unrunnable_key_inside_a_prefix_sequence_is_consumed() {
     await focusContent(browser);
     const tabs = gBrowser.tabs.length;
     EventUtils.synthesizeKey("b", { ctrlKey: true });
-    EventUtils.synthesizeKey("v"); // split_vertical: not runnable until M4
-    Assert.deepEqual(await pageKeysThenZ(browser), ["z"], "ctrl+b v leaks no v to the page");
+    EventUtils.synthesizeKey("w"); // workspace_picker: not runnable yet
+    Assert.deepEqual(await pageKeysThenZ(browser), ["z"], "ctrl+b w leaks no w to the page");
     Assert.equal(gBrowser.tabs.length, tabs, "and does nothing else yet");
   });
 });
@@ -329,6 +329,10 @@ add_task(async function rows_mark_what_the_host_can_run() {
       "next_tab",
       "select_tab_3",
       "close_tab",
+      "split_vertical",
+      "focus_pane_left",
+      "zoom",
+      "close_pane",
       "scroll_down",
       "scroll_top",
       "normal_mode",
@@ -336,17 +340,12 @@ add_task(async function rows_mark_what_the_host_can_run() {
     ]) {
       Assert.equal(row(name).dataset.runnable, "true", `${name} is marked implemented`);
     }
-    for (const name of [
-      "rename_workspace",
-      "split_vertical",
-      "workspace_picker",
-      "next_workspace",
-    ]) {
+    for (const name of ["rename_workspace", "workspace_picker", "next_workspace"]) {
       Assert.equal(row(name).dataset.runnable, "false", `${name} is marked not yet`);
     }
     const opacity = (name) => Number(getComputedStyle(row(name)).opacity);
     Assert.equal(opacity("new_tab"), 1, "an implemented row is not dimmed");
-    Assert.less(opacity("split_vertical"), 1, "a not-yet row is dimmed");
+    Assert.less(opacity("workspace_picker"), 1, "a not-yet row is dimmed");
     const legend = overlay().querySelector(".vimma-help-legend");
     Assert.ok(legend && BrowserTestUtils.isVisible(legend), "a legend explains the dimming");
     Assert.stringContains(legend.textContent, "not implemented yet");

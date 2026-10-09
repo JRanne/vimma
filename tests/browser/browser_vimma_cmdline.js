@@ -301,12 +301,12 @@ add_task(async function open_loads_through_fixup() {
 
 add_task(async function unbuilt_and_pending_commands_say_so() {
   const tabs = await openTabs(1);
-  runCommand("vsplit");
+  runCommand("sidebar");
   Assert.ok(!isOpen(), "the line closes");
-  Assert.ok(noticeShown(), ":vsplit shows the notice");
+  Assert.ok(noticeShown(), ":sidebar shows the notice");
   Assert.equal(
     document.getElementById(NOTICE_ID).textContent,
-    "Split right: not implemented yet",
+    "Open / close the side panel: not implemented yet",
     "as the keys do",
   );
   await focusContent(tabs[0].linkedBrowser);
@@ -427,8 +427,8 @@ add_task(async function a_notice_does_not_cover_the_line() {
   const tabs = await openTabs(1);
   typeCommand("ta");
   EventUtils.synthesizeKey("b", { ctrlKey: true });
-  EventUtils.synthesizeKey("v");
-  Assert.ok(noticeShown(), "ctrl+b v from the line shows the notice");
+  EventUtils.synthesizeKey("w");
+  Assert.ok(noticeShown(), "ctrl+b w from the line shows the notice");
   Assert.ok(isOpen(), "and the line stays open");
   const gap = () =>
     document.getElementById(NOTICE_ID).getBoundingClientRect().bottom -

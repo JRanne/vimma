@@ -14,8 +14,10 @@ delete its line in the same PR.
 - Tab keys count Firefox's visible tabs; workspaces (M3) will narrow them to the current one.
 - Single-key actions the host cannot run yet (`r`, `ctrl+i`, `ctrl+u`, …) pass through
   to the page or Firefox, and so does the first key of a sequence with nothing runnable under it
-  (`ctrl+w`, the M4 pane keys) ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md),
-  Settled).
+  ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled). `ctrl+w`'s pane keys run
+  only with two panes or more, so with one pane `ctrl+w` closes the tab; with a split, in normal
+  mode, it is Vim's window prefix and does not close the tab
+  ([m4-split-panes](specs/m4-split-panes.md), sub-spec 3).
 - Pages that take keys outside a text field (games, Google Docs' canvas, Figma) lose their bare
   keys to normal mode; press `i` to let every key through until `Esc`. Text editors are
   detected ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Limits).
