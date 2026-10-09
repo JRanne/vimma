@@ -75,7 +75,7 @@ const active = () => ww().model.active;
 
 /** The window model's workspace of `tab`, by id. */
 function workspaceOf(tab) {
-  return ww().model.workspaces.find((w) => w.tabs.includes(tab.linkedPanel))?.id ?? null;
+  return ww().model.workspaces.find((w) => w.tabs.includes(ww().idOf(tab)))?.id ?? null;
 }
 
 /** ctrl+b, then `key`. */
@@ -169,7 +169,7 @@ add_task(async function ctrl_i_and_ctrl_u_show_one_workspace_and_restore_its_tab
   for (const t of [...aTabs, b0]) BrowserTestUtils.removeTab(t);
   Assert.deepEqual(
     ww().model.workspaces.flatMap((w) => w.tabs),
-    [first.linkedPanel],
+    [ww().idOf(first)],
     "closed tabs leave the model",
   );
 });

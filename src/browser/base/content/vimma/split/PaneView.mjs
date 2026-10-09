@@ -77,6 +77,9 @@ export class PaneView {
   #laidOut = new Set();
   /** @type {Map<string, { panes: Panes, wrapper: Wrapper | null, laidOut: Set<Tab> }>} */
   #parked = new Map();
+  /** Told after every reconcile (WindowWorkspaces saves the window's snapshot, m3 sub-spec 3). */
+  /** @type {(() => void) | null} */
+  onChange = null;
 
   /**
    * @param {Window} win
@@ -148,6 +151,32 @@ export class PaneView {
     this.#laidOut = back?.laidOut ?? new Set();
     this.#resize?.disconnect();
     this.#resize = null;
+  }
+
+  /**
+   * The tree parked under workspace `id` by `swap`, or null (none, or one pane).
+   * @param {string} id
+   * @returns {Panes | null}
+   */
+  parked(id) {
+    return this.#parked.get(id)?.panes ?? null;
+  }
+
+  /**
+   * A session restore (m3-workspaces sub-spec 3): `trees` replaces every workspace's tree, the
+   * one of `active` shown, the others parked. Like `swap`, it touches nothing in Firefox; the
+   * caller's `reconcile()` lays it out (SessionStore restored the wrappers; any that differ are
+   * rebuilt).
+   * @param {Map<string, Panes>} trees
+   * @param {string} active
+   */
+  restore(trees, active) {
+    this.#panes = trees.get(active) ?? null;
+    this.#wrapper = null;
+    this.#parked = new Map();
+    for (const [id, panes] of trees) {
+      if (id !== active) this.#parked.set(id, { panes, wrapper: null, laidOut: new Set() });
+    }
   }
 
   /**
@@ -303,6 +332,7 @@ export class PaneView {
     } finally {
       this.#reconciling = false;
     }
+    this.onChange?.();
   }
 
   #reconcile() {

@@ -48,8 +48,8 @@ delete its line in the same PR.
   frame that takes over 150 ms to answer (busy) gets none that time. `F` does not open `blob:`
   links ([m1-hints](specs/m1-hints.md), Limits).
 - `config.toml` changes show up to 2 s late (the poll; `:source` is at once). Two saves within
-  one millisecond that keep the file's size are seen as one. `[workspaces]` is validated but not
-  applied: the workspace store reads its definitions once at startup and has no runtime seam yet.
+  one millisecond that keep the file's size are seen as one. A workspace removed from
+  `[workspaces]` stays, as a runtime workspace with its tabs and container.
   Only the first error is in the status bar (all are in the Browser Console; `about:vimma` is
   later). Overridden bindings are not marked in `ctrl+b ?`; `:source <path>` and `:config` do not
   exist ([m5-config-load](specs/m5-config-load.md)).
@@ -124,8 +124,15 @@ accepts
 - Pinned tabs belong to no workspace: they show in every workspace, and a tab opened pinned
   stays in no container (decision 11 plans to unpin them). A tab sharing camera, microphone or
   screen cannot be hidden and stays visible in other workspaces while it shares.
-- Workspaces and their tabs are not kept across a restart yet (M3 sub-spec 3); the `foreign`
-  mark is kept but not shown until the workspace picker and side panel.
+- The `foreign` mark is kept but not shown until the workspace picker and side panel.
+- Workspaces are saved with Firefox's session, so a crash loses what the session file has not
+  caught yet: up to 15 seconds of changes while you are active, and up to an hour after 3
+  minutes without input (`browser.sessionstore.interval.idle`). Tabs then come back in the
+  workspace that owns their container, but a workspace's selected tab, its panes and new tab
+  names may be older.
+- A window saved by a newer Vimma keeps its saved workspaces untouched: this version starts it
+  with its tabs sorted into workspaces by container, without its panes, and does not save over
+  it.
 - Tabs of hidden workspaces keep playing audio and are never unloaded automatically.
 - Closing the last tab opens a new tab instead of closing the window
   (`browser.tabs.closeWindowWithLastTab` is `false`); setting it to `true` lets the window close

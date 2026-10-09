@@ -288,11 +288,11 @@ normal mode (`3 ctrl+w >` by three), as in Vim. A config can rebind the mode's k
 - **Back, forward and reload** (`H`/`L`, `r`): bound, not built yet. Until then these keys
   reach the page as before.
 - **M3, the rest of workspaces and the side panel:** the `ctrl+b w` picker, new/rename/close
-  workspace, keeping workspaces across a restart, and `ctrl+b b` or `<leader>n` for the side
-  panel. `ctrl+i` / `ctrl+u` work now (see [Workspaces](#workspaces)).
-- **M4, split panes:** click focus, one layout per workspace and restore after a restart.
-- **M5, config:** `[workspaces]` in `config.toml` (the rest of the file works: see
-  [config.toml](#configtoml)), errors listed in `about:vimma`.
+  workspace, and `ctrl+b b` or `<leader>n` for the side panel. `ctrl+i` / `ctrl+u` and restoring
+  workspaces after a restart work now (see [Workspaces](#workspaces)).
+- **M4, split panes:** click focus.
+- **M5, config:** errors listed in `about:vimma` (the file itself works: see
+  [config.toml](#configtoml)).
 
 ## Workspaces
 
@@ -317,6 +317,11 @@ comes later in M3 (until then they are made through the workspace store, as the 
   an extension's) joins the workspace you are in as a `foreign` tab: it does not share that
   workspace's cookies and logins. (The workspace picker and side panel, still to come, will mark
   it.)
+- **A restart restores them.** Each window comes back with its workspaces, their tabs, the
+  workspace you were in, the tab you had selected in each, its split panes laid out as you left
+  them, your tab names and each page's scroll position. Tabs of other workspaces are not loaded
+  until you first go to them; their scroll position comes back then. The same happens with
+  "Restore previous session" and reopening a closed window.
 - **Pinned tabs** belong to no workspace and show in every one. Vimma has no key to pin; an
   extension or an old session can still pin.
 - Each window has its own current workspace; the workspaces themselves are shared by all
@@ -438,8 +443,9 @@ accent = "#ff9e64"
   and `[unbind]`; `[panes] max` (most panes in a window, 1 to 16, default 4; it limits new
   splits); `[sites."<host>"] insert` (`auto`, `never` or `always`: whether a text field on that
   site and its subdomains takes insert mode); `[theme]` `source` (`omarchy` or `file`, the
-  built-in Tokyo Night), `font` and `[theme.colors]` (single colours over either source).
-  `[workspaces]` is checked but not used yet.
+  built-in Tokyo Night), `font` and `[theme.colors]` (single colours over either source);
+  `[workspaces]` (a new one gets its container at once; one removed from the file stays, as a
+  workspace you can close yourself).
 - **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]` and `hint_chars`; every key,
   its type and default are in [m5-core-config-and-theme](specs/m5-core-config-and-theme.md#schema-v1)
   and [m3-m4-core-prep](specs/m3-m4-core-prep.md#config-schema-2), and
@@ -569,11 +575,8 @@ For workspaces ([m3-workspaces](specs/m3-workspaces.md)); each is a default you 
   `false`).
 - **No preloaded new-tab page** (`browser.newtab.preload` = `false`): Firefox only uses it for
   tabs without a container, and every Vimma tab is in one.
-
-**Planned for M3:**
-
-- **Restart restores your session**: tabs, workspaces and scroll positions come back
-  (`browser.startup.page` = `3`; Firefox's default `1` opens the home page).
+- **Restart restores your session**: tabs, workspaces, pane layouts and scroll positions come
+  back (`browser.startup.page` = `3`; Firefox's default `1` opens the home page).
 - **Firefox Sync leaves two settings alone**: `browser.startup.page` and
   `privacy.userContext.enabled` (turning containers off deletes every workspace's data).
 

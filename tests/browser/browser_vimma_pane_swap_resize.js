@@ -242,3 +242,41 @@ add_task(async function ctrl_w_greater_than_widens_directly_in_normal_mode() {
   Assert.deepEqual(await pageKeysThenZ(a), ["z"], "a's page saw none of the keys");
   await reset();
 });
+
+add_task(async function a_restored_pane_tree_swaps_and_resizes() {
+  const a = await openPage("a");
+  const b = BrowserTestUtils.addTab(gBrowser, `${PAGE}?b`);
+  await BrowserTestUtils.browserLoaded(b.linkedBrowser);
+  // A tree as M3 persistence hands it over (WindowWorkspaces #restorePanes): a | b at .7 / .3,
+  // focus on a.
+  const one = Panes.createPanes(a.linkedPanel);
+  let tree = Panes.split(one, one.focus, "vertical", b.linkedPanel);
+  tree = Panes.focusPane(tree, Panes.paneOfTab(tree, a.linkedPanel));
+  tree = Panes.resize(tree, "wider", 0.2);
+  const { WindowWorkspaces } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/workspaces/WindowWorkspaces.sys.mjs",
+  );
+  const active = WindowWorkspaces.get(window)?.model?.active ?? "restored";
+  view().restore(new Map([[active, tree]]), active);
+  view().reconcile();
+  await nextFrame();
+  Assert.deepEqual(paneTabs(), [a, b], "the restored tree is shown");
+  await focusContent(a.linkedBrowser);
+  await until(() => VimmaHost.status(window).mode === "normal", "a is in normal mode");
+
+  prefix("r");
+  Assert.equal(VimmaHost.status(window).mode, "resize", "ctrl+b r works on the restored tree");
+  EventUtils.synthesizeKey("h");
+  EventUtils.synthesizeKey("KEY_Escape");
+  await nextFrame();
+  Assert.lessOrEqual(Math.abs(ratios()[0] - 0.65), 1e-9, "h narrows a from .7 to .65");
+  assertLayout("restored, resized");
+
+  prefix("L", { shiftKey: true });
+  await nextFrame();
+  Assert.deepEqual(paneTabs(), [b, a], "ctrl+b shift+l swaps the restored panes");
+  Assert.equal(focusedTab(), a, "a keeps focus");
+  assertLayout("restored, swapped");
+  Assert.deepEqual(await pageKeysThenZ(a), ["z"], "a's page saw none of the keys");
+  await reset();
+});
