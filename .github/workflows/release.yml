@@ -1,0 +1,300 @@
+# Spec m6-packaging: build, package, sign and publish a release, then push AUR vimma-bin.
+# release-please creates the tag vX.Y.Z and the GitHub Release; this workflow adds the assets.
+# Nothing runs until the repository variable RELEASE_ENABLED is `true`, manual runs included.
+# Setup and verification: docs/runbook.md, "Releases".
+#
+# Trigger: `release: published`, not `push: tags`. The release (with its changelog notes)
+# already exists, so this only uploads to it; a hand-pushed v* tag starts nothing. Neither event
+# fires for a release made with GITHUB_TOKEN, so release-please needs RELEASE_PLEASE_TOKEN, or
+# run this by hand: gh workflow run release.yml -f tag=vX.Y.Z (also how to retry a failure).
+# Neither event can come from a fork or a pull request.
+name: release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to build and upload to (vX.Y.Z)"
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  # Full build on the self-hosted machine (22 GB engine/, 39 min; as nightly.yml). Read-only
+  # token, no secrets: what it produces is checked, signed and uploaded by hosted jobs below.
+  build:
+    if: vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma'
+    runs-on: [self-hosted, linux, x64, vimma-build]
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    steps:
+      - name: Check the tag's form
+        run: |
+          echo "$TAG" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+' \
+            || { echo "::error::'$TAG' is not a vX.Y.Z release tag"; exit 1; }
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          persist-credentials: false
+          # Keep the git-ignored engine/ and .surfer/ between runs (as nightly.yml).
+          clean: false
+
+      - name: npm ci
+        run: npm ci
+
+      - name: The tag matches surfer.json's version
+        run: |
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { releaseVersion } from "./tools/package/package.mjs";
+            const config = JSON.parse(readFileSync("surfer.json", "utf8"));
+            console.log("Vimma " + releaseVersion(config, process.env.TAG));'
+
+      - name: Firefox source matching surfer.json
+        run: |
+          want=$(node -p 'require("./surfer.json").version.version')
+          have=$(cat engine/.vimma-firefox-version 2>/dev/null || true)
+          if [ "$want" != "$have" ]; then
+            npx surfer download --force
+            echo "$want" > engine/.vimma-firefox-version
+          fi
+
+      - name: Import patches and our sources
+        run: npm run import
+
+      - name: Build
+        run: npx surfer build
+
+      - name: Smoke check
+        run: |
+          version=$(engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma --version 2>&1)
+          expected="Vimma Vimma ${TAG#v}"
+          [ "$version" = "$expected" ] || { echo "::error::--version is '$version', want '$expected'"; exit 1; }
+
+      - name: Package with mach (dist/vimma-<firefox>.en-US.linux-x86_64.tar.xz)
+        run: |
+          rm -f engine/obj-x86_64-pc-linux-gnu/dist/vimma-*.tar.xz
+          (cd engine && ./mach package)
+          rm -rf release && mkdir release
+          cp engine/obj-x86_64-pc-linux-gnu/dist/vimma-*.en-US.linux-x86_64.tar.xz release/
+
+      - name: SBOM (CycloneDX)
+        run: node tools/package/sbom.mjs --engine engine --out "release/vimma-${TAG#v}.cdx.json"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: build
+          path: release/
+          retention-days: 7
+          if-no-files-found: error
+
+  # AppImage, .deb, AUR files, SHA256SUMS; then install and start what was built.
+  package:
+    needs: build
+    if: vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      MAINTAINER: ${{ vars.PACKAGE_MAINTAINER }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: build
+          path: build
+
+      - name: Tools (appimagetool and runtime pinned by SHA-256; desktop-file-validate)
+        run: |
+          tools/package/fetch-appimagetool.sh "$RUNNER_TEMP/appimagetool"
+          sudo apt-get update -q
+          sudo apt-get install -y -q desktop-file-utils
+
+      - name: Package
+        run: |
+          [ -n "$MAINTAINER" ] || { echo "::error::set the PACKAGE_MAINTAINER variable ('Name <email>')"; exit 1; }
+          v=${TAG#v}
+          tarball=$(echo build/vimma-*.en-US.linux-x86_64.tar.xz)
+          node tools/package/package.mjs --tarball "$tarball" --out dist --tag "$TAG" \
+            --maintainer "$MAINTAINER" --repo "$GITHUB_REPOSITORY" --sbom "build/vimma-$v.cdx.json" \
+            --appimagetool "$RUNNER_TEMP/appimagetool/appimagetool" \
+            --runtime "$RUNNER_TEMP/appimagetool/runtime-x86_64"
+          desktop-file-validate dist/aur/vimma.desktop
+          (cd dist && sha256sum -c SHA256SUMS)
+
+      - name: Smoke test the .deb and the AppImage
+        run: |
+          v=${TAG#v}
+          sudo apt-get install -y -q "./dist/vimma_${v}_amd64.deb"
+          [ "$(vimma --version)" = "Vimma Vimma $v" ] || { echo "::error::.deb: $(vimma --version)"; exit 1; }
+          test -f /usr/share/applications/vimma.desktop
+          p=$(mktemp -d)
+          # First run creates the profile; --screenshot on a fresh profile races the bookmarks
+          # import (docs/runbook.md, Smoke check). timeout exits 124.
+          timeout 30 vimma --headless --no-remote --profile "$p" about:blank || true
+          timeout 60 vimma --headless --no-remote --profile "$p" --screenshot "$RUNNER_TEMP/shot.png" "data:text/html,<h1>ok</h1>"
+          test -s "$RUNNER_TEMP/shot.png"
+          out=$(APPIMAGE_EXTRACT_AND_RUN=1 "./dist/vimma-$v-x86_64.AppImage" --version)
+          [ "$out" = "Vimma Vimma $v" ] || { echo "::error::AppImage: $out"; exit 1; }
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: dist/
+          include-hidden-files: true # dist/aur/.SRCINFO
+          retention-days: 7
+          if-no-files-found: error
+
+  # cosign keyless: the certificate names this workflow at this tag. Only this job can mint an
+  # OIDC token; it runs no repository code.
+  sign:
+    needs: package
+    if: vars.RELEASE_ENABLED == 'true' && vars.SIGNING_ENABLED == 'true' && github.repository == 'JRanne/vimma'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: dist
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Sign every asset
+        run: |
+          for f in dist/vimma* dist/SHA256SUMS; do
+            cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
+          done
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signatures
+          path: dist/*.sigstore.json
+          retention-days: 7
+          if-no-files-found: error
+
+  publish:
+    needs: [package, sign]
+    # sign is skipped while SIGNING_ENABLED is unset; publish then uploads unsigned assets.
+    if: >-
+      always() && vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&
+      needs.package.result == 'success' &&
+      (needs.sign.result == 'success' || needs.sign.result == 'skipped')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write # upload the release assets
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: dist
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.sign.result == 'success'
+        with:
+          name: signatures
+          path: dist
+
+      - name: Upload to the GitHub Release
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null \
+            || { echo "::error::no GitHub Release for $TAG (release-please creates it)"; exit 1; }
+          # --clobber: a re-run replaces the assets of a failed one.
+          gh release upload "$TAG" dist/vimma* dist/SHA256SUMS* --clobber --repo "$GITHUB_REPOSITORY"
+
+  # Pushes PKGBUILD, .SRCINFO and vimma.desktop to aur.archlinux.org/vimma-bin.git. No GitHub
+  # token at all; skipped (green, with a notice) until the AUR_SSH_KEY secret exists.
+  aur:
+    needs: publish
+    if: vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions: {}
+    env:
+      AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+      MAINTAINER: ${{ vars.PACKAGE_MAINTAINER }}
+      # aur.archlinux.org's Ed25519 host key; fingerprint
+      # SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4 as published on https://aur.archlinux.org/
+      AUR_HOST_KEY: aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN
+    steps:
+      - name: Without AUR_SSH_KEY, skip
+        if: env.AUR_SSH_KEY == ''
+        run: echo "::notice::AUR_SSH_KEY is not set; vimma-bin was not pushed (docs/runbook.md, Releases)"
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: env.AUR_SSH_KEY != ''
+        with:
+          name: release
+          path: dist
+
+      - name: Push vimma-bin
+        if: env.AUR_SSH_KEY != ''
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          printf '%s\n' "$AUR_HOST_KEY" > ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          git clone ssh://aur@aur.archlinux.org/vimma-bin.git aur
+          cp dist/aur/PKGBUILD dist/aur/.SRCINFO dist/aur/vimma.desktop aur/
+          cd aur
+          name=$(printf '%s' "$MAINTAINER" | sed -E 's/ *<.*//')
+          email=$(printf '%s' "$MAINTAINER" | sed -E 's/.*<(.*)>.*/\1/')
+          git add PKGBUILD .SRCINFO vimma.desktop
+          if git diff --cached --quiet; then
+            echo "::notice::vimma-bin already at ${TAG#v}"
+          else
+            git -c user.name="$name" -c user.email="$email" commit -m "Update to ${TAG#v}"
+            git push origin HEAD:master
+          fi
+
+  failure:
+    needs: [build, package, sign, publish, aur]
+    if: failure() && vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write # open or comment on the release-failure issue
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Open or update the failure issue
+        run: |
+          gh label create release-failure --repo "$GITHUB_REPOSITORY" --color B60205 \
+            --description "release.yml failed" --force
+          body="Release $TAG failed: $RUN_URL. Fix, then re-run: \`gh workflow run release.yml -f tag=$TAG\` (assets are replaced)."
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --label release-failure --state open \
+            --json number --jq '.[0].number')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Release $TAG failed" \
+              --label release-failure --body "$body"
+          fi
