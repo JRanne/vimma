@@ -53,6 +53,18 @@ jobs:
       - name: npm ci
         run: npm ci
 
+      # Disk guards. Measured (PR #8): ~13 GB free before the download; the tarball (0.8 GB) and
+      # tree (4.7 GB) leave ~8.3 GB once the tarball is deleted; build and tests then use 1.2 GB,
+      # ending at 7.1 GB. Each guard asks for the step's use plus ~2 GB of margin.
+      - name: Disk guard (download and unpack need ~6 GB)
+        run: |
+          df -h . | tail -1
+          free=$(df --output=avail -BG . | tail -1 | tr -dc 0-9)
+          if [ "$free" -lt 8 ]; then
+            echo "::error::Only ${free} GB free; the Firefox source needs ~6 GB (ADR-010). Free space first, e.g. rm -rf /usr/local/lib/android (~9 GB)."
+            exit 1
+          fi
+
       - name: Firefox source tarball (surfer.json), unpacked without history
         env:
           CI_SKIP_INIT: "1" # Surfer's own switch: skips `git init` + commit of 4.7 GB
@@ -67,6 +79,14 @@ jobs:
 
       - name: Import our patches and sources
         run: npm run import
+
+      - name: Disk guard (artifact build and tests need ~1.2 GB)
+        run: |
+          free=$(df --output=avail -BG . | tail -1 | tr -dc 0-9)
+          if [ "$free" -lt 3 ]; then
+            echo "::error::Only ${free} GB free; the artifact build and tests need ~1.2 GB (ADR-010). Free space first, e.g. rm -rf /usr/local/lib/android (~9 GB)."
+            exit 1
+          fi
 
       - name: Artifact build (tools/artifact-build)
         run: node tools/artifact-build/artifact-build.mjs
