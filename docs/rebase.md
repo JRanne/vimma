@@ -240,11 +240,12 @@ upstream renamed or removed the provider: read `firefox.js` and the spec before 
 
 ## 7. Split-view contract: the canary (M4)
 
-Once M4's first sub-spec lands, `tests/browser/browser_vimma_split_contract.js` pins the upstream
+`tests/browser/browser_vimma_split_contract.js` (M4 sub-spec 1, ADR-013) pins the upstream
 split-view behaviour we rely on without a patch (spec m4-split-panes, Contract). It always uses
-three and four tabs, never only two. It checks that `addTabSplitView([a, b, c])` keeps one wrapper
-with every panel active, that selection keeps docshells active, the four-tab case, and
-`removeTab` on a three-tab split. Run it first on both builds, before the rest of the suite:
+wrappers of three and four tabs, never only two. It covers an L shape of three and a 2×2 grid of
+four placed at vimma-core's `layout()` rectangles, focus and the URL bar following the pane, the
+find bar and notifications per pane, zoom, and `removeTab` on a member of a three-tab split. Run
+it first on both builds, before the rest of the suite:
 
 ```sh
 npm run mochitest -- tests/browser/browser_vimma_split_contract.js
@@ -254,7 +255,7 @@ npm run mochitest -- --artifact tests/browser/browser_vimma_split_contract.js
 **Decide:** if it fails, Firefox changed its split view (renames, a two-tab limit, panel
 reordering). Do not loosen the test or wrap upstream code at runtime. Hold the bump, and follow
 the spec's risk table: the named contingency patch, with an ADR-003 register line, or a design
-change. Until the file exists, this step is a no-op.
+change.
 
 ## 8. Ready, CI, merge
 
@@ -264,7 +265,7 @@ change. Until the file exists, this step is a no-op.
       green (paste counts in the PR, as the PR template asks)
 - [ ] artifact build: preflight OK; `npm run mochitest -- --artifact tests/browser/` green
 - [ ] `npx vitest run tools/branding/` green; cfr provider up to date
-- [ ] split-view contract green (once it exists)
+- [ ] split-view contract green on both builds
 
 Then `gh pr ready <n>`, which starts `ci.yml` and `e2e.yml`. Merge when green. The nightly
 re-downloads Firefox because `surfer.json` changed, and builds it at 03:00 UTC. release-please
