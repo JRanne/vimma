@@ -219,8 +219,8 @@ add_task(async function unrunnable_key_inside_a_prefix_sequence_is_consumed() {
     await focusContent(browser);
     const tabs = gBrowser.tabs.length;
     EventUtils.synthesizeKey("b", { ctrlKey: true });
-    EventUtils.synthesizeKey("c"); // new_tab: not runnable yet
-    Assert.deepEqual(await pageKeysThenZ(browser), ["z"], "ctrl+b c leaks no c to the page");
+    EventUtils.synthesizeKey("v"); // split_vertical: not runnable until M4
+    Assert.deepEqual(await pageKeysThenZ(browser), ["z"], "ctrl+b v leaks no v to the page");
     Assert.equal(gBrowser.tabs.length, tabs, "and does nothing else yet");
   });
 });
@@ -308,6 +308,52 @@ add_task(async function overrides_are_marked() {
       help.dialog.querySelector(`[data-action="${name}"] .vimma-help-override`).textContent;
     Assert.equal(marker("new_tab"), "*", "an overridden action is marked *");
     Assert.equal(marker("close_tab"), "", "a default one is not");
+  } finally {
+    help.close();
+    help.destroy();
+  }
+});
+
+add_task(async function rows_mark_what_the_host_can_run() {
+  await BrowserTestUtils.withNewTab("about:preferences", async (browser) => {
+    await SimpleTest.promiseFocus(browser.contentWindow);
+    await openHelp();
+    const row = (name) => overlay().querySelector(`[data-action="${name}"]`);
+    // Host actions and page actions (scroll, Esc/i) alike: the overlay is not about focus.
+    for (const name of [
+      "show_keybinds",
+      "new_tab",
+      "next_tab",
+      "select_tab_3",
+      "close_tab",
+      "scroll_down",
+      "scroll_top",
+      "normal_mode",
+      "insert_mode",
+    ]) {
+      Assert.equal(row(name).dataset.runnable, "true", `${name} is marked implemented`);
+    }
+    for (const name of ["rename_tab", "split_vertical", "goto_picker", "next_workspace"]) {
+      Assert.equal(row(name).dataset.runnable, "false", `${name} is marked not yet`);
+    }
+    const opacity = (name) => Number(getComputedStyle(row(name)).opacity);
+    Assert.equal(opacity("new_tab"), 1, "an implemented row is not dimmed");
+    Assert.less(opacity("split_vertical"), 1, "a not-yet row is dimmed");
+    const legend = overlay().querySelector(".vimma-help-legend");
+    Assert.ok(legend && BrowserTestUtils.isVisible(legend), "a legend explains the dimming");
+    Assert.stringContains(legend.textContent, "not implemented yet");
+    await closeHelp();
+  });
+});
+
+add_task(async function a_given_runnable_set_decides_the_marks() {
+  const help = new HelpOverlay(window, compileKeymap(), new Set(["tab.rename"]));
+  gBrowser.selectedBrowser.focus();
+  help.open();
+  try {
+    const mark = (name) => help.dialog.querySelector(`[data-action="${name}"]`).dataset.runnable;
+    Assert.equal(mark("rename_tab"), "true", "an id in the set is implemented");
+    Assert.equal(mark("new_tab"), "false", "an id outside it is not");
   } finally {
     help.close();
     help.destroy();
