@@ -115,10 +115,49 @@ Vimma's own preferences today:
 | -------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `vimma.ui.tabstrip.hidden` | `true`  | Hides Firefox's tab strip (horizontal, and the vertical tab list). Set `false` to show it again; it applies at once, no restart.                           |
 | `vimma.debug.keys`         | unset   | Create it as a boolean set to `true` to log every key Vimma sees (`{ key, mods, mode }`) to the Browser Console (`ctrl+shift+j`; enable its Debug filter). |
+| `vimma.control.enabled`    | `false` | Turns on the control socket for `vimma-ctl` and scripts (see [Scripting with vimma-ctl](#scripting-with-vimma-ctl)). Applies at once, no restart.          |
 
 **Planned:** `~/.config/vimma/config.toml` (M5) for keys, workspaces and theme. Its validator
-already exists, but the browser does not read the file yet. The control socket and `vimma-ctl`
-(off by default) are also planned.
+already exists, but the browser does not read the file yet.
+
+## Scripting with vimma-ctl
+
+`vimma-ctl` drives a running Vimma from a shell, a window-manager binding or a test: it sends
+keys, reads the state and opens URLs. It talks to the browser over a local control socket, which
+is **off by default**. Spec: [m0-control-server](specs/m0-control-server.md), protocol:
+[m0-control-protocol-and-vimma-ctl](specs/m0-control-protocol-and-vimma-ctl.md).
+
+1. Turn the socket on: in `about:config`, set `vimma.control.enabled` to `true`. It starts at
+   once and writes `vimma-control.json` into your profile directory. Setting it back to `false`
+   stops it and deletes the file.
+2. Build the client (Rust, no dependencies): `cargo build --release` in `tools/vimma-ctl/`; the
+   binary is `tools/vimma-ctl/target/release/vimma-ctl`. Packages will ship it later.
+3. Use it:
+
+   ```sh
+   vimma-ctl state                    # mode, pending keys, tabs
+   vimma-ctl state --json             # the same, as JSON
+   vimma-ctl send-keys "ctrl+b ?"     # typed as if on the keyboard: opens the help overlay
+   vimma-ctl send-keys esc
+   vimma-ctl open https://example.com # a new tab; only http, https, file and about URLs
+   ```
+
+   It finds your default profile itself; pass `--profile DIR` (or set `VIMMA_PROFILE`) for
+   another one. In Hyprland: `bind = SUPER, slash, exec, vimma-ctl send-keys "ctrl+b ?"`.
+
+`send-keys` presses the keys in the most recently focused Vimma window, exactly as typing them
+would: Vimma's bindings, Firefox's shortcuts (`ctrl+t`, `ctrl+q`) and the page all see them. Keys
+meant for the page reach it only while that window has focus, as with a real keyboard.
+
+**Security.** The socket listens on `127.0.0.1` only, on a random port. A client must first
+send the token from `vimma-control.json`, a 256-bit random value made new at every start and
+compared in constant time; the file is readable by you alone (mode 0600) and `vimma-ctl` refuses
+a file anyone else can read. So other users on the machine and web pages cannot use the socket;
+anything running as you can, just as it can already read your profile's cookies and history.
+`open` refuses `javascript:` and `data:` URLs. At most 8 connections are open at once (the next
+is told "busy"), a client must authenticate within 5 s, and an idle connection is closed after
+60 s. If Vimma crashes or is killed (`kill -9`, `SIGTERM`), the file stays behind and
+`vimma-ctl` says Vimma is not running; the next start replaces it.
 
 ## Privacy defaults
 

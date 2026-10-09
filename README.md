@@ -48,6 +48,10 @@ What works today:
   crash reporter and no official telemetry, so nothing is uploaded. Remote Settings, CRLite,
   the add-on blocklist, Sync and AMO work as in Firefox. Each default can be turned back on in
   `about:config`.
+- **Control socket and `vimma-ctl`** (off by default). With `vimma.control.enabled` on,
+  `vimma-ctl state`, `send-keys "ctrl+b ?"` and `open <url>` drive a running Vimma from a shell or
+  a test, over a token-protected socket on `127.0.0.1`. Build the client with
+  `cargo build --release` in `tools/vimma-ctl/`. See [docs/guide.md](docs/guide.md#scripting-with-vimma-ctl).
 - **Firefox-compatible.** Sites see Firefox 157's user agent, byte for byte. Add-ons, webcompat
   fixes and Remote Settings see Firefox's version number.
 

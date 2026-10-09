@@ -104,6 +104,35 @@ kill $(jobs -p)
 Pass `--repeat=N` with `=`: `tools/mochitest.mjs` treats a bare `N` as a test path. Plan §5: no
 retries in CI; a flaky test gets quarantined and an issue the same day.
 
+### The control socket (spec m0-control-server)
+
+`tests/browser/browser_vimma_control.js` drives the server with a raw socket client, and its last
+task runs the real `vimma-ctl state` against it. It finds the binary through the test file's
+symlink into this checkout (`tools/vimma-ctl/target/{release,debug}/vimma-ctl`), or `VIMMA_CTL`.
+Without one it skips that task; the e2e workflow builds the binary and passes
+`--setenv=VIMMA_REQUIRE_CTL=1`, which turns the skip into a failure. Locally:
+
+```sh
+(cd tools/vimma-ctl && cargo build --release)
+npm run mochitest -- tests/browser/browser_vimma_control.js
+```
+
+Test-only prefs shorten the limits: `vimma.control.helloTimeoutMs` (5000) and
+`vimma.control.idleTimeoutMs` (60000). By hand, against a real build:
+
+```sh
+p=$(mktemp -d); echo 'user_pref("vimma.control.enabled", true);' > "$p/user.js"
+engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma --headless --no-remote --profile "$p" &
+tools/vimma-ctl/target/release/vimma-ctl --profile "$p" state
+tools/vimma-ctl/target/release/vimma-ctl --profile "$p" send-keys ctrl+q   # quits; file removed
+```
+
+A normal quit (`ctrl+q`) deletes `vimma-control.json`. `SIGTERM` does not:
+measured on 157.0.1 (headless), the process dies by the signal within ~20 ms (exit 143) without
+running quit observers, so the file stays and `vimma-ctl` reports "not running". To end a run
+cleanly, send `ctrl+q` (with `browser.warnOnQuitShortcut` = `false` in `user.js`) and keep
+`SIGTERM`/`SIGKILL` as the fallback.
+
 ## Parallel browser lanes
 
 A lane is a git worktree (e.g. an agent's under `.claude/worktrees/`) with its own `engine/` and

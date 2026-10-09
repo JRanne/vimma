@@ -1,6 +1,6 @@
 # Spec: m0-control-protocol-and-vimma-ctl
 
-Status: implemented (client and contract), awaiting review; server side pending · Milestone: M0 ·
+Status: implemented (client and contract); the server is spec m0-control-server · Milestone: M0 ·
 Area: `packages/vimma-core` (contract validator), `tools/vimma-ctl` (Rust client),
 `tests/contract/control/v1/` (fixtures)
 Prerequisites: ADR-007 (control socket), ADR-011 (vimma-ctl in Rust).
