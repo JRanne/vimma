@@ -1,6 +1,17 @@
 {
   "$comment": "Key-to-action bench baseline, one entry per runner class (CPU model | arch | Node major). Gate: tools/bench/compare.mjs. Change only deliberately, with a changelog line in the commit body (docs/runbook.md, Bench baseline).",
   "machines": {
+    "AMD EPYC 9V74 80-Core Processor | x64 | node 22": {
+      "recorded": "2026-10-09",
+      "notes": "GitHub-hosted ubuntu-latest (24.04), 2 vCPU, private repo; ci.yml run 37963723494 on PR #36",
+      "cases": {
+        "single key: j → scroll.down": { "us": 0.2, "ratio": 0.389 },
+        "prefix + key: ctrl+b c → tab.new": { "us": 0.49, "ratio": 0.914 },
+        "count + motion: 5 j → scroll.down ×5": { "us": 0.39, "ratio": 0.743 },
+        "sequence: g t → tab.next": { "us": 0.4, "ratio": 0.754 },
+        "apply: pane focus + selectTab, 8 panes, 30 tabs": { "us": 13.45, "ratio": 24.753 }
+      }
+    },
     "INTEL(R) XEON(R) PLATINUM 8573C | x64 | node 22": {
       "recorded": "2026-10-09",
       "notes": "GitHub-hosted ubuntu-latest (24.04), 2 vCPU, private repo; ci.yml run 37962965080 on PR #36",
