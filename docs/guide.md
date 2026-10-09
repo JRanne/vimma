@@ -15,6 +15,25 @@ describes: `npm ci`, `npx surfer download`, `npx surfer bootstrap`, `npm run imp
 about 35 GB of disk space (`engine/` 27 GB, the sccache compiler cache 6.8 GB, `~/.mozbuild`
 3.1 GB, `.surfer/` 0.8 GB).
 
+### Installing (planned, not yet released)
+
+**Planned for M6; no release has these files yet.** Each GitHub Release will carry, for Linux
+x86_64 (`X.Y.Z` is the Vimma version):
+
+| File                              | Install                                                                                  |
+| --------------------------------- | ---------------------------------------------------------------------------------------- |
+| `vimma_X.Y.Z_amd64.deb`           | `sudo apt install ./vimma_X.Y.Z_amd64.deb` (Debian 12+, Ubuntu 22.04+)                   |
+| `vimma-X.Y.Z-x86_64.AppImage`     | `chmod +x vimma-X.Y.Z-x86_64.AppImage && ./vimma-X.Y.Z-x86_64.AppImage`                  |
+| `vimma-X.Y.Z-linux-x86_64.tar.xz` | `tar -xJf vimma-X.Y.Z-linux-x86_64.tar.xz && ./vimma/vimma`                              |
+| AUR `vimma-bin`                   | `yay -S vimma-bin` or `git clone https://aur.archlinux.org/vimma-bin.git && makepkg -si` |
+
+The `.deb` and the AUR package add Vimma to your application menu and offer it for web links,
+but never make it your default browser on their own: `xdg-settings set default-web-browser
+vimma.desktop` does that. Vimma has no in-app updater: update through apt, your AUR helper, or by
+downloading the next AppImage or tarball. Next to the files are `SHA256SUMS`, a CycloneDX SBOM
+(`vimma-X.Y.Z.cdx.json`) and cosign signatures (`*.sigstore.json`); how to check them is in
+[runbook.md](runbook.md#release-packages-releaseyml-spec-m6-packaging) ("Verify a release").
+
 ### First launch, with its own profile
 
 Start Vimma with a profile of its own, so it never touches your Firefox profile and two builds
