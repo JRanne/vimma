@@ -7,7 +7,9 @@
 # already exists, so this only uploads to it; a hand-pushed v* tag starts nothing. Neither event
 # fires for a release made with GITHUB_TOKEN, so release-please needs RELEASE_PLEASE_TOKEN, or
 # run this by hand: gh workflow run release.yml -f tag=vX.Y.Z (also how to retry a failure).
-# Neither event can come from a fork or a pull request.
+# Neither event can come from a fork or a pull request. A manual run executes the release.yml
+# of the branch it is started on, so every job also requires a release event or main: a pushed
+# branch must not be able to sign or upload anything (tools/package/test/release-workflow.test.mjs).
 name: release
 
 on:
@@ -30,10 +32,14 @@ env:
   TAG: ${{ github.event.release.tag_name || inputs.tag }}
 
 jobs:
-  # Full build on the self-hosted machine (22 GB engine/, 39 min; as nightly.yml). Read-only
-  # token, no secrets: what it produces is checked, signed and uploaded by hosted jobs below.
+  # Full build on the self-hosted machine (22 GB engine/; as nightly.yml). Read-only token, no
+  # secrets: what it produces is checked, signed and uploaded by hosted jobs below. It builds in
+  # a fresh objdir with an empty compiler cache of its own, so nothing a nightly (or anything
+  # else that ran on the runner) left behind reaches signed binaries; a cold build costs ~40 min.
   build:
-    if: vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma'
+    if: >-
+      vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&
+      (github.event_name == 'release' || github.ref == 'refs/heads/main')
     runs-on: [self-hosted, linux, x64, vimma-build]
     timeout-minutes: 240
     permissions:
@@ -53,6 +59,16 @@ jobs:
 
       - name: npm ci
         run: npm ci
+
+      - name: Fresh objdir and compiler cache for this release
+        run: |
+          objdir="$GITHUB_WORKSPACE/engine/obj-release"
+          cache="$RUNNER_TEMP/sccache-release"
+          # The nightly's sccache server would keep serving its own cache: stop it first.
+          "$HOME/.mozbuild/sccache/sccache" --stop-server || true
+          rm -rf "$objdir" "$cache"
+          mkdir -p "$cache"
+          { echo "MOZ_OBJDIR=$objdir"; echo "SCCACHE_DIR=$cache"; } >> "$GITHUB_ENV"
 
       - name: The tag matches surfer.json's version
         run: |
@@ -79,19 +95,30 @@ jobs:
 
       - name: Smoke check
         run: |
-          version=$(engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma --version 2>&1)
+          version=$("$MOZ_OBJDIR/dist/bin/vimma" --version 2>&1)
           expected="Vimma Vimma ${TAG#v}"
           [ "$version" = "$expected" ] || { echo "::error::--version is '$version', want '$expected'"; exit 1; }
+          # appinfo.version is the Firefox version (spec m0-app-version); --version shows Vimma's.
+          appver=$(sed -n 's/^Version=//p' "$MOZ_OBJDIR/dist/bin/application.ini")
+          firefox=$(node -p 'require("./surfer.json").version.version')
+          [ "$appver" = "$firefox" ] || { echo "::error::app version is '$appver', want '$firefox'"; exit 1; }
 
       - name: Package with mach (dist/vimma-<firefox>.en-US.linux-x86_64.tar.xz)
         run: |
-          rm -f engine/obj-x86_64-pc-linux-gnu/dist/vimma-*.tar.xz
           (cd engine && ./mach package)
           rm -rf release && mkdir release
-          cp engine/obj-x86_64-pc-linux-gnu/dist/vimma-*.en-US.linux-x86_64.tar.xz release/
+          cp "$MOZ_OBJDIR"/dist/vimma-*.en-US.linux-x86_64.tar.xz release/
 
-      - name: SBOM (CycloneDX)
-        run: node tools/package/sbom.mjs --engine engine --out "release/vimma-${TAG#v}.cdx.json"
+      - name: SBOM (CycloneDX), checked against the official 1.6 schema
+        run: |
+          node tools/package/sbom.mjs --engine engine --out "release/vimma-${TAG#v}.cdx.json"
+          node tools/package/validate-sbom.mjs "release/vimma-${TAG#v}.cdx.json"
+
+      - name: Stop the release compiler cache
+        if: always()
+        run: |
+          "$HOME/.mozbuild/sccache/sccache" --stop-server || true
+          rm -rf "$RUNNER_TEMP/sccache-release"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -103,7 +130,9 @@ jobs:
   # AppImage, .deb, AUR files, SHA256SUMS; then install and start what was built.
   package:
     needs: build
-    if: vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma'
+    if: >-
+      vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&
+      (github.event_name == 'release' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -140,7 +169,7 @@ jobs:
             --maintainer "$MAINTAINER" --repo "$GITHUB_REPOSITORY" --sbom "build/vimma-$v.cdx.json" \
             --appimagetool "$RUNNER_TEMP/appimagetool/appimagetool" \
             --runtime "$RUNNER_TEMP/appimagetool/runtime-x86_64"
-          desktop-file-validate dist/aur/vimma.desktop
+          desktop-file-validate dist/aur/*.desktop
           (cd dist && sha256sum -c SHA256SUMS)
 
       - name: Smoke test the .deb and the AppImage
@@ -148,7 +177,7 @@ jobs:
           v=${TAG#v}
           sudo apt-get install -y -q "./dist/vimma_${v}_amd64.deb"
           [ "$(vimma --version)" = "Vimma Vimma $v" ] || { echo "::error::.deb: $(vimma --version)"; exit 1; }
-          test -f /usr/share/applications/vimma.desktop
+          test -f /usr/share/applications/vimma-vimma.desktop
           p=$(mktemp -d)
           # First run creates the profile; --screenshot on a fresh profile races the bookmarks
           # import (docs/runbook.md, Smoke check). timeout exits 124.
@@ -162,7 +191,7 @@ jobs:
         with:
           name: release
           path: dist/
-          include-hidden-files: true # dist/aur/.SRCINFO
+          include-hidden-files: true # dist/aur/.SRCINFO; dist/notes/ goes into the release notes
           retention-days: 7
           if-no-files-found: error
 
@@ -170,7 +199,10 @@ jobs:
   # OIDC token; it runs no repository code.
   sign:
     needs: package
-    if: vars.RELEASE_ENABLED == 'true' && vars.SIGNING_ENABLED == 'true' && github.repository == 'JRanne/vimma'
+    if: >-
+      vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&
+      (github.event_name == 'release' || github.ref == 'refs/heads/main') &&
+      vars.SIGNING_ENABLED == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -201,6 +233,7 @@ jobs:
     # sign is skipped while SIGNING_ENABLED is unset; publish then uploads unsigned assets.
     if: >-
       always() && vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&
+      (github.event_name == 'release' || github.ref == 'refs/heads/main') &&
       needs.package.result == 'success' &&
       (needs.sign.result == 'success' || needs.sign.result == 'skipped')
     runs-on: ubuntu-24.04
@@ -228,11 +261,22 @@ jobs:
           # --clobber: a re-run replaces the assets of a failed one.
           gh release upload "$TAG" dist/vimma* dist/SHA256SUMS* --clobber --repo "$GITHUB_REPOSITORY"
 
-  # Pushes PKGBUILD, .SRCINFO and vimma.desktop to aur.archlinux.org/vimma-bin.git. No GitHub
+      - name: Append the third-party notice to the release notes
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > notes.md
+          # Once per release: a re-run finds the heading and leaves the notes alone.
+          if ! grep -q '^### Third-party notice$' notes.md; then
+            { echo; cat dist/notes/third-party.md; } >> notes.md
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
+          fi
+
+  # Pushes PKGBUILD, .SRCINFO and vimma-vimma.desktop to aur.archlinux.org/vimma-bin.git. No GitHub
   # token at all; skipped (green, with a notice) until the AUR_SSH_KEY secret exists.
   aur:
     needs: publish
-    if: vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma'
+    if: >-
+      vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&
+      (github.event_name == 'release' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions: {}
@@ -262,11 +306,12 @@ jobs:
           printf '%s\n' "$AUR_HOST_KEY" > ~/.ssh/known_hosts
           export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
           git clone ssh://aur@aur.archlinux.org/vimma-bin.git aur
-          cp dist/aur/PKGBUILD dist/aur/.SRCINFO dist/aur/vimma.desktop aur/
+          cp dist/aur/PKGBUILD dist/aur/.SRCINFO dist/aur/vimma-vimma.desktop aur/
           cd aur
           name=$(printf '%s' "$MAINTAINER" | sed -E 's/ *<.*//')
           email=$(printf '%s' "$MAINTAINER" | sed -E 's/.*<(.*)>.*/\1/')
-          git add PKGBUILD .SRCINFO vimma.desktop
+          git rm -q --ignore-unmatch vimma.desktop
+          git add PKGBUILD .SRCINFO vimma-vimma.desktop
           if git diff --cached --quiet; then
             echo "::notice::vimma-bin already at ${TAG#v}"
           else
@@ -276,8 +321,10 @@ jobs:
 
   failure:
     needs: [build, package, sign, publish, aur]
-    if: failure() && vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma'
-    runs-on: ubuntu-latest
+    if: >-
+      failure() && vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&
+      (github.event_name == 'release' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       issues: write # open or comment on the release-failure issue
