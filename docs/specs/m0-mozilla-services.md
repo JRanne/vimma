@@ -115,7 +115,8 @@ ships.
 
 ## Out of scope
 
-- Opt-in crash reporting to our own server, update server and update manifest (M6).
+- Opt-in crash reporting to our own server, update server and update manifest (M6); until then
+  the app updater is not built and system add-on updates are off (spec m0-updater).
 - A Safe Browsing API key (Open issues).
 - Telemetry prefs beyond the switches above (`toolkit.telemetry.*`): nothing uploads.
 - Hardening beyond Firefox's privacy model (LibreWolf-style), search engine defaults, DoH.
