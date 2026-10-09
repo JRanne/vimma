@@ -3,6 +3,9 @@ coverage/
 engine/
 .surfer/
 dist/
+# Stryker (npm run mutation): reports and its sandbox
+reports/
+.stryker-tmp/
 *.log
 
 .dotbuild/

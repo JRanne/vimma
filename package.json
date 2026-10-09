@@ -26,12 +26,14 @@
     "test:py": "python3 -m unittest discover -s tools/upstream",
     "license-check": "node tools/license-check/license-check.mjs",
     "license-check:crates": "node tools/license-check/cargo-license-check.mjs",
-    "bench": "vitest bench --run"
+    "bench": "node tools/bench/bench.mjs",
+    "mutation": "stryker run"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",
     "@commitlint/config-conventional": "^21.2.3",
     "@eslint/js": "^10.0.1",
+    "@stryker-mutator/core": "10.0.0",
     "@vitest/coverage-v8": "^5.0.3",
     "@zen-browser/surfer": "^1.14.9",
     "ajv": "^8.20.0",

@@ -242,6 +242,7 @@ Limits:
 | `claude.yml`         | `@claude`, `spec`+`claude:go`    | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
 | `release-please.yml` | push to `main`, manual           | `ubuntu-latest`           | Actions may open PRs; optional token       |
 | `release.yml`        | release published, manual        | `vimma-build` + hosted    | see "Release packages" (gated off)         |
+| `mutation.yml`       | Sundays 04:23 UTC, manual        | `ubuntu-latest`           | nothing (creates its `mutation` label)     |
 | Renovate             | Mondays before 07:00 Helsinki    | Renovate's own            | install the Renovate app                   |
 
 Locally, before pushing: `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:py`,
@@ -306,6 +307,112 @@ browser (5.5 min wall, ADR-010); upstream 4 × 1 min a day (≈ 120 min a month)
 (patch check + PR job) when a release is found; claude.yml only
 when triggered. `nightly.yml` uses the self-hosted runner, which costs no hosted minutes. Check usage in Settings → Billing → Usage. Once the repo is public,
 standard hosted runners are free and unlimited; the e2e paths filter can then go.
+
+The bench step adds about half a minute to each CI run. `mutation.yml` is the largest scheduled
+cost: a full run (first Sunday of the month) is estimated at 60–90 min on the 2-CPU runner
+(4 916 mutants; 22 min with 12 workers locally, about 0.6 s per mutant per CPU), an incremental
+week a few minutes plus one for the report job: roughly 100 min a month. If that is too much
+before the repo goes public, narrow `mutate` in `stryker.config.mjs` or drop the monthly full run.
+
+### Mutation testing (`mutation.yml`)
+
+Plan §5: Stryker mutates `packages/vimma-core/src` (not `vendor/`) every Sunday and runs the core's
+tests against each mutant. A mutant that no test fails on **survived**: the tests would not notice
+that change to the code. Survivors never fail the workflow; they go into one open issue labelled
+`mutation`, which each run rewrites (and closes when none are left). Only a broken run is red.
+
+Reading the issue and the report:
+
+- The issue lists survivors per file as `L<line>:<col> <mutator> → <replacement>`. The HTML report
+  (artifact `mutation-report` on the run, or `reports/mutation/mutation.html` locally) shows each
+  one in the source, which is easier for more than a handful.
+- `NoCoverage` means no test runs that code at all (rare: the coverage gate is 90 %).
+- `Timeout` counts as killed: the mutant made the tests hang (usually a loop condition). Under
+  heavy local parallelism a slow survivor can time out instead; CI's two workers are the reference.
+- For each survivor: write a test that fails on the mutant, red first (plan §5), naming the
+  behaviour, not the mutant. If the mutant cannot change behaviour (an equivalent mutant, e.g. a
+  redundant guard or a log message), mark it in the source with
+  `// Stryker disable next-line <Mutator>: <why it is equivalent>`; the reason is required.
+- Do not chase 100 %: string-literal mutants in error messages, for example, are fine to leave
+  when no caller depends on the text.
+
+Locally: `npm run mutation` (full run the first time, about 20 min on 12 cores; later runs reuse
+`reports/mutation/stryker-incremental.json` and re-test only changed files, `npx stryker run --force`
+to redo everything); `npx stryker run --mutate packages/vimma-core/src/keys.mjs` for one file.
+
+How it runs, and why: Stryker's `command` runner runs `vitest run` on the core's tests once per
+mutant (`packages/vimma-core/vitest.config.mjs`, one worker, `--bail 1`). The dedicated
+`@stryker-mutator/vitest-runner` 10.0.0 is not used: with Vitest 5 it skips every test inside a
+`describe()` and reports their mutants as survivors (spec ci-quality-gates). Each run uploads its
+results; the next week's run downloads them (`actions: read`) and re-tests only the mutants in
+changed files. Because that cannot see new tests, the first Sunday of the month (or
+`gh workflow run mutation.yml -f full=true`) re-tests everything. The job running Stryker has no
+write token; the separate report job alone has `issues: write`.
+
+### Bench baseline (`ci.yml`)
+
+Plan §5, issue #17: key-to-action in core must stay under 50 µs and must not regress by more
+than 10 %. `npm run bench` measures five cases (a single key, the prefix plus a key, a count plus
+a motion, a two-key sequence, and applying a pane-focus action to a 30-tab workspace) from
+`packages/vimma-core/bench/cases.mjs`; `npm run bench -- --check` is the CI step. It fails when:
+
+- any case takes **50 µs or more** (budget; applies on every machine), or
+- on a machine the baseline knows: the **suite**, the geometric mean of the cases' changes, is
+  more than **10 %** slower, or one case is more than **25 %** slower, or a baseline case is gone.
+- on a machine it does not know (a new runner CPU, a Node bump): the same, against the **most
+  demanding entry of the same arch and Node major**, with both limits widened by 40 points (50 %
+  suite, 65 % per case). Ratios do not carry across CPU generations: the Xeon 8573C and EPYC 9V74
+  entries differ by up to 5.5 % per case, but unchanged code on an EPYC 7763 measured +19 %
+  suite and up to +30 % per case against the 9V74 (run 37966135702), so a tighter fallback would
+  fail on hardware, not code. It still catches a gross regression. The step
+  then emits a `::warning::` and a step-summary line naming that entry. Only with no entry of the
+  same arch and Node major does it fall back to the budget alone, also with a warning. It never
+  passes silently.
+
+Why it does not flake (plan §5: no retries; flaky means quarantine):
+
+- **Ratios, not raw times.** Each sample times a case and then a fixed reference workload; the
+  gate compares the case/reference ratio. A faster or slower VM, or a clock change mid-run, moves
+  both.
+- **Robust statistics.** Warm-up, batches of ≥ 100 µs, the median of 51 samples per round, the
+  median over rounds; then the lowest over 15 fresh processes. One process lands in a JIT mode
+  that can be 20–30 % off for sub-microsecond code; the lowest of 15 is the fast mode, and a fresh
+  run finds it again.
+- **One baseline per runner class.** Entries are keyed by `CPU model | arch | node X.Y.Z`;
+  GitHub's pool mixes CPU models (we have seen Intel Xeon Platinum 8573C and AMD EPYC 9V74), and
+  ratios do not carry exactly across microarchitectures or V8 versions.
+- **Several samples per entry.** An entry's `cases` are the per-case median of its `samples`, one
+  per CI run, so one unlucky recording run does not set the bar. Currently: AMD EPYC 9V74 has 2
+  samples, Intel Xeon 8573C 1 and AMD EPYC 7763 1 (add later runs' numbers, see below).
+- **Suite-level 10 %.** Measured noise between whole runs on a 2-CPU-pinned laptop: the suite's
+  geometric mean within 6 % (max−min over 8 runs), single cases up to 14 %. So 10 % on the suite
+  and 25 % per case leave a margin of about two on the worst pair. Two CI runs on the same AMD
+  runner class differed by 1 % on the suite.
+- **The budget has headroom.** The slowest case is about 13 µs on CI, the key cases under 0.5 µs.
+
+If the step does fail without a slowing change, that is a flake: quarantine per plan §5 (open an
+issue with the log; do not re-run to green), and look at the numbers before touching thresholds.
+
+**Node is pinned exactly** in `.nvmrc`; ci, e2e, mutation and claude use
+`node-version-file: .nvmrc`. Exceptions, none of which runs the bench: release.yml's package job
+checks out a release tag (tags from before `.nvmrc` lack it) and stays on major 22; the
+self-hosted nightly and release build jobs use the runner's own Node for Surfer. The baseline is keyed on the exact version because a V8 patch can move these numbers. A
+Node bump therefore comes as its own Renovate PR (`nvm` manager, never automerged): its bench
+step falls back to the previous version's entries with a warning, and that PR records the new key.
+
+Updating the baseline, deliberately (like snapshots: never to make a red run green without
+saying why):
+
+1. A change that is meant to cost time (a new feature in the dispatch path), a new or renamed
+   case, a Node bump or a new runner CPU model are the reasons to re-record.
+2. Take the numbers from CI, not a laptop. Every bench step prints `baseline entry:` for the
+   runner it ran on: a new entry, or the existing one with this run added as a sample (medians
+   recomputed). Copy it into `packages/vimma-core/bench/baseline.json`. To replace an entry
+   because the code changed on purpose, delete the entry first so the old samples go. On a
+   machine of the class itself, `npm run bench -- --record "<notes>"` does the same in place.
+3. Keep the notes (runner image, why), and prefer two or more samples per entry.
+4. The commit body carries a changelog line naming the cases and the change, e.g.
+   `bench baseline: prefix + key +12 % from per-mode leader lookup (intended)`.
 
 ### Nightly build runner (`nightly.yml`)
 
