@@ -1,6 +1,6 @@
 # ADR-013: Split panes build on Firefox's own split view, not on vendored Zen code
 
-- Status: Proposed — pending the sub-spec 1 spike (see Acceptance criteria)
+- Status: Accepted (2026-10-09, after the sub-spec 1 spike; see Spike results)
 - Date: 2026-10-09
 - Supersedes: ADR-006 ("Split view is vendored from Zen")
 
@@ -130,6 +130,41 @@ local build, in `browser_vimma_split_contract.js` with wrappers of three and fou
 
 If any criterion fails without a fix in our own files or the one contingency patch, this ADR is
 rejected and M4 returns to ADR-006.
+
+## Spike results
+
+`tests/browser/browser_vimma_split_contract.js` with the spike module
+`src/browser/base/content/vimma/split/spike-layout.mjs` and `split-spike.css`, on a local artifact
+build of Firefox 157.0.1 (headless, Linux), window 1280 × 800, content area 1280 × 760. The
+pane trees are built with `vimma-core`'s pane ops (`split`, `resize`, `toggleZoom`) and the
+rectangles come from its `layout()`. 12 tasks, 234 checks, green on repeated runs and in the full
+`tests/browser/` suite.
+
+| #   | Criterion                                           | Result   | Measured                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --- | --------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | L shape and 4-pane grid at `layout()` ±1 px, active | **Pass** | Δ 0 px for every panel and `<browser>` in `x[p1, y[p2, p3]]` and in a grid at ratios .37/.63, .45/.55, .61/.39 (edges 474, 342, 464). `docShellIsActive` true on every member with each member selected in turn.                                                                                                                                                                                                                                             |
+| 2   | Fullscreen, focus outline, find bar, notification   | **Pass** | DOM fullscreen from pane 2 of 3: its panel is 1366 × 768, the whole (headless) screen, Δ 0; the others stay active, and the point where pane 3 was hits pane 2. After exit every rect is back, Δ 0. Outline: 2 px `--focus-outline-color` on the focused pane only; the others keep the 1 px separator outline. `accel+f` in pane 3 opens pane 3's find bar inside its panel and rect; a notification for pane 2 is in pane 2's `browserContainer` and rect. |
+| 3   | `removeTab` on a 3-split member, next `TabSelect`   | **Pass** | No exception: 0 console errors. The wrapper keeps the other two tabs, `panels` and `.split-view-panel-active` are exactly theirs, and so is `splitViewBrowsers`. Removing the selected member selects another member. The closed tab stays in the private `#tabs`, but `showSplitViewPanels` skips it (`linkedPanel` kept, `linkedBrowser` null).                                                                                                            |
+| 4   | Rebuild: kept active, dropped inactive, scroll kept | **Pass** | `unsplitTabs()` then `addTabSplitView([a, c])` in one task, `c` selected: `a` and `c` active at every sample (sync, microtask, next tick, two frames); `b` false once the host deactivates it. Scroll 600 px kept on `a` and `c`. One late `TabSplitViewDeactivate` (old wrapper, `detail.tabs` = a, b, c) arrives; it neither strips the kept panels nor clears `activeSplitView`.                                                                          |
+
+Also measured:
+
+- Without the host, `unsplitTabs` leaves the dropped tab's docshell active at every sample, so
+  the host's `docShellIsActive = false` on a leave is required, as Consequences says.
+- `browser.tabs.splitView.enabled = false` still allows `addTabSplitView` with three tabs, and
+  `hideTab` on one member hides every member.
+- Zoom: `-moz-subtree-hidden-only-visually` works from our own sheet. Without it, the column-0
+  panel (`z-index: 1` in `content-area.css`) paints and hit-tests on top of a full-size zoomed
+  panel; with it, the zoomed panel is hit. The hidden panels' docshells stay active (CSS alone),
+  so the host deactivates them as the M4 spec says. After unzoom every rect is back (Δ 0) and
+  scroll positions are kept.
+- Tab-key order: with a wrapper of `[o2, o3, o1]`, DOM order stays `o1, o2, o3`
+  (`setSplitViewActive` orders panels 0 and 1 only). The host fixes it with `moveBefore` in
+  reading order, which keeps each page loaded, active and scrolled. Sub-spec 2 does that in
+  `reconcile` instead of recording a limit.
+
+Decision: all four criteria hold with our own files only. The contingency patch
+(`tabsplitview-mjs.patch`) is not adopted, and leaves are rebuilds.
 
 ## Verification
 

@@ -1,0 +1,10 @@
+{
+  "description": "A command outside v1",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 4,
+    "command": "frobnicate",
+    "args": {}
+  }
+}

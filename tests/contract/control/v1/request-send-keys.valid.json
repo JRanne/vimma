@@ -1,0 +1,12 @@
+{
+  "description": "Prefix then c: new tab",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 1,
+    "command": "send-keys",
+    "args": {
+      "keys": "ctrl+b c"
+    }
+  }
+}

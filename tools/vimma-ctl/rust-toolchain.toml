@@ -1,0 +1,5 @@
+# CI installs exactly this toolchain (rustup reads this file); Arch's system Rust ignores it.
+[toolchain]
+channel = "1.98.1"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

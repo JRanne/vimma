@@ -1,0 +1,13 @@
+{
+  "description": "Unknown error code",
+  "kind": "response",
+  "message": {
+    "type": "response",
+    "id": 5,
+    "ok": false,
+    "error": {
+      "code": "oops",
+      "message": "?"
+    }
+  }
+}
