@@ -1,0 +1,20 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* Firefox's tab strip, hidden while the pref vimma.ui.tabstrip.hidden is on (ui/tabstrip.mjs sets
+ * the root attribute). Customize mode shows it, so its widgets can still be moved. */
+
+:root[vimma-tabstrip-hidden]:not([customizing]) {
+  /* What Firefox's own `collapsed` does for popups and vertical tabs: zero height. */
+  #TabsToolbar {
+    visibility: collapse;
+  }
+
+  /* Vertical tabs: the tab list in the sidebar launcher. Its tool buttons stay. */
+  @media -moz-pref("sidebar.verticalTabs") {
+    #vertical-tabs {
+      display: none;
+    }
+  }
+}
