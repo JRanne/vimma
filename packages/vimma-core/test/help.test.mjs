@@ -1,4 +1,5 @@
 import { describe, test, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import { compileKeymap } from "../src/keymap.mjs";
 import { bindingTable, filterBindings, renderHelpText } from "../src/help.mjs";
 import { ACTIONS } from "../src/actions.mjs";
@@ -39,5 +40,10 @@ describe("help table", () => {
   test("help text marks overrides with an asterisk", () => {
     const txt = renderHelpText(bindingTable(compileKeymap({ keys: { new_tab: ["ctrl+alt+c"] } })));
     expect(txt).toMatch(/\* new_tab/);
+  });
+
+  test("help depends on actions.mjs for isRunnable, not on the which-key module", () => {
+    const src = readFileSync(new URL("../src/help.mjs", import.meta.url), "utf8");
+    expect(src).not.toMatch(/whichkey/);
   });
 });
