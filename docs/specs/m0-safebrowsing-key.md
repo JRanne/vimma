@@ -2,7 +2,7 @@
 
 Status: implemented, awaiting review · Milestone: M0 · Area: build config
 (`configs/common/mozconfig`), default prefs (`src/browser/branding/vimma/pref/`), CI
-(`.github/workflows/nightly.yml`), `MozillaServices.sys.mjs`, `tools/mochitest.mjs`,
+(`.github/workflows/{nightly,release}.yml`), `MozillaServices.sys.mjs`, `tools/mochitest.mjs`,
 `tools/safebrowsing-smoke`
 Prerequisite: m0-mozilla-services merged (it lists Safe Browsing as a known gap pointing here),
 m0-updater merged (same full rebuild).
@@ -35,7 +35,10 @@ off instead of showing it ticked.
   `VIMMA_SAFEBROWSING_KEYFILE`, and deletes the file after the last `mach` call (`if: always()`;
   `mach` re-reads the mozconfig on every call, so the file must outlive tests and packaging). A
   missing secret fails the nightly. PR builds (`e2e.yml`) get no secret and build keyless.
-  `release.yml` is not on `main` yet (PR #23); it must copy the two steps (Open issues).
+  `release.yml`'s `build` job (merged from PR #23 during this spec) does the same, and its smoke
+  check fails a build whose `AppConstants` still has the placeholder (it runs no mochitests).
+  `tools/test/safebrowsing-workflows.test.mjs` checks the steps in both and that no other release
+  job and no PR workflow mentions the secret.
 - **Test expectation.** `tools/mochitest.mjs` passes `--setenv=VIMMA_EXPECT_SAFEBROWSING_KEY=1|0`
   to the browser: `VIMMA_EXPECT_SAFEBROWSING_KEY` from the environment if set (the nightly sets
   `1`), else whether the key file exists.
@@ -116,6 +119,10 @@ booleans, lengths, URL hosts.
 
 `tools/test/mochitest.test.mjs`: the expectation is passed as `--setenv`, from the key file's
 presence or an explicit environment value.
+`tools/test/safebrowsing-workflows.test.mjs`: the nightly and release `build` jobs write the key
+file with a builtin, never echo the secret, delete the file `if: always()`, and check the result
+(nightly: `VIMMA_EXPECT_SAFEBROWSING_KEY=1`; release: the placeholder grep); no other release job
+and not `e2e.yml` mention the secret.
 
 **List updates need the network**, which mochitests block (non-local connections abort the
 run). A mocked server would only test Firefox's list manager against our fake, not that our key
@@ -130,7 +137,6 @@ before a release; not in CI (PR CI is keyless and the nightly is not live).
 
 ## Out of scope
 
-- `release.yml` (PR #23): same key-file steps as the nightly once it is on `main`.
 - Google's other keys (location service, Bing); Mozilla's `shavar` lists (unchanged, keyless).
 - Our own Safe Browsing proxy, or hiding the key from binaries (impossible client-side).
 - Restoring download reputation (needs Mozilla's key or Google's agreement).
@@ -171,6 +177,12 @@ before a release; not in CI (PR CI is keyless and the nightly is not live).
   failed, 3 todo across the suite, `browser_vimma_safebrowsing.js` 38/38; artifact build
   (keyed) 235 passed, 0 failed; artifact build keyless (`HOME` on an empty directory, as PR CI)
   `browser_vimma_safebrowsing.js` 30/30 and `browser_vimma_mozilla_services.js` 44/44.
+- **Final runs** (rebased on `main` with PR #23 and the split-view spike): full build (keyed)
+  486 passed, 0 failed, 3 todo; artifact build (keyed) 469 passed, 0 failed, 2 todo. One earlier
+  full-build run died before any test (Marionette could not install the mochikit add-on,
+  `ERROR_FILE_ACCESS`, right after an incremental build); the re-run passed unchanged.
+- **Workflow test**: red with `release.yml` as merged from PR #23 (1 of 3 failed: no key-file
+  step), green 3/3 after.
 - **Smoke.** Keyed full build: all three tables after 60–70 s (`googpub-phish-proto.vlpset`
   ~4.9 MB, `goog-malware-proto.vlpset` ~279 KB, `goog-unwanted-proto.vlpset` ~106 KB, stored
   under `google4/`). Keyless builds: only Mozilla's `*-digest256` tables, exit 1. v5
@@ -178,6 +190,4 @@ before a release; not in CI (PR CI is keyless and the nightly is not live).
 
 ## Open issues
 
-- PR #23 (`release.yml`) must add the key-file steps (and `VIMMA_EXPECT_SAFEBROWSING_KEY=1` for
-  its tests) before the first release.
 - Each upstream bump must refresh the two `lists` copies from `all.js` (runbook, Upstream bumps).

@@ -111,8 +111,6 @@ Workspaces are not built yet; these are the limits their design accepts
   `goog-downloadwhite-proto`) and its remote download check only to Mozilla's key, so Vimma asks
   for neither, and "Block dangerous downloads" in Settings adds nothing beyond the site lists
   ([m0-safebrowsing-key](specs/m0-safebrowsing-key.md), Settled).
-- `release.yml` (PR #23) does not pass the key yet; it must copy the nightly's key-file steps
-  before the first release ([m0-safebrowsing-key](specs/m0-safebrowsing-key.md), Open issues).
 - Firefox's app updater is still built in and asks `aus5.mozilla.org` for updates on the `vimma`
   channel, and system add-on updates are on. Removing both is in review (PR #15, spec
   `m0-updater`).

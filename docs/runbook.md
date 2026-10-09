@@ -311,8 +311,8 @@ on purpose.
 **In CI**, the key is the repository secret `SAFEBROWSING_API_KEY` (`gh secret set
 SAFEBROWSING_API_KEY < ~/.config/vimma/keys/safebrowsing`). `nightly.yml` writes it to a mode-600
 file in `$RUNNER_TEMP` and deletes it after its last `mach` call. PR builds (`e2e.yml`) never get
-it: they build keyless, which `browser_vimma_safebrowsing.js` checks. A release workflow must
-copy the nightly's two steps.
+it: they build keyless, which `browser_vimma_safebrowsing.js` checks. `release.yml`'s `build` job
+does the same as the nightly, and its smoke check fails a release built without the key.
 
 Debugging: `browser.safebrowsing.debug` = `true` logs list updates to stdout, with the key
 replaced by `[trimmed-google-api-key]`. Still check before pasting a log anywhere.
@@ -478,13 +478,15 @@ node tools/package/sbom.mjs --engine engine --out dist/vimma-$(node -p 'require(
 2. Trigger: `gh secret set RELEASE_PLEASE_TOKEN` (fine-grained, this repo only: Contents, Pull
    requests and Issues read/write), so the release release-please creates starts `release.yml`.
    Without it, run it by hand after each release: `gh workflow run release.yml -f tag=vX.Y.Z`.
-3. Maintainer line for the `.deb` and the PKGBUILD:
+3. Safe Browsing key: the `SAFEBROWSING_API_KEY` secret ("Google Safe Browsing key" above);
+   the `build` job fails without it, and its smoke check fails a build that lacks the key.
+4. Maintainer line for the `.deb` and the PKGBUILD:
    `gh variable set PACKAGE_MAINTAINER --body 'Your Name <you@example.org>'` (public in every
    package; the `package` job fails without it).
-4. Signing (recommended: keyless, no key to keep): `gh variable set SIGNING_ENABLED --body true`.
+5. Signing (recommended: keyless, no key to keep): `gh variable set SIGNING_ENABLED --body true`.
    Each signature records `JRanne/vimma`'s `release.yml` and the tag in the public Rekor log.
    Without the variable, `sign` is skipped and the assets go up unsigned.
-5. AUR (optional; skipped with a notice until the secret exists):
+6. AUR (optional; skipped with a notice until the secret exists):
    - Check the name is free: `curl -s 'https://aur.archlinux.org/rpc/v5/info?arg[]=vimma-bin'`
      must say `"resultcount":0` (and look at `vimma` too, which `vimma-bin` provides).
    - Create an account at <https://aur.archlinux.org/register>.
@@ -492,7 +494,7 @@ node tools/package/sbom.mjs --engine engine --out dist/vimma-$(node -p 'require(
      paste `aur_key.pub` into My Account → SSH Public Key.
    - `gh secret set AUR_SSH_KEY < aur_key`, then delete `aur_key`. The first push creates
      `vimma-bin`; its maintainer is that account.
-6. Enable: `gh variable set RELEASE_ENABLED --body true` (disable: `gh variable delete
+7. Enable: `gh variable set RELEASE_ENABLED --body true` (disable: `gh variable delete
 RELEASE_ENABLED`). Try it on the next release, or re-run the last one with
    `gh workflow run release.yml -f tag=vX.Y.Z` (assets are replaced, `--clobber`).
 
