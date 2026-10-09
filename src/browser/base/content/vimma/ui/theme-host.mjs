@@ -75,6 +75,11 @@ const styles = new Set();
 let signature = "";
 /** An Omarchy theme was applied since the source or path last changed. */
 let loaded = false;
+/** The last rejected colors.toml as one line (about:vimma), null once one applies. */
+/** @type {string | null} */
+let lastError = null;
+/** @type {string[]} the applied theme's warnings (contrast), for about:vimma */
+let warnings = [];
 /** @type {Promise<void> | null} */
 let running = null;
 /** @type {unknown} */
@@ -152,10 +157,13 @@ async function check() {
     const where = PathUtils.join(dir, "colors.toml");
     const list = r.errors.map((e) => `${e.line ? `line ${e.line}: ` : ""}${e.path} ${e.message}`);
     console.warn(`vimma: ${where} rejected, keeping the current theme:\n  ${list.join("\n  ")}`);
+    lastError = `${where}: ${list.join("; ")}`;
     Services.obs.notifyObservers(null, ERROR_TOPIC);
     return;
   }
   for (const w of r.warnings) console.info(`vimma: theme: ${w}`);
+  lastError = null;
+  warnings = r.warnings;
   loaded = true;
   apply(r.css);
 }
@@ -263,6 +271,29 @@ export const ThemeHost = {
     if (JSON.stringify(next) === JSON.stringify(configTheme)) return;
     configTheme = next;
     recheck();
+  },
+
+  /**
+   * What about:vimma shows: the source in force ("builtin": the pref, or config.toml's
+   * source = "file"), the Omarchy theme directory, what the last check found ("pending" before
+   * one, "builtin", "missing", "loaded", or "rejected" when that file's errors kept the theme
+   * shown), the colors.toml mtime (ms) it saw, the last rejected file's errors, and the applied
+   * theme's warnings.
+   */
+  get status() {
+    const builtin =
+      Services.prefs.getStringPref(SOURCE_PREF, "omarchy") === "builtin" ||
+      configTheme.source === "file";
+    const parts = signature.split("|");
+    const seen = parts.length > 1;
+    return {
+      source: builtin ? "builtin" : "omarchy",
+      path: themeDir(),
+      state: signature === "" ? "pending" : seen ? (lastError ? "rejected" : "loaded") : signature,
+      mtime: seen ? Number(parts[1]) : null,
+      lastError,
+      warnings: [...warnings],
+    };
   },
 
   /** The token stylesheet in force (tests, about:vimma later). */

@@ -1,0 +1,112 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* about:vimma (vimma/about/about.html). Colours are the theme tokens, with the built-in theme's
+   values as fallbacks (core/theme.mjs), as on the start page. Nothing animates. */
+
+:root {
+  background: var(--vimma-bg, #1a1b26);
+  color: var(--vimma-fg, #a9b1d6);
+  font-family: var(--vimma-font, monospace);
+  font-size: 14px;
+}
+
+body {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: var(--vimma-fg-bright, #c0caf5);
+}
+
+h2 {
+  margin: 1.75rem 0 0.5rem;
+  font-size: 1rem;
+  color: var(--vimma-accent, #7aa2f7);
+}
+
+.hint,
+.muted {
+  color: var(--vimma-muted, #565f89);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--vimma-bg-dark, #16161e);
+  border: 1px solid var(--vimma-muted, #565f89);
+  border-radius: 4px;
+  padding: 0.15rem 0.6rem;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--vimma-accent, #7aa2f7);
+}
+
+#status {
+  color: var(--vimma-accent, #7aa2f7);
+}
+
+dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.2rem 1rem;
+  margin: 0;
+}
+
+dt {
+  color: var(--vimma-fg-dim, #787c99);
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  text-align: start;
+  padding: 0.1rem 0.75rem 0.1rem 0;
+  vertical-align: top;
+}
+
+th {
+  color: var(--vimma-fg-dim, #787c99);
+  font-weight: normal;
+}
+
+tr.overridden td {
+  color: var(--vimma-fg-bright, #c0caf5);
+}
+
+tr.overridden td:first-child::before {
+  content: "* ";
+  color: var(--vimma-accent, #7aa2f7);
+}
+
+.error {
+  color: var(--vimma-error, #f7768e);
+}
+
+ol,
+ul {
+  margin: 0;
+  padding-inline-start: 1.5rem;
+}
