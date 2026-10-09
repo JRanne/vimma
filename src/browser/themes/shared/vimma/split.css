@@ -22,6 +22,8 @@
    * from each side: --vimma-pane-i{l,t,r,b} are 1 on an interior edge, 0 on the area's border. */
   --vimma-pane-gap: 2px;
   position: relative;
+  /* What shows through the gap: the pane border, in the theme's colours (m5-omarchy-theme). */
+  background-color: var(--vimma-muted, #414868);
 
   & > .split-view-panel.split-view-panel-active {
     --vimma-half-gap: calc(var(--vimma-pane-gap) / 2);

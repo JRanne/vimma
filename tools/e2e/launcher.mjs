@@ -38,6 +38,9 @@ export const DEFAULT_DISCOVERY_TIMEOUT_MS = 30_000;
  */
 export const PROFILE_PREFS = Object.freeze([
   ["vimma.control.enabled", true],
+  // Screenshots in Vimma's built-in colours, whatever Omarchy theme the machine has (HOME is
+  // already inside the profile; this keeps baselines stable if that ever changes).
+  ["vimma.theme.source", "builtin"],
   // first run, default browser, welcome and what's-new pages
   ["browser.shell.checkDefaultBrowser", false],
   ["browser.startup.homepage_override.mstone", "ignore"],
