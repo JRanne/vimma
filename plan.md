@@ -204,13 +204,13 @@ Loop: spec → failing tests → implement → review → changelog → merge �
 | Every push / PR | `ci.yml`: eslint, prettier, `tsc --checkJs`, Vitest for `vimma-core` with coverage gate (90 %), commitlint, licence check | Merge allowed | Blocked; Claude Code asked to fix if it authored the PR |
 | Every PR | `e2e.yml`: UI-only build (`surfer build --ui` on a cached engine, or artifact build; decided in M0), mochitest browser-chrome suite, socket-driven e2e under Xvfb, screenshot diffs (0.5 % tolerance) | Merge allowed | Blocked; flaky test quarantined after 2 unexplained failures + issue |
 | Nightly 03:00 | `nightly.yml`: full build Linux x86_64 (+ aarch64, macOS when enabled), full e2e on the build, publish rolling `nightly` release | Nightly updated | Issue with logs + failing test, assigned to Claude Code |
-| Every 6 h | `upstream.yml`: poll `product-details.mozilla.org`; on a new Firefox release or dot release open `chore(upstream): Firefox X.Y` PR bumping `surfer.json`, run `surfer import`, build, test | Auto-merge if patches applied cleanly and e2e green; release PR follows | Claude Code attempts conflict resolution (≤3 pushes), else you get a summary with the failing hunks |
+| Every 6 h | `upstream.yml`: poll `product-details.mozilla.org`; on a new Firefox release or dot release open `upstream: update to Firefox X.Y` PR bumping `surfer.json`, run `surfer import`, build, test | Auto-merge if patches applied cleanly and e2e green; release PR follows | Claude Code attempts conflict resolution (≤3 pushes), else you get a summary with the failing hunks |
 | Weekly | Renovate: npm deps, GitHub Actions versions | Patch/minor auto-merged after CI | PR stays open |
 | Sunday | `maintenance.yml` (Claude Code, bounded): triage issues, re-run quarantined tests, refresh `docs/limits.md`, review patch sizes and propose moving code out of `.patch` files, write `docs/weekly.md` | PRs waiting Monday | Report lists what it could not do |
 | Tag `v*` | `release.yml`: tarball, AppImage, `.deb`, macOS `.dmg` when enabled; cosign signatures, SBOM; AUR `vimma-bin` push; update manifest for the in-app updater; GitHub Release notes from changelog | Users update | Tag deleted, issue opened |
 | Firefox security dot release | Same as upstream job, flagged `security`; release PR auto-approved and merged if e2e green → release within 7 days without you | | |
 
-**Definition of done:** spec exists; tests written first and green; lint + typecheck clean; changelog entry via commit body; docs regenerated (`npm run gen-docs` rebuilds the bindings table from `actions.mjs`); nightly used for a day.
+**Definition of done:** spec exists; tests written first and green; lint + typecheck clean; changelog entry via commit subject; docs regenerated (`npm run gen-docs` rebuilds the bindings table from `actions.mjs`); nightly used for a day.
 
 ---
 
@@ -254,7 +254,7 @@ Recurring every 4 weeks from M0: the upstream rebase. Budget half a day for the 
 
 `CHANGELOG.md` follows Keep a Changelog; versions follow SemVer; `release-please` derives both from Conventional Commits on `main` and keeps a release PR current. Merging it is the release. Config schema and socket protocol carry their own integer versions with migrations.
 
-Commit types: `feat`, `fix`, `perf`, `refactor`, `test`, `docs`, `chore`, `deps`, `upstream`; `!` or `BREAKING CHANGE:` for changed defaults, config keys, socket protocol. CI rejects `feat`/`fix` with an empty body (the body is the changelog line).
+Commit types: `feat`, `fix`, `perf`, `refactor`, `test`, `docs`, `chore`, `deps`, `upstream`; `!` or `BREAKING CHANGE:` for changed defaults, config keys, socket protocol. CI rejects `feat`/`fix` with an empty body (the subject is the changelog line; the body explains why).
 
 Versioning: `0.x` until M6's gate; breaking default-binding or config changes bump minor and ship a migration + deprecation note kept for two releases; `1.0.0` after M6. Nightlies: `0.x.y-nightly.<date>` on a rolling tag. Version string shows the upstream Firefox version too (`Vimma 0.4.0 · Firefox 152.0.1`).
 
@@ -367,7 +367,7 @@ Read plan.md once per milestone; read docs/specs/<current>.md every session.
 - Our code lives in src/browser/base/content/vimma/. Touch upstream files only to inject ours,
   in the smallest hunk possible. A new .patch needs a line in the ADR for it.
 - Never edit screenshot baselines or snapshots without a changelog line explaining the change.
-- Conventional Commits with a body; the body is the changelog line.
+- Conventional Commits with a body; the subject is the changelog line; the body explains why.
 - No new dependency without a licence check and a PR line. No #[allow]-style suppressions
   (eslint-disable) without a reason comment.
 - Never disable a workflow, pin, or lint rule to get green. Stop and report instead.
