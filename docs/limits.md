@@ -46,10 +46,16 @@ delete its line in the same PR.
   (`browser.tabs.splitView.enabled` false); splits come from Vimma's keys
   ([ADR-013](adr/013-split-on-firefox-split-view.md)).
 - Planned for M4: with three or more panes, extensions that move a split tab (`tabs.move`) and
-  Firefox's all-tabs list assume two tabs per split and may misplace or mislabel them
+  the all-tabs list's drag targets assume two tabs per split and may misplace them
   ([ADR-013](adr/013-split-on-firefox-split-view.md)).
-- Planned for M4: panes hidden by `ctrl+b z` keep rendering in the background (their docshells
-  stay active) ([m4-split-panes](specs/m4-split-panes.md), Open questions).
+- Planned for M4: at most `panes.max` live panes per workspace (default 4); further splits are
+  refused with a status-bar message ([m4-split-panes](specs/m4-split-panes.md), Risks).
+- Planned for M4: more than two panes relies on Firefox's split view accepting n tabs, which
+  Firefox permits but does not test; panes stay unproven until the sub-spec 1 spike
+  ([ADR-013](adr/013-split-on-firefox-split-view.md), Acceptance criteria).
+- Planned for M4: with three or more panes, the Tab key may move focus between panes in DOM
+  order rather than reading order, unless the spike adds a host reorder
+  ([ADR-013](adr/013-split-on-firefox-split-view.md), Known two-tab assumptions).
 - Planned for M4: a split's tabs become adjacent in Firefox's own tab order; Vimma's tab numbers
   come from its own list and are unaffected ([m4-split-panes](specs/m4-split-panes.md)).
 
