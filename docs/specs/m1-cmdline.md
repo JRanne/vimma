@@ -116,9 +116,9 @@ completion list.
 - **Theme:** the stylesheet reads M5's tokens (`--vimma-bg-dark`, `--vimma-fg`,
   `--vimma-accent`, `--vimma-selection`, `--vimma-error`, `--vimma-font`) with `Canvas` /
   `CanvasText` fallbacks; the status bar (#34) loads the token sheet once per window.
-- **Which-key, notice, fullscreen (review round 1).** While a prefix is pending
-  (`:root[vimma-whichkey-open]`) the line drops to `z-index: 4`, under the status bar's 5, so the
-  strip (the bar's child) is never covered. While the line is open (`:root[vimma-cmdline-open]`)
+- **Notice, fullscreen (review round 1).** The which-key layering (the line dropping to
+  `z-index: 4` while a prefix was pending) went with the strip (user decision 2026-10-09,
+  m2-statusbar-whichkey Settled). While the line is open (`:root[vimma-cmdline-open]`)
   the notice moves above it: a `ResizeObserver` on the panel sets `--vimma-cmdline-height` on
   the root. In DOM fullscreen (`:root[inDOMFullscreen]`) `:` does not open the line and an open
   one is hidden, as the status bar is; entering DOM fullscreen needs focus in the page, which

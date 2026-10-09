@@ -72,6 +72,11 @@ screenshot baselines (the e2e harness).
 
 ## Settled (2026-10-09, from the engine tree)
 
+- **Which-key strip dropped (user decision, 2026-10-09: "which-key is not needed").** Only
+  `prefix+?` shows the bindings; `ctrl+b` alone shows just the pending keys in the bar. The strip,
+  its CSS, `vimma-whichkey-open`, `VimmaHost.runnable()` and core's `whichkey.mjs` are removed;
+  the notice hides when the overlay opens. The strip notes below are history.
+
 - **Placement.** `#vimma-statusbar` is appended to the chrome `<body>` right after `#browser`.
   The body is a flex column (`browser-shared.css`), so the bar is the window's last row, under the
   sidebar and the content, and outside `#tabbrowser-tabbox`. Nothing upstream positions against

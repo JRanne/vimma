@@ -128,7 +128,7 @@ The labels are drawn by the browser, over the page, not inside it: the page cann
 restyle them or hide them. Apps that draw their own controls on a canvas (Google Docs, Figma,
 maps, games) have nothing to label.
 
-## Status bar and which-key
+## Status bar
 
 The status bar is the window's last line, always there (it hides only while a page is in
 fullscreen, such as a video; browser fullscreen with `F11` keeps it). From the left:
@@ -146,10 +146,9 @@ then dropped, then the title is shortened, and so on. The mode badge always stay
 readers announce the mode when it changes, including when focus moves into or out of a text
 field, but not every title change.
 
-After `ctrl+b` (or any key that starts a longer sequence) a **which-key strip** opens above the
-bar, listing every key you can press next with what it does, grouped like the `ctrl+b ?`
-overlay. Keys whose action is not built yet are greyed. The strip closes when the sequence
-completes, or on `Esc`.
+After `ctrl+b` (or any key that starts a longer sequence) only the pending keys show in the bar;
+no list of next keys pops up. To see the bindings, press `ctrl+b ?` (`ctrl+b shift+?` on a
+layout where `?` is shifted): the overlay is the one place that lists them.
 
 Colours are Tokyo Night until theming arrives (M5), which will follow your Omarchy theme.
 
