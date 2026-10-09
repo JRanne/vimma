@@ -1,6 +1,7 @@
 # Spec: m3-workspaces
 
-Status: research and plan; split into sub-specs (see Breakdown) · Milestone: M3 · Area: host
+Status: research and plan; split into sub-specs (see Breakdown). Sub-spec 1 (store) implemented,
+awaiting review (see Settled) · Milestone: M3 · Area: host
 (`src/browser/base/content/vimma/workspaces/`, `ui/`), one upstream patch file (two hunks)
 
 Plan §6 M3: container-backed workspaces; hidden tabs; `ctrl+i`/`ctrl+u`; a `prefix+w` picker; a
@@ -662,6 +663,40 @@ dependency for 4b, 5 and parts of 4a.
 | 5   | `m3-workspace-picker`      | `prefix+w` (M2 `picker.mjs` with workspace items, `m` = move current tab here with the warning), the status bar's workspace segment and `opened in …` messages.                                                                                                                             | 4b; M2 picker and bar  |
 | 6   | `m3-side-panel`            | `#vimma-panel`, `panel` mode wiring, rows, neighbours, focus. Side-panel test.                                                                                                                                                                                                              | 2b (works without 3-5) |
 | 7   | `m3-e2e`                   | Real restart happy path and the 200-tab measurement on the e2e harness.                                                                                                                                                                                                                     | 3; `tools/e2e` on main |
+
+## Settled: sub-spec 1, m3-workspace-store (2026-10-09)
+
+- Core `workspacedefs.mjs`: `readDefinitions` (schema 1; fixtures in `tests/contract/workspaces/v1/`),
+  `canWriteDefinitions`, `reconcileDefinitions` (config by name in file order, then runtime; a
+  removed config workspace becomes runtime; empty → `main`, gray circle, `runtime`; idempotent:
+  a no-op returns its input), `planContainers` (adopt by stored id **and** name, update drifted
+  colour/icon, create otherwise; never matches by name alone, so Firefox's defaults are never
+  adopted), `addRuntimeWorkspace`, `removeWorkspaceDefinition` (refuses config workspaces and the
+  last one), `withContainer`, `setLastActive`. `config.mjs` now exports `CONTAINER_COLORS`,
+  `CONTAINER_ICONS`, `MAX_WORKSPACE_NAME`.
+- Host `workspaces/WorkspaceStore.sys.mjs`: `WorkspaceStoreImpl` and the app singleton
+  `WorkspaceStore`. JSONFile with `backupTo` and a `beforeSave` that re-checks `canWrite` on the
+  file on disk. A newer file → `readOnly` (nothing written, no container made); valid JSON that
+  fails validation is copied to `.corrupt-<date>` and rebuilt; unparsable JSON is JSONFile's own
+  `.corrupt` rename plus restore from the backup. Containers whose stored id is gone or reused
+  get a new one (`lostContainers` lists the names for the status bar, 5); the reused container
+  is left alone. `defaultUserContextId(win)`: the window's active workspace (`setActive`), else
+  the top window's, else `lastActive`; null for private windows, popups and containers off.
+- **Config seam:** the constructor takes `config` (core `mergeWithDefaults(...).workspaces`); M5
+  passes it. Nothing reads `config.toml` yet, so every profile gets `main`.
+- **Delete** (moved forward from 4a): `deleteWorkspace(id, { confirmed: true })` only; without
+  it, `not-confirmed`. It closes the container's tabs, then `ContextualIdentityService.remove`,
+  which clears the site data; a container whose name is no longer ours is not removed. The
+  prompt, cross-window closing and the config-workspace message stay in 4a.
+- **Not wired at startup yet:** nothing calls `WorkspaceStore.init()` until 2a/2b (the patch and
+  `WindowWorkspaces`), so no container appears in a profile before tabs can use it. No pref is
+  changed; the `privacy.userContext.enabled` check is read through the `enabled` option (the
+  test cannot flip the pref: Firefox then wipes every container). Nothing user-visible, so no
+  guide change.
+- Tests: `workspacedefs.test.mjs` (Vitest) and `browser_vimma_workspace_store.js`: first run,
+  round trip, a newer file left byte-for-byte, adopt/replace without deleting, confirmed delete
+  removing container and cookie (after `clear-origin-attributes-data`), containers off, private
+  windows. Mutation check: skipping `CIS.remove` fails the delete task.
 
 ## Out of scope
 

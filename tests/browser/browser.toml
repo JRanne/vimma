@@ -74,3 +74,5 @@ support-files = [
 ["browser_vimma_rename.js"]
 
 ["browser_vimma_start_page.js"]
+
+["browser_vimma_workspace_store.js"]
