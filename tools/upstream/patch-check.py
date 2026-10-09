@@ -14,15 +14,17 @@ A patch that does not apply is checked hunk by hunk, so the report names each fa
 The tree is one of:
   --engine DIR             default engine/; reads HEAD when DIR is a git repository with a
                            commit (Surfer commits the pristine Firefox there; the working tree
-                           has our patches), else the working tree. --worktree forces the working tree, --ref REF
-                           another commit.
+                           has our patches), else the working tree. --worktree forces the
+                           working tree, --ref REF another commit.
   --tarball FILE|URL|-     a Firefox source tarball (archive.mozilla.org layout). Only the patched
                            files are extracted, to a temporary directory; `-` reads stdin, so a
                            download can be piped in without touching the disk (upstream.yml).
+                           --drain reads the stream to its end (for a `tee | sha512sum` beside).
 
 Writes a text summary to stdout, and with --json/--markdown a machine-readable report and a
 summary for a PR body. Exit status: 0 every patch imports, 1 at least one does not, 2 the check
-could not run. docs/rebase.md has the procedure. Python stdlib only.
+did not run (unreadable tree, malformed or unsupported patch, any crash); with 2 the JSON and
+Markdown still say so ("ran": false). docs/rebase.md has the procedure. Python stdlib only.
 """
 
 import argparse
@@ -297,13 +299,19 @@ def note(p):
     return ""
 
 
+def md_escape(text):
+    """Inline text safe in Markdown: HTML escaped, Markdown punctuation backslashed."""
+    return re.sub(r"([\\`*_\[\]|#!~])", r"\\\1", html.escape(text, quote=False))
+
+
 def fence(text):
     longest = max((len(m) for m in re.findall(r"`+", text)), default=0)
     return "`" * max(3, longest + 1)
 
 
 def render_markdown(report, hunks=True):
-    title = f"Firefox {report['firefox']}" if report["firefox"] else "the new Firefox"
+    # config/milestone.txt comes from the tarball: escape it like any upstream text.
+    title = f"Firefox {md_escape(report['firefox'])}" if report["firefox"] else "the new Firefox"
     out = [f"### Patch check against {title}", ""]
     out.append(f"Source: {report['source']}. {summary_line(report)}.")
     out.append("")
@@ -374,6 +382,7 @@ def build_report(src, read, source):
     counts = {s: sum(1 for r in rows if r["status"] == s) for s in ORDER}
     return {
         "version": 1,
+        "ran": True,
         "firefox": firefox_version(read),
         "source": source,
         "ok": all(r["imports"] for r in rows),
@@ -385,9 +394,34 @@ def build_report(src, read, source):
 def patched_files(src):
     files = set()
     for path in find_patches(src):
-        for f in parse_patch(Path(path).read_text(encoding="utf-8")):
-            files.add(f.path)
+        try:
+            parsed = parse_patch(Path(path).read_text(encoding="utf-8"))
+        except ValueError as err:
+            raise CheckError(f"{path.relative_to(Path(src).parent).as_posix()}: {err}") from err
+        files.update(f.path for f in parsed)
     return sorted(files)
+
+
+def did_not_run(error, source):
+    """The report when no verdict exists: upstream.yml must not read it as "patches fail"."""
+    return {
+        "version": 1,
+        "ran": False,
+        "ok": False,
+        "error": error,
+        "firefox": None,
+        "source": source,
+        "counts": {},
+        "patches": [],
+    }
+
+
+def render_did_not_run(report):
+    f = fence(report["error"])
+    return (
+        f"### Patch check did not run\n\nSource: {report['source']}. No verdict on any patch; "
+        f"run it by hand (docs/rebase.md, step 2).\n\n{f}text\n{report['error']}\n{f}\n"
+    )
 
 
 def main(argv=None):
@@ -401,55 +435,98 @@ def main(argv=None):
     parser.add_argument("--json", help="write the report as JSON here")
     parser.add_argument("--markdown", help="write a PR-body summary here")
     parser.add_argument("--list-files", action="store_true", help="print patched paths, exit")
+    parser.add_argument(
+        "--drain", action="store_true", help="with --tarball: read the stream to its end"
+    )
     args = parser.parse_args(argv)
 
+    source = f"tarball {args.tarball}" if args.tarball else str(args.engine or "engine/")
     try:
-        if args.list_files:
-            print("\n".join(patched_files(args.src)))
-            return 0
-        with tempfile.TemporaryDirectory(prefix="patch-check-tree-") as tmp:
-            if args.tarball:
-                wanted = set(patched_files(args.src)) | {MILESTONE, SOURCESTAMP}
-                try:
-                    with open_tarball(args.tarball) as f:
-                        found = extract_from_tarball(f, wanted, tmp)
-                except (tarfile.TarError, EOFError, lzma.LZMAError, OSError) as err:
-                    raise CheckError(f"cannot read tarball {args.tarball}: {err}") from err
-                if SOURCESTAMP not in found:
-                    raise CheckError(
-                        f"{args.tarball}: no {SOURCESTAMP}; not a Firefox source tarball"
-                    )
-                read = worktree_reader(tmp)
-                source = f"tarball {Path(args.tarball).name if args.tarball != '-' else '(stdin)'}"
-            else:
-                engine = Path(args.engine or ROOT / "engine")
-                if not engine.is_dir():
-                    raise CheckError(f"{engine} is not a directory (run `npx surfer download`)")
-                is_repo = (engine / ".git").exists()
-                if args.ref and (args.worktree or not is_repo):
-                    raise CheckError("--ref needs a git engine and no --worktree")
-                ref = args.ref or "HEAD"
-                commit = resolve_commit(engine, ref) if is_repo and not args.worktree else None
-                if args.ref and commit is None:
-                    raise CheckError(f"{engine}: no commit {args.ref!r}")
-                if commit:
-                    read = git_reader(engine, commit)
-                    source = f"{engine} at {ref}"
-                else:
-                    # No commit (e2e.yml's `git init` after CI_SKIP_INIT): the working tree.
-                    read = worktree_reader(engine)
-                    source = f"{engine} (working tree)"
-            report = build_report(args.src, read, source)
+        report = run_check(args)
     except CheckError as err:
-        print(f"patch-check: {err}", file=sys.stderr)
-        return 2
+        error = str(err)
+    except Exception as err:  # anything else is "did not run", never a verdict
+        error = f"unexpected {type(err).__name__}: {err}"
+    else:
+        if report is None:  # --list-files
+            return 0
+        sys.stdout.write(render_text(report))
+        if args.json:
+            Path(args.json).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        if args.markdown:
+            Path(args.markdown).write_text(render_markdown(report), encoding="utf-8")
+        return 0 if report["ok"] else 1
 
-    sys.stdout.write(render_text(report))
+    print(f"patch-check: {error}", file=sys.stderr)
+    report = did_not_run(error, source)
     if args.json:
         Path(args.json).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     if args.markdown:
-        Path(args.markdown).write_text(render_markdown(report), encoding="utf-8")
-    return 0 if report["ok"] else 1
+        Path(args.markdown).write_text(render_did_not_run(report), encoding="utf-8")
+    return 2
+
+
+class CountingReader:
+    """A binary stream that counts what is read from it, and can read the rest (--drain)."""
+
+    def __init__(self, raw):
+        self.raw = raw
+        self.count = 0
+
+    def read(self, size=-1):
+        data = self.raw.read(size)
+        self.count += len(data)
+        return data
+
+    def drain(self):
+        while self.read(1 << 20):
+            pass
+
+
+def run_check(args):
+    """The report, or None after --list-files. Raises CheckError when there is no verdict."""
+    if args.list_files:
+        print("\n".join(patched_files(args.src)))
+        return None
+    tarball_bytes = None
+    with tempfile.TemporaryDirectory(prefix="patch-check-tree-") as tmp:
+        if args.tarball:
+            wanted = set(patched_files(args.src)) | {MILESTONE, SOURCESTAMP}
+            try:
+                with open_tarball(args.tarball) as raw:
+                    stream = CountingReader(raw)
+                    found = extract_from_tarball(stream, wanted, tmp)
+                    if args.drain:
+                        stream.drain()
+                    tarball_bytes = stream.count
+            except (tarfile.TarError, EOFError, lzma.LZMAError, OSError) as err:
+                raise CheckError(f"cannot read tarball {args.tarball}: {err}") from err
+            if SOURCESTAMP not in found:
+                raise CheckError(f"{args.tarball}: no {SOURCESTAMP}; not a Firefox source tarball")
+            read = worktree_reader(tmp)
+            source = f"tarball {Path(args.tarball).name if args.tarball != '-' else '(stdin)'}"
+        else:
+            engine = Path(args.engine or ROOT / "engine")
+            if not engine.is_dir():
+                raise CheckError(f"{engine} is not a directory (run `npx surfer download`)")
+            is_repo = (engine / ".git").exists()
+            if args.ref and (args.worktree or not is_repo):
+                raise CheckError("--ref needs a git engine and no --worktree")
+            ref = args.ref or "HEAD"
+            commit = resolve_commit(engine, ref) if is_repo and not args.worktree else None
+            if args.ref and commit is None:
+                raise CheckError(f"{engine}: no commit {args.ref!r}")
+            if commit:
+                read = git_reader(engine, commit)
+                source = f"{engine} at {ref}"
+            else:
+                # No commit (e2e.yml's `git init` after CI_SKIP_INIT): the working tree.
+                read = worktree_reader(engine)
+                source = f"{engine} (working tree)"
+        report = build_report(args.src, read, source)
+    if tarball_bytes is not None:
+        report["tarball_bytes"] = tarball_bytes
+    return report
 
 
 if __name__ == "__main__":

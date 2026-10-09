@@ -106,11 +106,22 @@ def parse_patch(text):
         elif current is not None and not current.hunks:
             current.head.append(line)  # index, mode, rename lines
         i += 1
+    if not files:
+        raise ValueError("no diff in this file")
     for f in files:
+        if any(line.startswith(("rename from ", "copy from ")) for line in f.head):
+            raise ValueError(
+                f"{f.head[0]!r} is a rename or copy, which we do not support: `surfer export` "
+                "writes one plain diff per file. Export a delete and a create instead."
+            )
+        if f.old_path is None and f.new_path is None:
+            raise ValueError(f"{f.head[0]!r} has no ---/+++ lines (a mode-only or binary change?)")
+        if not f.hunks:
+            raise ValueError(f"no hunks for {f.path}")
         for path in (f.old_path, f.new_path):
             if path is not None and not safe_relpath(path):
                 raise ValueError(f"patch path leaves the tree: {path!r}")
-    return [f for f in files if f.old_path or f.new_path]
+    return files
 
 
 def find_patches(src):
