@@ -1,4 +1,5 @@
 [DEFAULT]
+support-files = ["head.js"]
 
 ["browser_vimma_help_overlay.js"]
 support-files = ["file_vimma_test.pdf"]
