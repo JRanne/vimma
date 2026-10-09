@@ -104,3 +104,87 @@ add_task(async function default_bookmarks_import_succeeds() {
   const menu = await PlacesUtils.promiseBookmarksTree(PlacesUtils.bookmarks.menuGuid);
   Assert.ok(menu.children?.length, "bookmarks menu is not empty");
 });
+
+// Every pref the stock brands (engine/browser/branding/{unofficial,official,nightly,aurora}/pref/
+// firefox-branding.js) define. Firefox reads them with getIntPref/getCharPref and no fallback, so a
+// brand without one throws (tools/branding/test/branding-prefs.test.mjs compares against the
+// unofficial brand file itself).
+const STOCK_BRAND_PREFS = [
+  "startup.homepage_override_url",
+  "startup.homepage_welcome_url",
+  "startup.homepage_welcome_url.additional",
+  "app.update.interval",
+  "app.update.promptWaitTime",
+  "app.update.url.manual",
+  "app.update.url.details",
+  "app.update.checkInstallTime.days",
+  "app.update.badgeWaitTime",
+  "app.releaseNotesURL",
+  "app.releaseNotesURL.aboutDialog",
+  "app.releaseNotesURL.prompt",
+  "devtools.selfxss.count",
+];
+
+add_task(async function stock_brand_prefs_have_defaults() {
+  const defaults = Services.prefs.getDefaultBranch("");
+  for (const name of STOCK_BRAND_PREFS) {
+    Assert.notEqual(
+      defaults.getPrefType(name),
+      Services.prefs.PREF_INVALID,
+      `${name} has a default`,
+    );
+  }
+  for (const name of ["app.update.checkInstallTime.days", "app.update.badgeWaitTime"]) {
+    Assert.equal(typeof defaults.getIntPref(name), "number", `${name} is an int default`);
+  }
+});
+
+add_task(async function old_build_update_check_does_not_throw() {
+  // BrowserGlue._onFirstWindowLoaded calls this before the browser-first-window-ready category
+  // (AboutNewTab.init, which maps resource://newtab/). A throw here skipped all of that, and
+  // about:home logged NS_ERROR_NOT_AVAILABLE from AboutNewTabRedirector. The harness turns
+  // app.update.checkInstallTime off (testing/profiles/common/user.js); Firefox's default is on.
+  // Any update check it starts is a no-op under app.update.disabledForTesting.
+  const glue = Cc["@mozilla.org/browser/browserglue;1"].getService().wrappedJSObject;
+  await SpecialPowers.pushPrefEnv({ set: [["app.update.checkInstallTime", true]] });
+  try {
+    glue._checkForOldBuildUpdates();
+    Assert.ok(true, "_checkForOldBuildUpdates ran without throwing");
+  } catch (e) {
+    Assert.ok(false, `_checkForOldBuildUpdates threw: ${e}`);
+  }
+  await SpecialPowers.popPrefEnv();
+});
+
+add_task(async function about_home_and_newtab_render() {
+  /** @type {string[]} */
+  const errors = [];
+  const listener = {
+    /** @param {nsIConsoleMessage} msg */
+    observe(msg) {
+      if (msg.message.includes("AboutNewTabRedirector")) {
+        errors.push(msg.message);
+      }
+    },
+  };
+  Services.console.registerListener(listener);
+  registerCleanupFunction(() => Services.console.unregisterListener(listener));
+
+  // A preloaded about:newtab is swapped in without a load event, which withNewTab waits for.
+  await SpecialPowers.pushPrefEnv({ set: [["browser.newtab.preload", false]] });
+  NewTabPagePreloading.removePreloadedBrowser(window);
+  for (const url of ["about:home", "about:newtab"]) {
+    await BrowserTestUtils.withNewTab({ gBrowser, url }, async (browser) => {
+      const rendered = await SpecialPowers.spawn(browser, [], async () => {
+        await ContentTaskUtils.waitForCondition(
+          () => content.document.querySelector("body.activity-stream"),
+          "activity-stream body",
+        );
+        return true;
+      });
+      Assert.ok(rendered, `${url} renders the new-tab page`);
+    });
+  }
+  await SpecialPowers.popPrefEnv();
+  Assert.deepEqual(errors, [], "no AboutNewTabRedirector errors");
+});
