@@ -290,7 +290,9 @@ playbook: patch failures, builds and tests, the security fast path, rollback).
 is newer than `surfer.json`. The `check` job (read-only token) then streams that release's source
 tarball through `tools/upstream/patch-check.py`, which dry-runs every `src/**/*.patch` and writes
 a summary (clean / offset / fuzz / failed, with the failing hunks) plus a JSON report, uploaded as
-the run's `patch-check` artifact. The `pr` job (the only one with write permissions) runs
+the run's `patch-check` artifact. It also checks the stream's SHA-512 against Mozilla's
+`SHA512SUMS`. A mismatch fails the job and opens no PR, and "did not run" is reported apart from
+"patches fail". The `pr` job (the only one with write permissions) runs
 `bump-surfer-json.py`, which rewrites only that version, and opens a draft PR
 `upstream: update to Firefox X.Y` on branch `upstream/firefox-X.Y`, with the summary in its body.
 If a PR for

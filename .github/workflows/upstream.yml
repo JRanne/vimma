@@ -32,6 +32,7 @@ jobs:
     outputs:
       version: ${{ steps.check.outputs.version }}
       patch-summary: ${{ steps.patches.outputs.summary }}
+      patch-result: ${{ steps.patches.outputs.result }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -50,23 +51,45 @@ jobs:
         env:
           VERSION: ${{ steps.check.outputs.version }}
         run: |
-          url="https://archive.mozilla.org/pub/firefox/releases/$VERSION/source/firefox-$VERSION.source.tar.xz"
-          # Streamed: only the patched files are extracted, nothing else touches the disk.
-          # patch-check stops reading once it has them, so curl may exit 23 (pipe closed):
-          # the verdict is patch-check's own status. 0 all apply, 1 some do not, 2 no check.
+          base="https://archive.mozilla.org/pub/firefox/releases/$VERSION"
+          name="source/firefox-$VERSION.source.tar.xz"
+          # Streamed once: tee feeds sha512sum (through a FIFO) and patch-check, which extracts
+          # only the patched files and, with --drain, reads to the end so the hash is whole.
+          # patch-check's status is the verdict: 0 all apply, 1 some do not, 2 did not run.
+          mkfifo tarball.fifo
+          sha512sum < tarball.fifo > tarball.sha512 &
+          hasher=$!
           set +e
-          curl -fsSL --retry 3 "$url" |
-            python3 tools/upstream/patch-check.py --tarball - \
+          curl -fsSL --retry 3 "$base/$name" | tee tarball.fifo |
+            python3 tools/upstream/patch-check.py --tarball - --drain \
               --json patch-check.json --markdown patch-check.md
-          status=${PIPESTATUS[1]}
+          status=${PIPESTATUS[2]}
+          wait "$hasher"
           set -e
-          if [ "$status" -gt 1 ]; then
-            printf '### Patch check did not run\n\nCould not read %s (exit %s); see the %s.\n' \
-              "$url" "$status" "upstream.yml run log" > patch-check.md
-            echo "::warning::patch-check could not read the Firefox $VERSION source tarball"
-          elif [ "$status" -eq 1 ]; then
-            echo "::warning::some patches do not apply to Firefox $VERSION (see the summary)"
-          fi
+          case "$status" in
+            0 | 1)
+              # Hard failure on a mismatch: never report on a tarball Mozilla did not publish.
+              curl -fsSL --retry 3 "$base/SHA512SUMS" -o SHA512SUMS
+              python3 tools/upstream/verify-sha512.py --sums SHA512SUMS --name "$name" \
+                --actual tarball.sha512 || {
+                echo "::error::SHA-512 of $name does not match $base/SHA512SUMS"
+                exit 1
+              }
+              [ "$status" -eq 0 ] && result=ok || result=fail
+              ;;
+            *)
+              result=norun
+              # patch-check writes its own "did not run" file; a crash before that may not.
+              [ -s patch-check.md ] || printf '### Patch check did not run\n\nExit %s; %s.\n' \
+                "$status" "see the upstream.yml run log" > patch-check.md
+              ;;
+          esac
+          case "$result" in
+            ok) ;;
+            fail) echo "::warning::some patches do not apply to Firefox $VERSION (summary)" ;;
+            norun) echo "::warning::the patch check did not run for Firefox $VERSION (no verdict)" ;;
+          esac
+          echo "result=$result" >> "$GITHUB_OUTPUT"
           cat patch-check.md >> "$GITHUB_STEP_SUMMARY"
           delim="EOF_$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
           { echo "summary<<$delim"; cat patch-check.md; echo "$delim"; } >> "$GITHUB_OUTPUT"
@@ -100,7 +123,13 @@ jobs:
         env:
           VERSION: ${{ needs.check.outputs.version }}
           PATCH_SUMMARY: ${{ needs.check.outputs.patch-summary }}
+          PATCH_RESULT: ${{ needs.check.outputs.patch-result }}
         run: |
+          case "$PATCH_RESULT" in
+            ok) verdict="Patch check: every patch applies (tarball SHA-512 verified)." ;;
+            fail) verdict="Patch check: **some patches do not apply**; fix them first (docs/rebase.md, step 3)." ;;
+            *) verdict="Patch check: **did not run**, so there is no verdict; run it by hand (docs/rebase.md, step 2)." ;;
+          esac
           branch="upstream/firefox-$VERSION"
           open=$(gh pr list --head "$branch" --state open --json number --jq '.[].number')
           if [ -n "$open" ]; then
@@ -119,7 +148,9 @@ jobs:
           {
             echo "Firefox $VERSION is out (was $old). Opened by upstream.yml."
             echo
-            printf '%s\n' "${PATCH_SUMMARY:-Patch check: no result (see the upstream.yml run).}"
+            echo "$verdict"
+            echo
+            printf '%s\n' "${PATCH_SUMMARY:-(No patch-check summary; see the upstream.yml run.)}"
             echo
             echo "Before merging, follow docs/rebase.md: \`npm run import && npx surfer build\` on"
             echo "the build machine, \`npm run mochitest -- tests/browser/\` on the built engine and"

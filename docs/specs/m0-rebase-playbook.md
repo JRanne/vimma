@@ -49,6 +49,12 @@ tests were added red later. One was the Markdown table with `|` in a path (`Asse
 The other was the repo without a commit (`patch-check: …/engine: no commit 'HEAD'`, exit 2 instead
 of 1). Green: `npm run test:py` → `Ran 48 tests … OK`.
 
+Review round (PR #31): 15 new tests. They cover create, delete, rename and malformed fixtures;
+"did not run" in both modes, plus for a crash and for `--list-files`; `--drain`; the milestone
+escaping; and `test_verify_sha512.py`. Red: `Ran 63 tests … FAILED (failures=8, errors=5)`.
+Two already passed: create/delete, and the missing-SHA512SUMS case, which exited 2 only because
+the script itself was missing. Green: `Ran 63 tests … OK`.
+
 ## Findings (2026-10-09, Firefox 157.0.1)
 
 - **All six patches apply cleanly to 157.0.1**, both from the release tarball and from
@@ -71,9 +77,27 @@ of 1). Green: `npm run test:py` → `Ran 48 tests … OK`.
   `cat` dies of SIGPIPE (141). Estimate for `ubuntu-latest`: 1 to 2 min, download included
   (archive.mozilla.org is a CDN). The check job's timeout went from 5 to 15 min; it costs minutes
   only when a release is found.
-- **The pipeline's status is patch-check's own.** It stops reading early, so `curl` may exit 23
-  (pipe closed). The workflow takes `${PIPESTATUS[1]}`; a real download failure shows up as exit 2
-  (an empty or truncated xz stream) and the PR body says the check did not run.
+- **The pipeline's status is patch-check's own** (`${PIPESTATUS[2]}` after `curl | tee`). A real
+  download failure shows up as exit 2 (an empty or truncated xz stream), and the PR body says the
+  check did not run. Simulated with a 300 MB prefix of the 157.0.1 tarball:
+  `cannot read tarball -: unexpected end of data`, status 2, "norun".
+- **Tarball hash (review decision).** The workflow streams the tarball once: `tee` feeds a FIFO
+  read by `sha512sum` and patch-check, which runs with `--drain` so it reads to the end and the
+  hash covers the whole file. The hash is compared with the `source/firefox-X.Y.source.tar.xz`
+  line of `https://archive.mozilla.org/pub/firefox/releases/X.Y/SHA512SUMS`
+  (`tools/upstream/verify-sha512.py`). A mismatch fails the job, names both hashes and opens no
+  PR. For 157.0.1, `SHA512SUMS` line 821 (`c019202b…102858`) equals `sha512sum` of the cached
+  tarball. The local simulation of the whole step (`cat` in place of `curl`) printed
+  `6 patches: 6 clean` and `matches SHA512SUMS`. **GPG is not checked** (`SHA512SUMS.asc`
+  exists): HTTPS from archive.mozilla.org is the trust anchor, the tarball only feeds a report,
+  and the build uses `surfer download`'s own copy. Adding it would mean pinning Mozilla's release
+  signing key in the repo and rotating it.
+- **Did not run is not "patches fail".** A malformed or unsupported patch (rename, copy,
+  mode-only, no hunks) or any unexpected exception gives exit 2. It also writes a
+  `patch-check.md` that says the check did not run, and a JSON report with `"ran": false`.
+  upstream.yml maps exit 0, 1 and 2 to `result=ok|fail|norun`, and the PR body opens with a
+  matching verdict line. A pure rename is rejected with a message that names the patch, because
+  `surfer export` never writes one; creating and deleting a file are supported and checked.
 - **Artifact preflight for 157.0.1**: the index entry
   `gecko.v2.mozilla-release.shippable.revision.737ec77d…firefox.linux64-opt` exists, with expiry
   `2027-10-05T13:54:14Z`.

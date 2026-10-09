@@ -32,8 +32,14 @@ Decision points are marked **Decide**.
    `version.version`, it streams
    `https://archive.mozilla.org/pub/firefox/releases/X.Y/source/firefox-X.Y.source.tar.xz`
    (≈ 810 MB, the same file `surfer download` fetches) through
-   `tools/upstream/patch-check.py --tarball -`. Only the patched files are extracted, so the disk
-   is barely touched; about 1–2 min.
+   `tools/upstream/patch-check.py --tarball - --drain`. Only the patched files are extracted, so
+   the disk is barely touched; about 1–2 min. The same stream goes through `tee` into
+   `sha512sum`. `tools/upstream/verify-sha512.py` compares the result with the
+   `source/firefox-X.Y.source.tar.xz` line of `https://archive.mozilla.org/pub/firefox/releases/X.Y/SHA512SUMS`.
+   **A mismatch fails the job** with both hashes in the log, and no PR is opened. We do not check
+   the GPG signature on `SHA512SUMS` (`SHA512SUMS.asc`): HTTPS from archive.mozilla.org is the
+   trust anchor, and the tarball only feeds a report. The build itself uses `surfer download`'s own
+   copy.
 2. **`pr` job** (the only one that can write). `bump-surfer-json.py` bumps the pin, and the job
    pushes `upstream/firefox-X.Y` and opens a draft PR `upstream: update to Firefox X.Y`, labelled
    `upstream`. Its body carries the patch-check summary. The JSON report is the run's
@@ -54,8 +60,13 @@ Each `fuzz` or `failed` hunk is listed under the table, collapsed, as the hunk f
 **Decide:**
 
 - All rows import → go to step 2; expect a mechanical bump.
-- "Patch check did not run" → the tarball was not readable (not published yet, or a network
-  error). Run the check yourself after step 2.
+- "Patch check: **did not run**" → no verdict at all: not "patches fail". The cause is in the
+  summary: the tarball was not readable (not published yet, or a network error), or a patch is
+  malformed or unsupported (e.g. a rename, which `surfer export` never writes). Run the check
+  yourself after step 2.
+- The job failed with "SHA-512 mismatch" and no PR → do not trust that download. Re-run later
+  (`gh workflow run upstream.yml`); if it persists, compare by hand with
+  `sha512sum .surfer/engine/firefox-X.Y.source.tar.xz` after step 2.
 - Any `fuzz` or `failed` → step 3 will fail at that patch; plan the fix before building.
 - A PR for the branch is already open → the workflow does nothing. Closing the PR is the way to get
   a fresh one: the branch is rebuilt from `main` on the next run.
@@ -93,7 +104,9 @@ patch-check: …/engine at HEAD (Firefox X.Y)
 6 patches: 6 clean
 ```
 
-Exit status: 0 every patch imports, 1 at least one does not, 2 the check could not run. Other
+Exit status: 0 every patch imports, 1 at least one does not, 2 the check could not run (an
+unreadable tree, a malformed or unsupported patch, or any crash). With 2, `--json` and
+`--markdown` still write a report saying it did not run (`"ran": false`). Other
 inputs: `--worktree` (the working tree, e.g. an engine you already imported, where every patch
 reads `applied`), `--ref REF`, `--tarball FILE|URL|-`. For files: `--json`, `--markdown`.
 
@@ -215,8 +228,15 @@ upstream adds there is silently dropped, and some break startup (spec m0-brandin
 
 ```sh
 npx vitest run tools/branding/
+# want: "Tests  1 passed (1)"
 # fails with the missing pref names; add each to src/browser/branding/vimma/pref/firefox-branding.js
 ```
+
+It must **pass, not skip**. The test reads upstream's
+`engine/browser/branding/unofficial/pref/firefox-branding.js`, and without `engine/` it skips and
+vitest still exits 0. A skip prints `branding-prefs: skipped, … is absent (run npm run import
+first)` and reports `1 skipped` instead of `1 passed`. Run it after `npm run import`, in the
+checkout that has the new `engine/`.
 
 **cfr provider (spec m0-mozilla-services).** We carry a full copy of upstream's
 `browser.newtabpage.activity-stream.asrouter.providers.cfr` with `"enabled":false`. A stale copy
