@@ -75,6 +75,13 @@ pref("browser.promo.relay.enabled", false);
 pref("browser.contentblocking.report.show_mobile_app", false);
 pref("browser.contentblocking.report.hide_vpn_banner", true);
 
+// System add-on updates (spec m0-updater): Mozilla's update server (aus5) is asked with our
+// version, build, OS and locale, and answers nothing for 157; webcompat fixes come through Remote
+// Settings instead. App updates are off at build time (configs/common/mozconfig). Add-on updates
+// from AMO (extensions.update.*) and OpenH264/Widevine (media.gmp-manager.url) stay on.
+pref("extensions.systemAddon.update.enabled", false);
+pref("extensions.systemAddon.update.url", "");
+
 // Vimma UI (spec m0-tabstrip-hidden): Firefox's tab strip is hidden until M2 brings Vimma's own
 // tab UI; false shows it again, live.
 pref("vimma.ui.tabstrip.hidden", true);
