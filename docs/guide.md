@@ -211,6 +211,8 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `j` / `k`, `h` / `l`        | Normal mode: scroll down / up, left / right by a step. A count repeats: `3j`.                                                                                 |
 | `d` / `u`                   | Normal mode: scroll half a page down / up (`ctrl+u` is reserved for workspaces).                                                                              |
 | `gg` / `G`                  | Normal mode: go to the top / bottom of the page.                                                                                                              |
+| `H` / `L`                   | Normal mode: back / forward in the tab's history. A count moves that many pages, stopping at the first or last: `3H`.                                         |
+| `r`                         | Normal mode: reloads the page.                                                                                                                                |
 | `i`                         | Normal mode: focus the first text field and enter insert mode.                                                                                                |
 | `f` / `F`                   | Normal mode: link hints. Type a label to follow it, or, with `F`, to open the link in a background tab. `Backspace` undoes a key, `Esc` cancels.              |
 | `/` / `?`                   | Normal mode: find in the page (below). `Enter` stays on the match, `Esc` goes back to where you were.                                                         |
@@ -237,8 +239,6 @@ digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 
 **Planned:**
 
-- **Back, forward and reload** (`H`/`L`, `r`): bound, not built yet. Until then these keys
-  reach the page as before.
 - **M3, workspaces and the side panel:** `ctrl+i`/`ctrl+u` next/previous workspace, the
   `ctrl+b w` picker, new/rename/close workspace, and `ctrl+b b` or `<leader>n` for the side panel.
   Until then `ctrl+i` and `ctrl+u` keep Firefox's meaning (page info, view source).

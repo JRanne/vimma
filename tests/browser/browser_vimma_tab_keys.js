@@ -226,12 +226,20 @@ add_task(async function unimplemented_prefix_action_shows_a_notice_that_hides() 
 
 add_task(async function passed_through_single_key_shows_no_notice() {
   const tabs = await openTabs(1);
-  EventUtils.synthesizeKey("r"); // reload: not built yet, so left to the page
+  // ctrl+u (previous workspace, M3) is the last single key bound to an unbuilt action, so it is
+  // left to the page and then to Firefox, which opens view-source in a new tab.
+  const opened = tabOpened();
+  EventUtils.synthesizeKey("u", { ctrlKey: true });
+  const viewSource = await opened;
+  Assert.ok(viewSource, "Firefox still gets ctrl+u (view source)");
+  if (viewSource) BrowserTestUtils.removeTab(viewSource);
+  await select(tabs[0]);
+  await focusContent(tabs[0].linkedBrowser);
   EventUtils.synthesizeKey("KEY_Escape"); // unbound in normal mode
   Assert.deepEqual(
     await pageKeysThenZ(tabs[0]),
-    ["r", "Escape", "z"],
-    "r and Esc reach the page, not default-prevented",
+    ["u", "Escape", "z"],
+    "ctrl+u and Esc reach the page, not default-prevented",
   );
   Assert.ok(!noticeShown(), "and show no notice");
   closeTabs(tabs);
@@ -239,11 +247,17 @@ add_task(async function passed_through_single_key_shows_no_notice() {
 
 add_task(async function a_count_before_an_unbuilt_key_shows_the_notice() {
   const tabs = await openTabs(1);
+  const count = gBrowser.tabs.length;
   EventUtils.synthesizeKey("3");
-  EventUtils.synthesizeKey("H", { shiftKey: true }); // history.back: not built yet
-  Assert.ok(noticeShown(), "3H shows a notice instead of vanishing");
-  Assert.equal(notice().textContent, "Go back: not implemented yet", "naming the action");
-  Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "the page saw neither 3 nor H");
+  EventUtils.synthesizeKey("u", { ctrlKey: true }); // workspace.previous: M3, not built yet
+  Assert.ok(noticeShown(), "3 ctrl+u shows a notice instead of vanishing");
+  Assert.equal(
+    notice().textContent,
+    "Previous workspace: not implemented yet",
+    "naming the action",
+  );
+  Assert.equal(gBrowser.tabs.length, count, "and Firefox does not open view-source");
+  Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "the page saw neither 3 nor ctrl+u");
   notice().hidePopover();
   closeTabs(tabs);
 });

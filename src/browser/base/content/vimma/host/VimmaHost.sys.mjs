@@ -174,6 +174,10 @@ export const CONTENT_RUNNERS = Object.freeze({
   "scroll.right": (b, a) => VimmaActors.scroll(b, "right", a.count),
   "scroll.half_down": (b, a) => VimmaActors.scroll(b, "half_down", a.count),
   "scroll.half_up": (b, a) => VimmaActors.scroll(b, "half_up", a.count),
+  // History and reload act on the focused page's <browser> (plan §2, M1 navigation keys).
+  "history.back": (b, a) => goHistory(b, -(a.count ?? 1)),
+  "history.forward": (b, a) => goHistory(b, a.count ?? 1),
+  "page.reload": (b) => b.reload(),
   "scroll.top": (b) => VimmaActors.scroll(b, "top"),
   "scroll.bottom": (b) => VimmaActors.scroll(b, "bottom"),
   // Esc in insert (escape.mjs: blur); the focusout recheck that follows stays in normal.
@@ -201,6 +205,23 @@ export const CONTENT_RUNNERS = Object.freeze({
     (win && states.get(win))?.notice.show(text);
   }),
 });
+
+/**
+ * Moves `browser` `delta` entries through its session history, clamped to the first and last
+ * entry (`5H` on the third page lands on the first). One step goes through goBack/goForward,
+ * which skip entries the user never interacted with, like the toolbar buttons.
+ * @param {any} browser
+ * @param {number} delta  negative goes back
+ */
+function goHistory(browser, delta) {
+  if (delta === -1) return browser.goBack();
+  if (delta === 1) return browser.goForward();
+  const history = browser.browsingContext?.sessionHistory;
+  if (!history) return undefined;
+  const index = Math.min(Math.max(history.index + delta, 0), history.count - 1);
+  if (index !== history.index) browser.gotoIndex(index);
+  return undefined;
+}
 
 /**
  * The find state of the window that owns `browser`.

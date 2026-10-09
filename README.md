@@ -33,7 +33,7 @@ release channel.
 
 **Pre-alpha.** Milestone M0 ("fork boots + pipeline", [plan.md](plan.md) §6) is almost done,
 and M1's modal page layer is complete (scrolling, insert mode, link hints, find, the `:`
-command line and copy mode); back, forward and reload keys (`H`/`L`/`r`) are not built yet.
+command line, copy mode, and back, forward and reload with `H`/`L`/`r`).
 There are no binaries yet: you build from source. Version `0.1.0`, on Firefox 157.0.1.
 
 What works today:
@@ -85,7 +85,7 @@ What works today:
 
 What does not work yet: the dimmed bindings in the overlay. The overlay lists the full planned
 keymap; a `ctrl+b` sequence that does not run yet shows "… not implemented yet" for a moment.
-`H`/`L`/`r` reach the page until they are built. M2 (tabs and the status bar) is
+M2 (tabs and the status bar) is
 complete; its which-key strip was dropped, and `ctrl+b ?` lists the bindings. Workspaces, split
 panes, `config.toml` and theming come later. The parser and validator for `config.toml` exist in
 `vimma-core`, but the browser does not read the file yet. See [docs/guide.md](docs/guide.md) and
