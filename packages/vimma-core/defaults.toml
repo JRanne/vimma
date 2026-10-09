@@ -1,0 +1,130 @@
+# vimma default configuration.
+# Generated from packages/vimma-core/src/defaults.mjs by `npm run gen-docs`; do not edit.
+# Copy any line into ~/.config/vimma/config.toml to change it.
+schema = 1
+
+[keys]
+prefix = "ctrl+b"
+show_keybinds = ["prefix+?"]
+new_tab = ["prefix+c"]
+next_tab = ["prefix+n"]
+previous_tab = ["prefix+p"]
+select_tab_1 = ["prefix+1"]
+select_tab_2 = ["prefix+2"]
+select_tab_3 = ["prefix+3"]
+select_tab_4 = ["prefix+4"]
+select_tab_5 = ["prefix+5"]
+select_tab_6 = ["prefix+6"]
+select_tab_7 = ["prefix+7"]
+select_tab_8 = ["prefix+8"]
+select_tab_9 = ["prefix+9"]
+rename_tab = ["prefix+shift+t"]
+close_tab = ["prefix+shift+x"]
+split_vertical = ["prefix+v"]
+split_horizontal = ["prefix+minus"]
+focus_pane_left = ["prefix+h"]
+focus_pane_down = ["prefix+j"]
+focus_pane_up = ["prefix+k"]
+focus_pane_right = ["prefix+l"]
+swap_pane_left = ["prefix+shift+h"]
+swap_pane_down = ["prefix+shift+j"]
+swap_pane_up = ["prefix+shift+k"]
+swap_pane_right = ["prefix+shift+l"]
+zoom = ["prefix+z"]
+close_pane = ["prefix+x"]
+resize_mode = ["prefix+r"]
+next_workspace = ["ctrl+i"]
+previous_workspace = ["ctrl+u"]
+workspace_picker = ["prefix+w"]
+new_workspace = ["prefix+shift+n"]
+rename_workspace = ["prefix+shift+w"]
+close_workspace = ["prefix+shift+d"]
+goto_picker = ["prefix+g"]
+toggle_sidebar = ["prefix+b", "<leader>n"]
+copy_mode = ["prefix+["]
+
+[modal]
+leader = " "
+timeout_ms = 800
+
+[modal.normal]
+"j" = "scroll.down"
+"k" = "scroll.up"
+"h" = "scroll.left"
+"l" = "scroll.right"
+"d" = "scroll.half_down"
+"u" = "scroll.half_up"
+"gg" = "scroll.top"
+"G" = "scroll.bottom"
+"H" = "history.back"
+"L" = "history.forward"
+"r" = "page.reload"
+"f" = "hint.follow"
+"F" = "hint.follow_new_tab"
+"/" = "find.forward"
+"?" = "find.backward"
+"n" = "find.next"
+"N" = "find.previous"
+"i" = "mode.insert"
+"v" = "mode.visual"
+":" = "command.open"
+"t" = "tab.new"
+"x" = "tab.close"
+"gt" = "tab.next"
+"gT" = "tab.previous"
+"b" = "goto.picker"
+"<C-w>h" = "pane.focus_left"
+"<C-w>j" = "pane.focus_down"
+"<C-w>k" = "pane.focus_up"
+"<C-w>l" = "pane.focus_right"
+"<C-w>H" = "pane.swap_left"
+"<C-w>J" = "pane.swap_down"
+"<C-w>K" = "pane.swap_up"
+"<C-w>L" = "pane.swap_right"
+"<C-w>o" = "pane.zoom"
+"<C-w><" = "pane.resize_narrower"
+"<C-w>>" = "pane.resize_wider"
+"<C-w>+" = "pane.resize_taller"
+"<C-w>-" = "pane.resize_shorter"
+
+[modal.insert]
+"<Esc>" = "mode.normal"
+
+[modal.visual]
+"<Esc>" = "mode.normal"
+"h" = "caret.left"
+"j" = "caret.down"
+"k" = "caret.up"
+"l" = "caret.right"
+"w" = "caret.word_forward"
+"b" = "caret.word_backward"
+"y" = "selection.yank"
+
+[modal.command]
+"<Esc>" = "command.cancel"
+
+[modal.hint]
+"<Esc>" = "hint.cancel"
+
+[modal.help]
+"<Esc>" = "help.close"
+"/" = "help.filter"
+"q" = "help.close"
+
+[modal.panel]
+"1" = "panel_select_1"
+"2" = "panel_select_2"
+"3" = "panel_select_3"
+"4" = "panel_select_4"
+"5" = "panel_select_5"
+"6" = "panel_select_6"
+"7" = "panel_select_7"
+"8" = "panel_select_8"
+"9" = "panel_select_9"
+"j" = "panel.down"
+"k" = "panel.up"
+"<CR>" = "panel.open"
+"<Esc>" = "panel.close"
+
+[unbind]
+normal = []
