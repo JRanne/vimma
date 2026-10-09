@@ -104,10 +104,16 @@ function probeFile(src) {
  * @param {{ allowCopy?: boolean, cp?: Cp, jobs?: number }} [opts]
  */
 export async function copyEngine(src, dest, { allowCopy = false, cp = runCp, jobs = 8 } = {}) {
-  if (existsSync(dest) || isLink(dest)) {
-    throw new Error(`${dest} already exists; pass --force to replace it`);
+  // One atomic, non-recursive mkdir: a second setup in the same worktree fails here (EEXIST),
+  // and so does a dangling symlink at dest; a missing lane root is not created.
+  try {
+    mkdirSync(dest);
+  } catch (e) {
+    if (/** @type {NodeJS.ErrnoException} */ (e).code === "EEXIST") {
+      throw new Error(`${dest} already exists; pass --force to replace it`, { cause: e });
+    }
+    throw e;
   }
-  mkdirSync(dest, { recursive: true });
   const probe = join(dest, ".lane-reflink-probe");
   const res = await cp(["--reflink=always", probeFile(src), probe]);
   rmSync(probe, { force: true });
@@ -134,7 +140,30 @@ export async function copyEngine(src, dest, { allowCopy = false, cp = runCp, job
   };
   await Promise.all(Array.from({ length: jobs }, worker));
   if (failures.length) throw new Error(`copying ${src} failed:\n${failures.join("\n")}`);
-  return { reflink: mode === "--reflink=always" };
+  return { reflink: mode === "--reflink=always", locks: removeStaleLocks(dest) };
+}
+
+/**
+ * Removes *.lock files under the lane's .git: copied while a git command ran in the source
+ * (say, mid-import), they would block every git call in the lane. Only ever called on the lane.
+ * @param {string} engine the lane's engine/
+ * @returns {string[]} the removed locks
+ */
+function removeStaleLocks(engine) {
+  const gitDir = join(engine, ".git");
+  if (!existsSync(gitDir) || isLink(gitDir)) return [];
+  /** @type {string[]} */
+  const locks = [];
+  const stack = [gitDir];
+  for (let dir = stack.pop(); dir !== undefined; dir = stack.pop()) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, entry.name);
+      if (entry.isDirectory()) stack.push(p);
+      else if (entry.name.endsWith(".lock")) locks.push(p);
+    }
+  }
+  for (const lock of locks) unlinkSync(lock);
+  return locks;
 }
 
 /** @param {string} p */
@@ -168,16 +197,17 @@ function symlinks(engine) {
 }
 
 /**
- * Symlinks in the lane's engine that point into the source checkout (Surfer's absolute links
+ * Symlinks in the lane's engine that point into a source checkout (Surfer's absolute links
  * from the import there), excluding those into the lane, which lives under the source's path
- * when it is an agent worktree.
+ * when it is an agent worktree. Pass both --source and the main checkout: a non-default
+ * source's engine may itself have been copied from main's and still carry links into it.
  * @param {string} engine the lane's engine/
- * @param {string} source the source checkout
+ * @param {string | string[]} sources the source checkout(s)
  * @param {string} lane the lane (worktree root)
  * @returns {string[]}
  */
-export function foreignLinks(engine, source, lane) {
-  const src = forms(source);
+export function foreignLinks(engine, sources, lane) {
+  const src = [sources].flat().flatMap(forms);
   const own = forms(lane);
   return symlinks(engine)
     .filter(([, t]) => src.some((s) => inside(t, s)) && !own.some((l) => inside(t, l)))
@@ -201,20 +231,30 @@ export function laneLinks(engine, lane) {
 
 /**
  * Unlinks the foreign links (never their targets). Refuses unless `engine` is inside a lane
- * that is not the source checkout.
+ * that is none of the source checkouts.
  * @param {string} engine
- * @param {string} source
+ * @param {string | string[]} sources see foreignLinks
  * @param {string} lane
  * @returns {string[]} the removed links
  */
-export function removeForeignLinks(engine, source, lane) {
-  assertLane(lane, source);
+export function removeForeignLinks(engine, sources, lane) {
+  for (const source of [sources].flat()) assertLane(lane, source);
   if (!forms(lane).some((l) => inside(realpathSync(engine), l))) {
     throw new Error(`${engine} is not inside the lane ${lane}`);
   }
-  const links = foreignLinks(engine, source, lane);
+  const links = foreignLinks(engine, sources, lane);
   for (const link of links) unlinkSync(link);
   return links;
+}
+
+/**
+ * The environment for git children, without GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE or any other
+ * GIT_* variable: from a hook or `git rebase --exec` they point at the calling repo (possibly
+ * main's), and `git -C <engine> reset` would then reset that repo's index.
+ * @returns {NodeJS.ProcessEnv}
+ */
+export function gitEnv() {
+  return Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
 }
 
 /** Files the import writes that upstream's .gitignore (`/mozconfig*`) hides from git clean. */
@@ -238,10 +278,24 @@ const IMPORT_IGNORED = ["mozconfig", "mozconfig.artifact"];
  */
 export function resetEngine(engine) {
   const git = (/** @type {string[]} */ ...args) => {
-    const res = spawnSync("git", ["-C", engine, ...args], { encoding: "utf8" });
+    const res = spawnSync("git", ["-C", engine, ...args], { encoding: "utf8", env: gitEnv() });
     if (res.status !== 0) throw new Error(`git ${args.join(" ")} in ${engine}: ${res.stderr}`);
     return res.stdout;
   };
+  // Without its own .git, git would find the enclosing worktree (or main, which the lane sits
+  // inside) and reset that.
+  let top = "";
+  try {
+    top = git("rev-parse", "--show-toplevel").trim();
+  } catch {
+    // no repo at all; refused below
+  }
+  if (!top || realpathSync(top) !== realpathSync(engine)) {
+    throw new Error(
+      `${engine} is not the top of its own git repo (git says ${top || "no repo"}); refusing ` +
+        `to reset or clean it`,
+    );
+  }
   git("reset", "-q");
   git("checkout", "--", ".");
   const removed = git("clean", "-fd")
@@ -267,7 +321,14 @@ export function teardownTarget(root, main) {
     throw new Error(`${engine} is a symlink; refusing (it may lead to another checkout's engine)`);
   }
   const real = realpathSync(engine);
-  if (inside(real, realpathSync(join(main, "engine")))) {
+  const mainEngine = join(main, "engine");
+  if (!existsSync(mainEngine)) {
+    throw new Error(
+      `the main checkout ${main} has no engine/, so ${engine} cannot be checked against it; ` +
+        `refusing (remove it by hand if you are sure)`,
+    );
+  }
+  if (inside(real, realpathSync(mainEngine))) {
     throw new Error(`${engine} resolves into the main checkout's engine; refusing`);
   }
   return engine;

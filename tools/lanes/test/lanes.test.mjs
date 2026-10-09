@@ -25,7 +25,7 @@ import {
   teardownTarget,
 } from "../lanes.mjs";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 
 /**
  * A main checkout with an imported engine, and a worktree under its .claude/worktrees/, the
@@ -289,6 +289,147 @@ describe("teardownTarget", () => {
   it("refuses when there is no engine/", () => {
     const { main, lane } = fakeCheckouts();
     expect(() => teardownTarget(lane, main)).toThrow(/no engine/);
+  });
+
+  it("says so when the main checkout has no engine/", () => {
+    const { main, lane, engine } = fakeCheckouts();
+    mkdirSync(join(lane, "engine"));
+    rmSync(engine, { recursive: true });
+    expect(() => teardownTarget(lane, main)).toThrow(/main checkout .* has no engine/);
+  });
+});
+
+describe("review follow-ups", () => {
+  /** A real git repo at `dir` with one commit; returns a git runner with a clean env. */
+  function gitRepo(/** @type {string} */ dir) {
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")),
+    );
+    const git = (/** @type {string[]} */ ...args) =>
+      execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", env });
+    git("init", "-q");
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x");
+    return git;
+  }
+
+  /** The lane engine as a real repo with one patched, staged file. */
+  function laneRepo() {
+    const { main, lane } = fakeCheckouts();
+    const engine = join(lane, "engine");
+    mkdirSync(engine);
+    const git = gitRepo(engine);
+    writeFileSync(join(engine, "f"), "upstream\n");
+    git("add", "f");
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "f");
+    writeFileSync(join(engine, "f"), "patched\n");
+    git("add", "f");
+    return { main, lane, engine };
+  }
+
+  it("resetEngine ignores GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE pointing at main", () => {
+    const { main, engine } = laneRepo();
+    const mainGit = gitRepo(main);
+    writeFileSync(join(main, "staged.txt"), "x\n");
+    mainGit("add", "staged.txt");
+    const saved = { ...process.env };
+    process.env.GIT_DIR = join(main, ".git");
+    process.env.GIT_WORK_TREE = main;
+    process.env.GIT_INDEX_FILE = join(main, ".git", "index");
+    try {
+      resetEngine(engine);
+    } finally {
+      for (const k of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"]) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    }
+    expect(readFileSync(join(engine, "f"), "utf8")).toBe("upstream\n");
+    expect(mainGit("diff", "--cached", "--name-only")).toBe("staged.txt\n");
+  });
+
+  it("resetEngine refuses an engine/ with no .git inside a bigger work tree", () => {
+    const { main, lane } = fakeCheckouts();
+    const mainGit = gitRepo(main);
+    writeFileSync(join(main, "staged.txt"), "x\n");
+    mainGit("add", "staged.txt");
+    const engine = join(lane, "engine");
+    mkdirSync(engine);
+    writeFileSync(join(engine, "f"), "\n");
+    expect(() => resetEngine(engine)).toThrow(/not the top of its own git repo/);
+    expect(mainGit("diff", "--cached", "--name-only")).toBe("staged.txt\n");
+    expect(existsSync(join(engine, "f"))).toBe(true);
+  });
+
+  it("copyEngine drops lock files copied from the source's .git, in the lane only", async () => {
+    const { lane, engine } = fakeCheckouts();
+    mkdirSync(join(engine, ".git", "refs", "heads"), { recursive: true });
+    writeFileSync(join(engine, ".git", "index.lock"), "");
+    writeFileSync(join(engine, ".git", "refs", "heads", "vimma.lock"), "");
+    const dest = join(lane, "engine");
+    const { locks } = await copyEngine(engine, dest, { allowCopy: true });
+    expect(locks.sort()).toEqual(
+      [join(dest, ".git", "index.lock"), join(dest, ".git", "refs", "heads", "vimma.lock")].sort(),
+    );
+    expect(existsSync(join(dest, ".git", "index.lock"))).toBe(false);
+    expect(existsSync(join(dest, ".git", "HEAD"))).toBe(true);
+    expect(existsSync(join(engine, ".git", "index.lock"))).toBe(true);
+    expect(existsSync(join(engine, ".git", "refs", "heads", "vimma.lock"))).toBe(true);
+  });
+
+  it("copyEngine: of two setups in one worktree, one fails cleanly", async () => {
+    const { lane, engine } = fakeCheckouts();
+    const dest = join(lane, "engine");
+    const results = await Promise.allSettled([
+      copyEngine(engine, dest, fakeCp()),
+      copyEngine(engine, dest, fakeCp()),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const failed = results.find((r) => r.status === "rejected");
+    expect(String(failed?.status === "rejected" && failed.reason)).toMatch(/already exists/);
+  });
+
+  it("copyEngine refuses a lane engine/ that is a symlink", async () => {
+    const { main, lane, engine } = fakeCheckouts();
+    symlinkSync(join(main, "elsewhere"), join(lane, "engine"));
+    await expect(copyEngine(engine, join(lane, "engine"), fakeCp())).rejects.toThrow(
+      /already exists/,
+    );
+  });
+
+  it("removeForeignLinks refuses a lane engine/ that is a symlink to the main engine", () => {
+    const { main, lane, engine } = fakeCheckouts();
+    symlinkSync(engine, join(lane, "engine"));
+    expect(() => removeForeignLinks(join(lane, "engine"), main, lane)).toThrow(/not inside/);
+    expect(lstatSync(join(engine, "browser/base/ours.js")).isSymbolicLink()).toBe(true);
+  });
+
+  it("works on a lane reached through a symlinked path component", async () => {
+    const { base, main, engine } = fakeCheckouts();
+    symlinkSync(main, join(base, "alias"));
+    const lane = join(base, "alias", ".claude", "worktrees", "agent-x");
+    const dest = join(lane, "engine");
+    expect(() => assertLane(lane, main)).not.toThrow();
+    await copyEngine(engine, dest, { allowCopy: true });
+    expect(removeForeignLinks(dest, main, lane)).toHaveLength(2);
+    expect(foreignLinks(dest, main, lane)).toEqual([]);
+  });
+
+  it("finds and removes links into both a non-default source and the main checkout", async () => {
+    const { base, main, lane, engine } = fakeCheckouts();
+    // Another worktree used as --source, whose engine also kept links into main.
+    const other = join(base, "other");
+    mkdirSync(join(other, "src"), { recursive: true });
+    writeFileSync(join(other, "src", "o.js"), "o\n");
+    const srcEngine = join(other, "engine");
+    await copyEngine(engine, srcEngine, { allowCopy: true });
+    symlinkSync(join(other, "src", "o.js"), join(srcEngine, "browser", "base", "o.js"));
+    const dest = join(lane, "engine");
+    await copyEngine(srcEngine, dest, { allowCopy: true });
+    const sources = [other, main];
+    expect(foreignLinks(dest, [other], lane)).toEqual([join(dest, "browser/base/o.js")]);
+    expect(foreignLinks(dest, sources, lane)).toHaveLength(3);
+    expect(removeForeignLinks(dest, sources, lane)).toHaveLength(3);
+    expect(foreignLinks(dest, sources, lane)).toEqual([]);
   });
 });
 
