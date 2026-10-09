@@ -35,16 +35,21 @@ const styled = new WeakSet();
  */
 let history = createHistory();
 
-/** @typedef {{ run: (result: Extract<CommandResult, { kind: "run" }>) => void }} Callbacks */
+/**
+ * @typedef {object} Callbacks
+ * @property {(result: Extract<CommandResult, { kind: "run" }>) => void} run
+ * @property {() => void} [changed]  after it opens or closes (the status bar's mode)
+ */
 
 export class CommandLine {
   /**
    * @param {Window} win  a browser window
    * @param {Callbacks} callbacks  `run` gets a parsed line once the command line has closed
    */
-  constructor(win, { run }) {
+  constructor(win, { run, changed = () => {} }) {
     this.win = win;
     this.run = run;
+    this.changed = changed;
     /** @type {HTMLElement | null} */
     this.el = null;
     /** @type {HTMLInputElement | null} */
@@ -76,6 +81,7 @@ export class CommandLine {
       this.refreshList();
     }
     input.focus();
+    this.changed();
   }
 
   /**
@@ -99,6 +105,7 @@ export class CommandLine {
       /** @type {HTMLElement} */ (opener).focus();
     }
     /** @type {HTMLElement} */ (this.el).hidden = true;
+    this.changed();
   }
 
   /** Close and remove the element (VimmaHost.uninit). */

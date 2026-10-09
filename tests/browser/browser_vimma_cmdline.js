@@ -57,7 +57,7 @@ async function openTabs(n, url = PAGE) {
   }
   await select(tabs[0]);
   await focusContent(tabs[0].linkedBrowser);
-  Assert.equal(VimmaHost.mode(window), "normal", "sanity: the page is in normal mode");
+  Assert.equal(VimmaHost.status(window).mode, "normal", "sanity: the page is in normal mode");
   return tabs;
 }
 
@@ -125,7 +125,7 @@ add_task(async function colon_opens_the_command_line_and_esc_closes_it() {
     "in the lower half of the content area",
   );
   Assert.equal(document.activeElement, input(), "with focus in it");
-  Assert.equal(VimmaHost.mode(window), "command", "in command mode");
+  Assert.equal(VimmaHost.status(window).mode, "command", "in command mode");
   Assert.equal(input().value, "", "empty");
 
   EventUtils.sendString("jk:x");
@@ -134,7 +134,7 @@ add_task(async function colon_opens_the_command_line_and_esc_closes_it() {
   EventUtils.synthesizeKey("KEY_Escape");
   Assert.ok(!isOpen(), "Esc closes it");
   Assert.equal(document.activeElement, browser, "focus is back on the page");
-  Assert.equal(VimmaHost.mode(window), "normal", "and the mode is normal again");
+  Assert.equal(VimmaHost.status(window).mode, "normal", "and the mode is normal again");
 
   colon();
   Assert.equal(input().value, "", "it opens empty the next time");
@@ -153,7 +153,7 @@ add_task(async function colon_in_a_text_field_is_typed() {
     content.document.body.prepend(field);
     field.focus();
   });
-  await TestUtils.waitForCondition(() => VimmaHost.mode(window) === "insert", "insert mode");
+  await TestUtils.waitForCondition(() => VimmaHost.status(window).mode === "insert", "insert mode");
   colon();
   Assert.ok(!isOpen(), ": in insert mode does not open the command line");
   const value = await SpecialPowers.spawn(browser, [], () =>
@@ -333,5 +333,21 @@ add_task(async function map_and_help_open_the_bindings_overlay() {
     Assert.equal(document.activeElement, tabs[0].linkedBrowser, "focus is back on the page");
   }
   Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "the page saw none of the keys");
+  closeTabs(tabs);
+});
+
+add_task(async function the_status_bar_shows_command_and_the_line_sits_above_it() {
+  const tabs = await openTabs(1);
+  const bar = document.getElementById("vimma-statusbar");
+  const modeText = () => bar.querySelector('[data-segment="mode"]')?.textContent;
+  const until = (cond, msg) => TestUtils.waitForCondition(cond, msg, 50, 100);
+  colon();
+  await until(() => modeText() === "COMMAND", "the status bar says COMMAND");
+  const panel = container().firstElementChild.getBoundingClientRect();
+  const top = bar.getBoundingClientRect().top;
+  Assert.lessOrEqual(Math.abs(panel.bottom - top), 1, "the line sits just above the status bar");
+  gURLBar.focus();
+  await until(() => !isOpen(), "focus moving elsewhere in the window closes the line");
+  await until(() => modeText() !== "COMMAND", "and the status bar leaves COMMAND");
   closeTabs(tabs);
 });

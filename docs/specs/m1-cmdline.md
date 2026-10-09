@@ -17,8 +17,9 @@ line open and tells me what I probably meant. Nothing I type into it reaches the
   in our `jar.mn`. Built on first use, one per window.
 - **Host:** `command.open` and `command.cancel` runners; `_mode` reports `command` while the line
   is open; `_runCommand(state, result)` runs a parsed line through `_run` (the path keys take),
-  refusing `PENDING_ACTIONS`. `VimmaHost.mode(win)` exposes the mode (tests; #34's `status(win)`
-  can build on it). Runners take an optional third argument, the command's free text.
+  refusing `PENDING_ACTIONS`. Opening and closing call #34's `_emit`, so the status bar shows
+  `COMMAND` and leaves it however the line closes. Runners take an optional third argument, the
+  command's free text.
 - **Runners added:** `pane.close` (until M4's panes every tab is one pane, so it closes the tab:
   `:q`, `prefix+x`), `page.open` (`:open`), and `tab.new` with text (`:tabnew url`).
 - **Core:** `page.open` moves from `PENDING_ACTIONS` into `actions.mjs` as `open_url` (unbound;
@@ -58,8 +59,9 @@ completion list.
 - **The input.** A chrome-level HTML `<input>` inside our own container, `div#vimma-cmdline`,
   inserted right after `#browser` in the chrome `<body>` (a flex column). The container takes no
   height; its panel is `position: absolute; bottom: 0` and overlays the bottom of the content,
-  so opening it never reflows the page. If #34's status bar (`#vimma-statusbar`, also after
-  `#browser`) exists, the container goes before it, so the line sits just above the bar.
+  so opening it never reflows the page. #34's status bar (`#vimma-statusbar`) is also after
+  `#browser`, built at window init; the container goes before it, so the line sits just above
+  the bar (and at the window's foot if the bar failed to build).
   `role="combobox"` on the input, with `aria-controls` / `aria-activedescendant` on the list.
 - **Keys while it is open.** The host reports mode `command` (the line is open; it closes when
   focus leaves it within the window). The dispatcher still sees every key first: `Esc` is the
@@ -108,10 +110,16 @@ completion list.
   the mode is `insert` too.
 - **Theme:** the stylesheet reads M5's tokens (`--vimma-bg-dark`, `--vimma-fg`,
   `--vimma-accent`, `--vimma-selection`, `--vimma-error`, `--vimma-font`) with `Canvas` /
-  `CanvasText` fallbacks; #34 loads the token sheet, so the line is themed once it merges.
+  `CanvasText` fallbacks; the status bar (#34) loads the token sheet once per window.
 - **Verified:** core red 4 failed (`:help`, `:h`, `PENDING_ACTIONS`, `open_url`), green 1044/0
   (the `prefix+?` snapshot gains the `open_url` row). Browser red, host without the line: 20/26
   passed (": opens the command line - false == true", the page saw `[":", "z"]`, `:q` timed
   out). Green: `browser_vimma_cmdline.js` 138/0. Mutation: `_runCommand` without the
   `PENDING_ACTIONS` refusal fails "a pending action is refused" ("workspace.switch: not
   implemented yet"); reverted. Full `tests/browser/` 889/0 on the artifact build.
+- **Reconciled with #34 (status bar, which-key):** merged with rerere off; README and
+  `browser.toml` by hand. `VimmaHost.status(win).mode` replaced this spec's own `mode(win)`. New
+  test: the bar says `COMMAND` while the line is open and leaves it when focus moving elsewhere
+  closes the line; the line's bottom meets the bar's top. It passed before the `changed`
+  callback (the bar's debounced refresh happened to run after the close), so the callback is
+  there to make it deterministic, not to fix an observed failure. Full `tests/browser/` 973/0.
