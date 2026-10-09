@@ -356,9 +356,15 @@ than 10 %. `npm run bench` measures five cases (a single key, the prefix plus a 
 a motion, a two-key sequence, and applying a pane-focus action to a 30-tab workspace) from
 `packages/vimma-core/bench/cases.mjs`; `npm run bench -- --check` is the CI step. It fails when:
 
-- any case takes over **50 µs** (budget; applies on every machine), or
+- any case takes **50 µs or more** (budget; applies on every machine), or
 - on a machine the baseline knows: the **suite**, the geometric mean of the cases' changes, is
   more than **10 %** slower, or one case is more than **25 %** slower, or a baseline case is gone.
+- on a machine it does not know (a new runner CPU, a Node bump): the same, against the **most
+  demanding entry of the same arch and Node major**, with both limits widened by 6 points (16 %
+  suite, 31 % per case; the two hosted CPUs' entries differ by up to 5.5 % per case). The step
+  then emits a `::warning::` and a step-summary line naming that entry. Only with no entry of the
+  same arch and Node major does it fall back to the budget alone, also with a warning. It never
+  passes silently.
 
 Why it does not flake (plan §5: no retries; flaky means quarantine):
 
@@ -369,26 +375,39 @@ Why it does not flake (plan §5: no retries; flaky means quarantine):
   median over rounds; then the lowest over 15 fresh processes. One process lands in a JIT mode
   that can be 20–30 % off for sub-microsecond code; the lowest of 15 is the fast mode, and a fresh
   run finds it again.
-- **One baseline per runner class.** Entries are keyed by `CPU model | arch | Node major`;
-  GitHub's pool mixes CPU models, and ratios do not carry across microarchitectures. On an
-  unrecorded machine only the 50 µs budget applies, with a note and the entry to record.
+- **One baseline per runner class.** Entries are keyed by `CPU model | arch | node X.Y.Z`;
+  GitHub's pool mixes CPU models (we have seen Intel Xeon Platinum 8573C and AMD EPYC 9V74), and
+  ratios do not carry exactly across microarchitectures or V8 versions.
+- **Several samples per entry.** An entry's `cases` are the per-case median of its `samples`, one
+  per CI run, so one unlucky recording run does not set the bar. Currently: AMD EPYC 9V74 has 2
+  samples, Intel Xeon 8573C 1 (add the next Intel run's numbers, see below).
 - **Suite-level 10 %.** Measured noise between whole runs on a 2-CPU-pinned laptop: the suite's
   geometric mean within 6 % (max−min over 8 runs), single cases up to 14 %. So 10 % on the suite
-  and 25 % per case leave a margin of about two on the worst pair.
-- **The budget has headroom.** The slowest case is about 9 µs locally, the key cases under 0.5 µs.
+  and 25 % per case leave a margin of about two on the worst pair. Two CI runs on the same AMD
+  runner class differed by 1 % on the suite.
+- **The budget has headroom.** The slowest case is about 13 µs on CI, the key cases under 0.5 µs.
 
 If the step does fail without a slowing change, that is a flake: quarantine per plan §5 (open an
 issue with the log; do not re-run to green), and look at the numbers before touching thresholds.
+
+**Node is pinned exactly** in `.nvmrc`; ci, e2e, mutation and claude use
+`node-version-file: .nvmrc`. Exceptions, none of which runs the bench: release.yml's package job
+checks out a release tag (tags from before `.nvmrc` lack it) and stays on major 22; the
+self-hosted nightly and release build jobs use the runner's own Node for Surfer. The baseline is keyed on the exact version because a V8 patch can move these numbers. A
+Node bump therefore comes as its own Renovate PR (`nvm` manager, never automerged): its bench
+step falls back to the previous version's entries with a warning, and that PR records the new key.
 
 Updating the baseline, deliberately (like snapshots: never to make a red run green without
 saying why):
 
 1. A change that is meant to cost time (a new feature in the dispatch path), a new or renamed
-   case, a new Node major or a new runner CPU model are the reasons to re-record.
-2. Take the numbers from CI, not a laptop: the step's log prints `baseline entry:` with the JSON
-   for the runner it ran on when that runner has no entry. For an existing entry, delete it in a
-   commit first, or run `npm run bench -- --record "<notes>"` on that machine class.
-3. Put the entry in `packages/vimma-core/bench/baseline.json` with notes (runner image, why).
+   case, a Node bump or a new runner CPU model are the reasons to re-record.
+2. Take the numbers from CI, not a laptop. Every bench step prints `baseline entry:` for the
+   runner it ran on: a new entry, or the existing one with this run added as a sample (medians
+   recomputed). Copy it into `packages/vimma-core/bench/baseline.json`. To replace an entry
+   because the code changed on purpose, delete the entry first so the old samples go. On a
+   machine of the class itself, `npm run bench -- --record "<notes>"` does the same in place.
+3. Keep the notes (runner image, why), and prefer two or more samples per entry.
 4. The commit body carries a changelog line naming the cases and the change, e.g.
    `bench baseline: prefix + key +12 % from per-mode leader lookup (intended)`.
 

@@ -65,6 +65,18 @@ Two rows of plan §5 and issue #17:
   yet, and a different machine class); the plan wants the gate on PRs. The step costs seconds and
   no extra job minute.
 
+## Review changes (2026-10-09)
+
+- **No silent pass on an unknown runner.** Fall back to the most demanding entry (lowest
+  geometric mean of ratios) of the same arch and Node major, limits +6 points (16 % suite, 31 %
+  per case), with a `::warning::` and a step-summary line naming it. Budget-only, with a warning,
+  only when no such entry exists. Budget is now strict: 50.0 µs fails (plan: < 50 µs).
+- **Node pinned exactly** in `.nvmrc` (22.23.3, what CI recorded on); the baseline key carries
+  the exact version; Renovate's `nvm` manager bumps it in a PR that never automerges.
+- **Samples per entry:** `cases` is the per-case median of `samples` (AMD 2, Intel 1 so far).
+- mutation.yml reuses results only from main's scheduled or manual runs; `GH_TOKEN` is scoped to
+  the download step.
+
 ## Handover
 
 Done. Follow-up: when the CI log of another runner CPU model prints "no baseline for machine",
