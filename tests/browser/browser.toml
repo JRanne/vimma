@@ -10,6 +10,9 @@ support-files = ["file_vimma_test.pdf"]
 support-files = [
   "file_vimma_insert_scroll.html",
   "file_vimma_frame.html",
+  "file_vimma_design.html",
+  "file_vimma_design_host.html",
+  "file_vimma_plain.html",
   "file_vimma_test.pdf",
 ]
 

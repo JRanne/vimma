@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Fixture for browser_vimma_insert_scroll.js: a long page with no text field, and a fake modal
+   - (hidden until a test shows it) that locks page scrolling the way sites do. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vimma plain page</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      html.locked {
+        overflow: hidden;
+      }
+      #modal {
+        display: none;
+        position: fixed;
+        inset: 20px;
+        background: white;
+      }
+      html.locked #modal {
+        display: block;
+      }
+      #list {
+        height: 200px;
+        overflow-y: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="modal">
+      <div id="list"><div style="height: 5000px"></div></div>
+    </div>
+    <div style="height: 20000px"></div>
+  </body>
+</html>
