@@ -1,5 +1,6 @@
 import { describe, test, expect } from "vitest";
 import { ACTIONS, getAction, resolveActionName } from "../src/actions.mjs";
+import { compileKeymap } from "../src/keymap.mjs";
 
 describe("actions", () => {
   test("every action has a unique id+arg, a unique config name, a group and a description", () => {
@@ -51,5 +52,27 @@ describe("actions", () => {
 
   test("ACTIONS is frozen so the closed set cannot be extended at runtime", () => {
     expect(Object.isFrozen(ACTIONS)).toBe(true);
+  });
+
+  test("every M2 tab action of plan §2 exists with its default binding (m2-core-logic)", () => {
+    const km = compileKeymap();
+    /** @type {Record<string, string[]>} */
+    const want = {
+      show_keybinds: ["prefix+?"],
+      new_tab: ["prefix+c", "t"],
+      next_tab: ["prefix+n", "gt"],
+      previous_tab: ["prefix+p", "gT"],
+      ...Object.fromEntries(
+        Array.from({ length: 9 }, (_, i) => [`select_tab_${i + 1}`, [`prefix+${i + 1}`]]),
+      ),
+      rename_tab: ["prefix+shift+t"],
+      close_tab: ["prefix+shift+x", "x"],
+      goto_picker: ["prefix+g", "b"],
+    };
+    for (const [name, bindings] of Object.entries(want)) {
+      expect(getAction(name), name).toBeDefined();
+      expect(km.bindingsFor(name), name).toEqual(bindings);
+    }
+    expect(getAction("select_tab_3")).toMatchObject({ id: "tab.goto", arg: 3 });
   });
 });

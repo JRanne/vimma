@@ -1,0 +1,13 @@
+{
+  "description": "Open a URL in a new tab",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 3,
+    "command": "open",
+    "args": {
+      "url": "https://example.com/",
+      "where": "tab"
+    }
+  }
+}

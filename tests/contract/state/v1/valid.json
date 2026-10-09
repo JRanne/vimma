@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "active": "w2",
+  "next": 4,
+  "workspaces": [
+    {
+      "id": "w1",
+      "name": "work",
+      "container": "vimma-work",
+      "tabs": ["tab-a", "tab-b", "tab-c"],
+      "activeTab": "tab-c",
+      "panes": {
+        "root": {
+          "type": "split",
+          "axis": "x",
+          "ratios": [0.5, 0.5],
+          "children": [
+            {
+              "type": "leaf",
+              "pane": "p1",
+              "tab": "tab-a"
+            },
+            {
+              "type": "split",
+              "axis": "y",
+              "ratios": [0.6, 0.4],
+              "children": [
+                {
+                  "type": "leaf",
+                  "pane": "p2",
+                  "tab": "tab-b"
+                },
+                {
+                  "type": "leaf",
+                  "pane": "p3",
+                  "tab": "tab-c"
+                }
+              ]
+            }
+          ]
+        },
+        "focus": "p3",
+        "mru": ["p3", "p2", "p1"],
+        "zoom": null,
+        "next": 4
+      }
+    },
+    {
+      "id": "w2",
+      "name": "personal",
+      "container": "vimma-personal",
+      "tabs": ["tab-d"],
+      "activeTab": "tab-d",
+      "panes": {
+        "root": {
+          "type": "leaf",
+          "pane": "p1",
+          "tab": "tab-d"
+        },
+        "focus": "p1",
+        "mru": ["p1"],
+        "zoom": "p1",
+        "next": 2
+      }
+    },
+    {
+      "id": "w3",
+      "name": "admin",
+      "container": "vimma-admin",
+      "tabs": [],
+      "activeTab": null,
+      "panes": null
+    }
+  ]
+}

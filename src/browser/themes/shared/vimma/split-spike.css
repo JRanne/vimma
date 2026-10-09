@@ -1,0 +1,36 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* SPIKE (docs/specs/m4-split-panes.md, sub-spec 1; ADR-013), loaded by split/spike-layout.mjs.
+ * Places Firefox's active split-view panels at the rectangles in --vimma-pane-*, overriding
+ * content-area.css's two-column rules. Off under DOM fullscreen, where Firefox's own rule makes
+ * the deck-selected panel fill the window. Sub-spec 2 replaces this with split.css. */
+
+:root:not([inDOMFullscreen]) #tabbrowser-tabpanels[vimma-panes][splitview] {
+  position: relative;
+
+  & > .split-view-panel.split-view-panel-active {
+    position: absolute !important;
+    inset: auto !important;
+    left: var(--vimma-pane-x) !important;
+    top: var(--vimma-pane-y) !important;
+    width: var(--vimma-pane-w) !important;
+    height: var(--vimma-pane-h) !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+    flex: none !important;
+  }
+
+  /* Zoom: every pane but the zoomed one keeps its frame (and scroll position) but is not drawn,
+   * as content-area.css does for the other panels under DOM fullscreen. */
+  & > .split-view-panel-active[vimma-zoomed-away] {
+    -moz-subtree-hidden-only-visually: 1;
+  }
+
+  & > .split-view-splitter,
+  & split-view-footer {
+    display: none !important;
+  }
+}

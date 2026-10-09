@@ -182,6 +182,7 @@ Limits:
 | `upstream.yml`       | every 6 h (`:17`), manual        | `ubuntu-latest`           | allow Actions to open PRs; optional token  |
 | `claude.yml`         | `@claude`, `spec`+`claude:go`    | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
 | `release-please.yml` | push to `main`, manual           | `ubuntu-latest`           | Actions may open PRs; optional token       |
+| `release.yml`        | release published, manual        | `vimma-build` + hosted    | see "Release packages" (gated off)         |
 | Renovate             | Mondays before 07:00 Helsinki    | Renovate's own            | install the Renovate app                   |
 
 Locally, before pushing: `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:py`,
@@ -352,7 +353,7 @@ Plan §4/§7: [release-please](https://github.com/googleapis/release-please-acti
 by SHA) keeps one release PR open, `chore(main): release X.Y.Z`, updated on every push to `main`.
 It holds the next version and that release's `CHANGELOG.md` entry. **Merging it is the release**:
 release-please tags `vX.Y.Z` and creates the GitHub Release with the same notes. Nothing is built
-or uploaded yet; `release.yml` (packages, signatures, AUR) is M6.
+or uploaded by release-please itself; `release.yml` does that (below, "Release packages").
 
 - **Version source:** `surfer.json` `brands.vimma.release.displayVersion`, the version
   `vimma --version` and the About dialog show (spec m0-app-version). The release PR bumps it
@@ -389,12 +390,98 @@ One-time setup:
    `gh workflow run ci.yml --ref release-please--branches--main` before merging, or store a
    fine-grained token for this repo only (Contents, Pull requests and Issues: read/write) as
    `gh secret set RELEASE_PLEASE_TOKEN`; the workflow uses it when present.
-3. M6: tags created with `GITHUB_TOKEN` trigger no workflows either, so `release.yml` cannot rely
-   on `on: push: tags`. Call it from `release-please.yml` when `release_created` is set, or use
-   the token above.
+3. Tags and releases created with `GITHUB_TOKEN` trigger no workflows, so `release.yml`
+   (on `release: published`) runs by itself only with `RELEASE_PLEASE_TOKEN` set; without it,
+   start it by hand (see "Release packages").
 
 The job's token has `contents`, `pull-requests` and `issues: write` (labels go through the issues
 API). It runs no repository code.
+
+### Release packages (`release.yml`, spec m6-packaging)
+
+When a GitHub Release is published (release-please, above), `release.yml` builds Vimma on the
+`vimma-build` runner, packages it on a hosted runner, signs, uploads to that release and pushes
+AUR `vimma-bin`. **Every job is off until `RELEASE_ENABLED` is `true`**, manual runs included.
+
+| Asset                             | What                                                            |
+| --------------------------------- | --------------------------------------------------------------- |
+| `vimma-X.Y.Z-linux-x86_64.tar.xz` | `./mach package`'s tarball, renamed (one `vimma/` directory)    |
+| `vimma-X.Y.Z-x86_64.AppImage`     | AppImage (appimagetool 1.9.1, runtime 20251108, both pinned)    |
+| `vimma_X.Y.Z_amd64.deb`           | `/usr/lib/vimma`, `/usr/bin/vimma`, desktop file, icons         |
+| `vimma-X.Y.Z.cdx.json`            | CycloneDX 1.6 SBOM (`tools/package/sbom.mjs`)                   |
+| `SHA256SUMS`                      | checksums of the four files above                               |
+| `*.sigstore.json`                 | cosign keyless bundles, one per file above (when signing is on) |
+
+Jobs: `build` (self-hosted, read-only token, no secrets) → `package` (AppImage, `.deb`, AUR
+files, checksums; installs the `.deb` and starts it headless) → `sign` (only job with
+`id-token: write`) → `publish` (only job with `contents: write`) → `aur` (no GitHub token; the
+SSH key only) → `failure` (opens a `release-failure` issue). Locally, from a mach tarball:
+
+```sh
+tools/package/fetch-appimagetool.sh /tmp/ait
+node tools/package/package.mjs --tarball engine/obj-x86_64-pc-linux-gnu/dist/vimma-*.tar.xz \
+  --out dist --maintainer 'Name <email>' --appimagetool /tmp/ait/appimagetool \
+  --runtime /tmp/ait/runtime-x86_64 --no-deb   # dpkg-deb only exists on Debian/Ubuntu
+node tools/package/sbom.mjs --engine engine --out dist/vimma-$(node -p 'require("./surfer.json").brands.vimma.release.displayVersion').cdx.json
+```
+
+**Enable it (one time):**
+
+1. Runner: the nightly's `vimma-build` runner ("Nightly build runner" above) must be online
+   when a release is published. With the runner stopped outside the nightly window, start it
+   before merging the release PR (the job waits up to 24 h in the queue).
+2. Trigger: `gh secret set RELEASE_PLEASE_TOKEN` (fine-grained, this repo only: Contents, Pull
+   requests and Issues read/write), so the release release-please creates starts `release.yml`.
+   Without it, run it by hand after each release: `gh workflow run release.yml -f tag=vX.Y.Z`.
+3. Maintainer line for the `.deb` and the PKGBUILD:
+   `gh variable set PACKAGE_MAINTAINER --body 'Your Name <you@example.org>'` (public in every
+   package; the `package` job fails without it).
+4. Signing (recommended: keyless, no key to keep): `gh variable set SIGNING_ENABLED --body true`.
+   Each signature records `JRanne/vimma`'s `release.yml` and the tag in the public Rekor log.
+   Without the variable, `sign` is skipped and the assets go up unsigned.
+5. AUR (optional; skipped with a notice until the secret exists):
+   - Check the name is free: `curl -s 'https://aur.archlinux.org/rpc/v5/info?arg[]=vimma-bin'`
+     must say `"resultcount":0` (and look at `vimma` too, which `vimma-bin` provides).
+   - Create an account at <https://aur.archlinux.org/register>.
+   - Make a key for the workflow only: `ssh-keygen -t ed25519 -N '' -C vimma-release -f aur_key`;
+     paste `aur_key.pub` into My Account → SSH Public Key.
+   - `gh secret set AUR_SSH_KEY < aur_key`, then delete `aur_key`. The first push creates
+     `vimma-bin`; its maintainer is that account.
+6. Enable: `gh variable set RELEASE_ENABLED --body true` (disable: `gh variable delete
+RELEASE_ENABLED`). Try it on the next release, or re-run the last one with
+   `gh workflow run release.yml -f tag=vX.Y.Z` (assets are replaced, `--clobber`).
+
+**Runner rule:** until Settings → Actions → General has "Require approval for all outside
+collaborators" set, the `vimma-build` runner must stay offline outside nightly and release
+builds (fork PRs could add a workflow with `runs-on: vimma-build`). Release jobs themselves
+cannot be started from a fork, and a manual run does nothing unless started from `main`. The
+release build uses its own fresh objdir (`engine/obj-release`) and an empty sccache directory,
+so nothing left on the runner by a nightly or another job reaches signed binaries.
+
+**Verify a release** (the user guide's "Installing" points here):
+
+```sh
+v=0.1.0
+gh release download "v$v" -R JRanne/vimma
+sha256sum -c SHA256SUMS              # every file OK
+cosign verify-blob --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/JRanne/vimma/\.github/workflows/release\.yml@refs/(heads/main|tags/v[0-9]+\.[0-9]+\.[0-9]+)$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  SHA256SUMS                         # "Verified OK"
+```
+
+The identity accepts only this repository's `release.yml`, run for a `vX.Y.Z` tag (a published
+release) or from `main` (a manual re-run); `release.yml` refuses to run from any other branch.
+The issuer pins GitHub Actions' OIDC. Checking `SHA256SUMS`'s signature and then `sha256sum -c`
+covers every file; each asset also has its own `<file>.sigstore.json`, verified the same way.
+The regexp is `IDENTITY_REGEXP` in `tools/package/package.mjs`, and a test keeps the two equal.
+
+**When it fails:** a `release-failure` issue links the run. Fix on `main`, then re-run for the
+same tag. The tag is not deleted (plan §4 said so): release-please has already moved its
+manifest and changelog past it, and the release notes stay valid. If the fix changes what is
+built, release a patch version instead. To pull a bad release: `gh release edit vX.Y.Z --draft`
+(hides it); the AUR package cannot go back a version without an `epoch`, so ship a fixed
+release instead.
 
 ### Licences
 
@@ -402,3 +489,46 @@ API). It runs no repository code.
 BSD-2/3-Clause, Apache-2.0, MPL-2.0. Reviewed exceptions live in
 `tools/license-check/exceptions.json`, keyed by exact `name@version`, so an upgrade must be
 re-reviewed; stale exceptions fail the check too.
+
+`npm run license-check:crates` does the same for the Rust crates (`cargo metadata` on
+`tools/vimma-ctl`, legacy `MIT/Apache-2.0` read as OR); exceptions would go in
+`tools/license-check/cargo-exceptions.json`. vimma-ctl has no dependencies, so today it checks
+only the crate itself (MPL-2.0).
+
+## vimma-ctl (control socket client)
+
+Spec m0-control-protocol-and-vimma-ctl, ADR-007, ADR-011. A std-only Rust binary in
+`tools/vimma-ctl/`; the toolchain is pinned in its `rust-toolchain.toml` (rustup honours it;
+Arch's system Rust 1.98.1 matches).
+
+```sh
+cd tools/vimma-ctl
+cargo test                                    # unit (fixtures) + integration (fake server)
+cargo fmt --check && cargo clippy --all-targets -- -D warnings
+cargo build --release --locked                # → target/release/vimma-ctl, one file
+install -Dm755 target/release/vimma-ctl ~/.local/bin/vimma-ctl
+```
+
+The control socket is **off by default**. Turn it on in `about:config`: `vimma.control.enabled`
+= `true` (until the server spec lands, nothing listens; `vimma-ctl` then exits 3). The browser
+writes `<profile>/vimma-control.json` (port, token, pid; mode 0600) while it runs.
+
+```sh
+vimma-ctl state                     # mode, pending keys, workspace, tabs (* = selected)
+vimma-ctl state --json | jq .tabs   # the raw result; unknown fields pass through
+vimma-ctl send-keys ctrl+b c        # chords in Herdr notation, space-separated
+vimma-ctl open https://example.com  # new tab; prints its id
+vimma-ctl --profile /tmp/p --timeout 2 state   # --timeout: seconds, at most 3600
+```
+
+Profile: `--profile DIR`, else `VIMMA_PROFILE`, else the default in
+`~/.config/vimma/vimma/profiles.ini` (`$XDG_CONFIG_HOME` honoured; legacy `~/.vimma/vimma` if
+present): the `[Install…]` section's `Default`, else the `[Profile…]` with `Default=1`.
+
+| Exit | Meaning                                             | Typical fix                                                               |
+| ---- | --------------------------------------------------- | ------------------------------------------------------------------------- |
+| 1    | server answered with an error (`code: msg`)         | fix the arguments (e.g. `invalid-args` for a `javascript:` URL)           |
+| 2    | usage                                               | `vimma-ctl --help`                                                        |
+| 3    | not reachable: no profile/file, stale, unsafe, busy | start Vimma, set the pref, `chmod 600` the file, `--profile`; busy: retry |
+| 4    | token or protocol refused                           | the file is from another run; restart Vimma                               |
+| 5    | malformed reply or timeout                          | a server bug; `--timeout` for a busy browser                              |

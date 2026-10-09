@@ -17,7 +17,7 @@ Each is a file in `docs/adr/`. Summaries here; the ADR holds the reasoning and t
 | 003 | **Our code lives in our own files** under `src/browser/base/content/vimma/`; upstream files are touched only to inject them. | Keeps the patch set small so monthly rebases are mechanical. Same discipline as Zen's `zen-components`. |
 | 004 | **Language: JavaScript ES modules (`.sys.mjs` / `.mjs`) with JSDoc types, type-checked by `tsc --checkJs`.** No TypeScript compile step inside the Firefox tree. | The fork's UI runs inside Firefox's chrome; a transpile step complicates patching and debugging. Type safety comes from JSDoc + tsc in CI. The engine underneath is already C++ and Rust. |
 | 005 | **`vimma-core` is a pure ES module package** (dispatcher, key notation, keymap merge, state tree) with zero Firefox imports, tested with Vitest in Node in milliseconds. | 80 % of behaviour becomes testable without a browser; the same module could run in an extension or another host. |
-| 006 | **Split view is vendored from Zen** (MPL-2.0, attribution kept) and adapted to our pane tree, not written from scratch. | Zen spent months making `tabbrowser` tolerate two visible browsers; that work is open and licence-compatible. |
+| 006 | ~~**Split view is vendored from Zen**~~ Superseded by **ADR-013: split panes build on Firefox's own split view**; our CSS places its panels at the core pane tree's rectangles. | Firefox 157 ships, tests and maintains split view in the tree we rebase onto; Zen's needs split-related hunks in 20 upstream patch files. The sub-spec 1 spike proved 3 and 4 panes at exact rectangles. |
 | 007 | **Control socket**: a local TCP server (localhost, random port, token in a file under the profile) speaking JSON lines: `send-keys`, `state`, `list-tabs`, `screenshot`, `reload-config`, `open <url>`. | Herdr-style scripting API for users and the backbone of end-to-end tests, so tests never depend on window-manager key injection. |
 | 008 | **Config: one `config.toml`**, Herdr `[keys]` syntax for the multiplexing layer, per-mode tables for the modal layer, `[workspaces]`, `[theme]`; schema versioned with migrations; TOML parser vendored (small MIT JS lib). | Matches Herdr muscle memory; Firefox ships no TOML parser. |
 
@@ -133,21 +133,21 @@ Rules the config engine enforces: actions are a closed set generated from `actio
 │                              │                 pickers (HTML + CSS in chrome)      │
 │                              ├─ workspaces/    containers model, hide/show tabs,   │
 │                              │                 SessionStore persistence            │
-│                              ├─ split/         vendored Zen split view, adapted    │
+│                              ├─ split/         layout over Firefox's split view    │
 │                              ├─ config/        TOML load/validate/migrate, poll-   │
 │                              │                 based reload, theme tokens,          │
 │                              │                 Omarchy adapter                      │
 │                              └─ ctl/           control socket (nsIServerSocket)    │
 └───────────────────────────────────────────────────────────────────────────────────┘
-          ▲ config.toml, theme files            ▲ vimma-ctl (Python/Node CLI) and the e2e harness
+          ▲ config.toml, theme files            ▲ vimma-ctl (Rust CLI, ADR-011) and the e2e harness
 ```
 
 Key mechanics:
 
 - **Key capture:** `window.addEventListener('keydown', handler, true)` in the chrome window sees keys before the URL bar, sidebar, about: pages and the PDF viewer. Keys the dispatcher returns `pass` for continue untouched.
 - **Content side:** a `JSWindowActor` pair. The child reports focus changes (insert mode), executes scroll/hint/caret commands, and returns hint targets; the parent is the only thing that talks to it. This is the one Firefox-specific concept to learn properly in M1.
-- **Panes:** a pane tree in `vimma-core` (`split`, `zoom`, `swap`, `focus`, `close`) mirrored onto the vendored split-view layout. One `<browser>` per pane; the active pane owns the URL bar.
-- **Workspaces:** model in core; host maps to containers and hidden tabs; persisted through `SessionStore.setCustomTabValue` (tab → workspace) plus a JSON file for workspace definitions and pane layouts; restored on startup.
+- **Panes:** a pane tree in `vimma-core` (`split`, `zoom`, `swap`, `focus`, `close`) mirrored onto Firefox's split view, laid out by our CSS (ADR-013). One `<browser>` per pane; the active pane owns the URL bar.
+- **Workspaces:** model in core; host maps to containers and hidden tabs; persisted through `SessionStore.setCustomTabValue` (tab → workspace) plus a JSON file for workspace definitions; per-window state and pane layouts in a SessionStore window value (`docs/specs/m3-workspaces.md`); restored on startup.
 - **Theme:** tokens → CSS custom properties on the chrome document. Omarchy adapter polls `~/.local/state/omarchy/current/theme/colors.toml` and remaps on change (see `docs/notes/omarchy-theming.md`).
 - **Config reload:** poll the file's mtime every 2 s (Firefox has no portable fs watcher); `:source` forces it.
 
@@ -171,7 +171,7 @@ vimma/
     browser/branding/vimma/                        # name, icons
   configs/                        # mozconfigs: linux, macos, ci-artifact
   tools/
-    vimma-ctl/                    # CLI client for the control socket
+    vimma-ctl/                    # Rust CLI client for the control socket (ADR-011)
     e2e/                          # harness: launch build with temp profile, drive via socket
     upstream/                     # check-release.py, bump-surfer-json.py, rebase helpers
   tests/
@@ -241,7 +241,7 @@ Weeks are evenings-and-weekends ordering estimates, not dates. Each milestone en
 | M1 | **Modal page layer** (4 wks) | JSWindowActor pair; insert-mode detection; scrolling; `hints.js` + hint mode; find via `gBrowser.finder`; `:` command line with completion from `actions.mjs`; copy mode (caret browsing + selection); `Esc` semantics | A day of browsing without the mouse on ordinary sites |
 | M2 | **Tabs, status bar, which-key** (3 wks) | Herdr tab keys over `gBrowser`; tab rename (label override persisted); status bar; which-key strip while prefix pending; `prefix+g` basic picker | Herdr's "learn these five first" all work (minus panes); screenshot baselines recorded |
 | M3 | **Workspaces + side panel** (4 wks) | Container-backed workspaces; hidden tabs; `ctrl+i`/`ctrl+u`; `prefix+w` picker; `<leader>n` side panel with `panel` mode; SessionStore persistence + restore; `[workspaces]` config | Login in `work` invisible in `personal`; restart restores workspaces, tabs, scroll positions |
-| M4 | **Split panes** (5 wks) | Vendor Zen split view (ADR-006); pane tree in core; `prefix+v`/`-`/`x`/`z`/`h j k l`; swap; resize mode; URL bar follows active pane; fullscreen requests zoom the pane | Two panes of real sites side by side, keyboard only; mochitests for every pane op |
+| M4 | **Split panes** (5 wks) | Firefox's split view with our layout (ADR-013); pane tree in core; `prefix+v`/`-`/`x`/`z`/`h j k l`; swap; resize mode; URL bar follows active pane; fullscreen requests zoom the pane | Two panes of real sites side by side, keyboard only; mochitests for every pane op |
 | M5 | **Config + theme** (3 wks) | `config.toml` load/validate/migrate; polling reload; `:source`; errors in status bar + `about:vimma`; theme tokens; Tokyo Night default; Omarchy adapter; `about:vimma` | `omarchy-theme-set` changes vimma colours live; a broken config line shows file:line in the status bar and the old config stays active |
 | M6 | **Daily driver + release** (4 wks) | Quickmarks + history in `prefix+g`; per-workspace autofill stance; download/permission UX reviewed for keyboard use; tarball/AppImage/`.deb`; cosign + SBOM; AUR `vimma-bin`; in-app updater pointed at our update manifest; opt-in crash reporting | Firefox (stock) uninstalled for a week; a stranger installs from AUR and updates |
 | M7 | **Hardening** (ongoing) | macOS build + notarisation; Windows when cheap; accessibility pass on chrome UI; patch-set audit each quarter; security release SLA proven twice | Two consecutive Firefox releases rebased and shipped with zero manual steps |
@@ -311,7 +311,7 @@ The repo holds the memory. `CLAUDE.md` (appendix A), specs, ADRs, tests and the 
 | --- | --- | --- |
 | Rebase pain: upstream front-end files churn and our `.patch` hunks stop applying | High, monthly | ADR-003 (own files, minimal injection); `upstream.yml` tries first; patch-size audit in the Sunday run; `docs/rebase.md` playbook |
 | Full Firefox build too slow/expensive for CI | High | PR jobs use UI-only or artifact builds on a cached engine (decide in M0); full builds nightly on a larger runner or your own box as a self-hosted runner |
-| Split view destabilises tab selection, focus, URL bar | High | Vendor Zen's, adapt slowly, mochitest every pane op, `prefix+z` as escape hatch |
+| Split view destabilises tab selection, focus, URL bar | High | Build on Firefox's tested split view (ADR-013), a contract mochitest, mochitest every pane op, `prefix+z` as escape hatch |
 | Insert-mode detection wrong on complex editors (Google Docs, Monaco) | Medium | Actor heuristics + per-site overrides in config; Tridactyl's rules as reference |
 | Firefox's updater needs an update server | Medium | Serve a static update XML from GitHub Pages/Releases as Zen does; M6 |
 | Surfer is a small project | Medium | It is a thin Node CLI over `mach`; fork it into `tools/` if it stalls |
@@ -321,10 +321,10 @@ The repo holds the memory. `CLAUDE.md` (appendix A), specs, ADRs, tests and the 
 Open questions to settle in M0 (each becomes an ADR or a line in `docs/limits.md`):
 
 - [x] PR build strategy: `surfer build --ui` on a cached engine vs Firefox artifact builds — which works with release tarballs? Artifact builds, on hosted runners (ADR-010).
-- [ ] Side panel: custom box in the window layout or Firefox's sidebar framework (`SidebarController`)?
-- [ ] Where does the control socket's auth token live, and should it be off by default in release builds?
+- [x] Side panel: custom box in the window layout or Firefox's sidebar framework (`SidebarController`)? Our own box, inserted from JS (`docs/specs/m3-workspaces.md`).
+- [x] Where does the control socket's auth token live, and should it be off by default in release builds? In `<profile>/vimma-control.json` (0600); off by default in all builds, pref `vimma.control.enabled` (spec m0-control-protocol-and-vimma-ctl).
 - [x] Omarchy adapter: neither; read the theme's `colors.toml`, which every Omarchy 4 theme ships (`docs/notes/omarchy-theming.md`).
-- [ ] Starter workspaces (work/admin/personal) created on first run, or only shipped as the commented example?
+- [x] Starter workspaces (work/admin/personal) created on first run, or only shipped as the commented example? Commented example; first run creates one `main` (`docs/specs/m3-workspaces.md`).
 - [ ] Flatpak alongside AUR from M6, or later?
 
 ---

@@ -1,0 +1,12 @@
+{
+  "description": "javascript: URLs are refused",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 3,
+    "command": "open",
+    "args": {
+      "url": "javascript:alert(1)"
+    }
+  }
+}

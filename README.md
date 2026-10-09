@@ -1,11 +1,33 @@
+<p align="center">
+  <img src="docs/assets/vimma-logo.png" alt="Vimma: Vim and Tmux inspired" width="320">
+</p>
+
 # Vimma
 
-Vimma is a keyboard-first browser built as a Firefox fork. The plan: Neovim-style modal control
-of the page, [Herdr](https://herdr.dev/)'s prefix keymap (`ctrl+b`) for tabs, panes and
-workspaces, `ctrl+b ?` to show every binding, workspaces as isolated Firefox containers, an
-on-demand side panel, an always-visible status bar, and an [Omarchy](https://omarchy.org/)-native
-look. It is built with [Surfer](https://github.com/zen-browser/surfer), the toolchain behind Zen
-Browser, on the Firefox release channel.
+**A keyboard-first browser, inspired by Vim and Tmux.** Browse the way you edit text and juggle
+terminal sessions: modal keys for the page, a `ctrl+b` prefix for tabs, panes and workspaces, and
+your hands never leave the keyboard.
+
+- **Vim** brings the modal layer: `j`/`k` to scroll, `f` for link hints, `/` to find, `:` for
+  commands, and `Esc` to get back to normal mode.
+- **Tmux** brings the prefix layer: `ctrl+b c` for a new tab, `ctrl+b v` to split, `ctrl+b w` to
+  switch workspace, the same muscle memory as in your terminal (via
+  [Herdr](https://herdr.dev/)'s keymap).
+
+### The name
+
+_Vimma_ is a Finnish word for a frenzy or craze, a burst of eager energy, as in _ostosvimma_
+(shopping frenzy) or _työvimma_ (a fit of working). It also happens to start with _Vim_. Fittingly,
+that is how browsing should feel: fast, fluent and a little bit obsessive.
+
+### What it is
+
+Vimma is a Firefox fork. The plan: Neovim-style modal control of the page, Herdr's prefix keymap
+(`ctrl+b`) for tabs, panes and workspaces, `ctrl+b ?` to show every binding, workspaces as
+isolated Firefox containers, an on-demand side panel, an always-visible status bar, and an
+[Omarchy](https://omarchy.org/)-native look. It is built with
+[Surfer](https://github.com/zen-browser/surfer), the toolchain behind Zen Browser, on the Firefox
+release channel.
 
 ## Status
 

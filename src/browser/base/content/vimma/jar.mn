@@ -14,3 +14,5 @@ browser.jar:
         skin/classic/browser/vimma/help-overlay.css       (/browser/themes/shared/vimma/help-overlay.css)
         content/browser/vimma/ui/tabstrip.mjs             (ui/tabstrip.mjs)
         skin/classic/browser/vimma/tabstrip.css           (/browser/themes/shared/vimma/tabstrip.css)
+        content/browser/vimma/split/spike-layout.mjs      (split/spike-layout.mjs)
+        skin/classic/browser/vimma/split-spike.css        (/browser/themes/shared/vimma/split-spike.css)

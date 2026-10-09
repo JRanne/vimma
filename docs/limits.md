@@ -42,6 +42,42 @@ delete its line in the same PR.
 - The nav bar's drag region on GNOME (client-side decorations) has not been checked by hand
   ([m0-tabstrip-hidden](specs/m0-tabstrip-hidden.md)).
 
+## Workspaces (M3, by design)
+
+Workspaces are not built yet; these are the limits their design accepts
+([m3-workspaces](specs/m3-workspaces.md)).
+
+- Containers do not isolate history, bookmarks, form history, the downloads list, HSTS or site
+  permissions: they are shared by every workspace, and the URL bar suggests other workspaces'
+  history.
+- Saved passwords are not per container: a login saved in one workspace autofills in all of them
+  until the per-workspace `autofill` setting (M6).
+- Moving a tab to another workspace reopens its URL in the other container: back/forward
+  history, form data, scroll position and POST data are lost.
+- Closing a workspace created at runtime deletes its container's cookies and site data, and its
+  closed tabs cannot be reopened.
+- Setting `privacy.userContext.enabled` to `false` closes every workspace tab and deletes all
+  containers and their data (Firefox's behaviour).
+- A corrupt `containers.json` makes Firefox reset containers; workspace logins can be lost and
+  tabs come back marked `foreign`.
+- Pinned tabs are not supported: a pinned tab is unpinned. A tab sharing camera, microphone or
+  screen cannot be hidden and stays visible in other workspaces while it shares.
+- Tabs of hidden workspaces keep playing audio and are never unloaded automatically.
+- Closing the last tab opens a new tab instead of closing the window
+  (`browser.tabs.closeWindowWithLastTab` is `false`); setting it to `true` lets the window close
+  with every hidden workspace in it.
+- Restoring workspaces needs `browser.startup.page = 3` (Vimma's default); with any other value
+  tabs are not restored and workspaces start empty.
+- New tabs get no preloaded `about:newtab`: Firefox preloads only for tabs without a container,
+  so Vimma turns preloading off (`browser.newtab.preload`).
+- Firefox Sync no longer syncs `browser.startup.page` or `privacy.userContext.enabled` to Vimma.
+- After 3 minutes without input, the session is saved hourly, so a crash can lose an hour of
+  changes made by pages (tabs they opened), as in Firefox.
+- Private windows and popups have no workspaces.
+- Firefox's sidebar keys (`ctrl+h`, `ctrl+alt+x`, `ctrl+alt+u`, `ctrl+alt+z`) still open its own
+  sidebar beside Vimma's side panel; Firefox's four default containers stay in Settings.
+- Extensions that hide or show tabs (`tabs.hide`) conflict with workspace visibility.
+
 ## Panes
 
 - No split panes yet: `ctrl+b v`, `-`, `x`, `z`, `h/j/k/l` and resize mode are planned for M4
@@ -128,6 +164,9 @@ delete its line in the same PR.
 - No binaries, packages or releases: build from source. Tarball, AppImage, `.deb` and AUR are M6
   ([plan.md](../plan.md) §6).
 - The smol-toml BSD-3-Clause notice is not in `about:license` yet (M6, issue #16).
+- `vimma-ctl` checks the discovery file's permissions on Unix only; on Windows `check_mode`
+  does nothing (ACLs, not mode bits)
+  ([m0-control-protocol-and-vimma-ctl](specs/m0-control-protocol-and-vimma-ctl.md)).
 
 ## Build and CI
 
