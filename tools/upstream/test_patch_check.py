@@ -305,6 +305,151 @@ class PatchCheckFromGitRef(unittest.TestCase):
         self.assertEqual(by_name(report)["clean-txt.patch"]["status"], "applied")
 
 
+class CreateDeleteRename(unittest.TestCase):
+    def test_patches_that_create_and_delete_a_file_apply_cleanly(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "r.json"
+            r = run(
+                "--src", str(FIXTURES / "create-delete" / "src"), "--engine", str(TREE),
+                "--worktree", "--json", str(out),
+            )  # fmt: skip
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            patches = by_name(json.loads(out.read_text(encoding="utf-8")))
+            self.assertEqual(patches["new-txt.patch"]["status"], "clean")  # creates browser/new.txt
+            self.assertEqual(patches["clean-txt.patch"]["status"], "clean")  # deletes clean.txt
+            self.assertEqual(patches["new-txt.patch"]["missing"], [])
+
+    def test_a_pure_rename_is_rejected_with_a_clear_message_not_reported_failed(self):
+        with tempfile.TemporaryDirectory() as d:
+            md = Path(d) / "r.md"
+            r = run(
+                "--src", str(FIXTURES / "rename" / "src"), "--engine", str(TREE), "--worktree",
+                "--markdown", str(md),
+            )  # fmt: skip
+            self.assertEqual(r.returncode, 2, r.stdout)
+            self.assertIn("renamed-txt.patch", r.stderr)
+            self.assertIn("rename", r.stderr)
+            self.assertIn("did not run", md.read_text(encoding="utf-8"))
+
+
+class DidNotRun(unittest.TestCase):
+    """Anything but a verdict is exit 2 with a Markdown file that says the check did not run."""
+
+    MALFORMED = FIXTURES / "malformed" / "src"
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.md = Path(self.tmp.name) / "r.md"
+        self.json = Path(self.tmp.name) / "r.json"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def assert_did_not_run(self, r, needle):
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertIn(needle, r.stderr)
+        text = self.md.read_text(encoding="utf-8")
+        self.assertIn("did not run", text)
+        self.assertIn(needle, text)
+        report = json.loads(self.json.read_text(encoding="utf-8"))
+        self.assertFalse(report["ran"])
+        self.assertFalse(report["ok"])
+
+    def test_malformed_patch_on_a_tree(self):
+        r = run(
+            "--src", str(self.MALFORMED), "--engine", str(TREE), "--worktree",
+            "--markdown", str(self.md), "--json", str(self.json),
+        )  # fmt: skip
+        self.assert_did_not_run(r, "clean-txt.patch")
+
+    def test_malformed_patch_with_a_tarball(self):
+        with tempfile.TemporaryDirectory() as d:
+            tarball = Path(d) / "t.tar.xz"
+            make_tarball(tarball)
+            r = run(
+                "--src", str(self.MALFORMED), "--tarball", str(tarball),
+                "--markdown", str(self.md), "--json", str(self.json),
+            )  # fmt: skip
+        self.assert_did_not_run(r, "clean-txt.patch")
+
+    def test_unreadable_tarball_writes_did_not_run(self):
+        junk = Path(self.tmp.name) / "junk.tar.xz"
+        junk.write_bytes(b"junk")
+        r = run(
+            "--src", str(SRC), "--tarball", str(junk),
+            "--markdown", str(self.md), "--json", str(self.json),
+        )  # fmt: skip
+        self.assert_did_not_run(r, "cannot read tarball")
+
+    def test_unexpected_exception_is_exit_two_not_a_verdict(self):
+        module = load_module()
+
+        def boom(*_args):
+            raise RuntimeError("kaboom")
+
+        module.build_report = boom
+        args = ["--src", str(SRC), "--engine", str(TREE), "--worktree"]
+        args += ["--markdown", str(self.md), "--json", str(self.json)]
+        with open(os.devnull, "w") as null:
+            stderr, sys.stderr = sys.stderr, null
+            try:
+                status = module.main(args)
+            finally:
+                sys.stderr = stderr
+        self.assertEqual(status, 2)
+        self.assertIn("kaboom", self.md.read_text(encoding="utf-8"))
+        self.assertFalse(json.loads(self.json.read_text(encoding="utf-8"))["ran"])
+
+    def test_list_files_on_a_malformed_patch_is_exit_two(self):
+        r = run("--src", str(self.MALFORMED), "--list-files")
+        self.assertEqual(r.returncode, 2)
+        self.assertNotIn("Traceback", r.stderr)
+
+
+class TarballDrain(unittest.TestCase):
+    """upstream.yml hashes the stream with tee; --drain reads it to the end so the hash is whole."""
+
+    def run_stdin(self, *extra):
+        with tempfile.TemporaryDirectory() as d:
+            tarball = Path(d) / "t.tar"
+            # Wanted files first, then 1 MB of padding after them.
+            with tarfile.open(tarball, "w") as tar:
+                tar.add(TREE, arcname="firefox-158.0")
+                info = tarfile.TarInfo("firefox-158.0/zz/padding.bin")
+                info.size = 1 << 20
+                tar.addfile(info, fileobj=io.BytesIO(b"\0" * info.size))
+            data = tarball.read_bytes()
+            # Only patches whose files exist, so every wanted file is found before the padding.
+            src = Path(d) / "src"
+            for name in ("browser/clean-txt.patch", "toolkit/failed-txt.patch"):
+                (src / name).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(SRC / name, src / name)
+            out = Path(d) / "r.json"
+            r = run("--src", str(src), "--tarball", "-", "--json", str(out), *extra, stdin=data)
+            return len(data), r, json.loads(out.read_text(encoding="utf-8"))
+
+    def test_drain_reads_the_whole_stream(self):
+        size, r, report = self.run_stdin("--drain")
+        self.assertEqual(r.returncode, 1, r.stderr)
+        self.assertEqual(report["tarball_bytes"], size)
+
+    def test_without_drain_it_stops_after_the_last_wanted_file(self):
+        size, _, report = self.run_stdin()
+        self.assertLess(report["tarball_bytes"], size)
+
+
+class MilestoneInMarkdown(unittest.TestCase):
+    def test_upstream_milestone_string_is_escaped_in_the_heading(self):
+        report = {"firefox": "158.0 <img src=x>|`*", "source": "t", "ok": True, "patches": []}
+        report["counts"] = {"clean": 0, "offset": 0, "applied": 0, "fuzz": 0, "failed": 0}
+        heading = load_module().render_markdown(report).splitlines()[0]
+        self.assertNotIn("<img", heading)
+        self.assertIn("&lt;img", heading)
+        self.assertIn("\\`", heading)
+        self.assertIn("\\*", heading)
+
+
 class RealPatches(unittest.TestCase):
     def test_every_patch_in_src_parses_with_its_hunks(self):
         module = load_module()

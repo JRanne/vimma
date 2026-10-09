@@ -1,0 +1,8 @@
+diff --git a/browser/new.txt b/browser/new.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..a3a1f637942b8199185a4e94c0b9b12a10c1a0c9
+--- /dev/null
++++ b/browser/new.txt
+@@ -0,0 +1,2 @@
++new line 1
++new line 2
