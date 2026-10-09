@@ -63,6 +63,46 @@ describe("scoring", () => {
     expect(scoreField("GitHub", "")).toBeNull();
   });
 
+  test("case folds per character, so one special letter does not disable the rest", () => {
+    expect(scoreField("İstanbul GitHub", "git")).toMatchObject({
+      tier: TIER.word,
+      ranges: [[9, 12]],
+    });
+    expect(scoreField("İstanbul", "i̇stanbul")?.tier).toBe(TIER.exact);
+    expect(scoreField("GROSSE Straße", "straße")).toMatchObject({
+      tier: TIER.word,
+      ranges: [[7, 13]],
+    });
+    expect(scoreField("Straße", "STRAẞE")?.tier).toBe(TIER.exact);
+  });
+
+  test("text and query are compared in NFC, with ranges in the original text", () => {
+    const nfd = "Ka\u0308ytta\u0308ja\u0308t";
+    expect(scoreField(nfd, "kä")).toMatchObject({ tier: TIER.prefix, ranges: [[0, 3]] });
+    expect(scoreField("Käyttäjät", "ka\u0308")).toMatchObject({
+      tier: TIER.prefix,
+      ranges: [[0, 2]],
+    });
+  });
+
+  test("diacritics: exact letters first, a folded match ranks below every exact tier", () => {
+    expect(scoreField("Käyttäjät", "ka")).toMatchObject({ tier: TIER.folded, ranges: [[0, 2]] });
+    expect(scoreField("Käyttäjät", "kayttajat")?.tier).toBe(TIER.folded);
+    const exact = /** @type {{ score: number }} */ (scoreField("Käyttäjät", "kä"));
+    const folded = /** @type {{ score: number }} */ (scoreField("Käyttäjät", "ka"));
+    expect(exact.score).toBeGreaterThan(folded.score);
+    // a folded match in the best field still loses to an exact subsequence in the worst one
+    const sub = /** @type {{ score: number }} */ (scoreField("x-k-y-a", "ka", "workspace"));
+    expect(sub.score).toBeGreaterThan(folded.score);
+    expect(scoreField("Käyttäjät", "kö")).toBeNull();
+  });
+
+  test("tiers beat fields: a URL prefix match outranks a title word match", () => {
+    const url = /** @type {{ score: number }} */ (scoreField("github.com/x", "git", "url"));
+    const title = /** @type {{ score: number }} */ (scoreField("My github", "git", "title"));
+    expect(url.score).toBeGreaterThan(title.score);
+  });
+
   test("subsequence prefers the tightest alignment", () => {
     expect(scoreField("a-x-b ab", "ab")?.tier).toBe(TIER.word);
     expect(scoreField("axxb ayb", "ab")?.ranges).toEqual([
