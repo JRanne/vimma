@@ -45,9 +45,16 @@ delete its line in the same PR.
   leaves them stale. Frames inside a CSS-transformed `<iframe>` get misplaced labels, and a
   frame that takes over 150 ms to answer (busy) gets none that time. `F` does not open `blob:`
   links ([m1-hints](specs/m1-hints.md), Limits).
-- `config.toml` is not read by the browser. Its validator and theme tokens exist in `vimma-core`,
-  but loading, polling, `:source` and theming wait for the M5 host spec
+- `config.toml` is not read by the browser. Its validator exists in `vimma-core`, but loading,
+  polling, `:source` and its `[theme]` table (font, colour overrides) wait for the M5 host spec
   ([m5-core-config-and-theme](specs/m5-core-config-and-theme.md)).
+- An Omarchy theme change shows up to 2 s late: Vimma polls `colors.toml`'s stat every 2 s
+  (Firefox has no portable file watcher; plan §3). A `theme-set.d` hook through the control
+  socket could make it instant later ([m5-omarchy-theme](specs/m5-omarchy-theme.md), Limits).
+- If the Omarchy theme directory disappears after a theme was shown (as during
+  `omarchy-theme-set`'s swap), the colours stay until a theme is back; Tokyo Night only when no
+  theme was found since startup or the last `vimma.theme.*` change
+  ([m5-omarchy-theme](specs/m5-omarchy-theme.md)).
 - The overlay has legible defaults only: no theme tokens yet (M5)
   ([m0-help-overlay](specs/m0-help-overlay.md)).
 
