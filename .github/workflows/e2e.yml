@@ -1,22 +1,76 @@
-# Spec m0-pipeline: skeleton only.
-# TODO(M0 build-strategy ADR, docs/adr/010-*, not yet written): that ADR picks a UI-only build
-# (`surfer build --ui` on a cached engine, needs the self-hosted runner) or an artifact build.
-# Until it is accepted this job is a deliberate no-op; then it runs the mochitest browser-chrome
-# suite and the socket-driven e2e under Xvfb with screenshot diffs (plan §4).
+# Spec m0-build-strategy, ADR-010: the mochitest browser-chrome suite on an artifact build, on a
+# GitHub-hosted runner. The engine is the Firefox release source tarball with our patches and
+# front end; the compiled binaries are Mozilla's own build of that exact release (the revision
+# in engine/sourcestamp.txt), downloaded from Taskcluster by `mach build`. No self-hosted runner,
+# no secrets: safe for pull requests from forks once the repo is public (read-only token).
+# The socket-driven e2e and screenshot diffs (plan §4) join this job when they exist.
 name: e2e
 
 on:
   pull_request:
+    # ready_for_review: PRs opened with GITHUB_TOKEN (claude.yml, upstream.yml) do not trigger
+    # workflows; marking them ready (or a manual run) starts this as the owner.
+    types: [opened, synchronize, reopened, ready_for_review]
+    # Only what can change the browser or the test run: Actions minutes are limited while the
+    # repo is private (docs/runbook.md, "Actions minutes budget").
+    paths:
+      - "src/**"
+      - "tests/browser/**"
+      - "packages/vimma-core/**"
+      - "configs/**"
+      - "surfer.json"
+      - "package.json"
+      - "package-lock.json"
+      - "tools/artifact-build/**"
+      - "tools/mochitest.mjs"
+      - "tools/sync-core.mjs"
+      - "tools/version-files/**"
+      - ".github/workflows/e2e.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  e2e:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  mochitest:
+    name: mochitest (artifact build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
-      - name: No-op until the build-strategy ADR is accepted
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Firefox source tarball (surfer.json), unpacked without history
+        env:
+          CI_SKIP_INIT: "1" # Surfer's own switch: skips `git init` + commit of 4.7 GB
         run: |
-          echo "e2e is a skeleton: no build strategy yet (M0 build-strategy ADR, docs/adr/010-*)."
-          echo "e2e skipped: waiting for the M0 build-strategy ADR." >> "$GITHUB_STEP_SUMMARY"
+          npx surfer download
+          # An empty repo, so `git apply` in `surfer import` resolves paths inside engine/
+          # rather than against this checkout.
+          git init -q engine
+          df -h . | tail -1
+
+      - name: Import our patches and sources
+        run: npm run import
+
+      - name: Artifact build (tools/artifact-build)
+        run: node tools/artifact-build/artifact-build.mjs
+
+      - name: Mochitests (npm run mochitest -- --artifact tests/browser/)
+        run: |
+          npm run mochitest -- --artifact tests/browser/
+          df -h . | tail -1
+          du -sh engine engine/obj-artifact ~/.mozbuild 2>/dev/null || true
