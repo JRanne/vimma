@@ -274,8 +274,9 @@ or uploaded yet; `release.yml` (packages, signatures, AUR) is M6.
   `release-please--branches--main`, lists every `feat`/`fix` since the first commit and puts its
   entry above the hand-written `## [Unreleased]` section. Just before merging it, edit
   `CHANGELOG.md` on that branch: replace the generated `0.1.0` list with the `[Unreleased]`
-  sections and delete that heading (release-please rewrites the branch on every push to `main`,
-  so make the edit last). After the merge, **remove `release-as`** in a follow-up PR, or every
+  sections and delete that heading. The generated list also has a false "BREAKING CHANGES" item
+  (cd70146's body has a line starting `BREAKING CHANGE:`). release-please rewrites the branch on
+  every push to `main`, so make the edit last. After the merge, **remove `release-as`** in a follow-up PR, or every
   later release PR proposes `0.1.0` again. From then on every entry is generated.
 - **Names.** `include-component-in-tag` is off, so tags are `vX.Y.Z`, the branch is
   `release-please--branches--main` and the PR title `chore(main): release X.Y.Z`.
