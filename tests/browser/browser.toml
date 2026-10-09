@@ -58,3 +58,7 @@ skip-if = ["artifact"]
 support-files = ["file_vimma_title.html"]
 
 ["browser_vimma_cmdline.js"]
+
+["browser_vimma_picker.js"]
+
+["browser_vimma_rename.js"]

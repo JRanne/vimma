@@ -333,7 +333,12 @@ add_task(async function rows_mark_what_the_host_can_run() {
     ]) {
       Assert.equal(row(name).dataset.runnable, "true", `${name} is marked implemented`);
     }
-    for (const name of ["rename_tab", "split_vertical", "goto_picker", "next_workspace"]) {
+    for (const name of [
+      "rename_workspace",
+      "split_vertical",
+      "workspace_picker",
+      "next_workspace",
+    ]) {
       Assert.equal(row(name).dataset.runnable, "false", `${name} is marked not yet`);
     }
     const opacity = (name) => Number(getComputedStyle(row(name)).opacity);

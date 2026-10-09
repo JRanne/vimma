@@ -19,7 +19,16 @@ const STYLESHEET = "chrome://browser/skin/vimma/statusbar.css";
 const HTML_NS = "http://www.w3.org/1999/xhtml";
 /** Characters in the probe that measures one column of the bar's font. */
 const PROBE_CHARS = 10;
-const TAB_EVENTS = ["TabSelect", "TabOpen", "TabClose", "TabMove", "TabAttrModified", "TabShow"];
+// SSTabRestoring: a restored tab's rename (m2-picker-rename) arrives with its session data.
+const TAB_EVENTS = [
+  "TabSelect",
+  "TabOpen",
+  "TabClose",
+  "TabMove",
+  "TabAttrModified",
+  "TabShow",
+  "SSTabRestoring",
+];
 /** @type {WeakSet<Window>} windows our sheets are loaded into (loading one twice throws) */
 const styled = new WeakSet();
 

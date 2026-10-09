@@ -43,6 +43,16 @@ const HEIGHT_VAR = "--vimma-cmdline-height";
  */
 const sharedHistory = { history: createHistory() };
 
+/**
+ * Loads cmdline.css into `win` once (loading it twice throws); the rename prompt shares it.
+ * @param {Window} win
+ */
+export function loadCmdlineSheet(win) {
+  if (styled.has(win)) return;
+  win.windowUtils.loadSheetUsingURIString(STYLESHEET, win.windowUtils.AUTHOR_SHEET);
+  styled.add(win);
+}
+
 /** @param {Window} win */
 function isPrivate(win) {
   const { PrivateBrowsingUtils } = ChromeUtils.importESModule(
@@ -332,10 +342,7 @@ export class CommandLine {
    */
   build() {
     const doc = this.win.document;
-    if (!styled.has(this.win)) {
-      this.win.windowUtils.loadSheetUsingURIString(STYLESHEET, this.win.windowUtils.AUTHOR_SHEET);
-      styled.add(this.win);
-    }
+    loadCmdlineSheet(this.win);
     /**
      * @param {string} tag
      * @param {string} [className]
