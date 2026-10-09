@@ -1,6 +1,6 @@
 # Spec: m0-branding
 
-Status: in progress · Milestone: M0 · Area: branding (`configs/branding/vimma/`, `src/browser/branding/vimma/`)
+Status: implemented, awaiting review · Milestone: M0 · Area: branding (`configs/branding/vimma/`, `src/browser/branding/vimma/`)
 Prerequisite: Surfer project set up and `npx surfer build` succeeded once (plan §10 step 3).
 
 ## User story
@@ -92,3 +92,5 @@ of the default bookmarks (still Mozilla's links; see Settled).
   runbook smoke check no longer uses `--screenshot` on a fresh profile.
 - **Placeholder logo**: drawn by us, released under the repo's MPL-2.0 like the rest; no
   Mozilla/Firefox artwork in the files we supply.
+- **Build cost**: the first `./mach build` after switching brand, basename and vendor took 977 s
+  (16.3 min, reconfigure plus a large C++/Rust rebuild); no clobber was needed.
