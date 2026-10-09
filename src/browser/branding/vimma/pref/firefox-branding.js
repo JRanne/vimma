@@ -101,3 +101,7 @@ pref("vimma.ui.tabstrip.hidden", true);
 // Control socket (spec m0-control-server, ADR-007): off in every build. When on, Vimma listens on
 // 127.0.0.1 and writes <profile>/vimma-control.json (0600) for vimma-ctl; live on change.
 pref("vimma.control.enabled", false);
+
+// Find (spec m1-find): Vim's smartcase for `/` and Firefox's own find bar alike. 2 is the find
+// bar's "auto" mode: a query with a capital letter matches case, an all lower-case one does not.
+pref("accessibility.typeaheadfind.casesensitive", 2);

@@ -32,7 +32,7 @@ release channel.
 ## Status
 
 **Pre-alpha.** Milestone M0 ("fork boots + pipeline", [plan.md](plan.md) §6) is almost done,
-and M1's modal page layer has started (scrolling, insert mode, link hints and the `:`
+and M1's modal page layer has started (scrolling, insert mode, link hints, find and the `:`
 command line).
 There are no binaries yet: you build from source. Version `0.1.0`, on Firefox 157.0.1.
 
@@ -45,6 +45,9 @@ What works today:
   `Esc` leaves it and `i` enters it.
 - **Link hints.** `f` labels every link, button and field on screen, also inside frames from
   other sites; typing a label follows or focuses it. `F` opens a link in a background tab.
+- **Find.** `/` searches the page as you type (frames and PDFs too), with Vim's smartcase;
+  `Enter` keeps the match, `Esc` goes back, `n`/`N` jump between matches and `?` searches
+  backward. The status bar shows `/word [2/5]` or `not found`.
 - **`ctrl+b ?`** opens an overlay listing every binding, over any page, including
   `about:preferences` and the PDF viewer. `/` filters the list and `Esc` or `q` closes it.
   Bindings that do not run yet are dimmed.
@@ -75,7 +78,7 @@ What works today:
 
 What does not work yet: the dimmed bindings in the overlay. The overlay lists the full planned
 keymap; a `ctrl+b` sequence that does not run yet shows "… not implemented yet" for a moment.
-The rest of the modal page layer (find, copy mode) is M1. Tab
+The rest of the modal page layer (copy mode) is M1. Tab
 rename and the `ctrl+b g` picker are M2. Workspaces, split
 panes, `config.toml` and theming come later. The parser and validator for `config.toml` exist in
 `vimma-core`, but the browser does not read the file yet. See [docs/guide.md](docs/guide.md) and

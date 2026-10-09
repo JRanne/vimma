@@ -7,6 +7,7 @@
  * token names, fitted to a character budget. The host renders them; no HTML here.
  */
 import { formatConfigError } from "./config.mjs";
+import { findStatusText } from "./find.mjs";
 import { displayLabel } from "./tablabels.mjs";
 import { clusterWidth, graphemes, textWidth } from "./textwidth.mjs";
 
@@ -14,6 +15,7 @@ export { textWidth };
 
 /** @import { Mode } from "./modes.mjs" */
 /** @import { ConfigError } from "./config.mjs" */
+/** @import { FindStatus } from "./find.mjs" */
 
 /**
  * @typedef {object} Segment
@@ -39,6 +41,7 @@ export { textWidth };
  * @property {number | null} [progress]          0..1
  * @property {readonly ConfigError[]} [configErrors]
  * @property {string} [configFile]
+ * @property {FindStatus | null} [find]          the current `/` or `?` find (spec m1-find)
  */
 
 /** `[workspaces.<name>] color` (Firefox container colours) → theme token. */
@@ -141,6 +144,7 @@ export function statusSegments(input) {
     progress = null,
     configErrors = [],
     configFile = "config.toml",
+    find = null,
   } = input;
   /** @type {Segment[]} */
   const left = [];
@@ -225,6 +229,19 @@ export function statusSegments(input) {
         side: "right",
         priority: 2,
         min: 16,
+        cut: "end",
+      }),
+    );
+  }
+  if (find) {
+    right.push(
+      seg({
+        id: "find",
+        text: findStatusText(find),
+        fg: find.notFound ? "--vimma-error" : "--vimma-fg-bright",
+        side: "right",
+        priority: 3,
+        min: 8,
         cut: "end",
       }),
     );

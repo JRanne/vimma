@@ -24,6 +24,7 @@ export * from "./splitplan.mjs";
 export * from "./switchplan.mjs";
 export * from "./textwidth.mjs";
 export * from "./tablabels.mjs";
+export * from "./find.mjs";
 export * from "./statusbar.mjs";
 export * from "./picker.mjs";
 export * from "./control.mjs";

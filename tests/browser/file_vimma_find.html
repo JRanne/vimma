@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Fixture for browser_vimma_find.js: "word" four times (one "Word"), with a tall gap so the
+   - first is above the viewport once scrolled; "kiwi" only in the same-origin frame, "mango"
+   - only in the cross-origin one. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vimma find</title>
+    <style>
+      body {
+        margin: 0;
+        font: 16px/1.5 sans-serif;
+      }
+      #gap {
+        height: 3000px;
+      }
+      #tail {
+        height: 3000px;
+      }
+      iframe {
+        width: 300px;
+        height: 60px;
+        border: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <p id="w1">alpha word one</p>
+    <div id="gap"></div>
+    <p id="w2">beta word two</p>
+    <p id="w3">gamma Word three</p>
+    <p id="w4">delta word four</p>
+    <iframe id="same" src="file_vimma_find_frame.html?kiwi"></iframe>
+    <iframe
+      id="cross"
+      src="https://example.org/browser/browser/base/zen-components/tests/browser/file_vimma_find_frame.html?mango"
+    ></iframe>
+    <div id="tail"></div>
+  </body>
+</html>
