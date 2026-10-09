@@ -8,6 +8,9 @@ import {
   EDITABLE_ROLES,
   KNOWN_EDITORS,
   INSERT_SITE_MODES,
+  parseDescriptor,
+  DESCRIPTOR_MAX_STRING,
+  DESCRIPTOR_MAX_CLASSES,
 } from "../src/editable.mjs";
 import { resolveEscape } from "../src/escape.mjs";
 
@@ -416,5 +419,76 @@ describe("insert mode on focus changes (host contract)", () => {
     expect(
       insertModeAfterFocus({ mode: "insert", trigger: "recheck", descriptor: d, ...opts }),
     ).toBe("normal");
+  });
+});
+
+describe("parseDescriptor: untrusted reports from a content process", () => {
+  const long = "x".repeat(DESCRIPTOR_MAX_STRING + 1);
+
+  test("the limits are 256 characters and 64 classes", () => {
+    expect([DESCRIPTOR_MAX_STRING, DESCRIPTOR_MAX_CLASSES]).toEqual([256, 64]);
+  });
+
+  test("a well-formed descriptor comes back as a fresh copy with only known fields", () => {
+    const known = {
+      tagName: "div",
+      type: "text",
+      readOnly: false,
+      disabled: false,
+      isContentEditable: true,
+      contentEditable: "true",
+      role: null,
+      ariaReadOnly: false,
+      ariaDisabled: false,
+      designMode: false,
+      classes: Array(DESCRIPTOR_MAX_CLASSES).fill("x".repeat(DESCRIPTOR_MAX_STRING)),
+    };
+    const parsed = parseDescriptor({ ...known, extra: "dropped" });
+    expect(parsed).toEqual(known);
+    expect(parsed?.classes).not.toBe(known.classes);
+  });
+
+  test("only tagName is required", () => {
+    expect(parseDescriptor({ tagName: "input" })).toEqual({ tagName: "input" });
+  });
+
+  test.each([
+    ["null", null],
+    ["undefined", undefined],
+    ["a string", "input"],
+    ["an array", ["input"]],
+    ["no tagName", {}],
+    ["tagName not a string", { tagName: 5 }],
+    ["tagName empty", { tagName: "" }],
+    ["tagName too long", { tagName: long }],
+    ["type not a string", { tagName: "input", type: 3 }],
+    ["type too long", { tagName: "input", type: long }],
+    ["readOnly not a boolean", { tagName: "input", readOnly: "no" }],
+    ["disabled not a boolean", { tagName: "input", disabled: 0 }],
+    ["isContentEditable not a boolean", { tagName: "div", isContentEditable: "yes" }],
+    ["contentEditable not a string", { tagName: "div", contentEditable: true }],
+    ["role not a string or null", { tagName: "div", role: ["textbox"] }],
+    ["role too long", { tagName: "div", role: long }],
+    ["ariaReadOnly not a boolean", { tagName: "div", ariaReadOnly: "true" }],
+    ["ariaDisabled not a boolean", { tagName: "div", ariaDisabled: 1 }],
+    ["designMode not a boolean", { tagName: "div", designMode: 1 }],
+    ["classes not an array", { tagName: "div", classes: "ProseMirror" }],
+    ["a class not a string", { tagName: "div", classes: ["ProseMirror", 1] }],
+    ["a class too long", { tagName: "div", classes: ["ProseMirror", long] }],
+    [
+      "too many classes",
+      { tagName: "div", classes: Array(DESCRIPTOR_MAX_CLASSES + 1).fill("ProseMirror") },
+    ],
+  ])("%s → null", (_name, value) => {
+    expect(parseDescriptor(value)).toBeNull();
+  });
+
+  test("a throwing getter → null, not an exception", () => {
+    const hostile = {
+      get tagName() {
+        throw new Error("boom");
+      },
+    };
+    expect(parseDescriptor(hostile)).toBeNull();
   });
 });

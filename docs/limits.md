@@ -6,14 +6,29 @@ delete its line in the same PR.
 
 ## Features
 
-- Only `ctrl+b ?` runs. Every other binding in the overlay and in [bindings.md](bindings.md) is
-  planned, and other `ctrl+b` sequences are consumed and do nothing
-  ([m0-help-overlay](specs/m0-help-overlay.md), Settled).
-- Every page is in `insert` mode until M1's content actor can detect editable focus. Bare keys go
-  to the page ([m0-help-overlay](specs/m0-help-overlay.md)).
-- Single-key actions the host cannot run yet (`Esc`, `ctrl+i`, `ctrl+u`) pass through to Firefox.
-  This is an M0 stopgap, to be revisited per action in M1
-  ([m0-help-overlay](specs/m0-help-overlay.md)).
+- Only `ctrl+b ?`, scrolling (`j k h l d u gg G`), `i` and `Esc` run. Every other binding in
+  the overlay and in [bindings.md](bindings.md) is planned, and other `ctrl+b` sequences are
+  consumed and do nothing ([m0-help-overlay](specs/m0-help-overlay.md), Settled).
+- Single-key actions the host cannot run yet (`f`, `/`, `r`, `ctrl+i`, `ctrl+u`, …) pass through
+  to the page or Firefox, and so does the first key of a sequence with nothing runnable under it
+  (`ctrl+w`, the M4 pane keys) ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md),
+  Settled).
+- Pages that take keys outside a text field (games, Google Docs' canvas, Figma) lose their bare
+  keys to normal mode; press `i` to let every key through until `Esc`. Text editors are
+  detected ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Limits).
+- Bare digits are counts in normal mode, so a page's own digit shortcuts need `i` first
+  ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Limits).
+- Extension pages (`moz-extension:`), `data:`, `view-source:` and `blob:` pages have no content
+  actor: they stay in insert, with no Vim keys ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md),
+  Settled).
+- Closed shadow roots in pages are seen (the actor is privileged), but a page script that moves
+  focus from a frame to the top page's `<body>` can leave insert on until `Esc`
+  ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Limits).
+- `Esc` in a text field leaves insert and does not reach the page; press `Esc` again for the
+  site's own `Esc` (closing an autocomplete or a dialog)
+  ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled).
+- After `Esc` in a `designMode` page, it stays in normal until the next click into it
+  ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled).
 - `config.toml` is not read by the browser. Its validator and theme tokens exist in `vimma-core`,
   but loading, polling, `:source` and theming wait for the M5 host spec
   ([m5-core-config-and-theme](specs/m5-core-config-and-theme.md)).

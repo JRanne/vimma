@@ -35,14 +35,15 @@ add_task(async function records_ctrl_b_in_about_preferences() {
   });
 });
 
-add_task(async function records_j_in_content_and_page_still_receives_it() {
+// z, not the spec's j: since M1, j scrolls in normal mode; unbound keys still reach the page.
+add_task(async function records_an_unbound_key_in_content_and_page_still_receives_it() {
   await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
     await recordPageKeys(browser);
     await focusContent(browser);
     clearChords();
-    EventUtils.synthesizeKey("j");
-    Assert.ok(await waitForPageKey(browser, ["j"]), "page received j, not default-prevented");
-    Assert.deepEqual(VimmaHost._lastChords, ["j"], "host recorded j");
+    EventUtils.synthesizeKey("z");
+    Assert.ok(await waitForPageKey(browser, ["z"]), "page received z, not default-prevented");
+    Assert.deepEqual(VimmaHost._lastChords, ["z"], "host recorded z");
   });
 });
 
