@@ -147,7 +147,7 @@ Key mechanics:
 - **Key capture:** `window.addEventListener('keydown', handler, true)` in the chrome window sees keys before the URL bar, sidebar, about: pages and the PDF viewer. Keys the dispatcher returns `pass` for continue untouched.
 - **Content side:** a `JSWindowActor` pair. The child reports focus changes (insert mode), executes scroll/hint/caret commands, and returns hint targets; the parent is the only thing that talks to it. This is the one Firefox-specific concept to learn properly in M1.
 - **Panes:** a pane tree in `vimma-core` (`split`, `zoom`, `swap`, `focus`, `close`) mirrored onto the vendored split-view layout. One `<browser>` per pane; the active pane owns the URL bar.
-- **Workspaces:** model in core; host maps to containers and hidden tabs; persisted through `SessionStore.setCustomTabValue` (tab → workspace) plus a JSON file for workspace definitions and pane layouts; restored on startup.
+- **Workspaces:** model in core; host maps to containers and hidden tabs; persisted through `SessionStore.setCustomTabValue` (tab → workspace) plus a JSON file for workspace definitions; per-window state and pane layouts in a SessionStore window value (`docs/specs/m3-workspaces.md`); restored on startup.
 - **Theme:** tokens → CSS custom properties on the chrome document. Omarchy adapter polls `~/.local/state/omarchy/current/theme/colors.toml` and remaps on change (see `docs/notes/omarchy-theming.md`).
 - **Config reload:** poll the file's mtime every 2 s (Firefox has no portable fs watcher); `:source` forces it.
 

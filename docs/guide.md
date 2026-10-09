@@ -126,6 +126,20 @@ Sites see Firefox 157's user agent, with no Vimma token, and add-ons see Firefox
 (`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. `vimma --version` and the About
 dialog show Vimma's own version (`0.1.0`).
 
+## Firefox behaviour Vimma changes
+
+**Planned for M3** (workspaces, [m3-workspaces](specs/m3-workspaces.md)); each is a default you
+can change in `about:config`:
+
+- **Restart restores your session**: tabs, workspaces and scroll positions come back
+  (`browser.startup.page` = `3`; Firefox's default `1` opens the home page).
+- **Closing the last tab keeps the window** and opens a new tab, so a window never closes with
+  other workspaces' tabs in it (`browser.tabs.closeWindowWithLastTab` = `false`).
+- **No preloaded new-tab page** (`browser.newtab.preload` = `false`): Firefox only uses it for
+  tabs without a container, and every Vimma tab is in one.
+- **Firefox Sync leaves two settings alone**: `browser.startup.page` and
+  `privacy.userContext.enabled` (turning containers off deletes every workspace's data).
+
 ## FAQ and troubleshooting
 
 **Vimma says the profile was used by a newer version and refuses to start.** Profiles remember

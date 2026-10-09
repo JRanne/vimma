@@ -58,6 +58,11 @@ Workspaces are not built yet; these are the limits their design accepts
   with every hidden workspace in it.
 - Restoring workspaces needs `browser.startup.page = 3` (Vimma's default); with any other value
   tabs are not restored and workspaces start empty.
+- New tabs get no preloaded `about:newtab`: Firefox preloads only for tabs without a container,
+  so Vimma turns preloading off (`browser.newtab.preload`).
+- Firefox Sync no longer syncs `browser.startup.page` or `privacy.userContext.enabled` to Vimma.
+- After 3 minutes without input, the session is saved hourly, so a crash can lose an hour of
+  changes made by pages (tabs they opened), as in Firefox.
 - Private windows and popups have no workspaces.
 - Firefox's sidebar keys (`ctrl+h`, `ctrl+alt+x`, `ctrl+alt+u`, `ctrl+alt+z`) still open its own
   sidebar beside Vimma's side panel; Firefox's four default containers stay in Settings.
