@@ -1,9 +1,9 @@
 {
-  "description": "Handshake with a 64-hex token for protocol 1",
+  "description": "Opens the handshake for protocol 1 with a 64-hex client nonce and no token: the token is sent only after the server's challenge proves it knows it",
   "kind": "hello",
   "message": {
     "type": "hello",
     "protocol": 1,
-    "token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    "nonce": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
   }
 }

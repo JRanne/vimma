@@ -1,0 +1,9 @@
+{
+  "description": "Server proves the token: proof = HMAC-SHA256(token, \"vimma-server\\u0000\" + nonce) for hello.valid.json and the token of auth.valid.json; unknown extra fields are allowed",
+  "kind": "challenge",
+  "message": {
+    "type": "challenge",
+    "protocol": 1,
+    "proof": "dfa7036df27761c79aa0a83e40ee29270903d00e65e5a1b7249bc93098b29bb0"
+  }
+}

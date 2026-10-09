@@ -2,11 +2,15 @@
 // for the harness's tests. Every line it receives and sends is checked with vimma-core's
 // validateMessage, the validator the real server will use, so a drift from the contract
 // fixtures fails here first. Behaviour switches simulate the failures the driver must handle.
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { rmSync, renameSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
-import { tokensEqual, validateMessage } from "../../../packages/vimma-core/src/control.mjs";
+import {
+  CHALLENGE_CONTEXT,
+  tokensEqual,
+  validateMessage,
+} from "../../../packages/vimma-core/src/control.mjs";
 
 /**
  * @typedef {{ id: string, url: string, title: string, selected: boolean }} FakeTab
@@ -135,6 +139,7 @@ export async function startFakeServer(profile, options = {}) {
       socket.end();
       return;
     }
+    let greeted = false;
     let authed = false;
     let buffer = "";
     socket.setEncoding("utf8");
@@ -145,8 +150,18 @@ export async function startFakeServer(profile, options = {}) {
         const line = buffer.slice(0, newline).replace(/\r$/, "");
         buffer = buffer.slice(newline + 1);
         const message = JSON.parse(line);
-        if (!authed) {
+        if (!greeted) {
+          // hello {nonce} → challenge: prove the token as the real server does.
           check(message, { kind: "hello" });
+          greeted = true;
+          const proof = createHmac("sha256", token)
+            .update(`${CHALLENGE_CONTEXT}${message.nonce}`)
+            .digest("hex");
+          send({ type: "challenge", protocol: 1, proof });
+          continue;
+        }
+        if (!authed) {
+          check(message, { kind: "auth" });
           if (fake.options.rejectAuth || !tokensEqual(message.token, token)) {
             send({
               type: "response",

@@ -117,9 +117,11 @@ jobs:
       - name: Artifact build (tools/artifact-build)
         run: node tools/artifact-build/artifact-build.mjs
 
+      # browser_vimma_control.js runs the vimma-ctl built above (target/debug) against the live
+      # server; without it the task skips, and VIMMA_REQUIRE_CTL=1 makes that skip a failure.
       - name: Mochitests (npm run mochitest -- --artifact tests/browser/)
         run: |
-          npm run mochitest -- --artifact tests/browser/
+          npm run mochitest -- --artifact --setenv=VIMMA_REQUIRE_CTL=1 tests/browser/
           df -h . | tail -1
           du -sh engine engine/obj-artifact ~/.mozbuild 2>/dev/null || true
 

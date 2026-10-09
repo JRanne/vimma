@@ -16,6 +16,26 @@ use std::time::{Duration, Instant};
 const TOKEN: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
 const WELCOME: &str = r#"{"type":"welcome","protocol":1,"app":"Vimma","version":"0.1.0"}"#;
 
+/// The nonce of a `hello` line.
+fn nonce_of(hello: &str) -> String {
+    let value = vimma_ctl::json::parse(hello).expect("hello is JSON");
+    match value.get("nonce") {
+        Some(vimma_ctl::json::Value::String(nonce)) => nonce.clone(),
+        _ => panic!("hello without a nonce: {hello}"),
+    }
+}
+
+/// A challenge proving knowledge of `key` for this hello: what the real server sends with the
+/// token. A squatter does not know the token.
+fn challenge_with_key(hello: &str, key: &str) -> String {
+    let proof = vimma_ctl::protocol::challenge_proof(key, &nonce_of(hello));
+    format!(r#"{{"type":"challenge","protocol":1,"proof":"{proof}"}}"#)
+}
+
+fn challenge(hello: &str) -> String {
+    challenge_with_key(hello, TOKEN)
+}
+
 fn temp_profile() -> PathBuf {
     static N: AtomicUsize = AtomicUsize::new(0);
     let dir = std::env::temp_dir().join(format!(
@@ -77,11 +97,23 @@ impl Server {
         Self { profile, handle }
     }
 
-    /// A well-behaved server: welcome, then `response` (with `"id":1`) to the first request.
+    /// A server that completes the real handshake (challenge for the hello, welcome for the
+    /// right token), then hands request lines to `script` numbered from 0.
+    fn authed(mut script: impl FnMut(usize, &str) -> Option<Vec<String>> + Send + 'static) -> Self {
+        Self::start(move |n, line| match n {
+            0 => Some(vec![challenge(line)]),
+            1 => {
+                assert_eq!(line, format!(r#"{{"token":"{TOKEN}","type":"auth"}}"#));
+                Some(vec![WELCOME.into()])
+            }
+            _ => script(n - 2, line),
+        })
+    }
+
+    /// A well-behaved server: handshake, then `response` (with `"id":1`) to the first request.
     fn answering(response: &'static str) -> Self {
-        Self::start(move |n, _| match n {
-            0 => Some(vec![WELCOME.into()]),
-            1 => Some(vec![response.into()]),
+        Self::authed(move |n, _| match n {
+            0 => Some(vec![response.into()]),
             _ => None,
         })
     }
@@ -116,23 +148,36 @@ fn authenticates_and_sends_keys() {
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
     assert_eq!(stdout(&out), "");
     let lines = server.lines();
-    assert_eq!(
-        lines[0],
-        format!(r#"{{"protocol":1,"token":"{TOKEN}","type":"hello"}}"#)
+    let nonce = nonce_of(&lines[0]);
+    assert!(
+        nonce.len() == 64
+            && nonce
+                .bytes()
+                .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),
+        "nonce is 64 lowercase hex: {nonce}"
     );
     assert_eq!(
-        lines[1],
+        lines[0],
+        format!(r#"{{"nonce":"{nonce}","protocol":1,"type":"hello"}}"#),
+        "the hello carries no token"
+    );
+    assert_eq!(lines[1], format!(r#"{{"token":"{TOKEN}","type":"auth"}}"#));
+    assert_eq!(
+        lines[2],
         r#"{"args":{"keys":"ctrl+b c"},"command":"send-keys","id":1,"type":"request"}"#
     );
 }
 
 #[test]
 fn reports_a_refused_token_with_exit_4() {
-    let server = Server::start(|_, _| {
-        Some(vec![
+    let server = Server::start(|n, line| {
+        match n {
+        0 => Some(vec![challenge(line)]),
+        _ => Some(vec![
             r#"{"type":"response","id":null,"ok":false,"error":{"code":"unauthorized","message":"bad token"}}"#
                 .into(),
-        ])
+        ]),
+    }
     });
     let out = vimma_ctl(&server.profile, &["state"]);
     assert_eq!(out.status.code(), Some(4));
@@ -140,7 +185,7 @@ fn reports_a_refused_token_with_exit_4() {
         stderr(&out),
         "vimma-ctl: authentication failed: unauthorized: bad token\n"
     );
-    assert_eq!(server.lines().len(), 1, "no request after a refused hello");
+    assert_eq!(server.lines().len(), 2, "no request after a refused token");
 }
 
 #[test]
@@ -155,7 +200,7 @@ fn prints_state_for_people() {
         "mode: normal\npending: -\nworkspace: -\ntabs: 1\n* 12  Example  https://example.com/\n"
     );
     assert_eq!(
-        server.lines()[1],
+        server.lines()[2],
         r#"{"args":{},"command":"state","id":1,"type":"request"}"#
     );
 }
@@ -181,7 +226,7 @@ fn opens_a_url_and_prints_the_tab() {
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
     assert_eq!(stdout(&out), "14\n");
     assert_eq!(
-        server.lines()[1],
+        server.lines()[2],
         r#"{"args":{"url":"https://example.com/","where":"tab"},"command":"open","id":1,"type":"request"}"#
     );
 }
@@ -271,13 +316,7 @@ fn times_out_when_the_server_is_silent() {
 
 #[test]
 fn times_out_after_the_handshake_too() {
-    let server = Server::start(|n, _| {
-        if n == 0 {
-            Some(vec![WELCOME.into()])
-        } else {
-            Some(vec![])
-        }
-    });
+    let server = Server::authed(|_, _| Some(vec![]));
     let out = vimma_ctl(&server.profile, &["--timeout", "0.5", "state"]);
     assert_eq!(out.status.code(), Some(5), "{}", stderr(&out));
     assert!(stderr(&out).contains("no reply within 0.5 s"));
@@ -379,13 +418,7 @@ fn reports_a_busy_server_with_exit_3() {
 #[test]
 fn reports_a_drop_after_the_handshake_with_exit_5() {
     // The server's idle timeout or connection cap closing an authenticated connection.
-    let server = Server::start(|n, _| {
-        if n == 0 {
-            Some(vec![WELCOME.into()])
-        } else {
-            None
-        }
-    });
+    let server = Server::authed(|_, _| None);
     let out = vimma_ctl(&server.profile, &["state"]);
     assert_eq!(out.status.code(), Some(5), "{}", stderr(&out));
     assert_eq!(
@@ -419,4 +452,97 @@ fn the_fake_server_speaks_on_loopback_only() {
     );
     drop(TcpStream::connect(addr).unwrap());
     drop(server.lines());
+}
+
+#[test]
+fn a_fresh_nonce_per_connection() {
+    let first = Server::answering(r#"{"type":"response","id":1,"ok":true,"result":{"sent":1}}"#);
+    let second = Server::answering(r#"{"type":"response","id":1,"ok":true,"result":{"sent":1}}"#);
+    assert_eq!(
+        vimma_ctl(&first.profile, &["send-keys", "j"]).status.code(),
+        Some(0)
+    );
+    assert_eq!(
+        vimma_ctl(&second.profile, &["send-keys", "j"])
+            .status
+            .code(),
+        Some(0)
+    );
+    assert_ne!(first.lines()[0], second.lines()[0], "nonces differ");
+}
+
+/// The security review's `PoC` squatter: it bound a stale discovery file's port and answers the
+/// challenge with an HMAC keyed by whatever token it has seen so far (none: the hello has no
+/// token), then accepts anything. vimma-ctl must send it nothing after the hello.
+#[test]
+fn a_squatter_gets_neither_the_token_nor_a_command() {
+    let server = Server::start(|_, line| {
+        let seen = vimma_ctl::json::parse(line).ok();
+        let token = match seen.as_ref().and_then(|v| v.get("token")) {
+            Some(vimma_ctl::json::Value::String(t)) => t.clone(),
+            _ => "0".repeat(64),
+        };
+        Some(vec![
+            challenge_with_key(line, &token),
+            WELCOME.into(),
+            r#"{"type":"response","id":1,"ok":true,"result":{"sent":1}}"#.into(),
+        ])
+    });
+    let out = vimma_ctl(&server.profile, &["send-keys", "h u n t e r 2 enter"]);
+    assert_eq!(out.status.code(), Some(4), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("did not prove it knows the token"),
+        "{}",
+        stderr(&out)
+    );
+    let lines = server.lines();
+    assert_eq!(lines.len(), 1, "only the hello: {lines:?}");
+    assert!(
+        !lines[0].contains(TOKEN),
+        "the hello does not carry the token"
+    );
+}
+
+#[test]
+fn a_server_that_never_answers_the_challenge_times_out_cleanly() {
+    let server = Server::start(|_, _| Some(vec![]));
+    let out = vimma_ctl(&server.profile, &["--timeout", "0.5", "send-keys", "j"]);
+    assert_eq!(out.status.code(), Some(5), "{}", stderr(&out));
+    assert_eq!(
+        stderr(&out),
+        "vimma-ctl: protocol error: no reply within 0.5 s\n"
+    );
+    let lines = server.lines();
+    assert_eq!(lines.len(), 1, "only the hello");
+    assert!(!lines[0].contains(TOKEN));
+}
+
+#[test]
+fn refuses_a_welcome_in_place_of_the_challenge() {
+    let server = Server::start(|_, _| Some(vec![WELCOME.into()]));
+    let out = vimma_ctl(&server.profile, &["send-keys", "secret"]);
+    assert_ne!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert_eq!(server.lines().len(), 1, "nothing sent after the hello");
+}
+
+#[test]
+fn reports_a_discovery_file_whose_process_has_exited() {
+    let profile = temp_profile();
+    let path = profile.join("vimma-control.json");
+    fs::write(
+        &path,
+        format!(r#"{{"protocol":1,"port":4000,"token":"{TOKEN}","pid":999999999}}"#),
+    )
+    .unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+    }
+    let out = vimma_ctl(&profile, &["state"]);
+    assert_eq!(out.status.code(), Some(3), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("pid 999999999") && stderr(&out).contains("stale"),
+        "{}",
+        stderr(&out)
+    );
 }

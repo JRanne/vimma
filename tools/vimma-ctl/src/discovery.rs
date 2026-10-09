@@ -201,8 +201,31 @@ pub fn read_discovery(profile: &Path) -> Result<Discovery, DiscoveryError> {
     }
     let value = json::parse(&text)
         .map_err(|e| DiscoveryError(format!("{} is not valid JSON: {e}", path.display())))?;
-    decode_discovery(&value)
-        .map_err(|e| DiscoveryError(format!("{} is not a discovery file: {e}", path.display())))
+    let discovery = decode_discovery(&value)
+        .map_err(|e| DiscoveryError(format!("{} is not a discovery file: {e}", path.display())))?;
+    check_pid(&path, discovery.pid)?;
+    Ok(discovery)
+}
+
+/// A crashed or killed browser cannot delete its file: say so instead of dialling a port that
+/// something else may have taken. This is only a hint: a reused pid passes it. What protects the
+/// user is the handshake: the server must prove it knows the token (the challenge) before the
+/// client sends the token or any command, so a squatter on the port learns neither.
+#[cfg(target_os = "linux")]
+fn check_pid(path: &Path, pid: u64) -> Result<(), DiscoveryError> {
+    if Path::new(&format!("/proc/{pid}")).exists() {
+        return Ok(());
+    }
+    Err(DiscoveryError(format!(
+        "Vimma is not running: {} is stale (pid {pid} has exited; a crash or a kill leaves it \
+         behind, and the next start replaces it)",
+        path.display()
+    )))
+}
+
+#[cfg(not(target_os = "linux"))]
+fn check_pid(_path: &Path, _pid: u64) -> Result<(), DiscoveryError> {
+    Ok(())
 }
 
 #[cfg(unix)]
@@ -353,11 +376,26 @@ mod tests {
     #[test]
     fn reads_a_0600_discovery_file() {
         let dir = temp_dir();
-        let text = format!(r#"{{"protocol":1,"port":4000,"token":"{TOKEN}","pid":7}}"#);
+        let pid = std::process::id(); // alive: this test
+        let text = format!(r#"{{"protocol":1,"port":4000,"token":"{TOKEN}","pid":{pid}}}"#);
         write_mode(&dir.join(FILE_NAME), &text, 0o600);
         let found = read_discovery(&dir).unwrap();
         assert_eq!(found.port, 4000);
-        assert_eq!(found.pid, 7);
+        assert_eq!(found.pid, u64::from(pid));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn reports_a_file_whose_process_has_exited_as_stale() {
+        let dir = temp_dir();
+        // Above Linux's largest pid_max (2^22), so no process has it.
+        let text = format!(r#"{{"protocol":1,"port":4000,"token":"{TOKEN}","pid":999999999}}"#);
+        write_mode(&dir.join(FILE_NAME), &text, 0o600);
+        let err = read_discovery(&dir).unwrap_err();
+        assert!(
+            err.0.contains("stale") && err.0.contains("pid 999999999"),
+            "{err}"
+        );
     }
 
     #[cfg(unix)]
