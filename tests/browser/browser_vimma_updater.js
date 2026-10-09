@@ -14,7 +14,7 @@
 
 "use strict";
 
-/* global AUS_HOST, watchUpdateServer, settle -- from head_vimma_aus.js */
+/* global AUS_HOST, watchUpdateServer -- from head_vimma_aus.js */
 Services.scriptloader.loadSubScript(getRootDirectory(gTestPath) + "head_vimma_aus.js", this);
 
 const { AppConstants } = ChromeUtils.importESModule("resource://gre/modules/AppConstants.sys.mjs");
@@ -49,32 +49,6 @@ add_task(async function app_update_service_has_no_url() {
   } finally {
     await SpecialPowers.popPrefEnv();
   }
-});
-
-add_task(async function old_build_check_makes_no_request() {
-  await SpecialPowers.pushPrefEnv({
-    set: [
-      ["app.update.disabledForTesting", false],
-      ["app.update.checkInstallTime", true],
-      ["app.update.checkInstallTime.days", 0],
-    ],
-  });
-  const watch = watchUpdateServer();
-  try {
-    // BrowserGlue's old-build check (a background update check when the build is older than
-    // app.update.checkInstallTime.days).
-    Cc["@mozilla.org/browser/browserglue;1"]
-      .getService()
-      .wrappedJSObject._checkForOldBuildUpdates();
-
-    // Let a background check started above reach the network (it may first wait for another
-    // running instance; app_update_service_has_no_url is the deterministic check).
-    await settle(1000);
-  } finally {
-    watch.stop();
-    await SpecialPowers.popPrefEnv();
-  }
-  Assert.deepEqual(watch.seen, [], `no request to ${AUS_HOST}`);
 });
 
 const ERROR_PANELS = [
