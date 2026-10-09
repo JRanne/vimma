@@ -260,6 +260,26 @@ export class WorkspaceStoreImpl {
   }
 
   /**
+   * The config's `[workspaces]` changed (ConfigHost, m5-config-load): reconciles the definitions
+   * with it as init does (a workspace gone from the file becomes runtime; nothing is removed),
+   * gives new ones a container, saves and tells the windows.
+   * @param {readonly Workspace[]} config  core `mergeWithDefaults(...).workspaces`
+   */
+  async setConfig(config) {
+    this.#config = config;
+    if (!this.#ready) return; // init() reads it
+    await this.#ready;
+    if (this.disabled || this.readOnly) return;
+    const before = this.definitions;
+    const { definitions, changed } = reconcileDefinitions(before, this.#config, mintId);
+    this.definitions = definitions;
+    const containersChanged = this.#checkContainers();
+    if (!changed && !containersChanged) return;
+    this.#save();
+    this.#notify(this.definitions.workspaces.map((w) => w.id));
+  }
+
+  /**
    * Records the workspace a window switched to; it becomes `lastActive` for the next start.
    * @param {object | null} win
    * @param {string} id

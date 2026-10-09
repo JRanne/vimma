@@ -3,7 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // What the goto picker lists (spec: docs/specs/m2-picker-rename.md): core pickerItems over the
-// window's tabs. Tab ids are `tab.linkedPanel`.
+// window's tabs. Tab ids are `tab.linkedPanel`, or for a lazy tab (no panel until it is first
+// selected, as every restored background tab is) the window model's uuid (m3-workspaces 3).
 
 import { pickerItems } from "../core/picker.mjs";
 import { getTabLabel } from "./tab-labels.mjs";
@@ -32,15 +33,19 @@ function gBrowserOf(win) {
  * @returns {Workspaces}
  */
 export function pickerWorkspaces(win) {
-  const model = WindowWorkspaces.get(win)?.model;
-  if (model) {
-    const order = new Map(gBrowserOf(win).tabs.map((t, i) => [t.linkedPanel, i]));
+  const ww = WindowWorkspaces.get(win);
+  const model = ww?.model;
+  if (ww && model) {
+    const order = new Map(gBrowserOf(win).tabs.map((t, i) => [ww.idOf(/** @type {any} */ (t)), i]));
     const at = (/** @type {string} */ id) => order.get(id) ?? Infinity;
+    const panel = (/** @type {string} */ id) => ww.tabOf(id)?.linkedPanel || id;
     return {
       ...model,
       workspaces: model.workspaces.map((w) => ({
         ...w,
-        tabs: [...w.tabs].sort((a, b) => at(a) - at(b)),
+        tabs: [...w.tabs].sort((a, b) => at(a) - at(b)).map(panel),
+        activeTab: w.activeTab && panel(w.activeTab),
+        panes: null,
       })),
     };
   }
@@ -62,7 +67,10 @@ export function pickerWorkspaces(win) {
  * @returns {Tab | undefined}
  */
 export function tabById(win, tabId) {
-  return gBrowserOf(win).tabs.find((t) => t.linkedPanel === tabId);
+  const tab = gBrowserOf(win).tabs.find((t) => t.linkedPanel === tabId);
+  if (tab) return tab;
+  const lazyTab = WindowWorkspaces.get(win)?.tabOf(tabId);
+  return /** @type {Tab | undefined} */ (/** @type {unknown} */ (lazyTab));
 }
 
 /**

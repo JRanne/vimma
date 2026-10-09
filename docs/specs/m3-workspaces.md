@@ -1,7 +1,8 @@
 # Spec: m3-workspaces
 
-Status: research and plan; split into sub-specs (see Breakdown). Sub-specs 1 (store) and 2a
-(routing) merged; sub-spec 2b (switching) implemented, awaiting review (see Settled) ·
+Status: research and plan; split into sub-specs (see Breakdown). Sub-specs 1 (store), 2a
+(routing) and 2b (switching) merged; sub-spec 3 (persistence) implemented, awaiting review (see
+Settled) ·
 Milestone: M3 · Area: host
 (`src/browser/base/content/vimma/workspaces/`, `ui/`), four upstream patch files (five hunks)
 
@@ -803,6 +804,57 @@ dependency for 4b, 5 and parts of 4a.
   and a container-0 tab (`foreign`); `:workspace` by name, number and an unknown name. Red
   before (module missing: 8 failures), green after; the whole `tests/browser/` suite passes.
   Mutation check: not calling `hideTab` in the switch fails 17 assertions.
+
+## Settled: sub-spec 3, m3-workspace-persistence (2026-10-10)
+
+- **Tab ids are uuids now**, not `linkedPanel`: a lazy tab (every restored background tab) has
+  no panel until it is first selected, so 2b's model put `null` in it. `WindowWorkspaces` keeps
+  tab → uuid (`idOf`, `tabOf`); the uuid is the tab value `vimma-tab`, the workspace id
+  `vimma-workspace`. `PaneView` still uses panels; the conversion happens only when saving and
+  restoring. The goto picker keeps panel ids and uses the uuid for a lazy tab (`tabById` falls
+  back to `tabOf`), so `VimmaHost` is unchanged.
+- **Saving**: at the end of every task that changed the model, a pane tree (`PaneView.onChange`
+  after each reconcile) or a label (`VimmaTabLabelChanged`, fired by `setTabLabel`), the tab
+  values and the window value `vimma-workspaces` (`toSnapshot` with every workspace's tree, the
+  shown one and the parked ones, in uuids, and `tabLabels`) are written, unless the window value
+  has a newer schema (`canWrite`) or a restore is under way. A microtask, not a timer: nothing is
+  lost when the window closes or the app quits right after a change; `SSWindowClosing` and
+  `SSWindowStateBusy` also flush. Unchanged text is not written again.
+- **Restoring**: `SSWindowStateBusy` → pending (tab events and the definitions observer are not
+  applied, nothing is written); `SSWindowStateReady` → the reconcile, which is also the build at
+  init (a window whose start finds a restore under way builds on its Ready). It re-reads the
+  uuids (tab value first; a second holder of one gets a new uuid), places every open tab in the
+  workspace owning its container, else (foreign) the snapshot's or its `vimma-workspace`'s, else
+  the active one; restores each workspace's selected tab from the snapshot; the active workspace
+  is the selected tab's. A window value that differs from what this window last wrote is a
+  restored one: its labels fill tabs that came back without `vimma.tabLabel`, and its pane trees
+  go to `PaneView.restore` (the active one shown, the others parked; a lazy member gets its
+  browser with `gBrowser.insertBrowser`, as split-view activation does). Firefox restores
+  `hidden`, the split wrappers and the scroll positions.
+- **Labels: no consolidation.** The rename seam planned to read `vimma.tabLabel` once into the
+  snapshot and drop the tab value. Dropping it would lose a label on undo-close-tab and on a move
+  to another window (only tab values travel with a tab), so the tab value stays the source of
+  truth; the snapshot's `tabLabels` is written too and fills a tab that lacks the value.
+- **Prefs**: `browser.startup.page = 3`, `services.sync.prefs.sync.browser.startup.page` and
+  `services.sync.prefs.sync.privacy.userContext.enabled` = `false` (decision 9).
+- **Tests**: `browser_vimma_workspace_restore.js`. Gate 2: two workspaces built in one window
+  (A: start tab, a long page scrolled to 1200, a renamed tab selected; B: two tabs split
+  side by side, active), `SessionStore.getBrowserState()`, that window's state (its tab label
+  values removed, so the label must come from the snapshot) restored with `setWindowState` into
+  a fresh window: workspaces, membership and uuids in order, active workspace, each selected
+  tab, hidden flags, the label, B's pane tree with its rectangles within 1 px, and the long page
+  lazy until selected, then `scrollY === 1200`. A newer-schema window value: one workspace with
+  every tab, a new tab joins it, the value left byte for byte. The three prefs. Red before (11
+  failures), green after; whole `tests/browser/` suite green. Mutation checks: not restoring each
+  workspace's selected tab fails "A's selected tab is remembered"; dropping the
+  `browser.startup.page` pref fails its assertion. `browser_vimma_workspace_switching.js`'s
+  helpers read the model's id with `idOf` (the id changed, not the assertions).
+- **Not done here:** a real quit and relaunch: the e2e harness launches one browser per
+  scenario and has no restart step, so it moves to sub-spec 7 (`m3-restart-restore`). The
+  live-restore test of the plan (undo close tab, two brackets in a row, `setWindowState` without
+  overwrite) is covered only by the gate's path through the same bracket; side effects waiting
+  for `promiseAllWindowsRestored` and unpinning (decision 11) are still open. Parked pane trees
+  are saved and restored but only the active workspace's layout is asserted.
 
 ## Out of scope
 
