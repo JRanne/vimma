@@ -69,7 +69,13 @@ jobs:
           appver=$(sed -n 's/^Version=//p' engine/obj-x86_64-pc-linux-gnu/dist/bin/application.ini)
           firefox=$(node -p 'require("./surfer.json").version.version')
           [ "$appver" = "$firefox" ] || { echo "::error::app version is '$appver', want '$firefox'"; exit 1; }
-          # TODO(M0 build-strategy ADR): full e2e on this build once e2e.yml has a suite.
+
+      - name: Mochitests on the full build
+        # PRs run them on an artifact build (e2e.yml, ADR-010), which skips what only a full
+        # build has (skip-if = ["artifact"], e.g. browser_vimma_crash_reporter.js).
+        run: |
+          set -o pipefail
+          npm run mochitest -- tests/browser/ 2>&1 | tee -a "$LOG"
 
       - name: Package
         run: |
