@@ -68,8 +68,8 @@ in the URL bar, `about:` pages and the PDF viewer.
   The prefix works in every mode and waits for the next key with no timeout. `Esc` cancels it.
 - **The modal layer (Neovim).** Bare keys act on the page depending on the mode: `j`/`k` scroll
   in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page. Planned
-  modes: `visual`/copy (caret and selection), `command` (`:` line) and `panel` (the side
-  panel); `hint` is link hints and `help` the bindings overlay.
+  modes: `visual`/copy (caret and selection) and `panel` (the side panel); `hint` is link
+  hints, `help` the bindings overlay and `command` the `:` line.
 
 ### Normal and insert mode
 
@@ -174,6 +174,8 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `ctrl+b c`, `t`             | Opens a new tab (Firefox's new-tab page, URL bar focused), as `ctrl+t` does. `t` in normal mode.                                                              |
 | `ctrl+b n` / `ctrl+b p`     | Next / previous tab, wrapping around at the ends. Hidden tabs are skipped. `gt` / `gT` in normal mode; `3gt` goes to tab 3.                                   |
 | `ctrl+b 1..9`               | Tab 1 to 9, counting visible tabs (pinned tabs first). With fewer tabs than N, nothing happens.                                                               |
+| `:`                         | Normal mode: opens the command line at the bottom of the window ([below](#the-command-line)). In a text field `:` is typed.                                   |
+| `ctrl+b x`                  | Closes the pane; until split panes (M4) every tab is one pane, so it closes the tab, as `ctrl+b shift+x`.                                                     |
 | `ctrl+b shift+x`, `x`       | Closes the tab, as `ctrl+w` does: on a pinned tab it selects the first unpinned tab instead; the last tab closes the window. `x` in normal mode.              |
 | `ctrl+b` then anything else | Never leaks to the page. A binding that does not run yet shows "… not implemented yet" for 1.5 s; an unbound key does nothing. No more bookmarks sidebar.     |
 | Firefox's own keys          | Unchanged: `ctrl+t`, `ctrl+w`, `ctrl+tab`, `ctrl+shift+tab`, `ctrl+pagedown`, `alt+1..9` (tab N on Linux), `ctrl+l`, `ctrl+f`, `ctrl+u`, `ctrl+i`, and so on. |
@@ -185,7 +187,7 @@ digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 **Planned:**
 
 - **M1, the rest of the modal page layer:** back and forward (`H`/`L`), reload (`r`), find
-  (`/ ? n N`), the `:` command line and copy mode (`v`, `ctrl+b [`). Until then these keys
+  (`/ ? n N`) and copy mode (`v`, `ctrl+b [`). Until then these keys
   reach the page as before.
 - **M2, the rest of tabs:** `ctrl+b shift+t` rename (kept across restarts; an empty name
   restores the page title), the `ctrl+b g` picker (`j`/`k` to move, `/` to search titles, URLs,
@@ -196,6 +198,41 @@ digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 - **M4, split panes:** `ctrl+b v`/`-`, `ctrl+b h j k l`, swap, zoom, resize, close pane.
 - **M5, config and theme:** rebinding in `~/.config/vimma/config.toml`, `:source`, Omarchy
   colours.
+
+## The command line
+
+`:` in normal mode opens a Vim-style command line just above the status bar. Type a command
+and press `Enter`; `Esc` closes it and puts focus back on the page. While it is open nothing you
+type reaches the page, and `ctrl+b` sequences still work.
+
+- **Completion.** A list of matching commands and actions, with what each does, follows what you
+  type. `Tab` puts the next match on the line, `shift+Tab` the previous; both wrap around.
+  Matching also takes letters in order (`scd` finds `scroll_down`).
+- **History.** `Up` / `Down` walk the lines you ran before, newest first. With text typed, `Up`
+  recalls only lines that start with it, as in Vim. History lasts until Vimma quits; a private
+  window keeps its own, forgotten when it closes.
+- `:open` and `:tabnew` refuse `javascript:` URLs, with a message. The line does not open over
+  a fullscreen page.
+- **Errors** show under the line, which stays open so you can fix it: `:tabnwe` says
+  `not a command: "tabnwe"; did you mean :tabnew?`.
+- A command name can be shortened while it stays unique (`:tabr`, `:wsn`), and leading colons
+  are fine (`::q`).
+- An argument is the rest of the line, as typed. Quotes are removed only when one pair wraps all
+  of it: `:tabrename "my  tab"`.
+
+| Command                                                      | What it does                                                                                                       |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `:open text`                                                 | Opens `text` in this tab as the URL bar would: `example.com` becomes a web address, other words a web search.      |
+| `:tabnew`, `:tabnew text`                                    | Opens a new tab; with text, opens it there (as `:open`).                                                           |
+| `:q`, `:quit`                                                | Closes the pane; with one pane (always, until M4) the tab, as `x`: a pinned tab is kept and the next one selected. |
+| `:map`, `:help`, `:h`                                        | Shows every binding (the `ctrl+b ?` overlay).                                                                      |
+| `:scroll_down`, `:tab.next`…                                 | Any action by its name in [bindings.md](bindings.md), or by its dotted id. Actions take no argument.               |
+| `:tabrename [name]`                                          | Not built yet (M2): says "… not implemented yet".                                                                  |
+| `:vsplit`/`:vs`, `:split`/`:sp`                              | Not built yet (M4).                                                                                                |
+| `:wsnext`, `:wsprev`, `:workspace [name]`, `:ls`, `:sidebar` | Not built yet (M2, M3); `:workspace name` says "… not available yet".                                              |
+| `:source`                                                    | Not built yet (M5).                                                                                                |
+
+A command that is not built yet says so for a moment, as its keys do.
 
 ## Settings (about:config)
 

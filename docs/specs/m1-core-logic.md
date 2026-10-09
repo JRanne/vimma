@@ -254,6 +254,9 @@ starting with the draft are recalled, newest first; at the oldest match it stays
 
 ### Missing actions (for the host spec; the dispatcher contract is unchanged)
 
+m1-cmdline (2026-10-09) added `page.open` to `actions.mjs` as `open_url` and runs it, so
+`PENDING_ACTIONS` is now `["workspace.switch"]`; `:help` (`:h`) joined the table.
+
 - `page.open` (`:open url`) and `workspace.switch` (`:workspace name`) are not in
   `actions.mjs`. `PENDING_ACTIONS` lists them and a test pins the list, so adding them to
   `actions.mjs` (with `npm run gen-docs`) is a deliberate change in the host spec. Until then
