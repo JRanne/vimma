@@ -23,6 +23,7 @@ import {
   assertLane,
   copyEngine,
   foreignLinks,
+  gitEnv,
   laneLinks,
   mainWorktree,
   parseBtrfsDu,
@@ -38,12 +39,15 @@ const VERIFY_TEST = "tests/browser/browser_vimma_branding.js";
  * @param {string[]} args
  * @param {string} cwd
  * @param {boolean} [quiet] capture stdout instead of passing it through
+ * Every child (git, and npm/node, whose surfer runs git apply in engine/) gets gitEnv(): no
+ * inherited GIT_DIR/GIT_WORK_TREE can steer it at another repo.
  */
 function run(cmd, args, cwd, quiet = false) {
   const res = spawnSync(cmd, args, {
     cwd,
     stdio: quiet ? ["ignore", "pipe", "pipe"] : "inherit",
     encoding: "utf8",
+    env: gitEnv(),
   });
   if (res.status !== 0) {
     throw new Error(`${cmd} ${args.join(" ")} failed (exit ${res.status}) ${res.stderr ?? ""}`);
@@ -112,12 +116,15 @@ async function main(root) {
     return out;
   };
 
-  const { reflink } = await phase("copy", () =>
+  // Links into main can survive in a non-default source's engine; check both.
+  const sources = [...new Set([source, mainCheckout])];
+  const { reflink, locks } = await phase("copy", () =>
     copyEngine(srcEngine, engine, { allowCopy: values["allow-copy"] }),
   );
+  for (const lock of locks) console.warn(`lane-setup: removed stale lock ${lock} (lane copy)`);
   if (!reflink) console.warn("lane-setup: reflinks unsupported; made a full copy (--allow-copy)");
   await phase("reset", () => {
-    const links = removeForeignLinks(engine, source, root);
+    const links = removeForeignLinks(engine, sources, root);
     const cleaned = resetEngine(engine);
     console.log(`lane-setup: unlinked ${links.length} links, cleaned ${cleaned.length} paths`);
   });
@@ -126,13 +133,14 @@ async function main(root) {
     run("node", ["tools/artifact-build/artifact-build.mjs"], root),
   );
 
-  const stray = foreignLinks(engine, source, root);
+  const stray = foreignLinks(engine, sources, root);
+  const into = sources.join(" or ");
   if (stray.length) {
-    throw new Error(`symlinks still lead into ${source}:\n${stray.slice(0, 10).join("\n")}`);
+    throw new Error(`symlinks still lead into ${into}:\n${stray.slice(0, 10).join("\n")}`);
   }
   const own = laneLinks(engine, root).length;
   if (own === 0) throw new Error(`no symlink in ${engine} leads into ${root}; did import run?`);
-  console.log(`lane-setup: ${own} symlinks lead into this lane, none into ${source}`);
+  console.log(`lane-setup: ${own} symlinks lead into this lane, none into ${into}`);
   if (!values["no-verify"]) {
     await phase("mochitest", () =>
       run("npm", ["run", "mochitest", "--", "--artifact", VERIFY_TEST], root),

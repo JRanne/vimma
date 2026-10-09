@@ -162,6 +162,13 @@ Limits:
 - **CPU:** an artifact build is CPU-bound (the front-end build). On this 16-thread box run at
   most about 3 artifact builds at once, and none while the main checkout runs a full build;
   mochitests are light, a few in parallel are fine.
+- **Don't set up a lane while the source checkout is mid-import** (or mid-`git` in its
+  `engine/`): the copy is a snapshot. Stray `*.lock` files copied from its `engine/.git` are
+  removed in the lane (and logged), never in the source; a half-applied import is undone by
+  the reset, but rerun setup with `--force` if anything looks off.
+- With `--source <other worktree>`, links into both that worktree and the main checkout are
+  removed and checked. All git (and import) children run without inherited `GIT_*`
+  variables, and reset refuses an `engine/` that is not the top of its own git repo.
 - mach keeps a small per-tree state dir in `~/.mozbuild/srcdirs/engine-<hash>` (about 2 MB
   per lane); teardown leaves it.
 
