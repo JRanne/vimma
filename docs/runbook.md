@@ -29,7 +29,7 @@ npx surfer run
 bin=engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma
 $bin --version   # "Vimma Vimma 0.1.0" (vendor, name, surfer.json brands.vimma.release.displayVersion)
 p=$(mktemp -d)
-timeout 20 $bin --headless --no-remote --profile "$p" about:blank   # first run: profile + bookmarks
+timeout 20 $bin --headless --no-remote --profile "$p" about:blank || true   # first run: profile + bookmarks; timeout exits 124
 $bin --headless --no-remote --profile "$p" --screenshot /tmp/shot.png "data:text/html,<h1>ok</h1>"
 ```
 

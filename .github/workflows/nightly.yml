@@ -61,7 +61,10 @@ jobs:
       - name: Smoke check
         run: |
           set -o pipefail
-          engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma --version 2>&1 | tee -a "$LOG"
+          version=$(engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma --version 2>&1 | tee -a "$LOG")
+          expected="Vimma Vimma $(node -p "require('./surfer.json').brands.vimma.release.displayVersion")"
+          # A nightly that lost the Vimma brand (e.g. built `unofficial`) must not be published.
+          [ "$version" = "$expected" ] || { echo "::error::--version is '$version', want '$expected'"; exit 1; }
           # TODO(M0 build-strategy ADR): full e2e on this build once e2e.yml has a suite.
 
       - name: Package

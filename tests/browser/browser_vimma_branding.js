@@ -33,6 +33,12 @@ function formatBrandTerms(terms) {
 add_task(async function app_name_and_vendor_are_vimma() {
   Assert.equal(Services.appinfo.name, BRAND, "Services.appinfo.name");
   Assert.equal(Services.appinfo.vendor, BRAND, "Services.appinfo.vendor");
+  // surfer.json brands.vimma.release.displayVersion; Surfer falls back to 1.0.0 if it is lost.
+  // Plan §7: 0.x until M6.
+  Assert.ok(
+    /^0\.\d+\.\d+$/.test(Services.appinfo.version),
+    `appinfo.version ${Services.appinfo.version} is 0.x`,
+  );
 });
 
 add_task(async function brand_strings_are_vimma() {
