@@ -7,6 +7,7 @@
  * compiled keymap the dispatcher uses, so help cannot drift from behaviour.
  */
 import { ACTIONS } from "./actions.mjs";
+import { isRunnable } from "./whichkey.mjs";
 
 /** @import { Keymap } from "./keymap.mjs" */
 /**
@@ -17,13 +18,16 @@ import { ACTIONS } from "./actions.mjs";
  * @property {string} description
  * @property {string[]} bindings
  * @property {boolean} overridden
+ * @property {boolean} [runnable]   only when `bindingTable` is given a runnable set
  */
 
 /**
  * @param {Keymap} keymap
+ * @param {{ runnable?: ReadonlySet<string> }} [options] action ids the host implements; rows
+ *   then carry `runnable`, the same rule the which-key strip uses
  * @returns {BindingRow[]}
  */
-export function bindingTable(keymap) {
+export function bindingTable(keymap, { runnable } = {}) {
   return ACTIONS.map((a) => ({
     id: a.id,
     name: a.name,
@@ -31,6 +35,7 @@ export function bindingTable(keymap) {
     description: a.description,
     bindings: keymap.bindingsFor(a.name),
     overridden: keymap.isOverridden(a.name),
+    ...(runnable ? { runnable: isRunnable(a.id, runnable) } : {}),
   }));
 }
 
