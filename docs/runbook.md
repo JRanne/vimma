@@ -183,7 +183,7 @@ The job keeps `engine/` between runs (`clean: false`) and re-downloads Firefox o
 
 `tools/upstream/check-release.py` prints `LATEST_FIREFOX_VERSION` from product-details when it
 is newer than `surfer.json`; `bump-surfer-json.py` rewrites only that version. The workflow then
-opens a draft PR `chore(upstream): Firefox X.Y` on branch `upstream/firefox-X.Y`. If a PR for
+opens a draft PR `upstream: update to Firefox X.Y` on branch `upstream/firefox-X.Y`. If a PR for
 that branch is already open it does nothing; a branch left by a failed or closed run is rebuilt
 from `main` and force-pushed, so a failed run is retried 6 h later.
 
@@ -265,15 +265,20 @@ or uploaded yet; `release.yml` (packages, signatures, AUR) is M6.
   (`bump-minor-pre-major`). Changelog sections: `feat` → Added, `fix` → Fixed; `perf`, `deps`,
   `upstream` and `revert` → Changed; `docs`, `test`, `build`, `ci`, `chore` and `refactor` are
   left out.
-- **The changelog line is the commit subject.** release-please writes the subject, not the body
-  (it has no body option). Keep subjects readable as changelog lines; the body still carries the
-  detail (CLAUDE.md).
-- **First release (one-time).** No tag exists yet, so the first release PR proposes `0.1.0`
-  (`initial-version`), listing every `feat`/`fix` since the first commit, and puts its entry
-  above the hand-written `## [Unreleased]` section. Just before merging it, edit `CHANGELOG.md` on
-  the release branch: replace the generated `0.1.0` list with the `[Unreleased]` sections and
-  delete that heading. release-please rewrites the branch on every push to `main`, so make the
-  edit last. From then on, every entry is generated.
+- **The changelog line is the commit subject; the body explains why** (CLAUDE.md). release-please
+  writes subjects only. Firefox bumps are `upstream: update to Firefox X.Y` (upstream.yml), so a
+  security dot release alone still produces a release PR (plan §4: release within 7 days).
+- **First release (one-time).** No `v0.1.0` tag exists, and release-please would treat the
+  manifest's `0.1.0` as already released and propose `0.2.0`. So `release-please-config.json`
+  pins `"release-as": "0.1.0"`: the first release PR, `chore(main): release 0.1.0` on branch
+  `release-please--branches--main`, lists every `feat`/`fix` since the first commit and puts its
+  entry above the hand-written `## [Unreleased]` section. Just before merging it, edit
+  `CHANGELOG.md` on that branch: replace the generated `0.1.0` list with the `[Unreleased]`
+  sections and delete that heading (release-please rewrites the branch on every push to `main`,
+  so make the edit last). After the merge, **remove `release-as`** in a follow-up PR, or every
+  later release PR proposes `0.1.0` again. From then on every entry is generated.
+- **Names.** `include-component-in-tag` is off, so tags are `vX.Y.Z`, the branch is
+  `release-please--branches--main` and the PR title `chore(main): release X.Y.Z`.
 
 One-time setup:
 
