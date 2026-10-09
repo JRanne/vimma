@@ -94,9 +94,84 @@ export function appIniForArtifact(ini, name) {
 }
 
 /**
+ * The tree mach searches for artifacts, as `select_candidate_trees` in
+ * python/mozbuild/mozbuild/artifacts.py decides it: from MOZ_APP_VERSION_DISPLAY (our
+ * version_display.txt, not Firefox's version) and MOZ_SOURCE_REPO. Only mozilla-release has
+ * the build our release tarball came from; mach has no switch to force the tree.
+ * @param {string} versionDisplay
+ * @param {string} sourceRepo
+ * @returns {string}
+ */
+export function candidateTree(versionDisplay, sourceRepo) {
+  if (versionDisplay.includes("esr") || sourceRepo.includes("esr")) return "releases/mozilla-esr*";
+  if (/a\d+$/.test(versionDisplay)) return "mozilla-central";
+  if (/b\d+$/.test(versionDisplay)) return "releases/mozilla-beta";
+  return "mozilla-release";
+}
+
+/**
+ * The Taskcluster index namespace artifacts.py looks up (`TaskCache.artifacts`: the tree's last
+ * path part, `.shippable` for `-opt` jobs, trust domain gecko, product firefox).
+ * @param {string} revision
+ */
+export function indexNamespace(revision) {
+  return `gecko.v2.mozilla-release.shippable.revision.${revision}.firefox.linux64-opt`;
+}
+
+const INDEX_URL = "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/";
+const REMEDY =
+  "Check that surfer.json pins a Firefox release (not a beta or ESR) and that `npm run import` " +
+  "ran on its tarball; release builds are indexed for a year (ADR-010). A full build " +
+  "(`npx surfer build`) does not need this.";
+
+/**
+ * @param {string} revision
+ * @param {number} status HTTP status of the findTask call
+ * @param {unknown} body its JSON body
+ * @param {Date} now
+ * @returns {{ taskId: string, expires: string }}
+ */
+export function indexTask(revision, status, body, now) {
+  if (status === 404) {
+    throw new Error(
+      `Mozilla's linux64 release build of ${revision} is not in the Taskcluster index ` +
+        `(${indexNamespace(revision)}). ${REMEDY}`,
+    );
+  }
+  if (status !== 200) throw new Error(`Taskcluster index: HTTP ${status} for ${revision}`);
+  const task = /** @type {{ taskId?: unknown, expires?: unknown }} */ (body ?? {});
+  if (typeof task.taskId !== "string" || typeof task.expires !== "string") {
+    throw new Error(`Taskcluster index: unexpected response for ${revision}`);
+  }
+  if (Date.parse(task.expires) <= now.getTime()) {
+    throw new Error(
+      `Mozilla's linux64 release build of ${revision} expired ${task.expires}. ${REMEDY}`,
+    );
+  }
+  return { taskId: task.taskId, expires: task.expires };
+}
+
+/**
+ * Writes dist/bin/browser/application.ini (the file tests load via XUL_APP_FILE) from the
+ * build's current application.ini, so a later bare `./mach build` never leaves it stale.
+ * @param {string} engine path of engine/
+ * @returns {string} the written path
+ */
+export function refreshAppIni(engine) {
+  const bin = join(engine, ARTIFACT_OBJDIR, "dist", "bin");
+  const out = join(bin, "browser", "application.ini");
+  const ini = appIniForArtifact(
+    readFileSync(join(bin, "application.ini"), "utf8"),
+    uaName(readFileSync(join(engine, "browser", "moz.configure"), "utf8")),
+  );
+  writeFileSync(out, ini);
+  return out;
+}
+
+/**
  * @param {string} root repository root
  */
-function main(root) {
+async function main(root) {
   const engine = join(root, "engine");
   const read = (/** @type {string} */ p) => readFileSync(join(engine, p), "utf8");
   if (!existsSync(join(engine, "mozconfig"))) {
@@ -105,7 +180,22 @@ function main(root) {
   const mozconfig = join(engine, "mozconfig.artifact");
   writeFileSync(mozconfig, artifactMozconfig(read("mozconfig")));
   const revision = sourceRevision(read("sourcestamp.txt"));
-  console.log(`artifact-build: Mozilla binaries of ${revision}, objdir engine/${ARTIFACT_OBJDIR}`);
+  const display = read("browser/config/vimma/version_display.txt").trimEnd().split("\n").at(-1);
+  const repo = /^export MOZ_SOURCE_REPO=(\S*)/m.exec(read("mozconfig"))?.[1] ?? "";
+  const tree = candidateTree(display ?? "", repo);
+  if (tree !== "mozilla-release") {
+    throw new Error(
+      `display version ${display} / MOZ_SOURCE_REPO ${repo} make mach look for artifacts on ` +
+        `${tree}, but the release tarball's build is on mozilla-release (artifacts.py ` +
+        `select_candidate_trees). Use an x.y.z display version for artifact builds.`,
+    );
+  }
+  const res0 = await fetch(INDEX_URL + indexNamespace(revision));
+  const { expires } = indexTask(revision, res0.status, await res0.json(), new Date());
+  console.log(
+    `artifact-build: Mozilla binaries of ${revision} (indexed until ${expires}), ` +
+      `objdir engine/${ARTIFACT_OBJDIR}`,
+  );
 
   const res = spawnSync("./mach", ["--no-interactive", "build"], {
     cwd: engine,
@@ -118,11 +208,7 @@ function main(root) {
   const binaryName = JSON.parse(readFileSync(join(root, "surfer.json"), "utf8")).binaryName;
   const launcher = join(bin, binaryName);
   if (!existsSync(launcher) && !isSymlink(launcher)) symlinkSync("firefox", launcher);
-  const ini = appIniForArtifact(
-    readFileSync(join(bin, "application.ini"), "utf8"),
-    uaName(read("browser/moz.configure")),
-  );
-  writeFileSync(join(bin, "browser", "application.ini"), ini);
+  refreshAppIni(engine);
   console.log(`artifact-build: done; run 'npm run mochitest -- --artifact tests/browser/'`);
 }
 
@@ -136,5 +222,8 @@ function isSymlink(path) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  main(fileURLToPath(new URL("../../", import.meta.url)));
+  main(fileURLToPath(new URL("../../", import.meta.url))).catch((e) => {
+    console.error(`artifact-build: ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  });
 }
