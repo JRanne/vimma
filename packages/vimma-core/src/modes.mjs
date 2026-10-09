@@ -5,7 +5,8 @@
 /**
  * Modes the host can report to the dispatcher. `prefix` is not a mode here: the dispatcher
  * tracks a pending prefix itself and the host shows it in the status bar via `pending()`.
- * @typedef {"normal" | "insert" | "visual" | "command" | "hint" | "help" | "panel"} Mode
+ * @typedef {"normal" | "insert" | "visual" | "command" | "hint" | "help" | "panel"
+ *   | "resize"} Mode
  */
 
 /** @type {readonly Mode[]} */
@@ -17,11 +18,12 @@ export const MODES = Object.freeze([
   "hint",
   "help",
   "panel",
+  "resize",
 ]);
 
 /** Modes in which leading digits are a count (`3gt`). */
 /** @type {ReadonlySet<Mode>} */
-export const COUNT_MODES = new Set(["normal", "visual"]);
+export const COUNT_MODES = new Set(["normal", "visual", "resize"]);
 
 /**
  * @param {string} mode

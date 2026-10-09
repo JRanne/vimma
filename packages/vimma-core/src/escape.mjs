@@ -26,12 +26,13 @@ const EXITS = {
   hint: { id: "hint.cancel" },
   help: { id: "help.close", back: true },
   panel: { id: "panel.close", back: true },
+  resize: { id: "pane.resize_exit", back: true },
 };
 
 /**
  * @param {{ mode: Mode, pending?: boolean, previous?: Mode }} state
  *   `pending`: a prefix, key sequence or count is pending; `previous`: the mode an overlay
- *   (help, panel) was opened from
+ *   (help, panel, resize) was opened from
  * @returns {EscapeResult}
  */
 export function resolveEscape({ mode, pending = false, previous = "normal" }) {
