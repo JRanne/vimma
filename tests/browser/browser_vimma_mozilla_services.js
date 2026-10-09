@@ -152,8 +152,9 @@ add_task(async function test_normandy_and_nimbus_do_not_run() {
   Assert.strictEqual(ExperimentAPI.rolloutsEnabled, false, "Nimbus rollouts are disabled");
 });
 
-add_task(function test_no_crash_reporter_or_telemetry_upload() {
-  Assert.strictEqual(AppConstants.MOZ_CRASHREPORTER, false, "built without the crash reporter");
+// The crash-reporter flag is compiled into libxul: browser_vimma_crash_reporter.js, which artifact
+// builds skip (ADR-010).
+add_task(function test_no_telemetry_upload() {
   // A build with MOZILLA_OFFICIAL turns telemetry upload on; that must not slip in unnoticed.
   Assert.strictEqual(AppConstants.MOZILLA_OFFICIAL, false, "not a MOZILLA_OFFICIAL build");
   Assert.strictEqual(
