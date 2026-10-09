@@ -35,6 +35,10 @@ const OFF_BOOL_PREFS = [
   [`${AS}asrouter.userprefs.cfr.features`, false],
   ["browser.vpn_promo.enabled", false],
   ["browser.preferences.moreFromMozilla", false],
+  ["browser.promo.pin.enabled", false],
+  ["browser.promo.relay.enabled", false],
+  ["browser.contentblocking.report.show_mobile_app", false],
+  ["browser.contentblocking.report.hide_vpn_banner", true],
 ];
 
 /** Security-critical services that must keep Firefox's defaults. */
@@ -101,6 +105,37 @@ add_task(function test_no_sponsored_address_bar_suggestions() {
   Assert.strictEqual(Services.prefs.getBoolPref(SPONSORED), false, "applied again when unset");
 });
 
+add_task(async function test_sponsored_suggestions_survive_suggest_migrations() {
+  // A fresh profile runs every Firefox Suggest migration at browser-idle-startup, after our
+  // first window. Migration 5 clears the sponsored pref's user value for DE, FR and IT with an
+  // English locale; Vimma must set it again.
+  const { QuickSuggest } = ChromeUtils.importESModule(
+    "moz-src:///browser/components/urlbar/QuickSuggest.sys.mjs",
+  );
+  const { Region } = ChromeUtils.importESModule("resource://gre/modules/Region.sys.mjs");
+  const SPONSORED = "browser.urlbar.suggest.quicksuggest.sponsored";
+  const MIGRATION = "browser.urlbar.quicksuggest.migrationVersion";
+  await QuickSuggest.init();
+
+  const region = Region.home;
+  const migration = Services.prefs.getIntPref(MIGRATION, 0);
+  registerCleanupFunction(async () => {
+    Region._setHomeRegion(region, false);
+    Services.prefs.setIntPref(MIGRATION, migration);
+    await QuickSuggest._test_reset();
+  });
+
+  Region._setHomeRegion("DE", false);
+  Assert.equal(Services.locale.appLocaleAsBCP47, "en-US", "migration 5 applies to this locale");
+  Services.prefs.setBoolPref(SPONSORED, false); // what Vimma wrote at the first window
+  Services.prefs.setIntPref(MIGRATION, 0); // a fresh profile
+  await QuickSuggest._test_reset();
+
+  Assert.ok(Services.prefs.getIntPref(MIGRATION) > 0, "the migrations ran");
+  Assert.ok(Services.prefs.prefHasUserValue(SPONSORED), "Vimma's value is set again");
+  Assert.strictEqual(Services.prefs.getBoolPref(SPONSORED), false, "sponsored Suggest is off");
+});
+
 add_task(async function test_normandy_and_nimbus_do_not_run() {
   const { RecipeRunner } = ChromeUtils.importESModule(
     "resource://normandy/lib/RecipeRunner.sys.mjs",
@@ -117,8 +152,15 @@ add_task(async function test_normandy_and_nimbus_do_not_run() {
   Assert.strictEqual(ExperimentAPI.rolloutsEnabled, false, "Nimbus rollouts are disabled");
 });
 
-add_task(function test_no_crash_reporter() {
+add_task(function test_no_crash_reporter_or_telemetry_upload() {
   Assert.strictEqual(AppConstants.MOZ_CRASHREPORTER, false, "built without the crash reporter");
+  // A build with MOZILLA_OFFICIAL turns telemetry upload on; that must not slip in unnoticed.
+  Assert.strictEqual(AppConstants.MOZILLA_OFFICIAL, false, "not a MOZILLA_OFFICIAL build");
+  Assert.strictEqual(
+    AppConstants.MOZ_TELEMETRY_REPORTING,
+    false,
+    "built without telemetry reporting",
+  );
 });
 
 add_task(function test_security_services_stay_on() {
