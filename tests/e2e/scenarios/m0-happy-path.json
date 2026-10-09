@@ -1,0 +1,19 @@
+{
+  "name": "m0-happy-path",
+  "description": "M0: a real build starts with the control socket on, opens about:blank, and prefix+? opens the help overlay (mode help).",
+  "pending": "needs the browser-side control server (next spec, ctl/VimmaControl.sys.mjs); until it exists nothing writes vimma-control.json, so this would only time out",
+  "timeoutSeconds": 60,
+  "steps": [
+    { "wait-for-state": { "mode": "insert" }, "timeoutSeconds": 15 },
+    { "open": "about:blank" },
+    {
+      "wait-for-state": {
+        "tabs": [{ "selected": false }, { "url": "about:blank", "selected": true }]
+      }
+    },
+    { "keys": "ctrl+b ?" },
+    { "wait-for-state": { "mode": "help" } },
+    { "assert-state": { "mode": "help", "pending": null } },
+    { "screenshot": "m0-happy-path-help" }
+  ]
+}
