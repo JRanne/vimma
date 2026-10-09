@@ -1,6 +1,6 @@
 # ADR-013: Split panes build on Firefox's own split view, not on vendored Zen code
 
-- Status: Proposed
+- Status: Proposed — pending the sub-spec 1 spike (see Acceptance criteria)
 - Date: 2026-10-09
 - Supersedes: ADR-006 ("Split view is vendored from Zen")
 
@@ -31,10 +31,12 @@ own split view, and Zen 157.0.1 turns it off to keep its own. The M4 research
   panel per panel, the find bar per panel, DOM fullscreen from a pane (the `deck-selected` panel
   fills the window under `:root[inDOMFullscreen]` in `content-area.css`), SessionStore
   (`splitViewId` on tabs, `numberOfTabs` on the wrapper, restored by
-  `Tabbrowser.createTabsForSessionRestore` with no limit on n), hidden tabs (`hideTab` hides the whole wrapper), and the WebExtension
-  `splitViewId`.
+  `Tabbrowser.createTabsForSessionRestore` with no limit on n), hidden tabs (`hideTab` hides
+  the whole wrapper), and the WebExtension `splitViewId`.
 - Tested upstream: 18 mochitest files with 93 tasks under
   `browser/components/tabbrowser/test/browser/`, plus SessionStore and extension tests.
+- **More than two panes is permitted, not supported.** The API accepts n tabs, but no upstream
+  test uses more than two, and several code paths assume two (Known two-tab assumptions below).
 - **What it lacks:** the layout is two columns. `content-area.css` styles `column="0"` and `"1"`
   with one `.split-view-splitter`. `reverseTabs()` and `resetRightPanelWidth()` assume two tabs,
   and so do `ext-tabs.js` ("a split view has 2 tabs") and `TabsList.sys.mjs`. There are no rows
@@ -55,7 +57,7 @@ own split view, and Zen 157.0.1 turns it off to keep its own. The M4 research
   `Tabbrowser-sys-mjs.patch` (1,289 lines in all, 48 split-related lines: `splitViewBrowsers`
   redirected to Zen, `addTabGroup({ forSplitView })`, moves, restore and removal), plus
   `xul-css.patch`, `SessionStore`, `TabGroupState`, `tabs.js`, `tab.js`, `tabgroup.mjs`,
-  `drag-and-drop.js` and `tabs.css`: 22 upstream patch files mention split view.
+  `drag-and-drop.js` and `tabs.css`: 20 of Zen's upstream patch files are split-related.
 - It is locked against Firefox's split view (`prefs/firefox/browser.yaml`:
   `browser.tabs.splitView.enabled` false, locked).
 - `ZenViewSplitter.mjs` had 60 commits from 2026-01-01 to 2026-10-09 (GitHub API). Tracking it
@@ -82,9 +84,9 @@ flickers or breaks. It then gets its line in ADR-003's register.
 
 ## Reasoning
 
-- **Patches.** Vendoring Zen brings about 10 of its upstream hunks into at least 8 churny
-  front-end files. Disentangling them from Zen's folders, glance and workspaces is our own work,
-  and it is not tested anywhere. Building on Firefox needs public `gBrowser` APIs and CSS in our
+- **Patches.** Vendoring Zen brings split-related hunks from 20 of its upstream patch files,
+  most of them churny front-end files. Disentangling them from Zen's folders, glance and
+  workspaces is our own work, and it is not tested anywhere. Building on Firefox needs public `gBrowser` APIs and CSS in our
   own sheet. ADR-003 prefers the smaller patch set.
 - **Rebase risk.** Firefox's split view is maintained and tested by Mozilla in the same tree we
   rebase onto. Zen's patches are rebased by Zen on Zen's schedule. We would rebase a third-party
@@ -99,6 +101,57 @@ flickers or breaks. It then gets its line in ADR-003's register.
   of positioning that we would have had to adapt from Zen anyway.
 - **Licence.** Both are MPL-2.0. Building on Firefox needs no attribution beyond the tree we
   already ship.
+
+## Known two-tab assumptions and how we handle them
+
+| Upstream code                                                                        | Assumption                                                     | Handling                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reverseTabs()`, `resetRightPanelWidth()` (`tabsplitview.mjs:441`, `:317`)           | Exactly two tabs; right panel is `panels[1]`                   | Unused: swap is geometry only, and Firefox's splitter is hidden.                                                                                                                 |
+| `MozTabpanels.setSplitViewActive` (`tabbox.js:604-630`)                              | Orders panels 0 and 1 in the DOM and puts the splitter after 0 | Tab-key focus order across three or more panes follows DOM order, not reading order. Sub-spec 1 decides: the host reorders panels with `moveBefore`, or we accept it as a limit. |
+| `tab.updateSplitViewAriaLabel(index)` (`tab.js:1043`)                                | Labels "left" and "right" only                                 | The host sets the accessible label of a third or later tab itself after each `reconcile`.                                                                                        |
+| `TabsList.sys.mjs:887-889` (all-tabs drag targets), `ext-tabs.js:1155` (`tabs.move`) | `tabs[0]` / `tabs[1]`, "a split view has 2 tabs"               | Recorded in `docs/limits.md`; the all-tabs list is hidden with the tab strip.                                                                                                    |
+| Glean `splitview.*` labels (`tabsplitview.mjs:368`)                                  | Labels "1" and "2"                                             | Harmless: telemetry is off in Vimma.                                                                                                                                             |
+
+## Acceptance criteria (sub-spec 1 spike)
+
+This ADR becomes Accepted when the `m4-split-contract` spike shows all of the following on a
+local build, in `browser_vimma_split_contract.js` with wrappers of three and four tabs:
+
+1. An L shape (`x[p1, y[p2, p3]]`) and a four-pane grid render each panel at core's `layout()`
+   rectangle within ±1 px, with every member's docshell active.
+2. DOM fullscreen from one pane fills the window and exiting restores every rectangle within
+   ±1 px; the focus outline is on the focused pane only; the find bar and a notification bar
+   open in the right pane.
+3. `gBrowser.removeTab` on a member of a three-tab split does not throw on the next
+   `TabSelect`. If it throws, the contingency patch is adopted instead of rebuilds and gets its
+   ADR-003 line.
+4. After a rebuild (`unsplitTabs`, then `addTabSplitView`), the kept members are active and
+   the dropped member is inactive once the host deactivates it, with no scroll position lost.
+
+If any criterion fails without a fix in our own files or the one contingency patch, this ADR is
+rejected and M4 returns to ADR-006.
+
+## Verification
+
+Claims confirmed by an independent review of PR #25 against the engine tree (Firefox 157.0.1):
+
+- `browser/app/profile/firefox.js:2842`: `browser.tabs.splitView.enabled` defaults to `true`,
+  with no `#ifdef`.
+- `browser/components/tabbrowser/content/tabsplitview.mjs:332-358`: `addTabs` loops over any
+  number of tabs.
+- `browser/components/tabbrowser/Tabbrowser.sys.mjs:4090-4103`: `showSplitViewPanels` sets
+  `docShellIsActive = true` on every member.
+- `browser/components/tabbrowser/AsyncTabSwitcher.sys.mjs:940`: `shouldDeactivateDocShell`
+  skips `splitViewBrowsers`.
+- `toolkit/content/widgets/tabbox.js:372-397`: `focus` on a split browser, or a click in its
+  panel, selects its tab.
+- `browser/themes/shared/tabbrowser/content-area.css:364-470`: `#tabbrowser-tabpanels` is a
+  flexbox with a two-column split layout.
+- Firefox writes panel widths inline without `!important` (`tabsplitview.mjs:308`, `:321`;
+  `tabbox.js:471`), so our `!important` rules win.
+- `split-view-footer` is a light-DOM `MozXULElement` (`split-view-footer.js`), so our sheet can
+  hide it.
+- Zen: 20 upstream patch files carry split-related changes.
 
 ## Alternatives rejected
 
@@ -116,14 +169,14 @@ flickers or breaks. It then gets its line in ADR-003's register.
 - When a pane joins or leaves, we rebuild the wrapper (`unsplitTabs`, then `addTabSplitView`
   with the new list), because Firefox's wrapper cannot drop one tab out of three or more. The
   first sub-spec proves this with a contract mochitest, and the contingency patch above is the
-  fallback.
+  fallback. `unsplitTabs` does not deactivate the dropped tab's docshell, so the host does.
 - Firefox's own split-view entry points would create splits outside our model. We set
   `browser.tabs.splitView.enabled` to `false` in our branding prefs (it gates UI only), hide the
   URL bar's `#split-view-button` and the panel footers in our CSS, and adopt any split that
   still appears (an extension, the keyboard command) through `SplitViewCreated`.
 - `browser_vimma_split_contract.js` asserts every upstream behaviour we rely on, so a rebase that
   changes one fails CI instead of breaking panes silently.
-- Code that assumes two tabs per split stays upstream: extension `tabs.move` of a split tab and
-  the all-tabs list's labels. These are recorded in `docs/limits.md`.
+- Code that assumes two tabs per split stays upstream; the table above says how we handle each
+  case, and the ones we accept are recorded in `docs/limits.md`.
 - plan.md §1, §3 and §6 still say "vendor Zen". When this ADR is accepted, the same PR updates
   them to point here. ADR-006 stays as written, with this ADR superseding it.
