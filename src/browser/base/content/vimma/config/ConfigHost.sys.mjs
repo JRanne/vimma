@@ -13,6 +13,7 @@ import { formatConfigError, reloadConfig } from "../core/config.mjs";
 import { CONFIG_RELOAD_TOPIC, VimmaHost } from "../host/VimmaHost.sys.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
+import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
 
 /** @import { ActiveConfig, ConfigError, ResolvedConfig } from "../core/config.mjs" */
 
@@ -84,6 +85,9 @@ function apply(next) {
   VimmaHost.configure({ keymap, hintChars: config.hintChars, sites: config.sites });
   for (const win of windows) applyToWindow(win, config);
   ThemeHost.setConfig(config.theme);
+  WorkspaceStore.setConfig(config.workspaces).catch((e) =>
+    console.error("vimma: [workspaces] not applied", e),
+  );
 }
 
 /** @param {boolean} force  read even when the stat is unchanged (`:source`) */

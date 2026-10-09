@@ -226,3 +226,25 @@ add_task(async function theme_source_and_colors_feed_the_theme() {
   await until(() => barBackground() === rgb("#405060"), "no config: Omarchy again");
   await SpecialPowers.popPrefEnv();
 });
+
+add_task(async function workspaces_from_the_file_apply_live() {
+  const { WorkspaceStore } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/workspaces/WorkspaceStore.sys.mjs",
+  );
+  const { WindowWorkspaces } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/workspaces/WindowWorkspaces.sys.mjs",
+  );
+  const def = () => WorkspaceStore.definitions.workspaces.find((w) => w.name === "cfgws");
+  await writeConfig(`[workspaces.cfgws]\ncolor = "green"\nicon = "tree"`);
+  await until(() => def()?.source === "config", "[workspaces] reaches the store");
+  Assert.equal(def().color, "green", "with its colour");
+  Assert.ok(def().userContextId > 0, "and a container of its own");
+  await until(
+    () => WindowWorkspaces.get(window).model.workspaces.some((w) => w.id === def().id),
+    "the window has the new workspace",
+  );
+
+  await resetConfig();
+  await until(() => def()?.source === "runtime", "out of the file it becomes runtime");
+  await WorkspaceStore.deleteWorkspace(def().id, { confirmed: true });
+});
