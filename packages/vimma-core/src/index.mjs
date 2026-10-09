@@ -20,6 +20,7 @@ export * from "./escape.mjs";
 export * from "./panes.mjs";
 export * from "./workspaces.mjs";
 export * from "./snapshot.mjs";
+export * from "./splitplan.mjs";
 export * from "./textwidth.mjs";
 export * from "./tablabels.mjs";
 export * from "./whichkey.mjs";
