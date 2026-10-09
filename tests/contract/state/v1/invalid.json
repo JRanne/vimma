@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "active": "w1",
+  "next": 2,
+  "workspaces": [
+    {
+      "id": "w1",
+      "name": "work",
+      "container": "vimma-work",
+      "tabs": ["tab-a", "tab-b"],
+      "activeTab": "tab-a",
+      "panes": {
+        "root": {
+          "type": "split",
+          "axis": "x",
+          "ratios": [0.7, 0.7],
+          "children": [
+            { "type": "leaf", "pane": "p1", "tab": "tab-a" },
+            { "type": "leaf", "pane": "p2", "tab": "tab-b" }
+          ]
+        },
+        "focus": "p1",
+        "zoom": null,
+        "next": 3
+      }
+    }
+  ]
+}
