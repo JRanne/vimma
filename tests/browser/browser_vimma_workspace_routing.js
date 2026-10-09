@@ -175,6 +175,95 @@ add_task(async function an_opener_or_an_explicit_container_wins() {
   for (const tab of [fromLink, related, page, none, pinned]) BrowserTestUtils.removeTab(tab);
 });
 
+/**
+ * Waits for a new window whose tabs include one on `url`, and returns the window.
+ * @param {() => unknown} open @param {string} url
+ */
+async function windowOpenedOn(open, url) {
+  const opened = BrowserTestUtils.waitForNewWindow();
+  open();
+  const win = await opened;
+  await TestUtils.waitForCondition(
+    () => win.gBrowser.tabs.some((t) => t.linkedBrowser.currentURI.spec == url),
+    `a tab on ${url}`,
+  );
+  return win;
+}
+
+/** @param {Window} win */
+const containersOf = (win) => win.gBrowser.tabs.map((t) => t.userContextId);
+
+add_task(async function open_link_in_new_window_keeps_the_pages_container() {
+  const work = workspace("routing-ctx-page");
+  const personal = workspace("routing-ctx-active");
+  WorkspaceStore.setActive(window, personal.id);
+  const page = BrowserTestUtils.addTab(gBrowser, PAGE, { userContextId: work.userContextId });
+  gBrowser.selectedTab = page;
+  await BrowserTestUtils.browserLoaded(page.linkedBrowser);
+
+  const menu = document.getElementById("contentAreaContextMenu");
+  const shown = BrowserTestUtils.waitForPopupEvent(menu, "shown");
+  await BrowserTestUtils.synthesizeMouseAtCenter(
+    "#link",
+    { type: "contextmenu", button: 2 },
+    page.linkedBrowser,
+  );
+  await shown;
+  const hidden = BrowserTestUtils.waitForPopupEvent(menu, "hidden");
+  const url = new URL("file_vimma_cookie.html?from=link", PAGE).href;
+  const win = await windowOpenedOn(
+    () => menu.activateItem(document.getElementById("context-openlink")),
+    url,
+  );
+  await hidden;
+  Assert.deepEqual(
+    containersOf(win),
+    [work.userContextId],
+    "Open Link in New Window: one tab, in the page's container, not the active workspace's",
+  );
+  await BrowserTestUtils.closeWindow(win);
+  BrowserTestUtils.removeTab(page);
+});
+
+add_task(async function a_bookmark_or_typed_url_in_a_new_window_takes_the_workspaces() {
+  const work = workspace("routing-bookmark");
+  WorkspaceStore.setActive(window, work.id);
+  const url = `${PAGE}?from=bookmark`;
+  // What bookmark and URL-bar "open in new window" do: a trusted openLinkIn, no container.
+  const win = await windowOpenedOn(() => window.openTrustedLinkIn(url, "window"), url);
+  Assert.deepEqual(containersOf(win), [work.userContextId], "one tab, in work's container");
+  await BrowserTestUtils.closeWindow(win);
+});
+
+add_task(async function an_external_link_in_a_new_window_opens_one_tab_in_the_workspace() {
+  const work = workspace("routing-external-window");
+  WorkspaceStore.setActive(window, work.id);
+  const url = `${PAGE}?from=external-window`;
+  const win = await windowOpenedOn(
+    () =>
+      window.browserDOMWindow.openURI(
+        Services.io.newURI(url),
+        null,
+        Ci.nsIBrowserDOMWindow.OPEN_NEWWINDOW,
+        Ci.nsIBrowserDOMWindow.OPEN_EXTERNAL,
+        system(),
+      ),
+    url,
+  );
+  Assert.deepEqual(containersOf(win), [work.userContextId], "one tab, in work's container");
+  await BrowserTestUtils.closeWindow(win);
+});
+
+add_task(async function the_active_container_is_cached_for_the_next_start() {
+  const work = workspace("routing-cache");
+  WorkspaceStore.setActive(window, work.id);
+  Assert.equal(
+    Services.prefs.getIntPref("vimma.workspaces.startupUserContextId", 0),
+    work.userContextId,
+    "the next start routes its first tab without reading the file synchronously",
+  );
+});
+
 add_task(async function private_windows_are_untouched() {
   const work = workspace("routing-private");
   WorkspaceStore.setActive(window, work.id);

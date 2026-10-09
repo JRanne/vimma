@@ -6,7 +6,7 @@ declare const Services: {
     getBoolPref(name: string, defaultValue?: boolean): boolean;
     getIntPref(name: string, defaultValue?: number): number;
     setBoolPref(name: string, value: boolean): void;
-    getIntPref(name: string, defaultValue?: number): number;
+    setIntPref(name: string, value: number): void;
     prefHasUserValue(name: string): boolean;
     getDefaultBranch(root: string): {
       setBoolPref(name: string, value: boolean): void;

@@ -2,7 +2,7 @@
 
 Status: research and plan; split into sub-specs (see Breakdown). Sub-spec 1 (store) merged;
 sub-spec 2a (routing) implemented, awaiting review (see Settled) · Milestone: M3 · Area: host
-(`src/browser/base/content/vimma/workspaces/`, `ui/`), two upstream patch files (three hunks)
+(`src/browser/base/content/vimma/workspaces/`, `ui/`), four upstream patch files (five hunks)
 
 Plan §6 M3: container-backed workspaces; hidden tabs; `ctrl+i`/`ctrl+u`; a `prefix+w` picker; a
 `<leader>n` side panel with `panel` mode; SessionStore persistence and restore; `[workspaces]`
@@ -562,6 +562,8 @@ allowed).
 | ------------------------------------------------------------ | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/browser/components/tabbrowser/Tabbrowser-sys-mjs.patch` | 2     | `addTab`, after `openerTab` (3767-3772): `userContextId ??= openerTab?.userContextId ?? <our default>`. `#setupInitialBrowserAndTab`, after the `openWindowInfo` override (698-700): `userContextId ??= <our default>`. Decision 3. |
 | `src/browser/modules/BrowserDOMWindow-sys-mjs.patch`         | 1     | `#getContentWindowOrOpenURI` (256-259): no container guess for an external link → `null`, not 0, so `addTab` routes it. Decision 3, found in 2a.                                                                                    |
+| `src/browser/modules/URILoadingHelper-sys-mjs.patch`         | 1     | `openLinkIn`, before `updatePrincipals`: a new window with no container takes the opening page's, else the workspace's. Found in 2a's review.                                                                                       |
+| `src/browser/base/content/browser-init-js.patch`             | 1     | `_handleURIToLoad`: no `arguments[5]` → the first tab's container, not 0. Found in 2a's review.                                                                                                                                     |
 
 ADR-003 register line, added by sub-spec 2a with the patch: "`Tabbrowser-sys-mjs.patch`: tabs
 and a window's first tab opened with no container take the active workspace's container
@@ -735,6 +737,20 @@ dependency for 4b, 5 and parts of 4a.
   green after; the whole `tests/browser/` suite passes. Mutation check: dropping
   `openerTab?.userContextId ??` from hunk 1 fails the `relatedToCurrent` assertion (a link click
   passes its container explicitly, so it alone did not catch it).
+- **Privacy review (round 2):** two more paths opened in container 0, so two more one-hunk
+  patches. `URILoadingHelper-sys-mjs.patch`: `openLinkIn(url, "window")` (context-menu "Open Link
+  in New Window", bookmark and URL-bar new windows) packed an undefined container into
+  `window.arguments[5]` as an explicit 0; the hunk, before `updatePrincipals`, fills it with the
+  opening page's container (a content triggering principal) or else the active workspace's,
+  never for a private window. `browser-init-js.patch`: a new window's URL with no
+  `arguments[5]` (an external link opening a window) loaded with container 0 and so opened a
+  second tab beside the routed first tab; it now uses the first tab's container. The context
+  menu needs no patch of its own: its triggering principal carries the page's container. The
+  store caches `lastActive`'s container in `vimma.workspaces.startupUserContextId` on every
+  save, so a start routes its first tab without the synchronous file read (the read stays as
+  the fallback). Tests: context-menu "Open Link in New Window" from a page in another container
+  than the active one, `openTrustedLinkIn(url, "window")`, an external link opened as a window
+  (one tab), and the cache pref; all red before, green after.
 - **Not done here:** `foreign` marking needs the window model (2b). Bookmarks and `alt+enter` go
   through the same `addTab` path as `ctrl+t` and are not tested separately. Nothing
   user-visible yet (no switching), so no guide change.

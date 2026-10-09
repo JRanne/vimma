@@ -108,7 +108,8 @@ Workspaces are not built yet; these are the limits their design accepts
   containers and their data (Firefox's behaviour).
 - A corrupt `containers.json` makes Firefox reset containers; workspace logins can be lost and
   tabs come back marked `foreign`.
-- Pinned tabs are not supported: a pinned tab is unpinned. A tab sharing camera, microphone or
+- Pinned tabs are not supported: a pinned tab is unpinned. Until switching lands (M3 sub-spec
+  2b) a tab opened pinned stays in no container. A tab sharing camera, microphone or
   screen cannot be hidden and stays visible in other workspaces while it shares.
 - Tabs of hidden workspaces keep playing audio and are never unloaded automatically.
 - Closing the last tab opens a new tab instead of closing the window
