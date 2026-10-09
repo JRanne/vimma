@@ -38,6 +38,16 @@ export class HelpOverlay {
     this.opener = null;
   }
 
+  /**
+   * A new keymap (config.toml reloaded, m5-config-load): the rows are rebuilt from it; an open
+   * overlay closes, so it never lists bindings that no longer apply.
+   * @param {Keymap} keymap
+   */
+  setKeymap(keymap) {
+    this.destroy(); // the dialog is built from the rows once; the next open builds it anew
+    this.rows = bindingTable(keymap, { runnable: this.runnable });
+  }
+
   get isOpen() {
     return !!this.dialog?.open;
   }

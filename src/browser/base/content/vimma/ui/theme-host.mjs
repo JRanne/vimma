@@ -7,7 +7,8 @@
 // It starts on the built-in Tokyo Night and swaps in the user's Omarchy theme
 // (colors.toml, light.mode) once the async read completes, then polls the file (plan §3:
 // Firefox has no portable file watcher). vimma-core parses and validates (resolveTheme,
-// tokensToCss); this module only does the I/O and the injection.
+// tokensToCss); this module only does the I/O and the injection. config.toml's `[theme]`
+// (source, font, colors) arrives through `setConfig` (spec m5-config-load).
 
 import { resolveTheme, tokensToCss } from "../core/theme.mjs";
 
@@ -25,20 +26,31 @@ const DEFAULT_POLL_MS = 2000;
 /** Notified after new tokens reach the windows, and when a theme file is rejected. */
 const CHANGED_TOPIC = "vimma-theme-changed";
 const ERROR_TOPIC = "vimma-theme-error";
-const FONT = "monospace";
+/** @import { ResolvedConfig } from "../core/config.mjs" */
+
+/**
+ * config.toml's `[theme]` (core's resolved form); the defaults until ConfigHost has read it.
+ * @type {ResolvedConfig["theme"]}
+ */
+let configTheme = { source: "omarchy", font: "monospace", colors: {} };
 
 /** @param {string | null} omarchy  colors.toml text; null: the built-in theme */
 function cssFor(omarchy, lightMode = false) {
   const source = omarchy === null ? "file" : "omarchy";
   const r = resolveTheme({
-    theme: { source, font: FONT, colors: {} },
+    theme: { ...configTheme, source },
     omarchy,
     omarchyLightMode: lightMode,
   });
   return { css: tokensToCss(r.tokens, ":root"), errors: r.errors, warnings: r.warnings };
 }
 
-const BUILTIN_CSS = cssFor(null).css;
+/** Tokyo Night with config.toml's font and `[theme.colors]` (they overlay either source). */
+function builtinCss() {
+  const r = cssFor(null);
+  for (const e of r.errors) console.warn(`vimma: [theme.colors] ${e.path} ${e.message}`);
+  return r.css;
+}
 
 /** @param {string} css */
 const sheetUri = (css) => `data:text/css;charset=utf-8,${encodeURIComponent(css)}`;
@@ -54,7 +66,7 @@ function themeDir() {
 /** IOUtils rejects with a DOMException named NotFoundError for a missing file. */
 const notFound = (/** @type {unknown} */ e) => /** @type {any} */ (e)?.name === "NotFoundError";
 
-let css = BUILTIN_CSS;
+let css = builtinCss();
 /** @type {Map<Window, string>} each window's token sheet (a data: URI of `css`) */
 const windows = new Map();
 /** @type {Set<WeakRef<HTMLStyleElement>>} start pages' token <style> elements */
@@ -105,9 +117,13 @@ async function stat(dir) {
 }
 
 async function check() {
-  if (Services.prefs.getStringPref(SOURCE_PREF, "omarchy") === "builtin") {
+  // The pref (tests, about:config) and config.toml's source = "file" both mean "no Omarchy".
+  if (
+    Services.prefs.getStringPref(SOURCE_PREF, "omarchy") === "builtin" ||
+    configTheme.source === "file"
+  ) {
     signature = "builtin";
-    apply(BUILTIN_CSS);
+    apply(builtinCss());
     return;
   }
   const dir = themeDir();
@@ -116,7 +132,7 @@ async function check() {
     // Omarchy absent: Tokyo Night. Once a theme is showing, a missing file is far more likely
     // omarchy-theme-set between its rm and mv: keep the theme until the next one appears.
     signature = "missing";
-    if (!loaded) apply(BUILTIN_CSS);
+    if (!loaded) apply(builtinCss());
     return;
   }
   if (now === signature) return;
@@ -166,6 +182,13 @@ function stopTimer() {
   timer = null;
 }
 
+/** Reads the theme again from scratch once the running check (with the old settings) is done. */
+function recheck() {
+  signature = "";
+  loaded = false;
+  (running ?? Promise.resolve()).then(poll);
+}
+
 /**
  * @param {unknown} _subject
  * @param {string} _topic
@@ -176,10 +199,7 @@ function onPref(_subject, _topic, pref) {
     if (timer !== null) startTimer();
     return;
   }
-  signature = "";
-  loaded = false;
-  // A check already running read the old prefs: check again once it is done.
-  (running ?? Promise.resolve()).then(poll);
+  recheck();
 }
 
 function start() {
@@ -231,6 +251,18 @@ export const ThemeHost = {
     style.textContent = css;
     doc.head.append(style);
     styles.add(new WeakRef(style));
+  },
+
+  /**
+   * config.toml's `[theme]` (m5-config-load): `source` "file" stops following Omarchy; `font` and
+   * `colors` overlay either source. Unchanged settings cost nothing.
+   * @param {ResolvedConfig["theme"]} theme
+   */
+  setConfig(theme) {
+    const next = { source: theme.source, font: theme.font, colors: { ...theme.colors } };
+    if (JSON.stringify(next) === JSON.stringify(configTheme)) return;
+    configTheme = next;
+    recheck();
   },
 
   /** The token stylesheet in force (tests, about:vimma later). */

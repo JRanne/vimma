@@ -47,9 +47,12 @@ delete its line in the same PR.
   leaves them stale. Frames inside a CSS-transformed `<iframe>` get misplaced labels, and a
   frame that takes over 150 ms to answer (busy) gets none that time. `F` does not open `blob:`
   links ([m1-hints](specs/m1-hints.md), Limits).
-- `config.toml` is not read by the browser. Its validator exists in `vimma-core`, but loading,
-  polling, `:source` and its `[theme]` table (font, colour overrides) wait for the M5 host spec
-  ([m5-core-config-and-theme](specs/m5-core-config-and-theme.md)).
+- `config.toml` changes show up to 2 s late (the poll; `:source` is at once). Two saves within
+  one millisecond that keep the file's size are seen as one. `[workspaces]` is validated but not
+  applied: the workspace store reads its definitions once at startup and has no runtime seam yet.
+  Only the first error is in the status bar (all are in the Browser Console; `about:vimma` is
+  later). Overridden bindings are not marked in `ctrl+b ?`; `:source <path>` and `:config` do not
+  exist ([m5-config-load](specs/m5-config-load.md)).
 - An Omarchy theme change shows up to 2 s late: Vimma polls `colors.toml`'s stat every 2 s
   (Firefox has no portable file watcher; plan §3). A `theme-set.d` hook through the control
   socket could make it instant later ([m5-omarchy-theme](specs/m5-omarchy-theme.md), Limits).
@@ -233,9 +236,8 @@ accepts
 
 ## Files and profiles
 
-- `~/.config/vimma/` holds both `config.toml` (M5) and the profiles (`vimma/`). The M5 config
-  loader must read only `config.toml` and never scan the folder
-  ([m5-core-config-and-theme](specs/m5-core-config-and-theme.md), host spec;
+- `~/.config/vimma/` holds both `config.toml` and the profiles (`vimma/`). The config loader
+  reads only `config.toml` and never scans the folder ([m5-config-load](specs/m5-config-load.md);
   [m0-branding](specs/m0-branding.md), Settled).
 
 ## Branding

@@ -1,6 +1,6 @@
 # Spec: m5-core-config-and-theme
 
-Status: implemented (core), awaiting review; host wiring pending · Milestone: M5 · Area: `packages/vimma-core`
+Status: implemented (core); host wiring in [m5-config-load](m5-config-load.md) · Milestone: M5 · Area: `packages/vimma-core`
 
 ## User stories
 

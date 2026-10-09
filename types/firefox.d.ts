@@ -54,6 +54,8 @@ declare const Services: {
   uuid: { generateUUID(): { toString(): string } };
   // engine/xpcom/io/nsIDirectoryService.idl (nsIProperties)
   dirsvc: { get(prop: string, iface: unknown): { readonly path: string } };
+  // engine/xpcom/system/nsIEnvironment.idl ("" for an unset variable)
+  env: { get(name: string): string; exists(name: string): boolean };
   // engine/xpcom/base/nsIWindowMediator.idl
   wm: { getMostRecentWindow(type: string): Window | null };
 };

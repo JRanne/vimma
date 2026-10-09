@@ -48,6 +48,13 @@
   );
   PaneViews.init(window);
 
+  // config.toml (spec m5-config-load), once its users exist: the keymap, [panes] max, hints,
+  // [sites] and [theme]. Read asynchronously; until then the built-in defaults apply.
+  const { ConfigHost } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/config/ConfigHost.sys.mjs",
+  );
+  ConfigHost.init(window);
+
   // One control server per app (spec m0-control-server); off unless vimma.control.enabled.
   const { VimmaControl } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/ctl/VimmaControl.sys.mjs",

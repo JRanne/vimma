@@ -3,7 +3,7 @@
 Status: implemented, awaiting review · Area: UI (`src/browser/base/content/vimma/ui/theme-host.mjs`,
 `vimma.js`, `ui/statusbar.mjs`, `start/start.mjs`)
 
-The theme half of M5. `config.toml` loading and its `[theme]` table are a later spec.
+The theme half of M5. `config.toml` loading and its `[theme]` table: [m5-config-load](m5-config-load.md).
 
 ## User story
 

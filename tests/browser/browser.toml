@@ -2,7 +2,9 @@
 support-files = ["head.js"]
 # Hermetic colours: the developer's own Omarchy theme must not reach other tests' assertions.
 # browser_vimma_theme.js turns it back on for its fixtures (spec m5-omarchy-theme).
-prefs = ["vimma.theme.source=builtin"]
+# The same for config.toml: the developer's own file must not rebind keys under other tests
+# (m5-config-load); browser_vimma_config.js points the path at its own temporary file.
+prefs = ["vimma.theme.source=builtin", "vimma.config.path=/nonexistent/vimma-test/config.toml"]
 
 ["browser_vimma_help_overlay.js"]
 support-files = ["file_vimma_test.pdf"]
@@ -88,6 +90,8 @@ support-files = [
 support-files = ["file_vimma_cookie.html"]
 
 ["browser_vimma_workspace_switching.js"]
+
+["browser_vimma_config.js"]
 
 ["browser_vimma_theme.js"]
 run-if = ["os == 'linux'"] # ln -s for the omarchy-theme-set symlink swap
