@@ -74,14 +74,14 @@ Placeholder artwork: `configs/branding/vimma/*.svg`, rendered by `tools/branding
 
 ## CI and automation (spec m0-pipeline)
 
-| Workflow       | Trigger                       | Runner                    | Needs from you                               |
-| -------------- | ----------------------------- | ------------------------- | -------------------------------------------- |
-| `ci.yml`       | push to `main`, PRs, manual   | `ubuntu-latest`           | nothing                                      |
-| `e2e.yml`      | every PR                      | `ubuntu-latest`           | nothing (no-op until the build-strategy ADR) |
-| `nightly.yml`  | 03:00 UTC, manual             | self-hosted `vimma-build` | register the runner, set `NIGHTLY_ENABLED`   |
-| `upstream.yml` | every 6 h (`:17`), manual     | `ubuntu-latest`           | allow Actions to open PRs; optional token    |
-| `claude.yml`   | `@claude`, `spec`+`claude:go` | `ubuntu-latest`           | a secret, two labels, Actions may open PRs   |
-| Renovate       | Mondays before 07:00 Helsinki | Renovate's own            | install the Renovate app                     |
+| Workflow       | Trigger                          | Runner                    | Needs from you                             |
+| -------------- | -------------------------------- | ------------------------- | ------------------------------------------ |
+| `ci.yml`       | push to `main`, PRs, manual      | `ubuntu-latest`           | nothing                                    |
+| `e2e.yml`      | PRs touching the browser, manual | `ubuntu-24.04`            | nothing (ADR-010)                          |
+| `nightly.yml`  | 03:00 UTC, manual                | self-hosted `vimma-build` | register the runner, set `NIGHTLY_ENABLED` |
+| `upstream.yml` | every 6 h (`:17`), manual        | `ubuntu-latest`           | allow Actions to open PRs; optional token  |
+| `claude.yml`   | `@claude`, `spec`+`claude:go`    | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
+| Renovate       | Mondays before 07:00 Helsinki    | Renovate's own            | install the Renovate app                   |
 
 Locally, before pushing: `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:py`,
 `npm run license-check`, `npx surfer license-check`, `npx commitlint --from main`.
@@ -102,12 +102,38 @@ Claude-written code with that token (claude.yml's Claude job is read-only), Clau
 the owner (`claude:go` added by the owner; `@claude` from owner/member/collaborator), and GitHub
 Actions minutes and logs show every push. Check `git log origin/main` if anything looks off.
 
+### PR mochitests (`e2e.yml`, ADR-010)
+
+PRs run `tests/browser/` on an **artifact build**: our front end built on Mozilla's compiled
+binaries for the release in `surfer.json`, on a GitHub-hosted runner. No runner, secret or
+variable to set up. Same thing locally, next to the full build (≈ 0.6 GB, `engine/obj-artifact`):
+
+```sh
+npm run import
+node tools/artifact-build/artifact-build.mjs     # ~25 s warm; first run downloads 163 MB
+npm run mochitest -- --artifact tests/browser/
+```
+
+It runs only when a PR touches `src/`, `tests/browser/`, `packages/vimma-core/`, `configs/`,
+`surfer.json`, `package*.json`, the tools it uses or `e2e.yml` (paths filter). For a PR opened
+with `GITHUB_TOKEN`, mark it ready for review or `gh workflow run e2e.yml --ref <branch>`.
+
+What it does not cover: compiled-in build config (C++ defines, `--disable-crashreporter`). Tests
+of that carry `skip-if = ["artifact"]` in `tests/browser/browser.toml` and run in the nightly
+(full build) and locally with plain `npm run mochitest`. If the job fails with "no built
+artifacts found", Mozilla's index has no shippable linux64 build for `engine/sourcestamp.txt`'s
+revision (release tasks are kept a year): check `surfer.json` points at a real release.
+
+Fork PRs (once public) run the same job with a read-only token and no secrets; GitHub asks you
+to approve the first run of a first-time contributor (Settings → Actions → General).
+
 ### Actions minutes budget
 
 The free plan has a limited monthly budget of minutes for private repos, billed per job and rounded
-up to the minute. Rough use: CI ≈ 2 min and e2e ≈ 1 min per PR push; upstream 4 × 1 min a day
-(≈ 120 min a month); claude.yml only when triggered. `nightly.yml` uses the self-hosted runner,
-which costs no hosted minutes. Check usage in Settings → Billing → Usage.
+up to the minute. Rough use: CI ≈ 2 min per PR push, e2e ≈ 6 min per PR push that touches the
+browser (5.5 min wall, ADR-010); upstream 4 × 1 min a day (≈ 120 min a month); claude.yml only
+when triggered. `nightly.yml` uses the self-hosted runner, which costs no hosted minutes. Check usage in Settings → Billing → Usage. Once the repo is public,
+standard hosted runners are free and unlimited; the e2e paths filter can then go.
 
 ### Nightly build runner (`nightly.yml`)
 
