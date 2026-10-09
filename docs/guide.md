@@ -102,9 +102,10 @@ for bindings that do not run yet are dimmed, under a legend that says so.
 - **M1, the modal page layer:** scrolling (`j k h l`, `d`/`u`, `gg`/`G`), back and forward
   (`H`/`L`), reload (`r`), link hints (`f`/`F`), find (`/ ? n N`), the `:` command line, copy mode
   (`v`, `ctrl+b [`), `i` to focus the first input, and `Esc` back to normal mode.
-- **M2, the rest of tabs:** `ctrl+b shift+t` rename, the `ctrl+b g` picker, the status bar and
-  the which-key strip. `t`, `x`, `gt`/`gT` and `3gt` already run the same tab commands once M1's
-  normal mode exists.
+- **M2, the rest of tabs:** `ctrl+b shift+t` rename (kept across restarts; an empty name
+  restores the page title), the `ctrl+b g` picker (`j`/`k` to move, `/` to search titles, URLs,
+  workspaces and renames, `Enter` to go, `Esc` to back out), the status bar and the which-key
+  strip. `t`, `x`, `gt`/`gT` and `3gt` run the same tab commands once M1's normal mode exists.
 - **M3, workspaces and the side panel:** `ctrl+i`/`ctrl+u` next/previous workspace, the
   `ctrl+b w` picker, new/rename/close workspace, and `ctrl+b b` or `<leader>n` for the side panel.
   Until then `ctrl+i` and `ctrl+u` keep Firefox's meaning (page info, view source).

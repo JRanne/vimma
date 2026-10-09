@@ -28,7 +28,8 @@ moment, and the `ctrl+b ?` overlay shows at a glance which bindings run today.
 - **Overlay:** `HelpOverlay(win, keymap, runnable)`; rows get `data-runnable="true|false"`,
   not-yet rows are dimmed (`opacity: 0.45`) and carry `aria-description="not implemented yet"`;
   a legend "Dimmed rows: not implemented yet" sits under the header. Without `runnable` (tests
-  that build an overlay by hand) nothing is marked.
+  that build an overlay by hand) every row counts as runnable, as core's default, and there is
+  no legend.
 - **One source of truth:** `RUNNABLE = new Set(Object.keys(RUNNERS))`, exported by the host.
   `_dispatch` uses it to pass or consume, `_run` shows the notice for what is not in it, and the
   overlay dims what is not in it.
@@ -91,9 +92,9 @@ action set).
   `#browser`: the top layer puts it above remote content and the modal help overlay, and
   `showPopover()` does not move focus (asserted). One element per window, removed on
   `VimmaHost.uninit`; the stylesheet is loaded once per window, as the overlay's.
-- **The overlay dims in the UI**, not through `bindingTable`: PR #22 (core M2, unmerged) adds
-  `bindingTable(keymap, { runnable })` and `isRunnable(id, runnable)` (`runnable.has(id)`, the
-  same rule). After it merges, switch `HelpOverlay` to it; the marks and tests stay.
+- **The overlay marks rows through core's `bindingTable(keymap, { runnable })`** (M2 core, #22):
+  `isRunnable` is the same rule the which-key strip will use, so the strip can take the host's
+  `RUNNABLE` too when it is wired.
 - **M3 seam.** `host/tab-ops.mjs` `selectableTabs(win)` is the only place that decides which tabs
   the keys count. M3 returns the active workspace's tabs in its model order (m3-m4-core-models
   `selectTab`/`openTab`/`closeTab`) and routes `tab.new`/`tab.close` through the model; the
@@ -101,7 +102,7 @@ action set).
 - **Race-free page-key checks** (#14, #18): `head.js` from the flaky fix (#24). Each tab awaits
   `recordPageKeys`, then `focusContent`; then the key; then `waitForPageKey` for a sentinel `j`
   and `pageKeys`. Never `waitForContentEvent` before a key.
-- **After merging main** (lanes #20, flaky fix #24, M1 core #21, updater #15): full
+- **After merging main** (lanes #20, flaky fix #24, M1 core #21, updater #15, M2 core #22): full
   `tests/browser/` 300/0 on the artifact build.
 - **Verified:** red (host without the runners): 45 passed / 10 failed (no tab opened, `n` did not
   move, digits did not select, `shift+x` timed out); overlay red 32/15 (no marks, no legend).
