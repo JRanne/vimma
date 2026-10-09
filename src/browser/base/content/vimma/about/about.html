@@ -1,0 +1,39 @@
+<!doctype html>
+
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
+<!-- about:vimma (spec: docs/specs/m5-about-vimma.md). Read-only: about.mjs fills each section
+   - from AboutVimma.collect() on load and on Refresh; r (page.reload) reloads the page. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="dark light" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src chrome:; style-src chrome: 'unsafe-inline'; connect-src chrome:; object-src 'none'"
+    />
+    <title>about:vimma</title>
+    <link rel="stylesheet" href="chrome://browser/skin/vimma/about.css" />
+    <script type="module" src="chrome://browser/content/vimma/about/about.mjs"></script>
+  </head>
+  <body>
+    <header>
+      <h1>about:vimma</h1>
+      <button id="refresh" type="button">Refresh</button>
+      <button id="copy" type="button">Copy redacted report</button>
+      <span id="status" role="status"></span>
+    </header>
+    <p class="hint">j / k scroll · r reloads · :bug copies a redacted report</p>
+    <section id="version"><h2>Version</h2></section>
+    <section id="patches"><h2>Upstream patches</h2></section>
+    <section id="modes"><h2>Modes</h2></section>
+    <section id="keys"><h2>Last key events</h2></section>
+    <section id="config"><h2>Config</h2></section>
+    <section id="theme"><h2>Theme</h2></section>
+    <section id="workspaces"><h2>Workspaces</h2></section>
+    <section id="control"><h2>Control socket</h2></section>
+    <section id="bindings"><h2>Bindings</h2></section>
+  </body>
+</html>

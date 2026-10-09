@@ -17,6 +17,7 @@ import { ACTIONS, closest, resolveActionName } from "./actions.mjs";
  * @property {"none" | "optional" | "required"} argument
  * @property {string} action       the action id, run without text (or with it, absent textAction)
  * @property {string} [textAction] the action id when text is given, if it differs
+ * @property {string} [text]       fixed text the action always runs with (`:about`)
  * @property {string} description
  */
 /** @typedef {{ code: string, message: string, suggestions: readonly string[] }} CommandError */
@@ -39,16 +40,17 @@ import { ACTIONS, closest, resolveActionName } from "./actions.mjs";
  * @param {CommandDef["argument"]} argument
  * @param {string} action
  * @param {string} description
- * @param {{ aliases?: string[], textAction?: string }} [extra]
+ * @param {{ aliases?: string[], textAction?: string, text?: string }} [extra]
  * @returns {CommandDef}
  */
-const cmd = (name, argument, action, description, { aliases = [], textAction } = {}) =>
+const cmd = (name, argument, action, description, { aliases = [], textAction, text } = {}) =>
   Object.freeze({
     name,
     aliases: Object.freeze(aliases),
     argument,
     action,
     ...(textAction ? { textAction } : {}),
+    ...(text ? { text } : {}),
     description,
   });
 
@@ -73,6 +75,14 @@ export const COMMANDS = Object.freeze([
   cmd("map", "none", "help.show", "Show all bindings"),
   cmd("help", "none", "help.show", "Show all bindings", { aliases: ["h"] }),
   cmd("source", "none", "config.reload", "Reload config"),
+  // about:vimma (m5-about-vimma): a fixed URL for tab.new, so no new action or host runner.
+  cmd("about", "none", "tab.new", "Open about:vimma (diagnostics)", {
+    aliases: ["vimma"],
+    text: "about:vimma",
+  }),
+  cmd("bug", "none", "tab.new", "Copy a redacted about:vimma report", {
+    text: "about:vimma#bug",
+  }),
 ]);
 
 /**
@@ -185,7 +195,7 @@ export function parseCommandLine(line) {
     return fail("missing-argument", `:${command.name} needs an argument`);
   }
   const id = text && command.textAction ? command.textAction : command.action;
-  return runResult(command.name, { id }, text);
+  return runResult(command.name, { id }, command.text ?? text);
 }
 
 /**

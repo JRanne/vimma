@@ -50,8 +50,8 @@ delete its line in the same PR.
 - `config.toml` changes show up to 2 s late (the poll; `:source` is at once). Two saves within
   one millisecond that keep the file's size are seen as one. A workspace removed from
   `[workspaces]` stays, as a runtime workspace with its tabs and container.
-  Only the first error is in the status bar (all are in the Browser Console; `about:vimma` is
-  later). Overridden bindings are not marked in `ctrl+b ?`; `:source <path>` and `:config` do not
+  Only the first error is in the status bar (all are in the Browser Console and
+  `about:vimma`). Overridden bindings are not marked in `ctrl+b ?`; `:source <path>` and `:config` do not
   exist ([m5-config-load](specs/m5-config-load.md)).
 - An Omarchy theme change shows up to 2 s late: Vimma polls `colors.toml`'s stat every 2 s
   (Firefox has no portable file watcher; plan §3). A `theme-set.d` hook through the control
@@ -62,6 +62,12 @@ delete its line in the same PR.
   ([m5-omarchy-theme](specs/m5-omarchy-theme.md)).
 - The overlay has legible defaults only: no theme tokens yet (M5)
   ([m0-help-overlay](specs/m0-help-overlay.md)).
+- `about:vimma` is read when it opens: `r` or Refresh updates it, it does not follow changes
+  live. It is registered when the first window opens, so a session that restores an
+  `about:vimma` tab before that shows Firefox's error page until reloaded. Its key log keeps
+  the last 20 keys Vimma dispatched; keys the goto picker, the `/` search and the help filter
+  take are not in it, and an ambiguous key resolved by its timeout shows as `…`. `:bug` copies
+  to the clipboard only; it writes no file ([m5-about-vimma](specs/m5-about-vimma.md)).
 
 ## Find
 

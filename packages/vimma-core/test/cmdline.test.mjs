@@ -51,6 +51,9 @@ describe("parseCommandLine: plan §2 commands", () => {
     [":help", run("help", "help.show")],
     [":h", run("help", "help.show")],
     [":source", run("source", "config.reload")],
+    [":about", run("about", "tab.new", { text: "about:vimma" })],
+    [":vimma", run("about", "tab.new", { text: "about:vimma" })],
+    [":bug", run("bug", "tab.new", { text: "about:vimma#bug" })],
     [":open example.com", run("open", "page.open", { text: "example.com" })],
     ["  :  open   example.com  ", run("open", "page.open", { text: "example.com" })],
     [":TABNEW", run("tabnew", "tab.new")],
@@ -66,6 +69,7 @@ describe("parseCommandLine: plan §2 commands", () => {
     [":q now", "unexpected-argument"],
     [":map j k", "unexpected-argument"],
     [":ls x", "unexpected-argument"],
+    [":about x", "unexpected-argument"],
   ])("%j → %s", (text, code) => {
     const r = parseCommandLine(text);
     expect(r.kind).toBe("error");
