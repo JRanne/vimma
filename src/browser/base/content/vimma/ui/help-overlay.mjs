@@ -14,6 +14,8 @@ import { bindingTable, filterBindings } from "../core/help.mjs";
 export const HELP_OVERLAY_ID = "vimma-help";
 const STYLESHEET = "chrome://browser/skin/vimma/help-overlay.css";
 const HTML_NS = "http://www.w3.org/1999/xhtml";
+/** @type {WeakSet<Window>} windows our stylesheet is loaded into */
+const styled = new WeakSet();
 
 export class HelpOverlay {
   /**
@@ -28,6 +30,8 @@ export class HelpOverlay {
     this.dialog = null;
     /** @type {HTMLInputElement | null} */
     this.input = null;
+    /** @type {Element | null} focused before open; close() falls back if it is gone */
+    this.opener = null;
   }
 
   get isOpen() {
@@ -45,18 +49,40 @@ export class HelpOverlay {
 
   open() {
     if (this.isOpen) return;
+    this.opener = Services.focus.focusedElement;
     const dialog = this.dialog ?? this.build();
     /** @type {HTMLInputElement} */ (this.input).value = "";
     this.applyFilter();
     dialog.showModal();
     dialog.scrollTop = 0;
+    // Not redundant: showModal() focuses the first focusable descendant, the filter input.
     dialog.focus();
   }
 
-  /** HTMLDialogElement.close() returns focus to where it was before showModal(). */
-  close() {
+  /**
+   * HTMLDialogElement.close() returns focus to where it was before showModal(). When the tab
+   * changed underneath (`tabChanged`) or that element is gone, focus the selected browser
+   * instead of a dying one or nothing.
+   * @param {{ tabChanged?: boolean }} [options]
+   */
+  close({ tabChanged = false } = {}) {
     if (!this.isOpen) return;
     /** @type {HTMLDialogElement} */ (this.dialog).close();
+    const opener = this.opener;
+    this.opener = null;
+    if (tabChanged || !opener?.isConnected) {
+      /** @type {{ gBrowser?: { selectedBrowser: HTMLElement } }} */ (
+        /** @type {unknown} */ (this.win)
+      ).gBrowser?.selectedBrowser.focus();
+    }
+  }
+
+  /** Close and remove the dialog (VimmaHost.uninit). */
+  destroy() {
+    this.close();
+    this.dialog?.remove();
+    this.dialog = null;
+    this.input = null;
   }
 
   focusFilter() {
@@ -85,7 +111,11 @@ export class HelpOverlay {
    */
   build() {
     const doc = this.win.document;
-    this.win.windowUtils.loadSheetUsingURIString(STYLESHEET, this.win.windowUtils.AUTHOR_SHEET);
+    if (!styled.has(this.win)) {
+      // Loading the same sheet twice throws NS_ERROR_ILLEGAL_VALUE (re-init, a second overlay).
+      this.win.windowUtils.loadSheetUsingURIString(STYLESHEET, this.win.windowUtils.AUTHOR_SHEET);
+      styled.add(this.win);
+    }
 
     /**
      * @param {string} tag

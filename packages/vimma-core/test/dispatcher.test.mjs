@@ -114,6 +114,28 @@ describe("dispatcher (spec acceptance criteria)", () => {
     });
   });
 
+  test("ambiguous() is true only while flush() would resolve to an action", () => {
+    const d = make({ modal: { normal: { g: "tab.new", gg: "scroll.top" } } });
+    expect(d.ambiguous()).toBe(false);
+    feed(d, "normal", "g");
+    expect(d.ambiguous()).toBe(true);
+    d.dispatch("normal", parseKey("g"));
+    expect(d.ambiguous()).toBe(false);
+  });
+
+  test("a bare prefix, a dead modal prefix and a count are pending but not ambiguous", () => {
+    const d = make();
+    feed(d, "insert", "ctrl+b");
+    expect(d.pending()).toEqual(["prefix"]);
+    expect(d.ambiguous()).toBe(false);
+    d.reset();
+    feed(d, "normal", "g");
+    expect(d.ambiguous()).toBe(false);
+    d.reset();
+    feed(d, "normal", "3");
+    expect(d.ambiguous()).toBe(false);
+  });
+
   test("flush with nothing pending returns null; flush on a dead prefix cancels", () => {
     const d = make();
     expect(d.flush()).toBeNull();

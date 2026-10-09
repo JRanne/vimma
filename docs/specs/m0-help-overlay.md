@@ -11,7 +11,8 @@ and the PDF viewer; I can type `/` to filter and `Esc` to close.
 
 - Host wires `createDispatcher(compileKeymap())` into the keydown handler from m0-key-capture:
   `action` and `pending` and `cancel` call `preventDefault()` + `stopPropagation()`; `pass` does nothing.
-  `flush()` runs on a `timeoutMs` timer; `replay: true` re-dispatches the same chord.
+  `flush()` runs on a `timeoutMs` timer only while `ambiguous()` (ADR-009; a bare prefix never
+  times out); `replay: true` re-dispatches the same chord.
 - `ui/help-overlay.mjs` + `browser/themes/shared/vimma/help-overlay.css`: a chrome-level panel
   (not in content) rendering `bindingTable(keymap)` grouped by `group`; overrides marked `*`.
 - Mode `help` while open: `/` focuses a filter input (`filterBindings`), `Esc`/`q` closes.
@@ -58,3 +59,15 @@ vimma/help-overlay.css`); the overlay loads it with `windowUtils.loadSheetUsingU
   (author sheet) on first open.
 - **PDF test fixture:** `tests/browser/file_vimma_test.pdf` is a hand-written one-page PDF (no
   third-party licence); pdf.js tests' own fixtures are not installed when only our manifest runs.
+- **Review round 1 (2026-10-09):**
+  - A bare prefix no longer times out: the timer is armed only when `dispatcher.ambiguous()`
+    (new core API, ADR-009). `ctrl+b`, a pause, `?` still opens help.
+  - Help mode is modal for keys too: every key that reaches the dispatcher while the overlay is
+    open is consumed, handled or not (`ctrl+w` no longer closes the tab underneath). The filter
+    input still gets plain keys. As a fallback, `TabSelect` closes the overlay and focuses the
+    newly selected browser (a script closing the tab underneath).
+  - `VimmaHost.uninit` removes the `<dialog>`; the stylesheet is loaded once per window.
+  - `dialog.focus()` after `showModal()` stays: without it `showModal()` focuses the filter input,
+    so `q` and `/` would be typed into it.
+  - **Revisit in M1:** "an unrunnable single-key action passes through" is an M0 stopgap. Once
+    `normal` mode and the content actor are real, decide per action whether it is consumed.
