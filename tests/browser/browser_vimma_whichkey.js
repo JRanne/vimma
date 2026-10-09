@@ -44,7 +44,7 @@ function pendingText() {
 
 registerCleanupFunction(() => {
   // Leave nothing pending for the next file.
-  if (shown()) EventUtils.synthesizeKey("KEY_Escape");
+  if (VimmaHost.status(window).pending.length) EventUtils.synthesizeKey("KEY_Escape");
   const help = $("vimma-help");
   if (help?.open) help.close();
 });
@@ -96,6 +96,32 @@ add_task(async function unbuilt_actions_are_greyed() {
   Assert.greater(greyed, 0, "unbuilt actions (panes, workspaces) are greyed");
   const dim = getComputedStyle(entries().find((e) => e.getAttribute("aria-disabled"))).color;
   Assert.notEqual(dim, getComputedStyle(entry("?")).color, "greyed entries look different");
+  EventUtils.synthesizeKey("KEY_Escape");
+  await until(() => !shown(), "hidden again");
+});
+
+add_task(async function a_clipped_strip_says_how_many_more() {
+  EventUtils.synthesizeKey("b", { ctrlKey: true });
+  await until(shown, "strip shown");
+  const hint = () => strip().querySelector(".vimma-wk-clipped");
+  const outside = () => {
+    const box = strip().getBoundingClientRect();
+    return entries().filter((e) => {
+      const r = e.getBoundingClientRect();
+      return r.bottom > box.bottom + 0.5 || r.right > box.right + 0.5;
+    }).length;
+  };
+  // The test window may be short enough for 40vh to clip already: start from no limit.
+  strip().style.maxHeight = "none";
+  await until(() => hint().hidden, "no hint when every entry fits");
+  Assert.equal(outside(), 0, "and every entry does fit");
+  strip().style.maxHeight = "40px";
+  await until(() => !hint().hidden, "a hint once the strip is clipped");
+  Assert.greater(outside(), 0, "some entries are clipped");
+  await until(() => hint().textContent === `…${outside()} more`, "the hint counts them");
+  strip().style.maxHeight = "none";
+  await until(() => hint().hidden, "the hint goes when everything fits again");
+  strip().style.removeProperty("max-height");
   EventUtils.synthesizeKey("KEY_Escape");
   await until(() => !shown(), "hidden again");
 });

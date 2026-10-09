@@ -4,6 +4,8 @@
 
 // Spec: docs/specs/m2-statusbar-whichkey.md
 
+/* global focusContent -- from head.js */
+
 "use strict";
 
 const { VimmaHost } = ChromeUtils.importESModule(
@@ -51,7 +53,11 @@ registerCleanupFunction(() => {
   while (gBrowser.tabs.length > 1) gBrowser.removeTab(gBrowser.tabs.at(-1));
   const help = $("vimma-help");
   if (help?.open) help.close();
-  if (bar()) bar().style.removeProperty("width");
+  if (bar()) {
+    bar().style.removeProperty("width");
+    bar().style.removeProperty("font-size");
+    bar().style.removeProperty("padding-inline");
+  }
 });
 
 add_task(async function bar_is_visible_at_the_window_bottom() {
@@ -102,6 +108,76 @@ add_task(async function mode_follows_the_host_and_help() {
     await until(() => segText("mode") === "HELP", "HELP while the overlay is open");
     EventUtils.synthesizeKey("KEY_Escape");
     await until(() => segText("mode") === mode.toUpperCase(), "back after Esc");
+  });
+});
+
+add_task(async function mode_follows_focus_into_a_page_input() {
+  await BrowserTestUtils.withNewTab(TITLE_PAGE, async (browser) => {
+    await focusContent(browser);
+    await until(() => segText("mode") === "NORMAL", "NORMAL on a page");
+    // No key is pressed: only the actor's focus report (VimmaHost.onModeChange) can tell the bar.
+    let told = 0;
+    const off = VimmaHost.onStateChange(window, () => told++);
+    await SpecialPowers.spawn(browser, [], () => content.document.getElementById("field").focus());
+    await until(() => VimmaHost.status(window).mode === "insert", "the host is in insert");
+    await until(() => told > 0, "the host tells its listeners about the focus report");
+    off();
+    await until(() => segText("mode") === "INSERT", "INSERT after focusing an input");
+    await until(
+      () => bar().querySelector("[aria-live=polite]").textContent === "insert mode",
+      "the mode change is announced",
+    );
+    EventUtils.synthesizeKey("KEY_Escape");
+    await until(() => segText("mode") === "NORMAL", "NORMAL again after Esc");
+  });
+});
+
+add_task(async function font_change_re_measures_the_column() {
+  await BrowserTestUtils.withNewTab(TITLE_PAGE, async () => {
+    const b = bar();
+    b.style.width = "600px";
+    b.style.paddingInline = "8px"; // padding in ch would resize the content box with the font
+    await until(() => segText("title")?.endsWith("…"), "title shortened in a 600px bar");
+    const before = segText("title");
+    // Same bar size, twice the glyph width: only the probe's ResizeObserver entry sees it.
+    b.style.fontSize = "24px";
+    await until(() => segText("title") !== before, "the title is fitted again");
+    const right = b.getBoundingClientRect().right - parseFloat(getComputedStyle(b).paddingRight);
+    for (const s of b.querySelectorAll("[data-segment]")) {
+      Assert.lessOrEqual(
+        s.getBoundingClientRect().right,
+        right + 1,
+        `${s.dataset.segment} fits after the font change`,
+      );
+    }
+    b.style.removeProperty("font-size");
+    b.style.removeProperty("padding-inline");
+    b.style.removeProperty("width");
+  });
+});
+
+add_task(async function notice_sits_above_the_bar_and_gives_way_to_the_strip() {
+  await BrowserTestUtils.withNewTab(TITLE_PAGE, async (browser) => {
+    await focusContent(browser);
+    const notice = () => $("vimma-notice");
+    const noticeShown = () =>
+      !!notice()?.matches(":popover-open") && getComputedStyle(notice()).visibility === "visible";
+    EventUtils.synthesizeKey("b", { ctrlKey: true });
+    EventUtils.synthesizeKey("v"); // split_vertical: M4, not implemented yet
+    await until(noticeShown, "ctrl+b v shows the notice");
+    Assert.lessOrEqual(
+      notice().getBoundingClientRect().bottom,
+      bar().getBoundingClientRect().top,
+      "the notice is above the status bar",
+    );
+    EventUtils.synthesizeKey("b", { ctrlKey: true });
+    await until(() => !$("vimma-whichkey").hidden, "strip open");
+    Assert.ok(
+      !notice().matches(":popover-open") || getComputedStyle(notice()).visibility === "hidden",
+      "the notice gives way to the which-key strip",
+    );
+    EventUtils.synthesizeKey("KEY_Escape");
+    await until(() => $("vimma-whichkey").hidden, "strip closed");
   });
 });
 
