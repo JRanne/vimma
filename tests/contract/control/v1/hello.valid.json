@@ -1,0 +1,9 @@
+{
+  "description": "Handshake with a 64-hex token for protocol 1",
+  "kind": "hello",
+  "message": {
+    "type": "hello",
+    "protocol": 1,
+    "token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+}

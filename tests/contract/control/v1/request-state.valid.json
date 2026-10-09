@@ -1,0 +1,10 @@
+{
+  "description": "state takes no args",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 2,
+    "command": "state",
+    "args": {}
+  }
+}

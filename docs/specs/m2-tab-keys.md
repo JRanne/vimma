@@ -103,7 +103,7 @@ action set).
   `recordPageKeys`, then `focusContent`; then the key; then `waitForPageKey` for a sentinel `j`
   and `pageKeys`. Never `waitForContentEvent` before a key.
 - **After merging main** (lanes #20, flaky fix #24, M1 core #21, updater #15, M2 core #22): full
-  `tests/browser/` 300/0 on the artifact build.
+  `tests/browser/` 300/0 on the artifact build; after the split spike and vimma-ctl, 534/0.
 - **Verified:** red (host without the runners): 45 passed / 10 failed (no tab opened, `n` did not
   move, digits did not select, `shift+x` timed out); overlay red 32/15 (no marks, no legend).
   Green: `browser_vimma_tab_keys.js` + `browser_vimma_help_overlay.js` 130/0. Mutation:

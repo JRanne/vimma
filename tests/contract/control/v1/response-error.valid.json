@@ -1,0 +1,13 @@
+{
+  "description": "Handshake failure: id is null",
+  "kind": "response",
+  "message": {
+    "type": "response",
+    "id": null,
+    "ok": false,
+    "error": {
+      "code": "unauthorized",
+      "message": "bad token"
+    }
+  }
+}
