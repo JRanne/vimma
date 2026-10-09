@@ -26,6 +26,7 @@ on:
       - "tools/mochitest.mjs"
       - "tools/sync-core.mjs"
       - "tools/version-files/**"
+      - "tools/vimma-ctl/**"
       - ".github/workflows/e2e.yml"
   workflow_dispatch:
 
@@ -96,8 +97,14 @@ jobs:
       - name: Artifact build (tools/artifact-build)
         run: node tools/artifact-build/artifact-build.mjs
 
+      # browser_vimma_control.js runs the client against the live server; without the binary it
+      # skips, and VIMMA_REQUIRE_CTL=1 turns that skip into a failure here.
+      - name: Build vimma-ctl for the control-socket mochitest (tools/vimma-ctl)
+        working-directory: tools/vimma-ctl
+        run: rustup toolchain install && cargo build --locked --release
+
       - name: Mochitests (npm run mochitest -- --artifact tests/browser/)
         run: |
-          npm run mochitest -- --artifact tests/browser/
+          npm run mochitest -- --artifact --setenv=VIMMA_REQUIRE_CTL=1 tests/browser/
           df -h . | tail -1
           du -sh engine engine/obj-artifact ~/.mozbuild 2>/dev/null || true
