@@ -52,6 +52,12 @@ class CheckReleaseCli(unittest.TestCase):
         self.assertEqual(r.stdout, "")
         self.assertIn("malformed", r.stderr)
 
+    def test_beta_in_latest_version_exits_non_zero(self):
+        r = run("--source", str(FIXTURES / "versions-beta.json"), "--surfer-json", str(SURFER))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(r.stdout, "")
+        self.assertIn("158.0b9", r.stderr)
+
     def test_missing_key_exits_non_zero(self):
         r = run(
             "--source", str(FIXTURES / "versions-missing-key.json"), "--surfer-json", str(SURFER)
