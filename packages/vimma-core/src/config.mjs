@@ -3,13 +3,17 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
- * config.toml: parse, validate schema v1, migrate, merge with defaults, keep the last good one.
- * See docs/specs/m5-core-config-and-theme.md. Core does no I/O: the host passes file contents.
+ * config.toml: parse, validate schema v2, migrate, merge with defaults, keep the last good one.
+ * See docs/specs/m5-core-config-and-theme.md (v1) and docs/specs/m3-m4-core-prep.md (v2).
+ * Core does no I/O: the host passes file contents.
  */
 import { closest, resolveActionName } from "./actions.mjs";
 import { DEFAULT_CONFIG, WORKSPACE_DEFAULTS } from "./defaults.mjs";
+import { INSERT_SITE_MODES } from "./editable.mjs";
+import { DEFAULT_HINT_CHARS, hintLabels } from "./hints.mjs";
 import { KeymapError, compileKeymap } from "./keymap.mjs";
 import { MODES, isMode } from "./modes.mjs";
+import { PANES_MAX_DEFAULT, PANES_MAX_LIMIT } from "./panes.mjs";
 import { PALETTE_KEYS, isHexColor, normalizeHex } from "./theme.mjs";
 import { formatPath, locateKeys, parsePath, parseToml } from "./toml.mjs";
 
@@ -17,6 +21,7 @@ import { formatPath, locateKeys, parsePath, parseToml } from "./toml.mjs";
 /** @import { UserConfig } from "./defaults.mjs" */
 /** @import { Path } from "./toml.mjs" */
 /** @import { ThemeConfig } from "./theme.mjs" */
+/** @import { InsertSiteMode, InsertSiteRule } from "./editable.mjs" */
 
 /**
  * @typedef {object} ConfigError
@@ -44,12 +49,15 @@ import { formatPath, locateKeys, parsePath, parseToml } from "./toml.mjs";
  * @property {Record<string, string[]>} unbind
  * @property {Workspace[]} workspaces                     file order = ctrl+i order
  * @property {ThemeConfig} theme
+ * @property {{ max: number }} panes                     `[panes]` (schema 2)
+ * @property {string} hintChars                          `[modal] hint_chars` (schema 2)
+ * @property {InsertSiteRule[]} sites                    `[sites."<host>"]` in file order (schema 2)
  */
 
 /** @typedef {{ config: ResolvedConfig, keymap: Keymap }} ActiveConfig */
 /** @typedef {(config: Record<string, unknown>) => Record<string, unknown>} Migration */
 
-export const CONFIG_SCHEMA_VERSION = 1;
+export const CONFIG_SCHEMA_VERSION = 2;
 
 /**
  * Step `n` turns a schema-n object into a schema-(n+1) object. Pure; never mutates its input.
@@ -58,6 +66,9 @@ export const CONFIG_SCHEMA_VERSION = 1;
 export const MIGRATIONS = Object.freeze({
   // v0: configs without `schema`, written before M5. Same shape as v1.
   0: (config) => ({ ...config, schema: 1 }),
+  // v1 → v2 only adds keys ([panes], [sites], [modal] hint_chars). A file must say schema = 2 to
+  // use them, so an older vimma reports "from a newer vimma" instead of an unknown key.
+  1: (config) => ({ ...config, schema: 2 }),
 });
 
 /**
@@ -111,11 +122,21 @@ const ICONS = [
   "circle",
   "fence",
 ];
-const TOP_KEYS = ["schema", "keys", "modal", "unbind", "workspaces", "theme"];
+const TOP_KEYS = ["schema", "keys", "modal", "unbind", "workspaces", "theme", "panes", "sites"];
 const KEYMAP_SECTIONS = new Set(["keys", "modal", "unbind"]);
 const WORKSPACE_KEYS = ["color", "icon", "home", "autofill"];
 const THEME_KEYS = ["source", "font", "colors"];
 const THEME_SOURCES = ["omarchy", "file"];
+const PANES_KEYS = ["max"];
+const SITE_KEYS = ["insert"];
+const MODAL_KEYS = ["leader", "timeout_ms", "hint_chars"];
+/** Keys a file may use only when it declares `schema = 2`, by config path. */
+const SCHEMA_2_KEYS = ["panes", "sites", "modal.hint_chars"];
+const NEEDS_SCHEMA_2 = "is new in schema 2: put schema = 2 at the top of the file";
+const LABEL = "[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?";
+const DOMAIN = new RegExp(`^(?=.{1,253}$)${LABEL}(?:\\.${LABEL})*\\.?$`, "i");
+const IPV6 = /^(?:\[[0-9a-f:.]*:[0-9a-f:.]*\]|[0-9a-f.]*:[0-9a-f:.]*)$/i;
+const BAD_HOST = 'must be a hostname like "docs.google.com", without scheme, port, path or *';
 const MAX_TIMEOUT_MS = 10000;
 const MAX_WORKSPACE_NAME = 32;
 const MAX_FONT = 200;
@@ -147,11 +168,57 @@ const isTable = (v) =>
 /** @typedef {{ path: Path, message: string, suggestion?: string }} Problem */
 
 /**
- * Checks schema v1 and returns every problem; keymap contents are left to compileKeymap.
- * @param {Record<string, unknown>} raw  migrated to v1
+ * A `[sites."<host>"]` key: a hostname as `URL.hostname` gives it (a domain, an IPv4 address or
+ * an IPv6 address, bracketed or not), optionally with a trailing dot.
+ * @param {string} host
+ */
+const isSiteHost = (host) => DOMAIN.test(host) || IPV6.test(host);
+
+/**
+ * The same host as matchSiteRule compares it: case, a trailing dot and IPv6 brackets ignored.
+ * @param {string} host
+ */
+const siteKey = (host) =>
+  host
+    .toLowerCase()
+    .replace(/\.$/, "")
+    .replace(/^\[(.*)\]$/, "$1");
+
+/**
+ * What the user probably meant by a key that is not a hostname: the host of a URL, a host
+ * without its port, a wildcard domain without `*.` (a rule already covers subdomains).
+ * @param {string} key
+ * @returns {string | undefined}
+ */
+function hostSuggestion(key) {
+  const host = key
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+    .replace(/^\*\./, "")
+    .replace(/[/?#].*$/, "")
+    .replace(/:\d*$/, "");
+  return host !== key && isSiteHost(host) ? host : undefined;
+}
+
+/**
+ * @param {unknown} chars
+ * @returns {boolean}
+ */
+function isHintCharset(chars) {
+  try {
+    hintLabels(0, /** @type {string} */ (chars));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Checks the current schema and returns every problem; keymap contents are left to compileKeymap.
+ * @param {Record<string, unknown>} raw  migrated to the current schema
+ * @param {number} declared  the schema the file declared (0 without `schema`)
  * @returns {Problem[]}
  */
-function validate(raw) {
+function validate(raw, declared) {
   /** @type {Problem[]} */
   const problems = [];
   /** @param {Path} path @param {string} message @param {string} [suggestion] */
@@ -172,9 +239,19 @@ function validate(raw) {
   /** @param {Path} path @param {string} key @param {readonly string[]} known */
   const unknownKey = (path, key, known) => fail(path, `unknown key "${key}"`, closest(key, known));
 
+  /**
+   * A schema-2 key in a file that declares an older schema: reported once, then skipped.
+   * @param {Path} path
+   */
+  const gated = (path) => {
+    if (declared >= 2 || !SCHEMA_2_KEYS.includes(path.join("."))) return false;
+    fail(path, NEEDS_SCHEMA_2);
+    return true;
+  };
+
   for (const [key, v] of Object.entries(raw)) {
     if (!TOP_KEYS.includes(key)) unknownKey([key], key, TOP_KEYS);
-    else if (key !== "schema") table([key], v);
+    else if (key !== "schema" && !gated([key])) table([key], v);
   }
 
   if (isTable(raw.modal)) {
@@ -187,10 +264,16 @@ function validate(raw) {
         else if (v < 0n || v > BigInt(MAX_TIMEOUT_MS)) {
           fail(path, `must be an integer between 0 and ${MAX_TIMEOUT_MS}`);
         }
+      } else if (key === "hint_chars") {
+        if (gated(path)) continue;
+        if (typeof v !== "string") typeError(path, v, "a string");
+        else if (!isHintCharset(v)) {
+          fail(path, "must be at least 2 distinct characters, none uppercase or whitespace");
+        }
       } else if (isMode(key)) {
         table(path, v);
       } else {
-        unknownKey(path, key, [...MODES, "leader", "timeout_ms"]);
+        unknownKey(path, key, [...MODES, ...MODAL_KEYS]);
       }
     }
   }
@@ -237,6 +320,44 @@ function validate(raw) {
           if (typeof v !== "boolean") typeError(at, v, "a boolean");
         } else {
           unknownKey(at, key, WORKSPACE_KEYS);
+        }
+      }
+    }
+  }
+
+  if (declared >= 2 && isTable(raw.panes)) {
+    for (const [key, v] of Object.entries(raw.panes)) {
+      const path = ["panes", key];
+      if (key !== "max") unknownKey(path, key, PANES_KEYS);
+      else if (typeof v !== "bigint") typeError(path, v, "an integer");
+      else if (v < 1n || v > BigInt(PANES_MAX_LIMIT)) {
+        fail(path, `must be an integer between 1 and ${PANES_MAX_LIMIT}`);
+      }
+    }
+  }
+
+  if (declared >= 2 && isTable(raw.sites)) {
+    /** @type {Map<string, string>} */
+    const seen = new Map();
+    for (const [host, site] of Object.entries(raw.sites)) {
+      const path = ["sites", host];
+      if (!isSiteHost(host)) {
+        fail(path, BAD_HOST, hostSuggestion(host));
+        continue;
+      }
+      const first = seen.get(siteKey(host));
+      if (first !== undefined) {
+        fail(path, `same host as ${JSON.stringify(first)}`);
+        continue;
+      }
+      seen.set(siteKey(host), host);
+      if (!table(path, site)) continue;
+      for (const [key, v] of Object.entries(site)) {
+        const at = [...path, key];
+        if (key !== "insert") unknownKey(at, key, SITE_KEYS);
+        else if (typeof v !== "string") typeError(at, v, "a string");
+        else if (!INSERT_SITE_MODES.includes(/** @type {InsertSiteMode} */ (v))) {
+          fail(at, 'must be "auto", "never" or "always"', closest(v, INSERT_SITE_MODES));
         }
       }
     }
@@ -295,13 +416,14 @@ function toNumbers(v) {
 }
 
 /**
- * Fill every section of a valid v1 config (as parsed) with defaults and normalise values.
+ * Fill every section of a valid config (as parsed) with defaults and normalise values.
  * @param {UserConfig} user
  * @param {string[]} [workspaceOrder]  workspace names in file order; JS objects list
  *   number-like keys first, so parseConfig passes the order it read from the text
+ * @param {string[]} [siteOrder]  `[sites]` hosts in file order, for the same reason
  * @returns {ResolvedConfig}
  */
-export function mergeWithDefaults(user, workspaceOrder) {
+export function mergeWithDefaults(user, workspaceOrder, siteOrder) {
   const theme = user.theme ?? {};
   const defTheme = /** @type {Required<NonNullable<UserConfig["theme"]>>} */ (DEFAULT_CONFIG.theme);
   /** @type {Record<string, string>} */
@@ -329,6 +451,12 @@ export function mergeWithDefaults(user, workspaceOrder) {
       font: theme.font ?? defTheme.font,
       colors,
     },
+    panes: { max: user.panes?.max ?? PANES_MAX_DEFAULT },
+    hintChars: /** @type {string | undefined} */ (user.modal?.hint_chars) ?? DEFAULT_HINT_CHARS,
+    sites: (siteOrder ?? Object.keys(user.sites ?? {})).map((match) => ({
+      match,
+      insert: /** @type {NonNullable<UserConfig["sites"]>} */ (user.sites)[match]?.insert ?? "auto",
+    })),
   };
 }
 
@@ -379,7 +507,7 @@ export function parseConfig(text) {
     return failed(located([{ path: ["schema"], message }]));
   }
   const migrated = migrate(raw, schema).config;
-  const problems = validate(migrated);
+  const problems = validate(migrated, schema);
   const user = /** @type {UserConfig} */ (toNumbers(migrated));
 
   /** @type {Keymap | null} */
@@ -403,15 +531,14 @@ export function parseConfig(text) {
     }
   }
   if (problems.length) return failed(located(problems));
+  /** @param {"workspaces" | "sites"} table */
+  const fileOrder = (table) =>
+    Object.keys(user[table] ?? {}).sort(
+      (a, b) =>
+        /** @type {number} */ (lineOf([table, a])) - /** @type {number} */ (lineOf([table, b])),
+    );
   return {
-    config: mergeWithDefaults(
-      user,
-      Object.keys(user.workspaces ?? {}).sort(
-        (a, b) =>
-          /** @type {number} */ (lineOf(["workspaces", a])) -
-          /** @type {number} */ (lineOf(["workspaces", b])),
-      ),
-    ),
+    config: mergeWithDefaults(user, fileOrder("workspaces"), fileOrder("sites")),
     keymap,
     errors: [],
     migratedFrom: schema === CONFIG_SCHEMA_VERSION ? null : schema,

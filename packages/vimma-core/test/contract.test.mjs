@@ -20,7 +20,9 @@ describe.each(Array.from({ length: CONFIG_SCHEMA_VERSION }, (_, i) => i + 1))(
     test("valid.toml parses without errors", () => {
       const r = parseConfig(read("valid.toml"));
       expect(r.errors).toEqual([]);
-      expect(r.config?.schema).toBe(version);
+      // an older version's valid file still loads, migrated to the current schema
+      expect(r.config?.schema).toBe(CONFIG_SCHEMA_VERSION);
+      expect(r.migratedFrom).toBe(version === CONFIG_SCHEMA_VERSION ? null : version);
     });
 
     test("there is at least one invalid fixture, and each has expected errors", () => {
