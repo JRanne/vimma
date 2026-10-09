@@ -47,6 +47,8 @@ declare class JSWindowActorChild {
   readonly browsingContext: any;
   readonly document: Document;
   readonly contentWindow: Window | null;
+  // WindowGlobalChild: the other actors of this frame (spec m1-find: Firefox's FinderChild)
+  readonly manager: { getActor(name: string): any };
   sendAsyncMessage(name: string, data?: unknown): void;
   sendQuery(name: string, data?: unknown): Promise<any>;
 }

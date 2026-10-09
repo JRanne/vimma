@@ -16,12 +16,14 @@ import { compileKeymap } from "../core/keymap.mjs";
 import { notImplementedText } from "../core/actions.mjs";
 import { HelpOverlay } from "../ui/help-overlay.mjs";
 import { StatusBar } from "../ui/statusbar.mjs";
+import { Find } from "./find.mjs";
 import { Notice } from "../ui/notice.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
 import { closeTab, newTab, selectTab } from "./tab-ops.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
 /** @import { Mode } from "../core/modes.mjs" */
+/** @import { FindStatus } from "../core/find.mjs" */
 /** @import { Action, DispatchResult } from "../core/dispatcher.mjs" */
 /** @import { EditableDescriptor, InsertTrigger } from "../core/editable.mjs" */
 /** @import { Keymap, TrieNode } from "../core/keymap.mjs" */
@@ -43,6 +45,7 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {number | null} timer   pending-sequence timeout (dispatcher.flush)
  * @property {Set<() => void>} listeners  told after mode or pending keys may have changed
  * @property {StatusBar | null} statusBar  m2-statusbar-whichkey
+ * @property {Find} find  `/`, `?`, `n`, `N` over Firefox's find bar (m1-find)
  */
 
 /**
@@ -107,7 +110,22 @@ export const CONTENT_RUNNERS = Object.freeze({
     setBrowserMode(b, "insert");
     VimmaActors.focusInput(b);
   },
+  // Find in page over Firefox's find bar (m1-find).
+  "find.forward": (b) => findOf(b)?.start(b, false),
+  "find.backward": (b) => findOf(b)?.start(b, true),
+  "find.next": (b) => findOf(b)?.again(b, false),
+  "find.previous": (b) => findOf(b)?.again(b, true),
 });
+
+/**
+ * The find state of the window that owns `browser`.
+ * @param {any} browser
+ * @returns {Find | undefined}
+ */
+function findOf(browser) {
+  const win = browser?.ownerDocument?.defaultView;
+  return (win && states.get(win))?.find ?? undefined;
+}
 
 /**
  * Every action id the host implements: the one source for the help overlay's dimmed rows, the
@@ -158,6 +176,7 @@ export const VimmaHost = {
       timer: null,
       listeners: new Set(),
       statusBar: null,
+      find: new Find(win, () => this._emit(state)),
     };
     states.set(win, state);
     win.addEventListener("keydown", state.onKeyDown, true);
@@ -195,20 +214,27 @@ export const VimmaHost = {
     state.notice.destroy();
     state.tabStrip?.uninit();
     state.statusBar?.uninit();
+    state.find.destroy();
     state.listeners.clear();
     states.delete(win);
   },
 
   /**
    * What the status bar and which-key strip show: the mode keys are dispatched in and the keys
-   * of a pending sequence (dispatcher.pending() labels).
+   * of a pending sequence (dispatcher.pending() labels); `command` while a `/` or `?` search is
+   * typed (Vim's command-line mode), and that search or the page's last one (m1-find).
    * @param {Window} win
-   * @returns {{ mode: Mode, pending: string[] }}
+   * @returns {{ mode: Mode, pending: string[], find?: FindStatus | null }}
    */
   status(win) {
     const state = states.get(win);
     if (!state) return { mode: "insert", pending: [] };
-    return { mode: this._mode(state), pending: state.dispatcher.pending() };
+    const browser = /** @type {any} */ (win).gBrowser?.selectedBrowser;
+    return {
+      mode: state.find.typing ? "command" : this._mode(state),
+      pending: state.dispatcher.pending(),
+      find: browser ? state.find.status(browser) : null,
+    };
   },
 
   /**
@@ -350,6 +376,11 @@ export const VimmaHost = {
     if (Services.prefs.getBoolPref(DEBUG_PREF, false)) {
       const mods = MODIFIERS.filter((m) => chord[m]);
       console.debug("vimma key", { key, mods, mode });
+    }
+    // Enter and Esc in a `/` search, and keys typed before its input exists (m1-find).
+    if (state.dispatcher.pending().length === 0 && state.find.onKeyDown(e)) {
+      this._emit(state);
+      return;
     }
     // Typing into the help filter: plain keys belong to the input; Esc and chords stay ours.
     const typing = !chord.ctrl && !chord.alt && !chord.meta && chord.key !== "esc";

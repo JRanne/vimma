@@ -108,6 +108,22 @@ function parentOf(el) {
   return "host" in root ? /** @type {ShadowRoot} */ (root).host : null;
 }
 
+/** A find text no page contains (a noncharacter): resets the find buffer without moving. */
+const NO_MATCH = "\uffff";
+/** nsITypeAheadFind.FIND_INITIAL: a new search, as typing in the find bar starts. */
+const FIND_INITIAL = 0;
+
+/**
+ * Whether the selection is a range at least partly inside the viewport.
+ * @param {Selection} sel
+ * @param {Window} win
+ */
+function selectionOnScreen(sel, win) {
+  if (!sel.rangeCount || sel.isCollapsed) return false;
+  const r = sel.getRangeAt(0).getBoundingClientRect();
+  return r.bottom > 0 && r.top < win.innerHeight;
+}
+
 export class VimmaChild extends JSWindowActorChild {
   /** @type {WeakRef<Element> | null} the last largest scrollable, reused while it can scroll */
   #largest = null;
@@ -188,8 +204,57 @@ export class VimmaChild extends JSWindowActorChild {
       }
       case "Vimma:FocusInput":
         return this.#focusInput();
+      case "Vimma:ScrollPosition": {
+        const win = this.contentWindow;
+        return win ? { x: win.scrollX, y: win.scrollY } : null;
+      }
+      case "Vimma:FindAnchor":
+        return this.#findAnchor();
+      case "Vimma:ScrollTo": {
+        const x = Number(msg.data?.x);
+        const y = Number(msg.data?.y);
+        if (Number.isFinite(x) && Number.isFinite(y)) {
+          this.contentWindow?.scrollTo({ left: x, top: y, behavior: "instant" });
+        }
+        return undefined;
+      }
     }
     return undefined;
+  }
+
+  /**
+   * Where a find starts (spec m1-find): Vim searches from the cursor, so a selection or caret
+   * still on screen stays where it is; otherwise the caret goes to the top of the viewport (left
+   * alone when an element has focus: Firefox starts there; and in pdf.js, which finds itself).
+   * Then the find's typed-text buffer is reset with a search that cannot match: nsITypeAheadFind
+   * starts its first search at the first rendered match from the document start (its viewport
+   * clip is ignored), and a search that extends the previous text continues from the previous
+   * search's start; a non-empty, unrelated buffer makes it start at the caret.
+   */
+  #findAnchor() {
+    const win = this.contentWindow;
+    const doc = this.document;
+    if (!win || doc.contentType === "application/pdf") return;
+    const sel = win.getSelection();
+    const active = deepActiveElement(doc);
+    const focused = active && active !== doc.body && active !== doc.documentElement;
+    if (sel && !focused && !selectionOnScreen(sel, win)) {
+      try {
+        const pos = win.scrollY || win.scrollX ? doc.caretPositionFromPoint(1, 1) : null;
+        if (pos?.offsetNode) sel.collapse(pos.offsetNode, pos.offset);
+        else sel.removeAllRanges();
+      } catch {
+        // a position that cannot hold the caret (inside a text control): leave the selection
+      }
+    }
+    try {
+      // FinderChild's Finder (toolkit/actors/FinderChild.sys.mjs) owns this frame's
+      // nsITypeAheadFind; Firefox has no API to start a find at a point.
+      const typeahead = this.manager.getActor("Finder")?.finder?._fastFind;
+      typeahead?.find(NO_MATCH, false, FIND_INITIAL, true);
+    } catch (e) {
+      console.error("vimma: find start", e);
+    }
   }
 
   #focusInput() {

@@ -6,6 +6,7 @@ browser.jar:
         content/browser/vimma/vimma.js                    (vimma.js)
         content/browser/vimma/host/VimmaHost.sys.mjs      (host/VimmaHost.sys.mjs)
         content/browser/vimma/host/tab-ops.mjs            (host/tab-ops.mjs)
+        content/browser/vimma/host/find.mjs               (host/find.mjs)
         content/browser/vimma/actors/VimmaActors.sys.mjs  (actors/VimmaActors.sys.mjs)
         content/browser/vimma/actors/VimmaChild.sys.mjs   (actors/VimmaChild.sys.mjs)
         content/browser/vimma/actors/VimmaParent.sys.mjs  (actors/VimmaParent.sys.mjs)

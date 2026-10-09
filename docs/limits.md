@@ -7,11 +7,11 @@ delete its line in the same PR.
 ## Features
 
 - Only `ctrl+b ?`, the tab keys (`ctrl+b c`, `n`, `p`, `1..9`, `shift+x`; `t`, `x`, `gt`, `gT`
-  in normal mode), scrolling (`j k h l d u gg G`), `i` and `Esc` run. The other bindings are
+  in normal mode), scrolling (`j k h l d u gg G`), find (`/ ? n N`), `i` and `Esc` run. The other bindings are
   dimmed in the overlay; their `ctrl+b` sequences (or a count before them) are consumed and show
   "… not implemented yet" ([m2-tab-keys](specs/m2-tab-keys.md), Settled).
 - Tab keys count Firefox's visible tabs; workspaces (M3) will narrow them to the current one.
-- Single-key actions the host cannot run yet (`f`, `/`, `r`, `ctrl+i`, `ctrl+u`, …) pass through
+- Single-key actions the host cannot run yet (`f`, `r`, `ctrl+i`, `ctrl+u`, …) pass through
   to the page or Firefox, and so does the first key of a sequence with nothing runnable under it
   (`ctrl+w`, the M4 pane keys) ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md),
   Settled).
@@ -36,6 +36,20 @@ delete its line in the same PR.
   ([m5-core-config-and-theme](specs/m5-core-config-and-theme.md)).
 - The overlay has legible defaults only: no theme tokens and no which-key strip (M2, M5)
   ([m0-help-overlay](specs/m0-help-overlay.md)).
+
+## Find
+
+- `?` searches forward while you type, as Firefox's find bar does; `Enter` then steps back to
+  the last match before where the search started ([m1-find](specs/m1-find.md), Settled).
+- `Esc` scrolls the page back, not a frame or an inner scroller it scrolled (pdf.js scrolls its
+  own viewer: there `Esc` leaves the view at the match) ([m1-find](specs/m1-find.md)).
+- In the PDF viewer `/`, `Enter`, `n` and `N` work through pdf.js, but the status bar shows no
+  match count: pdf.js reports it to the find bar only ([m1-find](specs/m1-find.md)).
+- A count before `n` (`3n`) searches once. `N` right after `Esc`, or after the page reloads,
+  searches forward once: Firefox's finder has no previous match to step back from
+  ([m1-find](specs/m1-find.md)).
+- A search starts at the top-left corner of the viewport; a fixed header there makes it start at
+  the header's place in the document ([m1-find](specs/m1-find.md)).
 
 ## Tabs and window
 

@@ -98,4 +98,35 @@ export const VimmaActors = {
   focusInput(browser) {
     actorFor(browser.browsingContext)?.sendAsyncMessage("Vimma:FocusInput");
   },
+
+  /**
+   * The top frame's scroll position (where `/` started, spec m1-find), or null.
+   * @param {any} browser XULBrowserElement
+   * @returns {Promise<{ x: number, y: number } | null>}
+   */
+  async scrollPosition(browser) {
+    try {
+      return (await actorFor(browser.browsingContext)?.sendQuery("Vimma:ScrollPosition")) ?? null;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Makes the next find start where Vim's would (spec m1-find): at a selection still on screen,
+   * else at the top of the viewport, not at the document's first match.
+   * @param {any} browser XULBrowserElement
+   */
+  findAnchor(browser) {
+    actorFor(browser.browsingContext)?.sendAsyncMessage("Vimma:FindAnchor");
+  },
+
+  /**
+   * Scrolls the top frame back to a position from `scrollPosition` (Esc in a find).
+   * @param {any} browser XULBrowserElement
+   * @param {{ x: number, y: number }} at
+   */
+  scrollTo(browser, at) {
+    actorFor(browser.browsingContext)?.sendAsyncMessage("Vimma:ScrollTo", at);
+  },
 };

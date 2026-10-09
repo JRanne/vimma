@@ -49,3 +49,10 @@ skip-if = ["artifact"]
 support-files = ["file_vimma_title.html"]
 
 ["browser_vimma_whichkey.js"]
+
+["browser_vimma_find.js"]
+support-files = [
+  "file_vimma_find.html",
+  "file_vimma_find_frame.html",
+  "file_vimma_test.pdf",
+]

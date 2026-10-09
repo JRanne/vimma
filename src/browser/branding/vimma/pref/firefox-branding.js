@@ -97,3 +97,7 @@ pref("extensions.systemAddon.update.url", "");
 // Vimma UI (spec m0-tabstrip-hidden): Firefox's tab strip is hidden until M2 brings Vimma's own
 // tab UI; false shows it again, live.
 pref("vimma.ui.tabstrip.hidden", true);
+
+// Find (spec m1-find): Vim's smartcase for `/` and Firefox's own find bar alike. 2 is the find
+// bar's "auto" mode: a query with a capital letter matches case, an all lower-case one does not.
+pref("accessibility.typeaheadfind.casesensitive", 2);
