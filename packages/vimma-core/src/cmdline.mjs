@@ -79,7 +79,7 @@ export const COMMANDS = Object.freeze([
  * Action ids the commands use that actions.mjs does not define yet. The host spec adds them
  * (with `npm run gen-docs`) and empties this list.
  */
-export const PENDING_ACTIONS = Object.freeze(["workspace.switch"]);
+export const PENDING_ACTIONS = Object.freeze(/** @type {string[]} */ ([]));
 
 /** @type {Map<string, CommandDef>} */
 const byWord = new Map();

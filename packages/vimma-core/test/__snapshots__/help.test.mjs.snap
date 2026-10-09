@@ -44,6 +44,7 @@ Panes
 Workspaces
   next_workspace       ctrl+i                          Next workspace
   previous_workspace   ctrl+u                          Previous workspace
+  switch_workspace     (unbound)                       Switch to a workspace by name or number
   workspace_picker     prefix+w                        Workspace picker
   new_workspace        prefix+shift+n                  New workspace
   rename_workspace     prefix+shift+w                  Rename workspace

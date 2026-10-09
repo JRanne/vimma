@@ -118,6 +118,10 @@ pref("accessibility.typeaheadfind.casesensitive", 2);
 // Firefox only uses a preloaded about:newtab for tabs in no container, so it would never be used.
 pref("browser.newtab.preload", false);
 
+// Workspaces (spec m3-workspaces, decision 9): closing the last visible tab must not close a
+// window whose other workspaces' tabs are hidden; Firefox opens a new tab in the workspace instead.
+pref("browser.tabs.closeWindowWithLastTab", false);
+
 // Split panes (spec m4-split-panes, ADR-013): Vimma's keys are the only way into a split. This
 // hides Firefox's tab and link context-menu items and alt-click; the split-view API keeps
 // working. split.css hides the URL bar button.

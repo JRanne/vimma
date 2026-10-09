@@ -53,14 +53,15 @@ Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm 
 
 ## Workspaces
 
-| Action             | Config name          | Bindings         |
-| ------------------ | -------------------- | ---------------- |
-| Next workspace     | `next_workspace`     | `ctrl+i`         |
-| Previous workspace | `previous_workspace` | `ctrl+u`         |
-| Workspace picker   | `workspace_picker`   | `prefix+w`       |
-| New workspace      | `new_workspace`      | `prefix+shift+n` |
-| Rename workspace   | `rename_workspace`   | `prefix+shift+w` |
-| Close workspace    | `close_workspace`    | `prefix+shift+d` |
+| Action                                  | Config name          | Bindings         |
+| --------------------------------------- | -------------------- | ---------------- |
+| Next workspace                          | `next_workspace`     | `ctrl+i`         |
+| Previous workspace                      | `previous_workspace` | `ctrl+u`         |
+| Switch to a workspace by name or number | `switch_workspace`   | —                |
+| Workspace picker                        | `workspace_picker`   | `prefix+w`       |
+| New workspace                           | `new_workspace`      | `prefix+shift+n` |
+| Rename workspace                        | `rename_workspace`   | `prefix+shift+w` |
+| Close workspace                         | `close_workspace`    | `prefix+shift+d` |
 
 ## Navigation
 
