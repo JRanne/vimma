@@ -32,6 +32,7 @@ import { BLOCKED_URL_TEXT, closeTab, newTab, openUrl, selectTab } from "./tab-op
 import { closePane, focusPane, hasPanes, splitPane, zoomPane } from "./pane-ops.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { leaves } from "../core/panes.mjs";
+import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
 /** @import { Mode } from "../core/modes.mjs" */
@@ -118,6 +119,36 @@ function paneRunner(op) {
   };
 }
 
+const NO_WORKSPACES = "no workspaces in this window";
+
+/**
+ * `workspace.switch`: by number (`:workspace 2`) or name (`:workspace work`); a key bound to
+ * switch_workspace asks on the command line.
+ * @param {WindowState} s
+ * @param {string} [text]
+ */
+function switchWorkspace(s, text) {
+  if (!text) {
+    s.cmdline.open("workspace ");
+    return;
+  }
+  const ref = /^\d+$/.test(text) ? { index: Number(text) } : { name: text };
+  const refused = WindowWorkspaces.get(s.win)?.switchTo(ref) ?? NO_WORKSPACES;
+  if (refused) s.notice.show(refused);
+}
+
+/**
+ * A workspace step (ctrl+i / ctrl+u); shows its refusal, if any.
+ * @param {"next" | "previous"} step
+ * @returns {(state: WindowState) => void}
+ */
+function workspaceStep(step) {
+  return (s) => {
+    const refused = WindowWorkspaces.get(s.win)?.[step]() ?? NO_WORKSPACES;
+    if (refused) s.notice.show(refused);
+  };
+}
+
 /**
  * Pane actions that do something only with two panes or more: as single keys they are
  * runnable only then, so the first ctrl+w of `<C-w>h` passes to Firefox (close tab) while the
@@ -133,8 +164,7 @@ const MULTI_PANE = new Set([
 
 /**
  * What the host can execute so far, with CONTENT_RUNNERS. An action without an entry is left to
- * Firefox when it is a single key outside help (ctrl+i, ctrl+u keep working until their
- * milestones land); inside a sequence (or after a count) it is consumed and shows "<action>: not
+ * Firefox when it is a single key outside help; inside a sequence (or after a count) it is consumed and shows "<action>: not
  * implemented yet", so `ctrl+b <key>` never leaks the second key to the page and is never silent
  * (m2-tab-keys). Unbound keys always pass (m1-actor-insert-scroll, Settled). `text` is a
  * command's free-text argument (`:open example.com`, m1-cmdline); keys never carry one.
@@ -175,6 +205,11 @@ export const RUNNERS = Object.freeze({
   },
   "tab.rename": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
     renameTab(s, text),
+  // m3-workspaces 2b: one workspace's tabs visible at a time (WindowWorkspaces).
+  "workspace.next": workspaceStep("next"),
+  "workspace.previous": workspaceStep("previous"),
+  "workspace.switch": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
+    switchWorkspace(s, text),
 });
 
 /**
@@ -373,6 +408,12 @@ export const VimmaHost = {
     } catch (e) {
       console.error("vimma: no status bar", e);
     }
+    // After the keys too: a failure costs the workspaces, not ctrl+b (m3-workspaces 2b).
+    try {
+      WindowWorkspaces.init(win, { onChange: () => this._emit(state) });
+    } catch (e) {
+      console.error("vimma: no workspaces", e);
+    }
   },
 
   /** @param {Window} win */
@@ -391,6 +432,7 @@ export const VimmaHost = {
     state.picker.destroy();
     state.rename.destroy();
     state.tabStrip?.uninit();
+    WindowWorkspaces.uninit(win);
     state.statusBar?.uninit();
     state.find.destroy();
     state.listeners.clear();
@@ -401,10 +443,11 @@ export const VimmaHost = {
    * What the status bar shows: the mode keys are dispatched in and the keys of a pending
    * sequence (dispatcher.pending() labels); `command` while a `/` or `?` search is typed (Vim's
    * command-line mode), and that search or the page's last one (m1-find); the focused pane's
-   * place among two or more (m4-split-panes).
+   * place among two or more (m4-split-panes); the active workspace (m3-workspaces).
    * @param {Window} win
    * @returns {{ mode: Mode, pending: string[], find?: FindStatus | null,
-   *   pane?: { index: number, count: number } | null }}
+   *   pane?: { index: number, count: number } | null,
+   *   workspace?: { name: string, index: number, color?: string } | null }}
    */
   status(win) {
     const state = states.get(win);
@@ -415,6 +458,7 @@ export const VimmaHost = {
       pending: state.dispatcher.pending(),
       find: browser ? state.find.status(browser) : null,
       pane: paneStatus(win),
+      workspace: WindowWorkspaces.get(win)?.status() ?? null,
     };
   },
 
@@ -664,7 +708,7 @@ export const VimmaHost = {
 
   /**
    * Runs a parsed `:` line through `_run`, as if its action had been keyed, after the line has
-   * closed. An action core lists as pending (`workspace.switch`) is refused, never run
+   * closed. An action core lists as pending (PENDING_ACTIONS) is refused, never run
    * (m1-core-logic, Missing actions).
    * @param {WindowState} state
    * @param {Extract<CommandResult, { kind: "run" }>} result

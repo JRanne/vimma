@@ -11,8 +11,8 @@ delete its line in the same PR.
   and find (`/ ? n N`) run. The other bindings are dimmed in the overlay; their `ctrl+b`
   sequences (or a count before them) are consumed and show "… not implemented yet"
   ([m2-tab-keys](specs/m2-tab-keys.md), Settled).
-- Tab keys count Firefox's visible tabs; workspaces (M3) will narrow them to the current one.
-- Single-key actions the host cannot run yet (`r`, `ctrl+i`, `ctrl+u`, …) pass through
+- Tab keys count Firefox's visible tabs: the current workspace's and any pinned tab.
+- Single-key actions the host cannot run yet (`r`, `H`, `L`, …) pass through
   to the page or Firefox, and so does the first key of a sequence with nothing runnable under it
   ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled). `ctrl+w`'s pane keys run
   only with two panes or more, so with one pane `ctrl+w` closes the tab; with a split, in normal
@@ -35,7 +35,7 @@ delete its line in the same PR.
 - After `Esc` in a `designMode` page, it stays in normal until the next click into it
   ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled).
 - Command line: history is kept in memory only, until Vimma quits; arguments are not
-  completed (URLs, workspace names); `:workspace name` is refused until workspaces exist; no
+  completed (URLs, workspace names); no
   `:set`, ranges or counts ([m1-cmdline](specs/m1-cmdline.md), Settled).
 - `:q` and `ctrl+b x` close the tab: with no split panes yet, every tab is one pane
   ([m1-cmdline](specs/m1-cmdline.md), Settled).
@@ -94,7 +94,8 @@ delete its line in the same PR.
 
 ## Workspaces (M3, by design)
 
-Workspaces are not built yet; these are the limits their design accepts
+Workspaces are partly built (switching, not yet persistence); these are the limits their design
+accepts
 ([m3-workspaces](specs/m3-workspaces.md)).
 
 - Containers do not isolate history, bookmarks, form history, the downloads list, HSTS or site
@@ -110,9 +111,11 @@ Workspaces are not built yet; these are the limits their design accepts
   containers and their data (Firefox's behaviour).
 - A corrupt `containers.json` makes Firefox reset containers; workspace logins can be lost and
   tabs come back marked `foreign`.
-- Pinned tabs are not supported: a pinned tab is unpinned. Until switching lands (M3 sub-spec
-  2b) a tab opened pinned stays in no container. A tab sharing camera, microphone or
+- Pinned tabs belong to no workspace: they show in every workspace, and a tab opened pinned
+  stays in no container (decision 11 plans to unpin them). A tab sharing camera, microphone or
   screen cannot be hidden and stays visible in other workspaces while it shares.
+- Workspaces and their tabs are not kept across a restart yet (M3 sub-spec 3); the `foreign`
+  mark is kept but not shown until the workspace picker and side panel.
 - Tabs of hidden workspaces keep playing audio and are never unloaded automatically.
 - Closing the last tab opens a new tab instead of closing the window
   (`browser.tabs.closeWindowWithLastTab` is `false`); setting it to `true` lets the window close

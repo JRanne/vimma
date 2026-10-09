@@ -8,6 +8,7 @@
 import { pickerItems } from "../core/picker.mjs";
 import { getTabLabel } from "./tab-labels.mjs";
 import { selectableTabs } from "./tab-ops.mjs";
+import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
 
 /** @import { PickerItem } from "../core/picker.mjs" */
 /** @import { Workspaces } from "../core/workspaces.mjs" */
@@ -24,12 +25,25 @@ function gBrowserOf(win) {
 }
 
 /**
- * The workspace model the picker lists. M3 seam: until workspaces exist this is one workspace
- * holding the window's selectable tabs; M3 returns its own model (every workspace's tabs).
+ * The workspace model the picker lists: the window's workspaces (m3-workspaces 2b), every
+ * workspace's tabs in the window's tab order; selecting one in another workspace switches to it
+ * (WindowWorkspaces' TabSelect). A window without workspaces (private) lists its visible tabs.
  * @param {Window} win
  * @returns {Workspaces}
  */
 export function pickerWorkspaces(win) {
+  const model = WindowWorkspaces.get(win)?.model;
+  if (model) {
+    const order = new Map(gBrowserOf(win).tabs.map((t, i) => [t.linkedPanel, i]));
+    const at = (/** @type {string} */ id) => order.get(id) ?? Infinity;
+    return {
+      ...model,
+      workspaces: model.workspaces.map((w) => ({
+        ...w,
+        tabs: [...w.tabs].sort((a, b) => at(a) - at(b)),
+      })),
+    };
+  }
   const tabs = /** @type {Tab[]} */ (selectableTabs(win));
   const workspace = {
     id: "window",

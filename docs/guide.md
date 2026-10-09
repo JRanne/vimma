@@ -199,7 +199,8 @@ fullscreen, such as a video; browser fullscreen with `F11` keeps it). From the l
   the `ctrl+b ?` overlay or the `ctrl+b g` picker is open, `HINT` while link hints are up,
   `VISUAL` in copy mode;
 - the **pending keys**, e.g. `prefix` after `ctrl+b`;
-- `tab 2/5`: the selected tab and how many there are;
+- the **workspace**: `● 2:work`, its number in `ctrl+i` order and its name;
+- `tab 2/5`: the selected tab and how many the workspace shows;
 - the page **title**, or your rename (`ctrl+b shift+t`);
 - on the right, the **search** in this page: `/word [2/5]` (match 2 of 5), or
   `/zzz not found` in red;
@@ -259,13 +260,41 @@ digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 
 - **Back, forward and reload** (`H`/`L`, `r`): bound, not built yet. Until then these keys
   reach the page as before.
-- **M3, workspaces and the side panel:** `ctrl+i`/`ctrl+u` next/previous workspace, the
-  `ctrl+b w` picker, new/rename/close workspace, and `ctrl+b b` or `<leader>n` for the side panel.
-  Until then `ctrl+i` and `ctrl+u` keep Firefox's meaning (page info, view source).
+- **M3, the rest of workspaces and the side panel:** the `ctrl+b w` picker, new/rename/close
+  workspace, keeping workspaces across a restart, and `ctrl+b b` or `<leader>n` for the side
+  panel. `ctrl+i` / `ctrl+u` work now (see [Workspaces](#workspaces)).
 - **M4, split panes:** swap (`ctrl+b shift+h j k l`), resize (`ctrl+b r`), click focus, one
   layout per workspace and restore after a restart.
 - **M5, config and theme:** rebinding in `~/.config/vimma/config.toml`, `:source`, Omarchy
   colours.
+
+## Workspaces
+
+Every tab lives in a workspace, and every workspace is a Firefox container of its own: a site
+you are signed in to in one workspace sees none of its cookies or storage in another. A new
+profile has one workspace, `main`; creating, renaming and closing workspaces from the keyboard
+comes later in M3 (until then they are made through the workspace store, as the tests do).
+
+- `ctrl+i` / `ctrl+u` (or `:wsnext` / `:wsprev`) go to the next / previous workspace, wrapping
+  around; `:workspace work` or `:workspace 2` goes to one by name or number. The status bar
+  shows where you are (`● 2:work`).
+- A window shows **one workspace at a time**: the other workspaces' tabs are hidden, not closed.
+  Coming back selects the tab you left, and a split comes back with its panes laid out as
+  before. A workspace with no tabs gets a start-page tab when you switch to it.
+- `ctrl+b 1..9`, `ctrl+b n` / `p`, `gt`, `ctrl+tab` and closing a tab stay within the
+  workspace. The goto picker (`ctrl+b g`) is the exception: it lists every workspace's tabs, and
+  picking one from another workspace switches there.
+- **New tabs** (`ctrl+b c`, `t`, `ctrl+t`, a bookmark, a link from another app) open in the
+  current workspace and its container. A link opened from a page keeps that page's container
+  and so its workspace: opened in the background into another workspace, it waits there, hidden.
+- A tab in a container that belongs to no workspace (Firefox's own containers, "no container",
+  an extension's) joins the workspace you are in as a `foreign` tab: it does not share that
+  workspace's cookies and logins. (The workspace picker and side panel, still to come, will mark
+  it.)
+- **Pinned tabs** belong to no workspace and show in every one. Vimma has no key to pin; an
+  extension or an old session can still pin.
+- Each window has its own current workspace; the workspaces themselves are shared by all
+  windows. Workspaces and their tabs are not kept across a restart yet (later in M3).
 
 ## Goto picker and tab rename
 
@@ -282,8 +311,9 @@ Like the bindings overlay it takes every key while open, so nothing reaches the 
 - `Esc` in a search goes back to moving through the filtered list; `Esc` or `q` then closes the
   picker and focus returns to the page.
 
-The picker lists the current window only; with workspaces (M3) it lists every tab of every
-workspace.
+The picker lists every tab of every workspace in the current window, workspace by workspace;
+the number is the tab's place in its workspace. `Enter` on a tab of another workspace switches
+to that workspace.
 
 `ctrl+b shift+t` opens a one-line prompt at the foot of the window with the tab's current name.
 Type a name and press `Enter`; `Esc` cancels. An empty name removes the rename, so the page title
@@ -314,18 +344,20 @@ type reaches the page, and `ctrl+b` sequences still work.
 - An argument is the rest of the line, as typed. Quotes are removed only when one pair wraps all
   of it: `:tabrename "my  tab"`.
 
-| Command                                               | What it does                                                                                                   |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `:open text`                                          | Opens `text` in this tab as the URL bar would: `example.com` becomes a web address, other words a web search.  |
-| `:tabnew`, `:tabnew text`                             | Opens a new tab; with text, opens it there (as `:open`).                                                       |
-| `:q`, `:quit`                                         | Closes the pane, as `ctrl+b x`; with one pane the tab, as `x`: a pinned tab is kept and the next one selected. |
-| `:map`, `:help`, `:h`                                 | Shows every binding (the `ctrl+b ?` overlay).                                                                  |
-| `:scroll_down`, `:tab.next`…                          | Any action by its name in [bindings.md](bindings.md), or by its dotted id. Actions take no argument.           |
-| `:tabrename [name]`                                   | Renames the tab; without a name, opens the rename prompt.                                                      |
-| `:ls`, `:b`                                           | Opens the goto picker.                                                                                         |
-| `:vsplit`/`:vs`, `:split`/`:sp`                       | Splits the pane right / down, as `ctrl+b v` / `ctrl+b -`.                                                      |
-| `:wsnext`, `:wsprev`, `:workspace [name]`, `:sidebar` | Not built yet (M3); `:workspace name` says "… not available yet".                                              |
-| `:source`                                             | Not built yet (M5).                                                                                            |
+| Command                           | What it does                                                                                                   |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `:open text`                      | Opens `text` in this tab as the URL bar would: `example.com` becomes a web address, other words a web search.  |
+| `:tabnew`, `:tabnew text`         | Opens a new tab; with text, opens it there (as `:open`).                                                       |
+| `:q`, `:quit`                     | Closes the pane, as `ctrl+b x`; with one pane the tab, as `x`: a pinned tab is kept and the next one selected. |
+| `:map`, `:help`, `:h`             | Shows every binding (the `ctrl+b ?` overlay).                                                                  |
+| `:scroll_down`, `:tab.next`…      | Any action by its name in [bindings.md](bindings.md), or by its dotted id. Actions take no argument.           |
+| `:tabrename [name]`               | Renames the tab; without a name, opens the rename prompt.                                                      |
+| `:ls`, `:b`                       | Opens the goto picker.                                                                                         |
+| `:vsplit`/`:vs`, `:split`/`:sp`   | Splits the pane right / down, as `ctrl+b v` / `ctrl+b -`.                                                      |
+| `:wsnext`, `:wsprev`              | Next / previous workspace, as `ctrl+i` / `ctrl+u`.                                                             |
+| `:workspace name`, `:workspace 2` | Switches to the workspace with that name, or that number in `ctrl+i` order.                                    |
+| `:workspace`, `:sidebar`          | Not built yet (M3: the workspace picker and the side panel).                                                   |
+| `:source`                         | Not built yet (M5).                                                                                            |
 
 A command that is not built yet says so for a moment, as its keys do.
 
@@ -463,15 +495,19 @@ any server about the pages you visit.
 
 ## Firefox behaviour Vimma changes
 
-**Planned for M3** (workspaces, [m3-workspaces](specs/m3-workspaces.md)); each is a default you
-can change in `about:config`:
+For workspaces ([m3-workspaces](specs/m3-workspaces.md)); each is a default you can change in
+`about:config`:
+
+- **Closing the last tab keeps the window** and opens a new tab in the workspace, so a window
+  never closes with other workspaces' tabs in it (`browser.tabs.closeWindowWithLastTab` =
+  `false`).
+- **No preloaded new-tab page** (`browser.newtab.preload` = `false`): Firefox only uses it for
+  tabs without a container, and every Vimma tab is in one.
+
+**Planned for M3:**
 
 - **Restart restores your session**: tabs, workspaces and scroll positions come back
   (`browser.startup.page` = `3`; Firefox's default `1` opens the home page).
-- **Closing the last tab keeps the window** and opens a new tab, so a window never closes with
-  other workspaces' tabs in it (`browser.tabs.closeWindowWithLastTab` = `false`).
-- **No preloaded new-tab page** (`browser.newtab.preload` = `false`): Firefox only uses it for
-  tabs without a container, and every Vimma tab is in one.
 - **Firefox Sync leaves two settings alone**: `browser.startup.page` and
   `privacy.userContext.enabled` (turning containers off deletes every workspace's data).
 
