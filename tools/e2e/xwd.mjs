@@ -10,13 +10,25 @@ const HEADER_FIELDS = 25;
 const Z_PIXMAP = 2;
 const COLOR_ENTRY_SIZE = 12;
 
-/** Shift and width of a colour mask, to scale its channel to 8 bits. @param {number} mask */
-function maskInfo(mask) {
-  if (mask === 0) throw new Error("XWD: zero colour mask (not a TrueColor visual)");
+/** Largest width or height accepted; Xvfb screens are far smaller. */
+const MAX_DIMENSION = 16384;
+
+/**
+ * Shift and maximum of a colour mask, to scale its channel to 8 bits. The mask must be one run
+ * of 1 to 16 set bits inside `bpp` bits. The loops are bounded by 32 iterations, so a hostile
+ * mask (0xFFFFFFFF: `>>> 32` is `>>> 0`) cannot spin forever (review of PR #35).
+ * @param {number} mask
+ * @param {number} bpp
+ */
+function maskInfo(mask, bpp) {
   let shift = 0;
-  while (((mask >>> shift) & 1) === 0) shift++;
+  while (shift < 32 && ((mask >>> shift) & 1) === 0) shift++;
   let bits = 0;
-  while (((mask >>> (shift + bits)) & 1) === 1) bits++;
+  while (shift + bits < 32 && ((mask >>> (shift + bits)) & 1) === 1) bits++;
+  const contiguous = shift + bits >= 32 || mask >>> (shift + bits) === 0;
+  if (mask === 0 || bits > 16 || !contiguous || shift + bits > bpp) {
+    throw new Error(`XWD: bad colour mask 0x${(mask >>> 0).toString(16)} for ${bpp} bpp`);
+  }
   return { shift, max: 2 ** bits - 1 };
 }
 
@@ -40,8 +52,25 @@ export function decodeXwd(file) {
   );
   const masks = [field(14), field(15), field(16)];
   const ncolors = field(19);
+  if (/** @type {number} */ (headerSize) < HEADER_FIELDS * 4) {
+    throw new Error(
+      `XWD: header_size ${headerSize} is smaller than the ${HEADER_FIELDS * 4}-byte header`,
+    );
+  }
   if (format !== Z_PIXMAP) throw new Error(`XWD: pixmap format ${format} is not ZPixmap`);
   if (bpp !== 16 && bpp !== 24 && bpp !== 32) throw new Error(`XWD: ${bpp} bits per pixel`);
+  if (byteOrder !== 0 && byteOrder !== 1) throw new Error(`XWD: byte_order ${byteOrder}`);
+  for (const d of [width, height]) {
+    if (!d || d > MAX_DIMENSION) {
+      throw new Error(`XWD: implausible dimensions ${width}×${height} (max ${MAX_DIMENSION})`);
+    }
+  }
+  if (
+    /** @type {number} */ (bytesPerLine) <
+    /** @type {number} */ (width) * /** @type {number} */ (bpp / 8)
+  ) {
+    throw new Error(`XWD: bytes_per_line ${bytesPerLine} is less than width × bytes per pixel`);
+  }
   const w = /** @type {number} */ (width);
   const h = /** @type {number} */ (height);
   const bpl = /** @type {number} */ (bytesPerLine);
@@ -50,7 +79,10 @@ export function decodeXwd(file) {
   if (offset + bpl * h > buf.length) {
     throw new Error(`XWD truncated: ${buf.length} bytes, need ${offset + bpl * h}`);
   }
-  const [r, g, b] = masks.map(maskInfo);
+  const [r, g, b] = masks.map((m) => maskInfo(m, /** @type {number} */ (bpp)));
+  if ((masks[0] & masks[1]) | (masks[0] & masks[2]) | (masks[1] & masks[2])) {
+    throw new Error("XWD: overlapping colour masks");
+  }
   const out = new Uint8Array(w * h * 4);
   if (bytes === 4 && byteOrder === 0 && masks.join() === "16711680,65280,255") {
     // Xvfb at depth 24 on a little-endian host: bytes are B, G, R, X. A fast path for 1 Mpx.

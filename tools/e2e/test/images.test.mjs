@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import { decodePng, encodePng } from "../png.mjs";
+import fc from "fast-check";
 import { decodeXwd } from "../xwd.mjs";
 import { CHANNEL_TOLERANCE, MAX_DIFF_RATIO, checkBaseline, diffImages } from "../screenshot.mjs";
 
@@ -128,6 +129,46 @@ describe("XWD (Xvfb -fbdir)", () => {
     );
     expect(() => decodeXwd(full.subarray(0, full.length - 1))).toThrow(/truncated/);
     expect(() => decodeXwd(Buffer.alloc(200))).toThrow(/not an XWD/);
+  });
+
+  // Review of PR #35: a hostile or corrupt header must fail fast, never hang or misread.
+  const black = () => xvfbXwd(3, 2, [[0, 0, 0]], false);
+  /** @param {number} field @param {number} value */
+  const patched = (field, value) => {
+    const buf = Buffer.from(black());
+    buf.writeUInt32BE(value >>> 0, field * 4);
+    return buf;
+  };
+  it.each([
+    ["red_mask 0xFFFFFFFF", 14, 0xffffffff, /colour mask/],
+    ["a non-contiguous mask", 15, 0x0f0f00, /colour mask/],
+    ["overlapping masks", 16, 0xff00, /colour mask/],
+    ["bytes_per_line below width × bpp", 12, 11, /bytes_per_line/],
+    ["header_size 0", 0, 0, /header_size/],
+    ["header_size below the fixed header", 0, 99, /header_size/],
+    ["width 0", 4, 0, /dimensions/],
+    ["an implausible height", 5, 1_000_000, /dimensions/],
+    ["a huge colormap", 19, 0x7fffffff, /truncated|ncolors/],
+  ])("rejects %s", (_what, field, value, message) => {
+    expect(() => decodeXwd(patched(field, value))).toThrow(message);
+  });
+
+  it("never hangs or throws a non-Error on any corrupted header field (fuzz)", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 24 }),
+        fc.oneof(fc.constantFrom(0, 1, 7, 31, 32, 0xffffffff, 0x80000000), fc.nat()),
+        (field, value) => {
+          try {
+            const img = decodeXwd(patched(field, value));
+            expect(img.data.length).toBe(img.width * img.height * 4);
+          } catch (e) {
+            expect(e).toBeInstanceOf(Error);
+          }
+        },
+      ),
+      { numRuns: 2000 },
+    );
   });
 });
 
