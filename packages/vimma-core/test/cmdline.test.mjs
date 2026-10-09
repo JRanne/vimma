@@ -2,7 +2,6 @@ import { describe, test, expect } from "vitest";
 import {
   COMMANDS,
   PENDING_ACTIONS,
-  tokenize,
   parseCommandLine,
   completeCommandLine,
   createHistory,
@@ -11,32 +10,7 @@ import {
   historyNext,
   resetHistoryCursor,
 } from "../src/cmdline.mjs";
-import { ACTIONS } from "../src/actions.mjs";
-
-describe("tokenize", () => {
-  test.each([
-    ["a b  c", ["a", "b", "c"]],
-    ["  ", []],
-    ['"a  b"', ["a  b"]],
-    ["'a \\ \"b'", ['a \\ "b']],
-    ['"say \\"hi\\""', ['say "hi"']],
-    ['"back\\\\slash"', ["back\\slash"]],
-    ['"\\n"', ["\\n"]],
-    ['a"b c"', ["ab c"]],
-    ["\"\" ''", ["", ""]],
-    ["x\ty", ["x", "y"]],
-  ])("%j → %j", (text, tokens) => {
-    expect(tokenize(text)).toEqual({ ok: true, tokens });
-  });
-
-  test.each([
-    ['"open', 0],
-    ["ab 'cd", 3],
-    ['x "a\\"', 2],
-  ])("%j → unterminated-quote at column %i", (text, column) => {
-    expect(tokenize(text)).toEqual({ ok: false, column });
-  });
-});
+import { ACTIONS, getAction } from "../src/actions.mjs";
 
 const run = (command, id, extra = {}) => ({
   kind: "run",
@@ -50,7 +24,16 @@ describe("parseCommandLine: plan §2 commands", () => {
     [":tabnew", run("tabnew", "tab.new")],
     ["tabnew https://x.org/?q=1", run("tabnew", "tab.new", { text: "https://x.org/?q=1" })],
     [':tabrename "my  tab"', run("tabrename", "tab.rename", { text: "my  tab" })],
-    [":tabrename my   tab", run("tabrename", "tab.rename", { text: "my tab" })],
+    [":tabrename my   tab ", run("tabrename", "tab.rename", { text: "my   tab" })],
+    [":tabrename Juuso's tab", run("tabrename", "tab.rename", { text: "Juuso's tab" })],
+    [":open https://x.com/?q=it's", run("open", "page.open", { text: "https://x.com/?q=it's" })],
+    [":tabrename 'my tab'", run("tabrename", "tab.rename", { text: "my tab" })],
+    [':workspace "my ws"', run("workspace", "workspace.switch", { text: "my ws" })],
+    [':tabrename "a" and "b"', run("tabrename", "tab.rename", { text: '"a" and "b"' })],
+    [':tabrename "oops', run("tabrename", "tab.rename", { text: '"oops' })],
+    [":tabrename '", run("tabrename", "tab.rename", { text: "'" })],
+    ["::q", run("q", "pane.close")],
+    [" :: :tabnew x", run("tabnew", "tab.new", { text: "x" })],
     [":tabrename", run("tabrename", "tab.rename")],
     [":q", run("q", "pane.close")],
     [":quit", run("q", "pane.close")],
@@ -76,10 +59,11 @@ describe("parseCommandLine: plan §2 commands", () => {
   test.each([
     [":open", "missing-argument"],
     [':open ""', "missing-argument"],
+    [":open ''", "missing-argument"],
+    [":open    ", "missing-argument"],
     [":q now", "unexpected-argument"],
     [":map j k", "unexpected-argument"],
     [":ls x", "unexpected-argument"],
-    [':tabrename "oops', "unterminated-quote"],
   ])("%j → %s", (text, code) => {
     const r = parseCommandLine(text);
     expect(r.kind).toBe("error");
@@ -88,15 +72,11 @@ describe("parseCommandLine: plan §2 commands", () => {
     expect(r.error.suggestions).toEqual(expect.any(Array));
   });
 
-  test("the unterminated quote's column is in the original line", () => {
-    expect(parseCommandLine(':tabrename "oops').error.column).toBe(11);
-  });
-
   test(":map with arguments says bindings live in config.toml", () => {
     expect(parseCommandLine(":map j k").error.message).toMatch(/config\.toml/);
   });
 
-  test.each(["", ":", "  :  "])("%j is empty", (text) => {
+  test.each(["", ":", "  :  ", "::"])("%j is empty", (text) => {
     expect(parseCommandLine(text)).toEqual({ kind: "empty" });
   });
 });
@@ -166,6 +146,10 @@ describe("command table", () => {
     }
   });
 
+  test(":q's action says the last pane closes the tab (plan §2)", () => {
+    expect(getAction("close_pane").description).toBe("Close pane; the last pane closes the tab");
+  });
+
   test("PENDING_ACTIONS are exactly the missing ones, not yet in actions.mjs", () => {
     expect(PENDING_ACTIONS).toEqual(["page.open", "workspace.switch"]);
     for (const id of PENDING_ACTIONS) expect(ids.has(id)).toBe(false);
@@ -190,6 +174,7 @@ describe("completeCommandLine", () => {
 
   test("wsp → wsprev", () => {
     expect(values("wsp")[0]).toBe("wsprev");
+    expect(values("::wsp")[0]).toBe("wsprev");
   });
 
   test("fuzzy scd → scroll_down before scroll_half_down", () => {

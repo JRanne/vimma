@@ -25,23 +25,28 @@ Status: implemented (core), awaiting review; host wiring pending · Milestone: M
 
 `packages/vimma-core/src/`:
 
-| Module         | Exports                                                                                                                                                                      |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `editable.mjs` | `isEditable`, `matchSiteRule`, `TEXT_INPUT_EXCLUDED_TYPES`, `EDITABLE_ROLES`, `KNOWN_EDITORS`, `INSERT_SITE_MODES`                                                           |
-| `hints.mjs`    | `DEFAULT_HINT_CHARS`, `HINT_ACTIONS`, `hintLabels`, `orderTargets`, `startHints`, `hintKey`, `visibleHints`, `HintError`                                                     |
-| `cmdline.mjs`  | `COMMANDS`, `PENDING_ACTIONS`, `tokenize`, `parseCommandLine`, `completeCommandLine`, `createHistory`, `pushHistory`, `historyPrevious`, `historyNext`, `resetHistoryCursor` |
-| `escape.mjs`   | `resolveEscape`                                                                                                                                                              |
-| `index.mjs`    | re-exports                                                                                                                                                                   |
+| Module         | Exports                                                                                                                                                          |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `editable.mjs` | `isEditable`, `insertModeAfterFocus`, `matchSiteRule`, `TEXT_INPUT_EXCLUDED_TYPES`, `EDITABLE_ROLES`, `KNOWN_EDITORS`, `INSERT_SITE_MODES`, `INSERT_TRIGGERS`    |
+| `hints.mjs`    | `DEFAULT_HINT_CHARS`, `HINT_ACTIONS`, `hintLabels`, `orderTargets`, `startHints`, `hintKey`, `visibleHints`, `HintError`                                         |
+| `cmdline.mjs`  | `COMMANDS`, `PENDING_ACTIONS`, `parseCommandLine`, `completeCommandLine`, `createHistory`, `pushHistory`, `historyPrevious`, `historyNext`, `resetHistoryCursor` |
+| `escape.mjs`   | `resolveEscape`                                                                                                                                                  |
+| `actions.mjs`  | changed: `close_pane` reads "Close pane; the last pane closes the tab"                                                                                           |
+| `index.mjs`    | re-exports                                                                                                                                                       |
 
 Everything is pure: plain data in, frozen plain data out, inputs never mutated. No module
 reads the DOM, the clock or storage.
 
 ## Insert detection (`editable.mjs`)
 
-The content actor (M1 actor spec) builds a descriptor of the focused element (the deepest
-`activeElement`, through open shadow roots and into same-process frames, as Vimium's
-`getActiveElement` does) on every `focusin` / `focusout`, and the host enters or leaves
-`insert` from `isEditable(descriptor, { site })`.
+The content actor (M1 actor spec) builds a descriptor of the focused element and reports it
+with the trigger that caused the report. Finding that element is the actor's job:
+
+- the deepest focused element, through open **and closed** shadow roots
+  (`openOrClosedShadowRoot`, available to privileged actor code; Vimium's `getActiveElement`
+  only sees open ones);
+- frames: a child actor runs in every frame, including out-of-process iframes (Fission), and
+  each reports for its own document; the parent keeps the report of the frame that has focus.
 
 ```js
 /**
@@ -56,53 +61,86 @@ The content actor (M1 actor spec) builds a descriptor of the focused element (th
  * @property {boolean} [ariaReadOnly]      aria-readonly="true" on the element
  * @property {boolean} [ariaDisabled]      aria-disabled="true" on the element or an ancestor
  * @property {boolean} [designMode]        ownerDocument.designMode === "on"
- * @property {string[]} [ancestorClasses]  class tokens of the element and its ancestors
+ * @property {string[]} [classes]          the element's own class tokens
  */
 /** @typedef {{ editable: boolean, reason: string }} EditableResult */
+/** @typedef {"focusin" | "recheck"} InsertTrigger */
 ```
 
-Rules, first match wins:
+`isEditable(descriptor, { site = "auto", trigger = "focusin" })`. Rules, first match wins:
 
-| #   | Condition                                                                                                                             | Result | `reason`             |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------- | ------ | -------------------- |
-| 1   | `site = "never"`                                                                                                                      | no     | `site:never`         |
-| 2   | `site = "always"`                                                                                                                     | yes    | `site:always`        |
-| 3   | `designMode`                                                                                                                          | yes    | `design-mode`        |
-| 4   | `disabled`                                                                                                                            | no     | `disabled`           |
-| 5   | `ariaDisabled`                                                                                                                        | no     | `aria-disabled`      |
-| 6   | `readOnly`                                                                                                                            | no     | `readonly`           |
-| 7   | `<input>` whose type is in `TEXT_INPUT_EXCLUDED_TYPES` (button checkbox color file hidden image radio range reset submit)             | no     | `input:<type>`       |
-| 8   | any other `<input>` (text, search, email, url, tel, password, number, date, time, …, and unknown types, which browsers treat as text) | yes    | `input:<type>`       |
-| 9   | `<textarea>`, `<select>`                                                                                                              | yes    | `textarea`, `select` |
-| 10  | `<embed>`, `<object>`                                                                                                                 | yes    | `embed`              |
-| 11  | `isContentEditable` (or, when absent, `contentEditable` ∈ `"true"`, `""`, `"plaintext-only"`)                                         | yes    | `contenteditable`    |
-| 12  | an `ancestorClasses` token names a `KNOWN_EDITORS` entry                                                                              | yes    | `editor:<name>`      |
-| 13  | `role` ∈ `EDITABLE_ROLES` (textbox searchbox combobox spinbutton application) and not `ariaReadOnly`                                  | yes    | `role:<role>`        |
-| 14  | `role` ∈ `EDITABLE_ROLES` with `ariaReadOnly`                                                                                         | no     | `aria-readonly`      |
-| 15  | otherwise                                                                                                                             | no     | `none`               |
+| #   | Condition                                                                                                                             | Result | `reason`                       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------ |
+| 1   | `site = "never"`                                                                                                                      | no     | `site:never`                   |
+| 2   | `trigger = "recheck"`, the element is `<body>` or `<html>`, and `site = "always"` or `designMode`                                     | no     | `document-root`                |
+| 3   | `site = "always"`                                                                                                                     | yes    | `site:always`                  |
+| 4   | `designMode`                                                                                                                          | yes    | `design-mode`                  |
+| 5   | `disabled`                                                                                                                            | no     | `disabled`                     |
+| 6   | `readOnly`                                                                                                                            | no     | `readonly`                     |
+| 7   | `<input>` whose type is in `TEXT_INPUT_EXCLUDED_TYPES` (button checkbox color file hidden image radio range reset submit)             | no     | `input:<type>`                 |
+| 8   | any other `<input>` (text, search, email, url, tel, password, number, date, time, …, and unknown types, which browsers treat as text) | yes    | `input:<type>`                 |
+| 9   | `<textarea>`, `<select>`                                                                                                              | yes    | `textarea`, `select`           |
+| 10  | `<embed>`, `<object>`                                                                                                                 | yes    | `embed`                        |
+| 11  | `isContentEditable` (or, when absent, `contentEditable` ∈ `"true"`, `""`, `"plaintext-only"`)                                         | yes    | `contenteditable`              |
+| 12  | an editor focus class (below) or `role` ∈ `EDITABLE_ROLES` (textbox searchbox combobox spinbutton application), with `ariaDisabled`   | no     | `aria-disabled`                |
+| 13  | the same, with `ariaReadOnly`                                                                                                         | no     | `aria-readonly`                |
+| 14  | the same, otherwise                                                                                                                   | yes    | `editor:<name>`, `role:<role>` |
+| 15  | otherwise                                                                                                                             | no     | `none`                         |
 
-`KNOWN_EDITORS` (class → name): `monaco-editor` → `monaco` (Monaco / VS Code web),
-`cm-editor` → `codemirror6`, `CodeMirror` → `codemirror5`, `ace_editor` → `ace`,
-`ProseMirror` → `prosemirror`, `ql-editor` → `quill`. Classes match whole tokens. Most of them
-focus a textarea or a contenteditable and are caught earlier; the marker catches the editors'
-own focusable wrappers (Monaco's and Ace's scroll containers, CodeMirror 6's
-`tabindex` content element when it is not contenteditable) that otherwise read as `none`.
+`aria-disabled` blocks only the ARIA and editor rules: a real `<input>` or contenteditable under
+an `aria-disabled` ancestor still takes typing, so it stays editable.
 
-**Per-site override (data shape only; config wiring is the M5 follow-up).**
+`KNOWN_EDITORS` match a class on the **focused element itself**, the element the editor focuses
+to receive keys, not on an ancestor: `monaco` (`native-edit-context`, `inputarea`),
+`codemirror6` (`cm-content`), `ace` (`ace_text-input`), `prosemirror` (`ProseMirror`, its
+editable root), `quill` (`ql-editor`). Most are also a textarea or contenteditable and are
+caught earlier; the class catches the ones that are neither (Monaco's EditContext
+`native-edit-context` div). Native controls (`a button details input label optgroup option
+select summary textarea`) and elements whose `contentEditable` is `"false"` never match, so a
+button in CodeMirror's search panel or a ProseMirror widget is `none`. Read-only editors mark
+their focus element `aria-readonly` (CodeMirror 6) or `readonly` (Monaco's textarea).
+
+**Host contract: entering and leaving insert.**
+`insertModeAfterFocus({ mode, trigger, descriptor, site })` → the next mode.
+
+- Insert is entered only on a `focusin` of an editable element, or by the explicit `i`
+  action. A `recheck` (on `focusout`, after a blur, after a page change) can leave insert, never
+  enter it.
+- `focusin` of a non-editable element in `insert` → `normal`.
+- Modes other than `normal` and `insert` are returned unchanged; their own exits handle focus.
+- Esc in insert: `resolveEscape` switches to `normal` and asks the actor to blur; focus falls
+  to `<body>`, and the `focusout` recheck stays in `normal`, even under `site = "always"` or
+  `designMode` (rule 2). Without rule 2 and the focusin-only rule, the recheck would put the
+  user straight back in insert.
+
+**Per-site override (data shape only; the config wiring is the M1 host spec's).**
 
 ```js
 /** @typedef {"auto" | "never" | "always"} InsertSiteMode */
 /** @typedef {{ match: string, insert: InsertSiteMode }} InsertSiteRule */
 ```
 
-Proposed config: `[[insert.sites]]` array of tables, `match = "docs.google.com"`,
-`insert = "always"`. Not `[modal.insert] sites`: `[modal.insert]` is a keymap table and `sites`
-would read as the key sequence `s i t e s`. `matchSiteRule(host, rules)` returns the rule whose
-`match` equals the host or is a dot-suffix of it (`example.com` matches `www.example.com`, not
-`badexample.com`), the longest such match winning, the earlier rule on a tie; case-insensitive;
-a trailing dot on the host is ignored. `auto` = the heuristic; `never` = keys stay vimma's
-(sites that grab focus with fake inputs); `always` = everything focused is editable (canvas
-editors, web terminals).
+Planned config (schema 2, with an identity migration from 1, in the M1 host spec; not in this
+PR):
+
+```toml
+schema = 2
+[sites."docs.google.com"]
+insert = "always"   # auto | never | always
+```
+
+The host turns each `[sites."<host>"]` table into `{ match: "<host>", insert }`. Not
+`[modal.insert] sites`: `[modal.insert]` is a keymap table and `sites` would read as the key
+sequence `s i t e s`. `auto` = the heuristic; `never` = keys stay vimma's (sites that grab focus
+with fake inputs); `always` = everything focused is editable (canvas editors, web terminals).
+
+`matchSiteRule(hostname, rules)`: the input is `URL.hostname` (no port; IPv6 in brackets).
+A domain rule matches the hostname or any subdomain, on label boundaries (`example.com`
+matches `www.example.com`, not `badexample.com`); `localhost` matches `localhost`. IPv4 and IPv6
+literals match only exactly (`1.1` does not match `10.1.1.1`; `[::1]` and `::1` are the same).
+The longest match wins, the earlier rule on a tie; case and a trailing dot are ignored. Ports
+take no part: a rule cannot name one, and a string with a port (`example.com:8080`) is not a
+hostname and matches nothing a rule would normally contain.
 
 ## Hints (`hints.mjs`)
 
@@ -117,7 +155,8 @@ editors, web terminals).
   extensions in order, cut at `n`. So the shortest labels go to the first targets and are made
   of the first (most comfortable) characters.
 - Charset: ≥ 2 distinct single characters, none of them whitespace or uppercase →
-  else `HintError("bad-charset")`. `n` a non-negative integer, else `HintError("bad-count")`.
+  else `HintError("bad-charset")`. Planned config key: `[modal] hint_chars` (M1 host spec,
+  schema 2). `n` a non-negative integer, else `HintError("bad-count")`.
 - `orderTargets(targets)`: targets are `{ rect: { x, y, width, height }, … }` (any extra fields
   pass through). Sorted by `(y, x, height, width)`, then swept into rows: a target joins the
   current row while its `y` is above the row's first target's vertical centre; rows are read
@@ -152,10 +191,13 @@ editors, web terminals).
 
 ## Command line (`cmdline.mjs`)
 
-**Grammar.** An optional leading `:`, whitespace, a command word, then arguments. `tokenize`
-splits arguments on whitespace; `"…"` groups with `\"` and `\\` escapes, `'…'` groups literally;
-an unclosed quote is an `unterminated-quote` error at its column. A command that takes text
-gets the arguments joined with one space (`:tabrename "a  b"` keeps both spaces).
+**Grammar.** Optional leading colons and whitespace (`::q` works, as in Vim), a command word,
+then the rest of the line. Every command takes at most one argument, and it is free text: the
+raw rest of the line, trimmed. Quotes are removed only when one pair wraps the whole argument
+(`:tabrename "my  tab"` → `my  tab`, `:workspace 'my ws'` → `my ws`); anywhere else they are
+text (`:tabrename Juuso's tab`, `:open https://x.com/?q=it's`, `:tabrename "a" and "b"`,
+`:tabrename "oops`). A tokenizer with quoting comes when a command takes several arguments;
+none does yet.
 
 **Commands** (plan §2, Neovim column):
 
@@ -164,7 +206,7 @@ gets the arguments joined with one space (`:tabrename "a  b"` keeps both spaces)
 | `:open url`         |         | required | `page.open` (missing, see below)                                           |
 | `:tabnew [url]`     |         | optional | `tab.new` (+ `text`)                                                       |
 | `:tabrename [name]` |         | optional | `tab.rename` (+ `text`; without it, the rename prompt as `prefix+shift+t`) |
-| `:q`                | `quit`  | none     | `pane.close` (the last pane's close closes the tab, as in Vim)             |
+| `:q`                | `quit`  | none     | `pane.close`; with one pane the host closes the tab (plan §2)              |
 | `:vsplit`           | `vs`    | none     | `pane.split_vertical`                                                      |
 | `:split`            | `sp`    | none     | `pane.split_horizontal`                                                    |
 | `:wsnext`           |         | none     | `workspace.next`                                                           |
@@ -181,7 +223,7 @@ order: command name or alias, action, then a unique prefix of a command name (`:
 `:wsn`), as Vim abbreviates. `:3tabnext`-style counts, ranges and `!` are out of scope.
 
 ```js
-/** @typedef {{ code: string, message: string, suggestions: readonly string[], column?: number }} CommandError */
+/** @typedef {{ code: string, message: string, suggestions: readonly string[] }} CommandError */
 /**
  * @typedef {{ kind: "run", command: string, action: Action, text?: string }
  *   | { kind: "empty" }
@@ -191,8 +233,8 @@ order: command name or alias, action, then a unique prefix of a command name (`:
 
 `parseCommandLine(text)` → `CommandResult`. Error codes: `unknown-command` (suggestions: up to
 3 names starting with the word, else the closest by edit distance via `closest`),
-`ambiguous-command` (suggestions: the candidates), `missing-argument`, `unexpected-argument`,
-`unterminated-quote`. An empty line is `empty` (Vim does nothing).
+`ambiguous-command` (suggestions: the candidates), `missing-argument` (also for `""` and
+`''`), `unexpected-argument`. An empty line (`""`, `:`, `::`) is `empty` (Vim does nothing).
 
 **Completion.** `completeCommandLine(text, { limit = 20 })` → `{ word, candidates: [{ value,
 kind: "command" | "action", description }] }` for the command word (the cursor is assumed at
@@ -214,11 +256,17 @@ starting with the draft are recalled, newest first; at the oldest match it stays
 
 - `page.open` (`:open url`) and `workspace.switch` (`:workspace name`) are not in
   `actions.mjs`. `PENDING_ACTIONS` lists them and a test pins the list, so adding them to
-  `actions.mjs` (with `npm run gen-docs`) is a deliberate change in the host spec.
+  `actions.mjs` (with `npm run gen-docs`) is a deliberate change in the host spec. Until then
+  the host must refuse to run an id in `PENDING_ACTIONS` (status bar: "not available yet"),
+  never pass it on to an executor that does not know it.
 - Free-text arguments (`:open url`, `:tabnew url`, `:tabrename name`, `:workspace name`) ride
   on `CommandResult.text`, not on `Action`: the dispatcher's `Action = { id, count?, arg? }`
   (numeric `arg`) is untouched. The host spec decides whether `Action` grows a `text`.
 - `:bug` (plan §4, M6) and `:set` (not in plan) are not commands yet.
+- `:q` → `pane.close`. Host semantic (plan §2: `:q` closes the tab, and closes a pane in a
+  pane): closing the last pane closes the tab, as `prefix+x` does. `close_pane`'s description
+  in `actions.mjs` now says so ("Close pane; the last pane closes the tab"); `docs/bindings.md`
+  and the `prefix+?` snapshot are regenerated.
 
 ## Esc (`escape.mjs`)
 
@@ -236,8 +284,8 @@ starting with the draft are recalled, newest first; at the oldest match it stays
 | `normal`, nothing pending                         | `{ kind: "pass" }`: the page gets `Esc`                                         |
 
 Pending wins: `ctrl+b` in `insert` then `Esc` cancels the prefix and stays in `insert`. `blur`
-tells the actor to blur the editable element, otherwise the next focus report would put the
-user straight back in `insert` (Vimium and Tridactyl both blur). A test pins every action to
+tells the actor to blur the editable element (Vimium and Tridactyl both blur); the focus report
+that follows is a `recheck`, which never re-enters insert (§ Insert detection, host contract). A test pins every action to
 the default keymap's `<Esc>` binding for that mode, so this table and `defaults.mjs` cannot
 drift. A user who rebinds `<Esc>` in a mode gets the dispatcher's answer first.
 
@@ -252,8 +300,10 @@ Insert detection:
   `datetime-local`, `tel`, `url`, `foo`, then editable with `input:<type>`.
 - Given `<input type>` `checkbox`, `radio`, `submit`, `button`, `file`, `range`, `color`,
   `hidden`, `image`, `reset`, then not editable.
-- Given a text input that is `disabled`, `readOnly` or `ariaDisabled`, then not editable with
-  that reason; given a `readOnly` textarea, then `readonly`.
+- Given a text input that is `disabled` or `readOnly`, then not editable with that reason;
+  given a `readOnly` textarea, then `readonly`.
+- Given a text input, a textarea or a contenteditable under an `aria-disabled` ancestor, then
+  still editable; given role `textbox` with `ariaDisabled`, then `aria-disabled`.
 - Given `textarea`, `select`, `embed`, `object` (any case), then editable.
 - Given a `div` with `isContentEditable`, then `contenteditable`; with `isContentEditable: false`
   and `contentEditable: "true"`, then not (the computed property wins); without
@@ -262,12 +312,27 @@ Insert detection:
 - Given a `div` with role `textbox`, `searchbox`, `combobox`, `spinbutton`, `application`,
   `TextBox`, `"textbox foo"`, then editable; with `ariaReadOnly`, then `aria-readonly`; role
   `button`, `listbox`, then `none`.
-- Given a `div` inside each `KNOWN_EDITORS` class, then `editor:<name>`; `monaco-editorx` does
-  not match; a read-only textarea inside Monaco is `readonly` (rule 6 comes first).
+- Given a focused `div` with each `KNOWN_EDITORS` class, then `editor:<name>`; `cm-contentx`
+  does not match; a `<button>` in CodeMirror's search panel, and `a button option summary label`
+  carrying `cm-content`, are `none`; a `contenteditable="false"` ProseMirror widget and a
+  `cm-content` marked `contenteditable="false"` are `none`; an editor focus element with
+  `ariaReadOnly` is `aria-readonly`; a read-only Monaco textarea is `readonly`.
 - Given `designMode`, a `body`, then `design-mode`; site `never` beats `designMode`; site
   `always` makes a `div` editable; site `auto` changes nothing.
 - `matchSiteRule`: exact host, subdomain, not `badexample.com`, longest match wins, first on tie,
-  case-insensitive, trailing dot, no match → `undefined`.
+  case-insensitive, trailing dot, no match → `undefined`; `1.1` / `1.1.1` do not match
+  `10.1.1.1`, `0.10` not `192.168.0.10`, `1` not `[::1]`, `example.com` not `example.com:8080`,
+  `localhost` not `localhostx`; `localhost`, `10.1.1.1`, `[::1]` = `::1`, `[FE80::1]` =
+  `fe80::1` match exactly.
+- Triggers: on a `recheck`, `<body>` / `<html>` under `site = "always"` or `designMode` are
+  `document-root` (and editable on `focusin`); a `div` under `always` stays `site:always`; an
+  unknown trigger throws.
+- `insertModeAfterFocus`: `focusin` of a text input enters insert from normal; `focusin` of a
+  `div` leaves it; a `recheck` never enters insert and leaves it for `<body>`; `hint` and
+  `visual` are unchanged; `focusin` of `<body>` under `always` enters insert.
+- Given insert under `site = "always"`, and under `designMode`: when Esc (`resolveEscape`:
+  `normal`, `blur`) blurs to `<body>`, then the recheck keeps normal mode, and a host that
+  rechecks while still in insert also lands in normal.
 
 Hints:
 
@@ -277,7 +342,9 @@ Hints:
 - Property (n ∈ 0…2000, charsets of 2–12 characters): exactly `n` labels; unique; prefix-free;
   every character from the charset; lengths ∈ {L−1, L} with `L = ⌈log_k n⌉`; minimal: the
   Kraft sum `Σ k^(L−|ℓ|)` ≤ `k^L`, and making one more label short would exceed it; ordered by
-  length then charset order; `hintLabels(n)` is deterministic.
+  length then charset order; no empty label, and `n ≤ k` gives exactly the first `n`
+  characters; `hintLabels(n)` is deterministic. Examples: `n = 1` and `n = k` for `ab`, `asdf`,
+  `jkl;`.
 - Charset `"a"`, `"aa"`, `"aB"`, `"a "`, `""` → `bad-charset`; `n = -1`, `1.5` → `bad-count`.
 - `orderTargets`: a 3 × 3 grid shuffled reads row by row; links on one text line with tops 100,
   102, 98 and heights 16 stay one row left to right; a target 9 px lower (more than half a
@@ -297,22 +364,24 @@ Hints:
 
 Command line:
 
-- `tokenize`: plain words; `"a  b"`; single quotes are literal (`'a \ "b'`); `"say \"hi\""`;
-  `"back\\slash"`; `"\n"` stays `\n`; `"" ''` are two empty tokens;
-  `"open` → `unterminated-quote` with its column; adjacent quoted and bare text joins (`a"b c"`
-  → `ab c`).
+- Free text: `:tabrename my   tab ` → `my   tab`; `:tabrename Juuso's tab`;
+  `:open https://x.com/?q=it's`; `:tabrename 'my tab'` and `:workspace "my ws"` unwrap;
+  `:tabrename "a" and "b"`, `:tabrename "oops`, `:tabrename '` stay as typed; `::q` and
+  ` :: :tabnew x` parse.
 - Each `COMMANDS` row parses: `:tabnew`, `tabnew https://x`, `:tabrename "my tab"`, `:q`,
   `:quit`, `:vs`, `:sp`, `:wsnext`, `:wsprev`, `:workspace`, `:workspace work`, `:ls`,
   `:sidebar`, `:map`, `:source`, `:open example.com`.
-- `:open` → `missing-argument`; `:q now`, `:map j k` → `unexpected-argument`.
+- `:open`, `:open ""`, `:open ''`, `:open    ` → `missing-argument`; `:q now`, `:map j k`,
+  `:ls x` → `unexpected-argument`.
 - `:scroll_down`, `:tab.next`, `:select_tab_3`, `:prev_workspace` → their actions;
   `:scroll_down 3` → `unexpected-argument`; `:tab.goto` (ambiguous id) → `unknown-command`.
 - `:tabr x`, `:wsn` → unique-prefix commands; `:ws` → `ambiguous-command` listing `wsnext`,
   `wsprev` (`workspace` does not start with `ws`); `:tabnwe` → `unknown-command` suggesting `tabnew`.
-- `""`, `":"`, `"  :  "` → `empty`.
+- `""`, `":"`, `"  :  "`, `"::"` → `empty`.
+- `close_pane`'s description is "Close pane; the last pane closes the tab".
 - Every command maps to an action in `actions.mjs` or in `PENDING_ACTIONS`, which equals
   `["page.open", "workspace.switch"]` and has no overlap with `actions.mjs`.
-- Completion: `tab` → `tabnew`, `tabrename` first, then actions; `wsp` → `wsprev`; fuzzy `scd`
+- Completion: `tab` → `tabnew`, `tabrename` first, then actions; `wsp`, `::wsp` → `wsprev`; fuzzy `scd`
   → `scroll_down` before `scroll_half_down`; `""` → every command then every action, cut at
   `limit`; `tabnew x` → `[]`; each candidate has a description.
 - History: push dedupes to newest, drops empty, honours `limit`; Up/Down walk with the draft
@@ -330,10 +399,11 @@ Coverage ≥ 90 % lines, branches, functions on `packages/vimma-core` (vendor ex
 
 ## Out of scope
 
-- The content actor, `focusin` tracking, building descriptors, shadow DOM and frame traversal,
-  hint rendering and target collection, the command-line UI: the M1 host specs.
-- Config keys for `[[insert.sites]]` and `hint_chars` (shape only here; wiring with the next
-  config schema version and migration).
+- The content actor, `focusin` tracking, building descriptors, shadow DOM (open and closed)
+  and per-frame actors (including out-of-process iframes), hint rendering and target
+  collection, the command-line UI: the M1 host specs.
+- Config: `[sites."<host>"] insert` and `[modal] hint_chars` (schema 2 with an identity
+  migration from 1, in the M1 host spec; shapes only here).
 - Hint text filtering (typing link text), hint rotation, yank-link and focus-input hints.
 - Argument completion (workspace names, URLs from history), `:set`, `:bug`, counts and ranges.
 
@@ -357,12 +427,13 @@ Sources read at these commits:
 | Question                   | Vimium                                                                                 | Tridactyl                                                   | vimma                                                                                                                                              |
 | -------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `<input>` types            | deny list (button checkbox color file hidden image radio reset submit); unknown = text | allow list (text search email url number password date tel) | Vimium's deny list plus `range` (it takes no characters): unknown types are text in browsers, so a deny list stays right as types are added        |
-| `readOnly`, `disabled`     | not checked                                                                            | `readOnly`, disabled input, `aria-disabled` on an ancestor  | all three (Tridactyl), checked before everything else                                                                                              |
+| `readOnly`, `disabled`     | not checked                                                                            | `readOnly`, disabled input, `aria-disabled` on an ancestor  | `readOnly` and `disabled` first; `aria-disabled` only for ARIA-role and editor rules (a real input under it still takes typing)                    |
 | `select`, `embed`/`object` | editable / focusable                                                                   | `select`, `object` editable                                 | editable (they take keys)                                                                                                                          |
 | contenteditable            | `isContentEditable`                                                                    | `isContentEditable`                                         | the computed property, attribute only as a fallback                                                                                                |
 | ARIA                       | none                                                                                   | `role=application`, `combobox`, `listbox`, `option` widgets | `textbox searchbox combobox spinbutton application`; `listbox` / `option` are arrow-key widgets that leave letters free; `aria-readonly` respected |
 | `designMode`               | via `body.isContentEditable`                                                           | via `isContentEditable`                                     | explicit flag (some engines do not reflect it on `body`)                                                                                           |
-| code editors               | via their textarea / contenteditable                                                   | same                                                        | same, plus class markers for their non-editable wrappers                                                                                           |
+| code editors               | via their textarea / contenteditable                                                   | same                                                        | same, plus the editors' focus classes on the focused element itself (not ancestors), never on native controls or `contenteditable="false"`         |
+| leaving insert             | blur on Esc                                                                            | blur on Esc                                                 | blur on Esc, and only `focusin` enters insert, so the blur's own focus report cannot re-enter it                                                   |
 
 - Hint labels follow Vimium's breadth-first idea (shortest prefix-free labels; Vimium's
   `hintStrings` expands the queue front) but are computed in closed form and assigned in reading
@@ -372,3 +443,10 @@ Sources read at these commits:
   closes the tab page; plan §2 lists `:q` for both rows.
 - Commands return `text` beside `Action` rather than changing `Action` (dispatcher contract,
   plan §2) in a core-only spec.
+- Config shape (review of PR #21): per-site overrides are `[sites."<host>"] insert = …` and the
+  hint charset is `[modal] hint_chars`, both in schema 2 with an identity migration, done by the
+  M1 host spec. A `[sites]` table keyed by host leaves room for other per-site settings.
+- Free text, not tokens (review of PR #21): quoting everywhere broke apostrophes in tab names
+  and URLs, and no command has two arguments.
+- Insert is entered only on `focusin` (review of PR #21): with `site = "always"` or
+  `designMode`, the `<body>` that Esc's blur leaves focused would otherwise re-enter insert.
