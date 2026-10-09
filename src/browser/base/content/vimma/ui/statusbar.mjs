@@ -9,7 +9,6 @@
 // path: the bar's width comes from a ResizeObserver.
 
 import { fitStatus, statusSegments } from "../core/statusbar.mjs";
-import { resolveTheme, tokensToCss } from "../core/theme.mjs";
 
 /** @import { Mode } from "../core/modes.mjs" */
 /** @import { FindStatus } from "../core/find.mjs" */
@@ -32,15 +31,6 @@ const TAB_EVENTS = [
 ];
 /** @type {WeakSet<Window>} windows our sheets are loaded into (loading one twice throws) */
 const styled = new WeakSet();
-
-/**
- * Until M5 wires config and the Omarchy adapter: the built-in theme (Tokyo Night, monospace).
- * Validated by tokensToCss, so nothing but colours and a font list reaches the sheet.
- */
-function defaultThemeCss() {
-  const { tokens } = resolveTheme({ theme: { source: "file", font: "monospace", colors: {} } });
-  return tokensToCss(tokens, ":root");
-}
 
 /**
  * The slice of tabbrowser this module reads (browser/components/tabbrowser/content/tabbrowser.js).
@@ -141,9 +131,8 @@ export class StatusBar {
     const doc = win.document;
     const anchor = doc.getElementById("browser");
     if (this.bar || !anchor) return;
+    // The theme tokens are ui/theme-host.mjs's sheet (spec m5-omarchy-theme), loaded by vimma.js.
     if (!styled.has(win)) {
-      const sheet = `data:text/css;charset=utf-8,${encodeURIComponent(defaultThemeCss())}`;
-      win.windowUtils.loadSheetUsingURIString(sheet, win.windowUtils.AUTHOR_SHEET);
       win.windowUtils.loadSheetUsingURIString(STYLESHEET, win.windowUtils.AUTHOR_SHEET);
       styled.add(win);
     }

@@ -215,7 +215,17 @@ After `ctrl+b` (or any key that starts a longer sequence) only the pending keys 
 no list of next keys pops up. To see the bindings, press `ctrl+b ?` (`ctrl+b shift+?` on a
 layout where `?` is shifted): the overlay is the one place that lists them.
 
-Colours are Tokyo Night until theming arrives (M5), which will follow your Omarchy theme.
+### Colours: your Omarchy theme
+
+The status bar, the command line, the pickers, link hints, notices, pane borders and the start
+page take their colours from your current [Omarchy](https://omarchy.org) theme, with nothing to
+set up: Vimma reads `~/.local/state/omarchy/current/theme/colors.toml` (and `light.mode`, for a
+light theme) and checks it every 2 seconds, so `omarchy-theme-set` (or picking a theme from the
+Omarchy menu) recolours every open window and start page within 2 seconds, without a restart.
+Without Omarchy, or with `vimma.theme.source` set to `builtin`, the colours are Vimma's built-in
+Tokyo Night. A `colors.toml` Vimma cannot read (a value that is not a `#rrggbb` colour, a
+missing key) is ignored: the colours stay as they were, and the Browser Console
+(`ctrl+shift+j`) says which line is wrong. The `ctrl+b ?` overlay keeps its own colours for now.
 
 ## Keys
 
@@ -265,8 +275,8 @@ digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
   panel. `ctrl+i` / `ctrl+u` work now (see [Workspaces](#workspaces)).
 - **M4, split panes:** swap (`ctrl+b shift+h j k l`), resize (`ctrl+b r`), click focus, one
   layout per workspace and restore after a restart.
-- **M5, config and theme:** rebinding in `~/.config/vimma/config.toml`, `:source`, Omarchy
-  colours.
+- **M5, config:** rebinding in `~/.config/vimma/config.toml`, `:source`. (Omarchy colours
+  work already: see [Colours](#colours-your-omarchy-theme).)
 
 ## Workspaces
 
@@ -365,12 +375,14 @@ A command that is not built yet says so for a moment, as its keys do.
 
 Vimma's own preferences today:
 
-| Preference                 | Default | What it does                                                                                                                                               |
-| -------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vimma.ui.tabstrip.hidden` | `true`  | Hides Firefox's tab strip (horizontal, and the vertical tab list). Set `false` to show it again; it applies at once, no restart.                           |
-| `vimma.debug.keys`         | unset   | Create it as a boolean set to `true` to log every key Vimma sees (`{ key, mods, mode }`) to the Browser Console (`ctrl+shift+j`; enable its Debug filter). |
-| `vimma.startpage.newtab`   | `true`  | New tabs open Vimma's start page (see [The start page](#the-start-page)). Set `false` for Firefox's new tab page; it applies at once, no restart.          |
-| `vimma.control.enabled`    | `false` | Turns on the control socket for `vimma-ctl` and scripts (see [Scripting with vimma-ctl](#scripting-with-vimma-ctl)). Applies at once, no restart.          |
+| Preference                 | Default                                | What it does                                                                                                                                               |
+| -------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vimma.ui.tabstrip.hidden` | `true`                                 | Hides Firefox's tab strip (horizontal, and the vertical tab list). Set `false` to show it again; it applies at once, no restart.                           |
+| `vimma.debug.keys`         | unset                                  | Create it as a boolean set to `true` to log every key Vimma sees (`{ key, mods, mode }`) to the Browser Console (`ctrl+shift+j`; enable its Debug filter). |
+| `vimma.startpage.newtab`   | `true`                                 | New tabs open Vimma's start page (see [The start page](#the-start-page)). Set `false` for Firefox's new tab page; it applies at once, no restart.          |
+| `vimma.control.enabled`    | `false`                                | Turns on the control socket for `vimma-ctl` and scripts (see [Scripting with vimma-ctl](#scripting-with-vimma-ctl)). Applies at once, no restart.          |
+| `vimma.theme.source`       | `omarchy`                              | `omarchy` follows your Omarchy theme (see [Colours](#colours-your-omarchy-theme)); `builtin` forces the built-in Tokyo Night. Applies at once.             |
+| `vimma.theme.omarchyPath`  | `~/.local/state/omarchy/current/theme` | The Omarchy theme directory to read `colors.toml` and `light.mode` from. Applies at once.                                                                  |
 
 **Planned:** `~/.config/vimma/config.toml` (M5) for keys, workspaces and theme. Its validator
 already exists, but the browser does not read the file yet. Schema 2 (`schema = 2` at the top)

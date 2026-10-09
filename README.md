@@ -31,15 +31,16 @@ release channel.
 
 ## Status
 
-**Pre-alpha.** Milestone M0 ("fork boots + pipeline", [plan.md](plan.md) §6) is almost done,
-and M1's modal page layer is complete (scrolling, insert mode, link hints, find, the `:`
-command line and copy mode); back, forward and reload keys (`H`/`L`/`r`) are not built yet.
+**Pre-alpha, not yet daily-driven.** M0 (fork, pipeline, control socket, e2e) and M2 (tabs,
+status bar, picker) are done; M1's modal page layer is done except back, forward and reload
+(`H`/`L`/`r`, in review). Split panes (M4) work from the keyboard; workspaces (M3) and
+`config.toml` (M5) are in progress, and the browser already follows your Omarchy theme.
 There are no binaries yet: you build from source. Version `0.1.0`, on Firefox 157.0.1.
 
 What works today:
 
-- **Branding.** The browser calls itself Vimma (`vimma --version`, the window title, About), with
-  a placeholder logo. Its profiles are separate from Firefox's.
+- **Branding.** The browser calls itself Vimma (`vimma --version`, the window title, About); the
+  start page shows the Vimma logo, while the app icon is still a placeholder. Its profiles are separate from Firefox's.
 - **Vim keys on pages.** In normal mode `j`/`k` scroll, `d`/`u` scroll half a page and `gg`/`G`
   go to the top and bottom. Focusing a text field enters insert mode, so typing works as usual;
   `Esc` leaves it and `i` enters it.
@@ -69,6 +70,12 @@ What works today:
   it), `Enter` to go. `ctrl+b shift+t` or `:tabrename name` names a tab; the name shows in the
   status bar and the picker and survives a restart.
   `ctrl+b ?` is the one place that lists the bindings.
+- **Split panes.** `ctrl+b v` / `ctrl+b -` (or `:vsplit` / `:split`) split right and down,
+  `ctrl+b h/j/k/l` (or `ctrl+w h/j/k/l`) move between panes, `ctrl+b z` zooms and `ctrl+b x`
+  or `:q` closes a pane; up to 4 panes, shown as `pane n/m` in the status bar.
+- **Omarchy theme.** The status bar, pickers, command line, hints and start page take their
+  colours from your current Omarchy theme and follow `omarchy-theme-set` within 2 seconds;
+  without Omarchy, Tokyo Night.
 - **Hidden tab strip.** Firefox's tab strip is hidden. Firefox's own tab keys (`ctrl+t`,
   `ctrl+w`, `ctrl+tab`, `alt+1..9`, …) still work. Set `vimma.ui.tabstrip.hidden` to `false` in
   `about:config` to bring the strip back.
@@ -87,10 +94,10 @@ What works today:
 
 What does not work yet: the dimmed bindings in the overlay. The overlay lists the full planned
 keymap; a `ctrl+b` sequence that does not run yet shows "… not implemented yet" for a moment.
-`H`/`L`/`r` reach the page until they are built. M2 (tabs and the status bar) is
-complete; its which-key strip was dropped, and `ctrl+b ?` lists the bindings. Workspaces, split
-panes, `config.toml` and theming come later. The parser and validator for `config.toml` exist in
-`vimma-core`, but the browser does not read the file yet. See [docs/guide.md](docs/guide.md) and
+`H`/`L`/`r` reach the page until they are built. Workspaces route new tabs into per-workspace
+containers already, but switching, restore and the workspace picker are still being built;
+swap and resize for panes, `config.toml` loading and `about:vimma` come next. The parser and
+validator for `config.toml` exist in `vimma-core`, but the browser does not read the file yet. See [docs/guide.md](docs/guide.md) and
 [docs/limits.md](docs/limits.md).
 
 ## Requirements
