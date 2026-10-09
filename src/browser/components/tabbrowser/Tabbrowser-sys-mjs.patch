@@ -1,0 +1,30 @@
+diff --git a/browser/components/tabbrowser/Tabbrowser.sys.mjs b/browser/components/tabbrowser/Tabbrowser.sys.mjs
+index e41d07a03d564b2c5960d5b70cd76f8e528e6532..213e1877fc660b7e906b6e498107349565b12aa1 100644
+--- a/browser/components/tabbrowser/Tabbrowser.sys.mjs
++++ b/browser/components/tabbrowser/Tabbrowser.sys.mjs
+@@ -698,6 +698,10 @@ export class Tabbrowser {
+     if (openWindowInfo) {
+       userContextId = openWindowInfo.originAttributes.userContextId;
+     }
++    // Vimma (m3-workspaces): a first tab with no container takes the workspace's.
++    userContextId ??= ChromeUtils.importESModule(
++      "chrome://browser/content/vimma/workspaces/WorkspaceStore.sys.mjs"
++    ).WorkspaceStore.defaultUserContextId(this.documentGlobal);
+ 
+     let remoteTypeOptions = { window: this.documentGlobal, userContextId };
+     if (triggeringRemoteType) {
+@@ -3771,6 +3775,14 @@ export class Tabbrowser {
+       (openerBrowser && this.getTabForBrowser(openerBrowser)) ||
+       (relatedToCurrent && this.selectedTab) ||
+       null;
++    // Vimma (m3-workspaces): no container given, not pinned: the opener's, else the workspace's.
++    if (!pinned) {
++      userContextId ??=
++        openerTab?.userContextId ??
++        ChromeUtils.importESModule(
++          "chrome://browser/content/vimma/workspaces/WorkspaceStore.sys.mjs"
++        ).WorkspaceStore.defaultUserContextId(this.documentGlobal);
++    }
+ 
+     // When overflowing, new tabs are scrolled into view smoothly, which
+     // doesn't go well together with the width transition. So we skip the

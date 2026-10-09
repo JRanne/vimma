@@ -1,0 +1,19 @@
+diff --git a/browser/modules/URILoadingHelper.sys.mjs b/browser/modules/URILoadingHelper.sys.mjs
+index 6a3e36036256e198fd8951fd49de964391b7a5bc..9cb996b18a7c9c8865d5cdccdae254730e6710d8 100644
+--- a/browser/modules/URILoadingHelper.sys.mjs
++++ b/browser/modules/URILoadingHelper.sys.mjs
+@@ -538,6 +538,14 @@ export const URILoadingHelper = {
+       forceNonPrivate
+     );
+ 
++    // Vimma (m3-workspaces): a new window with no container: the opening page's, else the workspace's.
++    if ((!w || where == "window") && !params.private) {
++      params.userContextId ??= triggeringPrincipal.isContentPrincipal
++        ? triggeringPrincipal.originAttributes.userContextId
++        : ChromeUtils.importESModule(
++            "chrome://browser/content/vimma/workspaces/WorkspaceStore.sys.mjs"
++          ).WorkspaceStore.defaultUserContextId(window);
++    }
+     updatePrincipals(w, params);
+ 
+     if (where == "chromeless") {
