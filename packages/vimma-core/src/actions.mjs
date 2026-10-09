@@ -112,6 +112,7 @@ group("Navigation", [
   ["history_back", "history.back", "Go back"],
   ["history_forward", "history.forward", "Go forward"],
   ["reload", "page.reload", "Reload page"],
+  ["open_url", "page.open", "Open a URL or search in this tab"],
 ]);
 
 group("Hints", [

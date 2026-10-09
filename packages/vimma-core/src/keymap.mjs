@@ -162,7 +162,7 @@ export function compileKeymap(user = {}) {
 
   // [modal.<mode>] layer: user entries are merged over default entries per sequence.
   for (const key of Object.keys(userModal)) {
-    if (key === "leader" || key === "timeout_ms") continue;
+    if (key === "leader" || key === "timeout_ms" || key === "hint_chars") continue;
     if (!isMode(key)) {
       throw new KeymapError(
         `unknown mode "${key}"`,

@@ -120,8 +120,8 @@ their focus element `aria-readonly` (CodeMirror 6) or `readonly` (Monaco's texta
 /** @typedef {{ match: string, insert: InsertSiteMode }} InsertSiteRule */
 ```
 
-Planned config (schema 2, with an identity migration from 1, in the M1 host spec; not in this
-PR):
+Config (schema 2, with an identity migration from 1; validated in core since
+[m3-m4-core-prep](m3-m4-core-prep.md), read by the M1 host spec):
 
 ```toml
 schema = 2
@@ -253,6 +253,9 @@ starting with the draft are recalled, newest first; at the oldest match it stays
 `resetHistoryCursor(h)` after `Enter` / `Esc`.
 
 ### Missing actions (for the host spec; the dispatcher contract is unchanged)
+
+m1-cmdline (2026-10-09) added `page.open` to `actions.mjs` as `open_url` and runs it, so
+`PENDING_ACTIONS` is now `["workspace.switch"]`; `:help` (`:h`) joined the table.
 
 - `page.open` (`:open url`) and `workspace.switch` (`:workspace name`) are not in
   `actions.mjs`. `PENDING_ACTIONS` lists them and a test pins the list, so adding them to

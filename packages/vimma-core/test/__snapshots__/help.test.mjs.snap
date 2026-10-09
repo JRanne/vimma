@@ -63,6 +63,7 @@ Navigation
   history_back         H                               Go back
   history_forward      L                               Go forward
   reload               r                               Reload page
+  open_url             (unbound)                       Open a URL or search in this tab
 
 Hints
   follow_link          f                               Follow link
