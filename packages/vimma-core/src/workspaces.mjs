@@ -25,11 +25,11 @@ import {
 /**
  * @typedef {{ readonly id: string, readonly name: string, readonly container: string,
  *   readonly tabs: readonly string[], readonly activeTab: string | null,
- *   readonly panes: Panes | null }} Workspace
+ *   readonly panes: Panes | null }} WorkspaceState
  */
 /**
  * `next` mints workspace ids (`w<next>`). A workspace's index is its 1-based position.
- * @typedef {{ readonly workspaces: readonly Workspace[], readonly active: string,
+ * @typedef {{ readonly workspaces: readonly WorkspaceState[], readonly active: string,
  *   readonly next: number }} Workspaces
  */
 /** @typedef {{ id: string } | { index: number } | { name: string }} WorkspaceRef */
@@ -89,9 +89,9 @@ function activeIndex(s) {
 }
 
 /**
- * @param {Workspace} w
- * @param {Partial<Workspace>} changes
- * @returns {Workspace}
+ * @param {WorkspaceState} w
+ * @param {Partial<WorkspaceState>} changes
+ * @returns {WorkspaceState}
  */
 function updateWs(w, changes) {
   const next = { ...w, ...changes };
@@ -100,7 +100,7 @@ function updateWs(w, changes) {
 
 /**
  * @param {Workspaces} s
- * @param {{ workspaces?: Workspace[], active?: string, next?: number }} changes
+ * @param {{ workspaces?: WorkspaceState[], active?: string, next?: number }} changes
  * @returns {Workspaces}
  */
 function updateState(s, changes) {
@@ -111,7 +111,7 @@ function updateState(s, changes) {
 /**
  * @param {Workspaces} s
  * @param {number} i
- * @param {Workspace} w
+ * @param {WorkspaceState} w
  * @param {{ active?: string }} [extra]
  * @returns {Workspaces}
  */
@@ -148,9 +148,9 @@ function checkNewTab(s, tabId, except) {
 
 /**
  * Makes `tabId` (already in `w.tabs`) the active tab: focus its pane, or show it in the focused one.
- * @param {Workspace} w
+ * @param {WorkspaceState} w
  * @param {string} tabId
- * @returns {Workspace}
+ * @returns {WorkspaceState}
  */
 function showTab(w, tabId) {
   const panes = /** @type {Panes} */ (w.panes);
@@ -178,16 +178,16 @@ export function createWorkspaces(defs) {
 
 /**
  * @param {Workspaces} s
- * @returns {Workspace}
+ * @returns {WorkspaceState}
  */
 export function activeWorkspace(s) {
-  return /** @type {Workspace} */ (s.workspaces[activeIndex(s)]);
+  return /** @type {WorkspaceState} */ (s.workspaces[activeIndex(s)]);
 }
 
 /**
  * @param {Workspaces} s
  * @param {WorkspaceRef} ref
- * @returns {Workspace | undefined}
+ * @returns {WorkspaceState | undefined}
  */
 export function findWorkspace(s, ref) {
   return s.workspaces[indexOf(s, ref)];
@@ -196,7 +196,7 @@ export function findWorkspace(s, ref) {
 /**
  * @param {Workspaces} s
  * @param {string} tabId
- * @returns {Workspace | undefined}
+ * @returns {WorkspaceState | undefined}
  */
 export function workspaceOfTab(s, tabId) {
   return s.workspaces.find((w) => w.tabs.includes(tabId));
@@ -237,7 +237,7 @@ export function addWorkspace(s, def, { activate = true } = {}) {
  */
 export function renameWorkspace(s, ref, name) {
   const i = mustIndex(s, ref);
-  const w = /** @type {Workspace} */ (s.workspaces[i]);
+  const w = /** @type {WorkspaceState} */ (s.workspaces[i]);
   const trimmed = checkName(s, name, w.id);
   return trimmed === w.name ? s : replaceWs(s, i, updateWs(w, { name: trimmed }));
 }
@@ -254,10 +254,12 @@ export function deleteWorkspace(s, ref) {
   if (s.workspaces.length === 1) {
     throw new WorkspaceError("last-workspace", "cannot delete the last workspace");
   }
-  const w = /** @type {Workspace} */ (s.workspaces[i]);
+  const w = /** @type {WorkspaceState} */ (s.workspaces[i]);
   const workspaces = s.workspaces.filter((_, k) => k !== i);
   const active =
-    s.active === w.id ? /** @type {Workspace} */ (workspaces[Math.max(0, i - 1)]).id : s.active;
+    s.active === w.id
+      ? /** @type {WorkspaceState} */ (workspaces[Math.max(0, i - 1)]).id
+      : s.active;
   return { state: updateState(s, { workspaces, active }), closedTabs: w.tabs.slice() };
 }
 
@@ -267,7 +269,7 @@ export function deleteWorkspace(s, ref) {
  * @returns {Workspaces}
  */
 export function switchWorkspace(s, ref) {
-  const w = /** @type {Workspace} */ (s.workspaces[mustIndex(s, ref)]);
+  const w = /** @type {WorkspaceState} */ (s.workspaces[mustIndex(s, ref)]);
   return w.id === s.active ? s : updateState(s, { active: w.id });
 }
 
@@ -310,7 +312,7 @@ export function previousWorkspace(s) {
 export function openTab(s, tabId, { workspace, after, activate = true } = {}) {
   checkNewTab(s, tabId);
   const i = workspace ? mustIndex(s, workspace) : activeIndex(s);
-  const w = /** @type {Workspace} */ (s.workspaces[i]);
+  const w = /** @type {WorkspaceState} */ (s.workspaces[i]);
   const tabs = w.tabs.slice();
   if (after === undefined) tabs.push(tabId);
   else {
@@ -333,7 +335,7 @@ export function openTab(s, tabId, { workspace, after, activate = true } = {}) {
  */
 export function closeTab(s, tabId) {
   const i = indexOfTab(s, tabId);
-  const w = /** @type {Workspace} */ (s.workspaces[i]);
+  const w = /** @type {WorkspaceState} */ (s.workspaces[i]);
   const at = w.tabs.indexOf(tabId);
   const tabs = w.tabs.filter((t) => t !== tabId);
   if (!tabs.length) return replaceWs(s, i, updateWs(w, { tabs, activeTab: null, panes: null }));
@@ -364,7 +366,7 @@ export function closeTab(s, tabId) {
  */
 export function selectTab(s, tabId) {
   const i = indexOfTab(s, tabId);
-  const w = /** @type {Workspace} */ (s.workspaces[i]);
+  const w = /** @type {WorkspaceState} */ (s.workspaces[i]);
   const next = showTab(w, tabId);
   if (next === w && w.id === s.active) return s;
   return replaceWs(s, i, next, { active: w.id });
@@ -385,7 +387,7 @@ export function moveTab(s, tabId, ref, { newTabId = tabId } = {}) {
   const from = indexOfTab(s, tabId);
   const to = mustIndex(s, ref);
   if (from === to) return s;
-  const target = /** @type {Workspace} */ (s.workspaces[to]);
+  const target = /** @type {WorkspaceState} */ (s.workspaces[to]);
   if (newTabId !== tabId && target.tabs.includes(newTabId)) return closeTab(s, tabId);
   checkNewTab(s, newTabId, tabId);
   return openTab(closeTab(s, tabId), newTabId, { workspace: { id: target.id }, activate: false });

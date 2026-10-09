@@ -124,8 +124,8 @@ tab ids and container ids; the model mints pane ids (`p1`, `p2`, …) and worksp
 
 ```js
 /** @typedef {{ id: string, name: string, container: string, tabs: string[],
- *              activeTab: string | null, panes: Panes | null }} Workspace */
-/** @typedef {{ workspaces: Workspace[], active: string, next: number }} Workspaces */
+ *              activeTab: string | null, panes: Panes | null }} WorkspaceState */
+/** @typedef {{ workspaces: WorkspaceState[], active: string, next: number }} Workspaces */
 /** @typedef {{ id: string } | { index: number } | { name: string }} WorkspaceRef */
 ```
 
