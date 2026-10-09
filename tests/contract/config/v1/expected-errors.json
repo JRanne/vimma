@@ -11,6 +11,5 @@
     { "line": 20, "path": "sidebar", "suggestion": null }
   ],
   "invalid-keymap.toml": [{ "line": 6, "path": "keys.new_tabb", "suggestion": "new_tab" }],
-  "invalid-syntax.toml": [{ "line": 5, "path": "", "suggestion": null }],
-  "invalid-newer.toml": [{ "line": 2, "path": "schema", "suggestion": null }]
+  "invalid-syntax.toml": [{ "line": 5, "path": "", "suggestion": null }]
 }

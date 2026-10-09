@@ -1,7 +1,7 @@
 # vimma default configuration.
 # Generated from packages/vimma-core/src/defaults.mjs by `npm run gen-docs`; do not edit.
 # Copy any line into ~/.config/vimma/config.toml to change it.
-schema = 1
+schema = 2
 
 [keys]
 prefix = "ctrl+b"
@@ -46,6 +46,8 @@ copy_mode = ["prefix+["]
 [modal]
 leader = " "
 timeout_ms = 800
+# Hint labels are made of these characters, the first ones most often.
+hint_chars = "asdfghjkl"
 
 [modal.normal]
 "j" = "scroll.down"
@@ -142,3 +144,12 @@ font = "monospace"
 # Overrides on top of the palette, with the keys of Omarchy's colors.toml.
 [theme.colors]
 # accent = "#7aa2f7"
+
+# The most panes (live pages) one workspace shows at once, 1 to 16.
+[panes]
+max = 4
+
+# Per-site insert mode: auto (detect text fields), never (keys stay vimma's), always.
+# A host also covers its subdomains. None by default.
+# [sites."docs.google.com"]
+# insert = "always"

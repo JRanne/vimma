@@ -58,6 +58,8 @@ describe("validation", () => {
       ["next too small", (r) => (r.next = 3), "next"],
       ["workspace not an object", (r) => (r.workspaces[2] = 7), "workspaces[2]"],
       ["duplicate workspace id", (r) => (r.workspaces[1].id = "w1"), "workspaces[1].id"],
+      ["workspace id too long", (r) => (r.workspaces[1].id = "x".repeat(129)), "workspaces[1].id"],
+      ["workspace id with a space", (r) => (r.workspaces[1].id = "w 2"), "workspaces[1].id"],
       ["duplicate name", (r) => (r.workspaces[1].name = "work"), "workspaces[1].name"],
       ["empty name", (r) => (r.workspaces[1].name = " "), "workspaces[1].name"],
       [

@@ -171,7 +171,7 @@ describe("parseConfig: errors carry line numbers", () => {
   });
 
   test("a schema from a newer vimma is an error", () => {
-    const e = oneError(toml("# hi", "schema = 2"));
+    const e = oneError(toml("# hi", `schema = ${CONFIG_SCHEMA_VERSION + 1}`));
     expect(e).toMatchObject({ line: 2, path: "schema" });
     expect(e.message).toMatch(/newer vimma/);
   });
@@ -363,12 +363,15 @@ describe("parseConfig: errors carry line numbers", () => {
 describe("mergeWithDefaults", () => {
   test("fills every section", () => {
     expect(mergeWithDefaults({})).toEqual({
-      schema: 1,
+      schema: 2,
       keys: {},
       modal: {},
       unbind: {},
       workspaces: [],
       theme: { source: "omarchy", font: "monospace", colors: {} },
+      panes: { max: 4 },
+      hintChars: "asdfghjkl",
+      sites: [],
     });
   });
 });
@@ -376,14 +379,15 @@ describe("mergeWithDefaults", () => {
 describe("migrate", () => {
   test("v0 → v1 adds schema = 1 and keeps everything else", () => {
     const raw = { keys: { new_tab: ["prefix+c"] } };
-    const r = migrate(raw, 0);
+    const r = migrate(raw, 0, 1);
     expect(r.applied).toEqual(["0→1"]);
     expect(r.config).toEqual({ schema: 1, keys: { new_tab: ["prefix+c"] } });
     expect(raw).toEqual({ keys: { new_tab: ["prefix+c"] } });
   });
 
   test("the current version needs no step", () => {
-    expect(migrate({ schema: 1 }, 1)).toEqual({ config: { schema: 1 }, applied: [] });
+    const current = { schema: CONFIG_SCHEMA_VERSION };
+    expect(migrate(current, CONFIG_SCHEMA_VERSION)).toEqual({ config: current, applied: [] });
   });
 
   test("a chain of steps runs in order", () => {
