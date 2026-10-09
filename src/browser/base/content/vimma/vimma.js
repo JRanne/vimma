@@ -8,7 +8,7 @@
   const { MozillaServices } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/services/MozillaServices.sys.mjs",
   );
-  MozillaServices.applyUserDefaults();
+  MozillaServices.init();
 
   const { VimmaHost } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
