@@ -45,11 +45,14 @@ const styled = new WeakSet();
  * @typedef {Window & { gBrowser: Tabbrowser, ResizeObserver: typeof ResizeObserver }} BrowserWindow
  */
 
+/** @import { ConfigError } from "../core/config.mjs" */
+
 /**
  * @typedef {object} StatusBarHost  what the bar needs from VimmaHost, as plain functions
  * @property {() => { mode: Mode, pending: readonly string[], find?: FindStatus | null,
  *   pane?: { index: number, count: number } | null,
- *   workspace?: { name: string, index: number, color?: string } | null }} status
+ *   workspace?: { name: string, index: number, color?: string } | null,
+ *   configErrors?: readonly ConfigError[] }} status
  * @property {(fn: () => void) => () => void} subscribe  host state changes; returns unsubscribe
  * @property {(tab: Element) => string | null} [labelFor]  a user's tab rename (tab rename spec)
  */
@@ -198,7 +201,8 @@ export class StatusBar {
 
   /** @private */
   input() {
-    const { mode, pending, find = null, pane = null, workspace = null } = this.host.status();
+    const status = this.host.status();
+    const { mode, pending, find = null, pane = null, workspace = null } = status;
     const gBrowser = this.win.gBrowser;
     const tab = gBrowser.selectedTab;
     const visible = gBrowser.visibleTabs;
@@ -218,6 +222,7 @@ export class StatusBar {
       find,
       pane,
       workspace,
+      configErrors: status.configErrors ?? [],
     };
     return input;
   }
