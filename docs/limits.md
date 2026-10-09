@@ -32,6 +32,27 @@ delete its line in the same PR.
 - The nav bar's drag region on GNOME (client-side decorations) has not been checked by hand
   ([m0-tabstrip-hidden](specs/m0-tabstrip-hidden.md)).
 
+## Panes
+
+- No split panes yet: `ctrl+b v`, `-`, `x`, `z`, `h/j/k/l` and resize mode are planned for M4
+  ([m4-split-panes](specs/m4-split-panes.md)).
+- Planned for M4: panes are resized from the keyboard only (resize mode); dividers cannot be
+  dragged with the mouse, and tabs cannot be dropped onto a pane
+  ([m4-split-panes](specs/m4-split-panes.md), Out of scope).
+- Planned for M4: a pinned tab cannot be shown in a pane; Firefox's split view refuses pinned
+  tabs, so Vimma unpins a tab before it joins a split
+  ([ADR-013](adr/013-split-on-firefox-split-view.md)).
+- Planned for M4: Firefox's own split-view menus (tab and link context menu, alt-click) are off
+  (`browser.tabs.splitView.enabled` false); splits come from Vimma's keys
+  ([ADR-013](adr/013-split-on-firefox-split-view.md)).
+- Planned for M4: with three or more panes, extensions that move a split tab (`tabs.move`) and
+  Firefox's all-tabs list assume two tabs per split and may misplace or mislabel them
+  ([ADR-013](adr/013-split-on-firefox-split-view.md)).
+- Planned for M4: panes hidden by `ctrl+b z` keep rendering in the background (their docshells
+  stay active) ([m4-split-panes](specs/m4-split-panes.md), Open questions).
+- Planned for M4: a split's tabs become adjacent in Firefox's own tab order; Vimma's tab numbers
+  come from its own list and are unaffected ([m4-split-panes](specs/m4-split-panes.md)).
+
 ## Privacy, security and services
 
 - Safe Browsing does not work: there is no Google API key, so no phishing, malware or download
