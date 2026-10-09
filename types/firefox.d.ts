@@ -47,7 +47,10 @@ declare const Services: {
   obs: {
     addObserver(observer: (subject: unknown, topic: string) => void, topic: string): void;
     removeObserver(observer: (subject: unknown, topic: string) => void, topic: string): void;
+    notifyObservers(subject: unknown, topic: string, data?: string): void;
   };
+  // engine/xpcom/base/nsIUUIDGenerator.idl
+  uuid: { generateUUID(): { toString(): string } };
   // engine/xpcom/base/nsIWindowMediator.idl
   wm: { getMostRecentWindow(type: string): Window | null };
 };
@@ -67,6 +70,8 @@ declare const PathUtils: {
 declare const IOUtils: {
   createUniqueFile(parent: string, prefix: string, permissions?: number): Promise<string>;
   writeUTF8(path: string, data: string): Promise<number>;
+  readUTF8(path: string): Promise<string>;
+  copy(from: string, to: string): Promise<void>;
   move(from: string, to: string): Promise<void>;
   remove(path: string, options?: { ignoreAbsent?: boolean; recursive?: boolean }): Promise<void>;
 };
