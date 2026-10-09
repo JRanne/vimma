@@ -46,21 +46,24 @@ jobs:
           VERSION: ${{ steps.check.outputs.version }}
         run: |
           branch="upstream/firefox-$VERSION"
-          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
-            echo "$branch already exists; nothing to do."
+          open=$(gh pr list --head "$branch" --state open --json number --jq '.[].number')
+          if [ -n "$open" ]; then
+            echo "PR #$open for $branch is already open; nothing to do."
             exit 0
           fi
+          # No open PR: a branch left by a failed or closed run is rebuilt from main.
           old=$(python3 tools/upstream/bump-surfer-json.py "$VERSION" | cut -d' ' -f1)
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch -c "$branch"
+          git switch -C "$branch"
           git commit -am "chore(upstream): Firefox $VERSION" \
             -m "Bump surfer.json from Firefox $old to $VERSION (ADR-002)."
-          git push origin "$branch"
+          git push --force origin "$branch"
           gh label create upstream --color 1D76DB --description "Firefox upstream bump" --force
-          gh pr create --base main --head "$branch" --label upstream \
+          gh pr create --draft --base main --head "$branch" --label upstream \
             --title "chore(upstream): Firefox $VERSION" \
             --body "Firefox $VERSION is out (was $old). Opened by upstream.yml.
 
           Before merging: \`npm run import && npx surfer build\` on the build machine and check the
-          patches still apply (nightly.yml does this once merged). ADR-002."
+          patches still apply (nightly.yml does this once merged), then mark it ready for review,
+          which starts CI. ADR-002."
