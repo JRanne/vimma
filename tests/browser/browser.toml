@@ -6,6 +6,16 @@ support-files = ["file_vimma_test.pdf"]
 
 ["browser_vimma_key_capture.js"]
 
+["browser_vimma_insert_scroll.js"]
+support-files = [
+  "file_vimma_insert_scroll.html",
+  "file_vimma_frame.html",
+  "file_vimma_design.html",
+  "file_vimma_design_host.html",
+  "file_vimma_plain.html",
+  "file_vimma_test.pdf",
+]
+
 ["browser_vimma_branding.js"]
 
 ["browser_vimma_user_agent.js"]
@@ -21,6 +31,7 @@ skip-if = ["artifact"]
 ["browser_vimma_tabstrip.js"]
 
 ["browser_vimma_tab_keys.js"]
+support-files = ["file_vimma_test.pdf"]
 
 ["browser_vimma_system_addons.js"]
 support-files = ["head_vimma_aus.js"]

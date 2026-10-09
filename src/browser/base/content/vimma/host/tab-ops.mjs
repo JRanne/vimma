@@ -12,8 +12,12 @@ import { tabTarget } from "../core/tabs.mjs";
 /**
  * @typedef {object} TabBrowser  the part of gBrowser these keys use
  * @property {Element[]} visibleTabs
- * @property {Element} selectedTab
+ * @property {Element & { pinned?: boolean }} selectedTab
+ * @property {number} pinnedTabCount
+ * @property {{ selectedIndex: number }} tabContainer
  * @property {(options?: object) => void} removeCurrentTab
+ * @property {{ userTriggeredContext: (source: string) => object,
+ *   METRIC_SOURCE: { KEYBOARD: string } }} TabMetrics
  */
 
 /** @param {Window} win */
@@ -42,13 +46,25 @@ export function newTab(win) {
 }
 
 /**
- * tab.close: closes the selected tab, pinned or not (an explicit command, unlike ctrl+w, which
- * skips pinned tabs). The last tab closes the window when Firefox's
- * `browser.tabs.closeWindowWithLastTab` says so, as ctrl+w does.
+ * tab.close: what Firefox's ctrl+w does (BrowserCommands.closeTabOrWindow with a modifier
+ * event, browser-commands.js): on a pinned tab it selects the first unpinned tab instead of
+ * closing; otherwise it closes the selected tab, and the last tab closes the window unless
+ * `browser.tabs.closeWindowWithLastTab` is false (M3 sets it false). Metrics as for ctrl+w.
  * @param {Window} win
  */
 export function closeTab(win) {
-  gBrowserOf(win).removeCurrentTab({ animate: true });
+  const gBrowser = gBrowserOf(win);
+  if (gBrowser.selectedTab.pinned) {
+    if (gBrowser.visibleTabs.length > gBrowser.pinnedTabCount) {
+      gBrowser.tabContainer.selectedIndex = gBrowser.pinnedTabCount;
+    }
+    return;
+  }
+  const { TabMetrics } = gBrowser;
+  gBrowser.removeCurrentTab({
+    animate: true,
+    metricsContext: TabMetrics.userTriggeredContext(TabMetrics.METRIC_SOURCE.KEYBOARD),
+  });
 }
 
 /**

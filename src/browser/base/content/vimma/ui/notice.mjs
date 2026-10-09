@@ -23,8 +23,14 @@ export class Notice {
     this.timer = null;
   }
 
-  /** @param {string} text */
+  /**
+   * Shows `text`, except while a page is in DOM fullscreen (a video): the toast would sit over
+   * it, and Firefox's own chrome is hidden there too (`inDOMFullscreen` on the root, set by
+   * browser-fullScreenAndPointerLock.js).
+   * @param {string} text
+   */
   show(text) {
+    if (this.win.document.documentElement.hasAttribute("inDOMFullscreen")) return;
     const el = this.el ?? this.build();
     el.textContent = text;
     if (!el.matches(":popover-open")) el.showPopover();
