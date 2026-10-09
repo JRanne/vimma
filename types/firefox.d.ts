@@ -10,6 +10,10 @@ declare const Services: {
       name: string,
       observer: (subject: unknown, topic: string, data: string) => void,
     ): void;
+    removeObserver(
+      name: string,
+      observer: (subject: unknown, topic: string, data: string) => void,
+    ): void;
   };
   // engine/dom/interfaces/base/nsIFocusManager.idl
   focus: {

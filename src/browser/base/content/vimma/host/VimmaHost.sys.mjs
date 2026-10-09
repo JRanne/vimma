@@ -10,6 +10,7 @@ import { createDispatcher } from "../core/dispatcher.mjs";
 import { chordFromEvent, formatKey } from "../core/keys.mjs";
 import { compileKeymap } from "../core/keymap.mjs";
 import { HelpOverlay } from "../ui/help-overlay.mjs";
+import { TabStrip } from "../ui/tabstrip.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
 /** @import { Mode } from "../core/modes.mjs" */
@@ -25,6 +26,7 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {() => void} onTabSelect
  * @property {ReturnType<typeof createDispatcher>} dispatcher
  * @property {HelpOverlay} help
+ * @property {TabStrip} tabStrip  hides Firefox's tab strip (m0-tabstrip-hidden)
  * @property {number | null} timer   pending-sequence timeout (dispatcher.flush)
  */
 
@@ -72,9 +74,11 @@ export const VimmaHost = {
       },
       dispatcher: createDispatcher(keymap),
       help: new HelpOverlay(win, keymap),
+      tabStrip: new TabStrip(win),
       timer: null,
     };
     states.set(win, state);
+    state.tabStrip.init();
     win.addEventListener("keydown", state.onKeyDown, true);
     win.addEventListener("TabSelect", state.onTabSelect, true);
   },
@@ -87,6 +91,7 @@ export const VimmaHost = {
     win.removeEventListener("keydown", state.onKeyDown, true);
     win.removeEventListener("TabSelect", state.onTabSelect, true);
     state.help.destroy();
+    state.tabStrip.uninit();
     states.delete(win);
   },
 
