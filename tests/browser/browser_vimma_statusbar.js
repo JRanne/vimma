@@ -268,7 +268,8 @@ add_task(async function title_and_url_after_load() {
 add_task(async function narrow_bar_drops_url_and_keeps_mode() {
   await BrowserTestUtils.withNewTab(TITLE_PAGE, async () => {
     await until(() => segText("url") !== null, "URL shown at full width");
-    bar().style.width = "30ch";
+    // 40ch: the workspace segment (m3-workspaces 2b) takes nine columns of the old 30.
+    bar().style.width = "40ch";
     await until(() => seg("url") === null, "URL dropped in a narrow bar");
     Assert.ok(seg("mode"), "mode badge stays");
     Assert.ok(hasSize(seg("mode")), "and is visible");

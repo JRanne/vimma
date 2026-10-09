@@ -313,8 +313,8 @@ add_task(async function unbuilt_and_pending_commands_say_so() {
   runCommand("workspace work");
   Assert.equal(
     document.getElementById(NOTICE_ID).textContent,
-    ":workspace work: not available yet",
-    "a pending action is refused",
+    'no workspace "work"',
+    "an unknown workspace is refused (no longer pending: m3-workspaces 2b)",
   );
   document.getElementById(NOTICE_ID).hidePopover();
   Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "the page saw none of the keys");

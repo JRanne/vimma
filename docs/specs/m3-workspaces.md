@@ -1,7 +1,8 @@
 # Spec: m3-workspaces
 
-Status: research and plan; split into sub-specs (see Breakdown). Sub-spec 1 (store) merged;
-sub-spec 2a (routing) implemented, awaiting review (see Settled) · Milestone: M3 · Area: host
+Status: research and plan; split into sub-specs (see Breakdown). Sub-specs 1 (store) and 2a
+(routing) merged; sub-spec 2b (switching) implemented, awaiting review (see Settled) ·
+Milestone: M3 · Area: host
 (`src/browser/base/content/vimma/workspaces/`, `ui/`), four upstream patch files (five hunks)
 
 Plan §6 M3: container-backed workspaces; hidden tabs; `ctrl+i`/`ctrl+u`; a `prefix+w` picker; a
@@ -754,6 +755,54 @@ dependency for 4b, 5 and parts of 4a.
 - **Not done here:** `foreign` marking needs the window model (2b). Bookmarks and `alt+enter` go
   through the same `addTab` path as `ctrl+t` and are not tested separately. Nothing
   user-visible yet (no switching), so no guide change.
+
+## Settled: sub-spec 2b, m3-workspace-switching (2026-10-10)
+
+- **`workspaces/WindowWorkspaces.sys.mjs`**, one per window, started by `VimmaHost.init` (in a
+  `try`) after `WorkspaceStore.init()` and `DOMContentLoaded`; none in private windows and popups,
+  nor with containers off. It builds the core model from the definitions and the live tabs, and
+  calls `WorkspaceStore.setActive` on build and every switch, so routing (2a) follows the
+  window's workspace. Tab ids are `linkedPanel`, as the picker and `PaneView` use; uuids in tab
+  values come with persistence (3).
+- **Switching** (`ctrl+i`/`ctrl+u`, `:wsnext`/`:wsprev`, `:workspace name|number`): core
+  `switchWorkspace`/`next`/`previous`, then `planWorkspaceSwitch` applied as the mapping table
+  says: select the target's `activeTab` (none: `addTrustedTab` of its `home`, else the start page,
+  in its container), `showTab` the target's, `hideTab` one tab per other group. `unsplit` is only
+  logged; adopting foreign splits is M4 sub-spec 6. `workspace.switch` is now an action
+  (`switch_workspace`, unbound; with no text it opens `:workspace `), and `PENDING_ACTIONS` is
+  empty. Unknown name: notice `no workspace "x"`. No `select_workspace_1..9` (prefix+1..9 are
+  tabs; numbered actions would add nine unbound rows to the overlay).
+- **Splits** (decision 14): `PaneView.swap(from, to)` parks the window's pane tree, wrapper and
+  laid-out set under the workspace being left and brings back the target's, before any
+  selection; `reconcile()` after the switch lays it out. Hiding one member hides the wrapper
+  (asserted: every member and the wrapper `hidden`). Per-workspace trees in the core model stay
+  M4 sub-spec 6.
+- **Events:** `TabOpen` (and `TabUnpinned`) puts a tab in the workspace owning its container,
+  else in the active one, marked **`foreign`** (a set in the window object, `isForeign(tab)`;
+  shown by the picker of 5 and the panel of 6). A tab joining a workspace not shown is hidden
+  (decision 12), except Firefox's replacement for a closing last tab: hiding it left
+  `selectedTab` on the removed tab (found by the routing test's cleanup), so a tab is hidden at
+  `TabOpen` only when another visible tab is not closing. `TabClose` and `TabPinned` drop it;
+  `TabSelect` of another workspace's tab (picker, switch-to-tab, undo close) switches, in a
+  microtask, after Firefox's own selection. `TabMove` is not needed: the picker reads order from
+  `gBrowser.tabs`. The store's `vimma-workspaces-changed` adds, renames and removes workspaces;
+  a removed workspace's live tabs go to the active one (never closed).
+- **Pinned tabs** stay out of the model and visible in every workspace (the planner never hides
+  them). Unpinning them on `TabPinned` (decision 11) is deferred: with no Vimma key to pin it
+  needs the restore path of 3 to be worth it.
+- **Tab keys and picker:** `selectableTabs` is already `visibleTabs`, now the workspace's.
+  `pickerWorkspaces` returns the window model, tabs in DOM order; Enter on another workspace's
+  tab selects it, and `TabSelect` switches.
+- **Status bar:** `VimmaHost.status` passes `workspace: { name, index, color }`; the segment is
+  `● 2:work`. `browser_vimma_statusbar.js`'s narrow-bar check now uses 40ch (the segment takes
+  nine columns of the old 30).
+- **Pref:** `browser.tabs.closeWindowWithLastTab = false` (decision 9).
+- **Tests:** `browser_vimma_workspace_switching.js` (7 tasks): ctrl+i/ctrl+u with wrap, hiding,
+  restore of the selected tab, the bar; tab keys and ctrl+tab within the workspace; a split
+  hidden whole and back laid out; pinned tabs; the picker across workspaces switching; ctrl+t
+  and a container-0 tab (`foreign`); `:workspace` by name, number and an unknown name. Red
+  before (module missing: 8 failures), green after; the whole `tests/browser/` suite passes.
+  Mutation check: not calling `hideTab` in the switch fails 17 assertions.
 
 ## Out of scope
 

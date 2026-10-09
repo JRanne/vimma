@@ -2,8 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// The Herdr tab keys over plain gBrowser (spec: docs/specs/m2-tab-keys.md). Workspaces (M3) will
-// narrow `selectableTabs` to the current workspace's tabs; nothing else here should change.
+// The Herdr tab keys over plain gBrowser (spec: docs/specs/m2-tab-keys.md). Other workspaces'
+// tabs are hidden (m3-workspaces 2b), so `selectableTabs`, Firefox's visible tabs, is the
+// current workspace's (and pinned tabs, which every workspace shows).
 
 import { tabTarget } from "../core/tabs.mjs";
 

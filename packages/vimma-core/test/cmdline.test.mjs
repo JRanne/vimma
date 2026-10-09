@@ -153,7 +153,7 @@ describe("command table", () => {
   });
 
   test("PENDING_ACTIONS are exactly the missing ones, not yet in actions.mjs", () => {
-    expect(PENDING_ACTIONS).toEqual(["workspace.switch"]);
+    expect(PENDING_ACTIONS).toEqual([]);
     for (const id of PENDING_ACTIONS) expect(ids.has(id)).toBe(false);
   });
 

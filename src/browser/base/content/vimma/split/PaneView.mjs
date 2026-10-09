@@ -6,8 +6,8 @@
 // window's pane tree (vimma-core panes.mjs) and mirrors it onto ONE Firefox split view:
 // planSplit says which tabs join, leave, move, show, hide, (de)activate; layout() gives each
 // pane its rectangle. Firefox's wrapper keeps deciding which browsers are live and which tab is
-// selected; the tree decides the geometry. Until M3's workspace host owns the tree, the window
-// is the workspace. The pane keys (host/pane-ops.mjs, sub-spec 3) call split / focus / close /
+// selected; the tree decides the geometry. The tree shown is the active workspace's; a switch
+// parks it (`swap`, m3-workspaces 2b) until M4 sub-spec 6 keeps it in the model. The pane keys (host/pane-ops.mjs, sub-spec 3) call split / focus / close /
 // zoom; nothing here binds a key.
 
 import { mergeWithDefaults } from "../core/config.mjs";
@@ -70,6 +70,8 @@ export class PaneView {
   #scheduled = false;
   /** @type {Set<Tab>} tabs whose panel carries our geometry */
   #laidOut = new Set();
+  /** @type {Map<string, { panes: Panes, wrapper: Wrapper | null, laidOut: Set<Tab> }>} */
+  #parked = new Map();
 
   /**
    * @param {Window} win
@@ -113,6 +115,34 @@ export class PaneView {
 
   get max() {
     return this.#max;
+  }
+
+  /**
+   * A workspace switch (m3-workspaces 2b, decision 14): parks the tree shown now under `from`
+   * and brings back `to`'s (none: one pane), touching nothing in Firefox. The switch then hides
+   * the parked wrapper as a whole and selects `to`'s tab; `reconcile()` after it lays out the
+   * tree that came back. A parked tree whose tabs closed meanwhile shrinks on that reconcile.
+   * @param {string} from
+   * @param {string} to
+   */
+  swap(from, to) {
+    if (from === to) return;
+    if (this.#panes) {
+      this.#parked.set(from, {
+        panes: this.#panes,
+        wrapper: this.#wrapper,
+        laidOut: this.#laidOut,
+      });
+    } else {
+      this.#parked.delete(from);
+    }
+    const back = this.#parked.get(to);
+    this.#parked.delete(to);
+    this.#panes = back?.panes ?? null;
+    this.#wrapper = back?.wrapper ?? null;
+    this.#laidOut = back?.laidOut ?? new Set();
+    this.#resize?.disconnect();
+    this.#resize = null;
   }
 
   /**
