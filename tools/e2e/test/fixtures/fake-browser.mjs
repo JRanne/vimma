@@ -22,9 +22,11 @@ writeFileSync(
   join(profile, "fake-browser.json"),
   JSON.stringify({
     argv,
+    home: process.env.HOME,
+    tmp: process.env.TMPDIR,
     env: Object.fromEntries(
       Object.entries(process.env).filter(([k]) =>
-        /^(DISPLAY|XUL_APP_FILE|GDK_BACKEND|MOZ_|WAYLAND_DISPLAY)/.test(k),
+        /^(DISPLAY|XUL_APP_FILE|GDK_|QT_|MOZ_|WAYLAND_DISPLAY)/.test(k),
       ),
     ),
   }),

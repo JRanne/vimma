@@ -187,7 +187,7 @@ passes 1 MB (then `git lfs migrate import --include="tests/e2e/baselines/*.png"`
 - After the mochitests: `npm run e2e -- --artifact` on the artifact build. While every scenario
   is pending it launches nothing and prints a `::notice::` naming the pending scenarios and the
   reason; it is not a pass. When the server spec lands, it removes `pending` and this step runs
-  the scenarios for real (and should upload `e2e-output/` on failure).
+  the scenarios for real. On failure the job uploads `e2e-output/` (7 days).
 - `permissions: contents: read`, no secrets, actions pinned to SHAs (unchanged).
 
 ## Tests (written first)
@@ -235,15 +235,13 @@ passes 1 MB (then `git lfs migrate import --include="tests/e2e/baselines/*.png"`
    npm run e2e -- --xvfb --update-baselines --filter m0-happy-path
    ```
 
-   Make the CI step upload `e2e-output/` on failure. Baselines made locally may differ from the
-   runner's fonts: if CI's diff exceeds 0.5 %, take the baseline from CI's `e2e-output/`.
+   Baselines made locally may differ from the runner's fonts: if CI's diff exceeds 0.5 %, take the baseline from CI's `e2e-output/`.
 
 8. Replace `capture()` with the protocol's `screenshot` command when it is implemented.
 
 ## Out of scope
 
-The server; macOS/Windows; parallel scenarios; performance timers (plan §5 Performance row);
-uploading failure artifacts (needs a pinned `actions/upload-artifact`, added with the server).
+The server; macOS/Windows; parallel scenarios; performance timers (plan §5 Performance row).
 
 ## Implementation log (2026-10-09)
 
@@ -262,3 +260,47 @@ uploading failure artifacts (needs a pinned `actions/upload-artifact`, added wit
 - Checked on GitHub's runner-images readme (ubuntu-24.04): `xvfb` is installed, ImageMagick
   and x11-apps (`xwd`) are not; rustup is. Hence capture through `-fbdir`, no apt step.
 - No new dependency: `npm run license-check` and `license-check:crates` unchanged.
+
+## Review round 1 (2026-10-09)
+
+Supersedes the sections above where they differ.
+
+- **Cancellation while Xvfb starts.** A SIGINT at 0.03 to 0.12 s left a live Xvfb or its
+  fbdir: teardown ran while `startXvfb` was pending with `display = null`. Now `launch` keeps
+  the pending start, teardown aborts it (`startXvfb({ signal })` kills Xvfb and removes the
+  fbdir on abort and on every failure) and stops whatever it returns; `stop()` is idempotent.
+  Tests: teardown during Xvfb startup, an abort signal during startup and during the discovery
+  wait, and SIGINT to the CLI while a fake Xvfb starts (no Xvfb, fbdir or profile left).
+- **Minimal browser env.** The browser's environment is built from an allowlist (`PATH`,
+  `USER`, `LOGNAME`, `MOZ_HEADLESS`, `MOZ_LOG*`, plus `DISPLAY`, `WAYLAND_DISPLAY`,
+  `XDG_RUNTIME_DIR`, `XAUTHORITY` only when using the caller's display), with `HOME` and
+  `TMPDIR` inside the profile (`.e2e-home`, `.e2e-tmp`: no `~/.config` GTK or fontconfig
+  settings, and temp files such as remote-settings bundles go with the profile), `LANG=C.UTF-8`,
+  `TZ=UTC`, `GTK_THEME=Adwaita`; under Xvfb `GDK_BACKEND=x11` and `MOZ_ENABLE_WAYLAND=0`.
+  `GDK_SCALE` (a 2× crop on the dev box), `GDK_DPI_SCALE`, `QT_*` and the rest never reach it.
+  The profile pins `layout.css.devPixelsPerPx="1.0"`, `ui.systemUsesDarkTheme=0` and a light
+  content colour scheme; Xvfb runs at `-dpi 96` with `-nocursor`. A fake browser's own variables
+  now go through `build.env`, as an artifact build's `XUL_APP_FILE` does.
+- **`ready()` and a server still starting.** The first server build answers
+  `failed: no browser window` until its first window exists (≈ 70 % of runs failed at 0.7 s).
+  `ready()` retries that one message, within its deadline; any other `failed` and every
+  command outside `ready()` still fail at once.
+- **Hard timeouts.** The runner passes the scenario's AbortSignal to `startSession`; the CLI
+  hands it to `launch` (cancels Xvfb and the browser) and to `Ctl` (`execFile({ signal })`
+  SIGKILLs a running `vimma-ctl`; `ready()` stops). After a timeout the runner waits at most
+  `settleMs` (10 s, and never past the budget) before moving on; a session that arrives later is
+  torn down when it does. Tests use stubs that hang and ignore the abort.
+- **CI artifacts.** `e2e.yml` uploads `e2e-output/` on failure (`actions/upload-artifact`,
+  pinned, 7 days).
+- **XWD guards.** Mask scans are bounded (32 iterations; `0xFFFFFFFF` used to loop forever);
+  masks must be one run of at most 16 bits inside `bits_per_pixel` and must not overlap;
+  `header_size` below 100, `byte_order` other than 0/1, a zero or > 16384 dimension and
+  `bytes_per_line` < width × bytes per pixel are rejected. A fast-check property corrupts every
+  header field (2000 runs): the decoder returns a well-formed image or throws an `Error`.
+- **Nits.** "Baselines rewritten" is printed only when a screenshot step wrote one, naming it.
+- TDD: red, 13 failed in launcher/driver/runner, and the XWD file hung on the 0xFFFFFFFF mask
+  (killed by `timeout`); green: 120 passed, 1 skipped (Xvfb, absent on the dev box).
+- Manual check against the current local full build, which now has the control server: steps 1
+  to 6 of `m0-happy-path` passed in 1.0 s (state, open, `ctrl+b ?`, mode `help`); the
+  screenshot step failed as designed without the harness's Xvfb (none on the dev box). Nothing
+  left behind.

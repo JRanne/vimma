@@ -16,12 +16,19 @@ import { runSteps } from "./scenario.mjs";
 /** Plan §5: the whole suite stays under 5 minutes. */
 export const DEFAULT_BUDGET_MS = 5 * 60 * 1000;
 export const DEFAULT_SCENARIO_SECONDS = 60;
+/** How long a timed-out scenario may take to stop before the runner moves on. */
+export const DEFAULT_SETTLE_MS = 10_000;
+/**
+ * @typedef {(scenario: Scenario, options: { signal: AbortSignal }) => Promise<Session>}
+ *   StartSession
+ */
 
 /**
  * @param {Scenario[]} scenarios
  * @param {{
- *   startSession: (scenario: Scenario) => Promise<Session>,
+ *   startSession: StartSession,
  *   budgetMs?: number,
+ *   settleMs?: number,
  *   runPending?: boolean,
  *   pollMs?: number,
  *   now?: () => number,
@@ -35,6 +42,7 @@ export async function runScenarios(
     startSession,
     budgetMs = DEFAULT_BUDGET_MS,
     runPending = false,
+    settleMs = DEFAULT_SETTLE_MS,
     pollMs,
     now = Date.now,
     log = () => {},
@@ -60,21 +68,31 @@ export async function runScenarios(
     }
     const timeoutMs = Math.min((scenario.timeoutSeconds ?? DEFAULT_SCENARIO_SECONDS) * 1000, left);
     log(`RUN     ${scenario.name}`);
-    results.push(await runOne(scenario, { startSession, timeoutMs, pollMs }));
+    // the settle wait comes out of the budget too, so a hung scenario cannot overrun it
+    const settle = Math.min(settleMs, left - timeoutMs);
+    results.push(await runOne(scenario, { startSession, timeoutMs, pollMs, settleMs: settle }));
   }
   return results;
 }
 
 /**
+ * One scenario with a hard timeout (review of PR #35): at the deadline its AbortSignal fires,
+ * which cancels the launch (Xvfb, browser) and kills a running vimma-ctl; the runner then waits
+ * at most `settleMs` for the scenario to notice before it moves on, and a session that only
+ * arrives after that is torn down when it does.
  * @param {Scenario} scenario
- * @param {{ startSession: (s: Scenario) => Promise<Session>, timeoutMs: number, pollMs?: number }} o
+ * @param {{ startSession: StartSession, timeoutMs: number, pollMs?: number, settleMs: number }} o
  * @returns {Promise<Result>}
  */
-async function runOne(scenario, { startSession, timeoutMs, pollMs }) {
+async function runOne(scenario, { startSession, timeoutMs, pollMs, settleMs }) {
   const started = Date.now();
   const controller = new AbortController();
   /** @type {Session | null} */
   let session = null;
+  let movedOn = false;
+  /** @type {Promise<void> | null} */
+  let tornDown = null;
+  const teardown = (/** @type {Session} */ s) => (tornDown ??= s.teardown());
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   let timer;
   const timedOut = new Promise((resolve) => {
@@ -84,15 +102,22 @@ async function runOne(scenario, { startSession, timeoutMs, pollMs }) {
     }, timeoutMs);
   });
   const work = (async () => {
+    /** @type {Session} */
+    let s;
     try {
-      session = await startSession(scenario);
+      s = await startSession(scenario, { signal: controller.signal });
     } catch (e) {
       throw new Error(`launch: ${/** @type {Error} */ (e).message}`, { cause: e });
     }
+    session = s;
+    if (movedOn) {
+      await teardown(s); // arrived after the runner gave up on it
+      return;
+    }
     if (controller.signal.aborted) return;
     await runSteps(scenario, {
-      ctl: session.ctl,
-      screenshot: session.screenshot,
+      ctl: s.ctl,
+      screenshot: s.screenshot,
       pollMs,
       signal: controller.signal,
     });
@@ -120,13 +145,20 @@ async function runOne(scenario, { startSession, timeoutMs, pollMs }) {
   } finally {
     clearTimeout(timer);
   }
-  // After a timeout the steps stop at their next abort check; wait for that (or the launch) so
-  // teardown never races a running step, then tear down whatever was started.
-  await work.catch(() => {});
+  // After a timeout, give the aborted steps or launch a moment to stop, but never wait longer
+  // than settleMs: a hard deadline cannot depend on the scenario cooperating.
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let settle;
+  await Promise.race([
+    work.catch(() => {}),
+    new Promise((resolve) => (settle = setTimeout(resolve, settleMs))),
+  ]);
+  clearTimeout(settle);
+  movedOn = true;
   const s = /** @type {Session | null} */ (session);
   if (s) {
     try {
-      await s.teardown();
+      await teardown(s);
     } catch (e) {
       if (result.status === "pass") {
         result = {

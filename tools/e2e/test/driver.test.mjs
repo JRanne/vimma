@@ -134,6 +134,52 @@ describe.skipIf(!bin)(
       });
     });
 
+    // Review of PR #35: the first server build answers `failed: no browser window` until the
+    // first window exists, which failed ~70 % of runs at 0.7 s.
+    it("ready() retries `no browser window` while the server starts up", async () => {
+      fake.options.errorOn = { state: "failed" };
+      fake.options.errorMessage = "no browser window";
+      fake.options.errorTimes = 3;
+      await expect(ctl.ready({ timeoutMs: 5000, intervalMs: 20 })).resolves.toMatchObject({
+        mode: "insert",
+      });
+      expect(fake.requests.filter((r) => r.command === "state")).toHaveLength(4);
+    });
+
+    it("ready() does not retry any other `failed` error", async () => {
+      fake.options.errorOn = { state: "failed" };
+      fake.options.errorMessage = "no tab";
+      await expect(ctl.ready({ timeoutMs: 5000, intervalMs: 20 })).rejects.toMatchObject({
+        kind: "server",
+        code: "failed",
+      });
+      expect(fake.requests).toHaveLength(1);
+    });
+
+    it("state() alone never retries `no browser window`", async () => {
+      fake.options.errorOn = { state: "failed" };
+      fake.options.errorMessage = "no browser window";
+      await expect(ctl.state()).rejects.toMatchObject({ kind: "server", code: "failed" });
+      expect(fake.requests).toHaveLength(1);
+    });
+
+    it("an abort signal kills a hanging vimma-ctl at once", async () => {
+      fake.options.hangOn = "state";
+      const controller = new AbortController();
+      const slow = new Ctl({
+        bin: /** @type {string} */ (bin),
+        profile,
+        timeoutSecs: 60,
+        signal: controller.signal,
+      });
+      const pending = slow.state().catch((e) => e);
+      setTimeout(() => controller.abort(), 200);
+      const started = Date.now();
+      expect(await pending).toMatchObject({ kind: "aborted" });
+      expect(Date.now() - started).toBeLessThan(2000);
+      await expect(slow.ready({ timeoutMs: 5000 })).rejects.toMatchObject({ kind: "aborted" });
+    });
+
     it("reports a missing binary as a spawn error", async () => {
       const broken = new Ctl({ bin: join(profile, "no-such-ctl"), profile });
       await expect(broken.state()).rejects.toMatchObject({ kind: "spawn" });

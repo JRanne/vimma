@@ -110,7 +110,13 @@ async function main() {
     }
     const xvfb = values.xvfb || !process.env.DISPLAY;
 
-    const startSession = async () => {
+    /** @type {string[]} */
+    const rewritten = [];
+    /**
+     * @param {import("./scenario.mjs").Scenario} _scenario
+     * @param {{ signal: AbortSignal }} options the scenario's timeout
+     */
+    const startSession = async (_scenario, { signal }) => {
       /** @type {() => Promise<void>} */
       let registered = async () => {};
       const teardown = async () => {
@@ -123,6 +129,7 @@ async function main() {
         xvfb,
         keep: values.keep,
         discoveryTimeoutMs,
+        signal,
         // registered before the browser starts, so SIGINT during the launch cleans it up
         onTeardown: (t) => {
           registered = t;
@@ -133,7 +140,7 @@ async function main() {
         await teardown();
         throw e;
       });
-      const ctl = new Ctl({ bin: ctlBin, profile: session.profile });
+      const ctl = new Ctl({ bin: ctlBin, profile: session.profile, signal });
       try {
         await ctl.ready();
       } catch (e) {
@@ -156,6 +163,7 @@ async function main() {
           update: values["update-baselines"],
         });
         console.log(`        screenshot ${name}: ${result.status}: ${result.message}`);
+        if (result.status === "updated") rewritten.push(name);
         if (result.status === "missing" || result.status === "mismatch")
           throw new Error(result.message);
       };
@@ -179,10 +187,10 @@ async function main() {
         );
       }
     }
-    if (values["update-baselines"]) {
+    if (rewritten.length) {
       console.log(
-        "\nBaselines rewritten. Check them by eye and commit with a changelog line saying why " +
-          "(CLAUDE.md: never change a baseline without one).",
+        `\nBaselines rewritten: ${rewritten.join(", ")}. Check them by eye and commit with a ` +
+          "changelog line saying why (CLAUDE.md: never change a baseline without one).",
       );
     }
     return exitCode(results);

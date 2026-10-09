@@ -10,7 +10,16 @@ import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
-/** @typedef {"server" | "usage" | "not-running" | "busy" | "auth" | "protocol" | "spawn"} CtlErrorKind */
+/**
+ * @typedef {"server" | "usage" | "not-running" | "busy" | "auth" | "protocol" | "spawn" | "aborted"}
+ *   CtlErrorKind
+ */
+
+/**
+ * A server still starting up: it listens before its first browser window exists and answers
+ * `failed: no browser window` until then (review of PR #35). ready() retries only this one.
+ */
+const STARTING_UP = /^vimma-ctl: failed: no browser window\b/m;
 
 export class CtlError extends Error {
   /**
@@ -82,12 +91,14 @@ export function findVimmaCtl({ flag, env = {}, root = REPO_ROOT, exists = exists
 
 export class Ctl {
   /**
-   * @param {{ bin: string, profile: string, timeoutSecs?: number }} options
+   * @param {{ bin: string, profile: string, timeoutSecs?: number, signal?: AbortSignal }} options
+   *   `signal` (the scenario's timeout) kills a running vimma-ctl and stops ready() at once.
    */
-  constructor({ bin, profile, timeoutSecs = 5 }) {
+  constructor({ bin, profile, timeoutSecs = 5, signal }) {
     this.bin = bin;
     this.profile = profile;
     this.timeoutSecs = timeoutSecs;
+    this.signal = signal;
   }
 
   /**
@@ -101,11 +112,19 @@ export class Ctl {
       execFile(
         this.bin,
         argv,
-        { encoding: "utf8", timeout: (this.timeoutSecs + 5) * 1000, env: { ...process.env } },
+        {
+          encoding: "utf8",
+          timeout: (this.timeoutSecs + 5) * 1000,
+          env: { ...process.env },
+          signal: this.signal,
+          killSignal: "SIGKILL",
+        },
         (error, stdout, stderr) => {
           if (!error) return resolve(stdout);
           const exitCode = typeof error.code === "number" ? error.code : null;
-          const { kind, code } = classify(exitCode, stderr);
+          const { kind, code } = this.signal?.aborted
+            ? { kind: /** @type {CtlErrorKind} */ ("aborted"), code: null }
+            : classify(exitCode, stderr);
           const why = stderr.trim() || error.message;
           reject(
             new CtlError(`vimma-ctl ${args[0]} failed (${kind}): ${why}`, {
@@ -149,7 +168,8 @@ export class Ctl {
 
   /**
    * Connection setup: call `state` until it answers, retrying only while the socket is not up
-   * yet (`not-running`) or `busy`. Anything else fails at once.
+   * yet (`not-running`), `busy`, or the server is still starting up (`failed: no browser
+   * window`), and only until `timeoutMs`. Anything else fails at once.
    * @param {{ timeoutMs?: number, intervalMs?: number }} [options]
    */
   async ready({ timeoutMs = 10_000, intervalMs = 100 } = {}) {
@@ -158,10 +178,23 @@ export class Ctl {
       try {
         return await this.state();
       } catch (e) {
-        const retryable = e instanceof CtlError && (e.kind === "not-running" || e.kind === "busy");
+        const retryable =
+          e instanceof CtlError &&
+          (e.kind === "not-running" ||
+            e.kind === "busy" ||
+            (e.kind === "server" && STARTING_UP.test(e.stderr)));
         if (!retryable || Date.now() + intervalMs >= deadline) throw e;
       }
-      await sleep(intervalMs);
+      try {
+        await sleep(intervalMs, undefined, { signal: this.signal });
+      } catch {
+        throw new CtlError("vimma-ctl: ready() aborted", {
+          kind: "aborted",
+          code: null,
+          exitCode: null,
+          stderr: "",
+        });
+      }
     }
   }
 }

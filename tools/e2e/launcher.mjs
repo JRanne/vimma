@@ -3,7 +3,15 @@
 // asked), spawns the browser in its own process group, waits for <profile>/vimma-control.json,
 // and tears it all down again: the whole process tree, Xvfb, the profile unless kept.
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -82,6 +90,11 @@ export const PROFILE_PREFS = Object.freeze([
   ["gfx.webrender.software", true],
   ["browser.toolbars.bookmarks.visibility", "never"],
   ["focusmanager.testmode", true],
+  // the same pixels on every machine: one device pixel per CSS pixel whatever the desktop's
+  // scaling, and a light theme whatever the desktop's (review of PR #35: GDK_SCALE=2 leaked)
+  ["layout.css.devPixelsPerPx", "1.0"],
+  ["ui.systemUsesDarkTheme", 0],
+  ["layout.css.prefers-color-scheme.content-override", 1],
 ]);
 
 /**
@@ -185,22 +198,39 @@ export function browserArgs(profile, { width, height }) {
   ];
 }
 
+/** Passed through from the caller: who we are, where programs are, and debugging switches. */
+const ENV_PASSTHROUGH = ["PATH", "USER", "LOGNAME", "MOZ_HEADLESS", "MOZ_LOG", "MOZ_LOG_FILE"];
+/** Also passed through when the browser uses the caller's display instead of our Xvfb. */
+const DISPLAY_PASSTHROUGH = ["DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "XAUTHORITY"];
+
 /**
- * The browser's environment: with our Xvfb, X11 only, so a Wayland session cannot take it.
+ * The browser's environment, built from an allowlist rather than inherited, so a developer's
+ * desktop (GDK_SCALE, GDK_DPI_SCALE, QT_*SCALE*, GTK_THEME, Wayland, locale, fontconfig and GTK
+ * settings under HOME) cannot change what the screenshots show. HOME and TMPDIR live inside the
+ * profile, so the user's ~/.config is not read and temp files go away with the profile. Under
+ * our Xvfb the browser is forced onto X11.
  * @param {Record<string, string | undefined>} base
- * @param {{ display?: string, extra?: Record<string, string> }} options
+ * @param {{ display?: string, home?: string, tmp?: string, extra?: Record<string, string> }} o
  * @returns {Record<string, string>}
  */
-export function browserEnv(base, { display, extra = {} }) {
+export function browserEnv(base, { display, home, tmp, extra = {} }) {
   /** @type {Record<string, string>} */
   const env = {};
-  for (const [k, v] of Object.entries(base)) if (v !== undefined) env[k] = v;
+  const keep = display ? ENV_PASSTHROUGH : [...ENV_PASSTHROUGH, ...DISPLAY_PASSTHROUGH];
+  for (const k of keep) {
+    const v = base[k];
+    if (v !== undefined) env[k] = v;
+  }
+  if (home) env.HOME = home;
+  if (tmp) env.TMPDIR = tmp;
+  env.LANG = "C.UTF-8";
+  env.TZ = "UTC";
+  env.GTK_THEME = "Adwaita";
   env.MOZ_CRASHREPORTER_DISABLE = "1";
   if (display) {
     env.DISPLAY = display;
     env.GDK_BACKEND = "x11";
     env.MOZ_ENABLE_WAYLAND = "0";
-    delete env.WAYLAND_DISPLAY;
   }
   return { ...env, ...extra };
 }
@@ -221,60 +251,100 @@ const XVFB_PACKAGES =
  */
 
 /**
- * Start Xvfb on a free display (-displayfd), screen `width`×`height`×24, black root, its
- * framebuffer kept as an XWD file in a temp dir (-fbdir), the capture path for screenshots.
- * @param {{ width: number, height: number, bin?: string | null, timeoutMs?: number }} options
+ * Xvfb's arguments: a free display reported on fd 3, the screen at 24-bit depth and 96 dpi,
+ * black root, no cursor, the framebuffer kept as an XWD file in `fbdir` (the capture path).
+ * @param {{ width: number, height: number, fbdir: string }} o
+ */
+export function xvfbArgs({ width, height, fbdir }) {
+  return [
+    "-displayfd",
+    "3",
+    "-screen",
+    "0",
+    `${width}x${height}x24`,
+    "-dpi",
+    "96",
+    "-fbdir",
+    fbdir,
+    "-br",
+    "-nocursor",
+    "-nolisten",
+    "tcp",
+    "-noreset",
+  ];
+}
+
+/**
+ * Start Xvfb (see xvfbArgs). An abort `signal` while it starts kills it and removes the fbdir;
+ * every failure path does too, so nothing outlives a cancelled launch.
+ * @param {{ width: number, height: number, bin?: string | null, timeoutMs?: number,
+ *   signal?: AbortSignal, env?: Record<string, string | undefined> }} options
  * @returns {Promise<Display>}
  */
-export async function startXvfb({ width, height, bin = findXvfb(), timeoutMs = 10_000 }) {
+export async function startXvfb({
+  width,
+  height,
+  bin = findXvfb(),
+  timeoutMs = 10_000,
+  signal,
+  env = process.env,
+}) {
   if (!bin || !existsSync(bin))
     throw new Error(`Xvfb not found (${bin ?? "not on PATH"}); ${XVFB_PACKAGES}`);
+  signal?.throwIfAborted();
   const fbdir = mkdtempSync(join(tmpdir(), "vimma-e2e-xvfb-"));
-  const child = spawn(
-    bin,
-    [
-      "-displayfd",
-      "3",
-      "-screen",
-      "0",
-      `${width}x${height}x24`,
-      "-fbdir",
-      fbdir,
-      "-br",
-      "-nolisten",
-      "tcp",
-      "-noreset",
-    ],
-    { stdio: ["ignore", "ignore", "pipe", "pipe"], detached: true },
-  );
+  /** @type {import("node:child_process").ChildProcess} */
+  let child;
+  try {
+    child = spawn(bin, xvfbArgs({ width, height, fbdir }), {
+      stdio: ["ignore", "ignore", "pipe", "pipe"],
+      detached: true,
+      env,
+    });
+  } catch (e) {
+    rmSync(fbdir, { recursive: true, force: true });
+    throw e;
+  }
   let stderr = "";
   child.stderr?.on("data", (d) => (stderr = (stderr + d).slice(-4000)));
   const fd3 = /** @type {import("node:stream").Readable} */ (child.stdio[3]);
-  const stop = async () => {
-    await killTree(child, { graceMs: 2000 });
-    rmSync(fbdir, { recursive: true, force: true });
-  };
+  /** @type {Promise<void> | null} */
+  let stopping = null;
+  const stop = () =>
+    (stopping ??= (async () => {
+      await killTree(child, { graceMs: 2000 });
+      rmSync(fbdir, { recursive: true, force: true });
+    })());
   try {
     const display = await new Promise((resolve, reject) => {
       let out = "";
-      const timer = setTimeout(
-        () => reject(new Error(`Xvfb did not start in ${timeoutMs} ms: ${stderr}`)),
-        timeoutMs,
-      );
+      const done = () => {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
+      };
+      const onAbort = () => {
+        done();
+        reject(new Error("Xvfb start aborted"));
+      };
+      const timer = setTimeout(() => {
+        done();
+        reject(new Error(`Xvfb did not start in ${timeoutMs} ms: ${stderr}`));
+      }, timeoutMs);
+      signal?.addEventListener("abort", onAbort, { once: true });
       fd3.on("data", (d) => {
         out += d;
         const m = /^(\d+)\n/.exec(out);
         if (m) {
-          clearTimeout(timer);
+          done();
           resolve(`:${m[1]}`);
         }
       });
       child.on("error", (e) => {
-        clearTimeout(timer);
+        done();
         reject(new Error(`cannot start Xvfb: ${e.message}; ${XVFB_PACKAGES}`));
       });
       child.on("exit", (code) => {
-        clearTimeout(timer);
+        done();
         reject(new Error(`Xvfb exited with code ${code}: ${stderr.trim()}`));
       });
     });
@@ -390,16 +460,21 @@ export async function killTree(child, { graceMs = 5000 } = {}) {
 
 /**
  * Launch a build and wait for its control socket. On any failure everything started so far is
- * torn down before the error is thrown.
+ * torn down before the error is thrown. `teardown` is handed out (onTeardown) before anything
+ * slow starts and is idempotent; calling it, or aborting `signal`, at any point (Xvfb still
+ * starting, the discovery wait) stops the Xvfb, kills the browser and removes the profile.
  * @param {{
  *   build: Build,
  *   xvfb?: boolean,
+ *   xvfbBin?: string | null,
+ *   xvfbEnv?: Record<string, string | undefined>,
  *   window?: { width: number, height: number },
  *   tmpRoot?: string,
  *   keep?: boolean,
  *   discoveryTimeoutMs?: number,
  *   graceMs?: number,
  *   baseEnv?: Record<string, string | undefined>,
+ *   signal?: AbortSignal,
  *   onSpawn?: (child: import("node:child_process").ChildProcess) => void,
  *   onTeardown?: (teardown: () => Promise<void>) => void,
  *   log?: (line: string) => void,
@@ -409,38 +484,59 @@ export async function killTree(child, { graceMs = 5000 } = {}) {
 export async function launch({
   build,
   xvfb = !process.env.DISPLAY,
+  xvfbBin = findXvfb(),
+  xvfbEnv = process.env,
   window = WINDOW,
   tmpRoot = tmpdir(),
   keep = false,
   discoveryTimeoutMs = DEFAULT_DISCOVERY_TIMEOUT_MS,
   graceMs = 5000,
   baseEnv = process.env,
+  signal,
   onSpawn = () => {},
   onTeardown = () => {},
   log = () => {},
 }) {
   /** @type {Display | null} */
   let display = null;
+  /** @type {Promise<Display> | null} */
+  let displayStarting = null;
   /** @type {import("node:child_process").ChildProcess | null} */
   let child = null;
+  const cancel = new AbortController();
   const profile = createProfile(tmpRoot);
+  const home = join(profile, ".e2e-home");
+  const tmp = join(profile, ".e2e-tmp");
+  mkdirSync(home);
+  mkdirSync(tmp);
   let stderr = "";
   /** @type {Promise<void> | null} */
   let tearingDown = null;
-  // Idempotent, and handed out before anything slow starts, so a signal handler can clean up
-  // a launch that is still waiting for the control socket.
   const teardown = () =>
     (tearingDown ??= (async () => {
+      cancel.abort();
       if (child) await killTree(child, { graceMs });
-      if (display) await display.stop();
+      // Xvfb may still be starting: wait for that to settle (the abort makes it quick), then
+      // stop whatever it started. startXvfb removes its fbdir itself when it fails.
+      const started = await displayStarting?.catch(() => null);
+      if (started) await started.stop();
       if (keep) log(`kept profile ${profile}`);
       else rmSync(profile, { recursive: true, force: true });
     })());
   onTeardown(teardown);
+  const onAbort = () => void teardown();
+  if (signal?.aborted) onAbort();
+  signal?.addEventListener("abort", onAbort, { once: true });
+  const cancelled = () =>
+    tearingDown ? new Error("launch aborted (cancelled or timed out)") : null;
   try {
-    if (xvfb) display = await startXvfb(window);
-    if (tearingDown) throw new Error("launch cancelled");
-    const env = browserEnv(baseEnv, { display: display?.display, extra: build.env });
+    if (xvfb && !tearingDown) {
+      displayStarting = startXvfb({ ...window, bin: xvfbBin, signal: cancel.signal, env: xvfbEnv });
+      display = await displayStarting;
+    }
+    const stop = cancelled();
+    if (stop) throw stop;
+    const env = browserEnv(baseEnv, { display: display?.display, home, tmp, extra: build.env });
     const spawned = spawn(build.binary, browserArgs(profile, window), {
       env,
       detached: true,
@@ -452,13 +548,15 @@ export async function launch({
     let exit = null;
     /** @type {Error | null} */
     let spawnError = null;
-    spawned.on("exit", (code, signal) => (exit = { code, signal }));
+    spawned.on("exit", (code, sig) => (exit = { code, signal: sig }));
     spawned.on("error", (e) => (spawnError = e));
     spawned.stderr?.on("data", (d) => (stderr = (stderr + d).slice(-8000)));
     const stderrTail = () => stderr.split("\n").slice(-15).join("\n");
     const discovery = await waitForDiscovery(profile, {
       timeoutMs: discoveryTimeoutMs,
       exited: () => {
+        const stopped = cancelled();
+        if (stopped) throw stopped;
         if (spawnError)
           throw new Error(
             `cannot start ${build.binary}: ${/** @type {Error} */ (spawnError).message}`,
@@ -467,9 +565,12 @@ export async function launch({
       },
       stderrTail,
     });
+    signal?.removeEventListener("abort", onAbort);
     return { profile, child: spawned, display, discovery, stderrTail, teardown };
   } catch (e) {
+    signal?.removeEventListener("abort", onAbort);
+    const aborted = cancelled(); // before teardown(), which sets it
     await teardown();
-    throw e;
+    throw aborted ?? e;
   }
 }

@@ -15,6 +15,9 @@ import { tokensEqual, validateMessage } from "../../../packages/vimma-core/src/c
  *   rejectAuth?: boolean,
  *   dropOn?: string,
  *   errorOn?: Record<string, string>,
+ *   errorMessage?: string,
+ *   errorTimes?: number,
+ *   hangOn?: string,
  *   discoveryMode?: number,
  *   writeDiscovery?: boolean,
  * }} FakeOptions
@@ -88,7 +91,11 @@ export async function startFakeServer(profile, options = {}) {
    */
   function execute(command, args) {
     const forced = fake.options.errorOn?.[command];
-    if (forced) return { error: { code: forced, message: `fake ${forced}` } };
+    // errorTimes: fail only that many times, then answer normally (a server still starting up)
+    if (forced && (fake.options.errorTimes ?? Infinity) > 0) {
+      fake.options.errorTimes = (fake.options.errorTimes ?? Infinity) - 1;
+      return { error: { code: forced, message: fake.options.errorMessage ?? `fake ${forced}` } };
+    }
     if (command === "state") return { result: structuredClone(fake.state) };
     if (command === "send-keys") {
       const chords = String(args.keys).trim().split(/\s+/);
@@ -156,6 +163,7 @@ export async function startFakeServer(profile, options = {}) {
         }
         check(message, { kind: "request" });
         fake.requests.push({ command: message.command, args: message.args });
+        if (fake.options.hangOn === message.command) continue; // never answers
         if (fake.options.dropOn === message.command) {
           socket.destroy();
           return;

@@ -6,9 +6,12 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
+import { setTimeout as sleep } from "node:timers/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -20,10 +23,13 @@ import {
   launch,
   userJs,
   waitForDiscovery,
+  xvfbArgs,
 } from "../launcher.mjs";
 import { startFakeServer } from "./fake-server.mjs";
 
 const FAKE_BROWSER = fileURLToPath(new URL("./fixtures/fake-browser.mjs", import.meta.url));
+const FAKE_XVFB = fileURLToPath(new URL("./fixtures/fake-xvfb.mjs", import.meta.url));
+const E2E_CLI = fileURLToPath(new URL("../e2e.mjs", import.meta.url));
 
 /** @type {string[]} */
 const dirs = [];
@@ -163,6 +169,92 @@ describe("browser command line and environment", () => {
     expect(env.DISPLAY).toBe(":0");
     expect(env.WAYLAND_DISPLAY).toBe("w");
   });
+
+  // Review of PR #35: GDK_SCALE=2 on the dev box gave a 2× crop. Local runs must render as CI.
+  const desktop = {
+    PATH: "/usr/bin",
+    HOME: "/home/dev",
+    USER: "dev",
+    LANG: "fi_FI.UTF-8",
+    LC_ALL: "fi_FI.UTF-8",
+    TZ: "Europe/Helsinki",
+    DISPLAY: ":0",
+    WAYLAND_DISPLAY: "wayland-1",
+    XDG_RUNTIME_DIR: "/run/user/1000",
+    XAUTHORITY: "/run/user/1000/xauth",
+    XDG_CONFIG_HOME: "/home/dev/.config",
+    XDG_DATA_HOME: "/home/dev/.local/share",
+    GDK_SCALE: "2",
+    GDK_DPI_SCALE: "1.5",
+    GDK_BACKEND: "wayland",
+    QT_SCALE_FACTOR: "2",
+    QT_AUTO_SCREEN_SCALE_FACTOR: "1",
+    QT_SCREEN_SCALE_FACTORS: "2",
+    GTK_THEME: "Adwaita:dark",
+    MOZ_ENABLE_WAYLAND: "1",
+    MOZ_USE_XINPUT2: "1",
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus",
+    RANDOM_THING: "x",
+  };
+
+  it("under Xvfb, builds a minimal env: no scaling, theme, locale or home of the desktop", () => {
+    expect(
+      browserEnv(desktop, { display: ":99", home: "/p/.e2e-home", tmp: "/p/.e2e-tmp" }),
+    ).toEqual({
+      PATH: "/usr/bin",
+      USER: "dev",
+      HOME: "/p/.e2e-home",
+      TMPDIR: "/p/.e2e-tmp",
+      LANG: "C.UTF-8",
+      TZ: "UTC",
+      DISPLAY: ":99",
+      GDK_BACKEND: "x11",
+      MOZ_ENABLE_WAYLAND: "0",
+      GTK_THEME: "Adwaita",
+      MOZ_CRASHREPORTER_DISABLE: "1",
+    });
+  });
+
+  it("on the caller's display, keeps only what reaching that display needs", () => {
+    expect(browserEnv(desktop, { home: "/h", tmp: "/t" })).toEqual({
+      PATH: "/usr/bin",
+      USER: "dev",
+      HOME: "/h",
+      TMPDIR: "/t",
+      LANG: "C.UTF-8",
+      TZ: "UTC",
+      DISPLAY: ":0",
+      WAYLAND_DISPLAY: "wayland-1",
+      XDG_RUNTIME_DIR: "/run/user/1000",
+      XAUTHORITY: "/run/user/1000/xauth",
+      GTK_THEME: "Adwaita",
+      MOZ_CRASHREPORTER_DISABLE: "1",
+    });
+  });
+
+  it("passes debugging switches through, and the build's own variables", () => {
+    const env = browserEnv(
+      { PATH: "/b", MOZ_HEADLESS: "1", MOZ_LOG: "x:5", GDK_SCALE: "2" },
+      { display: ":9", home: "/h", tmp: "/t", extra: { XUL_APP_FILE: "/a.ini" } },
+    );
+    expect(env).toMatchObject({ MOZ_HEADLESS: "1", MOZ_LOG: "x:5", XUL_APP_FILE: "/a.ini" });
+    expect(env.GDK_SCALE).toBeUndefined();
+  });
+
+  it("pins one device pixel per CSS pixel and a light theme in the profile", () => {
+    const prefs = Object.fromEntries(PROFILE_PREFS);
+    expect(prefs["layout.css.devPixelsPerPx"]).toBe("1.0");
+    expect(prefs["ui.systemUsesDarkTheme"]).toBe(0);
+  });
+
+  it("starts Xvfb at 96 dpi with no cursor", () => {
+    const args = xvfbArgs({ width: 1280, height: 800, fbdir: "/fb" });
+    expect(args).toEqual(expect.arrayContaining(["-nocursor", "-br", "-noreset"]));
+    expect(args.join(" ")).toContain("-screen 0 1280x800x24");
+    expect(args.join(" ")).toContain("-dpi 96");
+    expect(args.join(" ")).toContain("-fbdir /fb");
+    expect(args.join(" ")).toContain("-displayfd 3");
+  });
 });
 
 describe("waitForDiscovery", () => {
@@ -224,12 +316,11 @@ describe("launch and teardown (fake browser)", () => {
   /** @param {Record<string, string>} env @param {object} [opts] */
   const start = (env, opts = {}) =>
     launch({
-      build: { binary: FAKE_BROWSER, env: {} },
+      build: { binary: FAKE_BROWSER, env },
       xvfb: false,
       tmpRoot: tempDir(),
       discoveryTimeoutMs: 5000,
       graceMs: 500,
-      baseEnv: { ...process.env, ...env },
       ...opts,
     });
 
@@ -240,6 +331,19 @@ describe("launch and teardown (fake browser)", () => {
     const seen = JSON.parse(readFileSync(join(session.profile, "fake-browser.json"), "utf8"));
     expect(seen.argv).toContain(session.profile);
     expect(seen.argv).toContain("-no-remote");
+  });
+
+  it("the spawned browser sees the scrubbed env, with HOME and TMPDIR inside the profile", async () => {
+    const session = await start(
+      {},
+      { baseEnv: { ...process.env, GDK_SCALE: "2", MOZ_ENABLE_WAYLAND: "1" } },
+    );
+    cleanups.push(() => session.teardown());
+    const seen = JSON.parse(readFileSync(join(session.profile, "fake-browser.json"), "utf8"));
+    expect(seen.env.GDK_SCALE).toBeUndefined();
+    expect(seen.env.MOZ_ENABLE_WAYLAND).toBeUndefined();
+    expect(seen.home).toBe(join(session.profile, ".e2e-home"));
+    expect(seen.tmp).toBe(join(session.profile, ".e2e-tmp"));
   });
 
   it("kills the whole process tree and removes the profile on teardown", async () => {
@@ -271,11 +375,10 @@ describe("launch and teardown (fake browser)", () => {
     const tmpRoot = tempDir();
     await expect(
       launch({
-        build: { binary: FAKE_BROWSER, env: {} },
+        build: { binary: FAKE_BROWSER, env: { FAKE_BROWSER: "exit" } },
         xvfb: false,
         tmpRoot,
         discoveryTimeoutMs: 5000,
-        baseEnv: { ...process.env, FAKE_BROWSER: "exit" },
       }),
     ).rejects.toThrow(/exited with code 7[^]*crashed on purpose/);
     expect(readdirSync(tmpRoot)).toEqual([]);
@@ -288,12 +391,11 @@ describe("launch and teardown (fake browser)", () => {
     /** @type {number[]} */
     const pids = [];
     const launching = launch({
-      build: { binary: FAKE_BROWSER, env: {} },
+      build: { binary: FAKE_BROWSER, env: { FAKE_BROWSER: "never" } },
       xvfb: false,
       tmpRoot,
       discoveryTimeoutMs: 20_000,
       graceMs: 300,
-      baseEnv: { ...process.env, FAKE_BROWSER: "never" },
       onTeardown: (/** @type {() => Promise<void>} */ t) => registered.push(t),
       onSpawn: (/** @type {import("node:child_process").ChildProcess} */ child) =>
         pids.push(/** @type {number} */ (child.pid)),
@@ -315,12 +417,11 @@ describe("launch and teardown (fake browser)", () => {
     const pids = [];
     await expect(
       launch({
-        build: { binary: FAKE_BROWSER, env: {} },
+        build: { binary: FAKE_BROWSER, env: { FAKE_BROWSER: "never", FAKE_BROWSER_CHILD: "1" } },
         xvfb: false,
         tmpRoot,
         discoveryTimeoutMs: 500,
         graceMs: 300,
-        baseEnv: { ...process.env, FAKE_BROWSER: "never", FAKE_BROWSER_CHILD: "1" },
         onSpawn: (/** @type {import("node:child_process").ChildProcess} */ child) =>
           pids.push(/** @type {number} */ (child.pid)),
       }),
@@ -328,5 +429,124 @@ describe("launch and teardown (fake browser)", () => {
     expect(readdirSync(tmpRoot)).toEqual([]);
     expect(pids).toHaveLength(1);
     expect(alive(/** @type {number} */ (pids[0]))).toBe(false);
+  });
+});
+
+// Review of PR #35: Ctrl+C while Xvfb was still starting left a live Xvfb or its fbdir.
+describe("cancelling while Xvfb starts (fake Xvfb)", () => {
+  /** @param {string} record */
+  const readRecord = (record) =>
+    /** @type {{ pid: number, fbdir: string }} */ (JSON.parse(readFileSync(record, "utf8")));
+
+  it("teardown during Xvfb startup stops Xvfb and removes its fbdir", async () => {
+    const tmpRoot = tempDir();
+    const record = join(tempDir(), "xvfb.json");
+    /** @type {Array<() => Promise<void>>} */
+    const registered = [];
+    const launching = launch({
+      build: { binary: FAKE_BROWSER, env: {} },
+      xvfb: true,
+      xvfbBin: FAKE_XVFB,
+      tmpRoot,
+      graceMs: 300,
+      xvfbEnv: { ...process.env, FAKE_XVFB_DELAY_MS: "1500", FAKE_XVFB_RECORD: record },
+      onTeardown: (/** @type {() => Promise<void>} */ t) => registered.push(t),
+    });
+    const outcome = launching.catch((e) => e);
+    for (let i = 0; i < 100 && !existsSync(record); i++) await sleep(20);
+    const { pid, fbdir } = readRecord(record);
+    expect(alive(pid) && existsSync(fbdir)).toBe(true);
+    await registered[0]?.();
+    expect(await outcome).toBeInstanceOf(Error);
+    expect(alive(pid)).toBe(false);
+    expect(existsSync(fbdir)).toBe(false);
+    expect(readdirSync(tmpRoot)).toEqual([]);
+  });
+
+  it("an abort signal cancels the launch the same way", async () => {
+    const record = join(tempDir(), "xvfb.json");
+    const controller = new AbortController();
+    const launching = launch({
+      build: { binary: FAKE_BROWSER, env: {} },
+      xvfb: true,
+      xvfbBin: FAKE_XVFB,
+      tmpRoot: tempDir(),
+      graceMs: 300,
+      xvfbEnv: { ...process.env, FAKE_XVFB_DELAY_MS: "1500", FAKE_XVFB_RECORD: record },
+      signal: controller.signal,
+    }).catch((e) => e);
+    for (let i = 0; i < 100 && !existsSync(record); i++) await sleep(20);
+    const started = Date.now();
+    controller.abort();
+    expect(await launching).toBeInstanceOf(Error);
+    expect(Date.now() - started).toBeLessThan(3000);
+    const { pid, fbdir } = readRecord(record);
+    expect(alive(pid)).toBe(false);
+    expect(existsSync(fbdir)).toBe(false);
+  });
+
+  it("an abort during the discovery wait kills the browser at once", async () => {
+    const controller = new AbortController();
+    /** @type {number[]} */
+    const pids = [];
+    const launching = launch({
+      build: { binary: FAKE_BROWSER, env: { FAKE_BROWSER: "never" } },
+      xvfb: false,
+      tmpRoot: tempDir(),
+      discoveryTimeoutMs: 60_000,
+      graceMs: 300,
+      onSpawn: (/** @type {import("node:child_process").ChildProcess} */ c) =>
+        pids.push(/** @type {number} */ (c.pid)),
+      signal: controller.signal,
+    }).catch((e) => e);
+    await sleep(300);
+    const started = Date.now();
+    controller.abort();
+    expect(String(await launching)).toMatch(/abort/);
+    expect(Date.now() - started).toBeLessThan(3000);
+    expect(alive(/** @type {number} */ (pids[0]))).toBe(false);
+  });
+
+  it("SIGINT to the CLI while Xvfb starts leaves no Xvfb, fbdir or profile", async () => {
+    const tmp = tempDir();
+    const bin = tempDir();
+    symlinkSync(FAKE_XVFB, join(bin, "Xvfb"));
+    const scenarios = tempDir();
+    writeFileSync(
+      join(scenarios, "m0-x.json"),
+      JSON.stringify({ name: "m0-x", description: "x", steps: [{ keys: "esc" }] }),
+    );
+    const record = join(tempDir(), "xvfb.json");
+    const cli = spawn(
+      process.execPath,
+      [
+        E2E_CLI,
+        "--xvfb",
+        "--build",
+        FAKE_BROWSER,
+        "--vimma-ctl",
+        process.execPath,
+        "--scenarios",
+        scenarios,
+      ],
+      {
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          TMPDIR: tmp,
+          FAKE_XVFB_DELAY_MS: "3000",
+          FAKE_XVFB_RECORD: record,
+        },
+        stdio: "ignore",
+      },
+    );
+    for (let i = 0; i < 200 && !existsSync(record); i++) await sleep(20);
+    const { pid, fbdir } = readRecord(record);
+    cli.kill("SIGINT");
+    const code = await new Promise((r) => cli.on("exit", (c) => r(c)));
+    expect(code).toBe(130);
+    expect(alive(pid)).toBe(false);
+    expect(existsSync(fbdir)).toBe(false);
+    expect(readdirSync(tmp)).toEqual([]);
   });
 });

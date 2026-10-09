@@ -137,6 +137,67 @@ describe("runScenarios", () => {
     expect(results[0]).toMatchObject({ status: "timeout" });
   });
 
+  // Review of PR #35: timeouts must be hard; a hanging launch or vimma-ctl must not overrun.
+  it("aborts a hanging launch at the timeout and returns on time", async () => {
+    /** @type {AbortSignal[]} */
+    const signals = [];
+    const started = Date.now();
+    const results = await runScenarios([scn("m0-hang", { timeoutSeconds: 0.3 })], {
+      startSession: (_s, { signal }) => {
+        signals.push(signal);
+        return new Promise(() => {}); // never resolves, even when aborted
+      },
+      settleMs: 200,
+    });
+    expect(results[0]).toMatchObject({ status: "timeout" });
+    expect(signals[0]?.aborted).toBe(true);
+    expect(Date.now() - started).toBeLessThan(1500);
+  });
+
+  it("tears down a session that arrives after the timeout", async () => {
+    /** @type {string[]} */
+    const events = [];
+    const results = await runScenarios([scn("m0-late", { timeoutSeconds: 0.2 })], {
+      startSession: () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                ctl: { state: async () => ({}), sendKeys: async () => {}, open: async () => "" },
+                screenshot: async () => {},
+                teardown: async () => void events.push("teardown"),
+              }),
+            500,
+          ),
+        ),
+      settleMs: 50,
+    });
+    expect(results[0]?.status).toBe("timeout");
+    await new Promise((r) => setTimeout(r, 600));
+    expect(events).toEqual(["teardown"]);
+  });
+
+  it("does not wait on a step that ignores the abort, and still tears down", async () => {
+    /** @type {string[]} */
+    const events = [];
+    const started = Date.now();
+    const results = await runScenarios([scn("m0-stuck", { timeoutSeconds: 0.3 })], {
+      startSession: async () => ({
+        ctl: {
+          state: () => new Promise(() => {}),
+          sendKeys: async () => {},
+          open: async () => "",
+        },
+        screenshot: async () => {},
+        teardown: async () => void events.push("teardown"),
+      }),
+      settleMs: 200,
+    });
+    expect(results[0]?.status).toBe("timeout");
+    expect(events).toEqual(["teardown"]);
+    expect(Date.now() - started).toBeLessThan(1500);
+  });
+
   it("an empty selection is not a pass", () => {
     expect(exitCode([])).toBe(1);
   });

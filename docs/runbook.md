@@ -124,8 +124,12 @@ npm run e2e -- --run-pending --filter m0         # run a pending scenario anyway
 ```
 
 Without `DISPLAY` (CI) the harness starts its own Xvfb at 1280×800×24; with a desktop, pass
-`--xvfb` for screenshots and to keep the window off your screen (it also clears
-`WAYLAND_DISPLAY` for the browser). The whole suite has a 5-minute budget (`--budget SECS`).
+`--xvfb` for screenshots and to keep the window off your screen. The browser never inherits
+your desktop's environment: it gets an allowlisted env (no `GDK_SCALE`, `QT_*`, `GTK_THEME`,
+Wayland or locale; `HOME` and `TMPDIR` inside the temp profile) and the profile pins
+`layout.css.devPixelsPerPx=1.0` and a light theme, so local screenshots match CI's. Timeouts are
+hard: a scenario's deadline kills its launch and any running `vimma-ctl`. The whole suite has a
+5-minute budget (`--budget SECS`).
 Exit 0: nothing failed (pending is not failure, nor a pass); 1: a failure; 2: usage.
 
 **Baselines.** Screenshots are compared with `tests/e2e/baselines/<name>.png`; more than 0.5 % of
@@ -139,7 +143,7 @@ npm run e2e -- --xvfb --update-baselines --filter <scenario>   # refused when CI
 look at the new PNG, and commit it with a changelog line saying which baseline changed and why
 (CLAUDE.md: never edit a baseline without one). A missing baseline fails; nothing creates one
 silently. Fonts differ between machines: if CI's diff exceeds 0.5 % on a baseline made locally,
-take CI's actual image from its `e2e-output/` instead. Baselines are plain git blobs, not LFS
+take CI's actual image from the `e2e-output` artifact of the failed run (kept 7 days) instead. Baselines are plain git blobs, not LFS
 (the spec's "LFS: not now" says when to revisit).
 
 **Troubleshooting Xvfb.**
