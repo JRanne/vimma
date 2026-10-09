@@ -23,7 +23,8 @@
     "lane:setup": "node tools/lanes/lane-setup.mjs",
     "lane:teardown": "node tools/lanes/lane-teardown.mjs",
     "test:py": "python3 -m unittest discover -s tools/upstream",
-    "license-check": "node tools/license-check/license-check.mjs"
+    "license-check": "node tools/license-check/license-check.mjs",
+    "bench": "vitest bench --run"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",
