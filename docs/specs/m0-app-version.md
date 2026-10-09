@@ -1,6 +1,6 @@
 # Spec: m0-app-version
 
-Status: in progress · Milestone: M0 · Area: build config (`configs/common/mozconfig`,
+Status: implemented, awaiting review · Milestone: M0 · Area: build config (`configs/common/mozconfig`,
 `tools/version-files/`), two one-line upstream patches (`ClientEnvironment`, `Targeting`)
 Prerequisite: m0-branding, m0-user-agent and m0-mozilla-services merged.
 
@@ -23,7 +23,9 @@ About dialog, about:support, Settings), I still see Vimma's own version, `0.1.0`
   and writes `src/browser/config/vimma/version.txt` (Firefox version) and `version_display.txt`
   (Vimma version), git-ignored like `vimma/core/`. `surfer import` links them into
   `engine/browser/config/vimma/`. It fails loudly if either version is missing or not a dotted
-  version (Surfer silently falls back to `1.0.0`).
+  version (Surfer silently falls back to `1.0.0`). Each file starts with the MPL header as `#`
+  lines, because `surfer license-check` walks `src/` (git-ignored files too); configure reads only
+  the last line, as with `config/milestone.txt`.
 - **Two readers of the display version that mean "Firefox version"**, patched to read
   `MOZ_APP_VERSION`, one word each:
   - `src/toolkit/components/utils/ClientEnvironment-sys-mjs.patch`: `ClientEnvironmentBase.version`
@@ -79,8 +81,9 @@ equals Firefox's app version, so upstream bumps need no test change.
   `MOZ_APP_VERSION_DISPLAY`.
 
 `tools/version-files/test/version-files.test.mjs` (vitest): `versionFiles(surferJson)` returns
-the two file contents; it throws when `version.version` or `displayVersion` is missing or
-malformed.
+the two files, each with the MPL header as `#` lines and the version on the last line; it throws
+when `version.version` or `displayVersion` is missing or malformed; `writeVersionFiles` creates
+the directory and writes both.
 
 **Changed assertion** in `browser_vimma_branding.js`: "`appinfo.version` is 0.x" becomes
 "`AppConstants.MOZ_APP_VERSION_DISPLAY` is 0.x". Reason: `appinfo.version` is now deliberately
@@ -140,3 +143,12 @@ stricter check that `appinfo.version` is exactly the Firefox version.
   Floorp writes its own version into both files and keeps Gecko's elsewhere (`tools/src/update.ts`).
 - **Profiles.** `appinfo.version` going from 0.1.0 to 157.0.1 is an upgrade, so existing dev
   profiles open without the downgrade prompt; the add-on manager re-checks compatibility once.
+- **Build cost**: after `npm run import`, `./mach build` reconfigured and rebuilt for 927 s
+  (15.5 min; `MOZ_APP_VERSION` is a define in gfx, telemetry, xre and others); no clobber. A
+  second import plus build with unchanged versions took 16 s. `vimma --version` prints
+  `Vimma Vimma 0.1.0`; `application.ini` has `Version=157.0.1`.
+- **Red/green**: before the change `browser_vimma_app_version.js` failed 8 of 11 checks
+  (`Services.appinfo.version - "0.1.0" == "157.0.1"`, likewise `MOZ_APP_VERSION`,
+  `ClientEnvironment env.version`, targeting `version`, ASRouter `firefoxVersion` `0 == 157`,
+  webcompat `getAppVersion()`, `runtime.getBrowserInfo().version`, and display vs app version
+  `"0.1.0" != "0.1.0"`); after it, 11/11 pass and all mochitests pass (120 passed, 0 failed).

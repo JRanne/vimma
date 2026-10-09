@@ -17,7 +17,8 @@
     "format": "prettier --write .",
     "gen-docs": "node tools/gen-docs.mjs && prettier --log-level warn --write docs/bindings.md",
     "sync-core": "node tools/sync-core.mjs",
-    "import": "npm run sync-core && surfer config brand vimma && surfer import && SURFER_MOZCONFIG_ONLY=1 surfer build",
+    "version-files": "node tools/version-files/version-files.mjs",
+    "import": "npm run sync-core && npm run version-files && surfer config brand vimma && surfer import && SURFER_MOZCONFIG_ONLY=1 surfer build",
     "mochitest": "node tools/mochitest.mjs",
     "test:py": "python3 -m unittest discover -s tools/upstream",
     "license-check": "node tools/license-check/license-check.mjs"

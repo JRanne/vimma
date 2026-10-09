@@ -28,6 +28,8 @@ npx surfer run
 ```sh
 bin=engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma
 $bin --version   # "Vimma Vimma 0.1.0" (vendor, name, surfer.json brands.vimma.release.displayVersion)
+grep '^Version=' engine/obj-x86_64-pc-linux-gnu/dist/bin/application.ini
+                 # "Version=157.0.1": appinfo.version is the Firefox version (spec m0-app-version)
 # navigator.userAgent stays Firefox's: "Mozilla/5.0 (X11; Linux x86_64; rv:157.0) Gecko/20100101
 # Firefox/157.0", no Vimma token (spec m0-user-agent; browser_vimma_user_agent.js checks it)
 p=$(mktemp -d)
@@ -39,6 +41,12 @@ The brand is `vimma` (spec m0-branding): `npm run import` selects it (`surfer co
 and rewrites `engine/mozconfig`, so `npm run import && (cd engine && ./mach build)` builds it.
 Changing branding needs a full `./mach build`, not `--ui`. Profiles now live under the Vimma
 vendor/name, so profiles from the old `unofficial` builds are not picked up.
+
+Two versions (spec m0-app-version): `npm run import` writes `src/browser/config/vimma/version.txt`
+(the Firefox version, `appinfo.version`) and `version_display.txt` (Vimma's, `--version` and the
+About dialog) from `surfer.json`; the mozconfig points configure at them. Surfer still writes
+`displayVersion` into the stock `browser/config/version*.txt`, which configure then ignores. After
+editing the generated files by hand, run `./mach configure`; `npm run import` triggers it anyway.
 
 `--screenshot` on a brand-new profile quits while Places is still importing the default
 bookmarks and logs "Failed to import bookmarks … 0x8046001e" (`NS_ERROR_ILLEGAL_DURING_SHUTDOWN`).

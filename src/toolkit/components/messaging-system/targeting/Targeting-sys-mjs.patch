@@ -1,0 +1,13 @@
+diff --git a/toolkit/components/messaging-system/targeting/Targeting.sys.mjs b/toolkit/components/messaging-system/targeting/Targeting.sys.mjs
+index 010997f08ed5251c9c3b5cb476399041297996a7..1cfc8a9ed8acbb45d1130276278099fc5ffa411d 100644
+--- a/toolkit/components/messaging-system/targeting/Targeting.sys.mjs
++++ b/toolkit/components/messaging-system/targeting/Targeting.sys.mjs
+@@ -44,7 +44,7 @@ const TargetingEnvironment = {
+   },
+ 
+   get version() {
+-    return AppConstants.MOZ_APP_VERSION_DISPLAY;
++    return AppConstants.MOZ_APP_VERSION;
+   },
+ 
+   get channel() {
