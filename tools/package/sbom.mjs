@@ -95,17 +95,89 @@ export function parseMozYaml(text) {
   return result;
 }
 
+const SPDX_DIR = new URL("vendor/spdx-license-list-3.24.0/", import.meta.url);
 /**
- * @param {string} license an SPDX id, an SPDX expression, the old `MIT/Apache-2.0` form or a name
+ * @param {string} file
+ * @param {string} list
+ * @param {string} key
+ */
+function spdxIds(file, list, key) {
+  const data = JSON.parse(readFileSync(new URL(file, SPDX_DIR), "utf8"));
+  /** @type {Map<string, string>} lower case -> SPDX's spelling */
+  const ids = new Map();
+  for (const entry of data[list]) ids.set(String(entry[key]).toLowerCase(), String(entry[key]));
+  return ids;
+}
+/** SPDX License List 3.24.0, the version CycloneDX 1.6.2's spdx.schema.json enumerates. */
+const LICENSE_IDS = spdxIds("licenses.json", "licenses", "licenseId");
+const EXCEPTION_IDS = spdxIds("exceptions.json", "exceptions", "licenseExceptionId");
+
+/**
+ * A CycloneDX licence entry: an SPDX id in SPDX's own spelling (`libpng` -> `Libpng`), an SPDX
+ * expression whose every id is on the list (operators upper-cased; the old `MIT/Apache-2.0` form
+ * becomes `MIT OR Apache-2.0`), or else the text as a licence name.
+ * @param {string} license
  * @returns {License}
  */
-function licenseEntry(license) {
-  const normalized = license.replace(/\s*\/\s*/g, " OR ");
-  if (/^[A-Za-z0-9.+-]+$/.test(normalized)) return { license: { id: normalized } };
-  if (/^[A-Za-z0-9.+() -]+$/.test(normalized) && / (OR|AND|WITH) /.test(normalized)) {
-    return { expression: normalized };
+export function canonicalLicense(license) {
+  const asName = { license: { name: license } };
+  const tokens = license.replace(/\s*\/\s*/g, " OR ").match(/\(|\)|[^\s()]+/g) ?? [];
+  const isOperator = (/** @type {string} */ t) => /^(or|and|with)$/i.test(t);
+  if (!tokens.some(isOperator)) {
+    if (tokens.length !== 1) return asName;
+    const id = LICENSE_IDS.get(license.toLowerCase());
+    return id ? { license: { id } } : asName;
   }
-  return { license: { name: license } };
+  /** @type {string[]} */
+  const out = [];
+  for (const token of tokens) {
+    if (token === "(" || token === ")") out.push(token);
+    else if (isOperator(token)) out.push(token.toUpperCase());
+    else {
+      const ids = out.at(-1) === "WITH" ? EXCEPTION_IDS : LICENSE_IDS;
+      const id = ids.get(token.toLowerCase());
+      if (!id) return asName;
+      out.push(id);
+    }
+  }
+  return { expression: out.join(" ").replaceAll("( ", "(").replaceAll(" )", ")") };
+}
+
+/**
+ * The version of a moz.yaml origin: the revision (a commit) when there is one, else the release
+ * without the "(date)." Mozilla's tooling appends.
+ * @param {MozYaml} origin
+ */
+function mozVersion(origin) {
+  if (origin.revision) return origin.revision;
+  return (origin.release ?? "")
+    .replace(/\s*\(.*\)\.?\s*$/, "")
+    .replace(/\.$/, "")
+    .trim();
+}
+
+/**
+ * The smol-toml vimma-core vendors (tools/vendor-smol-toml.mjs writes its version in a header).
+ * @param {string} vimmaRoot
+ * @returns {Component[]}
+ */
+function vendoredNpm(vimmaRoot) {
+  const file = join(vimmaRoot, "packages/vimma-core/src/vendor/smol-toml/smol-toml.mjs");
+  if (!existsSync(file)) return [];
+  const header = /Vendored for vimma: smol-toml (\S+), generated/.exec(readFileSync(file, "utf8"));
+  if (!header?.[1]) throw new Error(`${file}: no "Vendored for vimma: smol-toml <version>" header`);
+  const purl = `pkg:npm/smol-toml@${header[1]}`;
+  return [
+    {
+      type: "library",
+      "bom-ref": purl,
+      name: "smol-toml",
+      version: header[1],
+      purl,
+      // packages/vimma-core/src/vendor/smol-toml/LICENSE
+      licenses: [canonicalLicense("BSD-3-Clause")],
+    },
+  ];
 }
 
 /**
@@ -146,12 +218,13 @@ function findMozYaml(dir) {
 /**
  * @param {{ engineDir: string,
  *   config: { version?: { version?: unknown }, brands?: Record<string, { release?: { displayVersion?: unknown } }> },
- *   repo: string, serialNumber?: string, timestamp?: string }} options
+ *   repo: string, vimmaRoot?: string, serialNumber?: string, timestamp?: string }} options
+ * vimmaRoot: this repository, for what Vimma itself vendors (smol-toml)
  */
-export function buildSbom({ engineDir, config, repo, serialNumber, timestamp }) {
+export function buildSbom({ engineDir, config, repo, vimmaRoot, serialNumber, timestamp }) {
   const version = String(config.brands?.vimma?.release?.displayVersion ?? "");
   const firefox = String(config.version?.version ?? "");
-  const mpl = [licenseEntry("MPL-2.0")];
+  const mpl = [canonicalLicense("MPL-2.0")];
   /** @type {Component[]} */
   const components = [
     {
@@ -179,7 +252,7 @@ export function buildSbom({ engineDir, config, repo, serialNumber, timestamp }) 
     };
     if (pkg.checksum) component.hashes = [{ alg: "SHA-256", content: pkg.checksum }];
     const license = crateLicense(engineDir, pkg);
-    if (license) component.licenses = [licenseEntry(license)];
+    if (license) component.licenses = [canonicalLicense(license)];
     if (pkg.source.startsWith("git+")) {
       component.externalReferences = [{ type: "vcs", url: pkg.source.slice(4) }];
     }
@@ -188,9 +261,8 @@ export function buildSbom({ engineDir, config, repo, serialNumber, timestamp }) 
   for (const file of findMozYaml(engineDir)) {
     const origin = parseMozYaml(readFileSync(file, "utf8"));
     if (!origin) continue;
-    const ver = origin.release ?? origin.revision ?? "";
-    const purlVersion = origin.revision ?? ver.split(/\s/)[0] ?? "";
-    const purl = `pkg:generic/${encodeURIComponent(origin.name)}${purlVersion ? `@${encodeURIComponent(purlVersion)}` : ""}`;
+    const ver = mozVersion(origin);
+    const purl = `pkg:generic/${encodeURIComponent(origin.name)}${ver ? `@${encodeURIComponent(ver)}` : ""}`;
     /** @type {Component} */
     const component = {
       type: "library",
@@ -199,10 +271,12 @@ export function buildSbom({ engineDir, config, repo, serialNumber, timestamp }) 
       purl,
     };
     if (ver) component.version = ver;
-    if (origin.licenses.length) component.licenses = origin.licenses.map(licenseEntry);
+    if (origin.licenses.length)
+      component.licenses = origin.licenses.map((l) => canonicalLicense(l));
     if (origin.url) component.externalReferences = [{ type: "website", url: origin.url }];
     components.push(component);
   }
+  if (vimmaRoot) components.push(...vendoredNpm(vimmaRoot));
   return {
     bomFormat: "CycloneDX",
     specVersion: "1.6",
@@ -248,6 +322,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const bom = buildSbom({
     engineDir: values.engine ?? "engine",
     repo: values.repo ?? "JRanne/vimma",
+    vimmaRoot: fileURLToPath(root),
     config: JSON.parse(readFileSync(new URL("surfer.json", root), "utf8")),
   });
   writeFileSync(values.out, `${JSON.stringify(bom, null, 2)}\n`);

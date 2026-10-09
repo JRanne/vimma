@@ -18,3 +18,7 @@ packages/vimma-core/src/vendor/smol-toml/smol-toml.mjs
 # would fail lint on every release PR, and on main once one merges (docs/runbook.md, Releases)
 CHANGELOG.md
 .release-please-manifest.json
+
+# vendored byte-exact copies, pinned by SHA-256 in tools/package/vendor/README.md
+tools/package/vendor/cyclonedx-*/
+tools/package/vendor/spdx-license-list-*/
