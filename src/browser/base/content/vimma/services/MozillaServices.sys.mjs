@@ -13,10 +13,32 @@
  */
 const SPONSORED_SUGGESTIONS = "browser.urlbar.suggest.quicksuggest.sponsored";
 
+/**
+ * Suggest's pref migrations run at browser-idle-startup, after our first window, and can clear
+ * the user value (migration 5, for DE/FR/IT with an English locale). They end by writing this
+ * pref, so a change to it means "re-apply".
+ */
+const SUGGEST_MIGRATION_VERSION = "browser.urlbar.quicksuggest.migrationVersion";
+
+let started = false;
+
 export const MozillaServices = {
+  /** Apply now, and again after Suggest has initialised or migrated. Once per process. */
+  init() {
+    this.applyUserDefaults();
+    if (started) {
+      return;
+    }
+    started = true;
+    Services.prefs.addObserver(SUGGEST_MIGRATION_VERSION, () => this.applyUserDefaults());
+    const { QuickSuggest } = ChromeUtils.importESModule(
+      "moz-src:///browser/components/urlbar/QuickSuggest.sys.mjs",
+    );
+    QuickSuggest.initPromise.then(() => this.applyUserDefaults());
+  },
+
   /**
-   * Turn sponsored address-bar suggestions off unless the user has chosen. Idempotent; cheap
-   * enough to run for every window.
+   * Turn sponsored address-bar suggestions off unless the user has chosen. Idempotent.
    */
   applyUserDefaults() {
     if (!Services.prefs.prefHasUserValue(SPONSORED_SUGGESTIONS)) {

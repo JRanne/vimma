@@ -134,7 +134,13 @@ The job keeps `engine/` between runs (`clean: false`) and re-downloads Firefox o
 is newer than `surfer.json`; `bump-surfer-json.py` rewrites only that version. The workflow then
 opens a draft PR `chore(upstream): Firefox X.Y` on branch `upstream/firefox-X.Y`. If a PR for
 that branch is already open it does nothing; a branch left by a failed or closed run is rebuilt
-from `main` and force-pushed, so a failed run is retried 6 h later. One-time setup:
+from `main` and force-pushed, so a failed run is retried 6 h later.
+
+Every bump PR: refresh the copy of `browser.newtabpage.activity-stream.asrouter.providers.cfr`
+in `src/browser/branding/vimma/pref/firefox-branding.js` from `engine/browser/app/profile/firefox.js`,
+keeping `"enabled":false` (spec m0-mozilla-services). A stale copy shadows upstream's provider.
+
+One-time setup:
 
 1. Settings → Actions → General → Workflow permissions → tick "Allow GitHub Actions to create and
    approve pull requests" (`gh pr create` with the default token fails without it).
