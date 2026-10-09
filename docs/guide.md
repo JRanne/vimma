@@ -36,16 +36,18 @@ downloading the next AppImage or tarball. Next to the files are `SHA256SUMS`, a 
 
 ### First launch, with its own profile
 
-Start Vimma with a profile of its own, so it never touches your Firefox profile and two builds
-never share one:
+Start Vimma from the checkout with `npm start`. It runs your build with a profile of its own,
+`~/.cache/vimma-dev-profile`, so it never touches your Firefox profile:
 
 ```sh
-mkdir -p ~/.cache/vimma-dev-profile
-engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma --no-remote --profile ~/.cache/vimma-dev-profile
+npm start                   # the full build, or the artifact build if that is all there is
+npm start -- --fresh        # a throwaway profile, deleted when Vimma quits
+npm start -- --profile DIR  # another persistent profile
 ```
 
-Without `--profile`, Vimma keeps its profiles apart from Firefox's. `npx surfer run` launches
-with a scratch profile in the build directory.
+It refuses to start a second Vimma on a profile that is already open; switch to that window
+instead. The profile's `user.js` gets one line Vimma needs when run from a source checkout
+(read access for web pages' sandbox to the checkout's `src/`); your own lines there are kept.
 
 Where Vimma keeps its files on Linux:
 

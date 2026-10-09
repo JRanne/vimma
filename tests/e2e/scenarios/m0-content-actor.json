@@ -1,0 +1,16 @@
+{
+  "name": "m0-content-actor",
+  "description": "M0: Vimma's content actor loads in a web page under the default content sandbox (without read access to the repo's src/, VimmaChild never loads): a page that focuses an input reports insert mode.",
+  "timeoutSeconds": 45,
+  "steps": [
+    { "wait-for-state": { "mode": "insert" }, "timeoutSeconds": 15 },
+    { "open": "fixture:focus-later.html" },
+    {
+      "wait-for-state": {
+        "mode": "normal",
+        "tabs": [{ "selected": false }, { "title": "focus later", "selected": true }]
+      }
+    },
+    { "wait-for-state": { "mode": "insert" }, "timeoutSeconds": 10 }
+  ]
+}

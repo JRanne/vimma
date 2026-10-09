@@ -1,6 +1,6 @@
 # Spec: m0-e2e-harness
 
-Status: implemented (driver half), awaiting review; real scenarios pending the control server ·
+Status: implemented; `m0-happy-path` runs in CI since the control server (PR #38) ·
 Milestone: M0 · Area: `tools/e2e/`, `tests/e2e/`, `.github/workflows/e2e.yml`
 Prerequisites: ADR-007 (control socket), ADR-010 (artifact builds), ADR-011 (vimma-ctl),
 spec m0-control-protocol-and-vimma-ctl (protocol v1).
@@ -78,7 +78,11 @@ npm run e2e ─► tools/e2e/e2e.mjs (CLI: flags, signals, exit code)
   `validateMessage(…, { kind: "discovery" })` and have mode 0600. If the browser exits first the
   wait fails at once with the exit code and the last lines of its stderr; on timeout the message
   names the pref, the file and the stderr tail.
-- **Cleanup**: the browser is spawned `detached` (its own process group), so teardown sends
+- **Cleanup**: teardown first quits like a user, `send-keys ctrl+q` (the profile sets
+  `browser.warnOnQuitShortcut=false`; an open help overlay swallows ctrl+q, so `esc` closes it
+  first), so quit observers remove the discovery file; a clean quit that leaves the file fails
+  the scenario. Then, or when ctrl+q does not end it within 10 s, or after a timeout: the
+  browser is spawned `detached` (its own process group), so teardown sends
   SIGTERM to the whole group (content processes included), then SIGKILL after 5 s. Xvfb the
   same. The profile is removed unless `--keep` (then its path is printed). The CLI runs teardown
   on SIGINT/SIGTERM and on any failure, including a failed launch.
@@ -224,7 +228,8 @@ passes 1 MB (then `git lfs migrate import --include="tests/e2e/baselines/*.png"`
 3. `open {url: "about:blank"}` opens and selects a new tab.
 4. `send-keys "ctrl+b ?"` goes through the dispatcher like real keydowns, so the overlay opens
    (the bare-prefix path, ADR-009).
-5. The server deletes the discovery file at shutdown and SIGTERM ends the browser cleanly.
+5. The server deletes the discovery file at shutdown. SIGTERM does not run quit observers
+   (control server report), so the harness quits with ctrl+q and keeps signals as the fallback.
 6. Startup shows exactly one tab, `about:blank` (`browser.startup.page=0` in the profile), so
    after `open` the state has two tabs, the new one selected. If Vimma's startup differs, change
    the scenario's `tabs` expectation in the server PR and say why.
@@ -304,3 +309,25 @@ Supersedes the sections above where they differ.
   to 6 of `m0-happy-path` passed in 1.0 s (state, open, `ctrl+b ?`, mode `help`); the
   screenshot step failed as designed without the harness's Xvfb (none on the dev box). Nothing
   left behind.
+
+### M0 finish (PR after #38)
+
+- `pending` removed from `m0-happy-path`; its expectations already matched the server (checked
+  by hand, headless artifact build: startup `insert` with one `about:blank` tab, two tabs after
+  `open`, `help` after `ctrl+b ?`; ctrl+q in help changed nothing, `esc` then ctrl+q quit and
+  removed `vimma-control.json`). The fake server already spoke hello→challenge→auth→welcome.
+- Teardown quits with ctrl+q (`quitBrowser`, unit-tested with a fake ctl and child: plain,
+  help open, no exit, dead socket, already exited) before the signals.
+- A missing baseline now also writes `<name>.actual.png` to `e2e-output/`, so CI's first run
+  supplies a baseline from CI's own environment (Xvfb, fonts); the first one was taken from it.
+  `--update-baselines` stays refused when `CI` is set.
+- **Real-sandbox check** (with `npm start`): local objdirs symlink chrome files into the repo's
+  `src/`, which the default content sandbox may not read, so VimmaChild failed to load outside
+  mochitests (which relax the sandbox). The harness profile now takes `devPrefs` from
+  `tools/start.mjs` (the read-path whitelist) and keeps the default sandbox, and
+  `m0-content-actor` opens `fixture:focus-later.html` from a 127.0.0.1 page server (a web
+  content process), waits for `normal`, then for `insert` when the page focuses an input 2 s
+  later; only the actor reports that. Red without the pref (headless artifact build: "expected
+  insert, got normal"), green with it. Any scenario also fails if the browser's stderr has
+  `Failed to load chrome://browser/content/vimma/…`. Chosen over a separate script: it reuses
+  the launch, the socket and the CI step, and costs one ~3 s scenario.
