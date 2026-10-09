@@ -511,6 +511,7 @@ export const VimmaHost = {
     /** @type {HintSession} */
     const session = { browser, action: id, hs: null, buffered: [] };
     state.hint = session;
+    this._emit(state);
     VimmaActors.collectHints(browser, id)
       .then((targets) => {
         if (state.hint !== session) return;
@@ -519,6 +520,7 @@ export const VimmaHost = {
         } catch (e) {
           if (!(e instanceof HintError && e.code === "no-targets")) throw e;
           state.hint = null;
+          this._emit(state);
           console.info("vimma: no hint targets");
           return;
         }
@@ -574,6 +576,7 @@ export const VimmaHost = {
     if (!state.hint) return;
     state.hint = null;
     state.hintOverlay.hide();
+    this._emit(state); // the status bar leaves HINT, also when no key ended hint mode
     VimmaActors.cancelHints(state.win);
   },
 

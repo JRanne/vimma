@@ -134,7 +134,8 @@ The status bar is the window's last line, always there (it hides only while a pa
 fullscreen, such as a video; browser fullscreen with `F11` keeps it). From the left:
 
 - the **mode** badge in the mode's colour: `NORMAL` on a page, `INSERT` while a text field has
-  focus (or after `i`), `HELP` while the `ctrl+b ?` overlay is open, and later `VISUAL`, …;
+  focus (or after `i`), `HELP` while the `ctrl+b ?` overlay is open, `HINT` while link hints
+  are up, and later `VISUAL`, …;
 - the **pending keys**, e.g. `prefix` after `ctrl+b`;
 - `tab 2/5`: the selected tab and how many there are;
 - the page **title** (your rename, once tab rename lands);
