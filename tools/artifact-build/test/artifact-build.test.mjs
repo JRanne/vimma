@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   ARTIFACT_OBJDIR,
   appIniForArtifact,
   artifactMozconfig,
+  candidateTree,
+  indexNamespace,
+  indexTask,
+  refreshAppIni,
   sourceRevision,
   uaName,
 } from "../artifact-build.mjs";
@@ -13,6 +20,9 @@ const REV = "737ec77d798755890b062aab541a90d6c75afd19";
 const GENERATED = [
   "ac_add_options --with-app-name=vimma",
   'export MOZ_USER_DIR="Vimma"',
+  "export MOZ_APP_BASENAME=Vimma",
+  "export MOZ_DISTRIBUTION_ID=dev.vimma.browser",
+  "export MOZ_SOURCE_REPO=https://github.com/JRanne/vimma",
   "ac_add_options --enable-bootstrap",
   "ac_add_options --disable-crashreporter",
   "ac_add_options --with-version-file-path=browser/config/vimma",
@@ -23,7 +33,9 @@ const GENERATED = [
   "ac_add_options --enable-optimize",
   "ac_add_options --with-ccache=sccache",
   "ac_add_options --disable-debug",
+  "ac_add_options --enable-updater",
   "ac_add_options --with-branding=browser/branding/vimma",
+  "ac_add_options --enable-update-channel=vimma",
   "",
 ].join("\n");
 
@@ -55,10 +67,14 @@ describe("artifactMozconfig", () => {
       "ac_add_options --with-branding=browser/branding/vimma",
       "ac_add_options --enable-release",
       "ac_add_options --enable-bootstrap",
+      "ac_add_options --enable-updater",
+      "ac_add_options --enable-update-channel=vimma",
     ]) {
       expect(out).toContain(kept);
     }
-    expect(artifactMozconfig(GENERATED)).toContain('export MOZ_USER_DIR="Vimma"');
+    for (const env of ['export MOZ_USER_DIR="Vimma"', "export MOZ_APP_BASENAME=Vimma"]) {
+      expect(artifactMozconfig(GENERATED)).toContain(env);
+    }
   });
 
   it("enables artifact builds in their own objdir", () => {
@@ -140,5 +156,110 @@ describe("appIniForArtifact", () => {
 
   it("throws without an [App] section", () => {
     expect(() => appIniForArtifact("[Gecko]\nMinVersion=1\n", "Firefox")).toThrow(/\[App\]/);
+  });
+});
+
+describe("candidateTree (mirrors select_candidate_trees in mozbuild/artifacts.py)", () => {
+  const REPO = "https://github.com/JRanne/vimma";
+
+  it("is mozilla-release for Vimma's 0.x display versions", () => {
+    expect(candidateTree("0.1.0", REPO)).toBe("mozilla-release");
+    expect(candidateTree("0.2.0-nightly.20261009", REPO)).toBe("mozilla-release");
+  });
+
+  it.each([
+    ["0.2.0b1", "mozilla-beta"],
+    ["0.2.0a1", "mozilla-central"],
+    ["0.2.0esr", "esr"],
+  ])("sends display version %s elsewhere (%s)", (display, tree) => {
+    expect(candidateTree(display, REPO)).toContain(tree);
+  });
+
+  it("sends a source repo containing esr to the ESR trees", () => {
+    expect(candidateTree("0.1.0", "https://example.org/vimma-esr")).toContain("esr");
+  });
+});
+
+describe("indexNamespace", () => {
+  it("is the namespace artifacts.py searches for a linux64-opt release build", () => {
+    expect(indexNamespace(REV)).toBe(
+      `gecko.v2.mozilla-release.shippable.revision.${REV}.firefox.linux64-opt`,
+    );
+  });
+});
+
+describe("indexTask (Taskcluster index findTask response)", () => {
+  const NOW = new Date("2026-10-09T12:00:00Z");
+  const FOUND = {
+    namespace: indexNamespace(REV),
+    taskId: "KpoROUtgTjWRzky1Y6nIAg",
+    rank: 1791208370,
+    data: {},
+    expires: "2027-10-05T13:54:14.263Z",
+  };
+  const NOT_FOUND = { code: "ResourceNotFound", message: "Indexed task not found" };
+
+  it("returns the task and its expiry", () => {
+    expect(indexTask(REV, 200, FOUND, NOW)).toEqual({
+      taskId: "KpoROUtgTjWRzky1Y6nIAg",
+      expires: "2027-10-05T13:54:14.263Z",
+    });
+  });
+
+  it("explains a missing build with the revision and a remedy", () => {
+    expect(() => indexTask(REV, 404, NOT_FOUND, NOW)).toThrow(
+      new RegExp(`${REV}[\\s\\S]*not in the Taskcluster index[\\s\\S]*surfer\\.json`),
+    );
+  });
+
+  it("explains an expired build with its expiry date", () => {
+    const old = { ...FOUND, expires: "2026-10-01T00:00:00.000Z" };
+    expect(() => indexTask(REV, 200, old, NOW)).toThrow(/expired 2026-10-01T00:00:00.000Z/);
+  });
+
+  it("throws on another HTTP status or a malformed body", () => {
+    expect(() => indexTask(REV, 500, {}, NOW)).toThrow(/HTTP 500/);
+    expect(() => indexTask(REV, 200, { taskId: 1 }, NOW)).toThrow(/unexpected/);
+  });
+});
+
+describe("refreshAppIni", () => {
+  /** A minimal engine/ with an artifact objdir after `mach build`. */
+  const engine = () => {
+    const dir = mkdtempSync(join(tmpdir(), "vimma-artifact-"));
+    mkdirSync(join(dir, ARTIFACT_OBJDIR, "dist", "bin", "browser"), { recursive: true });
+    mkdirSync(join(dir, "browser"));
+    writeFileSync(
+      join(dir, "browser", "moz.configure"),
+      'imply_option("MOZ_APP_UA_NAME", "Firefox")\n',
+    );
+    return dir;
+  };
+  /** @param {string} dir @param {string} buildId */
+  const build = (dir, buildId) =>
+    writeFileSync(
+      join(dir, ARTIFACT_OBJDIR, "dist", "bin", "application.ini"),
+      `[App]\nName=Vimma\nBuildID=${buildId}\n`,
+    );
+  /** @param {string} dir */
+  const copy = (dir) =>
+    readFileSync(join(dir, ARTIFACT_OBJDIR, "dist", "bin", "browser", "application.ini"), "utf8");
+
+  it("writes the test app file from the current build every time", () => {
+    const dir = engine();
+    build(dir, "1");
+    refreshAppIni(dir);
+    expect(copy(dir)).toBe("[App]\nUAName=Firefox\nName=Vimma\nBuildID=1\n");
+    build(dir, "2"); // a later bare `./mach build`
+    refreshAppIni(dir);
+    expect(copy(dir)).toContain("BuildID=2");
+  });
+
+  it("returns the path tests pass as XUL_APP_FILE", () => {
+    const dir = engine();
+    build(dir, "1");
+    expect(refreshAppIni(dir)).toBe(
+      join(dir, ARTIFACT_OBJDIR, "dist", "bin", "browser", "application.ini"),
+    );
   });
 });
