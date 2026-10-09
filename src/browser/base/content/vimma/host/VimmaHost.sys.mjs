@@ -15,7 +15,7 @@ import { insertModeAfterFocus, matchSiteRule } from "../core/editable.mjs";
 import { HintError, hintKey, startHints } from "../core/hints.mjs";
 import { chordFromEvent, formatKey } from "../core/keys.mjs";
 import { compileKeymap } from "../core/keymap.mjs";
-import { notImplementedText } from "../core/actions.mjs";
+import { describeAction, notImplementedText } from "../core/actions.mjs";
 import { PENDING_ACTIONS } from "../core/cmdline.mjs";
 import { CommandLine } from "../ui/cmdline.mjs";
 import { HelpOverlay } from "../ui/help-overlay.mjs";
@@ -30,7 +30,15 @@ import { RenamePrompt } from "../ui/rename-prompt.mjs";
 import { gotoItems, tabById } from "./goto.mjs";
 import { getTabLabel, setTabLabel } from "./tab-labels.mjs";
 import { BLOCKED_URL_TEXT, closeTab, newTab, openUrl, selectTab } from "./tab-ops.mjs";
-import { closePane, focusPane, hasPanes, splitPane, zoomPane } from "./pane-ops.mjs";
+import {
+  closePane,
+  focusPane,
+  hasPanes,
+  resizePane,
+  splitPane,
+  swapPane,
+  zoomPane,
+} from "./pane-ops.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { leaves } from "../core/panes.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
@@ -81,6 +89,7 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {GotoPicker} picker  the prefix+g overlay (m2-picker-rename)
  * @property {RenamePrompt} rename  the prefix+shift+t prompt (m2-picker-rename)
  * @property {Find} find  `/`, `?`, `n`, `N` over Firefox's find bar (m1-find)
+ * @property {boolean} resize  in resize mode (`prefix+r`, m4-split-panes sub-spec 5, ADR-014)
  */
 
 /**
@@ -163,6 +172,14 @@ const MULTI_PANE = new Set([
   "pane.focus_up",
   "pane.focus_right",
   "pane.zoom",
+  "pane.swap_left",
+  "pane.swap_down",
+  "pane.swap_up",
+  "pane.swap_right",
+  "pane.resize_narrower",
+  "pane.resize_wider",
+  "pane.resize_taller",
+  "pane.resize_shorter",
 ]);
 
 /**
@@ -197,6 +214,26 @@ export const RUNNERS = Object.freeze({
   "pane.focus_up": paneRunner(focusPane),
   "pane.focus_right": paneRunner(focusPane),
   "pane.zoom": paneRunner(zoomPane),
+  "pane.swap_left": paneRunner(swapPane),
+  "pane.swap_down": paneRunner(swapPane),
+  "pane.swap_up": paneRunner(swapPane),
+  "pane.swap_right": paneRunner(swapPane),
+  "pane.resize_narrower": paneRunner(resizePane),
+  "pane.resize_wider": paneRunner(resizePane),
+  "pane.resize_taller": paneRunner(resizePane),
+  "pane.resize_shorter": paneRunner(resizePane),
+  // Resize mode (ADR-014): modal, window-wide, while the window shows two panes or more.
+  "pane.resize_mode": (/** @type {WindowState} */ s, /** @type {Action} */ a) => {
+    if (!hasPanes(s.win)) {
+      s.notice.show(`${describeAction(a)}: only one pane`);
+      return;
+    }
+    s.notice.hide();
+    s.resize = true;
+  },
+  "pane.resize_exit": (/** @type {WindowState} */ s) => {
+    s.resize = false;
+  },
   // Without text (a key bound to open_url) it asks for the URL on the command line.
   "page.open": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
     text ? openOrSay(s, text, "current") : s.cmdline.open("open "),
@@ -392,6 +429,7 @@ export const VimmaHost = {
       timer: null,
       onCancelHints: () => this._cancelHints(state),
       hint: null,
+      resize: false,
       hintOverlay: new HintOverlay(win),
       listeners: new Set(),
       statusBar: null,
@@ -602,7 +640,7 @@ export const VimmaHost = {
 
   /**
    * `help` while the overlay or the goto picker (modal too) is open; `command` while the `:` line
-   * is; the focused page's mode;
+   * is; `resize` in resize mode (ADR-014); the focused page's mode;
    * `insert` in chrome, so chrome text fields keep their keys and only global chords are ours.
    * @param {WindowState} state
    * @returns {Mode}
@@ -610,6 +648,9 @@ export const VimmaHost = {
   _mode(state) {
     if (state.help.isOpen || state.picker.isOpen) return "help";
     if (state.cmdline.isOpen) return "command";
+    // Resize mode ends by itself when the window is down to one pane (a tab closed meanwhile).
+    if (state.resize && !hasPanes(state.win)) state.resize = false;
+    if (state.resize) return "resize";
     const browser = this._focusedBrowser(state.win);
     if (state.hint && state.hint.browser === browser) return "hint";
     return browser ? this._browserMode(browser) : "insert";
@@ -700,8 +741,8 @@ export const VimmaHost = {
     const result = state.dispatcher.dispatch(mode, chord);
     // The overlay is modal: in help mode every key is ours, handled or not, so nothing reaches
     // the browser underneath (ctrl+w would close the tab behind it). Hint mode too: every key
-    // is a label key or ignored, never the page's.
-    const modal = mode === "help" || mode === "hint";
+    // is a label key or ignored, never the page's. Resize mode too (ADR-014).
+    const modal = mode === "help" || mode === "hint" || mode === "resize";
     switch (result.kind) {
       case "pass":
         if (modal) consume(e);

@@ -145,6 +145,25 @@ const modal = {
     "<CR>": "panel.open",
     "<Esc>": "panel.close",
   },
+  // ctrl+b r (m4-split-panes sub-spec 5, ADR-014): each key moves the focused pane's divider a
+  // step; a count repeats it (3l).
+  resize: {
+    h: "pane.resize_narrower",
+    l: "pane.resize_wider",
+    j: "pane.resize_taller",
+    k: "pane.resize_shorter",
+    "<Left>": "pane.resize_narrower",
+    "<Right>": "pane.resize_wider",
+    "<Down>": "pane.resize_taller",
+    "<Up>": "pane.resize_shorter",
+    "<lt>": "pane.resize_narrower",
+    ">": "pane.resize_wider",
+    "+": "pane.resize_taller",
+    "-": "pane.resize_shorter",
+    "<Esc>": "pane.resize_exit",
+    "<CR>": "pane.resize_exit",
+    q: "pane.resize_exit",
+  },
 };
 
 /** Values a `[workspaces.<name>]` table takes for keys it leaves out. */
