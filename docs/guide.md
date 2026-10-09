@@ -60,6 +60,22 @@ On first launch you see Firefox's interface without the tab strip: the window st
 navigation bar and URL bar at the top, and Vimma's status bar at the bottom. Press `ctrl+b`, then
 `?`, to see the bindings.
 
+### The start page
+
+New windows and new tabs open Vimma's start page: the logo, and under it the keys to start from
+(`ctrl+b ?` keys, `:` commands, `f` hints). The URL bar is empty and focused, so you can type an
+address straight away; click the page to use `:` and the other keys there. It is a local page
+(`chrome://browser/content/vimma/start/start.html`); nothing loads from the network.
+
+To change it back:
+
+- **Home page and new windows:** Settings (`about:preferences#home`) → "Homepage and new
+  windows", or set `browser.startup.homepage` in `about:config`. "Restore Defaults" there brings
+  the start page back.
+- **New tabs:** set `vimma.startpage.newtab` to `false` in `about:config` (applies at once) for
+  Firefox's new tab page. Settings' "New tabs" menu does not change Vimma's start page. An
+  extension that sets its own new tab page takes precedence.
+
 ## The two layers
 
 Vimma has two key layers and one dispatcher, which sees every key before Firefox does, including
@@ -267,6 +283,7 @@ Vimma's own preferences today:
 | -------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `vimma.ui.tabstrip.hidden` | `true`  | Hides Firefox's tab strip (horizontal, and the vertical tab list). Set `false` to show it again; it applies at once, no restart.                           |
 | `vimma.debug.keys`         | unset   | Create it as a boolean set to `true` to log every key Vimma sees (`{ key, mods, mode }`) to the Browser Console (`ctrl+shift+j`; enable its Debug filter). |
+| `vimma.startpage.newtab`   | `true`  | New tabs open Vimma's start page (see [The start page](#the-start-page)). Set `false` for Firefox's new tab page; it applies at once, no restart.          |
 | `vimma.control.enabled`    | `false` | Turns on the control socket for `vimma-ctl` and scripts (see [Scripting with vimma-ctl](#scripting-with-vimma-ctl)). Applies at once, no restart.          |
 
 **Planned:** `~/.config/vimma/config.toml` (M5) for keys, workspaces and theme. Its validator

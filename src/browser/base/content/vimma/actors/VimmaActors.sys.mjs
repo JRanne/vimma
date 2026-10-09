@@ -14,6 +14,8 @@ const { clearTimeout, setTimeout } = ChromeUtils.importESModule(
 
 const NAME = "Vimma";
 const BASE = "chrome://browser/content/vimma/actors/";
+/** start/StartPage.sys.mjs START_PAGE_URL; a match pattern needs no import for one string. */
+const START_PAGE_MATCH = "chrome://browser/content/vimma/start/start.html";
 
 /** @typedef {"down" | "up" | "left" | "right" | "half_down" | "half_up" | "top" | "bottom"} ScrollKind */
 
@@ -122,7 +124,9 @@ export const VimmaActors = {
         },
       },
       allFrames: true,
-      matches: ["http://*/*", "https://*/*", "file:///*", "about:*"],
+      // The start page (start/start.html) loads in the parent process; it needs the actor
+      // for normal mode like any page.
+      matches: ["http://*/*", "https://*/*", "file:///*", "about:*", START_PAGE_MATCH],
       messageManagerGroups: ["browsers"],
       // The child only reports focus and scrolls its own page; the parent trusts nothing but
       // a descriptor, which at worst flips that tab's mode.

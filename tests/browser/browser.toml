@@ -65,3 +65,5 @@ support-files = [
   "file_vimma_find_frame.html",
   "file_vimma_test.pdf",
 ]
+
+["browser_vimma_start_page.js"]

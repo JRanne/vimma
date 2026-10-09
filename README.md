@@ -57,6 +57,8 @@ What works today:
 - **`:` command line.** At the bottom of the window: `:tabnew`, `:q`, `:open example.com`
   (or search words), `:map`, and any action by name, with `Tab` completion, `Up`/`Down`
   history and inline errors that suggest the command you meant.
+- **Start page.** New windows and new tabs open a Vimma page with the logo and the keys to
+  start from; the URL bar stays empty and focused.
 - **Status bar.** A one-line status bar at the foot of the window shows the mode, pending keys
   (`prefix` after `ctrl+b`), `tab 2/5`, the page title, its URL and whether it is loading.
   `ctrl+b ?` is the one place that lists the bindings.
