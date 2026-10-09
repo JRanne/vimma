@@ -13,6 +13,7 @@ browser.jar:
         content/browser/vimma/actors/VimmaParent.sys.mjs  (actors/VimmaParent.sys.mjs)
         content/browser/vimma/actors/hint-collect.mjs     (actors/hint-collect.mjs)
         content/browser/vimma/services/MozillaServices.sys.mjs (services/MozillaServices.sys.mjs)
+        content/browser/vimma/workspaces/WorkspaceStore.sys.mjs (workspaces/WorkspaceStore.sys.mjs)
         content/browser/vimma/core                        (core/**/*.mjs)
         content/browser/vimma/ui/help-overlay.mjs         (ui/help-overlay.mjs)
         skin/classic/browser/vimma/help-overlay.css       (/browser/themes/shared/vimma/help-overlay.css)

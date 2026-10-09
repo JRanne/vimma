@@ -69,3 +69,5 @@ support-files = [
 ["browser_vimma_picker.js"]
 
 ["browser_vimma_rename.js"]
+
+["browser_vimma_workspace_store.js"]

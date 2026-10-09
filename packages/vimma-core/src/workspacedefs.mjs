@@ -1,0 +1,356 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/**
+ * Workspace definitions (spec m3-workspaces, sub-spec 1): the global list of workspaces in
+ * `<profile>/vimma-workspaces.json`, each with its id, name, container and looks. Pure: the host
+ * (WorkspaceStore) reads and writes the file and talks to ContextualIdentityService; this module
+ * validates the file, reconciles it with `[workspaces]` and plans the container work.
+ * Every operation returns a new object; a no-op returns its input.
+ */
+
+import { CONTAINER_COLORS, CONTAINER_ICONS, MAX_WORKSPACE_NAME } from "./config.mjs";
+import { isWorkspaceId } from "./workspaces.mjs";
+
+/** @import { Workspace } from "./config.mjs" */
+
+export const DEFINITIONS_SCHEMA_VERSION = 1;
+/** Decision 5: without `[workspaces]`, the one workspace a profile starts with. */
+export const DEFAULT_WORKSPACE_NAME = "main";
+const DEFAULT_LOOKS = Object.freeze({ color: "gray", icon: "circle" });
+const HOME = /^(?:https?:\/\/|about:)\S+$/;
+
+/**
+ * `userContextId` is the workspace's container, or null before one is made. `source` is
+ * `"config"` for a `[workspaces]` entry, `"runtime"` for one made while running (or `main`).
+ * @typedef {{ id: string, name: string, userContextId: number | null, color: string,
+ *   icon: string, home?: string, source: "config" | "runtime" }} WorkspaceDefinition
+ */
+/**
+ * Workspaces in `ctrl+i` order: config ones in file order, then runtime ones.
+ * @typedef {{ schema: number, lastActive: string | null,
+ *   workspaces: WorkspaceDefinition[] }} Definitions
+ */
+/**
+ * A container as `ContextualIdentityService.getPublicIdentities()` lists it. Firefox's defaults
+ * have an `l10nId` and no `name`.
+ * @typedef {{ userContextId: number, name?: string, color: string, icon: string }} Identity
+ */
+
+export class DefinitionsError extends Error {
+  /**
+   * @param {"syntax" | "invalid" | "unsupported-schema" | "unknown-workspace" | "duplicate-name"
+   *   | "duplicate-id" | "bad-id" | "bad-name" | "bad-color" | "bad-icon" | "config-workspace"
+   *   | "last-workspace"} code
+   * @param {string} path
+   * @param {string} message
+   */
+  constructor(code, path, message) {
+    super(path ? `${path}: ${message}` : message);
+    this.name = "DefinitionsError";
+    this.code = code;
+    this.path = path;
+  }
+}
+
+/** @returns {Definitions} */
+export function emptyDefinitions() {
+  return { schema: DEFINITIONS_SCHEMA_VERSION, lastActive: null, workspaces: [] };
+}
+
+/** @param {unknown} v @returns {v is Record<string, any>} */
+const isObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** @param {string} s */
+const validName = (s) =>
+  typeof s === "string" &&
+  [...s].length >= 1 &&
+  [...s].length <= MAX_WORKSPACE_NAME &&
+  ![...s].some((ch) => /** @type {number} */ (ch.codePointAt(0)) < 0x20 || ch === "\x7f");
+
+/**
+ * Validates a definitions file (its text or parsed JSON) and returns it as a Definitions.
+ * @param {unknown} input
+ * @returns {Definitions}
+ */
+export function readDefinitions(input) {
+  let doc = input;
+  if (typeof input === "string") {
+    try {
+      doc = JSON.parse(input);
+    } catch (e) {
+      throw new DefinitionsError("syntax", "", `not JSON: ${/** @type {Error} */ (e).message}`);
+    }
+  }
+  if (!isObject(doc)) throw new DefinitionsError("invalid", "", "must be a JSON object");
+  if (!Number.isInteger(doc.schema)) {
+    throw new DefinitionsError("invalid", "schema", "missing or not an integer");
+  }
+  if (doc.schema !== DEFINITIONS_SCHEMA_VERSION) {
+    throw new DefinitionsError(
+      "unsupported-schema",
+      "schema",
+      `schema ${doc.schema} is not supported`,
+    );
+  }
+  if (!Array.isArray(doc.workspaces)) {
+    throw new DefinitionsError("invalid", "workspaces", "must be an array");
+  }
+  const ids = new Set();
+  const names = new Set();
+  const workspaces = doc.workspaces.map((w, i) => {
+    const at = (/** @type {string} */ k) => `workspaces[${i}]${k ? `.${k}` : ""}`;
+    if (!isObject(w)) throw new DefinitionsError("invalid", at(""), "must be an object");
+    if (!isWorkspaceId(w.id)) throw new DefinitionsError("bad-id", at("id"), "not a valid id");
+    if (ids.has(w.id)) throw new DefinitionsError("duplicate-id", at("id"), `"${w.id}" twice`);
+    if (!validName(w.name)) {
+      throw new DefinitionsError("bad-name", at("name"), `1 to ${MAX_WORKSPACE_NAME} characters`);
+    }
+    if (names.has(w.name)) {
+      throw new DefinitionsError("duplicate-name", at("name"), `"${w.name}" twice`);
+    }
+    const ucid = w.userContextId;
+    if (ucid !== null && !(Number.isInteger(ucid) && ucid > 0)) {
+      throw new DefinitionsError("invalid", at("userContextId"), "a positive integer or null");
+    }
+    checkLooks(w, at);
+    if (w.home !== undefined && !(typeof w.home === "string" && HOME.test(w.home))) {
+      throw new DefinitionsError("invalid", at("home"), "an http(s) or about: URL");
+    }
+    if (w.source !== "config" && w.source !== "runtime") {
+      throw new DefinitionsError("invalid", at("source"), '"config" or "runtime"');
+    }
+    ids.add(w.id);
+    names.add(w.name);
+    /** @type {WorkspaceDefinition} */
+    const def = {
+      id: w.id,
+      name: w.name,
+      userContextId: ucid,
+      color: w.color,
+      icon: w.icon,
+      source: w.source,
+    };
+    if (w.home !== undefined) def.home = w.home;
+    return def;
+  });
+  const last = doc.lastActive;
+  if (last !== null && !ids.has(last)) {
+    throw new DefinitionsError("invalid", "lastActive", "null or the id of a workspace");
+  }
+  return { schema: doc.schema, lastActive: last, workspaces };
+}
+
+/**
+ * @param {{ color?: unknown, icon?: unknown }} w
+ * @param {(k: string) => string} at
+ */
+function checkLooks(w, at) {
+  if (!CONTAINER_COLORS.includes(/** @type {string} */ (w.color))) {
+    throw new DefinitionsError("bad-color", at("color"), `unknown colour "${w.color}"`);
+  }
+  if (!CONTAINER_ICONS.includes(/** @type {string} */ (w.icon))) {
+    throw new DefinitionsError("bad-icon", at("icon"), `unknown icon "${w.icon}"`);
+  }
+}
+
+/**
+ * Whether the host may overwrite the definitions file it found: false only for a file written
+ * by a newer vimma (schema above ours). Missing (null) or unreadable files may be overwritten.
+ * @param {unknown} existing the file's text, its parsed JSON, or null
+ * @returns {boolean}
+ */
+export function canWriteDefinitions(existing) {
+  let doc = existing;
+  if (typeof existing === "string") {
+    try {
+      doc = JSON.parse(existing);
+    } catch {
+      return true;
+    }
+  }
+  const schema = isObject(doc) ? doc.schema : undefined;
+  return !(Number.isInteger(schema) && schema > DEFINITIONS_SCHEMA_VERSION);
+}
+
+/** @param {WorkspaceDefinition} a @param {WorkspaceDefinition} b */
+const sameDef = (a, b) =>
+  a.id === b.id &&
+  a.name === b.name &&
+  a.userContextId === b.userContextId &&
+  a.color === b.color &&
+  a.icon === b.icon &&
+  a.home === b.home &&
+  a.source === b.source;
+
+/**
+ * Reconciles the file with `[workspaces]` (decision 7, Reconcile step 1): config workspaces by
+ * name, in file order, take colour, icon and home and keep their id and container; the others
+ * stay as runtime workspaces (a config one removed from the file becomes runtime: nothing is
+ * removed); an empty result gets `main`. Idempotent.
+ * @param {Definitions} defs
+ * @param {readonly Pick<Workspace, "name" | "color" | "icon" | "home">[]} config
+ * @param {() => string} mintId a new global workspace id (`ws-<uuid>`)
+ * @returns {{ definitions: Definitions, changed: boolean }}
+ */
+export function reconcileDefinitions(defs, config, mintId) {
+  const byName = new Map(defs.workspaces.map((w) => [w.name, w]));
+  const configNames = new Set(config.map((c) => c.name));
+  /** @type {WorkspaceDefinition[]} */
+  const workspaces = config.map((c) => {
+    const old = byName.get(c.name);
+    /** @type {WorkspaceDefinition} */
+    const def = {
+      id: old?.id ?? mintId(),
+      name: c.name,
+      userContextId: old?.userContextId ?? null,
+      color: c.color,
+      icon: c.icon,
+      source: "config",
+    };
+    if (c.home !== undefined) def.home = c.home;
+    return def;
+  });
+  for (const w of defs.workspaces) {
+    if (!configNames.has(w.name)) {
+      workspaces.push(w.source === "runtime" ? w : { ...w, source: "runtime" });
+    }
+  }
+  if (workspaces.length === 0) {
+    workspaces.push({
+      id: mintId(),
+      name: DEFAULT_WORKSPACE_NAME,
+      userContextId: null,
+      ...DEFAULT_LOOKS,
+      source: "runtime",
+    });
+  }
+  const lastActive = workspaces.some((w) => w.id === defs.lastActive)
+    ? defs.lastActive
+    : /** @type {WorkspaceDefinition} */ (workspaces[0]).id;
+  const changed =
+    lastActive !== defs.lastActive ||
+    defs.schema !== DEFINITIONS_SCHEMA_VERSION ||
+    workspaces.length !== defs.workspaces.length ||
+    workspaces.some((w, i) => !sameDef(w, /** @type {WorkspaceDefinition} */ (defs.workspaces[i])));
+  if (!changed) return { definitions: defs, changed };
+  return {
+    definitions: { schema: DEFINITIONS_SCHEMA_VERSION, lastActive, workspaces },
+    changed,
+  };
+}
+
+/**
+ * The startup container check (Container lifecycle): a workspace adopts the container whose id
+ * it stored when that container still carries the workspace's name; otherwise (none yet, gone,
+ * or the id reused after a `containers.json` reset) it needs a new one. Containers are only ever
+ * matched by stored id, so Firefox's defaults and other containers are never adopted.
+ * @param {Definitions} defs
+ * @param {readonly Identity[]} identities
+ * @returns {{ adopt: string[], update: string[], create: string[] }} workspace ids
+ */
+export function planContainers(defs, identities) {
+  const byId = new Map(identities.map((i) => [i.userContextId, i]));
+  /** @type {{ adopt: string[], update: string[], create: string[] }} */
+  const plan = { adopt: [], update: [], create: [] };
+  for (const w of defs.workspaces) {
+    const identity = w.userContextId === null ? undefined : byId.get(w.userContextId);
+    if (!identity || identity.name !== w.name) {
+      plan.create.push(w.id);
+      continue;
+    }
+    plan.adopt.push(w.id);
+    if (identity.color !== w.color || identity.icon !== w.icon) plan.update.push(w.id);
+  }
+  return plan;
+}
+
+/**
+ * @param {Definitions} defs
+ * @param {string} id
+ */
+function mustIndex(defs, id) {
+  const i = defs.workspaces.findIndex((w) => w.id === id);
+  if (i < 0) throw new DefinitionsError("unknown-workspace", "", `no workspace "${id}"`);
+  return i;
+}
+
+/**
+ * Records the container of workspace `id`.
+ * @param {Definitions} defs
+ * @param {string} id
+ * @param {number} userContextId
+ * @returns {Definitions}
+ */
+export function withContainer(defs, id, userContextId) {
+  const i = mustIndex(defs, id);
+  if (defs.workspaces[i]?.userContextId === userContextId) return defs;
+  const workspaces = defs.workspaces.map((w, k) => (k === i ? { ...w, userContextId } : w));
+  return { ...defs, workspaces };
+}
+
+/**
+ * @param {Definitions} defs
+ * @param {string} id
+ * @returns {Definitions}
+ */
+export function setLastActive(defs, id) {
+  mustIndex(defs, id);
+  return defs.lastActive === id ? defs : { ...defs, lastActive: id };
+}
+
+/**
+ * Adds a runtime workspace (no container yet) at the end.
+ * @param {Definitions} defs
+ * @param {{ id: string, name: string, color: string, icon: string, home?: string }} w
+ * @returns {Definitions}
+ */
+export function addRuntimeWorkspace(defs, w) {
+  if (!isWorkspaceId(w.id)) throw new DefinitionsError("bad-id", "id", "not a valid id");
+  if (defs.workspaces.some((x) => x.id === w.id)) {
+    throw new DefinitionsError("duplicate-id", "id", `"${w.id}" exists`);
+  }
+  if (!validName(w.name)) {
+    throw new DefinitionsError("bad-name", "name", `1 to ${MAX_WORKSPACE_NAME} characters`);
+  }
+  if (defs.workspaces.some((x) => x.name === w.name)) {
+    throw new DefinitionsError("duplicate-name", "name", `"${w.name}" exists`);
+  }
+  checkLooks(w, (k) => k);
+  /** @type {WorkspaceDefinition} */
+  const def = {
+    id: w.id,
+    name: w.name,
+    userContextId: null,
+    color: w.color,
+    icon: w.icon,
+    source: "runtime",
+  };
+  if (w.home !== undefined) def.home = w.home;
+  return { ...defs, workspaces: [...defs.workspaces, def] };
+}
+
+/**
+ * Removes a runtime workspace (decision 7: a config workspace stays while it is in
+ * `config.toml`; the last workspace stays). The host removes `removed.userContextId`.
+ * @param {Definitions} defs
+ * @param {string} id
+ * @returns {{ definitions: Definitions, removed: WorkspaceDefinition }}
+ */
+export function removeWorkspaceDefinition(defs, id) {
+  const i = mustIndex(defs, id);
+  const removed = /** @type {WorkspaceDefinition} */ (defs.workspaces[i]);
+  if (removed.source === "config") {
+    throw new DefinitionsError("config-workspace", "", `"${removed.name}" is in config.toml`);
+  }
+  if (defs.workspaces.length === 1) {
+    throw new DefinitionsError("last-workspace", "", "cannot delete the last workspace");
+  }
+  const workspaces = defs.workspaces.filter((_, k) => k !== i);
+  const lastActive =
+    defs.lastActive === id
+      ? /** @type {WorkspaceDefinition} */ (workspaces[0]).id
+      : defs.lastActive;
+  return { definitions: { ...defs, lastActive, workspaces }, removed };
+}
