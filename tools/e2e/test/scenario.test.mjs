@@ -81,6 +81,17 @@ describe("the m0-happy-path scenario", () => {
   });
 });
 
+describe("the m0-content-actor scenario (VimmaChild loads in the default content sandbox)", () => {
+  const actor = loadScenarios(SCENARIOS, { filter: "m0-content-actor" })[0];
+  it("runs, opens an http fixture page and waits for normal, then insert", () => {
+    expect(actor?.pending).toBeUndefined();
+    const steps = JSON.stringify(actor?.steps);
+    expect(steps).toContain('"open":"fixture:focus-later.html"');
+    expect(steps.indexOf('"mode":"normal"')).toBeGreaterThan(steps.indexOf('"open"'));
+    expect(steps.lastIndexOf('"mode":"insert"')).toBeGreaterThan(steps.indexOf('"mode":"normal"'));
+  });
+});
+
 describe("matchState", () => {
   const state = {
     mode: "help",

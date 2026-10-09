@@ -20,7 +20,7 @@ npx surfer setup-project   # interactive: name vimma, Firefox release
 npx surfer download
 npx surfer bootstrap
 npx surfer build
-npx surfer run
+npm start                  # tools/start.mjs: the build with ~/.cache/vimma-dev-profile
 ```
 
 ## Smoke check
@@ -133,11 +133,31 @@ running quit observers, so the file stays and `vimma-ctl` reports "not running".
 cleanly, send `ctrl+q` (with `browser.warnOnQuitShortcut` = `false` in `user.js`) and keep
 `SIGTERM`/`SIGKILL` as the fallback.
 
+### Running a local build (`npm start`)
+
+`npm start` runs the full build (`engine/obj-x86_64-pc-linux-gnu`) if present, else the artifact
+build with `XUL_APP_FILE` as `tools/mochitest.mjs` does, with `--no-remote` and
+`~/.cache/vimma-dev-profile` (`--profile DIR`, `--fresh` for a temp profile, `--import` to run
+`npm run import` first, browser flags after a second `--`). It refuses a profile in use: a POSIX
+lock on `<profile>/.parentlock` (`/proc/locks`) or a `lock` symlink whose pid is alive (the link
+can outlive the browser).
+
+It merges `security.sandbox.content.read_path_whitelist=<repo>/src/` into the profile's `user.js`.
+In a local objdir the chrome files are symlinks into `engine/`, which `surfer import` links to the
+repo's `src/`, outside the Firefox tree; the content sandbox then refuses them and the console
+says `Failed to load chrome://browser/content/vimma/actors/VimmaChild.sys.mjs` (no hints, no
+insert mode). Mochitests relax the sandbox, so they never see it. The e2e harness writes the same
+pref (`devPrefs` from `tools/start.mjs`) and keeps the default sandbox, and its
+`m0-content-actor` scenario fails without it (checked: `normal` instead of `insert`). Any scenario
+also fails when the browser logs a `Failed to load chrome://browser/content/vimma/…`.
+
 ### End-to-end tests (`npm run e2e`, spec m0-e2e-harness)
 
 Scenarios in `tests/e2e/scenarios/*.json` run against a real build, each in a fresh temp profile
 (`vimma.control.enabled=true`, no first-run pages, no telemetry), driven through `vimma-ctl`.
-Names: `m<N>-<slug>` for a milestone happy path, `issue-<N>-<slug>` (plus `"issue": N`) for a
+Pages: `open "fixture:<name>"` loads `tests/e2e/fixtures/<name>` from a local HTTP server on
+127.0.0.1 (a web content process; a `file:` URL would go to the file process, which may read any
+file). Names: `m<N>-<slug>` for a milestone happy path, `issue-<N>-<slug>` (plus `"issue": N`) for a
 regression test. A scenario with a `pending` reason is reported as `PENDING`, launched never
 and passed never. Each run ends with `send-keys ctrl+q` (after `esc` if the help overlay is
 open), so the browser removes its discovery file; signals are the fallback.

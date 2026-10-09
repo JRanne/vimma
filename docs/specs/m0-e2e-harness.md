@@ -321,3 +321,13 @@ Supersedes the sections above where they differ.
 - A missing baseline now also writes `<name>.actual.png` to `e2e-output/`, so CI's first run
   supplies a baseline from CI's own environment (Xvfb, fonts); the first one was taken from it.
   `--update-baselines` stays refused when `CI` is set.
+- **Real-sandbox check** (with `npm start`): local objdirs symlink chrome files into the repo's
+  `src/`, which the default content sandbox may not read, so VimmaChild failed to load outside
+  mochitests (which relax the sandbox). The harness profile now takes `devPrefs` from
+  `tools/start.mjs` (the read-path whitelist) and keeps the default sandbox, and
+  `m0-content-actor` opens `fixture:focus-later.html` from a 127.0.0.1 page server (a web
+  content process), waits for `normal`, then for `insert` when the page focuses an input 2 s
+  later; only the actor reports that. Red without the pref (headless artifact build: "expected
+  insert, got normal"), green with it. Any scenario also fails if the browser's stderr has
+  `Failed to load chrome://browser/content/vimma/…`. Chosen over a separate script: it reuses
+  the launch, the socket and the CI step, and costs one ~3 s scenario.

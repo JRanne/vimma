@@ -17,8 +17,12 @@ import { delimiter, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { validateMessage } from "../../packages/vimma-core/src/control.mjs";
+import { devPrefs } from "../start.mjs";
 
 const ENGINE = fileURLToPath(new URL("../../engine/", import.meta.url));
+const REPO = fileURLToPath(new URL("../../", import.meta.url));
+/** What the browser prints when a module of ours cannot be loaded (e.g. by the content sandbox). */
+export const VIMMA_LOAD_FAILURE = /Failed to load chrome:\/\/browser\/content\/vimma\/\S*/;
 export const FULL_OBJDIR = "obj-x86_64-pc-linux-gnu";
 export const ARTIFACT_OBJDIR = "obj-artifact";
 export const WINDOW = Object.freeze({ width: 1280, height: 800 });
@@ -116,7 +120,9 @@ export function userJs(prefs) {
  */
 export function createProfile(tmpRoot = tmpdir()) {
   const dir = mkdtempSync(join(tmpRoot, "vimma-e2e-profile-"));
-  writeFileSync(join(dir, "user.js"), userJs(PROFILE_PREFS));
+  // plus npm start's dev prefs: content processes may read the repo's src/, where a local
+  // objdir's chrome files lead (tools/start.mjs); harmless for a packaged build
+  writeFileSync(join(dir, "user.js"), userJs([...PROFILE_PREFS, ...devPrefs(REPO)]));
   return dir;
 }
 
@@ -499,6 +505,7 @@ export async function quitBrowser({ ctl, child, timeoutMs = 10_000, pollMs = 50 
  *   display: Display | null,
  *   discovery: { protocol: number, port: number, token: string, pid: number },
  *   stderrTail: () => string,
+ *   loadFailure: () => string | null,
  *   teardown: () => Promise<void>,
  * }} Session
  */
@@ -555,6 +562,8 @@ export async function launch({
   mkdirSync(home);
   mkdirSync(tmp);
   let stderr = "";
+  /** @type {string | null} */
+  let loadFailure = null;
   /** @type {Promise<void> | null} */
   let tearingDown = null;
   const teardown = () =>
@@ -595,7 +604,10 @@ export async function launch({
     let spawnError = null;
     spawned.on("exit", (code, sig) => (exit = { code, signal: sig }));
     spawned.on("error", (e) => (spawnError = e));
-    spawned.stderr?.on("data", (d) => (stderr = (stderr + d).slice(-8000)));
+    spawned.stderr?.on("data", (d) => {
+      stderr = (stderr + d).slice(-8000);
+      loadFailure ??= VIMMA_LOAD_FAILURE.exec(stderr)?.[0] ?? null;
+    });
     const stderrTail = () => stderr.split("\n").slice(-15).join("\n");
     const discovery = await waitForDiscovery(profile, {
       timeoutMs: discoveryTimeoutMs,
@@ -611,7 +623,15 @@ export async function launch({
       stderrTail,
     });
     signal?.removeEventListener("abort", onAbort);
-    return { profile, child: spawned, display, discovery, stderrTail, teardown };
+    return {
+      profile,
+      child: spawned,
+      display,
+      discovery,
+      stderrTail,
+      loadFailure: () => loadFailure,
+      teardown,
+    };
   } catch (e) {
     signal?.removeEventListener("abort", onAbort);
     const aborted = cancelled(); // before teardown(), which sets it

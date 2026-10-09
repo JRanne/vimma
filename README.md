@@ -101,15 +101,22 @@ npm run import          # apply Vimma's files and patches, select the vimma bran
 npx surfer build        # full build
 ```
 
-Run it with its own profile, so it never touches your Firefox profile:
+Run it:
 
 ```sh
-mkdir -p ~/.cache/vimma-dev-profile
-engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma --no-remote --profile ~/.cache/vimma-dev-profile
+npm start               # full build if present, else the artifact build; ~/.cache/vimma-dev-profile
+npm start -- --fresh    # a throwaway profile instead
+npm start -- --import   # run `npm run import` first
+npm start -- --profile DIR -- --jsconsole   # another profile; after the second -- browser flags
 ```
 
-`npx surfer run` also works. It launches through `mach run`, which uses a scratch profile in the
-build directory.
+`npm start` (`tools/start.mjs`) always passes `--no-remote` and its own profile, so it never
+touches your Firefox profile, and refuses to start a second instance on the same profile. It adds
+one line to the profile's `user.js` (other lines are kept):
+`security.sandbox.content.read_path_whitelist` set to this checkout's `src/`. A local build's
+front-end files are symlinks into `src/`, outside the Firefox tree, and without that pref the
+content sandbox refuses them, so Vimma's page actor never loads (packaged builds copy the files
+and do not need it). `npx surfer run` uses a scratch profile without it.
 
 After editing JavaScript or CSS under `src/`, run `npm run import && npx surfer build --ui`. That
 rebuilds only the front end. Changes to branding, `configs/` or `moz.configure` need a full

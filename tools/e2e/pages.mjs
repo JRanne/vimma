@@ -1,0 +1,68 @@
+// Fixture pages for scenarios: `open "fixture:<name>"` loads tests/e2e/fixtures/<name> from a
+// local HTTP server, so the page runs in a web content process under the default sandbox (a
+// file: URL would go to the file process, which may read any file and hides sandbox problems).
+import { createReadStream, existsSync, statSync } from "node:fs";
+import { createServer } from "node:http";
+import { extname, join } from "node:path";
+
+const NAME = /^[\w-][\w.-]*$/;
+const TYPES = /** @type {Record<string, string>} */ ({
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+});
+
+/**
+ * @param {string} url a scenario's `open` value
+ * @param {string | null} base the page server's base URL (with a trailing slash)
+ * @returns {string}
+ */
+export function fixtureUrl(url, base) {
+  if (!url.startsWith("fixture:")) return url;
+  const name = url.slice("fixture:".length);
+  if (!NAME.test(name) || name.includes("..")) {
+    throw new Error(`bad fixture name in ${JSON.stringify(url)}: one file in tests/e2e/fixtures/`);
+  }
+  if (!base) throw new Error(`${url} needs the fixture page server, which is not running`);
+  return `${base}${name}`;
+}
+
+/**
+ * Serve the plain files of `dir` (no subdirectories) on 127.0.0.1 at an ephemeral port.
+ * @param {string} dir
+ * @returns {Promise<{ base: string, close: () => Promise<void> }>}
+ */
+export async function startPageServer(dir) {
+  const server = createServer((req, res) => {
+    let name = "";
+    try {
+      name = decodeURIComponent(new URL(req.url ?? "/", "http://x").pathname.slice(1));
+    } catch {
+      // malformed escape: 404 below
+    }
+    const path = join(dir, name);
+    if (!NAME.test(name) || name.includes("..") || !existsSync(path) || !statSync(path).isFile()) {
+      res.writeHead(404, { "content-type": "text/plain" }).end("not found\n");
+      return;
+    }
+    res.writeHead(200, {
+      "content-type": TYPES[extname(name)] ?? "application/octet-stream",
+      "cache-control": "no-store",
+    });
+    createReadStream(path).pipe(res);
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => resolve(undefined));
+  });
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  return {
+    base: `http://127.0.0.1:${port}/`,
+    close: () =>
+      new Promise((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
+  };
+}

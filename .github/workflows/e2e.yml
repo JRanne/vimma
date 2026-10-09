@@ -28,6 +28,7 @@ on:
       - "tools/artifact-build/**"
       - "tools/branding/**"
       - "tools/mochitest.mjs"
+      - "tools/start.mjs" # the e2e profile takes its dev prefs (sandbox read path) from it
       - "tools/sync-core.mjs"
       - "tools/version-files/**"
       - "tools/e2e/**"

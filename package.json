@@ -19,6 +19,7 @@
     "sync-core": "node tools/sync-core.mjs",
     "version-files": "node tools/version-files/version-files.mjs",
     "import": "npm run sync-core && npm run version-files && surfer config brand vimma && surfer import && SURFER_MOZCONFIG_ONLY=1 surfer build",
+    "start": "node tools/start.mjs",
     "mochitest": "node tools/mochitest.mjs",
     "e2e": "node tools/e2e/e2e.mjs",
     "lane:setup": "node tools/lanes/lane-setup.mjs",

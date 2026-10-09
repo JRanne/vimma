@@ -26,7 +26,10 @@ import {
   waitForDiscovery,
   xvfbArgs,
 } from "../launcher.mjs";
+import { devPrefs } from "../../start.mjs";
 import { startFakeServer } from "./fake-server.mjs";
+
+const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 
 const FAKE_BROWSER = fileURLToPath(new URL("./fixtures/fake-browser.mjs", import.meta.url));
 const FAKE_XVFB = fileURLToPath(new URL("./fixtures/fake-xvfb.mjs", import.meta.url));
@@ -130,6 +133,14 @@ describe("profile", () => {
     expect(readFileSync(join(dir, "user.js"), "utf8")).toContain(
       'user_pref("vimma.control.enabled", true);',
     );
+  });
+
+  it("lets content processes read the repo's src/, as npm start's profile does", () => {
+    // A local objdir's chrome files are symlinks into src/; without this VimmaChild never loads
+    // in the default content sandbox (m0-content-actor checks it against a real build).
+    const js = readFileSync(join(createProfile(tempDir()), "user.js"), "utf8");
+    const [[name, value]] = devPrefs(REPO_ROOT);
+    expect(js).toContain(`user_pref(${JSON.stringify(name)}, ${JSON.stringify(value)});`);
   });
 });
 
@@ -326,6 +337,21 @@ describe("launch and teardown (fake browser)", () => {
       graceMs: 500,
       ...opts,
     });
+
+  it("reports a front-end module the browser failed to load (the sandbox regression)", async () => {
+    const line =
+      "JavaScript error: , line 0: Error: Failed to load " +
+      "chrome://browser/content/vimma/actors/VimmaChild.sys.mjs";
+    const bad = await start({ FAKE_BROWSER_STDERR: line });
+    cleanups.push(() => bad.teardown());
+    await sleep(200);
+    expect(bad.loadFailure()).toBe(
+      "Failed to load chrome://browser/content/vimma/actors/VimmaChild.sys.mjs",
+    );
+    const good = await start({});
+    cleanups.push(() => good.teardown());
+    expect(good.loadFailure()).toBeNull();
+  });
 
   it("starts the browser with the profile and waits for its control socket", async () => {
     const session = await start({ FAKE_BROWSER_DELAY_MS: "200" });
