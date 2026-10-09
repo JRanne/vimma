@@ -334,3 +334,46 @@ API). It runs no repository code.
 BSD-2/3-Clause, Apache-2.0, MPL-2.0. Reviewed exceptions live in
 `tools/license-check/exceptions.json`, keyed by exact `name@version`, so an upgrade must be
 re-reviewed; stale exceptions fail the check too.
+
+`npm run license-check:crates` does the same for the Rust crates (`cargo metadata` on
+`tools/vimma-ctl`, legacy `MIT/Apache-2.0` read as OR); exceptions would go in
+`tools/license-check/cargo-exceptions.json`. vimma-ctl has no dependencies, so today it checks
+only the crate itself (MPL-2.0).
+
+## vimma-ctl (control socket client)
+
+Spec m0-control-protocol-and-vimma-ctl, ADR-007, ADR-011. A std-only Rust binary in
+`tools/vimma-ctl/`; the toolchain is pinned in its `rust-toolchain.toml` (rustup honours it;
+Arch's system Rust 1.98.1 matches).
+
+```sh
+cd tools/vimma-ctl
+cargo test                                    # unit (fixtures) + integration (fake server)
+cargo fmt --check && cargo clippy --all-targets -- -D warnings
+cargo build --release --locked                # → target/release/vimma-ctl, one file
+install -Dm755 target/release/vimma-ctl ~/.local/bin/vimma-ctl
+```
+
+The control socket is **off by default**. Turn it on in `about:config`: `vimma.control.enabled`
+= `true` (until the server spec lands, nothing listens; `vimma-ctl` then exits 3). The browser
+writes `<profile>/vimma-control.json` (port, token, pid; mode 0600) while it runs.
+
+```sh
+vimma-ctl state                     # mode, pending keys, workspace, tabs (* = selected)
+vimma-ctl state --json | jq .tabs   # the raw result; unknown fields pass through
+vimma-ctl send-keys ctrl+b c        # chords in Herdr notation, space-separated
+vimma-ctl open https://example.com  # new tab; prints its id
+vimma-ctl --profile /tmp/p --timeout 2 state
+```
+
+Profile: `--profile DIR`, else `VIMMA_PROFILE`, else the default in
+`~/.config/vimma/vimma/profiles.ini` (`$XDG_CONFIG_HOME` honoured; legacy `~/.vimma/vimma` if
+present): the `[Install…]` section's `Default`, else the `[Profile…]` with `Default=1`.
+
+| Exit | Meaning                                       | Typical fix                                                     |
+| ---- | --------------------------------------------- | --------------------------------------------------------------- |
+| 1    | server answered with an error (`code: msg`)   | fix the arguments (e.g. `invalid-args` for a `javascript:` URL) |
+| 2    | usage                                         | `vimma-ctl --help`                                              |
+| 3    | not reachable: no profile/file, stale, unsafe | start Vimma, set the pref, `chmod 600` the file, `--profile`    |
+| 4    | token or protocol refused                     | the file is from another run; restart Vimma                     |
+| 5    | malformed reply or timeout                    | a server bug; `--timeout` for a busy browser                    |
