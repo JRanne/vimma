@@ -94,7 +94,8 @@ Each tab keeps its own mode. Settings (`about:preferences`) and the PDF viewer w
 way, but Settings focuses its search box when it opens, so it starts in insert: press `Esc`
 before `j`/`k`. Pages Vimma does not reach (extension pages, `data:` and `view-source:` pages)
 stay in insert, so their keys are untouched. With focus in the URL bar or the find bar, keys
-belong to that field; only `ctrl+b` sequences are Vimma's there.
+belong to that field; only `ctrl+b` sequences are Vimma's there (and, in a `/` search,
+`Enter` and `Esc`).
 
 **`Esc` in a text field is Vimma's.** It leaves insert, so the page does not see that `Esc`: a
 site's own `Esc` (closing an autocomplete list or a dialog) does not fire from the field. Press
@@ -109,7 +110,7 @@ cancels it.
 **A binding that does not work yet is never silent once it is Vimma's.** A `ctrl+b` sequence, or
 a count followed by a key (`3H`), whose command is not built yet shows "… not implemented yet"
 in the bottom-right corner for 1.5 s (not while a video or page is fullscreen). A single key
-that is not built yet (`/`, `ctrl+i`, …) is not Vimma's yet: it reaches the page or
+that is not built yet (`r`, `ctrl+i`, …) is not Vimma's yet: it reaches the page or
 Firefox, with no message. The `ctrl+b ?` overlay dims the bindings that do not work yet.
 
 ### Link hints
@@ -130,18 +131,40 @@ The labels are drawn by the browser, over the page, not inside it: the page cann
 restyle them or hide them. Apps that draw their own controls on a canvas (Google Docs, Figma,
 maps, games) have nothing to label.
 
+### Find
+
+`/` opens Firefox's find bar at the foot of the page, empty, and searches as you type, in frames
+from other sites, inside web components and in the PDF viewer too. Matches are highlighted and
+counted as in Firefox. The search starts at the top of what you see (or at the selection, if it
+is on screen), as Vim's starts at the cursor.
+
+- **Case:** smartcase. An all lower-case search ignores case (`word` finds `Word`); one capital
+  letter makes it match case (`Word` finds only `Word`). `ctrl+f` uses the same rule.
+- **`Enter`** keeps the match selected and closes the bar; you are back in normal mode. A search
+  that found nothing goes back to where you were, and the status bar says `not found`.
+- **`Esc`** cancels: the bar closes, nothing stays selected and the page scrolls back to where
+  it was when you pressed `/`.
+- **`n` / `N`** jump to the next / previous match without opening the bar, wrapping at the ends.
+  After a search that found nothing they do nothing.
+- **`?`** searches backward: it shows matches as you type, as `/` does, and `Enter` lands on the
+  last match before where you were. After `?`, `n` goes on backward and `N` forward.
+
+`ctrl+f` still opens Firefox's own find bar, where `Enter` goes to the next match.
+
 ## Status bar
 
 The status bar is the window's last line, always there (it hides only while a page is in
 fullscreen, such as a video; browser fullscreen with `F11` keeps it). From the left:
 
 - the **mode** badge in the mode's colour: `NORMAL` on a page, `INSERT` while a text field has
-  focus (or after `i`), `HELP` while the `ctrl+b ?` overlay is open, `HINT` while link hints
-  are up, and later `VISUAL`, …;
+  focus (or after `i`), `COMMAND` while you type a `:` command or a `/` search, `HELP` while
+  the `ctrl+b ?` overlay is open, `HINT` while link hints are up, and later `VISUAL`, …;
 - the **pending keys**, e.g. `prefix` after `ctrl+b`;
 - `tab 2/5`: the selected tab and how many there are;
 - the page **title** (your rename, once tab rename lands);
-- on the right, `loading` while the page loads, then its **URL** without `https://`.
+- on the right, the **search** in this page: `/word [2/5]` (match 2 of 5), or
+  `/zzz not found` in red;
+- `loading` while the page loads, then its **URL** without `https://`.
 
 On a narrow window the least important parts give way first: the URL is shortened in the middle,
 then dropped, then the title is shortened, and so on. The mode badge always stays. Screen
@@ -168,6 +191,8 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `gg` / `G`                  | Normal mode: go to the top / bottom of the page.                                                                                                              |
 | `i`                         | Normal mode: focus the first text field and enter insert mode.                                                                                                |
 | `f` / `F`                   | Normal mode: link hints. Type a label to follow it, or, with `F`, to open the link in a background tab. `Backspace` undoes a key, `Esc` cancels.              |
+| `/` / `?`                   | Normal mode: find in the page (below). `Enter` stays on the match, `Esc` goes back to where you were.                                                         |
+| `n` / `N`                   | Normal mode: next / previous match of the last search (`?` reverses them), wrapping around the page.                                                          |
 | `Esc`                       | Insert mode: leave the text field, back to normal mode. In normal mode the page gets `Esc`.                                                                   |
 | `ctrl+b ?`                  | Opens the bindings overlay over any page, including `about:preferences` and the PDF viewer. Press it again to close.                                          |
 | `/` (in the overlay)        | Filters the list as you type.                                                                                                                                 |
@@ -187,9 +212,8 @@ digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 
 **Planned:**
 
-- **M1, the rest of the modal page layer:** back and forward (`H`/`L`), reload (`r`), find
-  (`/ ? n N`) and copy mode (`v`, `ctrl+b [`). Until then these keys
-  reach the page as before.
+- **M1, the rest of the modal page layer:** back and forward (`H`/`L`), reload (`r`) and copy
+  mode (`v`, `ctrl+b [`). Until then these keys reach the page as before.
 - **M2, the rest of tabs:** `ctrl+b shift+t` rename (kept across restarts; an empty name
   restores the page title), the `ctrl+b g` picker (`j`/`k` to move, `/` to search titles, URLs,
   workspaces and renames, `Enter` to go, `Esc` to back out).

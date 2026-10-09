@@ -1,0 +1,18 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Fixture for browser_vimma_find.js, framed by file_vimma_find.html: its text is the query
+   - string, so the same file serves the same-origin and the cross-origin frame. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vimma find frame</title>
+  </head>
+  <body>
+    <p id="text"></p>
+    <script>
+      document.getElementById("text").textContent = `framed ${location.search.slice(1)}`;
+    </script>
+  </body>
+</html>
