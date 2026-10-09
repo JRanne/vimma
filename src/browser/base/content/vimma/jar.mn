@@ -36,3 +36,8 @@ browser.jar:
         content/browser/vimma/host/tab-labels.mjs         (host/tab-labels.mjs)
         content/browser/vimma/split/spike-layout.mjs      (split/spike-layout.mjs)
         skin/classic/browser/vimma/split-spike.css        (/browser/themes/shared/vimma/split-spike.css)
+        content/browser/vimma/start/StartPage.sys.mjs     (start/StartPage.sys.mjs)
+        content/browser/vimma/start/start.html            (start/start.html)
+        content/browser/vimma/start/start.mjs             (start/start.mjs)
+        content/browser/vimma/start/vimma-logo.png        (start/vimma-logo.png)
+        skin/classic/browser/vimma/start.css              (/browser/themes/shared/vimma/start.css)

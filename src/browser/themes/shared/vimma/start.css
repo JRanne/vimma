@@ -1,0 +1,49 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* The start page (vimma/start/start.html). Colours are the theme tokens; the fallbacks are the
+   built-in theme's (core/theme.mjs), so the first paint already has them. Nothing moves, so
+   prefers-reduced-motion has nothing to turn off. */
+
+:root {
+  height: 100%;
+  overflow: hidden;
+  background: var(--vimma-bg, #1a1b26);
+  color: var(--vimma-fg, #a9b1d6);
+  font-family: var(--vimma-font, monospace);
+}
+
+body {
+  height: 100%;
+  margin: 0;
+}
+
+main {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+img {
+  width: 40vmin;
+  height: 40vmin;
+  object-fit: contain;
+  /* the logo brings its own near-black square; rounded, it reads as a tile on --vimma-bg */
+  border-radius: 8%;
+}
+
+.hint {
+  margin: 0;
+  color: var(--vimma-muted, #414868);
+  font-size: 0.9rem;
+}
+
+/* the keys themselves in the text colour: --vimma-muted alone is too faint to read them by */
+kbd {
+  font: inherit;
+  color: var(--vimma-fg, #a9b1d6);
+}
