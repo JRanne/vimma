@@ -104,7 +104,7 @@ timeout_ms = 800
 "<leader>ff" = "goto.picker"
 
 [theme]
-source = "omarchy"                      # "omarchy" follows ~/.config/omarchy/current/theme; "file" uses [theme.colors]
+source = "omarchy"                      # "omarchy" follows ~/.local/state/omarchy/current/theme/colors.toml; "file" uses [theme.colors]
 font = "CaskaydiaMono Nerd Font"
 
 [unbind]
@@ -148,7 +148,7 @@ Key mechanics:
 - **Content side:** a `JSWindowActor` pair. The child reports focus changes (insert mode), executes scroll/hint/caret commands, and returns hint targets; the parent is the only thing that talks to it. This is the one Firefox-specific concept to learn properly in M1.
 - **Panes:** a pane tree in `vimma-core` (`split`, `zoom`, `swap`, `focus`, `close`) mirrored onto the vendored split-view layout. One `<browser>` per pane; the active pane owns the URL bar.
 - **Workspaces:** model in core; host maps to containers and hidden tabs; persisted through `SessionStore.setCustomTabValue` (tab → workspace) plus a JSON file for workspace definitions and pane layouts; restored on startup.
-- **Theme:** tokens → CSS custom properties on the chrome document. Omarchy adapter polls `~/.config/omarchy/current/theme` and remaps on change.
+- **Theme:** tokens → CSS custom properties on the chrome document. Omarchy adapter polls `~/.local/state/omarchy/current/theme/colors.toml` and remaps on change (see `docs/notes/omarchy-theming.md`).
 - **Config reload:** poll the file's mtime every 2 s (Firefox has no portable fs watcher); `:source` forces it.
 
 Repository layout (Surfer convention: `src/` mirrors the Firefox tree; `.patch` files for upstream edits, whole files for ours):
@@ -323,7 +323,7 @@ Open questions to settle in M0 (each becomes an ADR or a line in `docs/limits.md
 - [ ] PR build strategy: `surfer build --ui` on a cached engine vs Firefox artifact builds — which works with release tarballs?
 - [ ] Side panel: custom box in the window layout or Firefox's sidebar framework (`SidebarController`)?
 - [ ] Where does the control socket's auth token live, and should it be off by default in release builds?
-- [ ] Omarchy adapter: read each theme's `alacritty.toml` colours (always present) or require a `vimma.toml` per theme and ship one for stock themes?
+- [x] Omarchy adapter: neither; read the theme's `colors.toml`, which every Omarchy 4 theme ships (`docs/notes/omarchy-theming.md`).
 - [ ] Starter workspaces (work/admin/personal) created on first run, or only shipped as the commented example?
 - [ ] Flatpak alongside AUR from M6, or later?
 
