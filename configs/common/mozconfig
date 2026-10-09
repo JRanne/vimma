@@ -27,3 +27,11 @@ ac_add_options --disable-crashreporter
 # browser/config/version{,_display}.txt; configure reads these instead (npm run version-files):
 # version.txt is the Firefox version (appinfo.version), version_display.txt is Vimma's.
 ac_add_options --with-version-file-path=browser/config/vimma
+# configure silently falls back to Surfer's 0.1.0 if these are missing, so fail loudly instead.
+for _vimma_version_file in version.txt version_display.txt; do
+  if [ ! -s "$topsrcdir/browser/config/vimma/$_vimma_version_file" ]; then
+    echo "mozconfig: browser/config/vimma/$_vimma_version_file is missing; run 'npm run import'" >&2
+    exit 1
+  fi
+done
+unset _vimma_version_file

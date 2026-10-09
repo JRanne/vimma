@@ -47,6 +47,14 @@ Two versions (spec m0-app-version): `npm run import` writes `src/browser/config/
 About dialog) from `surfer.json`; the mozconfig points configure at them. Surfer still writes
 `displayVersion` into the stock `browser/config/version*.txt`, which configure then ignores. After
 editing the generated files by hand, run `./mach configure`; `npm run import` triggers it anyway.
+If the files are missing (a fresh clone without `npm run import`, or after `git clean -fdX`), the
+mozconfig stops the build with "browser/config/vimma/version.txt is missing; run 'npm run import'"
+rather than letting configure fall back to Surfer's 0.1.0.
+
+Profiles are stamped with the Firefox version (157.0.1), so a build from before m0-app-version
+(appinfo.version 0.1.0) sees any profile opened by a newer build as a downgrade and refuses it
+(`MOZ_BLOCK_PROFILE_DOWNGRADE`). When testing old and new builds side by side, give each its own
+`--profile`, or pass `--allow-downgrade`.
 
 `--screenshot` on a brand-new profile quits while Places is still importing the default
 bookmarks and logs "Failed to import bookmarks … 0x8046001e" (`NS_ERROR_ILLEGAL_DURING_SHUTDOWN`).
