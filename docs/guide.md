@@ -265,6 +265,10 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `ctrl+b` then anything else | Never leaks to the page. A binding that does not run yet shows "… not implemented yet" for 1.5 s; an unbound key does nothing. No more bookmarks sidebar.     |
 | Firefox's own keys          | Unchanged: `ctrl+t`, `ctrl+w`, `ctrl+tab`, `ctrl+shift+tab`, `ctrl+pagedown`, `alt+1..9` (tab N on Linux), `ctrl+l`, `ctrl+f`, `ctrl+u`, `ctrl+i`, and so on. |
 
+Clicking into a pane focuses it, as `ctrl+b h/j/k/l` would. So does selecting a pane's tab any
+other way (the `ctrl+b g` picker, `ctrl+tab`, `alt+1..9`): the status bar's `pane n/m` and the
+URL bar follow, and a zoom ends, as it does when a pane key moves.
+
 While the overlay is open it takes every key, so `ctrl+w` cannot close the tab behind it. Rows
 for bindings that do not run yet are dimmed, under a legend that says so. In normal mode bare
 digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
@@ -290,7 +294,6 @@ normal mode (`3 ctrl+w >` by three), as in Vim. A config can rebind the mode's k
 - **M3, the rest of workspaces and the side panel:** the `ctrl+b w` picker, new/rename/close
   workspace, and `ctrl+b b` or `<leader>n` for the side panel. `ctrl+i` / `ctrl+u` and restoring
   workspaces after a restart work now (see [Workspaces](#workspaces)).
-- **M4, split panes:** click focus.
 
 ## Workspaces
 
