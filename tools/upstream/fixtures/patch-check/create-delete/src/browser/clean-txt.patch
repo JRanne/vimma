@@ -1,0 +1,26 @@
+diff --git a/browser/clean.txt b/browser/clean.txt
+deleted file mode 100644
+index 189dd73d57b18f7ceacae2ae086142a970e35b86..0000000000000000000000000000000000000000
+--- a/browser/clean.txt
++++ /dev/null
+@@ -1,20 +0,0 @@
+-clean line 1
+-clean line 2
+-clean line 3
+-clean line 4
+-clean line 5
+-clean line 6
+-clean line 7
+-clean line 8
+-clean line 9
+-clean line 10
+-clean line 11
+-clean line 12
+-clean line 13
+-clean line 14
+-clean line 15
+-clean line 16
+-clean line 17
+-clean line 18
+-clean line 19
+-clean line 20

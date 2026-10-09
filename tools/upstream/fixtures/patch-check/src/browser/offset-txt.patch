@@ -1,0 +1,13 @@
+diff --git a/browser/offset.txt b/browser/offset.txt
+index 308c8a8b743c9208680ed47d1af0a12c4bb95f76..9bfcda92e4c77ed561d5983b2e67645174b56d14 100644
+--- a/browser/offset.txt
++++ b/browser/offset.txt
+@@ -7,7 +7,7 @@ offset line 6
+ offset line 7
+ offset line 8
+ offset line 9
+-offset line 10
++offset line 10, patched by Vimma
+ offset line 11
+ offset line 12
+ offset line 13
