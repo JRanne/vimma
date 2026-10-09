@@ -72,6 +72,38 @@ needed; the crash-reporter flag needs `npm run import && (cd engine && ./mach bu
 Placeholder artwork: `configs/branding/vimma/*.svg`, rendered by `tools/branding/render.sh`
 (`rsvg-convert`, ImageMagick). Replace the SVGs, re-run the script, commit the PNG/ICO outputs.
 
+## Testing
+
+### Mochitests that send keys to a page
+
+Set up, await, then press (issues #14, #18). `tests/browser/head.js`, which the harness loads
+before every test in the directory, has the helpers:
+
+```js
+await recordPageKeys(browser); // listener in place in the content process
+await focusContent(browser); // chrome and content focus
+EventUtils.synthesizeKey("j");
+Assert.ok(await waitForPageKey(browser, ["j"]), "page received j, not default-prevented");
+Assert.deepEqual(await pageKeys(browser), ["j"], "and nothing else");
+```
+
+Do not use `BrowserTestUtils.waitForContentEvent` followed by `synthesizeKey`: it installs its
+listener through `sharedData.flush()`, which the content process picks up later, so the key can
+beat the listener. Do not rely on `browser.focus()` either: it moves chrome focus; the content
+process takes focus later. On a 2-CPU runner both race the key. Neither matters for keys that
+only chrome handles (Vimma's chords, the help overlay, the URL bar).
+
+To shake out a race, run a test repeatedly on two busy CPUs (what the hosted runner has):
+
+```sh
+for i in 1 2 3 4; do taskset -c 0,1 sh -c 'while :; do :; done' & done
+taskset -c 0,1 npm run mochitest -- --repeat=49 tests/browser/browser_vimma_<name>.js
+kill $(jobs -p)
+```
+
+Pass `--repeat=N` with `=`: `tools/mochitest.mjs` treats a bare `N` as a test path. Plan §5: no
+retries in CI; a flaky test gets quarantined and an issue the same day.
+
 ## CI and automation (spec m0-pipeline)
 
 | Workflow       | Trigger                          | Runner                    | Needs from you                             |
