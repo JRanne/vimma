@@ -2,11 +2,14 @@ import { describe, test, expect } from "vitest";
 import {
   isEditable,
   matchSiteRule,
+  insertModeAfterFocus,
+  INSERT_TRIGGERS,
   TEXT_INPUT_EXCLUDED_TYPES,
   EDITABLE_ROLES,
   KNOWN_EDITORS,
   INSERT_SITE_MODES,
 } from "../src/editable.mjs";
+import { resolveEscape } from "../src/escape.mjs";
 
 const input = (type, extra = {}) => ({ tagName: "INPUT", type, ...extra });
 const div = (extra = {}) => ({ tagName: "DIV", ...extra });
@@ -70,7 +73,6 @@ describe("isEditable: disabled and read-only", () => {
   test.each([
     [{ disabled: true }, "disabled"],
     [{ readOnly: true }, "readonly"],
-    [{ ariaDisabled: true }, "aria-disabled"],
     [{ disabled: true, readOnly: true }, "disabled"],
   ])("Given a text input with %o, then not editable (%s)", (extra, reason) => {
     expect(isEditable(input("text", extra))).toEqual({ editable: false, reason });
@@ -83,8 +85,22 @@ describe("isEditable: disabled and read-only", () => {
     });
   });
 
-  test("Given an aria-disabled contenteditable, then not editable", () => {
-    expect(isEditable(div({ isContentEditable: true, ariaDisabled: true })).editable).toBe(false);
+  test.each([
+    [input("text", { ariaDisabled: true }), "input:text"],
+    [{ tagName: "TEXTAREA", ariaDisabled: true }, "textarea"],
+    [div({ isContentEditable: true, ariaDisabled: true }), "contenteditable"],
+  ])(
+    "Given native editable %o under an aria-disabled ancestor, then still editable",
+    (d, reason) => {
+      expect(isEditable(d)).toEqual({ editable: true, reason });
+    },
+  );
+
+  test("Given role textbox with aria-disabled, then aria-disabled", () => {
+    expect(isEditable(div({ role: "textbox", ariaDisabled: true }))).toEqual({
+      editable: false,
+      reason: "aria-disabled",
+    });
   });
 
   test("Given a disabled checkbox, then disabled wins over the type", () => {
@@ -160,35 +176,72 @@ describe("isEditable: other elements", () => {
 
 describe("isEditable: known editors", () => {
   test.each([
-    ["monaco-editor", "editor:monaco"],
-    ["cm-editor", "editor:codemirror6"],
-    ["CodeMirror", "editor:codemirror5"],
-    ["ace_editor", "editor:ace"],
+    ["native-edit-context", "editor:monaco"],
+    ["inputarea", "editor:monaco"],
+    ["cm-content", "editor:codemirror6"],
+    ["ace_text-input", "editor:ace"],
     ["ProseMirror", "editor:prosemirror"],
     ["ql-editor", "editor:quill"],
-  ])("Given a div inside .%s, then %s", (cls, reason) => {
-    expect(isEditable(div({ ancestorClasses: ["view-line", cls, "app"] }))).toEqual({
-      editable: true,
-      reason,
-    });
+  ])("Given a focused div with class %s, then %s", (cls, reason) => {
+    expect(isEditable(div({ classes: ["x", cls] }))).toEqual({ editable: true, reason });
   });
 
   test("Given a class that only contains a marker, then none", () => {
-    expect(isEditable(div({ ancestorClasses: ["monaco-editorx", "xcm-editor"] })).reason).toBe(
-      "none",
-    );
+    expect(isEditable(div({ classes: ["cm-contentx", "xProseMirror"] })).reason).toBe("none");
+  });
+
+  test("Given a button in CodeMirror 6's search panel, then none", () => {
+    expect(isEditable({ tagName: "BUTTON", classes: ["cm-button"] }).reason).toBe("none");
+  });
+
+  test.each(["BUTTON", "A", "OPTION", "SUMMARY", "LABEL"])(
+    "Given a <%s> carrying an editor focus class, then none (native controls are skipped)",
+    (tagName) => {
+      expect(isEditable({ tagName, classes: ["cm-content"] })).toEqual({
+        editable: false,
+        reason: "none",
+      });
+    },
+  );
+
+  test("Given a contenteditable=false widget inside ProseMirror, then none", () => {
+    expect(
+      isEditable({
+        tagName: "SPAN",
+        isContentEditable: false,
+        contentEditable: "false",
+        classes: ["mention-widget"],
+      }),
+    ).toEqual({ editable: false, reason: "none" });
+  });
+
+  test("Given an editor focus element marked contenteditable=false, then none", () => {
+    expect(
+      isEditable(
+        div({ classes: ["cm-content"], isContentEditable: false, contentEditable: "false" }),
+      ).reason,
+    ).toBe("none");
+  });
+
+  test("Given a read-only editor (aria-readonly), then aria-readonly", () => {
+    expect(isEditable(div({ classes: ["native-edit-context"], ariaReadOnly: true }))).toEqual({
+      editable: false,
+      reason: "aria-readonly",
+    });
   });
 
   test("Given a read-only textarea inside an editor, then readonly wins", () => {
-    expect(
-      isEditable({ tagName: "TEXTAREA", readOnly: true, ancestorClasses: ["monaco-editor"] }),
-    ).toEqual({ editable: false, reason: "readonly" });
+    expect(isEditable({ tagName: "TEXTAREA", readOnly: true, classes: ["inputarea"] })).toEqual({
+      editable: false,
+      reason: "readonly",
+    });
   });
 
-  test("every known editor has a name and a class", () => {
+  test("every known editor has a name and focus classes", () => {
     for (const e of KNOWN_EDITORS) {
       expect(e.name).toMatch(/^[a-z0-9]+$/);
-      expect(e.className).toMatch(/^[A-Za-z_-]+$/);
+      expect(e.classes.length).toBeGreaterThan(0);
+      for (const c of e.classes) expect(c).toMatch(/^[A-Za-z_-]+$/);
     }
   });
 });
@@ -271,8 +324,97 @@ describe("matchSiteRule", () => {
     expect(matchSiteRule("example.com", [])).toBeUndefined();
   });
 
+  test.each([
+    ["10.1.1.1", "1.1"],
+    ["10.1.1.1", "1.1.1"],
+    ["192.168.0.10", "0.10"],
+    ["[::1]", "1"],
+    ["[fe80::1]", "80::1"],
+    ["example.com:8080", "example.com"],
+    ["localhostx", "localhost"],
+  ])(
+    "Given host %s and rule %s, then no match (IP literals and ports match exactly)",
+    (host, match) => {
+      expect(matchSiteRule(host, [{ match, insert: "never" }])).toBeUndefined();
+    },
+  );
+
+  test.each([
+    ["localhost", "localhost"],
+    ["10.1.1.1", "10.1.1.1"],
+    ["[::1]", "[::1]"],
+    ["[::1]", "::1"],
+    ["[FE80::1]", "fe80::1"],
+  ])("Given host %s and rule %s, then the rule matches", (host, match) => {
+    const rule = { match, insert: "always" };
+    expect(matchSiteRule(host, [rule])).toBe(rule);
+  });
+
   test("a rule with a trailing dot or uppercase still matches", () => {
     const r = { match: "Example.COM.", insert: "never" };
     expect(matchSiteRule("www.example.com", [r])).toBe(r);
+  });
+});
+
+describe("insert mode on focus changes (host contract)", () => {
+  const body = { tagName: "BODY" };
+  const html = { tagName: "HTML" };
+  const text = input("text");
+
+  test("the triggers are focusin and recheck", () => {
+    expect([...INSERT_TRIGGERS]).toEqual(["focusin", "recheck"]);
+  });
+
+  test.each([
+    [{ site: "always" }, body],
+    [{ site: "always" }, html],
+    [{}, { ...body, designMode: true }],
+    [{}, { ...html, designMode: true }],
+  ])("on a recheck, %o never makes a bare <body>/<html> editable", (opts, d) => {
+    expect(isEditable(d, { ...opts, trigger: "recheck" })).toEqual({
+      editable: false,
+      reason: "document-root",
+    });
+    expect(isEditable(d, { ...opts, trigger: "focusin" }).editable).toBe(true);
+  });
+
+  test("on a recheck, site always still makes a focused div editable", () => {
+    expect(isEditable(div(), { site: "always", trigger: "recheck" }).reason).toBe("site:always");
+  });
+
+  test("an unknown trigger throws", () => {
+    expect(() => isEditable(div(), { trigger: /** @type {any} */ ("blur") })).toThrow(TypeError);
+  });
+
+  test.each([
+    ["normal", "focusin", text, "auto", "insert"],
+    ["insert", "focusin", div(), "auto", "normal"],
+    ["insert", "focusin", text, "auto", "insert"],
+    ["normal", "focusin", div(), "auto", "normal"],
+    ["normal", "recheck", text, "auto", "normal"],
+    ["insert", "recheck", text, "auto", "insert"],
+    ["insert", "recheck", body, "auto", "normal"],
+    ["hint", "focusin", text, "auto", "hint"],
+    ["visual", "recheck", body, "auto", "visual"],
+    ["normal", "focusin", body, "always", "insert"],
+  ])("Given %s, on %s of %o (site %s), then %s", (mode, trigger, descriptor, site, next) => {
+    expect(insertModeAfterFocus({ mode, trigger, descriptor, site })).toBe(next);
+  });
+
+  test.each([
+    ["site always", { site: "always" }, body],
+    ["designMode", {}, { ...body, designMode: true }],
+  ])("Given insert under %s, when Esc blurs to <body>, then normal mode stays", (_, opts, d) => {
+    // Esc: the host switches to normal and blurs (resolveEscape); focus falls to <body>.
+    const esc = resolveEscape({ mode: "insert" });
+    expect(esc).toMatchObject({ mode: "normal", blur: true });
+    const afterEsc = esc.mode;
+    expect(
+      insertModeAfterFocus({ mode: afterEsc, trigger: "recheck", descriptor: d, ...opts }),
+    ).toBe("normal");
+    // A host that rechecks before switching still leaves insert.
+    expect(
+      insertModeAfterFocus({ mode: "insert", trigger: "recheck", descriptor: d, ...opts }),
+    ).toBe("normal");
   });
 });
