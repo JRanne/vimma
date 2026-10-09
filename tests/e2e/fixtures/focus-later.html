@@ -1,0 +1,12 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>focus later</title>
+<!--
+  e2e fixture (m0-content-actor): the page loads with nothing focused (Vimma: normal), then
+  focuses a text input after 2 s. Only Vimma's content actor (VimmaChild) sees that focus and
+  reports insert mode, so insert proves the actor loaded in the content sandbox.
+-->
+<input id="q" />
+<script>
+  setTimeout(() => document.getElementById("q").focus(), 2000);
+</script>

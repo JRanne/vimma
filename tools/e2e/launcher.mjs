@@ -17,8 +17,12 @@ import { delimiter, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { validateMessage } from "../../packages/vimma-core/src/control.mjs";
+import { devPrefs } from "../start.mjs";
 
 const ENGINE = fileURLToPath(new URL("../../engine/", import.meta.url));
+const REPO = fileURLToPath(new URL("../../", import.meta.url));
+/** What the browser prints when a module of ours cannot be loaded (e.g. by the content sandbox). */
+export const VIMMA_LOAD_FAILURE = /Failed to load chrome:\/\/browser\/content\/vimma\/\S*/;
 export const FULL_OBJDIR = "obj-x86_64-pc-linux-gnu";
 export const ARTIFACT_OBJDIR = "obj-artifact";
 export const WINDOW = Object.freeze({ width: 1280, height: 800 });
@@ -48,6 +52,9 @@ export const PROFILE_PREFS = Object.freeze([
   ["toolkit.startup.max_resumed_crashes", -1],
   ["browser.tabs.warnOnClose", false],
   ["browser.warnOnQuit", false],
+  // ctrl+q quits without a dialog: teardown quits that way, so quit observers remove the
+  // discovery file (a signal skips them; spec m0-control-server)
+  ["browser.warnOnQuitShortcut", false],
   ["browser.newtabpage.enabled", false],
   ["browser.uitour.enabled", false],
   // telemetry and data reporting
@@ -113,7 +120,9 @@ export function userJs(prefs) {
  */
 export function createProfile(tmpRoot = tmpdir()) {
   const dir = mkdtempSync(join(tmpRoot, "vimma-e2e-profile-"));
-  writeFileSync(join(dir, "user.js"), userJs(PROFILE_PREFS));
+  // plus npm start's dev prefs: content processes may read the repo's src/, where a local
+  // objdir's chrome files lead (tools/start.mjs); harmless for a packaged build
+  writeFileSync(join(dir, "user.js"), userJs([...PROFILE_PREFS, ...devPrefs(REPO)]));
   return dir;
 }
 
@@ -448,12 +457,55 @@ export async function killTree(child, { graceMs = 5000 } = {}) {
 }
 
 /**
+ * Quit the browser the way a user would, `send-keys ctrl+q`, so quit observers run and remove
+ * the discovery file; a signal skips them (spec m0-control-server). The help overlay swallows
+ * ctrl+q, so it is closed with `esc` first. Never throws: on any trouble, or when the browser has
+ * not exited within `timeoutMs`, it returns false and the caller falls back to killTree.
+ * @param {{
+ *   ctl: { state: () => Promise<Record<string, any>>, sendKeys: (keys: string) => Promise<void> },
+ *   child: { exitCode: number | null, signalCode: string | null,
+ *     once: (event: "exit", f: () => void) => unknown },
+ *   timeoutMs?: number,
+ *   pollMs?: number,
+ * }} options
+ * @returns {Promise<boolean>} whether the browser exited
+ */
+export async function quitBrowser({ ctl, child, timeoutMs = 10_000, pollMs = 50 }) {
+  const gone = () => child.exitCode !== null || child.signalCode !== null;
+  if (gone()) return true;
+  const exited = new Promise((resolve) => child.once("exit", () => resolve(true)));
+  const deadline = Date.now() + timeoutMs;
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let timer;
+  const timeout = new Promise((resolve) => (timer = setTimeout(() => resolve(false), timeoutMs)));
+  const attempt = async () => {
+    let state = await ctl.state();
+    if (state.mode === "help") {
+      await ctl.sendKeys("esc");
+      while (state.mode === "help" && Date.now() < deadline) {
+        await sleep(pollMs);
+        state = await ctl.state();
+      }
+    }
+    // The reply may be lost as the browser goes down; the exit is what counts.
+    await ctl.sendKeys("ctrl+q").catch(() => {});
+    return exited;
+  };
+  try {
+    return /** @type {boolean} */ (await Promise.race([attempt().catch(() => false), timeout]));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * @typedef {{
  *   profile: string,
  *   child: import("node:child_process").ChildProcess,
  *   display: Display | null,
  *   discovery: { protocol: number, port: number, token: string, pid: number },
  *   stderrTail: () => string,
+ *   loadFailure: () => string | null,
  *   teardown: () => Promise<void>,
  * }} Session
  */
@@ -510,6 +562,8 @@ export async function launch({
   mkdirSync(home);
   mkdirSync(tmp);
   let stderr = "";
+  /** @type {string | null} */
+  let loadFailure = null;
   /** @type {Promise<void> | null} */
   let tearingDown = null;
   const teardown = () =>
@@ -550,7 +604,10 @@ export async function launch({
     let spawnError = null;
     spawned.on("exit", (code, sig) => (exit = { code, signal: sig }));
     spawned.on("error", (e) => (spawnError = e));
-    spawned.stderr?.on("data", (d) => (stderr = (stderr + d).slice(-8000)));
+    spawned.stderr?.on("data", (d) => {
+      stderr = (stderr + d).slice(-8000);
+      loadFailure ??= VIMMA_LOAD_FAILURE.exec(stderr)?.[0] ?? null;
+    });
     const stderrTail = () => stderr.split("\n").slice(-15).join("\n");
     const discovery = await waitForDiscovery(profile, {
       timeoutMs: discoveryTimeoutMs,
@@ -566,7 +623,15 @@ export async function launch({
       stderrTail,
     });
     signal?.removeEventListener("abort", onAbort);
-    return { profile, child: spawned, display, discovery, stderrTail, teardown };
+    return {
+      profile,
+      child: spawned,
+      display,
+      discovery,
+      stderrTail,
+      loadFailure: () => loadFailure,
+      teardown,
+    };
   } catch (e) {
     signal?.removeEventListener("abort", onAbort);
     const aborted = cancelled(); // before teardown(), which sets it

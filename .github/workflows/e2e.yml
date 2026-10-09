@@ -7,8 +7,7 @@
 # (spec m0-safebrowsing-key). Never add SAFEBROWSING_API_KEY here.
 # Spec m0-e2e-harness: the same job builds vimma-ctl and runs the e2e harness's own tests (fake
 # control server, real Xvfb) first, and the socket-driven scenarios on the artifact build last.
-# Until the control server spec lands every scenario is pending: that step reports them as a
-# notice and passes nothing.
+# A scenario marked pending is reported as a notice and passes nothing.
 name: e2e
 
 on:
@@ -29,6 +28,7 @@ on:
       - "tools/artifact-build/**"
       - "tools/branding/**"
       - "tools/mochitest.mjs"
+      - "tools/start.mjs" # the e2e profile takes its dev prefs (sandbox read path) from it
       - "tools/sync-core.mjs"
       - "tools/version-files/**"
       - "tools/e2e/**"
@@ -125,9 +125,9 @@ jobs:
           df -h . | tail -1
           du -sh engine engine/obj-artifact ~/.mozbuild 2>/dev/null || true
 
-      # Spec m0-e2e-harness. Pending scenarios are reported as ::notice:: and in the step summary,
-      # never as passed; once the control server lands they run here on the artifact build
-      # under Xvfb, with screenshots compared at 0.5 %.
+      # Spec m0-e2e-harness. The scenarios run here on the artifact build under Xvfb, with
+      # screenshots compared at 0.5 %; pending ones are a ::notice::, never a pass. CI is set, so
+      # --update-baselines is refused: a baseline changes only in a reviewed commit.
       - name: e2e scenarios (npm run e2e -- --artifact)
         run: npm run e2e -- --artifact
 

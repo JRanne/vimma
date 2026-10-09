@@ -15,13 +15,14 @@
  * Exit 0 when nothing failed (pending scenarios are reported, not passed), 1 on failures,
  * 2 on usage errors.
  */
-import { appendFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { Ctl, findVimmaCtl } from "./driver.mjs";
-import { findBuild, launch, unpackTarball } from "./launcher.mjs";
+import { DISCOVERY_FILE, findBuild, launch, quitBrowser, unpackTarball } from "./launcher.mjs";
+import { fixtureUrl, startPageServer } from "./pages.mjs";
 import { exitCode, formatReport, githubAnnotations, runScenarios } from "./runner.mjs";
 import { loadScenarios } from "./scenario.mjs";
 import { capture, checkBaseline } from "./screenshot.mjs";
@@ -92,6 +93,8 @@ async function main() {
     });
   }
 
+  /** @type {{ base: string, close: () => Promise<void> } | null} `open "fixture:<name>"` */
+  let pages = null;
   try {
     /** @type {import("./launcher.mjs").Build | null} */
     let build = null;
@@ -106,6 +109,8 @@ async function main() {
         build = findBuild({ build: values.build, artifact: values.artifact, env: process.env });
       }
       ctlBin = findVimmaCtl({ flag: values["vimma-ctl"], env: process.env });
+      // In-process: it dies with the CLI, so a signal needs no cleanup for it.
+      pages = await startPageServer(join(REPO, "tests/e2e/fixtures"));
       console.log(`build: ${build.binary}\nvimma-ctl: ${ctlBin}`);
     }
     const xvfb = values.xvfb || !process.env.DISPLAY;
@@ -147,6 +152,24 @@ async function main() {
         await teardown();
         throw e;
       }
+      const killTeardown = teardown;
+      // Quit with ctrl+q first (quit observers remove the discovery file); signals stay the
+      // fallback, and the only way out once the scenario's deadline has fired.
+      const quitThenTeardown = async () => {
+        /** @type {string | null} */
+        let problem = null;
+        if (!signal.aborted) {
+          const clean = await quitBrowser({ ctl, child: session.child });
+          if (!clean) console.log("        ctrl+q did not quit the browser; signalling it");
+          else if (existsSync(join(session.profile, DISCOVERY_FILE)))
+            problem = `the browser quit with ctrl+q but left ${DISCOVERY_FILE} behind`;
+        }
+        await killTeardown();
+        // e.g. the content sandbox refusing VimmaChild (npm start's read_path_whitelist)
+        const failed = session.loadFailure();
+        if (failed) problem = `the browser logged "${failed}"`;
+        if (problem) throw new Error(problem);
+      };
       /** @param {string} name */
       const screenshot = async (name) => {
         if (!session.display) {
@@ -167,7 +190,12 @@ async function main() {
         if (result.status === "missing" || result.status === "mismatch")
           throw new Error(result.message);
       };
-      return { ctl, screenshot, teardown };
+      const stepCtl = {
+        state: () => ctl.state(),
+        sendKeys: (/** @type {string} */ keys) => ctl.sendKeys(keys),
+        open: (/** @type {string} */ url) => ctl.open(fixtureUrl(url, pages?.base ?? null)),
+      };
+      return { ctl: stepCtl, screenshot, teardown: quitThenTeardown };
     };
 
     const results = await runScenarios(scenarios, {
@@ -196,6 +224,7 @@ async function main() {
     return exitCode(results);
   } finally {
     await cleanupAll();
+    await pages?.close();
   }
 }
 

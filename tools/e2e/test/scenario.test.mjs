@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { decodePng } from "../png.mjs";
 import { loadScenarios, matchState, runSteps, validateScenario } from "../scenario.mjs";
 
 const SCENARIOS = fileURLToPath(new URL("../../../tests/e2e/scenarios/", import.meta.url));
@@ -68,8 +69,9 @@ describe("loadScenarios", () => {
 
 describe("the m0-happy-path scenario", () => {
   const happy = loadScenarios(SCENARIOS, { filter: "m0-happy-path" })[0];
-  it("is pending until the control server exists, with a reason", () => {
-    expect(happy?.pending).toMatch(/control server/);
+  it("runs (is not pending) now that the control server exists (PR #38)", () => {
+    expect(happy).toBeDefined();
+    expect(happy?.pending).toBeUndefined();
   });
   it("opens about:blank, sends ctrl+b ? and expects help mode and a screenshot", () => {
     const steps = JSON.stringify(happy?.steps);
@@ -77,6 +79,30 @@ describe("the m0-happy-path scenario", () => {
     expect(steps).toContain('"keys":"ctrl+b ?"');
     expect(steps).toContain('"mode":"help"');
     expect(steps).toContain('"screenshot"');
+  });
+});
+
+describe("the m0-content-actor scenario (VimmaChild loads in the default content sandbox)", () => {
+  const actor = loadScenarios(SCENARIOS, { filter: "m0-content-actor" })[0];
+  it("runs, opens an http fixture page and waits for normal, then insert", () => {
+    expect(actor?.pending).toBeUndefined();
+    const steps = JSON.stringify(actor?.steps);
+    expect(steps).toContain('"open":"fixture:focus-later.html"');
+    expect(steps.indexOf('"mode":"normal"')).toBeGreaterThan(steps.indexOf('"open"'));
+    expect(steps.lastIndexOf('"mode":"insert"')).toBeGreaterThan(steps.indexOf('"mode":"normal"'));
+  });
+});
+
+describe("baselines", () => {
+  const BASELINES = fileURLToPath(new URL("../../../tests/e2e/baselines/", import.meta.url));
+  const shots = loadScenarios(SCENARIOS, {}).flatMap((s) =>
+    s.steps.flatMap((step) => (step.screenshot ? [step.screenshot] : [])),
+  );
+  it.each(shots)("%s has a committed 1280×800 baseline (made in CI's Xvfb)", (name) => {
+    const path = join(BASELINES, `${name}.png`);
+    expect(existsSync(path)).toBe(true);
+    const img = decodePng(readFileSync(path));
+    expect([img.width, img.height]).toEqual([1280, 800]);
   });
 });
 
