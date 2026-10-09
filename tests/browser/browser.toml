@@ -22,6 +22,8 @@ support-files = [
 
 ["browser_vimma_mozilla_services.js"]
 
+["browser_vimma_safebrowsing.js"]
+
 ["browser_vimma_crash_reporter.js"]
 # Artifact builds run Mozilla's libxul, built with the crash reporter (ADR-010).
 skip-if = ["artifact"]
