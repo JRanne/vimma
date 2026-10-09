@@ -120,8 +120,8 @@ their focus element `aria-readonly` (CodeMirror 6) or `readonly` (Monaco's texta
 /** @typedef {{ match: string, insert: InsertSiteMode }} InsertSiteRule */
 ```
 
-Planned config (schema 2, with an identity migration from 1, in the M1 host spec; not in this
-PR):
+Config (schema 2, with an identity migration from 1; validated in core since
+[m3-m4-core-prep](m3-m4-core-prep.md), read by the M1 host spec):
 
 ```toml
 schema = 2

@@ -187,7 +187,11 @@ Vimma's own preferences today:
 | `vimma.debug.keys`         | unset   | Create it as a boolean set to `true` to log every key Vimma sees (`{ key, mods, mode }`) to the Browser Console (`ctrl+shift+j`; enable its Debug filter). |
 
 **Planned:** `~/.config/vimma/config.toml` (M5) for keys, workspaces and theme. Its validator
-already exists, but the browser does not read the file yet. The control socket and `vimma-ctl`
+already exists, but the browser does not read the file yet. Schema 2 (`schema = 2` at the top)
+also takes `[panes] max` (most panes per workspace, 1 to 16, default 4), `[modal] hint_chars`
+(the characters hint labels are made of, default `"asdfghjkl"`) and `[sites."<host>"] insert`
+(`auto`, `never` or `always`, per site and its subdomains); `packages/vimma-core/defaults.toml`
+lists every key with its default. The control socket and `vimma-ctl`
 (off by default) are also planned.
 
 ## Privacy defaults

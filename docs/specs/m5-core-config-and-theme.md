@@ -31,6 +31,9 @@ Contract fixtures: `tests/contract/config/v1/` and `tests/contract/theme/`, run 
 
 ## Schema v1
 
+Schema 2 (identity migration, adds `[panes]`, `[sites."<host>"]` and `[modal] hint_chars`) is
+specified in [m3-m4-core-prep](m3-m4-core-prep.md).
+
 Every key is optional. "Defaults" are `DEFAULT_CONFIG` (`defaults.toml` is generated from it).
 Unknown keys anywhere in the schema are errors with the closest known key as suggestion.
 
