@@ -1,11 +1,19 @@
 # Spec m0-pipeline, plan §8 "Unattended runs". Follows anthropics/claude-code-action v1
-# (docs/setup.md, examples/claude.yml).
-# - `mention`: `@claude` in an issue, issue/PR comment or review answers or acts (interactive mode).
-# - `spec`: an issue labelled `spec` gets `claude:go` (a label only the maintainer adds) → Claude
-#   implements it on a branch and opens a draft PR labelled `bot` (automation mode).
-# Needs the ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN secret and the Claude GitHub app
-# (docs/runbook.md). Without a secret every step after the check is skipped and the run is green.
-# Scoped token: contents + pull-requests + issues write; no release, signing or other secrets.
+# (docs/setup.md, docs/security.md, examples/claude.yml).
+#
+# Security model (see the spec's Settled section and docs/runbook.md):
+# - Every job passes `github_token: github.token`, so the job's `permissions:` block is the
+#   token Claude gets (without it the action uses the Claude app's installation token, which has
+#   contents/pull-requests/issues write whatever this file says).
+# - `mention`: `@claude` from the owner, a member or a collaborator. Read-only contents: it
+#   answers, reviews and comments, but cannot push.
+# - `spec`: only when the repository owner adds `claude:go` to a `spec` issue. Claude edits and
+#   commits with a read-only token and a short tool allowlist; the commits leave as a patch.
+# - `spec-pr`: no Claude. Applies the patch, pushes `claude/spec-*` and opens a draft PR (`bot`).
+#   GITHUB_TOKEN cannot push workflow changes, and PRs it opens do not trigger CI: mark the PR
+#   ready for review (or `gh workflow run ci.yml --ref <branch>`) to run CI.
+# Needs ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN; without one every step after the check
+# skips and the run is green.
 name: Claude Code
 
 on:
@@ -24,19 +32,22 @@ permissions:
 jobs:
   mention:
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)) ||
       (github.event_name == 'issues' && github.event.action != 'labeled' &&
-        (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+        (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-      id-token: write # the action exchanges an OIDC token for the Claude app token
-      actions: read # lets Claude read CI results on PRs
+      contents: read # no pushes: code changes go through the spec flow
+      pull-requests: write # comment and review on PRs
+      issues: write # tracking comment on issues
+      actions: read # read CI results on PRs
     env:
       HAS_CLAUDE_AUTH: ${{ secrets.ANTHROPIC_API_KEY != '' || secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
     steps:
@@ -50,10 +61,12 @@ jobs:
         if: env.HAS_CLAUDE_AUTH == 'true'
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       - uses: anthropics/claude-code-action@2dca132ff0e0c4094ce6048b422c6915a071210b # v1.0.247
         if: env.HAS_CLAUDE_AUTH == 'true'
         with:
+          github_token: ${{ github.token }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: --max-turns 40
@@ -62,17 +75,18 @@ jobs:
     if: |
       github.event_name == 'issues' && github.event.action == 'labeled' &&
       github.event.label.name == 'claude:go' &&
+      github.event.sender.login == github.repository_owner &&
       contains(github.event.issue.labels.*.name, 'spec')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-      id-token: write
-      actions: read
+      contents: read
+      issues: read
     env:
       HAS_CLAUDE_AUTH: ${{ secrets.ANTHROPIC_API_KEY != '' || secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+      ISSUE: ${{ github.event.issue.number }}
+    outputs:
+      ran: ${{ steps.patch.outputs.ran }}
     steps:
       - name: Skip without a Claude secret
         if: env.HAS_CLAUDE_AUTH != 'true'
@@ -84,6 +98,7 @@ jobs:
         if: env.HAS_CLAUDE_AUTH == 'true'
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: env.HAS_CLAUDE_AUTH == 'true'
@@ -91,33 +106,86 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Prepare branch and label
+      - name: Install and branch
         if: env.HAS_CLAUDE_AUTH == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ISSUE: ${{ github.event.issue.number }}
         run: |
           npm ci
-          gh label create bot --color 5319E7 --description "Opened by automation" --force
-          git config --global user.name "claude[bot]"
-          git config --global user.email "41898282+claude[bot]@users.noreply.github.com"
-          git switch -c "claude/spec-$ISSUE-$GITHUB_RUN_ID"
+          git switch -c "claude/spec-$ISSUE"
 
       - uses: anthropics/claude-code-action@2dca132ff0e0c4094ce6048b422c6915a071210b # v1.0.247
         if: env.HAS_CLAUDE_AUTH == 'true'
         with:
+          github_token: ${{ github.token }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             Implement the spec in issue #${{ github.event.issue.number }} of ${{ github.repository }}
             (read it with `gh issue view ${{ github.event.issue.number }}`). You are on a fresh
             branch from main. Follow CLAUDE.md exactly: read the spec under docs/specs/, write the
-            failing tests first, then the code; npm test, npm run typecheck and npm run lint must
-            pass. Commit with Conventional Commits whose body is the changelog line, push the
-            branch, and open a DRAFT pull request with
-            `gh pr create --draft --label bot --base main` that says "Closes #${{ github.event.issue.number }}".
-            Never edit .github/workflows, lint config, screenshot baselines or surfer.json pins
-            to get green. Never merge. If you cannot finish, comment on the issue with what is left.
+            failing tests first, then the code; `npm test`, `npm run typecheck` and `npm run lint`
+            must pass. Commit with `git add` and `git commit`, Conventional Commits whose body is
+            the changelog line. Do not push and do not open a PR: the workflow does both from
+            your commits. Never edit .github/, lint config, screenshot baselines or surfer.json
+            pins to get green.
           claude_args: >-
             --max-turns 100
-            --allowedTools "Edit,MultiEdit,Write,Read,Glob,Grep,LS,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python3:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh pr create:*),Bash(gh pr view:*)"
+            --permission-mode acceptEdits
+            --allowedTools "Read,Glob,Grep,LS,Edit,MultiEdit,Write,Bash(npm test),Bash(npm run lint),Bash(npm run typecheck),Bash(npm run coverage),Bash(npm run format),Bash(npm run gen-docs),Bash(npm run test:py),Bash(git status),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(gh issue view:*)"
+
+      - name: Export commits as a patch
+        id: patch
+        if: env.HAS_CLAUDE_AUTH == 'true'
+        run: |
+          git format-patch --stdout origin/main..HEAD > spec.patch
+          if [ ! -s spec.patch ]; then
+            echo "::error::Claude made no commits for #$ISSUE."
+            exit 1
+          fi
+          echo "ran=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.patch.outputs.ran == 'true'
+        with:
+          name: spec-patch
+          path: spec.patch
+          retention-days: 7
+
+  spec-pr:
+    needs: spec
+    if: needs.spec.outputs.ran == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # push claude/spec-* (GITHUB_TOKEN cannot touch .github/workflows)
+      pull-requests: write
+      issues: write # create the `bot` label if missing
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ISSUE: ${{ github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: spec-patch
+          path: ${{ runner.temp }}/spec
+
+      - name: Apply the patch, push the branch, open a draft PR
+        run: |
+          branch="claude/spec-$ISSUE"
+          git config user.name "claude[bot]"
+          git config user.email "41898282+claude[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git -c core.hooksPath=/dev/null am "$RUNNER_TEMP/spec/spec.patch"
+          git push --force origin "$branch"
+          gh label create bot --color 5319E7 --description "Opened by automation" --force
+          if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[].number')" ]; then
+            gh pr create --draft --base main --head "$branch" --label bot \
+              --title "$(git log -1 --format=%s origin/main..HEAD)" \
+              --body "Closes #$ISSUE. Implemented by claude.yml from the spec issue.
+
+          CI does not start on PRs opened by GITHUB_TOKEN: mark this ready for review (or
+          \`gh workflow run ci.yml --ref $branch\`) to run it."
+          fi
