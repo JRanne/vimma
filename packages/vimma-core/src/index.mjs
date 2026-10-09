@@ -9,6 +9,7 @@ export * from "./defaults.mjs";
 export * from "./keymap.mjs";
 export * from "./dispatcher.mjs";
 export * from "./help.mjs";
+export * from "./tabs.mjs";
 export * from "./toml.mjs";
 export * from "./config.mjs";
 export * from "./theme.mjs";
