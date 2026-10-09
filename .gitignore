@@ -22,3 +22,5 @@ __pycache__/
 
 # agent worktrees (Claude Code)
 .claude/
+# cargo build output (tools/vimma-ctl, ADR-011)
+tools/vimma-ctl/target/

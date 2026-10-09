@@ -154,6 +154,9 @@ Workspaces are not built yet; these are the limits their design accepts
 - No binaries, packages or releases: build from source. Tarball, AppImage, `.deb` and AUR are M6
   ([plan.md](../plan.md) §6).
 - The smol-toml BSD-3-Clause notice is not in `about:license` yet (M6, issue #16).
+- `vimma-ctl` checks the discovery file's permissions on Unix only; on Windows `check_mode`
+  does nothing (ACLs, not mode bits)
+  ([m0-control-protocol-and-vimma-ctl](specs/m0-control-protocol-and-vimma-ctl.md)).
 
 ## Build and CI
 
@@ -175,6 +178,13 @@ Workspaces are not built yet; these are the limits their design accepts
   `browser_vimma_help_overlay.js` (issue #18).
 - PRs opened by `GITHUB_TOKEN` (upstream bumps, Claude, release-please) do not trigger CI by
   themselves ([runbook](runbook.md)).
+- Firefox bumps are manual after the bot's PR. Plan §4's Claude conflict resolution (≤3 pushes),
+  auto-merge of clean bumps and the auto-approved `security` path are not built. The bump PR
+  carries a dry run of every patch against the new release ([rebase playbook](rebase.md),
+  [m0-rebase-playbook](specs/m0-rebase-playbook.md)).
+- `surfer import` stops at the first patch that fails, and `git apply` has no fuzz: a hunk whose
+  context drifted fails like one whose code is gone. `tools/upstream/patch-check.py` reports
+  every patch and hunk, and tells the two apart ([m0-rebase-playbook](specs/m0-rebase-playbook.md)).
 - No branch protection on `main` (free private plan); write-token jobs could push to it
   ([m0-pipeline](specs/m0-pipeline.md), [runbook](runbook.md)).
 - A change to build config needs a full rebuild of 15–30 min on 16 threads: 927 s

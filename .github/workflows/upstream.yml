@@ -2,6 +2,10 @@
 # `upstream: update to Firefox X.Y` bumping surfer.json. Cheap on purpose (Python stdlib, no
 # npm ci): it runs 4 times a day on the free plan's minutes.
 #
+# Spec m0-rebase-playbook: before opening the PR, dry-run our .patch files against the new
+# release's source tarball (tools/upstream/patch-check.py) and put the result in the PR body.
+# That job has a read-only token; only the job that opens the PR can write. docs/rebase.md.
+#
 # PRs opened with the default GITHUB_TOKEN do not trigger other workflows, so CI would not run on
 # them. Add a fine-grained token as the UPSTREAM_PR_TOKEN secret to fix that (docs/runbook.md).
 name: upstream
@@ -21,6 +25,88 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # A release: stream the ~810 MB source tarball through patch-check (~1 min); else seconds.
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      patch-summary: ${{ steps.patches.outputs.summary }}
+      patch-result: ${{ steps.patches.outputs.result }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check for a new Firefox release
+        id: check
+        run: |
+          latest=$(python3 tools/upstream/check-release.py)
+          echo "version=$latest" >> "$GITHUB_OUTPUT"
+          echo "Latest newer release: ${latest:-none}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dry-run our patches on the new release's source
+        id: patches
+        if: steps.check.outputs.version != ''
+        env:
+          VERSION: ${{ steps.check.outputs.version }}
+        run: |
+          base="https://archive.mozilla.org/pub/firefox/releases/$VERSION"
+          name="source/firefox-$VERSION.source.tar.xz"
+          # Streamed once: tee feeds sha512sum (through a FIFO) and patch-check, which extracts
+          # only the patched files and, with --drain, reads to the end so the hash is whole.
+          # patch-check's status is the verdict: 0 all apply, 1 some do not, 2 did not run.
+          mkfifo tarball.fifo
+          sha512sum < tarball.fifo > tarball.sha512 &
+          hasher=$!
+          set +e
+          curl -fsSL --retry 3 "$base/$name" | tee tarball.fifo |
+            python3 tools/upstream/patch-check.py --tarball - --drain \
+              --json patch-check.json --markdown patch-check.md
+          status=${PIPESTATUS[2]}
+          wait "$hasher"
+          set -e
+          case "$status" in
+            0 | 1)
+              # Hard failure on a mismatch: never report on a tarball Mozilla did not publish.
+              curl -fsSL --retry 3 "$base/SHA512SUMS" -o SHA512SUMS
+              python3 tools/upstream/verify-sha512.py --sums SHA512SUMS --name "$name" \
+                --actual tarball.sha512 || {
+                echo "::error::SHA-512 of $name does not match $base/SHA512SUMS"
+                exit 1
+              }
+              [ "$status" -eq 0 ] && result=ok || result=fail
+              ;;
+            *)
+              result=norun
+              # patch-check writes its own "did not run" file; a crash before that may not.
+              [ -s patch-check.md ] || printf '### Patch check did not run\n\nExit %s; %s.\n' \
+                "$status" "see the upstream.yml run log" > patch-check.md
+              ;;
+          esac
+          case "$result" in
+            ok) ;;
+            fail) echo "::warning::some patches do not apply to Firefox $VERSION (summary)" ;;
+            norun) echo "::warning::the patch check did not run for Firefox $VERSION (no verdict)" ;;
+          esac
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+          cat patch-check.md >> "$GITHUB_STEP_SUMMARY"
+          delim="EOF_$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+          { echo "summary<<$delim"; cat patch-check.md; echo "$delim"; } >> "$GITHUB_OUTPUT"
+
+      - name: Upload the patch-check report
+        if: steps.check.outputs.version != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: patch-check
+          path: patch-check.*
+          if-no-files-found: ignore
+          retention-days: 30
+
+  pr:
+    needs: check
+    if: needs.check.outputs.version != ''
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: write
@@ -33,18 +119,17 @@ jobs:
         with:
           token: ${{ secrets.UPSTREAM_PR_TOKEN || github.token }}
 
-      - name: Check for a new Firefox release
-        id: check
-        run: |
-          latest=$(python3 tools/upstream/check-release.py)
-          echo "version=$latest" >> "$GITHUB_OUTPUT"
-          echo "Latest newer release: ${latest:-none}" >> "$GITHUB_STEP_SUMMARY"
-
       - name: Open the bump PR
-        if: steps.check.outputs.version != ''
         env:
-          VERSION: ${{ steps.check.outputs.version }}
+          VERSION: ${{ needs.check.outputs.version }}
+          PATCH_SUMMARY: ${{ needs.check.outputs.patch-summary }}
+          PATCH_RESULT: ${{ needs.check.outputs.patch-result }}
         run: |
+          case "$PATCH_RESULT" in
+            ok) verdict="Patch check: every patch applies (tarball SHA-512 verified)." ;;
+            fail) verdict="Patch check: **some patches do not apply**; fix them first (docs/rebase.md, step 3)." ;;
+            *) verdict="Patch check: **did not run**, so there is no verdict; run it by hand (docs/rebase.md, step 2)." ;;
+          esac
           branch="upstream/firefox-$VERSION"
           open=$(gh pr list --head "$branch" --state open --json number --jq '.[].number')
           if [ -n "$open" ]; then
@@ -60,11 +145,17 @@ jobs:
             -m "Bump surfer.json from Firefox $old to $VERSION (ADR-002)."
           git push --force origin "$branch"
           gh label create upstream --color 1D76DB --description "Firefox upstream bump" --force
+          {
+            echo "Firefox $VERSION is out (was $old). Opened by upstream.yml."
+            echo
+            echo "$verdict"
+            echo
+            printf '%s\n' "${PATCH_SUMMARY:-(No patch-check summary; see the upstream.yml run.)}"
+            echo
+            echo "Before merging, follow docs/rebase.md: \`npm run import && npx surfer build\` on"
+            echo "the build machine, \`npm run mochitest -- tests/browser/\` on the built engine and"
+            echo "on an artifact build, refresh the cfr provider pref, then mark this PR ready for"
+            echo "review, which starts CI. ADR-002."
+          } > body.md
           gh pr create --draft --base main --head "$branch" --label upstream \
-            --title "upstream: update to Firefox $VERSION" \
-            --body "Firefox $VERSION is out (was $old). Opened by upstream.yml.
-
-          Before merging: \`npm run import && npx surfer build\` on the build machine and check the
-          patches still apply (nightly.yml does this once merged), run
-          \`npm run mochitest -- tests/browser/\` on the built engine, then mark it ready for
-          review, which starts CI. ADR-002."
+            --title "upstream: update to Firefox $VERSION" --body-file body.md

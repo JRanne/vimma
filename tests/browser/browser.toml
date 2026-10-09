@@ -27,3 +27,5 @@ support-files = ["head_vimma_aus.js"]
 support-files = ["head_vimma_aus.js"]
 # Artifact builds run Mozilla's libxul, built with the updater (ADR-010).
 skip-if = ["artifact"]
+
+["browser_vimma_split_contract.js"]

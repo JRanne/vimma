@@ -58,6 +58,27 @@ jobs:
       - name: Licences of package-lock.json
         run: npm run license-check
 
+      # vimma-ctl (ADR-011). Steps in this job, not a job of their own: see the note at the top.
+      # The runner image ships rustup; it installs the toolchain pinned in rust-toolchain.toml.
+      - name: Rust toolchain (tools/vimma-ctl/rust-toolchain.toml)
+        working-directory: tools/vimma-ctl
+        run: rustup toolchain install && cargo --version && cargo clippy --version
+
+      - name: cargo fmt
+        working-directory: tools/vimma-ctl
+        run: cargo fmt --check
+
+      - name: cargo clippy
+        working-directory: tools/vimma-ctl
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: cargo test
+        working-directory: tools/vimma-ctl
+        run: cargo test --locked
+
+      - name: Licences of the Rust crates
+        run: npm run license-check:crates
+
       - name: MPL headers in src/
         run: npx surfer license-check
 

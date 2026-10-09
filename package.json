@@ -24,6 +24,7 @@
     "lane:teardown": "node tools/lanes/lane-teardown.mjs",
     "test:py": "python3 -m unittest discover -s tools/upstream",
     "license-check": "node tools/license-check/license-check.mjs",
+    "license-check:crates": "node tools/license-check/cargo-license-check.mjs",
     "bench": "node tools/bench/bench.mjs",
     "mutation": "stryker run"
   },
@@ -34,6 +35,7 @@
     "@stryker-mutator/core": "10.0.0",
     "@vitest/coverage-v8": "^5.0.3",
     "@zen-browser/surfer": "^1.14.9",
+    "ajv": "^8.20.0",
     "eslint": "^10.12.0",
     "fast-check": "^4.10.2",
     "globals": "^17.13.0",
