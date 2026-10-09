@@ -2,7 +2,6 @@ import { describe, test, expect } from "vitest";
 import fc from "fast-check";
 import {
   MAX_TAB_LABEL,
-  TabLabelError,
   clearTabLabel,
   displayLabel,
   normalizeTabLabel,
@@ -31,10 +30,27 @@ describe("tab labels", () => {
     expect(clearTabLabel(l, "t9")).toBe(l);
   });
 
-  test("labels are cut to MAX_TAB_LABEL code points", () => {
+  test("labels are cut to MAX_TAB_LABEL graphemes, never inside one", () => {
     expect(MAX_TAB_LABEL).toBe(100);
     expect([...normalizeTabLabel("é".repeat(150))].length).toBe(100);
     expect([...normalizeTabLabel("😀".repeat(150))].length).toBe(100);
+    const family = "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}";
+    expect(normalizeTabLabel(family.repeat(150))).toBe(family.repeat(100));
+    const combining = "e\u0301";
+    expect(normalizeTabLabel(combining.repeat(150))).toBe(combining.repeat(100));
+  });
+
+  test("format and bidi characters are stripped; emoji sequences survive", () => {
+    expect(normalizeTabLabel("\u202Eevil\u200Bname\u2066x\u2069\uFEFF")).toBe("evilnamex");
+    expect(normalizeTabLabel("a\u200Fb\u061Cc")).toBe("abc");
+    expect(normalizeTabLabel("\u200B")).toBe("");
+    const family = "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}";
+    expect(normalizeTabLabel(`hi ${family} \u{1F1EB}\u{1F1EE}`)).toBe(
+      `hi ${family} \u{1F1EB}\u{1F1EE}`,
+    );
+    const scotland = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}";
+    expect(normalizeTabLabel(scotland)).toBe(scotland);
+    expect(normalizeTabLabel("a\u{E0067}b")).toBe("ab");
   });
 
   test("pruneTabLabels keeps live tabs only", () => {
@@ -58,34 +74,42 @@ describe("tab labels", () => {
     ).toEqual(["t1", "t10", "t2"]);
   });
 
-  test("readTabLabels validates with a JSON path", () => {
+  test("readTabLabels is lenient: drops stale or invalid entries with warnings, never throws", () => {
     const ids = new Set(["t1", "t2"]);
-    expect(readTabLabels(undefined, ids)).toEqual({});
-    expect(readTabLabels({ t1: "mail" }, ids)).toEqual({ t1: "mail" });
-    const cases = [
-      [[], "tabLabels"],
-      [null, "tabLabels"],
-      [{ t9: "x" }, 'tabLabels["t9"]'],
-      [{ t1: 3 }, 'tabLabels["t1"]'],
-      [{ t1: "" }, 'tabLabels["t1"]'],
-      [{ t1: " padded " }, 'tabLabels["t1"]'],
-    ];
-    for (const [raw, path] of cases) {
-      let err;
-      try {
-        readTabLabels(raw, ids);
-      } catch (e) {
-        err = e;
-      }
-      expect(err, JSON.stringify(raw)).toBeInstanceOf(TabLabelError);
-      expect(/** @type {TabLabelError} */ (err).path).toBe(path);
-      expect(/** @type {TabLabelError} */ (err).code).toBe("invalid");
+    expect(readTabLabels(undefined, ids)).toEqual({ labels: {}, warnings: [] });
+    expect(readTabLabels({ t1: "mail" }, ids)).toEqual({ labels: { t1: "mail" }, warnings: [] });
+    for (const raw of [[], null, "x", 3]) {
+      const r = readTabLabels(raw, ids);
+      expect(r.labels).toEqual({});
+      expect(r.warnings.map((w) => w.path)).toEqual(["tabLabels"]);
     }
+    const r = readTabLabels({ t9: "stale", t1: 3, t2: " padded\u202E ", ["__proto__"]: "x" }, ids);
+    expect(r.labels).toEqual({ t2: "padded" });
+    expect(Object.isFrozen(r.labels)).toBe(true);
+    expect(r.warnings.map((w) => w.path)).toEqual([
+      'tabLabels["t9"]',
+      'tabLabels["t1"]',
+      'tabLabels["t2"]',
+      'tabLabels["__proto__"]',
+    ]);
+    expect(readTabLabels({ t1: "  " }, ids)).toMatchObject({
+      labels: {},
+      warnings: [{ path: 'tabLabels["t1"]' }],
+    });
+  });
+
+  test("property: readTabLabels never throws", () => {
+    fc.assert(
+      fc.property(fc.anything(), (raw) => {
+        const r = readTabLabels(raw, new Set(["t1"]));
+        for (const v of Object.values(r.labels)) expect(normalizeTabLabel(v)).toBe(v);
+      }),
+    );
   });
 
   test("property: normalizeTabLabel is idempotent and labels round-trip", () => {
     fc.assert(
-      fc.property(fc.string({ maxLength: 200 }), (s) => {
+      fc.property(fc.string({ unit: "binary", maxLength: 200 }), (s) => {
         const n = normalizeTabLabel(s);
         expect(normalizeTabLabel(n)).toBe(n);
       }),
@@ -94,7 +118,10 @@ describe("tab labels", () => {
       fc.property(fc.dictionary(fc.constantFrom("t1", "t2", "t3"), fc.string()), (raw) => {
         let l = {};
         for (const [k, v] of Object.entries(raw)) l = setTabLabel(l, k, v);
-        expect(readTabLabels(writeTabLabels(l), new Set(["t1", "t2", "t3"]))).toEqual(l);
+        expect(readTabLabels(writeTabLabels(l), new Set(["t1", "t2", "t3"]))).toEqual({
+          labels: l,
+          warnings: [],
+        });
       }),
     );
   });

@@ -7,6 +7,7 @@
  * every view shows (rename > title > URL). Persisted as the optional `tabLabels` field of the
  * state snapshot (schema v1, additive). No-ops return the input itself.
  */
+import { graphemes } from "./textwidth.mjs";
 
 /** @typedef {Readonly<Record<string, string>>} TabLabels */
 
@@ -15,32 +16,25 @@ export const MAX_TAB_LABEL = 100;
 /** The snapshot field that carries the labels. */
 export const TAB_LABELS_FIELD = "tabLabels";
 
-export class TabLabelError extends Error {
-  /**
-   * @param {"invalid"} code
-   * @param {string} path JSON path of the offending value
-   * @param {string} message
-   */
-  constructor(code, path, message) {
-    super(`${path}: ${message}`);
-    this.name = "TabLabelError";
-    this.code = code;
-    this.path = path;
-  }
-}
+/** @typedef {{ path: string, message: string }} TabLabelWarning */
+
+const EMOJI_START = /^\p{Extended_Pictographic}/u;
 
 /**
- * Control characters and whitespace runs become one space; trimmed; at most MAX_TAB_LABEL code
- * points.
+ * The label as stored and shown. Format characters (`\p{Cf}`: bidi overrides and isolates, zero
+ * width spaces, BOM, tags) are removed, except inside an emoji sequence (ZWJ, tag flags), so a
+ * label cannot be invisible or reorder its neighbours. Control characters and whitespace runs
+ * become one space; trimmed; at most MAX_TAB_LABEL grapheme clusters.
  * @param {string} text
  * @returns {string}
  */
 export function normalizeTabLabel(text) {
-  const flat = String(text)
-    .replace(/[\s\p{Cc}]+/gu, " ")
-    .trim();
-  const points = [...flat];
-  return points.length > MAX_TAB_LABEL ? points.slice(0, MAX_TAB_LABEL).join("").trimEnd() : flat;
+  const visible = graphemes(String(text))
+    .map(({ segment }) => (EMOJI_START.test(segment) ? segment : segment.replace(/\p{Cf}/gu, "")))
+    .join("");
+  const flat = visible.replace(/[\s\p{Cc}]+/gu, " ").trim();
+  const cut = graphemes(flat)[MAX_TAB_LABEL];
+  return cut ? flat.slice(0, cut.index).trimEnd() : flat;
 }
 
 /**
@@ -121,25 +115,36 @@ export function writeTabLabels(labels) {
 }
 
 /**
- * Validates the snapshot's `tabLabels` field (undefined = no renames).
+ * Reads the snapshot's `tabLabels` field (undefined = no renames) leniently, so a bad label never
+ * fails a session restore: entries for unknown tabs or with non-string or empty values are dropped,
+ * labels that are not normalised are normalised, and each such fix is reported as a warning.
  * @param {unknown} raw
  * @param {ReadonlySet<string>} tabIds every tab in the snapshot
- * @returns {TabLabels}
+ * @returns {{ labels: TabLabels, warnings: TabLabelWarning[] }}
  */
 export function readTabLabels(raw, tabIds) {
-  if (raw === undefined) return freeze({});
+  /** @type {TabLabelWarning[]} */
+  const warnings = [];
+  if (raw === undefined) return { labels: freeze({}), warnings };
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new TabLabelError("invalid", TAB_LABELS_FIELD, "must be an object of tab id → label");
+    warnings.push({ path: TAB_LABELS_FIELD, message: "not an object of tab id → label; ignored" });
+    return { labels: freeze({}), warnings };
   }
-  /** @type {Record<string, string>} */
-  const out = {};
+  /** @type {[string, string][]} */
+  const kept = [];
   for (const [id, value] of Object.entries(raw)) {
-    const at = `${TAB_LABELS_FIELD}[${JSON.stringify(id)}]`;
-    if (!tabIds.has(id)) throw new TabLabelError("invalid", at, "not a tab of this snapshot");
-    if (typeof value !== "string" || !value || normalizeTabLabel(value) !== value) {
-      throw new TabLabelError("invalid", at, "must be a non-empty, normalised label");
+    const path = `${TAB_LABELS_FIELD}[${JSON.stringify(id)}]`;
+    if (!tabIds.has(id)) {
+      warnings.push({ path, message: "not a tab of this snapshot; dropped" });
+      continue;
     }
-    out[id] = value;
+    const label = typeof value === "string" ? normalizeTabLabel(value) : "";
+    if (!label) {
+      warnings.push({ path, message: "not a non-empty string; dropped" });
+      continue;
+    }
+    if (label !== value) warnings.push({ path, message: "not normalised; normalised" });
+    kept.push([id, label]);
   }
-  return freeze(out);
+  return { labels: freeze(Object.fromEntries(kept)), warnings };
 }
