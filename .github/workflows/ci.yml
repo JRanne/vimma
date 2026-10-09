@@ -6,6 +6,10 @@ on:
   push:
     branches: [main]
   pull_request:
+    # ready_for_review: PRs opened with GITHUB_TOKEN (claude.yml, upstream.yml) do not trigger
+    # workflows; marking them ready (or a manual run below) starts CI as the owner.
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -56,6 +60,10 @@ jobs:
           FROM: ${{ github.event.pull_request.base.sha }}
           TO: ${{ github.event.pull_request.head.sha }}
         run: npx commitlint --from "$FROM" --to "$TO" --verbose
+
+      - name: commitlint (manual run, branch vs main)
+        if: github.event_name == 'workflow_dispatch'
+        run: npx commitlint --from origin/main --to HEAD --verbose
 
       - name: commitlint (pushed range)
         if: github.event_name == 'push'

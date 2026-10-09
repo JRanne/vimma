@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Spec m0-pipeline: npm + GitHub Actions, weekly; patch/minor automerged after CI.",
+  "description": "Spec m0-pipeline: npm + GitHub Actions, weekly; npm patch/minor automerged after CI.",
   "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
   "enabledManagers": ["npm", "github-actions"],
   "timezone": "Europe/Helsinki",
@@ -15,6 +15,11 @@
       "matchUpdateTypes": ["patch", "minor", "pin", "digest"],
       "automerge": true,
       "automergeType": "pr"
+    },
+    {
+      "description": "Never automerge GitHub Actions: workflows hold write tokens and the Claude secret.",
+      "matchManagers": ["github-actions"],
+      "automerge": false
     },
     {
       "description": "Surfer drives the Firefox build; a build on the runner must prove it first.",
