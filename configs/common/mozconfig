@@ -16,3 +16,9 @@ export MOZ_SOURCE_CHANGESET=${changeset}
 
 # Bootstrap
 ac_add_options --enable-bootstrap
+
+# Mozilla services (docs/specs/m0-mozilla-services.md). No crash reporter: its server is
+# crash-reports.mozilla.com and no pref changes that; M6 brings opt-in reporting to our own.
+ac_add_options --disable-crashreporter
+# Telemetry does not upload because MOZILLA_OFFICIAL is unset (MOZ_TELEMETRY_REPORTING defaults
+# to it). MOZ_DATA_REPORTING is computed by configure, so neither can be set with mk_add_options.

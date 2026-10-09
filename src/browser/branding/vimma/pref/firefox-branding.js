@@ -22,3 +22,41 @@ pref("app.releaseNotesURL.prompt", "");
 // Number of usages of the web console.
 // If this is less than 5, then pasting code into the web console is disabled
 pref("devtools.selfxss.count", 5);
+
+// Mozilla services (spec m0-mozilla-services). Defaults only, never locked: the user can turn any
+// of these back on in about:config or Settings. Remote Settings (CRLite, blocklists), Safe
+// Browsing, Sync and add-on installs from AMO keep Firefox's defaults on purpose.
+
+// Studies and experiments: Normandy recipes, Nimbus opt-out studies and rollouts.
+pref("app.normandy.enabled", false);
+pref("app.normandy.api_url", "");
+pref("app.shield.optoutstudies.enabled", false);
+pref("nimbus.rollouts.enabled", false);
+
+// Nothing uploads (MOZ_TELEMETRY_REPORTING unset, Glean upload disabled at build time), so the
+// data-collection switches say so and the "sends data to Mozilla" notice does not appear.
+pref("datareporting.healthreport.uploadEnabled", false);
+pref("datareporting.usage.uploadEnabled", false);
+pref("datareporting.policy.dataSubmissionEnabled", false);
+
+// Crash reports: the reporter is not built (configs/common/mozconfig); opt-in when M6 brings it
+// back with our own server.
+pref("browser.tabs.crashReporting.sendReport", false);
+
+// Sponsored content on the new tab, and the stories feed the sponsored stories ride in.
+// Sponsored address-bar suggestions: vimma/services/MozillaServices.sys.mjs.
+pref("browser.newtabpage.activity-stream.showSponsored", false);
+pref("browser.newtabpage.activity-stream.system.showSponsored", false);
+pref("browser.newtabpage.activity-stream.showSponsoredTopSites", false);
+pref("browser.newtabpage.activity-stream.feeds.section.topstories", false);
+pref("browser.topsites.contile.enabled", false);
+
+// Remote messaging (what's new, feature and add-on recommendations) and Mozilla product promos.
+// The provider is upstream's value with "enabled": false; carry upstream changes on rebase.
+// Kept on one line: wrapped, prettier adds a trailing comma that libpref's parser rejects.
+// prettier-ignore
+pref("browser.newtabpage.activity-stream.asrouter.providers.cfr", "{\"id\":\"cfr\",\"enabled\":false,\"type\":\"remote-settings\",\"collection\":\"cfr\",\"updateCycleInMs\":3600000}");
+pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.addons", false);
+pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features", false);
+pref("browser.vpn_promo.enabled", false);
+pref("browser.preferences.moreFromMozilla", false);
