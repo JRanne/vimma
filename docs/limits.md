@@ -108,7 +108,8 @@ Workspaces are not built yet; these are the limits their design accepts
   containers and their data (Firefox's behaviour).
 - A corrupt `containers.json` makes Firefox reset containers; workspace logins can be lost and
   tabs come back marked `foreign`.
-- Pinned tabs are not supported: a pinned tab is unpinned. A tab sharing camera, microphone or
+- Pinned tabs are not supported: a pinned tab is unpinned. Until switching lands (M3 sub-spec
+  2b) a tab opened pinned stays in no container. A tab sharing camera, microphone or
   screen cannot be hidden and stays visible in other workspaces while it shares.
 - Tabs of hidden workspaces keep playing audio and are never unloaded automatically.
 - Closing the last tab opens a new tab instead of closing the window
@@ -117,7 +118,12 @@ Workspaces are not built yet; these are the limits their design accepts
 - Restoring workspaces needs `browser.startup.page = 3` (Vimma's default); with any other value
   tabs are not restored and workspaces start empty.
 - New tabs get no preloaded `about:newtab`: Firefox preloads only for tabs without a container,
-  so Vimma turns preloading off (`browser.newtab.preload`).
+  so Vimma turns preloading off (`browser.newtab.preload`). A new tab paints about 40 ms later
+  than with a preload (measured 76 ms against 35 ms, median of 20).
+- On a new profile the very first tab opens before the first workspace exists, so it has no
+  container and is marked `foreign`; later tabs and windows open in the workspace's container.
+- `browser.link.force_default_user_context_id_for_external_opens` sends links from other apps to
+  the active workspace's container, not to "no container".
 - Firefox Sync no longer syncs `browser.startup.page` or `privacy.userContext.enabled` to Vimma.
 - After 3 minutes without input, the session is saved hourly, so a crash can lose an hour of
   changes made by pages (tabs they opened), as in Firefox.

@@ -1,8 +1,8 @@
 # Spec: m3-workspaces
 
-Status: research and plan; split into sub-specs (see Breakdown). Sub-spec 1 (store) implemented,
-awaiting review (see Settled) · Milestone: M3 · Area: host
-(`src/browser/base/content/vimma/workspaces/`, `ui/`), one upstream patch file (two hunks)
+Status: research and plan; split into sub-specs (see Breakdown). Sub-spec 1 (store) merged;
+sub-spec 2a (routing) implemented, awaiting review (see Settled) · Milestone: M3 · Area: host
+(`src/browser/base/content/vimma/workspaces/`, `ui/`), four upstream patch files (five hunks)
 
 Plan §6 M3: container-backed workspaces; hidden tabs; `ctrl+i`/`ctrl+u`; a `prefix+w` picker; a
 `<leader>n` side panel with `panel` mode; SessionStore persistence and restore; `[workspaces]`
@@ -300,6 +300,13 @@ copying it across would leak data between containers. We do not.
      `lastActive` workspace (read synchronously on first use, as `ContextualIdentityService`
      does with `ensureDataReady`); `null` for private windows and popups, and when workspaces are
      disabled, so upstream behaviour is untouched there.
+   - _A third one-line hunk_, `BrowserDOMWindow-sys-mjs.patch` (found in 2a): an external link
+     does not reach `addTab` with no container. `#getContentWindowOrOpenURI`
+     (`browser/modules/BrowserDOMWindow.sys.mjs:256-259`) passes
+     `guessUserContextId(uri) || DEFAULT_USER_CONTEXT_ID`, an explicit 0, so hunk 1's `??=` never
+     fires. The hunk makes the fallback `null`; `addTab` then applies hunk 1. A guess (a visible
+     tab on the same host) still wins. The research above ("returns null when nothing matches")
+     was right about the helper, not about its caller.
    - A runtime wrap of `addTab` is rejected for the reason m0-tabstrip-hidden gives: a patch fails
      loudly at `surfer import`, a wrap breaks silently.
 4. **Side panel: our own box**, inserted from JS into `#browser`, not `SidebarController` (answers
@@ -554,6 +561,9 @@ allowed).
 | Patch                                                        | Hunks | Why                                                                                                                                                                                                                                 |
 | ------------------------------------------------------------ | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/browser/components/tabbrowser/Tabbrowser-sys-mjs.patch` | 2     | `addTab`, after `openerTab` (3767-3772): `userContextId ??= openerTab?.userContextId ?? <our default>`. `#setupInitialBrowserAndTab`, after the `openWindowInfo` override (698-700): `userContextId ??= <our default>`. Decision 3. |
+| `src/browser/modules/BrowserDOMWindow-sys-mjs.patch`         | 1     | `#getContentWindowOrOpenURI` (256-259): no container guess for an external link → `null`, not 0, so `addTab` routes it. Decision 3, found in 2a.                                                                                    |
+| `src/browser/modules/URILoadingHelper-sys-mjs.patch`         | 1     | `openLinkIn`, before `updatePrincipals`: a new window with no container takes the opening page's, else the workspace's. Found in 2a's review.                                                                                       |
+| `src/browser/base/content/browser-init-js.patch`             | 1     | `_handleURIToLoad`: no `arguments[5]` → the first tab's container, not 0. Found in 2a's review.                                                                                                                                     |
 
 ADR-003 register line, added by sub-spec 2a with the patch: "`Tabbrowser-sys-mjs.patch`: tabs
 and a window's first tab opened with no container take the active workspace's container
@@ -697,6 +707,53 @@ dependency for 4b, 5 and parts of 4a.
   round trip, a newer file left byte-for-byte, adopt/replace without deleting, confirmed delete
   removing container and cookie (after `clear-origin-attributes-data`), containers off, private
   windows. Mutation check: skipping `CIS.remove` fails the delete task.
+
+## Settled: sub-spec 2a, m3-workspace-routing (2026-10-09)
+
+- **Patches:** `Tabbrowser-sys-mjs.patch`, two hunks as planned. Hunk 1 (`addTab`, 8 lines) is
+  guarded by `!pinned`: a tab opened pinned keeps upstream's container (decision 11 unpins it in
+  2b). Hunk 2 (`#setupInitialBrowserAndTab`, 4 lines). Plus a third patch file, not planned:
+  `BrowserDOMWindow-sys-mjs.patch` (1 line, decision 3), because external links passed an
+  explicit 0. Both files have ADR-003 register lines; the two Tabbrowser hunks call
+  `WorkspaceStore.defaultUserContextId(window)` (imported on use).
+- **Startup wiring:** `vimma.js` calls `WorkspaceStore.init()` once per app (not awaited, in a
+  `catch`), so every profile now gets `main` and its container at first start. The per-window
+  active workspace is still `setActive` (2b's `WindowWorkspaces` will call it); until then every
+  window routes to `lastActive`, which is `main`. `defaultUserContextId` now reads the file
+  synchronously whenever JSONFile has not loaded it yet, not only before `init()` starts: the first
+  window's first tab is set up while `init()` is still loading. On a brand-new profile that tab
+  still predates `main` and opens in container 0 (limits).
+- **Preload:** `browser.newtab.preload = false` (decision 13). Measured in the lane (artifact
+  build, headless, 16 threads): `ctrl+t` to the new tab's `about:newtab` loaded plus one animation
+  frame, median of 20 after a warm-up. Vimma (container, no preload): **76 ms** (71-82). Stock
+  behaviour in the same build (container 0, preload on, refilled after each tab): **35 ms**
+  (34-35). +41 ms, within the 100 ms criterion: the decision stands.
+- **Tests:** `browser_vimma_workspace_routing.js`: gate 1 (a cookie and a localStorage key set in
+  one workspace's container are invisible to the same page in another; `Services.cookies` has it
+  only under the first; the first still sees both), startup wiring (`main`, `ctrl+t` into it),
+  `ctrl+t`, an external link, a lazy tab and its SessionStore state, a new window's first tab, a
+  `target=_blank` link and a `relatedToCurrent` tab keeping the opener's container, explicit
+  containers (including 0), a pinned tab, a private window. Red before the patch (10 failures),
+  green after; the whole `tests/browser/` suite passes. Mutation check: dropping
+  `openerTab?.userContextId ??` from hunk 1 fails the `relatedToCurrent` assertion (a link click
+  passes its container explicitly, so it alone did not catch it).
+- **Privacy review (round 2):** two more paths opened in container 0, so two more one-hunk
+  patches. `URILoadingHelper-sys-mjs.patch`: `openLinkIn(url, "window")` (context-menu "Open Link
+  in New Window", bookmark and URL-bar new windows) packed an undefined container into
+  `window.arguments[5]` as an explicit 0; the hunk, before `updatePrincipals`, fills it with the
+  opening page's container (a content triggering principal) or else the active workspace's,
+  never for a private window. `browser-init-js.patch`: a new window's URL with no
+  `arguments[5]` (an external link opening a window) loaded with container 0 and so opened a
+  second tab beside the routed first tab; it now uses the first tab's container. The context
+  menu needs no patch of its own: its triggering principal carries the page's container. The
+  store caches `lastActive`'s container in `vimma.workspaces.startupUserContextId` on every
+  save, so a start routes its first tab without the synchronous file read (the read stays as
+  the fallback). Tests: context-menu "Open Link in New Window" from a page in another container
+  than the active one, `openTrustedLinkIn(url, "window")`, an external link opened as a window
+  (one tab), and the cache pref; all red before, green after.
+- **Not done here:** `foreign` marking needs the window model (2b). Bookmarks and `alt+enter` go
+  through the same `addTab` path as `ctrl+t` and are not tested separately. Nothing
+  user-visible yet (no switching), so no guide change.
 
 ## Out of scope
 

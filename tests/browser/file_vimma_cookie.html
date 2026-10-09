@@ -1,0 +1,22 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Fixture for browser_vimma_workspace_routing.js: `?set=<value>` signs in (a session cookie and
+   - a localStorage key); without it the page only reads. The link opens another tab from it. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vimma cookie page</title>
+    <script>
+      const value = new URLSearchParams(location.search).get("set");
+      if (value) {
+        document.cookie = `session=${value}; path=/; SameSite=Lax`;
+        localStorage.setItem("session", value);
+      }
+    </script>
+  </head>
+  <body>
+    <a id="link" href="file_vimma_cookie.html?from=link" target="_blank">open another</a>
+  </body>
+</html>

@@ -1,0 +1,13 @@
+diff --git a/browser/base/content/browser-init.js b/browser/base/content/browser-init.js
+index 28ac9595a84075885db03428b4c73cda8f10f26c..34cf423dee799ca8e4182261bd8007d8f203a4d9 100644
+--- a/browser/base/content/browser-init.js
++++ b/browser/base/content/browser-init.js
+@@ -847,7 +847,7 @@ var gBrowserInit = {
+         let userContextId =
+           window.arguments[5] != undefined
+             ? window.arguments[5]
+-            : Ci.nsIScriptSecurityManager.DEFAULT_USER_CONTEXT_ID;
++            : gBrowser.selectedTab.userContextId; // Vimma: the first tab's (m3-workspaces)
+ 
+         let hasValidUserGestureActivation = undefined;
+         let textDirectiveUserActivation = undefined;

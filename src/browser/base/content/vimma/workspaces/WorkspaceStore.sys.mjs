@@ -38,6 +38,8 @@ export const DEFINITIONS_FILE = "vimma-workspaces.json";
 /** Observer topic: the definitions changed (subject null, data a JSON list of workspace ids). */
 export const CHANGED_TOPIC = "vimma-workspaces-changed";
 const CONTAINERS_PREF = "privacy.userContext.enabled";
+/** `lastActive`'s container, so a start routes its first tab without reading the file. */
+const STARTUP_PREF = "vimma.workspaces.startupUserContextId";
 
 /** @param {string} code @param {string} message */
 const storeError = (code, message) => Object.assign(new Error(message), { code });
@@ -59,6 +61,8 @@ export class WorkspaceStoreImpl {
   #path;
   #config;
   #enabled;
+  /** @type {string | null} */
+  #cachePref;
   /** @type {any} */
   #file = null;
   /** @type {Promise<void> | null} */
@@ -69,16 +73,19 @@ export class WorkspaceStoreImpl {
 
   /**
    * @param {{ path?: string, config?: readonly Workspace[],
-   *   enabled?: () => boolean, saveDelayMs?: number }} [options]
+   *   enabled?: () => boolean, saveDelayMs?: number, cachePref?: string | null }} [options]
    *   `config` is the resolved `[workspaces]` (core `mergeWithDefaults(...).workspaces`); the M5
    *   host passes it once it reads `config.toml`. `enabled` reads the containers pref.
+   *   `cachePref` (the app's store only) caches `lastActive`'s container for the next start.
    */
   constructor({
     path = PathUtils.join(PathUtils.profileDir, DEFINITIONS_FILE),
     config = [],
     enabled = () => Services.prefs.getBoolPref(CONTAINERS_PREF, true),
     saveDelayMs,
+    cachePref = null,
   } = {}) {
+    this.#cachePref = cachePref;
     this.#path = path;
     this.#config = config;
     this.#enabled = enabled;
@@ -192,6 +199,10 @@ export class WorkspaceStoreImpl {
     const file = this.#open();
     file.data = this.definitions;
     file.saveSoon();
+    if (this.#cachePref) {
+      const last = this.definitions.workspaces.find((w) => w.id === this.definitions.lastActive);
+      Services.prefs.setIntPref(this.#cachePref, last?.userContextId ?? 0);
+    }
   }
 
   /** @param {string[]} ids */
@@ -266,7 +277,7 @@ export class WorkspaceStoreImpl {
    * The container a tab or window opened without one takes (decision 3): the window's active
    * workspace's, else the most recent browser window's, else `lastActive`'s. Null for private
    * windows and popups, and when workspaces are disabled, so upstream behaviour stays there.
-   * Before init it reads the file synchronously (as ContextualIdentityService does).
+   * Before init has loaded the file it reads it synchronously (as ContextualIdentityService does).
    * @param {any} win
    * @returns {number | null}
    */
@@ -275,12 +286,16 @@ export class WorkspaceStoreImpl {
     if (win && (lazy.PrivateBrowsingUtils.isWindowPrivate(win) || win.toolbar?.visible === false)) {
       return null;
     }
-    if (!this.#ready && !this.#file?.dataReady) this.#readSync();
     const top = lazy.BrowserWindowTracker.getTopWindow({ private: false });
-    const id =
-      (win && this.#active.get(win)) ??
-      (top && this.#active.get(top)) ??
-      this.definitions.lastActive;
+    const active = (win && this.#active.get(win)) ?? (top && this.#active.get(top));
+    // Also while init() is still loading: a window's first tab at startup is set up before it
+    // ends. The container cached at the last save spares the synchronous read.
+    if (!this.#file?.dataReady) {
+      const cached = this.#cachePref ? Services.prefs.getIntPref(this.#cachePref, 0) : 0;
+      if (!active && cached > 0) return cached;
+      this.#readSync();
+    }
+    const id = active ?? this.definitions.lastActive;
     return this.definitions.workspaces.find((w) => w.id === id)?.userContextId ?? null;
   }
 
@@ -301,4 +316,4 @@ export class WorkspaceStoreImpl {
 }
 
 /** The app's store. */
-export const WorkspaceStore = new WorkspaceStoreImpl();
+export const WorkspaceStore = new WorkspaceStoreImpl({ cachePref: STARTUP_PREF });
