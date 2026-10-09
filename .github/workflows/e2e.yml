@@ -22,6 +22,7 @@ on:
       - "package.json"
       - "package-lock.json"
       - "tools/artifact-build/**"
+      - "tools/branding/**"
       - "tools/mochitest.mjs"
       - "tools/sync-core.mjs"
       - "tools/version-files/**"
@@ -79,6 +80,10 @@ jobs:
 
       - name: Import our patches and sources
         run: npm run import
+
+      # Needs engine/ (upstream's unofficial brand), so it runs here; the CI job skips it.
+      - name: Branding prefs keep upstream's (tools/branding/test)
+        run: npx vitest run tools/branding/
 
       - name: Disk guard (artifact build and tests need ~1.2 GB)
         run: |
