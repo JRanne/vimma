@@ -1,6 +1,6 @@
 # Spec: m0-user-agent
 
-Status: draft · Milestone: M0 · Area: build config (`src/browser/moz-configure.patch`)
+Status: implemented, awaiting review · Milestone: M0 · Area: build config (`src/browser/moz-configure.patch`)
 Prerequisite: m0-branding merged (brand, basename and vendor are Vimma; `displayVersion` 0.1.0).
 
 ## User story
@@ -59,6 +59,11 @@ Vimma/0.1.0`. After: `… Gecko/20100101 Firefox/157.0`, byte-identical to Firef
   `isCompatibleWith` compares the toolkit id against `appinfo.platformVersion` (157.0.1)
   (`XPIDatabase.sys.mjs`). The blocklist compares `platformVersion` too. So `strict_min_version`
   works.
+
+- **Build cost**: after `npm run import`, `./mach build` reconfigured and rebuilt the HTTP handler
+  in 101 s; no clobber. `vimma --version` still prints `Vimma Vimma 0.1.0`.
+- **Red/green**: before the patch the mochitest failed 6 of 8 checks (chrome and content UA
+  `… Gecko/20100101 Vimma/0.1.0`); after it, 8/8 pass with `… Gecko/20100101 Firefox/157.0`.
 
 ## Open issues (versioning work, plan §7 / M6)
 
