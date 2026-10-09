@@ -75,9 +75,10 @@ regression here, only a local full build or the nightly can):
 | `MOZ_CRASHREPORTER`       | libxul                                                                                                         | on                                                                                                                     | off (`browser_vimma_crash_reporter.js`, skipped here) |
 
 Not a gap: `MOZ_USER_DIR` (`nsXREDirProvider.cpp`, the legacy profile-root fallback) is
-`"mozilla"` in both builds; the full build's `mozilla-config.h` has it too, so the
-`export MOZ_USER_DIR="Vimma"` in `configs/common/mozconfig` has no effect. The profile path
-itself comes from the app data's vendor and name, which tests take from our `application.ini`.
+`"mozilla"` in both builds (configure sets it from `--with-user-appdir`, never from the
+environment); the dead `export MOZ_USER_DIR` line has left `configs/common/mozconfig` (spec
+m0-branding). The profile path itself comes from the app data's vendor and name, which tests take
+from our `application.ini`.
 
 `AppConstants.MOZ_APP_VERSION_DISPLAY` (JS) is ours in both builds, which is why
 `browser_vimma_app_version.js` passes; the C++ copy is the gap. `MOZ_APP_VENDOR` reaches the
