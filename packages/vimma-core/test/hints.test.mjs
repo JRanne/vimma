@@ -9,6 +9,10 @@ import {
   hintKey,
   visibleHints,
   HintError,
+  parseHintReply,
+  HINT_REPLY_MAX_TARGETS,
+  HINT_REPLY_MAX_FRAMES,
+  HINT_REPLY_MAX_HREF,
 } from "../src/hints.mjs";
 import { ACTIONS } from "../src/actions.mjs";
 import { parseKey } from "../src/keys.mjs";
@@ -314,5 +318,94 @@ describe("hint mode", () => {
     expect(Object.isFrozen(s.hints)).toBe(true);
     hintKey(s, key("l"));
     expect(s.typed).toBe("");
+  });
+});
+
+describe("parseHintReply: untrusted Vimma:CollectHints replies from a content process", () => {
+  const rect = { x: 10, y: 20, width: 30, height: 12 };
+  const good = {
+    targets: [
+      { id: 0, rect, kind: "link", href: "https://example.com/" },
+      { id: 1, rect, kind: "input" },
+      { id: 2, rect, kind: "click" },
+    ],
+    frames: [{ id: 42, rect }],
+    ms: 3.5,
+  };
+
+  test("the caps are 5,000 targets, 64 frames and 8 KiB hrefs", () => {
+    expect([HINT_REPLY_MAX_TARGETS, HINT_REPLY_MAX_FRAMES, HINT_REPLY_MAX_HREF]).toEqual([
+      5000, 64, 8192,
+    ]);
+  });
+
+  test("a well-formed reply → a fresh copy with only the known fields", () => {
+    const extra = {
+      ...good,
+      evil: 1,
+      targets: good.targets.map((t) => ({ ...t, label: "x", rect: { ...t.rect, z: 1 } })),
+    };
+    const parsed = parseHintReply(extra);
+    expect(parsed).toEqual(good);
+    expect(parsed?.targets[0]?.rect).not.toBe(extra.targets[0]?.rect);
+  });
+
+  test("an empty frame is fine", () => {
+    expect(parseHintReply({ targets: [], frames: [], ms: 0 })).toEqual({
+      targets: [],
+      frames: [],
+      ms: 0,
+    });
+  });
+
+  const t0 = good.targets[0];
+  test.each([
+    ["null", null],
+    ["an array", []],
+    ["no ms", { targets: [], frames: [] }],
+    ["ms not finite", { ...good, ms: Infinity }],
+    ["a negative ms", { ...good, ms: -1 }],
+    ["targets not an array", { ...good, targets: {} }],
+    ["frames not an array", { ...good, frames: "x" }],
+    [
+      "too many targets",
+      { ...good, targets: Array.from({ length: 5001 }, (_, id) => ({ ...t0, id })) },
+    ],
+    ["too many frames", { ...good, frames: Array.from({ length: 65 }, (_, id) => ({ id, rect })) }],
+    ["a duplicate id", { ...good, targets: [t0, t0] }],
+    ["a negative id", { ...good, targets: [{ ...t0, id: -1 }] }],
+    ["a fractional id", { ...good, targets: [{ ...t0, id: 0.5 }] }],
+    ["an unknown kind", { ...good, targets: [{ ...t0, kind: "script" }] }],
+    ["a NaN coordinate", { ...good, targets: [{ ...t0, rect: { ...rect, x: NaN } }] }],
+    ["a huge coordinate", { ...good, targets: [{ ...t0, rect: { ...rect, y: 1e7 } }] }],
+    ["a zero width", { ...good, targets: [{ ...t0, rect: { ...rect, width: 0 } }] }],
+    ["a string height", { ...good, targets: [{ ...t0, rect: { ...rect, height: "9" } }] }],
+    ["an href not a string", { ...good, targets: [{ ...t0, href: 1 }] }],
+    ["a long href", { ...good, targets: [{ ...t0, href: "h".repeat(8193) }] }],
+    ["a frame id not an integer", { ...good, frames: [{ id: "42", rect }] }],
+    [
+      "a duplicate frame id",
+      {
+        ...good,
+        frames: [
+          { id: 42, rect },
+          { id: 42, rect },
+        ],
+      },
+    ],
+    ["a negative frame id", { ...good, frames: [{ id: -1, rect }] }],
+    ["a frame with no rect", { ...good, frames: [{ id: 42 }] }],
+  ])("%s → null", (_, value) => {
+    expect(parseHintReply(value)).toBeNull();
+  });
+
+  test("a throwing getter → null, not an exception", () => {
+    const hostile = {
+      ...good,
+      get targets() {
+        throw new Error("boom");
+      },
+    };
+    expect(parseHintReply(hostile)).toBeNull();
   });
 });

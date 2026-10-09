@@ -28,7 +28,7 @@ Status: implemented (core), awaiting review; host wiring pending · Milestone: M
 | Module         | Exports                                                                                                                                                          |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `editable.mjs` | `isEditable`, `insertModeAfterFocus`, `matchSiteRule`, `TEXT_INPUT_EXCLUDED_TYPES`, `EDITABLE_ROLES`, `KNOWN_EDITORS`, `INSERT_SITE_MODES`, `INSERT_TRIGGERS`    |
-| `hints.mjs`    | `DEFAULT_HINT_CHARS`, `HINT_ACTIONS`, `hintLabels`, `orderTargets`, `startHints`, `hintKey`, `visibleHints`, `HintError`                                         |
+| `hints.mjs`    | `DEFAULT_HINT_CHARS`, `HINT_ACTIONS`, `hintLabels`, `orderTargets`, `startHints`, `hintKey`, `visibleHints`, `HintError`, `parseHintReply` (m1-hints)            |
 | `cmdline.mjs`  | `COMMANDS`, `PENDING_ACTIONS`, `parseCommandLine`, `completeCommandLine`, `createHistory`, `pushHistory`, `historyPrevious`, `historyNext`, `resetHistoryCursor` |
 | `escape.mjs`   | `resolveEscape`                                                                                                                                                  |
 | `actions.mjs`  | changed: `close_pane` reads "Close pane; the last pane closes the tab"                                                                                           |
@@ -120,8 +120,8 @@ their focus element `aria-readonly` (CodeMirror 6) or `readonly` (Monaco's texta
 /** @typedef {{ match: string, insert: InsertSiteMode }} InsertSiteRule */
 ```
 
-Planned config (schema 2, with an identity migration from 1, in the M1 host spec; not in this
-PR):
+Config (schema 2, with an identity migration from 1; validated in core since
+[m3-m4-core-prep](m3-m4-core-prep.md), read by the M1 host spec):
 
 ```toml
 schema = 2

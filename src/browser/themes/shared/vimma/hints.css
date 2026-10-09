@@ -1,0 +1,35 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* Link-hint labels (ui/hint-overlay.mjs), in chrome over the page's <browser>. Colours are the
+ * theme tokens of m5-core-config-and-theme, with Tokyo Night's yellow until M5 sets them. */
+
+#vimma-hints {
+  position: relative;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+  /* Thousands of labels: their layout and paint stay inside the layer, which the stack sizes. */
+  contain: strict;
+
+  & .vimma-hint {
+    position: absolute;
+    padding: 0 3px;
+    border-radius: 3px;
+    background: var(--vimma-hint-bg, #e0af68);
+    color: var(--vimma-hint-fg, #1a1b26);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+    font: bold 11px/1.4 monospace;
+    text-transform: uppercase;
+    white-space: nowrap;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  & .vimma-hint-typed {
+    opacity: 0.45;
+  }
+}

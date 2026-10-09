@@ -157,7 +157,8 @@ below the top - "" == "w2:word"`, `a match in the cross-origin frame - "" == "te
   focus after `Enter` in pdf.js (now `open()`, no prefill); pdf.js's debounced search was
   dropped by closing the bar (now `findagain` on `Enter`).
 - Green: `browser_vimma_find.js` 57/0; `--repeat=9` pinned to two CPUs (`taskset -c 0,1`)
-  513/0. Full `tests/browser/` on the artifact build: 868/0.
+  513/0. Full `tests/browser/` on the artifact build: 868/0. After merging main (link hints #37, the split and workspace planners), by
+  hand with rerere off (`VimmaChild` and the docs kept both sides): 1065/0.
 - Mutation: without `VimmaActors.findAnchor(browser)` in `start()`, "/word Enter selects the
   first match below the top" fails with `"w1:word" == "w2:word"` (and the `n`/`N` and `?`
   steps after it); reverted.

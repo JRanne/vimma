@@ -1,0 +1,17 @@
+# Contract fixture: schema-2 errors in the new sections, all reported at once with their lines.
+schema = 2
+
+[modal]
+hint_chars = "aab"
+
+[panes]
+max = 32
+maks = 4
+
+[sites."https://docs.google.com/document"]
+insert = "always"
+
+[sites."example.com"]
+insert = "allways"
+
+[sites."EXAMPLE.com."]

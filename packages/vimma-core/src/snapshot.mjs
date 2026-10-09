@@ -17,6 +17,7 @@
 /** @typedef {(raw: any) => any} SnapshotMigration a step from schema n to n + 1 */
 
 import { MIN_RATIO } from "./panes.mjs";
+import { isWorkspaceId } from "./workspaces.mjs";
 import { pruneTabLabels, readTabLabels, writeTabLabels } from "./tablabels.mjs";
 
 export const SCHEMA_VERSION = 1;
@@ -289,7 +290,7 @@ export function readSnapshot(input, { migrations } = {}) {
   const workspaces = list.map((w, k) => {
     const at = `workspaces[${k}]`;
     if (!isObject(w)) return fail(at, "must be an object");
-    if (!isId(w.id) || ids.has(w.id)) fail(`${at}.id`, "missing or duplicate");
+    if (!isWorkspaceId(w.id) || ids.has(w.id)) fail(`${at}.id`, "missing, malformed or duplicate");
     if (typeof w.name !== "string" || !w.name || w.name !== w.name.trim() || names.has(w.name)) {
       fail(`${at}.name`, "empty, duplicate or with surrounding spaces");
     }

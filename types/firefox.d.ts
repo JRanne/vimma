@@ -4,6 +4,7 @@
 declare const Services: {
   prefs: {
     getBoolPref(name: string, defaultValue?: boolean): boolean;
+    getIntPref(name: string, defaultValue?: number): number;
     setBoolPref(name: string, value: boolean): void;
     prefHasUserValue(name: string): boolean;
     getDefaultBranch(root: string): {
@@ -27,12 +28,33 @@ declare const Services: {
     readonly focusedElement: Element | null;
     readonly focusedContentBrowsingContext: any;
   };
+  // engine/caps/nsIScriptSecurityManager.idl
+  scriptSecurityManager: {
+    checkLoadURIWithPrincipal(principal: unknown, uri: unknown, flags?: number): void;
+  };
+  // engine/dom/events/nsIEventListenerService.idl
+  els: {
+    hasListenersFor(target: EventTarget, type: string): boolean;
+  };
 };
+
+// XPCOM in system modules: interface constants and component constructors.
+declare const Ci: any;
+declare const Components: { Constructor(cid: string, iface: string, init?: string): any };
+
+// engine/dom/chrome-webidl/BrowsingContext.webidl
+declare const BrowsingContext: { get(id: number): any };
+
+// engine/dom/webidl/URL.webidl (chrome-only)
+interface URL {
+  readonly URI: unknown;
+}
 
 // engine/dom/chrome-webidl/ChromeUtils.webidl
 declare const ChromeUtils: {
   importESModule(url: string): any;
   registerWindowActor(name: string, options: object): void;
+  now(): number;
 };
 
 // engine/dom/chrome-webidl/JSWindowActor.webidl
@@ -58,6 +80,18 @@ interface Window {
   readonly windowUtils: {
     readonly AUTHOR_SHEET: number;
     loadSheetUsingURIString(sheetURI: string, type: number): void;
+    nodesFromRect(
+      x: number,
+      y: number,
+      top: number,
+      right: number,
+      bottom: number,
+      left: number,
+      ignoreRootScrollFrame: boolean,
+      flushLayout: boolean,
+      onlyVisible: boolean,
+      transparencyThreshold?: number,
+    ): NodeList;
   };
 }
 

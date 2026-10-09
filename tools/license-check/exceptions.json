@@ -1,9 +1,13 @@
 {
-  "$comment": "Reviewed licence exceptions, keyed by exact name@version so every upgrade is re-checked. Each licence below is permissive (OSI-approved or public-domain-like) but not on the spec allowlist.",
+  "$comment": "Reviewed licence exceptions, keyed by exact name@version so every upgrade is re-checked. Each licence below is permissive (OSI-approved, public-domain-like, or attribution-only data) but not on the spec allowlist.",
   "exceptions": {
     "argparse@2.0.1": {
       "license": "Python-2.0",
       "reason": "PSF licence, permissive; dev-only, via @zen-browser/surfer > xmlbuilder2 > js-yaml"
+    },
+    "caniuse-lite@1.0.30001815": {
+      "license": "CC-BY-4.0",
+      "reason": "browser-support data under an attribution-only licence; dev-only and never shipped, via @stryker-mutator/core > instrumenter > @babel/core > browserslist"
     },
     "minimatch@10.2.6": {
       "license": "BlueOak-1.0.0",
@@ -16,6 +20,10 @@
     "pako@1.0.11": {
       "license": "(MIT AND Zlib)",
       "reason": "MIT and zlib licences, both permissive; dev-only, via surfer > fast-extract"
+    },
+    "tslib@2.8.1": {
+      "license": "0BSD",
+      "reason": "Zero-Clause BSD, public-domain-equivalent; dev-only, via @stryker-mutator/core and rxjs"
     }
   }
 }

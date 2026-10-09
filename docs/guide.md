@@ -68,8 +68,8 @@ in the URL bar, `about:` pages and the PDF viewer.
   The prefix works in every mode and waits for the next key with no timeout. `Esc` cancels it.
 - **The modal layer (Neovim).** Bare keys act on the page depending on the mode: `j`/`k` scroll
   in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page. Planned
-  modes: `visual`/copy (caret and selection), `command` (`:` line), `hint` (link hints) and
-  `panel` (the side panel); `help` is the bindings overlay.
+  modes: `visual`/copy (caret and selection), `command` (`:` line) and `panel` (the side
+  panel); `hint` is link hints and `help` the bindings overlay.
 
 ### Normal and insert mode
 
@@ -108,8 +108,46 @@ cancels it.
 **A binding that does not work yet is never silent once it is Vimma's.** A `ctrl+b` sequence, or
 a count followed by a key (`3H`), whose command is not built yet shows "… not implemented yet"
 in the bottom-right corner for 1.5 s (not while a video or page is fullscreen). A single key
-that is not built yet (`f`, `ctrl+i`, …) is not Vimma's yet: it reaches the page or
+that is not built yet (`r`, `ctrl+i`, …) is not Vimma's yet: it reaches the page or
 Firefox, with no message. The `ctrl+b ?` overlay dims the bindings that do not work yet.
+
+### Link hints
+
+`f` puts a yellow label on everything you could click on screen: links, buttons, form fields,
+and elements the page made clickable (ARIA buttons and tabs, elements with a click handler),
+also inside web components and in frames from other sites. Things off screen, hidden or covered
+by something else (a fixed header, a cookie banner) get no label. Type a label to pick its
+target: a link is followed, a button is pressed, a text field gets focus and the tab is in
+insert mode. Labels use the home row (`a s d f g h j k l`), in reading order: targets near the
+top get the shortest. As you type, labels that no longer match disappear. `Backspace` takes
+back a key and `Esc` leaves hints without doing anything.
+
+`F` labels links only and opens the one you pick in a new tab in the background, so you stay
+on the page and can pick more.
+
+The labels are drawn by the browser, over the page, not inside it: the page cannot see them,
+restyle them or hide them. Apps that draw their own controls on a canvas (Google Docs, Figma,
+maps, games) have nothing to label.
+
+### Find
+
+`/` opens Firefox's find bar at the foot of the page, empty, and searches as you type, in frames
+from other sites, inside web components and in the PDF viewer too. Matches are highlighted and
+counted as in Firefox. The search starts at the top of what you see (or at the selection, if it
+is on screen), as Vim's starts at the cursor.
+
+- **Case:** smartcase. An all lower-case search ignores case (`word` finds `Word`); one capital
+  letter makes it match case (`Word` finds only `Word`). `ctrl+f` uses the same rule.
+- **`Enter`** keeps the match selected and closes the bar; you are back in normal mode. A search
+  that found nothing goes back to where you were, and the status bar says `not found`.
+- **`Esc`** cancels: the bar closes, nothing stays selected and the page scrolls back to where
+  it was when you pressed `/`.
+- **`n` / `N`** jump to the next / previous match without opening the bar, wrapping at the ends.
+  After a search that found nothing they do nothing.
+- **`?`** searches backward: it shows matches as you type, as `/` does, and `Enter` lands on the
+  last match before where you were. After `?`, `n` goes on backward and `N` forward.
+
+`ctrl+f` still opens Firefox's own find bar, where `Enter` goes to the next match.
 
 ## Status bar and which-key
 
@@ -118,7 +156,7 @@ fullscreen, such as a video; browser fullscreen with `F11` keeps it). From the l
 
 - the **mode** badge in the mode's colour: `NORMAL` on a page, `INSERT` while a text field has
   focus (or after `i`), `COMMAND` while you type a `/` search, `HELP` while the `ctrl+b ?`
-  overlay is open, and later `VISUAL`, …;
+  overlay is open, `HINT` while link hints are up, and later `VISUAL`, …;
 - the **pending keys**, e.g. `prefix` after `ctrl+b`;
 - `tab 2/5`: the selected tab and how many there are;
 - the page **title** (your rename, once tab rename lands);
@@ -151,6 +189,7 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `d` / `u`                   | Normal mode: scroll half a page down / up (`ctrl+u` is reserved for workspaces).                                                                              |
 | `gg` / `G`                  | Normal mode: go to the top / bottom of the page.                                                                                                              |
 | `i`                         | Normal mode: focus the first text field and enter insert mode.                                                                                                |
+| `f` / `F`                   | Normal mode: link hints. Type a label to follow it, or, with `F`, to open the link in a background tab. `Backspace` undoes a key, `Esc` cancels.              |
 | `/` / `?`                   | Normal mode: find in the page (below). `Enter` stays on the match, `Esc` goes back to where you were.                                                         |
 | `n` / `N`                   | Normal mode: next / previous match of the last search (`?` reverses them), wrapping around the page.                                                          |
 | `Esc`                       | Insert mode: leave the text field, back to normal mode. In normal mode the page gets `Esc`.                                                                   |
@@ -168,31 +207,10 @@ While the overlay is open it takes every key, so `ctrl+w` cannot close the tab b
 for bindings that do not run yet are dimmed, under a legend that says so. In normal mode bare
 digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 
-### Find
+**Planned:**
 
-`/` opens Firefox's find bar at the foot of the page, empty, and searches as you type, in frames
-from other sites, inside web components and in the PDF viewer too. Matches are highlighted and
-counted as in Firefox. The search starts at the top of what you see (or at the selection, if it
-is on screen), as Vim's starts at the cursor.
-
-- **Case:** smartcase. An all lower-case search ignores case (`word` finds `Word`); one capital
-  letter makes it match case (`Word` finds only `Word`). `ctrl+f` uses the same rule.
-- **`Enter`** keeps the match selected and closes the bar; you are back in normal mode. A search
-  that found nothing goes back to where you were, and the status bar says `not found`.
-- **`Esc`** cancels: the bar closes, nothing stays selected and the page scrolls back to where
-  it was when you pressed `/`.
-- **`n` / `N`** jump to the next / previous match without opening the bar, wrapping at the ends.
-  After a search that found nothing they do nothing.
-- **`?`** searches backward: it shows matches as you type, as `/` does, and `Enter` lands on the
-  last match before where you were. After `?`, `n` goes on backward and `N` forward.
-
-`ctrl+f` still opens Firefox's own find bar, where `Enter` goes to the next match.
-
-### Planned
-
-- **M1, the rest of the modal page layer:** back and forward (`H`/`L`), reload (`r`), link
-  hints (`f`/`F`), the `:` command line and copy mode (`v`, `ctrl+b [`). Until
-  then these keys reach the page as before.
+- **M1, the rest of the modal page layer:** back and forward (`H`/`L`), reload (`r`), the `:`
+  command line and copy mode (`v`, `ctrl+b [`). Until then these keys reach the page as before.
 - **M2, the rest of tabs:** `ctrl+b shift+t` rename (kept across restarts; an empty name
   restores the page title), the `ctrl+b g` picker (`j`/`k` to move, `/` to search titles, URLs,
   workspaces and renames, `Enter` to go, `Esc` to back out).
@@ -213,7 +231,11 @@ Vimma's own preferences today:
 | `vimma.debug.keys`         | unset   | Create it as a boolean set to `true` to log every key Vimma sees (`{ key, mods, mode }`) to the Browser Console (`ctrl+shift+j`; enable its Debug filter). |
 
 **Planned:** `~/.config/vimma/config.toml` (M5) for keys, workspaces and theme. Its validator
-already exists, but the browser does not read the file yet. The control socket and `vimma-ctl`
+already exists, but the browser does not read the file yet. Schema 2 (`schema = 2` at the top)
+also takes `[panes] max` (most panes per workspace, 1 to 16, default 4), `[modal] hint_chars`
+(the characters hint labels are made of, default `"asdfghjkl"`) and `[sites."<host>"] insert`
+(`auto`, `never` or `always`, per site and its subdomains); `packages/vimma-core/defaults.toml`
+lists every key with its default. The control socket and `vimma-ctl`
 (off by default) are also planned.
 
 ## Privacy defaults
