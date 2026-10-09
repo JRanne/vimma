@@ -142,6 +142,8 @@ export const VimmaActors = {
           focusin: { capture: true },
           focusout: { capture: true },
           focus: { capture: true },
+          // Only for an editable document root; a frame never focused has no actor to ask.
+          mousedown: { capture: true, createActor: false },
         },
       },
       allFrames: true,

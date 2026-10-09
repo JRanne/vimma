@@ -25,6 +25,11 @@ delete its line in the same PR.
 - Closed shadow roots in pages are seen (the actor is privileged), but a page script that moves
   focus from a frame to the top page's `<body>` can leave insert on until `Esc`
   ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Limits).
+- `Esc` in a text field leaves insert and does not reach the page; press `Esc` again for the
+  site's own `Esc` (closing an autocomplete or a dialog)
+  ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled).
+- After `Esc` in a `designMode` page, it stays in normal until the next click into it
+  ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled).
 - Link hints label only what the page has as elements: canvas and WebGL apps (Google Docs,
   Figma, maps, games) have nothing to label, and delegated click handlers with no role or
   listener of their own, image-map `<area>` links and pinch-zoomed pages are missed or
@@ -196,6 +201,13 @@ Workspaces are not built yet; these are the limits their design accepts
   `browser_vimma_help_overlay.js` (issue #18).
 - PRs opened by `GITHUB_TOKEN` (upstream bumps, Claude, release-please) do not trigger CI by
   themselves ([runbook](runbook.md)).
+- Firefox bumps are manual after the bot's PR. Plan §4's Claude conflict resolution (≤3 pushes),
+  auto-merge of clean bumps and the auto-approved `security` path are not built. The bump PR
+  carries a dry run of every patch against the new release ([rebase playbook](rebase.md),
+  [m0-rebase-playbook](specs/m0-rebase-playbook.md)).
+- `surfer import` stops at the first patch that fails, and `git apply` has no fuzz: a hunk whose
+  context drifted fails like one whose code is gone. `tools/upstream/patch-check.py` reports
+  every patch and hunk, and tells the two apart ([m0-rebase-playbook](specs/m0-rebase-playbook.md)).
 - No branch protection on `main` (free private plan); write-token jobs could push to it
   ([m0-pipeline](specs/m0-pipeline.md), [runbook](runbook.md)).
 - A change to build config needs a full rebuild of 15–30 min on 16 threads: 927 s

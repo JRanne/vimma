@@ -12,9 +12,11 @@ const { VimmaHost } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
 );
 
-const PAGE =
-  getRootDirectory(gTestPath).replace("chrome://mochitests/content", "https://example.com") +
-  "file_vimma_insert_scroll.html";
+const ROOT = getRootDirectory(gTestPath).replace(
+  "chrome://mochitests/content",
+  "https://example.com",
+);
+const PAGE = ROOT + "file_vimma_insert_scroll.html";
 
 /** Vimma's j/k step (Vimium's scrollStepSize), in CSS pixels. */
 const STEP = 60;
@@ -26,10 +28,11 @@ const UNBOUND = "z";
  * Opens the fixture in a new tab with content focus, records the page's keydowns and waits
  * for normal mode, then runs `fn`.
  * @param {(browser: XULBrowserElement) => Promise<void>} fn
+ * @param {string} [url]
  */
-async function withPage(fn) {
+async function withPage(fn, url = PAGE) {
   await SpecialPowers.pushPrefEnv({ set: [["general.smoothScroll", false]] });
-  await BrowserTestUtils.withNewTab(PAGE, async (browser) => {
+  await BrowserTestUtils.withNewTab(url, async (browser) => {
     await recordPageKeys(browser);
     await focusContent(browser);
     await waitForMode(browser, "normal");
@@ -274,5 +277,218 @@ add_task(async function the_actor_reaches_settings_and_the_pdf_viewer_but_not_da
   await BrowserTestUtils.withNewTab("data:text/html,<p>hi", async (browser) => {
     Assert.ok(!VimmaActors.has(browser), "a data: page has no actor");
     Assert.equal(VimmaHost._browserMode(browser), "insert", "so it stays in insert");
+  });
+});
+
+/**
+ * @param {XULBrowserElement | BrowsingContext} target
+ * @param {string} selector
+ */
+function textOf(target, selector) {
+  return SpecialPowers.spawn(
+    target,
+    [selector],
+    (s) => content.document.querySelector(s).textContent,
+  );
+}
+
+add_task(async function a_design_mode_page_enters_insert_on_click() {
+  await SpecialPowers.pushPrefEnv({ set: [["general.smoothScroll", false]] });
+  await BrowserTestUtils.withNewTab(ROOT + "file_vimma_design.html", async (browser) => {
+    await focusContent(browser);
+    await BrowserTestUtils.synthesizeMouseAtCenter("#p", {}, browser);
+    await waitForMode(browser, "insert");
+    EventUtils.synthesizeKey("j");
+    await TestUtils.waitForCondition(
+      async () => (await textOf(browser, "#p")).includes("j"),
+      "j is typed into the designMode page",
+    );
+    Assert.equal(await pageScrollY(browser), 0, "and does not scroll");
+
+    EventUtils.synthesizeKey("KEY_Escape");
+    await waitForMode(browser, "normal");
+    EventUtils.synthesizeKey("j");
+    await waitForScroll(browser, (y) => y === STEP, "after Esc, j scrolls");
+    Assert.equal(VimmaHost._browserMode(browser), "normal", "and the page stays in normal");
+  });
+});
+
+add_task(async function a_cross_origin_design_mode_iframe_enters_insert_on_click() {
+  await withPage(async (browser) => {
+    const frame = browser.browsingContext.children[0];
+    await BrowserTestUtils.synthesizeMouseAtCenter("#p", {}, frame);
+    await waitForMode(browser, "insert");
+    EventUtils.synthesizeKey("j");
+    await TestUtils.waitForCondition(
+      async () => (await textOf(frame, "#p")).includes("j"),
+      "j is typed into the framed designMode document",
+    );
+    Assert.equal(await pageScrollY(browser), 0, "the page does not scroll");
+    Assert.equal(
+      await SpecialPowers.spawn(frame, [], () => content.scrollY),
+      0,
+      "nor does the frame",
+    );
+
+    EventUtils.synthesizeKey("KEY_Escape");
+    await waitForMode(browser, "normal");
+    EventUtils.synthesizeKey("j");
+    await TestUtils.waitForCondition(
+      async () => (await SpecialPowers.spawn(frame, [], () => content.scrollY)) === STEP,
+      "after Esc, j scrolls the focused frame",
+    );
+  }, ROOT + "file_vimma_design_host.html");
+});
+
+/**
+ * Sends a focus report from a frame's own actor, as a compromised content process could, and
+ * resolves once the parent has handled it (a query answers after receiveMessage returns).
+ * @param {BrowsingContext} bc
+ * @param {unknown} data
+ */
+function sendReport(bc, data) {
+  return SpecialPowers.spawn(bc, [data], async (d) => {
+    await content.windowGlobalChild.getActor("Vimma").sendQuery("Vimma:Focus", d);
+  });
+}
+
+const INPUT_FOCUSIN = { descriptor: { tagName: "input" }, trigger: "focusin" };
+
+add_task(async function only_the_focused_frame_may_report() {
+  await withPage(async (browser) => {
+    const top = browser.browsingContext;
+    const frame = top.children[0];
+    await sendReport(frame, INPUT_FOCUSIN);
+    Assert.equal(
+      VimmaHost._browserMode(browser),
+      "normal",
+      "an unfocused frame cannot enter insert",
+    );
+    await sendReport(top, INPUT_FOCUSIN);
+    Assert.equal(VimmaHost._browserMode(browser), "insert", "the focused frame's report is taken");
+    await sendReport(frame, { descriptor: { tagName: "body" }, trigger: "recheck" });
+    Assert.equal(VimmaHost._browserMode(browser), "insert", "nor can it leave insert");
+  });
+});
+
+add_task(async function malformed_descriptors_are_dropped() {
+  const long = "x".repeat(257);
+  const bad = [
+    null,
+    { descriptor: { tagName: "input" }, trigger: "bogus" },
+    { descriptor: null, trigger: "focusin" },
+    { descriptor: { tagName: 5 }, trigger: "focusin" },
+    { descriptor: { tagName: long }, trigger: "focusin" },
+    { descriptor: { tagName: "input", type: 3 }, trigger: "focusin" },
+    { descriptor: { tagName: "input", type: long }, trigger: "focusin" },
+    { descriptor: { tagName: "div", isContentEditable: "yes" }, trigger: "focusin" },
+    { descriptor: { tagName: "div", contentEditable: true }, trigger: "focusin" },
+    { descriptor: { tagName: "div", role: ["textbox"] }, trigger: "focusin" },
+    { descriptor: { tagName: "div", designMode: 1 }, trigger: "focusin" },
+    { descriptor: { tagName: "div", classes: "ProseMirror" }, trigger: "focusin" },
+    { descriptor: { tagName: "div", classes: ["ProseMirror", 1] }, trigger: "focusin" },
+    { descriptor: { tagName: "div", classes: ["ProseMirror", long] }, trigger: "focusin" },
+    {
+      descriptor: { tagName: "div", classes: Array(65).fill("ProseMirror") },
+      trigger: "focusin",
+    },
+  ];
+  await withPage(async (browser) => {
+    for (const data of bad) {
+      await sendReport(browser.browsingContext, data);
+      Assert.equal(
+        VimmaHost._browserMode(browser),
+        "normal",
+        `dropped: ${JSON.stringify(data)?.slice(0, 120)}`,
+      );
+    }
+    await sendReport(browser.browsingContext, {
+      descriptor: { tagName: "div", role: null, classes: Array(64).fill("ProseMirror") },
+      trigger: "focusin",
+    });
+    Assert.equal(VimmaHost._browserMode(browser), "insert", "a well-formed report is taken");
+  });
+});
+
+add_task(async function a_scroll_locked_page_does_not_scroll() {
+  await withPage(async (browser) => {
+    // A site's modal: overflow hidden on <html>, a scrollable list inside the modal.
+    await SpecialPowers.spawn(browser, [], () =>
+      content.document.documentElement.classList.add("locked"),
+    );
+    EventUtils.synthesizeKey("j");
+    await TestUtils.waitForCondition(
+      async () =>
+        (await SpecialPowers.spawn(
+          browser,
+          [],
+          () => content.document.getElementById("list").scrollTop,
+        )) === STEP,
+      "j scrolls the modal's list",
+    );
+    Assert.equal(await pageScrollY(browser), 0, "not the locked page");
+
+    await SpecialPowers.spawn(browser, [], () => {
+      content.document.getElementById("list").style.display = "none";
+    });
+    EventUtils.synthesizeKey("j");
+    Assert.deepEqual(await pageKeysThenUnbound(browser), [UNBOUND], "j is still ours");
+    Assert.equal(await pageScrollY(browser), 0, "with nothing else to scroll, nothing scrolls");
+  }, ROOT + "file_vimma_plain.html");
+});
+
+add_task(async function i_with_no_text_field_lets_keys_through() {
+  await withPage(async (browser) => {
+    EventUtils.synthesizeKey("i");
+    await waitForMode(browser, "insert");
+    EventUtils.synthesizeKey("j");
+    Assert.ok(await waitForPageKey(browser, ["j"]), "the page receives j");
+    Assert.equal(await pageScrollY(browser), 0, "and nothing scrolls");
+  }, ROOT + "file_vimma_plain.html");
+});
+
+add_task(async function ctrl_w_still_closes_the_tab_in_normal_mode() {
+  const tab = await BrowserTestUtils.openNewForegroundTab(gBrowser, PAGE);
+  await focusContent(tab.linkedBrowser);
+  await waitForMode(tab.linkedBrowser, "normal");
+  const closing = BrowserTestUtils.waitForTabClosing(tab);
+  // ctrl+w starts only <C-w> pane sequences (M4), none runnable yet: the first key passes.
+  EventUtils.synthesizeKey("w", { ctrlKey: true });
+  await closing;
+  await TestUtils.waitForCondition(() => !tab.isConnected, "ctrl+w closed the tab");
+});
+
+add_task(async function every_mode_change_calls_the_hook_once() {
+  await withPage(async (browser) => {
+    const seen = [];
+    const original = VimmaHost.onModeChange;
+    VimmaHost.onModeChange = (b, mode) => b === browser && seen.push(mode);
+    try {
+      await focusIn(browser, "text");
+      await waitForMode(browser, "insert");
+      EventUtils.synthesizeKey("KEY_Escape");
+      await waitForMode(browser, "normal");
+      // The blur's focusout report travels ahead of this reply on the same channel: let it land
+      // (no change) before i.
+      Assert.equal(
+        await SpecialPowers.spawn(browser, [], () => content.document.activeElement.localName),
+        "body",
+        "Esc blurred the input",
+      );
+      EventUtils.synthesizeKey("i");
+      await waitForMode(browser, "insert");
+      await TestUtils.waitForCondition(() => seen.length >= 3, "three changes reported");
+      Assert.deepEqual(seen, ["insert", "normal", "insert"], "one call per change, in order");
+    } finally {
+      VimmaHost.onModeChange = original;
+    }
+  });
+});
+
+add_task(async function g_as_the_first_key_of_gg_is_consumed() {
+  await withPage(async (browser) => {
+    EventUtils.synthesizeKey("g");
+    EventUtils.synthesizeKey("KEY_Escape"); // cancels the pending g, consumed too
+    Assert.deepEqual(await pageKeysThenUnbound(browser), [UNBOUND], "the page saw no g or Esc");
   });
 });

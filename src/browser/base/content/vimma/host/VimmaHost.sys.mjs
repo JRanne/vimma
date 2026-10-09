@@ -61,26 +61,38 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * key to the page. Unbound keys always pass (m1-actor-insert-scroll, Settled).
  * @type {Record<string, (state: WindowState, action: Action) => void>}
  */
-const RUNNERS = {
-  "help.show": (s) => s.help.toggle(),
-  "help.close": (s) => s.help.close(),
-  "help.filter": (s) => s.help.focusFilter(),
-  "hint.cancel": (s) => VimmaHost._cancelHints(s),
-};
+export const RUNNERS = Object.freeze({
+  "help.show": (/** @type {WindowState} */ s) => s.help.toggle(),
+  "help.close": (/** @type {WindowState} */ s) => s.help.close(),
+  "help.filter": (/** @type {WindowState} */ s) => s.help.focusFilter(),
+  "hint.cancel": (/** @type {WindowState} */ s) => VimmaHost._cancelHints(s),
+});
 
 /**
  * The page mode of each tab's <browser>, from the actor's focus reports; absent = normal.
+ * Written only through setBrowserMode.
  * @type {WeakMap<object, "normal" | "insert">}
  */
 const browserModes = new WeakMap();
 
 /**
+ * @param {any} browser
+ * @param {"normal" | "insert"} mode
+ */
+function setBrowserMode(browser, mode) {
+  if ((browserModes.get(browser) ?? "normal") === mode) return;
+  browserModes.set(browser, mode);
+  VimmaHost.onModeChange(browser, mode);
+}
+
+/**
  * Actions on the focused page (m1-actor-insert-scroll). Runnable only while a content browser
  * with our actor has focus; elsewhere (the URL bar) they count as not runnable, so Esc there
- * still reaches Firefox.
- * @type {Record<string, (browser: any, action: Action) => void>}
+ * still reaches Firefox. Every runnable id is a key of RUNNERS or CONTENT_RUNNERS; whether one
+ * runs right now is `VimmaHost._runnable(state, id)`.
+ * @type {Readonly<Record<string, (browser: any, action: Action) => void>>}
  */
-const CONTENT_RUNNERS = {
+export const CONTENT_RUNNERS = Object.freeze({
   "scroll.down": (b, a) => VimmaActors.scroll(b, "down", a.count),
   "scroll.up": (b, a) => VimmaActors.scroll(b, "up", a.count),
   "scroll.left": (b, a) => VimmaActors.scroll(b, "left", a.count),
@@ -91,17 +103,17 @@ const CONTENT_RUNNERS = {
   "scroll.bottom": (b) => VimmaActors.scroll(b, "bottom"),
   // Esc in insert (escape.mjs: blur); the focusout recheck that follows stays in normal.
   "mode.normal": (b) => {
-    browserModes.set(b, "normal");
+    setBrowserMode(b, "normal");
     VimmaActors.blur(b);
   },
   "hint.follow": (b, a) => VimmaHost._startHints(b, a),
   "hint.follow_new_tab": (b, a) => VimmaHost._startHints(b, a),
   // Explicit insert, even with no text field to focus (pass-through for pages that take keys).
   "mode.insert": (b) => {
-    browserModes.set(b, "insert");
+    setBrowserMode(b, "insert");
     VimmaActors.focusInput(b);
   },
-};
+});
 
 /** @type {WeakMap<Window, WindowState>} */
 const states = new WeakMap();
@@ -188,8 +200,15 @@ export const VimmaHost = {
   onFocusReport(browser, { descriptor, trigger }) {
     const mode = browserModes.get(browser) ?? "normal";
     const next = insertModeAfterFocus({ mode, trigger, descriptor });
-    browserModes.set(browser, next === "insert" ? "insert" : "normal");
+    setBrowserMode(browser, next === "insert" ? "insert" : "normal");
   },
+
+  /**
+   * Hook: called after a tab's page mode changes (normal ↔ insert), whatever caused it (a focus
+   * report, `i`, `Esc`). A no-op until the status bar (M2) emits its state change from here.
+   * @type {(browser: any, mode: "normal" | "insert") => void}
+   */
+  onModeChange: () => {},
 
   /**
    * The page mode keys get while `browser` has focus. A page without our actor (extension

@@ -1,0 +1,20 @@
+applied line 1
+applied line 2
+applied line 3
+applied line 4
+applied line 5
+applied line 6
+applied line 7
+applied line 8
+applied line 9
+applied line 10, patched by Vimma
+applied line 11
+applied line 12
+applied line 13
+applied line 14
+applied line 15
+applied line 16
+applied line 17
+applied line 18
+applied line 19
+applied line 20

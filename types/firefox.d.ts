@@ -52,6 +52,8 @@ declare const ChromeUtils: {
 // engine/dom/chrome-webidl/JSWindowActor.webidl
 declare class JSWindowActorParent {
   readonly browsingContext: any;
+  /** engine/dom/chrome-webidl/WindowGlobalActors.webidl (WindowGlobalParent) */
+  readonly manager: { readonly isInProcess: boolean };
   sendAsyncMessage(name: string, data?: unknown): void;
   sendQuery(name: string, data?: unknown): Promise<any>;
 }

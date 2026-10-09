@@ -1,0 +1,13 @@
+diff --git a/browser/applied.txt b/browser/applied.txt
+index ac483c2477e7730f48aa7bd90d55f7543742318a..5379e6985498303793454e7b9925d966f9854e89 100644
+--- a/browser/applied.txt
++++ b/browser/applied.txt
+@@ -7,7 +7,7 @@ applied line 6
+ applied line 7
+ applied line 8
+ applied line 9
+-applied line 10
++applied line 10, patched by Vimma
+ applied line 11
+ applied line 12
+ applied line 13
