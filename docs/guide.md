@@ -68,8 +68,8 @@ in the URL bar, `about:` pages and the PDF viewer.
   The prefix works in every mode and waits for the next key with no timeout. `Esc` cancels it.
 - **The modal layer (Neovim).** Bare keys act on the page depending on the mode: `j`/`k` scroll
   in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page. Planned
-  modes: `visual`/copy (caret and selection), `command` (`:` line) and `panel` (the side
-  panel); `hint` is link hints and `help` the bindings overlay.
+  modes: `visual`/copy (caret and selection) and `panel` (the side panel); `hint` is link
+  hints, `help` the bindings overlay and `command` the `:` line.
 
 ### Normal and insert mode
 
@@ -149,14 +149,14 @@ is on screen), as Vim's starts at the cursor.
 
 `ctrl+f` still opens Firefox's own find bar, where `Enter` goes to the next match.
 
-## Status bar and which-key
+## Status bar
 
 The status bar is the window's last line, always there (it hides only while a page is in
 fullscreen, such as a video; browser fullscreen with `F11` keeps it). From the left:
 
 - the **mode** badge in the mode's colour: `NORMAL` on a page, `INSERT` while a text field has
-  focus (or after `i`), `COMMAND` while you type a `/` search, `HELP` while the `ctrl+b ?`
-  overlay is open, `HINT` while link hints are up, and later `VISUAL`, …;
+  focus (or after `i`), `COMMAND` while you type a `:` command or a `/` search, `HELP` while
+  the `ctrl+b ?` overlay is open, `HINT` while link hints are up, and later `VISUAL`, …;
 - the **pending keys**, e.g. `prefix` after `ctrl+b`;
 - `tab 2/5`: the selected tab and how many there are;
 - the page **title** (your rename, once tab rename lands);
@@ -169,10 +169,9 @@ then dropped, then the title is shortened, and so on. The mode badge always stay
 readers announce the mode when it changes, including when focus moves into or out of a text
 field, but not every title change.
 
-After `ctrl+b` (or any key that starts a longer sequence) a **which-key strip** opens above the
-bar, listing every key you can press next with what it does, grouped like the `ctrl+b ?`
-overlay. Keys whose action is not built yet are greyed. The strip closes when the sequence
-completes, or on `Esc`.
+After `ctrl+b` (or any key that starts a longer sequence) only the pending keys show in the bar;
+no list of next keys pops up. To see the bindings, press `ctrl+b ?` (`ctrl+b shift+?` on a
+layout where `?` is shifted): the overlay is the one place that lists them.
 
 Colours are Tokyo Night until theming arrives (M5), which will follow your Omarchy theme.
 
@@ -199,6 +198,8 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `ctrl+b c`, `t`             | Opens a new tab (Firefox's new-tab page, URL bar focused), as `ctrl+t` does. `t` in normal mode.                                                              |
 | `ctrl+b n` / `ctrl+b p`     | Next / previous tab, wrapping around at the ends. Hidden tabs are skipped. `gt` / `gT` in normal mode; `3gt` goes to tab 3.                                   |
 | `ctrl+b 1..9`               | Tab 1 to 9, counting visible tabs (pinned tabs first). With fewer tabs than N, nothing happens.                                                               |
+| `:`                         | Normal mode: opens the command line at the bottom of the window ([below](#the-command-line)). In a text field `:` is typed.                                   |
+| `ctrl+b x`                  | Closes the pane; until split panes (M4) every tab is one pane, so it closes the tab, as `ctrl+b shift+x`.                                                     |
 | `ctrl+b shift+x`, `x`       | Closes the tab, as `ctrl+w` does: on a pinned tab it selects the first unpinned tab instead; the last tab closes the window. `x` in normal mode.              |
 | `ctrl+b` then anything else | Never leaks to the page. A binding that does not run yet shows "… not implemented yet" for 1.5 s; an unbound key does nothing. No more bookmarks sidebar.     |
 | Firefox's own keys          | Unchanged: `ctrl+t`, `ctrl+w`, `ctrl+tab`, `ctrl+shift+tab`, `ctrl+pagedown`, `alt+1..9` (tab N on Linux), `ctrl+l`, `ctrl+f`, `ctrl+u`, `ctrl+i`, and so on. |
@@ -209,8 +210,8 @@ digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 
 **Planned:**
 
-- **M1, the rest of the modal page layer:** back and forward (`H`/`L`), reload (`r`), the `:`
-  command line and copy mode (`v`, `ctrl+b [`). Until then these keys reach the page as before.
+- **M1, the rest of the modal page layer:** back and forward (`H`/`L`), reload (`r`) and copy
+  mode (`v`, `ctrl+b [`). Until then these keys reach the page as before.
 - **M2, the rest of tabs:** `ctrl+b shift+t` rename (kept across restarts; an empty name
   restores the page title), the `ctrl+b g` picker (`j`/`k` to move, `/` to search titles, URLs,
   workspaces and renames, `Enter` to go, `Esc` to back out).
@@ -221,6 +222,41 @@ digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 - **M5, config and theme:** rebinding in `~/.config/vimma/config.toml`, `:source`, Omarchy
   colours.
 
+## The command line
+
+`:` in normal mode opens a Vim-style command line just above the status bar. Type a command
+and press `Enter`; `Esc` closes it and puts focus back on the page. While it is open nothing you
+type reaches the page, and `ctrl+b` sequences still work.
+
+- **Completion.** A list of matching commands and actions, with what each does, follows what you
+  type. `Tab` puts the next match on the line, `shift+Tab` the previous; both wrap around.
+  Matching also takes letters in order (`scd` finds `scroll_down`).
+- **History.** `Up` / `Down` walk the lines you ran before, newest first. With text typed, `Up`
+  recalls only lines that start with it, as in Vim. History lasts until Vimma quits; a private
+  window keeps its own, forgotten when it closes.
+- `:open` and `:tabnew` refuse `javascript:` URLs, with a message. The line does not open over
+  a fullscreen page.
+- **Errors** show under the line, which stays open so you can fix it: `:tabnwe` says
+  `not a command: "tabnwe"; did you mean :tabnew?`.
+- A command name can be shortened while it stays unique (`:tabr`, `:wsn`), and leading colons
+  are fine (`::q`).
+- An argument is the rest of the line, as typed. Quotes are removed only when one pair wraps all
+  of it: `:tabrename "my  tab"`.
+
+| Command                                                      | What it does                                                                                                       |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `:open text`                                                 | Opens `text` in this tab as the URL bar would: `example.com` becomes a web address, other words a web search.      |
+| `:tabnew`, `:tabnew text`                                    | Opens a new tab; with text, opens it there (as `:open`).                                                           |
+| `:q`, `:quit`                                                | Closes the pane; with one pane (always, until M4) the tab, as `x`: a pinned tab is kept and the next one selected. |
+| `:map`, `:help`, `:h`                                        | Shows every binding (the `ctrl+b ?` overlay).                                                                      |
+| `:scroll_down`, `:tab.next`…                                 | Any action by its name in [bindings.md](bindings.md), or by its dotted id. Actions take no argument.               |
+| `:tabrename [name]`                                          | Not built yet (M2): says "… not implemented yet".                                                                  |
+| `:vsplit`/`:vs`, `:split`/`:sp`                              | Not built yet (M4).                                                                                                |
+| `:wsnext`, `:wsprev`, `:workspace [name]`, `:ls`, `:sidebar` | Not built yet (M2, M3); `:workspace name` says "… not available yet".                                              |
+| `:source`                                                    | Not built yet (M5).                                                                                                |
+
+A command that is not built yet says so for a moment, as its keys do.
+
 ## Settings (about:config)
 
 Vimma's own preferences today:
@@ -229,14 +265,78 @@ Vimma's own preferences today:
 | -------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `vimma.ui.tabstrip.hidden` | `true`  | Hides Firefox's tab strip (horizontal, and the vertical tab list). Set `false` to show it again; it applies at once, no restart.                           |
 | `vimma.debug.keys`         | unset   | Create it as a boolean set to `true` to log every key Vimma sees (`{ key, mods, mode }`) to the Browser Console (`ctrl+shift+j`; enable its Debug filter). |
+| `vimma.control.enabled`    | `false` | Turns on the control socket for `vimma-ctl` and scripts (see [Scripting with vimma-ctl](#scripting-with-vimma-ctl)). Applies at once, no restart.          |
 
 **Planned:** `~/.config/vimma/config.toml` (M5) for keys, workspaces and theme. Its validator
 already exists, but the browser does not read the file yet. Schema 2 (`schema = 2` at the top)
 also takes `[panes] max` (most panes per workspace, 1 to 16, default 4), `[modal] hint_chars`
 (the characters hint labels are made of, default `"asdfghjkl"`) and `[sites."<host>"] insert`
 (`auto`, `never` or `always`, per site and its subdomains); `packages/vimma-core/defaults.toml`
-lists every key with its default. The control socket and `vimma-ctl`
-(off by default) are also planned.
+lists every key with its default.
+
+## Scripting with vimma-ctl
+
+`vimma-ctl` drives a running Vimma from a shell, a window-manager binding or a test: it sends
+keys, reads the state and opens URLs. It talks to the browser over a local control socket, which
+is **off by default**. Spec: [m0-control-server](specs/m0-control-server.md), protocol:
+[m0-control-protocol-and-vimma-ctl](specs/m0-control-protocol-and-vimma-ctl.md).
+
+1. Turn the socket on: in `about:config`, set `vimma.control.enabled` to `true`. It starts at
+   once and writes `vimma-control.json` into your profile directory. Setting it back to `false`
+   stops it and deletes the file.
+2. Build the client (Rust, no dependencies): `cargo build --release` in `tools/vimma-ctl/`; the
+   binary is `tools/vimma-ctl/target/release/vimma-ctl`. Packages will ship it later.
+3. Use it:
+
+   ```sh
+   vimma-ctl state                    # mode, pending keys, tabs
+   vimma-ctl state --json             # the same, as JSON
+   vimma-ctl send-keys "ctrl+b ?"     # typed as if on the keyboard: opens the help overlay
+   vimma-ctl send-keys esc
+   vimma-ctl open https://example.com # a new tab; only http, https, file and about URLs
+   ```
+
+   It finds your default profile itself; pass `--profile DIR` (or set `VIMMA_PROFILE`) for
+   another one. In Hyprland: `bind = SUPER, slash, exec, vimma-ctl send-keys "ctrl+b ?"`.
+
+`send-keys` presses the keys in the most recently focused Vimma window, exactly as typing them
+would: Vimma's bindings, Firefox's shortcuts (`ctrl+t`, `ctrl+q`) and the page all see them. Keys
+meant for the page reach it only while that window has focus, as with a real keyboard.
+
+**Security.** Turning the socket on hands **full control of the browser** to whoever has the
+token: they can type into any page (including your logged-in sites), open `about:config` and
+change any setting, and quit Vimma. `open` loads with the system principal, like a URL given on
+the command line, so it can open local files (`file:`) and privileged pages such as
+`about:config`; only `javascript:` and `data:` are refused. Leave the pref off unless you use it.
+
+What keeps others out:
+
+- The socket listens on `127.0.0.1` only, on a random port. Web pages cannot speak to it (they
+  cannot read the token, and an HTTP request is rejected).
+- A client must send the token from `vimma-control.json`: 256 random bits, new at every start,
+  compared in constant time. The file is readable by you alone (mode 0600), and `vimma-ctl`
+  refuses a file anyone else can read. Other users on the machine cannot get it; anything
+  running as you can, just as it can already read your profile's cookies and history.
+- The browser proves it knows the token first: `vimma-ctl` sends only a random nonce, and sends
+  the token only after the browser has answered with an HMAC of that nonce made with the token.
+  If Vimma crashed and another program took its old port, that program gets the nonce and
+  nothing else: no token and no command (`vimma-ctl` exits 4). It can still make `vimma-ctl`
+  wait until its timeout.
+- A stale file (Vimma crashed or was killed with `kill -9` or `SIGTERM`) is removed at Vimma's
+  next start, whether or not the socket is on. Until then, on Linux, `vimma-ctl` sees that the
+  process named in it has exited and says Vimma is not running; if that process number has been
+  reused, the handshake above still protects you.
+
+Limits against a local denial of service: at most 8 authenticated connections (the next is told
+"busy"); at most 2 connections still authenticating, a new one pushing out the oldest, so idle
+connections cannot lock `vimma-ctl` out; 5 s to authenticate; an idle connection closes after
+60 s; lines over 1 MiB and clients that stop reading are disconnected. These are limits, not a
+defence against an active attack: a program of any local user that connects fast enough keeps
+pushing `vimma-ctl` out before it authenticates, and any program running as you can keep the 8
+slots busy. Turn the pref off to stop either.
+
+With the help overlay open, every key goes to the overlay, `ctrl+q` included, as when typing;
+send `esc` first (`vimma-ctl send-keys "esc ctrl+q"`).
 
 ## Privacy defaults
 

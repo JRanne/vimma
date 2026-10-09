@@ -8,5 +8,6 @@
 pub mod cli;
 pub mod client;
 pub mod discovery;
+pub mod hmac;
 pub mod json;
 pub mod protocol;

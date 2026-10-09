@@ -128,7 +128,7 @@ Rules the config engine enforces: actions are a closed set generated from `actio
 │                              ├─ actors/        VimmaParent/Child JSWindowActors:   │
 │                              │                 focus/insert detection, scroll,      │
 │                              │                 hints, caret/copy, find helpers     │
-│                              ├─ ui/            status bar, which-key strip, help   │
+│                              ├─ ui/            status bar, help                    │
 │                              │                 overlay, command line, side panel,  │
 │                              │                 pickers (HTML + CSS in chrome)      │
 │                              ├─ workspaces/    containers model, hide/show tabs,   │
@@ -239,7 +239,7 @@ Weeks are evenings-and-weekends ordering estimates, not dates. Each milestone en
 | --- | --- | --- | --- |
 | M0 | **Fork boots + pipeline** (3 wks) | `surfer setup-project` on current Firefox release; branding; CI with Vitest, tsc, eslint, mochitest skeleton; e2e harness launching the build under Xvfb; nightly build; `upstream.yml`; Claude Code workflows; `vimma-core` dispatcher + key notation with tests; `VimmaHost` capturing keys; `prefix+?` overlay from the binding table; native tab strip hidden by CSS | Your build runs; `ctrl+b ?` shows the bindings over any page **including `about:preferences` and the PDF viewer**; CI green on a trivial PR |
 | M1 | **Modal page layer** (4 wks) | JSWindowActor pair; insert-mode detection; scrolling; `hints.js` + hint mode; find via `gBrowser.finder`; `:` command line with completion from `actions.mjs`; copy mode (caret browsing + selection); `Esc` semantics | A day of browsing without the mouse on ordinary sites |
-| M2 | **Tabs, status bar, which-key** (3 wks) | Herdr tab keys over `gBrowser`; tab rename (label override persisted); status bar; which-key strip while prefix pending; `prefix+g` basic picker | Herdr's "learn these five first" all work (minus panes); screenshot baselines recorded |
+| M2 | **Tabs, status bar** (3 wks) | Herdr tab keys over `gBrowser`; tab rename (label override persisted); status bar; ~~which-key strip while prefix pending~~ (dropped by user decision, 2026-10-09: only `prefix+?` lists bindings); `prefix+g` basic picker | Herdr's "learn these five first" all work (minus panes); screenshot baselines recorded |
 | M3 | **Workspaces + side panel** (4 wks) | Container-backed workspaces; hidden tabs; `ctrl+i`/`ctrl+u`; `prefix+w` picker; `<leader>n` side panel with `panel` mode; SessionStore persistence + restore; `[workspaces]` config | Login in `work` invisible in `personal`; restart restores workspaces, tabs, scroll positions |
 | M4 | **Split panes** (5 wks) | Firefox's split view with our layout (ADR-013); pane tree in core; `prefix+v`/`-`/`x`/`z`/`h j k l`; swap; resize mode; URL bar follows active pane; fullscreen requests zoom the pane | Two panes of real sites side by side, keyboard only; mochitests for every pane op |
 | M5 | **Config + theme** (3 wks) | `config.toml` load/validate/migrate; polling reload; `:source`; errors in status bar + `about:vimma`; theme tokens; Tokyo Night default; Omarchy adapter; `about:vimma` | `omarchy-theme-set` changes vimma colours live; a broken config line shows file:line in the status bar and the old config stays active |

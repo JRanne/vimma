@@ -158,7 +158,8 @@ below the top - "" == "w2:word"`, `a match in the cross-origin frame - "" == "te
   dropped by closing the bar (now `findagain` on `Enter`).
 - Green: `browser_vimma_find.js` 57/0; `--repeat=9` pinned to two CPUs (`taskset -c 0,1`)
   513/0. Full `tests/browser/` on the artifact build: 868/0. After merging main (link hints #37, the split and workspace planners), by
-  hand with rerere off (`VimmaChild` and the docs kept both sides): 1065/0.
+  hand with rerere off (`VimmaChild` and the docs kept both sides): 1065/0. Again after the `:` command line,
+  the control server and the which-key removal: 1425/0.
 - Mutation: without `VimmaActors.findAnchor(browser)` in `start()`, "/word Enter selects the
   first match below the top" fails with `"w1:word" == "w2:word"` (and the `n`/`N` and `?`
   steps after it); reverted.

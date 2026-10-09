@@ -32,7 +32,8 @@ release channel.
 ## Status
 
 **Pre-alpha.** Milestone M0 ("fork boots + pipeline", [plan.md](plan.md) §6) is almost done,
-and M1's modal page layer has started (scrolling, insert mode, link hints and find).
+and M1's modal page layer has started (scrolling, insert mode, link hints, find and the `:`
+command line).
 There are no binaries yet: you build from source. Version `0.1.0`, on Firefox 157.0.1.
 
 What works today:
@@ -53,9 +54,12 @@ What works today:
 - **Herdr tab keys.** `ctrl+b c` new tab, `ctrl+b n`/`p` next/previous (wrapping),
   `ctrl+b 1..9` tab N, `ctrl+b shift+x` close tab, from any page and the URL bar; in normal
   mode also `t`, `x`, `gt`/`gT`.
-- **Status bar and which-key.** A one-line status bar at the foot of the window shows the mode,
-  pending keys, `tab 2/5`, the page title, its URL and whether it is loading. After `ctrl+b` a
-  strip above it lists the keys you can press next; keys that do nothing yet are greyed.
+- **`:` command line.** At the bottom of the window: `:tabnew`, `:q`, `:open example.com`
+  (or search words), `:map`, and any action by name, with `Tab` completion, `Up`/`Down`
+  history and inline errors that suggest the command you meant.
+- **Status bar.** A one-line status bar at the foot of the window shows the mode, pending keys
+  (`prefix` after `ctrl+b`), `tab 2/5`, the page title, its URL and whether it is loading.
+  `ctrl+b ?` is the one place that lists the bindings.
 - **Hidden tab strip.** Firefox's tab strip is hidden. Firefox's own tab keys (`ctrl+t`,
   `ctrl+w`, `ctrl+tab`, `alt+1..9`, …) still work. Set `vimma.ui.tabstrip.hidden` to `false` in
   `about:config` to bring the strip back.
@@ -65,12 +69,16 @@ What works today:
   the add-on blocklist, Sync and AMO work as in Firefox. Google Safe Browsing is on in builds
   made with a Google API key; a build without one shows it off in Settings. Each default can be
   turned back on, or off, in `about:config`.
+- **Control socket and `vimma-ctl`** (off by default). With `vimma.control.enabled` on,
+  `vimma-ctl state`, `send-keys "ctrl+b ?"` and `open <url>` drive a running Vimma from a shell or
+  a test, over a token-protected socket on `127.0.0.1`. Build the client with
+  `cargo build --release` in `tools/vimma-ctl/`. See [docs/guide.md](docs/guide.md#scripting-with-vimma-ctl).
 - **Firefox-compatible.** Sites see Firefox 157's user agent, byte for byte. Add-ons, webcompat
   fixes and Remote Settings see Firefox's version number.
 
 What does not work yet: the dimmed bindings in the overlay. The overlay lists the full planned
 keymap; a `ctrl+b` sequence that does not run yet shows "… not implemented yet" for a moment.
-The rest of the modal page layer (`:` command line, copy mode) is M1. Tab
+The rest of the modal page layer (copy mode) is M1. Tab
 rename and the `ctrl+b g` picker are M2. Workspaces, split
 panes, `config.toml` and theming come later. The parser and validator for `config.toml` exist in
 `vimma-core`, but the browser does not read the file yet. See [docs/guide.md](docs/guide.md) and

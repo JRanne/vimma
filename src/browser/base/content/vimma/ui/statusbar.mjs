@@ -2,25 +2,20 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// The always-visible status bar and the which-key strip (spec: docs/specs/m2-statusbar-whichkey.md).
-// vimma-core decides what they say (statusbar.mjs, whichkey.mjs); this module gathers the
-// inputs from the window and the host, renders at most once per frame, and never reads layout
-// on the render path: the bar's width comes from a ResizeObserver.
+// The always-visible status bar (spec: docs/specs/m2-statusbar-whichkey.md; the which-key strip
+// was dropped by the user's decision of 2026-10-09: only prefix+? lists the bindings).
+// vimma-core decides what it says (statusbar.mjs); this module gathers the inputs from the
+// window and the host, renders at most once per frame, and never reads layout on the render
+// path: the bar's width comes from a ResizeObserver.
 
 import { fitStatus, statusSegments } from "../core/statusbar.mjs";
 import { resolveTheme, tokensToCss } from "../core/theme.mjs";
-import { whichKey } from "../core/whichkey.mjs";
 
-/** @import { Keymap } from "../core/keymap.mjs" */
 /** @import { Mode } from "../core/modes.mjs" */
 /** @import { FindStatus } from "../core/find.mjs" */
 /** @import { Segment, StatusInput } from "../core/statusbar.mjs" */
-/** @import { WhichKey } from "../core/whichkey.mjs" */
 
 export const STATUSBAR_ID = "vimma-statusbar";
-export const WHICHKEY_ID = "vimma-whichkey";
-/** Root attribute while the which-key strip is open, so other bottom UI (the notice) gives way. */
-export const WHICHKEY_OPEN_ATTR = "vimma-whichkey-open";
 const STYLESHEET = "chrome://browser/skin/vimma/statusbar.css";
 const HTML_NS = "http://www.w3.org/1999/xhtml";
 /** Characters in the probe that measures one column of the bar's font. */
@@ -55,8 +50,6 @@ function defaultThemeCss() {
  * @typedef {object} StatusBarHost  what the bar needs from VimmaHost, as plain functions
  * @property {() => { mode: Mode, pending: readonly string[], find?: FindStatus | null }} status
  * @property {(fn: () => void) => () => void} subscribe  host state changes; returns unsubscribe
- * @property {() => ReadonlySet<string>} runnable  action ids the host implements
- * @property {Keymap} keymap  the keymap the dispatcher walks
  * @property {(tab: Element) => string | null} [labelFor]  a user's tab rename (tab rename spec)
  */
 
@@ -71,8 +64,6 @@ export class StatusBar {
     /** @type {HTMLElement | null} */
     this.bar = null;
     /** @type {HTMLElement | null} */
-    this.strip = null;
-    /** @type {HTMLElement | null} */
     this.left = null;
     /** @type {HTMLElement | null} */
     this.right = null;
@@ -80,15 +71,12 @@ export class StatusBar {
     this.live = null;
     /** @type {HTMLElement | null} */
     this.probe = null;
-    /** @type {HTMLElement | null} "…N more" when the strip cannot show every entry */
-    this.moreHint = null;
     /** bar content width in CSS px, from the ResizeObserver */
     this.width = 0;
     /** one column of the bar's font in CSS px; 0 until measured */
     this.column = 0;
     this.frame = 0;
     this.lastBar = "";
-    this.lastStrip = "";
     /** @type {Mode | null} */
     this.lastMode = null;
     /** @type {ResizeObserver | null} */
@@ -124,9 +112,7 @@ export class StatusBar {
       win.gBrowser?.removeProgressListener(this.progress);
     }
     this.bar?.remove();
-    win.document.documentElement?.removeAttribute(WHICHKEY_OPEN_ATTR);
-    this.bar = this.strip = this.left = this.right = this.live = this.probe = null;
-    this.moreHint = null;
+    this.bar = this.left = this.right = this.live = this.probe = null;
   }
 
   /** Mark dirty; one render per frame however many triggers fire. */
@@ -176,17 +162,9 @@ export class StatusBar {
     this.probe.setAttribute("aria-hidden", "true");
     this.probe.textContent = "0".repeat(PROBE_CHARS);
 
-    const strip = el("div");
-    strip.id = WHICHKEY_ID;
-    strip.hidden = true;
-    strip.setAttribute("aria-label", "Next keys");
-    this.moreHint = el("div", "vimma-wk-clipped");
-    this.moreHint.hidden = true;
-
-    bar.append(this.left, this.right, this.live, this.probe, strip);
+    bar.append(this.left, this.right, this.live, this.probe);
     anchor.after(bar);
     this.bar = bar;
-    this.strip = strip;
 
     // Layout is fresh inside a ResizeObserver callback: measuring here forces no extra reflow.
     // The probe is observed too, so a font change (M5's [theme] font, a zoom) re-measures the
@@ -203,15 +181,12 @@ export class StatusBar {
             this.column = w;
             refit = true;
           }
-        } else if (entry.target === this.strip) {
-          this.markClipped();
         }
       }
       if (refit) this.schedule();
     });
     this.resize.observe(bar);
     this.resize.observe(this.probe);
-    this.resize.observe(strip);
 
     for (const type of TAB_EVENTS) win.addEventListener(type, this.update, true);
     // Focus moving into or out of a field changes the mode once the host detects it.
@@ -248,9 +223,7 @@ export class StatusBar {
   /** @private */
   render() {
     if (!this.bar) return;
-    const input = this.input();
-    this.renderBar(input);
-    this.renderStrip(input);
+    this.renderBar(this.input());
   }
 
   /**
@@ -292,93 +265,6 @@ export class StatusBar {
       span.style.backgroundColor = `var(${s.bg})`;
     }
     return span;
-  }
-
-  /**
-   * @private
-   * @param {StatusInput} input
-   */
-  renderStrip(input) {
-    const strip = /** @type {HTMLElement} */ (this.strip);
-    const pending = input.pending ?? [];
-    const wk = pending.length
-      ? whichKey(this.host.keymap, input.mode, pending, { runnable: this.host.runnable() })
-      : null;
-    const key = wk ? JSON.stringify(wk) : "";
-    if (key === this.lastStrip) return;
-    this.lastStrip = key;
-    const root = this.win.document.documentElement;
-    if (!wk) {
-      strip.hidden = true;
-      strip.replaceChildren();
-      root.removeAttribute(WHICHKEY_OPEN_ATTR);
-      return;
-    }
-    const hint = /** @type {HTMLElement} */ (this.moreHint);
-    hint.hidden = true;
-    strip.replaceChildren(...this.stripSections(wk), hint);
-    strip.hidden = false;
-    root.setAttribute(WHICHKEY_OPEN_ATTR, "true");
-    // New entries in a strip already at its max-height do not resize it: check after layout.
-    this.win.requestAnimationFrame(() => this.markClipped());
-  }
-
-  /**
-   * Shows "…N more" when entries fall outside the strip (a short window, a long keymap). Reads
-   * layout, so it runs only when the strip's content or size changed, not per keypress.
-   * @private
-   */
-  markClipped() {
-    const strip = this.strip;
-    const hint = this.moreHint;
-    if (!strip || !hint || strip.hidden) return;
-    const box = strip.getBoundingClientRect();
-    let clipped = 0;
-    for (const e of strip.querySelectorAll(".vimma-wk-entry")) {
-      const r = e.getBoundingClientRect();
-      if (r.bottom > box.bottom + 0.5 || r.right > box.right + 0.5) clipped++;
-    }
-    hint.textContent = clipped ? `…${clipped} more` : "";
-    hint.hidden = clipped === 0;
-  }
-
-  /**
-   * @private
-   * @param {WhichKey} wk
-   */
-  stripSections(wk) {
-    const doc = this.win.document;
-    /**
-     * @param {string} tag
-     * @param {string} className
-     * @param {string} [text]
-     */
-    const el = (tag, className, text) => {
-      const node = /** @type {HTMLElement} */ (doc.createElementNS(HTML_NS, tag));
-      node.className = className;
-      if (text !== undefined) node.textContent = text;
-      return node;
-    };
-    return wk.sections.map((section) => {
-      const box = el("section", "vimma-wk-section");
-      box.append(el("h2", "vimma-wk-group", section.group));
-      for (const e of section.entries) {
-        const row = el("div", "vimma-wk-entry");
-        row.dataset.key = e.key;
-        if (e.id) row.dataset.actionId = e.id;
-        if (!e.runnable) row.setAttribute("aria-disabled", "true");
-        row.append(
-          el("kbd", "vimma-wk-key", e.key),
-          el(
-            "span",
-            e.kind === "group" ? "vimma-wk-desc vimma-wk-more" : "vimma-wk-desc",
-            e.description,
-          ),
-        );
-        box.append(row);
-      }
-      return box;
-    });
   }
 }
 

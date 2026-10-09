@@ -5,6 +5,7 @@
 browser.jar:
         content/browser/vimma/vimma.js                    (vimma.js)
         content/browser/vimma/host/VimmaHost.sys.mjs      (host/VimmaHost.sys.mjs)
+        content/browser/vimma/ctl/VimmaControl.sys.mjs    (ctl/VimmaControl.sys.mjs)
         content/browser/vimma/host/tab-ops.mjs            (host/tab-ops.mjs)
         content/browser/vimma/host/find.mjs               (host/find.mjs)
         content/browser/vimma/actors/VimmaActors.sys.mjs  (actors/VimmaActors.sys.mjs)
@@ -23,5 +24,7 @@ browser.jar:
         skin/classic/browser/vimma/statusbar.css          (/browser/themes/shared/vimma/statusbar.css)
         content/browser/vimma/ui/notice.mjs               (ui/notice.mjs)
         skin/classic/browser/vimma/notice.css             (/browser/themes/shared/vimma/notice.css)
+        content/browser/vimma/ui/cmdline.mjs              (ui/cmdline.mjs)
+        skin/classic/browser/vimma/cmdline.css            (/browser/themes/shared/vimma/cmdline.css)
         content/browser/vimma/split/spike-layout.mjs      (split/spike-layout.mjs)
         skin/classic/browser/vimma/split-spike.css        (/browser/themes/shared/vimma/split-spike.css)

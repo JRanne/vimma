@@ -112,6 +112,7 @@ group("Navigation", [
   ["history_back", "history.back", "Go back"],
   ["history_forward", "history.forward", "Go forward"],
   ["reload", "page.reload", "Reload page"],
+  ["open_url", "page.open", "Open a URL or search in this tab"],
 ]);
 
 group("Hints", [
@@ -169,8 +170,8 @@ for (const a of ACTIONS) {
 }
 
 /**
- * The one rule for greying out actions the host has not built yet, shared by the which-key strip
- * and the bindings overlay. Without a set (undefined) every action counts as runnable.
+ * The one rule for greying out actions the host has not built yet, used by the bindings overlay.
+ * Without a set (undefined) every action counts as runnable.
  * @param {string} id action id
  * @param {ReadonlySet<string>} [runnable] ids the host implements
  */

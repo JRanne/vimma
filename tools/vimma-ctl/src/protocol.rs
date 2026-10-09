@@ -56,6 +56,17 @@ pub struct Welcome {
     pub version: String,
 }
 
+/// The server's `challenge`: proof that it knows the token, before the client sends it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Challenge {
+    pub protocol: u64,
+    /// `HMAC-SHA256(token, CHALLENGE_CONTEXT + nonce)` in lowercase hex.
+    pub proof: String,
+}
+
+/// Prefix of the challenge's HMAC message (domain separation).
+pub const CHALLENGE_CONTEXT: &str = "vimma-server\0";
+
 /// A response's `error`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ErrorBody {
@@ -118,14 +129,31 @@ impl fmt::Display for DecodeError {
 
 impl std::error::Error for DecodeError {}
 
-/// The `hello` line's value.
+/// The `hello` line's value: no token, only a fresh 64-hex `nonce` the server must answer.
 #[must_use]
-pub fn hello(token: &str) -> Value {
+pub fn hello(nonce: &str) -> Value {
     object([
         ("type", text("hello")),
         ("protocol", Value::Number(1.0)),
-        ("token", text(token)),
+        ("nonce", text(nonce)),
     ])
+}
+
+/// The `auth` line's value, sent only after the challenge checked out.
+#[must_use]
+pub fn auth(token: &str) -> Value {
+    object([("type", text("auth")), ("token", text(token))])
+}
+
+/// The proof a server must send for `nonce`:
+/// `HMAC-SHA256(key: token, message: CHALLENGE_CONTEXT + nonce)`, ASCII, in lowercase hex.
+#[must_use]
+pub fn challenge_proof(token: &str, nonce: &str) -> String {
+    let message = format!("{CHALLENGE_CONTEXT}{nonce}");
+    crate::hmac::hex(&crate::hmac::hmac_sha256(
+        token.as_bytes(),
+        message.as_bytes(),
+    ))
 }
 
 /// A request's value. Ids are `u32`: a CLI invocation sends a handful, and every `u32` is exact
@@ -166,6 +194,22 @@ pub fn decode_welcome(value: &Value) -> Result<Welcome, DecodeError> {
         protocol: protocol_field(map)?,
         app: string_field(map, "app")?.to_string(),
         version: string_field(map, "version")?.to_string(),
+    })
+}
+
+/// Decode a `challenge`.
+///
+/// # Errors
+/// When the value is not a v1 `challenge`.
+pub fn decode_challenge(value: &Value) -> Result<Challenge, DecodeError> {
+    let map = as_object(value, "challenge")?;
+    expect_type(map, "challenge")?;
+    Ok(Challenge {
+        protocol: protocol_field(map)?,
+        proof: match map.get("proof") {
+            Some(Value::String(proof)) if is_token(proof) => proof.clone(),
+            _ => return Err(fail("proof must be 64 lowercase hex characters")),
+        },
     })
 }
 
@@ -434,6 +478,7 @@ mod tests {
         let message = fixture.get("message").unwrap();
         match str_field(fixture, "kind").unwrap() {
             "welcome" => decode_welcome(message).map(drop),
+            "challenge" => decode_challenge(message).map(drop),
             "discovery" => decode_discovery(message).map(drop),
             "response" => match decode_response(message)? {
                 Response::Ok { result, .. } => match str_field(fixture, "command") {
@@ -450,7 +495,10 @@ mod tests {
     fn encode_fixture(fixture: &Value) -> Value {
         let message = fixture.get("message").unwrap();
         if str_field(fixture, "kind") == Some("hello") {
-            return hello(str_field(message, "token").unwrap());
+            return hello(str_field(message, "nonce").unwrap());
+        }
+        if str_field(fixture, "kind") == Some("auth") {
+            return auth(str_field(message, "token").unwrap());
         }
         let id = u32::try_from(message.get("id").and_then(Value::as_u64).unwrap()).unwrap();
         let args = message.get("args").unwrap();
@@ -474,7 +522,8 @@ mod tests {
 
     /// Client-direction fixtures the client never decodes, and requests it never sends: the
     /// server (vimma-core's validator) owns them. Listed so a new fixture cannot go untested.
-    const SERVER_ONLY: [&str; 6] = [
+    const SERVER_ONLY: [&str; 7] = [
+        "auth.invalid.json",
         "hello.invalid.json",
         "request-open.invalid.json",
         "request-reserved.invalid.json",
@@ -486,10 +535,10 @@ mod tests {
     #[test]
     fn every_fixture_is_covered() {
         let all = fixtures();
-        assert!(all.len() >= 22, "only {} fixtures", all.len());
+        assert!(all.len() >= 26, "only {} fixtures", all.len());
         for (name, fixture) in &all {
             let kind = str_field(fixture, "kind").unwrap();
-            let client_direction = kind == "hello" || kind == "request";
+            let client_direction = matches!(kind, "hello" | "auth" | "request");
             if client_direction && !name.ends_with(".valid.json") {
                 assert!(SERVER_ONLY.contains(&name.as_str()), "{name} untested");
             }
@@ -500,7 +549,7 @@ mod tests {
     fn decodes_server_direction_fixtures_as_named() {
         for (name, fixture) in fixtures() {
             let kind = str_field(&fixture, "kind").unwrap();
-            if kind == "hello" || kind == "request" {
+            if matches!(kind, "hello" | "auth" | "request") {
                 continue;
             }
             let result = decode_fixture(&fixture);
@@ -516,7 +565,8 @@ mod tests {
     fn encodes_client_direction_fixtures_exactly() {
         for (name, fixture) in fixtures() {
             let kind = str_field(&fixture, "kind").unwrap();
-            if (kind != "hello" && kind != "request") || SERVER_ONLY.contains(&name.as_str()) {
+            if !matches!(kind, "hello" | "auth" | "request") || SERVER_ONLY.contains(&name.as_str())
+            {
                 continue;
             }
             assert_eq!(
@@ -584,12 +634,57 @@ mod tests {
         );
     }
 
+    const NONCE: &str = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+
     #[test]
-    fn hello_is_a_single_line() {
+    fn hello_carries_the_nonce_and_never_the_token() {
         assert_eq!(
-            hello(TOKEN).to_string(),
-            format!(r#"{{"protocol":1,"token":"{TOKEN}","type":"hello"}}"#)
+            hello(NONCE).to_string(),
+            format!(r#"{{"nonce":"{NONCE}","protocol":1,"type":"hello"}}"#)
         );
+        assert_eq!(
+            auth(TOKEN).to_string(),
+            format!(r#"{{"token":"{TOKEN}","type":"auth"}}"#)
+        );
+    }
+
+    #[test]
+    fn challenge_fixture_proof_is_the_domain_separated_hmac() {
+        let all = fixtures();
+        let find = |name: &str| all.iter().find(|(n, _)| n == name).unwrap().1.clone();
+        let nonce = find("hello.valid.json");
+        let nonce = str_field(nonce.get("message").unwrap(), "nonce")
+            .unwrap()
+            .to_string();
+        let token = find("auth.valid.json");
+        let token = str_field(token.get("message").unwrap(), "token")
+            .unwrap()
+            .to_string();
+        let challenge =
+            decode_challenge(find("challenge.valid.json").get("message").unwrap()).unwrap();
+        assert_eq!(challenge.proof, challenge_proof(&token, &nonce));
+        // Not the plain HMAC of the nonce: the proof is good for this purpose only.
+        let plain = crate::hmac::hex(&crate::hmac::hmac_sha256(
+            token.as_bytes(),
+            nonce.as_bytes(),
+        ));
+        assert_ne!(challenge.proof, plain);
+    }
+
+    #[test]
+    fn decode_challenge_needs_a_64_hex_proof() {
+        let base = r#""type":"challenge","protocol":1"#;
+        assert!(decode_challenge(&parse(&format!("{{{base}}}")).unwrap()).is_err());
+        assert!(decode_challenge(&parse(&format!(r#"{{{base},"proof":"ab"}}"#)).unwrap()).is_err());
+        let ok = "ab".repeat(32);
+        assert_eq!(
+            decode_challenge(&parse(&format!(r#"{{{base},"proof":"{ok}"}}"#)).unwrap())
+                .unwrap()
+                .proof,
+            ok
+        );
+        let welcome = r#"{"type":"welcome","protocol":1,"app":"Vimma","version":"0.1.0"}"#;
+        assert!(decode_challenge(&parse(welcome).unwrap()).is_err());
     }
 
     #[test]

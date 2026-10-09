@@ -1,6 +1,6 @@
 # Spec: m0-control-protocol-and-vimma-ctl
 
-Status: implemented (client and contract), awaiting review; server side pending · Milestone: M0 ·
+Status: implemented (client and contract); the server is spec m0-control-server · Milestone: M0 ·
 Area: `packages/vimma-core` (contract validator), `tools/vimma-ctl` (Rust client),
 `tests/contract/control/v1/` (fixtures)
 Prerequisites: ADR-007 (control socket), ADR-011 (vimma-ctl in Rust).
@@ -56,22 +56,42 @@ When the server starts it writes `<profile>/vimma-control.json`, mode **0600**, 
 
 Clients refuse a discovery file readable or writable by group or others (`mode & 0o077 != 0`),
 like `ssh` with a private key, and say how to fix it. A stale file (nothing listening) is reported
-as "Vimma is not running (or the control socket is off)".
+as "Vimma is not running (or the control socket is off)". On Linux the client also checks that
+`pid` is alive (`/proc/<pid>`) and reports a stale file when it is not. The server removes any
+file at that path when it starts (whatever the pref) and when it stops.
 
 ### Handshake
 
-The client's first line must be `hello`; anything else, or no `hello` within 5 s, closes the
-connection with an error.
+Four lines, in this order; anything else, or no `welcome` within 5 s of connecting (one deadline
+for the whole handshake), closes the connection with an error. The server proves it knows the
+token **before** the client sends it.
 
-```json
-{ "type": "hello", "protocol": 1, "token": "<token from the discovery file>" }
-```
+1. Client: `{ "type": "hello", "protocol": 1, "nonce": "<64 hex>" }`. `nonce`: 32 fresh bytes
+   from a CSPRNG per connection, lowercase hex. **No token**: a `hello` with a `token` is
+   `bad-request`.
+2. Server: `{ "type": "challenge", "protocol": 1, "proof": "<64 hex>" }`, where
+   `proof` = HMAC-SHA256(key: the token, message: `"vimma-server\0"` + the nonce), ASCII
+   (vimma-core `CHALLENGE_CONTEXT`), in lowercase hex. The prefix separates this use of the token
+   from any other, so a proof the server hands to an unauthenticated client is good for nothing
+   else.
+3. Client: compares the proof with its own in constant time. On a mismatch it closes and sends
+   **nothing more**: neither the token nor a command. Otherwise `{ "type": "auth", "token": "<token
+from the discovery file>" }`.
+4. Server: `{ "type": "welcome", "protocol": 1, "app": "Vimma", "version": "0.1.0" }`.
 
-Success:
+Fixtures: `challenge.valid.json` answers `hello.valid.json` for the token of `auth.valid.json`.
 
-```json
-{ "type": "welcome", "protocol": 1, "app": "Vimma", "version": "0.1.0" }
-```
+**What this guarantees.** A process squatting on a stale discovery file's port (the browser
+crashed; another local user bound the port) learns only the nonce: it cannot produce the proof,
+so it never receives the token or a command (`vimma-ctl` exits 4). It does not stop a squatter
+from making the client wait (no reply: the client's timeout ends it) or from learning that a
+client tried to connect.
+
+**Amended in v1, not v2** (reviews of #38): the handshake was reordered before any server
+shipped. The v1 server first lands with it, and `vimma-ctl` and the e2e harness live in the same
+repository, so no deployed peer speaks an earlier form; a v2 would only carry dead compatibility
+code. (An intermediate form sent the token in the `hello` next to the nonce, so a squatter could
+compute the proof itself; a security review found it.)
 
 Failure: an error response with `"id": null`, then the server closes the connection:
 
@@ -85,8 +105,10 @@ Failure: an error response with `"id": null`, then the server closes the connect
 ```
 
 The server compares tokens with `tokensEqual` (vimma-core), which takes time independent of where
-the strings differ. A wrong token, a `protocol` the server does not speak (`unsupported-protocol`)
-and a malformed `hello` (`bad-request`) all end the connection.
+the strings differ. A wrong token (`unauthorized`), a `protocol` the server does not speak
+(`unsupported-protocol`), and a malformed or out-of-order line (`bad-request`) all end the
+connection. `busy` may come instead of a `challenge` (evicted while waiting) or instead of the
+`welcome` (8 authenticated connections).
 
 ### Requests and responses
 
@@ -177,16 +199,23 @@ the tab's id, as in `state`.
   context through it.
 - **Connection limits.** Any local user can connect before proving the token, so the server
   bounds what a connection may hold:
-  - **At most 8 open connections** (handshaking or authenticated together). Real use is one
-    short-lived `vimma-ctl` per command plus the e2e harness; 8 leaves room for scripts running
-    in parallel while capping the sockets, buffers and timers another local user can pin.
-  - **Handshake deadline 5 s** (above): no complete `hello` in 5 s → close.
+  - **At most 8 authenticated connections** and, apart from them, **at most 2 still in the
+    handshake**. Real use is one short-lived `vimma-ctl` per command plus the e2e harness; 8 leaves
+    room for scripts running in parallel. Anyone local can open waiting connections, so a new
+    one evicts the oldest waiting one (answered `busy`) instead of being refused: idle
+    connections cannot lock out a client that holds the token, which answers at once. A fast
+    **connect flood still can**: two new connections arriving between a client's connect and its
+    `auth` evict it. That is an active local denial of service by a process of some local user;
+    the remedy is turning the pref off. Up to 16 refused connections linger 1 s to deliver their
+    `busy`; beyond that they are closed at once.
+  - **Handshake deadline 5 s** (above): no `welcome` earned within 5 s of connecting → close.
   - **Idle timeout 60 s after the handshake**: no complete request line for 60 s → the server
     closes the connection without a message. A client that wants a long-lived connection sends
     a request (e.g. `state`) at least every 60 s.
-  - **At the limit**, the server accepts the 9th connection, writes one line
-    `{"type":"response","id":null,"ok":false,"error":{"code":"busy","message":"…"}}` and closes
-    it, so the client can tell "busy" from "not running". It never queues connections.
+  - **At the limit**, the 9th correct `auth` is answered with one line
+    `{"type":"response","id":null,"ok":false,"error":{"code":"busy","message":"…"}}` and the
+    connection closes, so the client can tell "busy" from "not running". It never queues.
+  - **A client that stops reading** (over 4 MiB of unsent replies) is disconnected.
   - `vimma-ctl` reports `busy` as "Vimma's control socket is busy (…); try again" with exit 3;
     a refused connection is exit 3 ("not running"); a connection dropped mid-reply (idle
     timeout, shutdown) is exit 5 "connection closed before a complete reply".
@@ -234,14 +263,14 @@ vimma-ctl [--profile DIR] [--timeout SECS] state [--json]
 vimma-ctl [--profile DIR] [--timeout SECS] open URL
 ```
 
-| Exit | Meaning                                                                              |
-| ---- | ------------------------------------------------------------------------------------ |
-| 0    | success                                                                              |
-| 1    | the server answered with an error (code and message printed to stderr)               |
-| 2    | usage error                                                                          |
-| 3    | Vimma not reachable: no profile, no discovery file, insecure file, no server, `busy` |
-| 4    | authentication failed (`unauthorized`, `unsupported-protocol`)                       |
-| 5    | protocol error: malformed response, wrong id, connection closed, timeout             |
+| Exit | Meaning                                                                                       |
+| ---- | --------------------------------------------------------------------------------------------- |
+| 0    | success                                                                                       |
+| 1    | the server answered with an error (code and message printed to stderr)                        |
+| 2    | usage error                                                                                   |
+| 3    | Vimma not reachable: no profile, no or stale discovery file, insecure file, no server, `busy` |
+| 4    | authentication failed (`unauthorized`, `unsupported-protocol`, or no valid `proof`)           |
+| 5    | protocol error: malformed response, wrong id, connection closed, timeout                      |
 
 The timeout (default 5 s, at most 3600 s) covers connect, handshake and the response.
 
