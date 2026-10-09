@@ -23,6 +23,7 @@ Read plan.md once per milestone; read docs/specs/<current>.md every session.
   in the smallest hunk possible. A new .patch needs a line in the ADR for it.
 - Never edit screenshot baselines or snapshots without a changelog line explaining the change.
 - Conventional Commits with a body; the body is the changelog line.
+- User-visible change → update docs/guide.md (and README status if it changes what works).
 - No new dependency without a licence check and a PR line. No #[allow]-style suppressions
   (eslint-disable) without a reason comment.
 - Never disable a workflow, pin, or lint rule to get green. Stop and report instead.
