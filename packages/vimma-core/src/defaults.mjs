@@ -12,6 +12,24 @@
  * @property {Record<string, string | string[]>} [keys]
  * @property {{ leader?: string, timeout_ms?: number } & Record<string, unknown>} [modal]
  * @property {Record<string, string[]>} [unbind]
+ * @property {number} [schema]
+ * @property {Record<string, WorkspaceInput>} [workspaces]
+ * @property {ThemeInput} [theme]
+ */
+
+/**
+ * @typedef {object} WorkspaceInput
+ * @property {string} [color]
+ * @property {string} [icon]
+ * @property {string} [home]
+ * @property {boolean} [autofill]
+ */
+
+/**
+ * @typedef {object} ThemeInput
+ * @property {"omarchy" | "file"} [source]
+ * @property {string} [font]
+ * @property {Record<string, string>} [colors]
  */
 
 /** Herdr's default keymap (https://herdr.dev/docs/keyboard/), plus vimma's own global chords. */
@@ -118,8 +136,13 @@ const modal = {
   },
 };
 
+/** Values a `[workspaces.<name>]` table takes for keys it leaves out. */
+export const WORKSPACE_DEFAULTS = Object.freeze({ color: "gray", icon: "circle", autofill: true });
+
+const theme = { source: /** @type {const} */ ("omarchy"), font: "monospace", colors: {} };
+
 /** @type {Readonly<UserConfig>} */
-export const DEFAULT_CONFIG = Object.freeze({ keys, modal, unbind: {} });
+export const DEFAULT_CONFIG = Object.freeze({ keys, modal, unbind: {}, workspaces: {}, theme });
 
 /** @param {string} s */
 const tomlString = (s) => JSON.stringify(s);
@@ -157,6 +180,25 @@ export function formatDefaultsToml() {
       lines.push(`${tomlString(seq)} = ${tomlString(action)}`);
     }
   }
-  lines.push("", "[unbind]", "normal = []", "");
+  lines.push(
+    "",
+    "[unbind]",
+    "normal = []",
+    "",
+    "# Order here is ctrl+i order; each workspace is a Firefox container. None by default.",
+    `# Left-out keys: color = ${tomlString(WORKSPACE_DEFAULTS.color)}, icon = ${tomlString(WORKSPACE_DEFAULTS.icon)}, autofill = ${WORKSPACE_DEFAULTS.autofill}.`,
+    "[workspaces]",
+    '# work = { color = "blue", icon = "briefcase", home = "https://intranet.example" }',
+    "",
+    '# "omarchy" follows the current Omarchy theme (Tokyo Night without one); "file" is Tokyo Night.',
+    "[theme]",
+    `source = ${tomlString(theme.source)}`,
+    `font = ${tomlString(theme.font)}`,
+    "",
+    "# Overrides on top of the palette, with the keys of Omarchy's colors.toml.",
+    "[theme.colors]",
+    '# accent = "#7aa2f7"',
+    "",
+  );
   return lines.join("\n");
 }

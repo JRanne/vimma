@@ -44,6 +44,8 @@ export class KeymapError extends Error {
   constructor(message, path, suggestion) {
     super(`${path}: ${message}${suggestion ? ` (did you mean "${suggestion}"?)` : ""}`);
     this.name = "KeymapError";
+    /** The message without path and suggestion, for callers that format those themselves. */
+    this.detail = message;
     this.path = path;
     this.suggestion = suggestion;
   }
