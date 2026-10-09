@@ -114,6 +114,10 @@ pref("vimma.control.enabled", false);
 // bar's "auto" mode: a query with a capital letter matches case, an all lower-case one does not.
 pref("accessibility.typeaheadfind.casesensitive", 2);
 
+// Workspaces (spec m3-workspaces, decision 13): every tab is in a workspace's container, and
+// Firefox only uses a preloaded about:newtab for tabs in no container, so it would never be used.
+pref("browser.newtab.preload", false);
+
 // Split panes (spec m4-split-panes, ADR-013): Vimma's keys are the only way into a split. This
 // hides Firefox's tab and link context-menu items and alt-click; the split-view API keeps
 // working. split.css hides the URL bar button.

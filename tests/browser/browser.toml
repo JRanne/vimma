@@ -78,3 +78,6 @@ support-files = [
 ["browser_vimma_start_page.js"]
 
 ["browser_vimma_workspace_store.js"]
+
+["browser_vimma_workspace_routing.js"]
+support-files = ["file_vimma_cookie.html"]

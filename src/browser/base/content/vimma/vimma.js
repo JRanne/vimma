@@ -27,6 +27,14 @@
   );
   VimmaHost.init(window);
 
+  // The workspace definitions, once per app (m3-workspaces, sub-spec 2a): Tabbrowser-sys-mjs.patch
+  // asks the store for the container of a tab or window opened without one. Not awaited: until
+  // it is loaded, the store reads its file synchronously on the first such question.
+  const { WorkspaceStore } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/workspaces/WorkspaceStore.sys.mjs",
+  );
+  WorkspaceStore.init().catch((e) => console.error("vimma: workspaces not loaded", e));
+
   // Split panes (spec m4-split-panes): the window's pane tree; sub-spec 3's keys drive it.
   const { PaneViews } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/split/PaneView.mjs",
