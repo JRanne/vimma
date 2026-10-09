@@ -1,0 +1,4 @@
+{
+  "$comment": "Key-to-action bench baseline, one entry per runner class (CPU model | arch | Node major). Gate: tools/bench/compare.mjs. Change only deliberately, with a changelog line in the commit body (docs/runbook.md, Bench baseline).",
+  "machines": {}
+}

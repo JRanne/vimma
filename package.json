@@ -24,7 +24,7 @@
     "lane:teardown": "node tools/lanes/lane-teardown.mjs",
     "test:py": "python3 -m unittest discover -s tools/upstream",
     "license-check": "node tools/license-check/license-check.mjs",
-    "bench": "vitest bench --run",
+    "bench": "node tools/bench/bench.mjs",
     "mutation": "stryker run"
   },
   "devDependencies": {
