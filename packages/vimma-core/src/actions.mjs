@@ -76,7 +76,7 @@ group("Panes", [
   ["swap_pane_up", "pane.swap_up", "Swap with pane above"],
   ["swap_pane_right", "pane.swap_right", "Swap with pane to the right"],
   ["zoom", "pane.zoom", "Zoom pane"],
-  ["close_pane", "pane.close", "Close pane"],
+  ["close_pane", "pane.close", "Close pane; the last pane closes the tab"],
   ["resize_mode", "pane.resize_mode", "Resize mode"],
   ["resize_narrower", "pane.resize_narrower", "Make pane narrower"],
   ["resize_wider", "pane.resize_wider", "Make pane wider"],

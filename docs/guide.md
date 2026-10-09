@@ -15,6 +15,25 @@ describes: `npm ci`, `npx surfer download`, `npx surfer bootstrap`, `npm run imp
 about 35 GB of disk space (`engine/` 27 GB, the sccache compiler cache 6.8 GB, `~/.mozbuild`
 3.1 GB, `.surfer/` 0.8 GB).
 
+### Installing (planned, not yet released)
+
+**Planned for M6; no release has these files yet.** Each GitHub Release will carry, for Linux
+x86_64 (`X.Y.Z` is the Vimma version):
+
+| File                              | Install                                                                                  |
+| --------------------------------- | ---------------------------------------------------------------------------------------- |
+| `vimma_X.Y.Z_amd64.deb`           | `sudo apt install ./vimma_X.Y.Z_amd64.deb` (Debian 12+, Ubuntu 22.04+)                   |
+| `vimma-X.Y.Z-x86_64.AppImage`     | `chmod +x vimma-X.Y.Z-x86_64.AppImage && ./vimma-X.Y.Z-x86_64.AppImage`                  |
+| `vimma-X.Y.Z-linux-x86_64.tar.xz` | `tar -xJf vimma-X.Y.Z-linux-x86_64.tar.xz && ./vimma/vimma`                              |
+| AUR `vimma-bin`                   | `yay -S vimma-bin` or `git clone https://aur.archlinux.org/vimma-bin.git && makepkg -si` |
+
+The `.deb` and the AUR package add Vimma to your application menu and offer it for web links,
+but never make it your default browser on their own: `xdg-settings set default-web-browser
+vimma-vimma.desktop` does that. Vimma has no in-app updater: update through apt, your AUR helper, or by
+downloading the next AppImage or tarball. Next to the files are `SHA256SUMS`, a CycloneDX SBOM
+(`vimma-X.Y.Z.cdx.json`) and cosign signatures (`*.sigstore.json`); how to check them is in
+[runbook.md](runbook.md#release-packages-releaseyml-spec-m6-packaging) ("Verify a release").
+
 ### First launch, with its own profile
 
 Start Vimma with a profile of its own, so it never touches your Firefox profile and two builds
@@ -131,6 +150,20 @@ contact Mozilla's update server; see [limits.md](limits.md).
 Sites see Firefox 157's user agent, with no Vimma token, and add-ons see Firefox's version
 (`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. `vimma --version` and the About
 dialog show Vimma's own version (`0.1.0`).
+
+## Firefox behaviour Vimma changes
+
+**Planned for M3** (workspaces, [m3-workspaces](specs/m3-workspaces.md)); each is a default you
+can change in `about:config`:
+
+- **Restart restores your session**: tabs, workspaces and scroll positions come back
+  (`browser.startup.page` = `3`; Firefox's default `1` opens the home page).
+- **Closing the last tab keeps the window** and opens a new tab, so a window never closes with
+  other workspaces' tabs in it (`browser.tabs.closeWindowWithLastTab` = `false`).
+- **No preloaded new-tab page** (`browser.newtab.preload` = `false`): Firefox only uses it for
+  tabs without a container, and every Vimma tab is in one.
+- **Firefox Sync leaves two settings alone**: `browser.startup.page` and
+  `privacy.userContext.enabled` (turning containers off deletes every workspace's data).
 
 ## FAQ and troubleshooting
 

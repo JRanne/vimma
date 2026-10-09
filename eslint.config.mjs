@@ -84,6 +84,8 @@ export default [
         ChromeUtils: "readonly",
         Services: "readonly",
         Cc: "readonly",
+        Ci: "readonly",
+        Cr: "readonly",
         ContentTaskUtils: "readonly", // inside SpecialPowers.spawn
         NewTabPagePreloading: "readonly",
         add_task: "readonly",

@@ -6,6 +6,8 @@
 
 "use strict";
 
+/* global focusContent, recordPageKeys, pageKeys, waitForPageKey -- from head.js */
+
 const NOTICE_ID = "vimma-notice";
 const PAGE = "https://example.com/";
 
@@ -14,19 +16,8 @@ registerCleanupFunction(() => {
   while (gBrowser.tabs.length > 1) gBrowser.removeTab(gBrowser.tabs.at(-1));
 });
 
-// Keys sent to a page race two asynchronous things (issues #14, #18): a content listener
-// installed later than the key, and content focus arriving later than browser.focus(). So: install
-// the recorder and await it, await content focus, press, then poll the page for a sentinel key.
-
-/** Focuses `browser` and resolves once its content process has focus too. */
-async function focusPage(browser) {
-  await SimpleTest.promiseFocus(browser);
-  Assert.equal(document.activeElement, browser, "focus is in the content browser");
-  Assert.ok(
-    await SpecialPowers.spawn(browser, [], () => content.document.hasFocus()),
-    "the page has focus",
-  );
-}
+// Page keys: recordPageKeys and focusContent are awaited before any key is pressed (head.js,
+// issues #14, #18).
 
 /** Selects `tab`; BrowserTestUtils.switchTab never resolves for the tab already selected. */
 async function select(tab) {
@@ -46,37 +37,18 @@ function tabOpened() {
   ]);
 }
 
-/** Records every keydown the page sees; resolves once the listener is in place. */
-async function recordKeys(browser) {
-  await SpecialPowers.spawn(browser, [], () => {
-    content.wrappedJSObject.vimmaKeys = [];
-    content.addEventListener(
-      "keydown",
-      (e) => content.wrappedJSObject.vimmaKeys.push(e.defaultPrevented ? `!${e.key}` : e.key),
-      true,
-    );
-  });
-}
-
 /**
  * Selects `tab`, presses j (never ours outside help) in its page and returns every key the page
  * saw, ending with "j". Content events arrive in order, so a leaked chord key would be listed
- * before the j. Gives up after 5 s so a swallowed j fails an assertion instead of the file.
+ * before the j.
  */
 async function pageKeysThenJ(tab) {
   await select(tab);
   const browser = tab.linkedBrowser;
-  await focusPage(browser);
+  await focusContent(browser);
   EventUtils.synthesizeKey("j");
-  return SpecialPowers.spawn(browser, [], async () => {
-    const seen = () => [...content.wrappedJSObject.vimmaKeys];
-    try {
-      await ContentTaskUtils.waitForCondition(() => seen().includes("j"), "page saw j", 50, 100);
-    } catch {
-      // Fall through: the assertion names what the page saw.
-    }
-    return seen();
-  });
+  await waitForPageKey(browser, ["j", "!j"]);
+  return pageKeys(browser);
 }
 
 /** Opens `n` example.com tabs, each recording its keys, and selects the first of them. */
@@ -84,11 +56,11 @@ async function openTabs(n) {
   const tabs = [];
   for (let i = 0; i < n; i++) {
     const tab = await BrowserTestUtils.openNewForegroundTab(gBrowser, `${PAGE}?tab=${i}`);
-    await recordKeys(tab.linkedBrowser);
+    await recordPageKeys(tab.linkedBrowser);
     tabs.push(tab);
   }
   await select(tabs[0]);
-  await focusPage(tabs[0].linkedBrowser);
+  await focusContent(tabs[0].linkedBrowser);
   return tabs;
 }
 

@@ -37,6 +37,10 @@ const DROPPED = [
     /^ac_add_options\s+--disable-crashreporter\b/,
     "Mozilla's libxul has the crash reporter and aborts without CrashService.sys.mjs",
   ],
+  [
+    /^ac_add_options\s+--disable-updater\b/,
+    "Mozilla's libxul has the updater and aborts without UpdateServiceStub.sys.mjs",
+  ],
   [/^ac_add_options\s+--with-ccache\b/, "nothing is compiled"],
 ];
 

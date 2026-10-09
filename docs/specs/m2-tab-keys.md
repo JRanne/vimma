@@ -98,10 +98,11 @@ action set).
   the keys count. M3 returns the active workspace's tabs in its model order (m3-m4-core-models
   `selectTab`/`openTab`/`closeTab`) and routes `tab.new`/`tab.close` through the model; the
   runners and tests keep their shape.
-- **Race-free page-key checks** (#14, #18): the flaky-fix `head.js` is not merged, so this file
-  has its own helpers with the same pattern: `await` the content recorder, `await` content focus
-  (`SimpleTest.promiseFocus(browser)` + `document.hasFocus()` in content), press, then poll the
-  page from content for a sentinel `j` (no `waitForContentEvent`). Switch to `head.js` once merged.
+- **Race-free page-key checks** (#14, #18): `head.js` from the flaky fix (#24). Each tab awaits
+  `recordPageKeys`, then `focusContent`; then the key; then `waitForPageKey` for a sentinel `j`
+  and `pageKeys`. Never `waitForContentEvent` before a key.
+- **After merging main** (lanes #20, flaky fix #24, M1 core #21, updater #15): full
+  `tests/browser/` 300/0 on the artifact build.
 - **Verified:** red (host without the runners): 45 passed / 10 failed (no tab opened, `n` did not
   move, digits did not select, `shift+x` timed out); overlay red 32/15 (no marks, no legend).
   Green: `browser_vimma_tab_keys.js` + `browser_vimma_help_overlay.js` 130/0. Mutation:
