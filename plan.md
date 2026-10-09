@@ -286,11 +286,11 @@ The repo holds the memory. `CLAUDE.md` (appendix A), specs, ADRs, tests and the 
 
 **Unattended runs (`claude.yml`):**
 
-- `@claude` in an issue/PR comment answers or acts. Issue with `spec` + `claude:go` → implemented in a worktree, draft PR. Only you add `claude:go`.
+- `@claude` in an issue/PR comment answers and reviews (read-only contents). Issue with `spec` + `claude:go` → implemented in a worktree, draft PR. Only you add `claude:go`.
 - Failed nightly, failed upstream rebase, failed Renovate PR → bounded fix: ≤ 3 pushes, each must add or change a test; never edits workflows, baselines, lint config or `surfer.json` pins to get green.
 - Sunday maintenance: fixed checklist, token budget, opens PRs, never merges.
 - Its PRs carry `bot`; auto-merge only for Renovate and clean upstream bumps, never for Claude Code PRs.
-- Scoped token: contents + pull-requests write; no release, AUR, signing or update-server secrets.
+- Scoped token: Claude itself gets read-only contents; a separate job without Claude pushes its branch and opens the PR (contents + pull-requests write); no release, AUR, signing or update-server secrets.
 
 **Practices that pay off here:**
 

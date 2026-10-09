@@ -39,11 +39,11 @@ chrome://browser/content/default-bookmarks.html". Both belong to the M0 branding
 
 | Workflow       | Trigger                       | Runner                    | Needs from you                               |
 | -------------- | ----------------------------- | ------------------------- | -------------------------------------------- |
-| `ci.yml`       | push to `main`, every PR      | `ubuntu-latest`           | nothing                                      |
+| `ci.yml`       | push to `main`, PRs, manual   | `ubuntu-latest`           | nothing                                      |
 | `e2e.yml`      | every PR                      | `ubuntu-latest`           | nothing (no-op until the build-strategy ADR) |
 | `nightly.yml`  | 03:00 UTC, manual             | self-hosted `vimma-build` | register the runner, set `NIGHTLY_ENABLED`   |
 | `upstream.yml` | every 6 h (`:17`), manual     | `ubuntu-latest`           | allow Actions to open PRs; optional token    |
-| `claude.yml`   | `@claude`, `spec`+`claude:go` | `ubuntu-latest`           | Claude GitHub app + a secret                 |
+| `claude.yml`   | `@claude`, `spec`+`claude:go` | `ubuntu-latest`           | a secret, two labels, Actions may open PRs   |
 | Renovate       | Mondays before 07:00 Helsinki | Renovate's own            | install the Renovate app                     |
 
 Locally, before pushing: `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:py`,
@@ -59,6 +59,12 @@ repos/JRanne/vimma/branches/main/protection` → 403 "Upgrade to GitHub Pro"). A
 review and green checks, by hand; no approval count is configured. Revisit if the repo goes public
 or moves to a paid plan (then: CI required, signed commits, one approval, via `gh api`).
 
+**Residual risk:** any job token with `contents: write` (`spec-pr` in claude.yml, upstream.yml,
+nightly.yml) could push to `main`, since nothing protects it. Mitigations: those jobs run no
+Claude-written code with that token (claude.yml's Claude job is read-only), Claude runs only for
+the owner (`claude:go` added by the owner; `@claude` from owner/member/collaborator), and GitHub
+Actions minutes and logs show every push. Check `git log origin/main` if anything looks off.
+
 ### Actions minutes budget
 
 The free plan has a limited monthly budget of minutes for private repos, billed per job and rounded
@@ -71,6 +77,15 @@ which costs no hosted minutes. Check usage in Settings → Billing → Usage.
 A full build does not fit a GitHub-hosted runner (22 GB `engine/`, 39 min on 16 threads), so it
 runs on a self-hosted runner, e.g. this dev box or a dedicated machine. Only for this private
 repo: never attach a self-hosted runner to a public repo that takes fork PRs.
+
+**Keep the runner stopped outside the nightly window.** Any branch of this repo can add a
+workflow with `runs-on: vimma-build` and run code on the machine while the runner is online.
+Runner groups, which could restrict it to `nightly.yml`, exist only for organisations (extra
+groups need the Team plan), not for a personal repo like this one. So: start the runner service
+shortly before 03:00 UTC and stop it after the build (e.g. two systemd timers calling
+`./svc.sh start` / `./svc.sh stop`), or keep it stopped and start it only for a manual run. Jobs
+queued while it is offline wait (up to 24 h) and run when it comes back, so check the queue
+(Actions → filter by "Queued") before starting it.
 
 1. Prerequisites on the machine: Node 22, Python 3, git, `gh`, ~60 GB free disk, and the Firefox
    toolchains (`npx surfer bootstrap` once, as in "First Firefox build"; they live in
@@ -96,33 +111,48 @@ The job keeps `engine/` between runs (`clean: false`) and re-downloads Firefox o
 
 `tools/upstream/check-release.py` prints `LATEST_FIREFOX_VERSION` from product-details when it
 is newer than `surfer.json`; `bump-surfer-json.py` rewrites only that version. The workflow then
-opens `chore(upstream): Firefox X.Y` on branch `upstream/firefox-X.Y` (skipped if the branch
-exists). One-time setup:
+opens a draft PR `chore(upstream): Firefox X.Y` on branch `upstream/firefox-X.Y`. If a PR for
+that branch is already open it does nothing; a branch left by a failed or closed run is rebuilt
+from `main` and force-pushed, so a failed run is retried 6 h later. One-time setup:
 
 1. Settings → Actions → General → Workflow permissions → tick "Allow GitHub Actions to create and
    approve pull requests" (`gh pr create` with the default token fails without it).
-2. Recommended: PRs opened with the default `GITHUB_TOKEN` do not trigger `ci.yml`. Create a
-   fine-grained token for this repo only (Contents + Pull requests: read/write) and store it:
-   `gh secret set UPSTREAM_PR_TOKEN`. The workflow uses it when present.
+2. Optional: PRs opened with the default `GITHUB_TOKEN` do not trigger `ci.yml`. Either mark the
+   draft ready for review (that event is yours, so CI runs) or `gh workflow run ci.yml --ref
+<branch>`; or store a fine-grained token for this repo only (Contents + Pull requests:
+   read/write) as `gh secret set UPSTREAM_PR_TOKEN`, which the workflow uses when present.
 
 Before merging a bump: `npm run import && npx surfer build` on the build machine (the nightly does
-this once merged).
+this once merged), then mark the PR ready for review.
 
 ### Claude Code in GitHub (`claude.yml`)
 
 Follows `anthropics/claude-code-action` v1. Until a secret exists every run is green and skips
 all work with a notice.
 
-1. Install the Claude GitHub app on the repo: <https://github.com/apps/claude>.
-2. Add one secret: `gh secret set ANTHROPIC_API_KEY`, or with a Pro/Max plan run
-   `claude setup-token` and `gh secret set CLAUDE_CODE_OAUTH_TOKEN`.
-3. Create the labels: `gh label create spec`, `gh label create claude:go`
+1. Add one secret: `gh secret set ANTHROPIC_API_KEY`, or with a Pro/Max plan run
+   `claude setup-token` and `gh secret set CLAUDE_CODE_OAUTH_TOKEN`. The Claude GitHub app is
+   not needed: the workflow passes the job's own `GITHUB_TOKEN` (`github_token` input).
+2. Create the labels: `gh label create spec`, `gh label create claude:go`
    (`bot`, `upstream`, `nightly-failure` are created by the workflows).
-4. Use: `@claude` in an issue, comment or review; or label a `spec` issue `claude:go` to get a
-   draft PR labelled `bot`. Only you add `claude:go`; Claude Code never merges.
+   Tick "Allow GitHub Actions to create and approve pull requests" (see Upstream bumps).
+3. Use `@claude` in an issue, comment or review (only from the owner, members or collaborators).
+   Claude answers, reviews and comments; it cannot push in this mode.
+4. For code: add `claude:go` to a `spec` issue yourself (the job checks that the label was added
+   by the repository owner, so a bot or a `@claude` request cannot chain into it). Claude
+   implements and commits on a runner with a read-only token; a separate job without Claude
+   applies the patch, pushes `claude/spec-<issue>` and opens a draft PR labelled `bot`.
+5. CI does not start on that PR by itself (GITHUB_TOKEN PRs trigger no workflows): mark it ready
+   for review, or `gh workflow run ci.yml --ref claude/spec-<issue>`. Claude Code never merges.
 
-The job token is scoped to contents, pull-requests and issues (write), `actions: read` and
-`id-token: write` for the Claude app token; no other secret is passed.
+Tokens: because `github_token: github.token` is passed, each job's `permissions:` block is the
+token Claude gets (without it the action would use the Claude app's installation token with
+contents, pull-requests and issues write). `mention`: contents read, pull-requests and issues
+write, actions read. `spec` (Claude): contents and issues read; tools limited to file edits,
+`npm test`/`lint`/`typecheck`/`coverage`/`format`/`gen-docs`/`test:py`, `git add/commit/diff/
+log/status` and `gh issue view`. Tests Claude writes still run as code on that runner, which is
+why its token is read-only. `spec-pr` (no Claude): contents and pull-requests write;
+GITHUB_TOKEN cannot change `.github/workflows`. No other secret is passed.
 
 ### Renovate
 
@@ -132,9 +162,10 @@ The job token is scoped to contents, pull-requests and issues (write), `actions:
    first run goes straight to the dependency dashboard issue and update PRs.
 
 `renovate.json`: npm and GitHub Actions only, Mondays, releases at least 3 days old, actions kept
-pinned to commit SHAs. Patch/minor/digest PRs automerge once all checks pass; Renovate merges them
+pinned to commit SHAs. npm patch/minor PRs automerge once all checks pass; Renovate merges them
 itself (`platformAutomerge: false`, since there is no branch protection for GitHub auto-merge to
-wait on). Majors and `@zen-browser/surfer` stay open for review.
+wait on). Majors, `@zen-browser/surfer` and every GitHub Actions update (workflows hold write
+tokens and the Claude secret) stay open for review.
 
 ### Licences
 
