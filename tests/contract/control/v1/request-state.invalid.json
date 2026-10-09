@@ -1,0 +1,12 @@
+{
+  "description": "Unknown args are rejected",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 2,
+    "command": "state",
+    "args": {
+      "verbose": true
+    }
+  }
+}
