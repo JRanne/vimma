@@ -322,6 +322,53 @@ add_task(async function esc_cancels_and_backspace_restores_the_filter() {
   });
 });
 
+add_task(async function the_status_bar_shows_hint_mode_while_labels_are_up() {
+  const badge = () =>
+    document.querySelector('#vimma-statusbar [data-segment="mode"]')?.textContent ?? null;
+  await withPage(PAGE, async () => {
+    await TestUtils.waitForCondition(() => badge() === "NORMAL", "the badge reads NORMAL");
+    await startHints();
+    await TestUtils.waitForCondition(() => badge() === "HINT", "the badge reads HINT");
+    EventUtils.synthesizeKey("KEY_Escape");
+    await TestUtils.waitForCondition(() => badge() === "NORMAL", "Esc: the badge reads NORMAL");
+  });
+  // With no targets, hint mode ends when the collection does, with no key to update the bar:
+  // a page with nothing to hint but a busy frame, so the collection ends at the frame timeout.
+  await withPage(DIR + "file_vimma_hints_frame.html?empty", async (browser) => {
+    await SpecialPowers.pushPrefEnv({ clear: [[FRAME_TIMEOUT_PREF]] });
+    const frameUrl = PAGE.replace("example.com", "example.org").replace(
+      "file_vimma_hints.html",
+      "file_vimma_hints_frame.html",
+    );
+    await SpecialPowers.spawn(browser, [frameUrl], async (url) => {
+      const doc = content.document;
+      doc.getElementById("framed").remove();
+      const frame = doc.createElement("iframe");
+      frame.src = url;
+      const loaded = new Promise((r) => frame.addEventListener("load", r, { once: true }));
+      doc.body.append(frame);
+      await loaded;
+    });
+    await SpecialPowers.spawn(browser.browsingContext.children[0], [], () => {
+      content.setTimeout(() => {
+        const end = Date.now() + 2000;
+        while (Date.now() < end);
+      }, 50);
+    });
+    await new Promise((r) => setTimeout(r, 200));
+    await TestUtils.waitForCondition(() => badge() === "NORMAL", "the badge reads NORMAL");
+    const runs = VimmaHost._hintRuns;
+    EventUtils.synthesizeKey("f");
+    await TestUtils.waitForCondition(() => VimmaHost._hintRuns > runs, "the collection finished");
+    await TestUtils.waitForCondition(
+      () => badge() === "NORMAL",
+      "no targets: the badge is back to NORMAL",
+      100,
+      20,
+    );
+  });
+});
+
 add_task(async function the_page_cannot_observe_the_hints() {
   await withPage(PAGE, async (browser) => {
     const hints = await startHints();
