@@ -25,8 +25,8 @@ Some features need awkward indirection instead of a direct edit.
 
 ## Patch register
 
-| Patch                                          | Why                                                                                                                   |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `src/browser/base/moz-build.patch`             | Adds `content/vimma` to `DIRS` so our own `moz.build` registers our `jar.mn` and mochitest manifest (m0-key-capture). |
-| `src/browser/base/content/browser-xhtml.patch` | One `<script>` after `browser-main.js` loads `vimma/vimma.js`, which starts `VimmaHost` (m0-key-capture).             |
-| `src/browser/moz-configure.patch`              | `MOZ_APP_VENDOR` "Mozilla" → "Vimma": an implied option cannot be overridden from a mozconfig (m0-branding).          |
+| Patch                                          | Why                                                                                                                                                                                                                           |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/browser/base/moz-build.patch`             | Adds `content/vimma` to `DIRS` so our own `moz.build` registers our `jar.mn` and mochitest manifest (m0-key-capture).                                                                                                         |
+| `src/browser/base/content/browser-xhtml.patch` | One `<script>` after `browser-main.js` loads `vimma/vimma.js`, which starts `VimmaHost` (m0-key-capture).                                                                                                                     |
+| `src/browser/moz-configure.patch`              | `MOZ_APP_VENDOR` "Mozilla" → "Vimma": an implied option cannot be overridden from a mozconfig (m0-branding); `MOZ_APP_UA_NAME` "Firefox": a project flag only `imply_option` can set, keeps the UA Firefox's (m0-user-agent). |
