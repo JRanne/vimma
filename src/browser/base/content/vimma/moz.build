@@ -1,0 +1,12 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# Wired in by browser/base/moz-build.patch (ADR-003).
+
+JAR_MANIFESTS += ["jar.mn"]
+
+# `surfer import` symlinks the repo's tests/ here.
+BROWSER_CHROME_MANIFESTS += [
+    "/browser/base/zen-components/tests/browser/browser.toml",
+]

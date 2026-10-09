@@ -1,6 +1,6 @@
 # Spec: m0-key-capture
 
-Status: ready · Milestone: M0 · Area: host (`src/browser/base/content/vimma/host/`)
+Status: implemented, awaiting review · Milestone: M0 · Area: host (`src/browser/base/content/vimma/host/`)
 Prerequisite: Surfer project set up and `npx surfer build` succeeded once (plan §10 step 3).
 
 ## User story
@@ -37,7 +37,26 @@ be wired in next.
 
 Dispatching actions, consuming keys, modes other than `normal`.
 
-## Open questions to settle here
+## Settled (2026-10-09, from the engine tree and Surfer's source)
 
-- Is a `browser.js.patch` needed at all, or is the `browser.xhtml` script tag enough?
-- Where do mochitests live inside the engine tree for `./mach test` to find them (`browser.toml`)?
+- **No `browser.js.patch`.** `browser.xhtml` loads `browser-main.js` as a classic `<script>`; one more
+  `<script src="chrome://browser/content/vimma/vimma.js">` after it is enough. That script calls
+  `ChromeUtils.importESModule` on the host (chrome:// URLs work, as `browser-main.js` does for
+  `tabgroup.mjs`) and `VimmaHost.init(window)`.
+- **Patch names follow `surfer export`**: dots become dashes, so `browser-xhtml.patch`, not
+  `browser.xhtml.patch`.
+- **Registration: our own `moz.build`.** `src/browser/base/content/vimma/moz.build` declares
+  `JAR_MANIFESTS` (our `jar.mn`, `browser.jar` section, so files land under
+  `chrome://browser/content/vimma/`) and `BROWSER_CHROME_MANIFESTS`. Upstream gets one line:
+  `browser/base/moz-build.patch` adds `"content/vimma"` to `DIRS`. This avoids touching the
+  long, churny `browser/base/jar.mn` and `BROWSER_CHROME_MANIFESTS` lists.
+- **Mochitests live in `tests/browser/`.** `surfer import` symlinks every file under `tests/` into
+  `engine/browser/base/zen-components/tests/` (path hard-coded in Surfer's `copy-patches.js`).
+  Our `moz.build` points at it with a topsrcdir path
+  (`/browser/base/zen-components/tests/browser/browser.toml`; mozbuild resolves `/`-prefixed
+  `SourcePath`s against topsrcdir). `npm run mochitest -- tests/browser/x.js` maps the path and
+  runs `./mach mochitest --headless` in `engine/`.
+- **`src/.../vimma/core/` is generated** by `npm run sync-core` and git-ignored; `npm run import`
+  runs `sync-core` then `surfer import`, so a fresh clone cannot build with stale copies.
+- **First build after adding a `moz.build`** needs a plain `./mach build` (backend regen);
+  `surfer build --ui` (`mach build faster`) is enough afterwards for JS/CSS edits.

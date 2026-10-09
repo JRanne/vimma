@@ -1,0 +1,12 @@
+diff --git a/browser/base/content/browser.xhtml b/browser/base/content/browser.xhtml
+index 9a7d30d910856de77921cdcefac24d4c79b09ee7..1166b6ad2ceb2c403e6f60de0de9d51a51503ff8 100644
+--- a/browser/base/content/browser.xhtml
++++ b/browser/base/content/browser.xhtml
+@@ -112,6 +112,7 @@
+ 
+   <script src="chrome://browser/content/global-scripts.js"></script>
+   <script src="chrome://browser/content/browser-main.js"></script>
++  <script src="chrome://browser/content/vimma/vimma.js"></script>
+ </head>
+ <html:body xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+ # All sets except for popupsets (commands, keys, and stringbundles)
