@@ -4,6 +4,8 @@
 declare const Services: {
   prefs: {
     getBoolPref(name: string, defaultValue?: boolean): boolean;
+    setBoolPref(name: string, value: boolean): void;
+    prefHasUserValue(name: string): boolean;
   };
   // engine/dom/interfaces/base/nsIFocusManager.idl
   focus: {
