@@ -68,6 +68,11 @@ Vimma/0.1.0`. After: `… Gecko/20100101 Firefox/157.0`, byte-identical to Firef
 
 ## Open issues (versioning work, plan §7 / M6)
 
+Addressed by [m0-app-version](m0-app-version.md): `appinfo.version` and `MOZ_APP_VERSION` become
+the Firefox version, `MOZ_APP_VERSION_DISPLAY` stays Vimma's, and `ClientEnvironment` and
+`Targeting` read the former. Its "Who sees which version" table supersedes the list below, which
+records the state before it.
+
 Surfer writes `displayVersion` into both `browser/config/version.txt` and `version_display.txt`,
 so `appinfo.version`, `MOZ_APP_VERSION` and `MOZ_APP_VERSION_DISPLAY` are all `0.1.0`. Places
 that read them as a Firefox version (Zen patches each of them against its own
@@ -91,7 +96,7 @@ that read them as a Firefox version (Zen patches each of them against its own
   restore a backup whose `appVersion` is higher (`BackupService.sys.mjs`), so a Firefox backup
   cannot be restored into Vimma.
 
-Options for that spec: (a) keep `version.txt` at the Firefox version and only `version_display.txt`
-at ours (fights Surfer, which rewrites both in `surfer build`), or (b) Zen's route, patching each
-reader to use `ZEN_FIREFOX_VERSION`. None of these blocks M0 (no add-on store, updates or
-telemetry in use yet).
+Options were (a) keep `version.txt` at the Firefox version and only `version_display.txt` at
+ours, or (b) Zen's route, patching each reader to use `ZEN_FIREFOX_VERSION`. m0-app-version
+chose (a) without fighting Surfer, through configure's `--with-version-file-path`, and rejected
+(b) as too many patches.
