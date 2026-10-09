@@ -6,11 +6,13 @@
  *                       appinfo.version
  *   version_display.txt brands.<brand>.release.displayVersion (Vimma's) -> MOZ_APP_VERSION_DISPLAY,
  *                       `vimma --version`, the About dialog
+ *   patches.json        every src/**\/*.patch with its hunk count, for about:vimma
+ *                       (spec m5-about-vimma; jar.mn packages it)
  * into src/browser/config/vimma/ (git-ignored); `surfer import` links them into the engine.
  * Usage: node tools/version-files/version-files.mjs [brand]   (default brand: vimma)
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** A Firefox version as configure parses it: x.y or x.y.z, optionally a beta (`bN`). */
@@ -71,10 +73,45 @@ export function writeVersionFiles(config, dir, brand) {
   return { firefox: version(files["version.txt"]), display: version(files["version_display.txt"]) };
 }
 
+/**
+ * The upstream patches the build carries, for about:vimma (spec m5-about-vimma): every
+ * `src/**\/*.patch` under `root`, sorted, with its hunk count (`@@ -` lines, as `git apply`
+ * reads them). tools/upstream/patch-audit.py has the full audit; this is only what the page shows.
+ * @param {string} root the repository
+ * @returns {{ patches: { path: string, hunks: number }[], hunks: number }}
+ */
+export function patchManifest(root) {
+  const patches = readdirSync(join(root, "src"), { recursive: true, withFileTypes: true })
+    .filter((e) => e.isFile() && e.name.endsWith(".patch"))
+    .map((e) => {
+      const file = join(e.parentPath, e.name);
+      const hunks = readFileSync(file, "utf8")
+        .split("\n")
+        .filter((l) => l.startsWith("@@ -")).length;
+      return { path: relative(root, file).split(sep).join("/"), hunks };
+    })
+    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  return { patches, hunks: patches.reduce((n, p) => n + p.hunks, 0) };
+}
+
+/**
+ * Writes `patches.json` (patchManifest) into `dir`; jar.mn packages it for about:vimma.
+ * @param {string} root
+ * @param {string} dir created if missing
+ */
+export function writePatchManifest(root, dir) {
+  const manifest = patchManifest(root);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "patches.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+  return manifest;
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const root = new URL("../../", import.meta.url);
   const config = JSON.parse(readFileSync(new URL("surfer.json", root), "utf8"));
   const dir = fileURLToPath(new URL("src/browser/config/vimma/", root));
   const { firefox, display } = writeVersionFiles(config, dir, process.argv[2]);
   console.log(`version-files: ${firefox} (Firefox), ${display} (display) -> ${dir}`);
+  const { patches } = writePatchManifest(fileURLToPath(root), dir);
+  console.log(`version-files: ${patches.length} patches -> ${join(dir, "patches.json")}`);
 }

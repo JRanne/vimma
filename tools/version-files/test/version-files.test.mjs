@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { versionFiles, writeVersionFiles } from "../version-files.mjs";
+import { fileURLToPath } from "node:url";
+import {
+  patchManifest,
+  versionFiles,
+  writePatchManifest,
+  writeVersionFiles,
+} from "../version-files.mjs";
 
 /**
  * configure (`milestone()`) reads only the last line, as with config/milestone.txt.
@@ -71,5 +77,45 @@ describe("writeVersionFiles", () => {
     });
     expect(lastLine(readFileSync(join(dir, "version.txt"), "utf8"))).toBe("157.0.1");
     expect(lastLine(readFileSync(join(dir, "version_display.txt"), "utf8"))).toBe("0.1.0");
+  });
+});
+
+describe("patchManifest", () => {
+  /** A tree with two patches (one nested) and a file that is not one. */
+  function tree() {
+    const root = mkdtempSync(join(tmpdir(), "vimma-patches-"));
+    /** @param {number} n */
+    const hunk = (n) => `@@ -${n},1 +${n},2 @@\n line\n+added\n`;
+    mkdirSync(join(root, "src/browser/base"), { recursive: true });
+    writeFileSync(
+      join(root, "src/browser/base/b.patch"),
+      `diff --git a/x b/x\n--- a/x\n+++ b/x\n${hunk(1)}${hunk(9)}`,
+    );
+    writeFileSync(join(root, "src/a.patch"), `diff --git a/y b/y\n--- a/y\n+++ b/y\n${hunk(3)}`);
+    writeFileSync(join(root, "src/notes.txt"), "@@ not a patch @@\n");
+    return root;
+  }
+
+  it("lists every src/**/*.patch, sorted, with its hunk count", () => {
+    expect(patchManifest(tree())).toEqual({
+      patches: [
+        { path: "src/a.patch", hunks: 1 },
+        { path: "src/browser/base/b.patch", hunks: 2 },
+      ],
+      hunks: 3,
+    });
+  });
+
+  it("counts the repository's own patches", () => {
+    const m = patchManifest(fileURLToPath(new URL("../../../", import.meta.url)));
+    expect(m.patches.length).toBeGreaterThan(0);
+    expect(m.patches.every((p) => p.path.startsWith("src/") && p.hunks > 0)).toBe(true);
+  });
+
+  it("writes patches.json into the directory", () => {
+    const root = tree();
+    const dir = join(root, "out");
+    writePatchManifest(root, dir);
+    expect(JSON.parse(readFileSync(join(dir, "patches.json"), "utf8")).patches).toHaveLength(2);
   });
 });

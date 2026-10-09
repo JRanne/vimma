@@ -92,6 +92,11 @@ export default [
     },
   },
   {
+    // about:vimma registers its nsIAboutModule factory through the component registrar.
+    files: ["src/**/vimma/about/**"],
+    languageOptions: { globals: { Components: "readonly" } },
+  },
+  {
     files: ["src/**/vimma/**/*.js"],
     languageOptions: { sourceType: "script" },
   },

@@ -16,6 +16,12 @@
   );
   StartPage.init(window);
 
+  // about:vimma, registered at runtime once per process (spec m5-about-vimma): no upstream patch.
+  const { AboutVimma } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/about/AboutVimma.sys.mjs",
+  );
+  AboutVimma.register();
+
   // Once per process, before the host dispatches page keys (m1-actor-insert-scroll).
   const { VimmaActors } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/actors/VimmaActors.sys.mjs",

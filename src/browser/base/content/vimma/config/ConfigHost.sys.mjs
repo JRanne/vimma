@@ -228,4 +228,19 @@ export const ConfigHost = {
   get path() {
     return configPath();
   },
+
+  /** The keymap in force (core's Keymap), null before the first read (about:vimma). */
+  get keymap() {
+    return active?.keymap ?? null;
+  },
+
+  /**
+   * The file as last read (about:vimma): "pending" before the first read, "missing" (the
+   * defaults), else "read" (applied, or the previous config kept when `errors` is not empty).
+   * @returns {"pending" | "missing" | "read"}
+   */
+  get file() {
+    if (!active) return "pending";
+    return signature === "missing" ? "missing" : "read";
+  },
 };
