@@ -32,8 +32,9 @@ env:
   TAG: ${{ github.event.release.tag_name || inputs.tag }}
 
 jobs:
-  # Full build on the self-hosted machine (22 GB engine/; as nightly.yml). Read-only token, no
-  # secrets: what it produces is checked, signed and uploaded by hosted jobs below. It builds in
+  # Full build on the self-hosted machine (22 GB engine/; as nightly.yml). Read-only token, and
+  # one secret, the Google Safe Browsing key, which ships inside the binaries anyway (spec
+  # m0-safebrowsing-key): what it produces is checked, signed and uploaded by hosted jobs below. It builds in
   # a fresh objdir with an empty compiler cache of its own, so nothing a nightly (or anything
   # else that ran on the runner) left behind reaches signed binaries; a cold build costs ~40 min.
   build:
@@ -87,6 +88,21 @@ jobs:
             echo "$want" > engine/.vimma-firefox-version
           fi
 
+      # As nightly.yml: the secret goes to a mode-600 file through a shell builtin, never echoed;
+      # configs/common/mozconfig reads VIMMA_SAFEBROWSING_KEYFILE. It stays until the last mach
+      # call (package): mach re-reads the mozconfig, which fails on a missing file.
+      - name: Safe Browsing key file
+        env:
+          SAFEBROWSING_API_KEY: ${{ secrets.SAFEBROWSING_API_KEY }}
+        run: |
+          if [ -z "$SAFEBROWSING_API_KEY" ]; then
+            echo "::error::secret SAFEBROWSING_API_KEY is not set; a release must have the key"
+            exit 1
+          fi
+          keyfile="$RUNNER_TEMP/vimma-safebrowsing.key"
+          (umask 077 && printf '%s' "$SAFEBROWSING_API_KEY" > "$keyfile")
+          echo "VIMMA_SAFEBROWSING_KEYFILE=$keyfile" >> "$GITHUB_ENV"
+
       - name: Import patches and our sources
         run: npm run import
 
@@ -102,12 +118,20 @@ jobs:
           appver=$(sed -n 's/^Version=//p' "$MOZ_OBJDIR/dist/bin/application.ini")
           firefox=$(node -p 'require("./surfer.json").version.version')
           [ "$appver" = "$firefox" ] || { echo "::error::app version is '$appver', want '$firefox'"; exit 1; }
+          # Safe Browsing needs the key compiled in; configure's placeholder means it is missing.
+          if grep -q '"no-google-safebrowsing-api-key"' "$MOZ_OBJDIR/dist/bin/modules/AppConstants.sys.mjs"; then
+            echo "::error::built without the Safe Browsing key"; exit 1
+          fi
 
       - name: Package with mach (dist/vimma-<firefox>.en-US.linux-x86_64.tar.xz)
         run: |
           (cd engine && ./mach package)
           rm -rf release && mkdir release
           cp "$MOZ_OBJDIR"/dist/vimma-*.en-US.linux-x86_64.tar.xz release/
+
+      - name: Delete the Safe Browsing key file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/vimma-safebrowsing.key"
 
       - name: SBOM (CycloneDX), checked against the official 1.6 schema
         run: |
