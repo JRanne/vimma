@@ -156,13 +156,14 @@ add_task(async function help_show_while_open_closes_it() {
 });
 
 /**
- * Presses j (never ours outside help) and returns the page's keys (recordPageKeys), ending with
- * "j". A key that is not ours proves the listener works and flushes any in-flight events. Gives
- * up after 5 s, so a swallowed j fails the assertion instead of timing out the whole file.
+ * Presses z (unbound, so never ours outside help) and returns the page's keys (recordPageKeys),
+ * ending with "z". A key that is not ours proves the listener works and flushes any in-flight
+ * events. Gives up after 5 s, so a swallowed z fails the assertion instead of timing out the
+ * whole file. (Not j: since M1 it scrolls in normal mode.)
  */
-async function pageKeysThenJ(browser) {
-  EventUtils.synthesizeKey("j");
-  await waitForPageKey(browser, ["j", "!j"]);
+async function pageKeysThenZ(browser) {
+  EventUtils.synthesizeKey("z");
+  await waitForPageKey(browser, ["z", "!z"]);
   return pageKeys(browser);
 }
 
@@ -173,8 +174,8 @@ add_task(async function page_receives_no_keydown_for_the_chord() {
     await openHelp();
     await closeHelp();
     Assert.deepEqual(
-      await pageKeysThenJ(browser),
-      ["j"],
+      await pageKeysThenZ(browser),
+      ["z"],
       "the page saw neither ctrl+b nor ? (nor Esc)",
     );
     Assert.ok(!SidebarController.isOpen, "ctrl+b no longer toggles the bookmarks sidebar");
@@ -194,19 +195,19 @@ add_task(async function bare_prefix_does_not_time_out() {
     EventUtils.synthesizeKey("?", { shiftKey: true });
     await TestUtils.waitForCondition(isShown, "ctrl+b, a pause, then ? still opens help");
     await closeHelp();
-    Assert.deepEqual(await pageKeysThenJ(browser), ["j"], "the page saw neither key");
+    Assert.deepEqual(await pageKeysThenZ(browser), ["z"], "the page saw neither key");
   });
 });
 
-add_task(async function unrunnable_single_key_action_reaches_the_page() {
+add_task(async function esc_in_normal_mode_reaches_the_page() {
   await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
     await recordPageKeys(browser);
     await focusContent(browser);
-    // Esc is bound to mode.normal, which the host cannot run before M1.
+    // Esc is bound only in the other modes (escape.mjs: normal with nothing pending passes).
     EventUtils.synthesizeKey("KEY_Escape");
     Assert.deepEqual(
-      await pageKeysThenJ(browser),
-      ["Escape", "j"],
+      await pageKeysThenZ(browser),
+      ["Escape", "z"],
       "Esc reaches the page, not default-prevented",
     );
   });
@@ -219,7 +220,7 @@ add_task(async function unrunnable_key_inside_a_prefix_sequence_is_consumed() {
     const tabs = gBrowser.tabs.length;
     EventUtils.synthesizeKey("b", { ctrlKey: true });
     EventUtils.synthesizeKey("c"); // new_tab: not runnable yet
-    Assert.deepEqual(await pageKeysThenJ(browser), ["j"], "ctrl+b c leaks no c to the page");
+    Assert.deepEqual(await pageKeysThenZ(browser), ["z"], "ctrl+b c leaks no c to the page");
     Assert.equal(gBrowser.tabs.length, tabs, "and does nothing else yet");
   });
 });
@@ -235,8 +236,8 @@ add_task(async function tab_select_resets_a_pending_prefix() {
     await focusContent(browser);
     EventUtils.synthesizeKey("?", { shiftKey: true });
     Assert.deepEqual(
-      await pageKeysThenJ(browser),
-      ["?", "j"],
+      await pageKeysThenZ(browser),
+      ["?", "z"],
       "after a tab switch ? is typed, not ctrl+b ?",
     );
     Assert.ok(!isShown(), "help did not open");

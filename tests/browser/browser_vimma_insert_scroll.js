@@ -38,7 +38,7 @@ async function withPage(fn) {
 }
 
 /** @param {XULBrowserElement} browser */
-function scrollY(browser) {
+function pageScrollY(browser) {
   return SpecialPowers.spawn(browser, [], () => content.scrollY);
 }
 
@@ -48,7 +48,7 @@ function scrollY(browser) {
  * @param {string} msg
  */
 function waitForScroll(browser, predicate, msg) {
-  return TestUtils.waitForCondition(async () => predicate(await scrollY(browser)), msg);
+  return TestUtils.waitForCondition(async () => predicate(await pageScrollY(browser)), msg);
 }
 
 /**
@@ -142,7 +142,7 @@ add_task(async function an_input_enters_insert_and_esc_leaves_it() {
       "j",
       "j is typed into the input",
     );
-    Assert.equal(await scrollY(browser), 0, "and does not scroll");
+    Assert.equal(await pageScrollY(browser), 0, "and does not scroll");
 
     EventUtils.synthesizeKey("KEY_Escape");
     await waitForMode(browser, "normal");
@@ -248,8 +248,31 @@ add_task(async function insert_mode_is_per_tab() {
           )) === "j",
         "back in the first tab, j is typed into its input",
       );
-      Assert.equal(await scrollY(first), 0, "and the first tab did not scroll");
+      Assert.equal(await pageScrollY(first), 0, "and the first tab did not scroll");
       Assert.equal(VimmaHost._browserMode(second), "normal", "the second tab stays in normal");
     });
+  });
+});
+
+add_task(async function the_actor_reaches_settings_and_the_pdf_viewer_but_not_data_urls() {
+  const { VimmaActors } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/actors/VimmaActors.sys.mjs",
+  );
+  await BrowserTestUtils.withNewTab("about:preferences", async (browser) => {
+    Assert.ok(VimmaActors.has(browser), "Settings (parent process) has the actor");
+    await focusContent(browser);
+    // Settings focuses its search box on load.
+    await waitForMode(browser, "insert");
+    EventUtils.synthesizeKey("KEY_Escape");
+    await waitForMode(browser, "normal");
+  });
+  const pdf = PAGE.replace("file_vimma_insert_scroll.html", "file_vimma_test.pdf");
+  await BrowserTestUtils.withNewTab(pdf, async (browser) => {
+    Assert.ok(VimmaActors.has(browser), "the PDF viewer has the actor");
+    Assert.equal(VimmaHost._browserMode(browser), "normal", "and starts in normal");
+  });
+  await BrowserTestUtils.withNewTab("data:text/html,<p>hi", async (browser) => {
+    Assert.ok(!VimmaActors.has(browser), "a data: page has no actor");
+    Assert.equal(VimmaHost._browserMode(browser), "insert", "so it stays in insert");
   });
 });
