@@ -1,0 +1,37 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Fixture for browser_vimma_hints.js: 2,000 links. `?dense` packs them all into the viewport;
+   - otherwise they run down a long page. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vimma 2000 links</title>
+    <style>
+      body {
+        margin: 0;
+        font: 8px/1 sans-serif;
+      }
+      .dense a {
+        display: inline-block;
+        width: 18px;
+        height: 12px;
+        overflow: hidden;
+      }
+      .long a {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="links"></div>
+    <script>
+      const box = document.getElementById("links");
+      box.className = location.search.includes("dense") ? "dense" : "long";
+      const html = [];
+      for (let i = 0; i < 2000; i++) html.push(`<a href="#l${i}"><span>${i}</span></a> `);
+      box.innerHTML = html.join("");
+    </script>
+  </body>
+</html>
