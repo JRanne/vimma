@@ -6,6 +6,8 @@
 
 "use strict";
 
+const { AppConstants } = ChromeUtils.importESModule("resource://gre/modules/AppConstants.sys.mjs");
+
 const BRAND = "Vimma";
 
 /**
@@ -34,11 +36,10 @@ add_task(async function app_name_and_vendor_are_vimma() {
   Assert.equal(Services.appinfo.name, BRAND, "Services.appinfo.name");
   Assert.equal(Services.appinfo.vendor, BRAND, "Services.appinfo.vendor");
   // surfer.json brands.vimma.release.displayVersion; Surfer falls back to 1.0.0 if it is lost.
-  // Plan §7: 0.x until M6.
-  Assert.ok(
-    /^0\.\d+\.\d+$/.test(Services.appinfo.version),
-    `appinfo.version ${Services.appinfo.version} is 0.x`,
-  );
+  // Plan §7: 0.x until M6. Vimma's product version is the display version; appinfo.version is
+  // the Firefox version (spec m0-app-version, browser_vimma_app_version.js).
+  const display = AppConstants.MOZ_APP_VERSION_DISPLAY;
+  Assert.ok(/^0\.\d+\.\d+$/.test(display), `MOZ_APP_VERSION_DISPLAY ${display} is 0.x`);
 });
 
 add_task(async function brand_strings_are_vimma() {
