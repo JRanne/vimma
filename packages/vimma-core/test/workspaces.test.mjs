@@ -18,6 +18,7 @@ import {
   findWorkspace,
   workspaceOfTab,
   WorkspaceError,
+  MAX_WORKSPACE_ID,
 } from "../src/workspaces.mjs";
 import { closePane, focus, leaves, resize, setPaneTab, swap, toggleZoom } from "../src/panes.mjs";
 import { toSnapshot, fromSnapshot } from "../src/snapshot.mjs";
@@ -138,6 +139,70 @@ describe("workspace lifecycle", () => {
     const r = deleteWorkspace(abc(), { index: 2 });
     expect(ws(r.state).name).toBe("work");
     expect(r.closedTabs).toEqual([]);
+  });
+});
+
+describe("explicit workspace ids", () => {
+  const uuid = "ws-6f1c2a3e-0b7d-4c55-9a1e-2f3b4c5d6e7f";
+
+  test("createWorkspaces and addWorkspace keep an explicit id; others are minted as before", () => {
+    let s = createWorkspaces([
+      { name: "work", container: "c-work", id: uuid },
+      { name: "personal", container: "c-personal" },
+    ]);
+    expect(s.workspaces.map((w) => w.id)).toEqual([uuid, "w1"]);
+    expect(s.active).toBe(uuid);
+    s = addWorkspace(s, { name: "shop", container: "c-shop", id: "ws-shop" }, { activate: false });
+    expect(findWorkspace(s, { id: "ws-shop" })?.name).toBe("shop");
+    expect(s.active).toBe(uuid);
+  });
+
+  test("an explicit id shaped like a minted one moves the counter past it", () => {
+    let s = createWorkspaces([{ name: "work", container: "c-work", id: "w7" }]);
+    s = addWorkspace(s, { name: "personal", container: "c-personal" });
+    expect(s.workspaces.map((w) => w.id)).toEqual(["w7", "w8"]);
+    expect(fromSnapshot(toSnapshot(s))).toEqual(s);
+  });
+
+  test("explicit ids round-trip through a v1 snapshot", () => {
+    const s = createWorkspaces([{ name: "work", container: "c-work", id: uuid }]);
+    const snap = toSnapshot(openTab(s, "a"));
+    expect(snap.schema).toBe(1);
+    expect(fromSnapshot(JSON.stringify(snap))).toEqual(openTab(s, "a"));
+  });
+
+  test("a duplicate id is duplicate-id", () => {
+    const s = createWorkspaces([{ name: "work", container: "c-work", id: "ws-a" }]);
+    expectWsError(
+      () => addWorkspace(s, { name: "x", container: "c-x", id: "ws-a" }),
+      "duplicate-id",
+    );
+    expectWsError(
+      () =>
+        createWorkspaces([
+          { name: "a", container: "c-a", id: "same" },
+          { name: "b", container: "c-b", id: "same" },
+        ]),
+      "duplicate-id",
+    );
+  });
+
+  test.each([
+    ["empty", ""],
+    ["too long", "x".repeat(MAX_WORKSPACE_ID + 1)],
+    ["whitespace", "ws a"],
+    ["control character", "ws\u0007"],
+    ["not a string", 7],
+  ])("a bad id (%s) is bad-id", (_, id) => {
+    expectWsError(
+      () => createWorkspaces([{ name: "w", container: "c", id: /** @type {any} */ (id) }]),
+      "bad-id",
+    );
+  });
+
+  test("an id of exactly MAX_WORKSPACE_ID characters is fine", () => {
+    const id = "x".repeat(MAX_WORKSPACE_ID);
+    expect(createWorkspaces([{ name: "w", container: "c", id }]).active).toBe(id);
   });
 });
 
@@ -338,7 +403,13 @@ const opArb = fc.oneof(
   },
   { weight: 1, arbitrary: fc.record({ op: fc.constant("switch"), w: fc.nat() }) },
   { weight: 1, arbitrary: fc.record({ op: fc.constant("next") }) },
-  { weight: 1, arbitrary: fc.record({ op: fc.constant("add") }) },
+  {
+    weight: 1,
+    arbitrary: fc.record({
+      op: fc.constant("add"),
+      id: fc.option(fc.constantFrom("w2", "w3", "w9", "ws-a", "ws-b"), { nil: undefined }),
+    }),
+  },
   { weight: 1, arbitrary: fc.record({ op: fc.constant("delete"), w: fc.nat() }) },
   { weight: 1, arbitrary: fc.record({ op: fc.constant("rename"), w: fc.nat() }) },
 );
@@ -402,10 +473,13 @@ function run(ops) {
       case "next":
         s = nextWorkspace(s);
         break;
-      case "add":
-        s = addWorkspace(s, { name: `ws${n}`, container: `c${n}` }, { activate: false });
+      case "add": {
+        // explicit ids too, some shaped like minted ones (w<n>)
+        const id = o.id && !findWorkspace(s, { id: o.id }) ? o.id : undefined;
+        s = addWorkspace(s, { name: `ws${n}`, container: `c${n}`, id }, { activate: false });
         n++;
         break;
+      }
       case "delete":
         if (s.workspaces.length > 1) s = deleteWorkspace(s, wref).state;
         break;

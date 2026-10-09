@@ -33,12 +33,30 @@ import {
  *   readonly next: number }} Workspaces
  */
 /** @typedef {{ id: string } | { index: number } | { name: string }} WorkspaceRef */
-/** @typedef {{ name: string, container: string }} WorkspaceDef */
+/**
+ * `id` is optional: the M3 host passes the global id from its definitions file so that ids agree
+ * across windows; without one the model mints `w<next>`.
+ * @typedef {{ name: string, container: string, id?: string }} WorkspaceDef
+ */
+
+/** Longest explicit workspace id, in UTF-16 code units (a `ws-<uuid>` is 39). */
+export const MAX_WORKSPACE_ID = 128;
+
+/**
+ * A valid workspace id: a string of 1 to MAX_WORKSPACE_ID characters without whitespace or
+ * control characters. Minted ids (`w<n>`) are valid ids.
+ * @param {unknown} id
+ * @returns {id is string}
+ */
+export function isWorkspaceId(id) {
+  return typeof id === "string" && id.length <= MAX_WORKSPACE_ID && /^[^\s\p{Cc}]+$/u.test(id);
+}
 
 export class WorkspaceError extends Error {
   /**
    * @param {"unknown-workspace" | "duplicate-name" | "empty-name" | "duplicate-container" |
-   *   "empty-container" | "unknown-tab" | "duplicate-tab" | "last-workspace" | "no-tab"} code
+   *   "empty-container" | "unknown-tab" | "duplicate-tab" | "last-workspace" | "no-tab" |
+   *   "bad-id" | "duplicate-id"} code
    * @param {string} message
    */
   constructor(code, message) {
@@ -203,7 +221,7 @@ export function workspaceOfTab(s, tabId) {
 }
 
 /**
- * Appends a workspace.
+ * Appends a workspace, with `def.id` when given (`bad-id`, `duplicate-id`).
  * @param {Workspaces} s
  * @param {WorkspaceDef} def
  * @param {{ activate?: boolean }} [options]
@@ -217,7 +235,20 @@ export function addWorkspace(s, def, { activate = true } = {}) {
   if (s.workspaces.some((w) => w.container === def.container)) {
     throw new WorkspaceError("duplicate-container", `container "${def.container}" is in use`);
   }
-  const id = `w${s.next}`;
+  let id = `w${s.next}`;
+  let next = s.next + 1;
+  if (def.id !== undefined) {
+    if (!isWorkspaceId(def.id)) {
+      throw new WorkspaceError("bad-id", `bad workspace id ${JSON.stringify(def.id)}`);
+    }
+    if (s.workspaces.some((w) => w.id === def.id)) {
+      throw new WorkspaceError("duplicate-id", `workspace id "${def.id}" is in use`);
+    }
+    id = def.id;
+    // Minted ids must never collide with an explicit one shaped like them (snapshot `next` rule).
+    const minted = /^w(\d+)$/.exec(id);
+    next = minted ? Math.max(s.next, Number(minted[1]) + 1) : s.next;
+  }
   const w = updateWs(
     { id, name, container: def.container, tabs: [], activeTab: null, panes: null },
     {},
@@ -225,7 +256,7 @@ export function addWorkspace(s, def, { activate = true } = {}) {
   return updateState(s, {
     workspaces: [...s.workspaces, w],
     active: activate ? id : s.active,
-    next: s.next + 1,
+    next,
   });
 }
 
