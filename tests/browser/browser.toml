@@ -8,3 +8,5 @@ support-files = ["file_vimma_test.pdf"]
 ["browser_vimma_branding.js"]
 
 ["browser_vimma_user_agent.js"]
+
+["browser_vimma_mozilla_services.js"]
