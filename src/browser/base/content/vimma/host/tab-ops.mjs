@@ -79,3 +79,17 @@ export function selectTab(win, action) {
   const tab = index === null ? undefined : tabs[index];
   if (tab && tab !== gBrowser.selectedTab) gBrowser.selectedTab = tab;
 }
+
+/**
+ * page.open (`:open text`) and `:tabnew text`: load what was typed as the URL bar would, through
+ * URIFixup with keyword lookup (`allowThirdPartyFixup`: `example.com` gets a scheme, words go to
+ * the default search engine; spec m1-cmdline, Settled).
+ * @param {Window} win
+ * @param {string} text
+ * @param {"current" | "tab"} where
+ */
+export function openUrl(win, text, where) {
+  /** @type {{ openTrustedLinkIn: (url: string, where: string, params: object) => void }} */ (
+    /** @type {unknown} */ (win)
+  ).openTrustedLinkIn(text, where, { allowThirdPartyFixup: true, inBackground: false });
+}

@@ -6,8 +6,8 @@ delete its line in the same PR.
 
 ## Features
 
-- Only `ctrl+b ?`, the tab keys (`ctrl+b c`, `n`, `p`, `1..9`, `shift+x`; `t`, `x`, `gt`, `gT`
-  in normal mode), scrolling (`j k h l d u gg G`), `i` and `Esc` run. The other bindings are
+- Only `ctrl+b ?`, the tab keys (`ctrl+b c`, `n`, `p`, `1..9`, `shift+x`, `x`; `t`, `x`, `gt`,
+  `gT` in normal mode), scrolling (`j k h l d u gg G`), `i`, `Esc` and `:` run. The other bindings are
   dimmed in the overlay; their `ctrl+b` sequences (or a count before them) are consumed and show
   "… not implemented yet" ([m2-tab-keys](specs/m2-tab-keys.md), Settled).
 - Tab keys count Firefox's visible tabs; workspaces (M3) will narrow them to the current one.
@@ -31,6 +31,11 @@ delete its line in the same PR.
   ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled).
 - After `Esc` in a `designMode` page, it stays in normal until the next click into it
   ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled).
+- Command line: history is kept in memory only, until Vimma quits; arguments are not
+  completed (URLs, workspace names); `:workspace name` is refused until workspaces exist; no
+  `:set`, ranges or counts ([m1-cmdline](specs/m1-cmdline.md), Settled).
+- `:q` and `ctrl+b x` close the tab: with no split panes yet, every tab is one pane
+  ([m1-cmdline](specs/m1-cmdline.md), Settled).
 - `config.toml` is not read by the browser. Its validator and theme tokens exist in `vimma-core`,
   but loading, polling, `:source` and theming wait for the M5 host spec
   ([m5-core-config-and-theme](specs/m5-core-config-and-theme.md)).

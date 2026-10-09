@@ -44,3 +44,5 @@ support-files = ["head_vimma_aus.js"]
 skip-if = ["artifact"]
 
 ["browser_vimma_split_contract.js"]
+
+["browser_vimma_cmdline.js"]

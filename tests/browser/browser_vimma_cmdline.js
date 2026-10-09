@@ -1,0 +1,337 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// Spec: docs/specs/m1-cmdline.md
+
+"use strict";
+
+/* global focusContent, recordPageKeys, pageKeys, waitForPageKey -- from head.js */
+
+const { VimmaHost } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
+);
+const { completeCommandLine } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/core/cmdline.mjs",
+);
+
+const PAGE = "https://example.org/";
+const CMDLINE_ID = "vimma-cmdline";
+const INPUT_ID = "vimma-cmdline-input";
+const NOTICE_ID = "vimma-notice";
+const HELP_ID = "vimma-help";
+
+/** Every tab this file opened is closed again, even when a task fails half-way. */
+registerCleanupFunction(() => {
+  while (gBrowser.tabs.length > 1) gBrowser.removeTab(gBrowser.tabs.at(-1));
+});
+
+const input = (win = window) => win.document.getElementById(INPUT_ID);
+const container = (win = window) => win.document.getElementById(CMDLINE_ID);
+const isOpen = (win = window) => !!container(win) && !container(win).hidden;
+const errorText = () => container().querySelector(".vimma-cmdline-error")?.textContent ?? "";
+const errorShown = () => {
+  const el = container().querySelector(".vimma-cmdline-error");
+  return !!el && !el.hidden && BrowserTestUtils.isVisible(el);
+};
+const options = () => [...container().querySelectorAll("[role=option]")];
+const selectedOption = () => container().querySelector("[role=option][aria-selected=true]");
+
+function noticeShown() {
+  const n = document.getElementById(NOTICE_ID);
+  return !!n && n.matches(":popover-open") && BrowserTestUtils.isVisible(n);
+}
+
+/** Selects `tab`; BrowserTestUtils.switchTab never resolves for the tab already selected. */
+async function select(tab) {
+  if (gBrowser.selectedTab !== tab) await BrowserTestUtils.switchTab(gBrowser, tab);
+}
+
+/** Opens `n` pages, each recording its keys, and focuses the first (normal mode). */
+async function openTabs(n, url = PAGE) {
+  const tabs = [];
+  for (let i = 0; i < n; i++) {
+    const tab = await BrowserTestUtils.openNewForegroundTab(gBrowser, `${url}?tab=${i}`);
+    await recordPageKeys(tab.linkedBrowser);
+    tabs.push(tab);
+  }
+  await select(tabs[0]);
+  await focusContent(tabs[0].linkedBrowser);
+  Assert.equal(VimmaHost.mode(window), "normal", "sanity: the page is in normal mode");
+  return tabs;
+}
+
+function closeTabs(tabs) {
+  for (const tab of tabs) if (!tab.closing && tab.isConnected) BrowserTestUtils.removeTab(tab);
+}
+
+/** `:` as typed on a US layout. */
+function colon(win = window) {
+  EventUtils.synthesizeKey(":", { shiftKey: true }, win);
+}
+
+/** `:`, then `line` typed key by key. */
+function typeCommand(line, win = window) {
+  colon(win);
+  Assert.ok(isOpen(win), "the command line is open");
+  EventUtils.sendString(line, win);
+}
+
+/** `:line` Enter. */
+function runCommand(line, win = window) {
+  typeCommand(line, win);
+  EventUtils.synthesizeKey("KEY_Enter", {}, win);
+}
+
+/** Presses z (unbound) in `tab`'s page and returns every key it saw, ending with "z". */
+async function pageKeysThenZ(tab) {
+  await select(tab);
+  const browser = tab.linkedBrowser;
+  await focusContent(browser);
+  EventUtils.synthesizeKey("z");
+  await waitForPageKey(browser, ["z", "!z"]);
+  return pageKeys(browser);
+}
+
+/** The next TabOpen, or null after 5 s (a command that opens nothing fails, not times out). */
+function tabOpened() {
+  const opened = BrowserTestUtils.waitForEvent(gBrowser.tabContainer, "TabOpen");
+  return Promise.race([
+    opened.then((e) => e.target),
+    new Promise((resolve) => setTimeout(() => resolve(null), 5000)),
+  ]);
+}
+
+add_task(async function colon_opens_the_command_line_and_esc_closes_it() {
+  const tabs = await openTabs(1);
+  const browser = tabs[0].linkedBrowser;
+  colon();
+  Assert.ok(isOpen(), ": opens the command line");
+  Assert.ok(BrowserTestUtils.isVisible(input()), "its input is visible");
+  const box = input().getBoundingClientRect();
+  Assert.equal(
+    document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2),
+    input(),
+    "on top of the page, not under it",
+  );
+  Assert.lessOrEqual(
+    Math.round(box.bottom),
+    Math.round(document.documentElement.getBoundingClientRect().bottom),
+    "inside the window, at its foot",
+  );
+  Assert.greater(
+    box.top,
+    browser.getBoundingClientRect().top + browser.getBoundingClientRect().height / 2,
+    "in the lower half of the content area",
+  );
+  Assert.equal(document.activeElement, input(), "with focus in it");
+  Assert.equal(VimmaHost.mode(window), "command", "in command mode");
+  Assert.equal(input().value, "", "empty");
+
+  EventUtils.sendString("jk:x");
+  Assert.equal(input().value, "jk:x", "keys type into it, : and the scroll keys too");
+
+  EventUtils.synthesizeKey("KEY_Escape");
+  Assert.ok(!isOpen(), "Esc closes it");
+  Assert.equal(document.activeElement, browser, "focus is back on the page");
+  Assert.equal(VimmaHost.mode(window), "normal", "and the mode is normal again");
+
+  colon();
+  Assert.equal(input().value, "", "it opens empty the next time");
+  EventUtils.synthesizeKey("KEY_Escape");
+
+  Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "the page saw none of those keys");
+  closeTabs(tabs);
+});
+
+add_task(async function colon_in_a_text_field_is_typed() {
+  const tabs = await openTabs(1);
+  const browser = tabs[0].linkedBrowser;
+  await SpecialPowers.spawn(browser, [], () => {
+    const field = content.document.createElement("input");
+    field.id = "field";
+    content.document.body.prepend(field);
+    field.focus();
+  });
+  await TestUtils.waitForCondition(() => VimmaHost.mode(window) === "insert", "insert mode");
+  colon();
+  Assert.ok(!isOpen(), ": in insert mode does not open the command line");
+  const value = await SpecialPowers.spawn(browser, [], () =>
+    ContentTaskUtils.waitForCondition(
+      () => content.document.getElementById("field").value === ":",
+      "the page's field got :",
+    ).then(() => content.document.getElementById("field").value),
+  );
+  Assert.equal(value, ":", "it is typed into the field");
+  closeTabs(tabs);
+});
+
+add_task(async function tabnew_opens_a_tab() {
+  const tabs = await openTabs(1);
+  const count = gBrowser.tabs.length;
+  const opened = tabOpened();
+  runCommand("tabnew");
+  const tab = await opened;
+  Assert.ok(tab, ":tabnew opens a tab");
+  Assert.equal(gBrowser.tabs.length, count + 1, "one tab more");
+  Assert.equal(gBrowser.selectedTab, tab, "and selects it");
+  Assert.ok(!isOpen(), "the command line closed");
+  Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "the page saw none of the keys");
+  closeTabs([...tabs, tab]);
+});
+
+add_task(async function q_closes_the_tab_but_not_a_pinned_one() {
+  const tabs = await openTabs(3);
+  const count = gBrowser.tabs.length;
+  const closed = BrowserTestUtils.waitForTabClosing(tabs[0]);
+  runCommand("q");
+  await closed;
+  Assert.ok(tabs[0].closing, ":q closes the selected tab");
+  await TestUtils.waitForCondition(() => !tabs[0].isConnected, "the closed tab is removed");
+  Assert.equal(gBrowser.tabs.length, count - 1, "and only that one");
+  Assert.ok(!isOpen(), "the command line closed");
+
+  gBrowser.pinTab(tabs[2]);
+  await select(tabs[2]);
+  await focusContent(tabs[2].linkedBrowser);
+  runCommand("quit");
+  Assert.equal(gBrowser.tabs.length, count - 1, ":quit on a pinned tab closes nothing");
+  Assert.equal(
+    gBrowser.selectedTab,
+    gBrowser.tabs[gBrowser.pinnedTabCount],
+    "and selects the first unpinned tab, as tab.close does",
+  );
+  gBrowser.unpinTab(tabs[2]);
+  Assert.deepEqual(await pageKeysThenZ(tabs[1]), ["z"], "no page saw the keys");
+  closeTabs(tabs);
+});
+
+add_task(async function q_on_the_last_tab_follows_close_window_with_last_tab() {
+  await SpecialPowers.pushPrefEnv({ set: [["browser.tabs.closeWindowWithLastTab", false]] });
+  const win = await BrowserTestUtils.openNewBrowserWindow();
+  const browser = win.gBrowser.selectedBrowser;
+  BrowserTestUtils.startLoadingURIString(browser, PAGE);
+  await BrowserTestUtils.browserLoaded(browser, false, PAGE);
+  await SimpleTest.promiseFocus(win);
+  await SimpleTest.promiseFocus(browser);
+  const first = win.gBrowser.selectedTab;
+  runCommand("q", win);
+  await TestUtils.waitForCondition(() => !first.isConnected, "the tab is closed");
+  Assert.ok(!win.closed, "the window stays (closeWindowWithLastTab = false)");
+  Assert.equal(win.gBrowser.tabs.length, 1, "with a fresh tab");
+  await BrowserTestUtils.closeWindow(win);
+  await SpecialPowers.popPrefEnv();
+});
+
+add_task(async function tab_completes_and_cycles() {
+  const tabs = await openTabs(1);
+  const expected = completeCommandLine("tabn").candidates.map((c) => c.value);
+  Assert.equal(expected[0], "tabnew", "sanity: core's first candidate");
+  Assert.greater(expected.length, 1, "sanity: more than one candidate to cycle");
+
+  typeCommand("tabn");
+  Assert.ok(options().length >= 2, "the list shows the candidates as you type");
+  EventUtils.synthesizeKey("KEY_Tab");
+  Assert.equal(input().value, "tabnew", "Tab completes tabn to tabnew");
+  Assert.equal(document.activeElement, input(), "and keeps focus in the line");
+  Assert.equal(selectedOption()?.dataset.value, "tabnew", "the list marks it");
+  EventUtils.synthesizeKey("KEY_Tab");
+  Assert.equal(input().value, expected[1], "Tab again cycles to the next candidate");
+  EventUtils.synthesizeKey("KEY_Tab", { shiftKey: true });
+  Assert.equal(input().value, "tabnew", "shift+Tab goes back");
+  EventUtils.synthesizeKey("KEY_Escape");
+  Assert.ok(!isOpen(), "Esc closes it");
+  Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "the page saw none of the keys");
+  closeTabs(tabs);
+});
+
+add_task(async function up_recalls_the_previous_command() {
+  const tabs = await openTabs(1);
+  runCommand("scroll_top");
+  Assert.ok(!isOpen(), "sanity: it ran and closed");
+  await focusContent(tabs[0].linkedBrowser);
+  typeCommand("scr");
+  EventUtils.synthesizeKey("KEY_ArrowUp");
+  Assert.equal(input().value, "scroll_top", "Up recalls the previous line starting with scr");
+  EventUtils.synthesizeKey("KEY_ArrowDown");
+  Assert.equal(input().value, "scr", "Down returns to what was typed");
+  EventUtils.synthesizeKey("KEY_Escape");
+  Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "the page saw none of the keys");
+  closeTabs(tabs);
+});
+
+add_task(async function an_unknown_command_shows_an_error_and_stays_open() {
+  const tabs = await openTabs(1);
+  const count = gBrowser.tabs.length;
+  runCommand("tabnwe");
+  Assert.ok(isOpen(), "the line stays open");
+  Assert.equal(input().value, "tabnwe", "with the text as typed");
+  Assert.ok(errorShown(), "an error shows");
+  Assert.stringContains(errorText(), 'not a command: "tabnwe"', "core's message");
+  Assert.stringContains(errorText(), "tabnew", "suggesting tabnew");
+  Assert.equal(document.activeElement, input(), "focus stays in the line");
+  Assert.equal(gBrowser.tabs.length, count, "nothing ran");
+  EventUtils.synthesizeKey("KEY_Backspace");
+  Assert.ok(!errorShown(), "editing clears the error");
+  EventUtils.synthesizeKey("KEY_Escape");
+  Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "the page saw none of the keys");
+  closeTabs(tabs);
+});
+
+add_task(async function open_loads_through_fixup() {
+  const tabs = await openTabs(1);
+  const browser = tabs[0].linkedBrowser;
+  const isExampleCom = (url) => /^https?:\/\/example\.com\/$/.test(url);
+  const loaded = BrowserTestUtils.browserLoaded(browser, false, isExampleCom);
+  runCommand("open example.com");
+  await loaded;
+  Assert.ok(
+    isExampleCom(browser.currentURI.spec),
+    `:open example.com loaded ${browser.currentURI.spec}`,
+  );
+  Assert.equal(gBrowser.selectedTab, tabs[0], "in the current tab");
+
+  await focusContent(browser);
+  const opened = BrowserTestUtils.waitForNewTab(gBrowser, isExampleCom, true);
+  runCommand("tabnew example.com");
+  const tab = await opened;
+  Assert.ok(isExampleCom(tab.linkedBrowser.currentURI.spec), ":tabnew example.com in a new tab");
+  closeTabs([...tabs, tab]);
+});
+
+add_task(async function unbuilt_and_pending_commands_say_so() {
+  const tabs = await openTabs(1);
+  runCommand("vsplit");
+  Assert.ok(!isOpen(), "the line closes");
+  Assert.ok(noticeShown(), ":vsplit shows the notice");
+  Assert.equal(
+    document.getElementById(NOTICE_ID).textContent,
+    "Split right: not implemented yet",
+    "as the keys do",
+  );
+  await focusContent(tabs[0].linkedBrowser);
+  runCommand("workspace work");
+  Assert.equal(
+    document.getElementById(NOTICE_ID).textContent,
+    ":workspace work: not available yet",
+    "a pending action is refused",
+  );
+  document.getElementById(NOTICE_ID).hidePopover();
+  Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "the page saw none of the keys");
+  closeTabs(tabs);
+});
+
+add_task(async function map_and_help_open_the_bindings_overlay() {
+  const tabs = await openTabs(1);
+  for (const command of ["map", "help"]) {
+    runCommand(command);
+    const help = document.getElementById(HELP_ID);
+    Assert.ok(help?.open, `:${command} opens the overlay`);
+    Assert.ok(!isOpen(), "the command line closed");
+    EventUtils.synthesizeKey("KEY_Escape");
+    Assert.ok(!help.open, "Esc closes the overlay");
+    Assert.equal(document.activeElement, tabs[0].linkedBrowser, "focus is back on the page");
+  }
+  Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "the page saw none of the keys");
+  closeTabs(tabs);
+});

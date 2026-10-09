@@ -17,5 +17,7 @@ browser.jar:
         skin/classic/browser/vimma/tabstrip.css           (/browser/themes/shared/vimma/tabstrip.css)
         content/browser/vimma/ui/notice.mjs               (ui/notice.mjs)
         skin/classic/browser/vimma/notice.css             (/browser/themes/shared/vimma/notice.css)
+        content/browser/vimma/ui/cmdline.mjs              (ui/cmdline.mjs)
+        skin/classic/browser/vimma/cmdline.css            (/browser/themes/shared/vimma/cmdline.css)
         content/browser/vimma/split/spike-layout.mjs      (split/spike-layout.mjs)
         skin/classic/browser/vimma/split-spike.css        (/browser/themes/shared/vimma/split-spike.css)

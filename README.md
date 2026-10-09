@@ -32,7 +32,7 @@ release channel.
 ## Status
 
 **Pre-alpha.** Milestone M0 ("fork boots + pipeline", [plan.md](plan.md) §6) is almost done,
-and M1's modal page layer has started (scrolling and insert mode).
+and M1's modal page layer has started (scrolling, insert mode and the `:` command line).
 There are no binaries yet: you build from source. Version `0.1.0`, on Firefox 157.0.1.
 
 What works today:
@@ -48,6 +48,9 @@ What works today:
 - **Herdr tab keys.** `ctrl+b c` new tab, `ctrl+b n`/`p` next/previous (wrapping),
   `ctrl+b 1..9` tab N, `ctrl+b shift+x` close tab, from any page and the URL bar; in normal
   mode also `t`, `x`, `gt`/`gT`.
+- **`:` command line.** At the bottom of the window: `:tabnew`, `:q`, `:open example.com`
+  (or search words), `:map`, and any action by name, with `Tab` completion, `Up`/`Down`
+  history and inline errors that suggest the command you meant.
 - **Hidden tab strip.** Firefox's tab strip is hidden. Firefox's own tab keys (`ctrl+t`,
   `ctrl+w`, `ctrl+tab`, `alt+1..9`, …) still work. Set `vimma.ui.tabstrip.hidden` to `false` in
   `about:config` to bring the strip back.
@@ -62,7 +65,7 @@ What works today:
 
 What does not work yet: the dimmed bindings in the overlay. The overlay lists the full planned
 keymap; a `ctrl+b` sequence that does not run yet shows "… not implemented yet" for a moment.
-The rest of the modal page layer (link hints, find, `:` command line, copy mode) is M1. Tab
+The rest of the modal page layer (link hints, find, copy mode) is M1. Tab
 rename, the status bar, the which-key strip and the `ctrl+b g` picker are M2. Workspaces, split
 panes, `config.toml` and theming come later. The parser and validator for `config.toml` exist in
 `vimma-core`, but the browser does not read the file yet. See [docs/guide.md](docs/guide.md) and

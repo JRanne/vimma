@@ -1,0 +1,117 @@
+# Spec: m1-cmdline
+
+Status: implemented, awaiting review · Milestone: M1 (prototype slice) · Area: UI
+(`ui/cmdline.mjs`), host (`host/VimmaHost.sys.mjs`, `host/tab-ops.mjs`), core (`actions.mjs`,
+`cmdline.mjs`)
+
+## User story
+
+As a user, `:` in normal mode opens a Vim-style command line at the bottom of the window. I type
+`:tabnew`, `:q`, `:open example.com`, `:map` or any action by name; `Tab` / `shift+Tab` cycle
+completions, `Up` / `Down` walk earlier lines, `Enter` runs and `Esc` cancels. A typo keeps the
+line open and tells me what I probably meant. Nothing I type into it reaches the page.
+
+## Scope
+
+- **UI:** `ui/cmdline.mjs` (`CommandLine`) + `browser/themes/shared/vimma/cmdline.css`, both
+  in our `jar.mn`. Built on first use, one per window.
+- **Host:** `command.open` and `command.cancel` runners; `_mode` reports `command` while the line
+  is open; `_runCommand(state, result)` runs a parsed line through `_run` (the path keys take),
+  refusing `PENDING_ACTIONS`. `VimmaHost.mode(win)` exposes the mode (tests; #34's `status(win)`
+  can build on it). Runners take an optional third argument, the command's free text.
+- **Runners added:** `pane.close` (until M4's panes every tab is one pane, so it closes the tab:
+  `:q`, `prefix+x`), `page.open` (`:open`), and `tab.new` with text (`:tabnew url`).
+- **Core:** `page.open` moves from `PENDING_ACTIONS` into `actions.mjs` as `open_url` (unbound;
+  `npm run gen-docs`); `:help` (alias `:h`) joins `COMMANDS` → `help.show`.
+- No upstream patch, no build-config change, no new dependency.
+
+## Tests (write first)
+
+`tests/browser/browser_vimma_cmdline.js`:
+
+- `:` on a page in normal mode opens the line, focus in its input, mode `command`; `Esc` closes
+  it, focus back on the page, mode `normal`.
+- `:tabnew` Enter opens a tab; `:q` closes the selected tab; on a pinned tab it closes nothing
+  and selects the first unpinned tab (as `tab.close`); the last tab with
+  `browser.tabs.closeWindowWithLastTab` false leaves a fresh tab.
+- `Tab` completes `tabn` → `tabnew` and cycles to core's next candidate, `shift+Tab` back; `Up`
+  recalls the previous command line, `Down` returns to the draft.
+- An unknown command (`:tabnwe`) shows an error naming `tabnew` and the line stays open.
+- `:open example.com` loads `http(s)://example.com/` through fixup; `:tabnew example.com` does so
+  in a new tab.
+- `:vsplit` shows m2-tab-keys' "Split right: not implemented yet"; `:workspace work` (pending)
+  shows "… not available yet"; `:map` and `:help` open the bindings overlay.
+- `:` in a text field (insert) is typed into it; the line does not open.
+- The page sees none of the keys typed into the line (head.js race-free helpers).
+
+`packages/vimma-core/test/cmdline.test.mjs`: `PENDING_ACTIONS` is `["workspace.switch"]`;
+`:open x` parses to `page.open`; `:help`, `:h` → `help.show`.
+
+## Out of scope
+
+Argument completion (URLs, workspace names), `:set`, `:bug`, counts and ranges, persisting
+history, `ctrl+r`/`ctrl+w`-style line editing beyond what an `<input>` does, mouse on the
+completion list.
+
+## Settled (2026-10-09)
+
+- **The input.** A chrome-level HTML `<input>` inside our own container, `div#vimma-cmdline`,
+  inserted right after `#browser` in the chrome `<body>` (a flex column). The container takes no
+  height; its panel is `position: absolute; bottom: 0` and overlays the bottom of the content,
+  so opening it never reflows the page. If #34's status bar (`#vimma-statusbar`, also after
+  `#browser`) exists, the container goes before it, so the line sits just above the bar.
+  `role="combobox"` on the input, with `aria-controls` / `aria-activedescendant` on the list.
+- **Keys while it is open.** The host reports mode `command` (the line is open; it closes when
+  focus leaves it within the window). The dispatcher still sees every key first: `Esc` is the
+  `command` keymap's `command.cancel`, and `ctrl+b` sequences work as in every mode. Everything
+  else passes, the host does not consume it, and it reaches the input, whose own `keydown`
+  listener handles `Tab`, `shift+Tab`, `Up`, `Down` and `Enter` (and prevents their defaults:
+  `Tab` would move focus). These are editing keys of the line, not actions, so `actions.mjs`
+  stays the user's keymap. Focus is in chrome, so the page gets no key at all.
+- **Closing.** `Esc` restores focus to what had it before `:` (the page), else the selected
+  browser. `Enter` closes first, restoring focus, then runs, so `:scroll_down` finds the page
+  focused and `:tabnew` can move focus to the new tab's URL bar. Focus moving elsewhere in the
+  window (a click, `ctrl+b c`) closes the line without running; the window losing focus
+  (alt+tab) keeps it open. A tab switch underneath closes it and focuses the new tab.
+- **History** is in memory, one list shared by the windows of a session (Vim's is global too),
+  newest 100 lines, kept by core's `pushHistory` (every executed line, errors included, as Vim).
+  Persisting it later goes to a file in the profile directory (`vimma/cmdline-history.json`,
+  like Vim's shada), not a pref: prefs are settings, are rewritten whole to `prefs.js` on change
+  and are not meant for growing lists.
+- **Completion popup:** a plain list (`ul[role=listbox]`) above the input, keyboard only, up to
+  core's 20 candidates with a scroll, each row the name and its description. It follows typing
+  while the line is just the command word; `Tab` selects the next candidate into the input
+  (`shift+Tab` the previous, both wrapping), typing ends the cycle. A line with an argument has
+  no candidates (core: argument completion is out of scope).
+- **Errors** show inline under the input (`role="alert"`), core's message plus "did you mean"
+  with its suggestions; the line stays open with the text, the next edit clears it. An empty
+  line (`:` Enter) just closes, as Vim.
+- **Running.** A `run` result goes through `_run`, so `RUNNERS`, `CONTENT_RUNNERS` and m2-tab-keys'
+  "<action>: not implemented yet" notice apply as they do to keys (`:vsplit`, `:tabrename`).
+  An id in `PENDING_ACTIONS` (`workspace.switch`) is refused with "<command>: not available yet"
+  in the same notice, never passed to `_run`. Text rides in a third runner argument; `Action`
+  stays `{ id, count?, arg? }`.
+- **`:open` (`page.open`)** is `openTrustedLinkIn(text, "current", { allowThirdPartyFixup: true })`:
+  `allowThirdPartyFixup` sets `LOAD_FLAGS_ALLOW_THIRD_PARTY_FIXUP | LOAD_FLAGS_FIXUP_SCHEME_TYPOS`
+  (URILoadingHelper.sys.mjs `openInCurrentTab`), and docshell then runs `URIFixup` with keyword
+  lookup (`nsDocShellLoadState::CreateFromLoadURIOptions`): `example.com` gets a scheme, words go
+  to the default search engine (`keyword.enabled`), as typing them in the URL bar and pressing
+  Enter. The URL bar's own heuristic (`UrlbarInput`) is not used: it needs the async provider
+  query and the panel. Pinned tabs keep Firefox's rule (a host change opens a new tab).
+  `:tabnew text` is the same in `"tab"`. `open_url` with no text (a key bound to it) opens the
+  line prefilled with `open `.
+- **`:q` → `pane.close`** closes the tab with m2-tab-keys' `closeTab` (pinned: selects the first
+  unpinned tab; the last tab closes the window unless `closeWindowWithLastTab` is false). M4
+  replaces the runner with "close the pane; the last pane closes the tab". `prefix+x` gets the
+  same runner, so it is no longer dimmed.
+- **Insert mode:** `:` is not bound in `insert`, so it is typed. In chrome text fields (URL bar)
+  the mode is `insert` too.
+- **Theme:** the stylesheet reads M5's tokens (`--vimma-bg-dark`, `--vimma-fg`,
+  `--vimma-accent`, `--vimma-selection`, `--vimma-error`, `--vimma-font`) with `Canvas` /
+  `CanvasText` fallbacks; #34 loads the token sheet, so the line is themed once it merges.
+- **Verified:** core red 4 failed (`:help`, `:h`, `PENDING_ACTIONS`, `open_url`), green 1044/0
+  (the `prefix+?` snapshot gains the `open_url` row). Browser red, host without the line: 20/26
+  passed (": opens the command line - false == true", the page saw `[":", "z"]`, `:q` timed
+  out). Green: `browser_vimma_cmdline.js` 138/0. Mutation: `_runCommand` without the
+  `PENDING_ACTIONS` refusal fails "a pending action is refused" ("workspace.switch: not
+  implemented yet"); reverted. Full `tests/browser/` 889/0 on the artifact build.
