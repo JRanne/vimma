@@ -33,8 +33,6 @@ jobs:
     permissions:
       contents: read
       actions: read # download the previous run's incremental file
-    env:
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,7 +40,7 @@ jobs:
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version-file: .nvmrc # exact; the bench baseline is keyed on it (docs/runbook.md)
           cache: npm
 
       - name: npm ci
@@ -51,14 +49,19 @@ jobs:
       - name: Previous run's results (incremental mode)
         env:
           FULL: ${{ inputs.full }}
+          GH_TOKEN: ${{ github.token }} # this step only: the later ones run repository code
         run: |
           if [ "$FULL" = "true" ] || [ "$(date -u +%d)" -le 7 ]; then
             echo "Full run: every mutant is re-tested."
             echo "STRYKER_FORCE=--force" >> "$GITHUB_ENV"
             exit 0
           fi
+          # Only results of main: a scheduled run, or a manual run on main. A manual run on a
+          # branch tests that branch's code and must not seed main's incremental results.
           run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow mutation.yml \
-            --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+            --branch main --status success --limit 20 --json databaseId,event \
+            --jq '[.[] | select(.event == "schedule" or .event == "workflow_dispatch")]
+              | .[0].databaseId // empty')
           if [ -n "$run_id" ] && gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
             --name mutation-report --dir reports/mutation; then
             echo "Reusing results of run $run_id."

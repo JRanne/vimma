@@ -35,8 +35,9 @@ export default {
     "/tests/browser",
     "/reports",
   ],
-  // Incremental mode: the workflow restores this file from the Actions cache, so a week in which
-  // a few core files changed re-tests only the mutants in those files and those whose tests changed.
+  // Incremental mode: mutation.yml downloads this file from the last main run's artifact (not the
+  // Actions cache, which evicts after 7 days), so a week in which a few core files changed
+  // re-tests only the mutants in those files; a monthly full run catches newly added tests.
   incremental: true,
   incrementalFile: "reports/mutation/stryker-incremental.json",
   reporters: ["clear-text", "progress", "html", "json"],
