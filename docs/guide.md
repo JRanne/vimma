@@ -241,14 +241,78 @@ Vimma's own preferences today:
 | -------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `vimma.ui.tabstrip.hidden` | `true`  | Hides Firefox's tab strip (horizontal, and the vertical tab list). Set `false` to show it again; it applies at once, no restart.                           |
 | `vimma.debug.keys`         | unset   | Create it as a boolean set to `true` to log every key Vimma sees (`{ key, mods, mode }`) to the Browser Console (`ctrl+shift+j`; enable its Debug filter). |
+| `vimma.control.enabled`    | `false` | Turns on the control socket for `vimma-ctl` and scripts (see [Scripting with vimma-ctl](#scripting-with-vimma-ctl)). Applies at once, no restart.          |
 
 **Planned:** `~/.config/vimma/config.toml` (M5) for keys, workspaces and theme. Its validator
 already exists, but the browser does not read the file yet. Schema 2 (`schema = 2` at the top)
 also takes `[panes] max` (most panes per workspace, 1 to 16, default 4), `[modal] hint_chars`
 (the characters hint labels are made of, default `"asdfghjkl"`) and `[sites."<host>"] insert`
 (`auto`, `never` or `always`, per site and its subdomains); `packages/vimma-core/defaults.toml`
-lists every key with its default. The control socket and `vimma-ctl`
-(off by default) are also planned.
+lists every key with its default.
+
+## Scripting with vimma-ctl
+
+`vimma-ctl` drives a running Vimma from a shell, a window-manager binding or a test: it sends
+keys, reads the state and opens URLs. It talks to the browser over a local control socket, which
+is **off by default**. Spec: [m0-control-server](specs/m0-control-server.md), protocol:
+[m0-control-protocol-and-vimma-ctl](specs/m0-control-protocol-and-vimma-ctl.md).
+
+1. Turn the socket on: in `about:config`, set `vimma.control.enabled` to `true`. It starts at
+   once and writes `vimma-control.json` into your profile directory. Setting it back to `false`
+   stops it and deletes the file.
+2. Build the client (Rust, no dependencies): `cargo build --release` in `tools/vimma-ctl/`; the
+   binary is `tools/vimma-ctl/target/release/vimma-ctl`. Packages will ship it later.
+3. Use it:
+
+   ```sh
+   vimma-ctl state                    # mode, pending keys, tabs
+   vimma-ctl state --json             # the same, as JSON
+   vimma-ctl send-keys "ctrl+b ?"     # typed as if on the keyboard: opens the help overlay
+   vimma-ctl send-keys esc
+   vimma-ctl open https://example.com # a new tab; only http, https, file and about URLs
+   ```
+
+   It finds your default profile itself; pass `--profile DIR` (or set `VIMMA_PROFILE`) for
+   another one. In Hyprland: `bind = SUPER, slash, exec, vimma-ctl send-keys "ctrl+b ?"`.
+
+`send-keys` presses the keys in the most recently focused Vimma window, exactly as typing them
+would: Vimma's bindings, Firefox's shortcuts (`ctrl+t`, `ctrl+q`) and the page all see them. Keys
+meant for the page reach it only while that window has focus, as with a real keyboard.
+
+**Security.** Turning the socket on hands **full control of the browser** to whoever has the
+token: they can type into any page (including your logged-in sites), open `about:config` and
+change any setting, and quit Vimma. `open` loads with the system principal, like a URL given on
+the command line, so it can open local files (`file:`) and privileged pages such as
+`about:config`; only `javascript:` and `data:` are refused. Leave the pref off unless you use it.
+
+What keeps others out:
+
+- The socket listens on `127.0.0.1` only, on a random port. Web pages cannot speak to it (they
+  cannot read the token, and an HTTP request is rejected).
+- A client must send the token from `vimma-control.json`: 256 random bits, new at every start,
+  compared in constant time. The file is readable by you alone (mode 0600), and `vimma-ctl`
+  refuses a file anyone else can read. Other users on the machine cannot get it; anything
+  running as you can, just as it can already read your profile's cookies and history.
+- The browser proves it knows the token first: `vimma-ctl` sends only a random nonce, and sends
+  the token only after the browser has answered with an HMAC of that nonce made with the token.
+  If Vimma crashed and another program took its old port, that program gets the nonce and
+  nothing else: no token and no command (`vimma-ctl` exits 4). It can still make `vimma-ctl`
+  wait until its timeout.
+- A stale file (Vimma crashed or was killed with `kill -9` or `SIGTERM`) is removed at Vimma's
+  next start, whether or not the socket is on. Until then, on Linux, `vimma-ctl` sees that the
+  process named in it has exited and says Vimma is not running; if that process number has been
+  reused, the handshake above still protects you.
+
+Limits against a local denial of service: at most 8 authenticated connections (the next is told
+"busy"); at most 2 connections still authenticating, a new one pushing out the oldest, so idle
+connections cannot lock `vimma-ctl` out; 5 s to authenticate; an idle connection closes after
+60 s; lines over 1 MiB and clients that stop reading are disconnected. These are limits, not a
+defence against an active attack: a program of any local user that connects fast enough keeps
+pushing `vimma-ctl` out before it authenticates, and any program running as you can keep the 8
+slots busy. Turn the pref off to stop either.
+
+With the help overlay open, every key goes to the overlay, `ctrl+q` included, as when typing;
+send `esc` first (`vimma-ctl send-keys "esc ctrl+q"`).
 
 ## Privacy defaults
 

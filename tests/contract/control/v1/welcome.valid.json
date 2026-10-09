@@ -1,5 +1,5 @@
 {
-  "description": "Server accepts; unknown extra fields are allowed",
+  "description": "Server accepts the token; unknown extra fields are allowed",
   "kind": "welcome",
   "message": {
     "type": "welcome",
