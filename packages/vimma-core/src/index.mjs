@@ -20,6 +20,7 @@ export * from "./escape.mjs";
 export * from "./panes.mjs";
 export * from "./workspaces.mjs";
 export * from "./snapshot.mjs";
+export * from "./workspacedefs.mjs";
 export * from "./splitplan.mjs";
 export * from "./switchplan.mjs";
 export * from "./textwidth.mjs";

@@ -92,8 +92,8 @@ export function migrate(raw, from, to = CONFIG_SCHEMA_VERSION, registry = MIGRAT
   return { config, applied };
 }
 
-// Firefox container colours and icons (ContextualIdentityService.sys.mjs).
-const COLORS = [
+// Firefox container colours and icons (ContextualIdentityService.sys.mjs); workspacedefs.mjs too.
+export const CONTAINER_COLORS = [
   "gray",
   "yellow",
   "orange",
@@ -107,7 +107,7 @@ const COLORS = [
 ];
 /** @type {Record<string, string>} */
 const COLOR_ALIASES = { turquoise: "cyan", toolbar: "gray" };
-const ICONS = [
+export const CONTAINER_ICONS = [
   "fingerprint",
   "briefcase",
   "dollar",
@@ -138,7 +138,7 @@ const DOMAIN = new RegExp(`^(?=.{1,253}$)${LABEL}(?:\\.${LABEL})*\\.?$`, "i");
 const IPV6 = /^(?:\[[0-9a-f:.]*:[0-9a-f:.]*\]|[0-9a-f.]*:[0-9a-f:.]*)$/i;
 const BAD_HOST = 'must be a hostname like "docs.google.com", without scheme, port, path or *';
 const MAX_TIMEOUT_MS = 10000;
-const MAX_WORKSPACE_NAME = 32;
+export const MAX_WORKSPACE_NAME = 32;
 const MAX_FONT = 200;
 const FONT_FORBIDDEN = /["';{}\\<>]/;
 const HOME = /^(?:https?:\/\/|about:)\S+$/;
@@ -302,16 +302,17 @@ function validate(raw, declared) {
         const at = [...path, key];
         if (key === "color") {
           if (typeof v !== "string") typeError(at, v, "a string");
-          else if (!COLORS.includes(v) && !(v in COLOR_ALIASES)) {
+          else if (!CONTAINER_COLORS.includes(v) && !(v in COLOR_ALIASES)) {
             fail(
               at,
               `unknown colour "${v}"`,
-              closest(v, [...COLORS, ...Object.keys(COLOR_ALIASES)]),
+              closest(v, [...CONTAINER_COLORS, ...Object.keys(COLOR_ALIASES)]),
             );
           }
         } else if (key === "icon") {
           if (typeof v !== "string") typeError(at, v, "a string");
-          else if (!ICONS.includes(v)) fail(at, `unknown icon "${v}"`, closest(v, ICONS));
+          else if (!CONTAINER_ICONS.includes(v))
+            fail(at, `unknown icon "${v}"`, closest(v, CONTAINER_ICONS));
         } else if (key === "home") {
           if (typeof v !== "string") typeError(at, v, "a string");
           else if (!HOME.test(v))
