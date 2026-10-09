@@ -38,7 +38,9 @@ Which-key strip (M2), styling beyond legible defaults (M5 theme tokens).
   elements, so outside the overlay the host dispatches every key as `insert`: only global chords
   (prefix sequences, ctrl/alt/meta bindings) are ours. Dispatching as `normal` would swallow `j`,
   `g` and digits typed into pages, the URL bar and about:preferences (and break m0-key-capture's
-  "page still receives `j`"). Mode is `help` while the overlay is open.
+  "page still receives `j`"). Mode is `help` while the overlay is open. **Replaced** by
+  [m1-actor-insert-scroll](m1-actor-insert-scroll.md): pages are `normal` unless a text field
+  has focus; chrome focus (URL bar) is still `insert`.
 - **Actions the host cannot run yet are left to Firefox when they are a single key**
   (`esc` → `mode.normal`, `ctrl+i`, `ctrl+u`), so M0 does not regress Esc or those shortcuts.
   Inside a sequence they are consumed: `ctrl+b <anything>` never leaks the second key. The
@@ -71,3 +73,5 @@ vimma/help-overlay.css`); the overlay loads it with `windowUtils.loadSheetUsingU
     so `q` and `/` would be typed into it.
   - **Revisit in M1:** "an unrunnable single-key action passes through" is an M0 stopgap. Once
     `normal` mode and the content actor are real, decide per action whether it is consumed.
+    Revisited in [m1-actor-insert-scroll](m1-actor-insert-scroll.md) (Settled): unbound keys
+    pass; the first key of a sequence with nothing runnable under it passes too (`ctrl+w`).

@@ -39,6 +39,11 @@ explicitly.
 - `i` focuses the first text input and enters insert.
 - Insert is per tab: switching tabs gives each tab its own mode.
 - Unbound bare keys in normal mode reach the page.
+- The actor reaches Settings (search box focused: insert, `Esc`: normal) and the PDF viewer; a
+  `data:` page has none and stays in insert.
+
+Mutation check: dropping `isContentEditable` from the child's descriptor fails the
+contenteditable case only (reverted). Stress: `--repeat=9` on two busy CPUs, 0 unexpected.
 
 Existing tests: `pageKeysThenJ` in the help overlay test and the key-capture test used `j` as
 "a key that is never ours"; `j` is ours in normal mode now, so they use `z`, which is unbound.
@@ -54,13 +59,18 @@ actions that are not implemented yet (parallel spec).
 - **Actor registration.** `ChromeUtils.registerWindowActor("Vimma", …)` from our own
   `actors/VimmaActors.sys.mjs`, as `PageDataService`, `Interactions` and `MigrationUtils` do at
   runtime; no upstream patch, no `ActorManagerParent` entry. Once per process (a module flag);
-  `vimma.js` calls it before `VimmaHost.init`. `allFrames: true`; `messageManagerGroups:
-["browsers"]` (tabs only, not the sidebar or devtools); `matches: ["http://*/*",
-"https://*/*", "file:///*", "about:*"]` (`JSWindowActorProtocol` builds the patterns with
-  `restrictSchemes = false`, so `about:` works). Module URLs are `chrome://browser/content/
-vimma/actors/…`; content processes load chrome:// modules (`NetErrorChild` imports one).
+  `vimma.js` calls it before `VimmaHost.init`. `allFrames: true`; message manager group
+  `browsers` (tabs only, not the sidebar or devtools); matches `http://*/*`, `https://*/*`,
+  `file:///*` and `about:*` (`JSWindowActorProtocol` builds the patterns with
+  `restrictSchemes = false`, so `about:` works). Modules live under
+  `chrome://browser/content/vimma/actors/`; content processes load chrome:// modules
+  (`NetErrorChild` imports one). `safeForUntrustedWebProcess: true` is required for web content
+  processes (`JSActorProtocol::RemoteTypeMatches`); the parent takes only a well-formed
+  `{ descriptor, trigger }` from the child, and a forged one can only flip that tab's mode.
+  ESLint gets `JSWindowActorChild`/`JSWindowActorParent` as globals for `actors/` only.
   - `about:preferences` and other parent-process `about:` pages get the child in the parent
-    process: `j` scrolls Settings, typing in its search box is insert.
+    process. Settings focuses its search box on load, so it opens in insert; `Esc` gives normal,
+    where `j` scrolls it (tested).
   - The PDF viewer: the document's URI is the PDF's, so it matches; pdf.js scrolls
     `#viewerContainer`, found by the largest-scrollable fallback below.
   - `moz-extension:`, `data:`, `view-source:`, `blob:` and `chrome:` pages get no actor. With no
@@ -76,8 +86,9 @@ vimma/actors/…`; content processes load chrome:// modules (`NetErrorChild` imp
   reports), and a recheck in a document that no longer has focus (tab switch, focus into
   another frame), so cross-process report order cannot undo the newer frame's report.
 - **Descriptor, not verdict.** The child sends the plain `EditableDescriptor`; the parent host
-  runs `insertModeAfterFocus` (core). Site rules (config, M1 host) live in the parent, and the
-  content process loads no core module.
+  runs `insertModeAfterFocus` (core). Site rules (config, M1 host) and the mode transitions
+  live in the parent, next to the dispatcher. The child imports only core's `editable.mjs`, to
+  pick the field for `i` with the same `isEditable` rules.
 - **Per-browser mode.** The host keeps `WeakMap<browser, "normal" | "insert">`; a report goes to
   `top.embedderElement`. Dispatch mode: `help` while the overlay is open; the focused browser's
   mode when chrome focus is on a `<browser>` (default `normal`; `insert` when the browser has no
@@ -93,8 +104,8 @@ vimma/actors/…`; content processes load chrome:// modules (`NetErrorChild` imp
   false and the top frame scrolls instead. Target: the nearest scrollable ancestor of the
   focused element (through shadow hosts), else `document.scrollingElement` when it can scroll,
   else the largest visible scrollable element (app shells, pdf.js). Amounts: `j k h l` 60 px
-  (Vimium's `scrollStepSize`) times the count; `d`/`u` half the target's client height times
-  the count; `gg`/`G` to 0 and the end. `behavior` is `smooth` when `general.smoothScroll` is
+  (Vimium's `scrollStepSize`) times the count; `d`/`u` half the target's client height, rounded
+  to a whole pixel so `d` then `u` returns to the same place, times the count; `gg`/`G` to 0 and the end. `behavior` is `smooth` when `general.smoothScroll` is
   true, else `instant`.
 - **"Pass if not runnable", revisited.** Unbound bare keys in normal mode pass to the page: plan
   §3 ("keys the dispatcher returns `pass` for continue untouched") and plan §2's `[unbind]`, which

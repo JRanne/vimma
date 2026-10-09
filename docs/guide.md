@@ -46,14 +46,29 @@ in the URL bar, `about:` pages and the PDF viewer.
 - **The prefix layer (Herdr).** `ctrl+b` is the prefix. The next key is a command: `ctrl+b ?`
   shows the bindings, and later `ctrl+b c` opens a tab, `ctrl+b v` splits the pane, and so on.
   The prefix works in every mode and waits for the next key with no timeout. `Esc` cancels it.
-- **The modal layer (Neovim) — planned, M1.** Bare keys act on the page depending on the mode:
-  `j`/`k` scroll in `normal` mode, while in `insert` mode (focus in a text field) keys go to the
-  page. Other modes: `visual`/copy (caret and selection), `command` (`:` line), `hint` (link
-  hints), `help` (the bindings overlay) and `panel` (the side panel).
+- **The modal layer (Neovim).** Bare keys act on the page depending on the mode: `j`/`k` scroll
+  in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page. Planned
+  modes: `visual`/copy (caret and selection), `command` (`:` line), `hint` (link hints) and
+  `panel` (the side panel); `help` is the bindings overlay.
 
-**Today** every page is in `insert` mode, because nothing can yet tell whether focus is in a
-text field. Bare keys and Firefox's own shortcuts reach the page as in Firefox. Only `ctrl+b`
-sequences are Vimma's.
+### Normal and insert mode
+
+Every tab starts in **normal** mode: Vimma's bare keys (the table below) act on the page, and
+the page never sees them. Keys Vimma has no binding for, such as `z` or a site's own `s` or `m`,
+still reach the page.
+
+Focusing a text field puts the tab in **insert** mode, so typing works as in Firefox: inputs,
+text areas, editable regions (`contenteditable`), ARIA text boxes, code editors (Monaco,
+CodeMirror, Ace, ProseMirror, Quill), fields inside web components and inside frames from
+other sites. Focusing a checkbox, button or link does not. `Esc` leaves insert: it takes focus
+out of the field and the tab is back in normal. `i` enters insert explicitly: it focuses the
+first text field on the page, or, on a page without one (a game), lets every key through until
+`Esc`.
+
+Each tab keeps its own mode. Settings (`about:preferences`) and the PDF viewer work the same
+way. Pages Vimma does not reach (extension pages, `data:` and `view-source:` pages) stay in
+insert, so their keys are untouched. With focus in the URL bar or the find bar, keys belong to
+that field; only `ctrl+b` sequences are Vimma's there.
 
 ## Keys
 
@@ -64,19 +79,25 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 
 | Keys                        | What it does                                                                                                                                                  |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `j` / `k`, `h` / `l`        | Normal mode: scroll down / up, left / right by a step. A count repeats: `3j`.                                                                                 |
+| `d` / `u`                   | Normal mode: scroll half a page down / up (`ctrl+u` is reserved for workspaces).                                                                              |
+| `gg` / `G`                  | Normal mode: go to the top / bottom of the page.                                                                                                              |
+| `i`                         | Normal mode: focus the first text field and enter insert mode.                                                                                                |
+| `Esc`                       | Insert mode: leave the text field, back to normal mode. In normal mode the page gets `Esc`.                                                                   |
 | `ctrl+b ?`                  | Opens the bindings overlay over any page, including `about:preferences` and the PDF viewer. Press it again to close.                                          |
 | `/` (in the overlay)        | Filters the list as you type.                                                                                                                                 |
 | `Esc` or `q` (overlay)      | Closes the overlay. Focus returns to where it was.                                                                                                            |
 | `ctrl+b` then anything else | Consumed and does nothing yet (the key never leaks to the page). `ctrl+b` no longer opens Firefox's bookmarks sidebar.                                        |
 | Firefox's own keys          | Unchanged: `ctrl+t`, `ctrl+w`, `ctrl+tab`, `ctrl+shift+tab`, `ctrl+pagedown`, `alt+1..9` (tab N on Linux), `ctrl+l`, `ctrl+f`, `ctrl+u`, `ctrl+i`, and so on. |
 
-While the overlay is open it takes every key, so `ctrl+w` cannot close the tab behind it.
+While the overlay is open it takes every key, so `ctrl+w` cannot close the tab behind it. In
+normal mode bare digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 
 **Planned:**
 
-- **M1, the modal page layer:** scrolling (`j k h l`, `d`/`u`, `gg`/`G`), back and forward
-  (`H`/`L`), reload (`r`), link hints (`f`/`F`), find (`/ ? n N`), the `:` command line, copy mode
-  (`v`, `ctrl+b [`), `i` to focus the first input, and `Esc` back to normal mode.
+- **M1, the rest of the modal page layer:** back and forward (`H`/`L`), reload (`r`), link
+  hints (`f`/`F`), find (`/ ? n N`), the `:` command line and copy mode (`v`, `ctrl+b [`). Until
+  then these keys reach the page as before.
 - **M2, tabs:** `ctrl+b c` new tab, `ctrl+b 1..9`, `ctrl+b n`/`p`, `ctrl+b shift+t` rename,
   `ctrl+b shift+x` close, `t`, `x`, `gt`/`gT`, the `ctrl+b g` picker, the status bar and the
   which-key strip.
