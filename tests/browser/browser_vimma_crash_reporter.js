@@ -3,8 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Spec: docs/specs/m0-mozilla-services.md. Skipped on artifact builds (browser.toml, ADR-010):
-// they run Mozilla's libxul, which has the crash reporter. The full build (locally, nightly.yml)
-// runs it.
+// they run Mozilla's libxul, which has the crash reporter. Full builds run it: locally for now,
+// and in nightly.yml once its runner is live.
 
 "use strict";
 
