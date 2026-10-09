@@ -85,9 +85,9 @@ in the URL bar, `about:` pages and the PDF viewer.
   shows the bindings, `ctrl+b c` opens a tab, and later `ctrl+b v` splits the pane, and so on.
   The prefix works in every mode and waits for the next key with no timeout. `Esc` cancels it.
 - **The modal layer (Neovim).** Bare keys act on the page depending on the mode: `j`/`k` scroll
-  in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page. Planned
-  modes: `visual`/copy (caret and selection) and `panel` (the side panel); `hint` is link
-  hints, `help` the bindings overlay and `command` the `:` line.
+  in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page.
+  `visual` is copy mode (caret and selection), `hint` is link hints, `help` the bindings overlay
+  and `command` the `:` line; `panel` (the side panel) is planned.
 
 ### Normal and insert mode
 
@@ -167,6 +167,27 @@ is on screen), as Vim's starts at the cursor.
 
 `ctrl+f` still opens Firefox's own find bar, where `Enter` goes to the next match.
 
+### Copy mode
+
+`v` (or `ctrl+b [`, as in tmux) enters copy mode: a caret appears at the start of the first text
+you see, or at the selection if one is on screen, and the badge says `VISUAL`. It is Firefox's
+caret browsing (`F7`), for this page only, driven by Vim keys:
+
+- **`h` / `l`** move the caret a character, **`j` / `k`** a line, **`w` / `b`** a word (Firefox's
+  word steps: `w` stops at the end of a word), **`0` / `$`** to the start / end of the line,
+  **`gg` / `G`** to the top / bottom of the page. A count repeats: `3w`. The page scrolls to
+  keep the caret in view.
+- **`v`** starts a selection at the caret; the motions then extend it. `v` again drops it and
+  the caret moves on its own.
+- **`y`** copies the selection to the clipboard as plain text, says "yanked 12 chars" and goes
+  back to normal mode. With nothing selected it says "nothing to yank".
+- **`Esc`** drops the selection and goes back to normal mode.
+
+The page gets none of these keys, nor any other plain key while copy mode is on; chords such as
+`ctrl+c` or `ctrl+t` still work. In a frame (an embedded video page, a comment widget) copy mode
+works once the frame has focus (click it first). Text inside a text field is not reachable: focus
+the field and use its own selection.
+
 ## Status bar
 
 The status bar is the window's last line, always there (it hides only while a page is in
@@ -174,10 +195,11 @@ fullscreen, such as a video; browser fullscreen with `F11` keeps it). From the l
 
 - the **mode** badge in the mode's colour: `NORMAL` on a page, `INSERT` while a text field has
   focus (or after `i`), `COMMAND` while you type a `:` command or a `/` search, `HELP` while
-  the `ctrl+b ?` overlay is open, `HINT` while link hints are up, and later `VISUAL`, …;
+  the `ctrl+b ?` overlay or the `ctrl+b g` picker is open, `HINT` while link hints are up,
+  `VISUAL` in copy mode;
 - the **pending keys**, e.g. `prefix` after `ctrl+b`;
 - `tab 2/5`: the selected tab and how many there are;
-- the page **title** (your rename, once tab rename lands);
+- the page **title**, or your rename (`ctrl+b shift+t`);
 - on the right, the **search** in this page: `/word [2/5]` (match 2 of 5), or
   `/zzz not found` in red;
 - `loading` while the page loads, then its **URL** without `https://`.
@@ -209,6 +231,7 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `f` / `F`                   | Normal mode: link hints. Type a label to follow it, or, with `F`, to open the link in a background tab. `Backspace` undoes a key, `Esc` cancels.              |
 | `/` / `?`                   | Normal mode: find in the page (below). `Enter` stays on the match, `Esc` goes back to where you were.                                                         |
 | `n` / `N`                   | Normal mode: next / previous match of the last search (`?` reverses them), wrapping around the page.                                                          |
+| `v`, `ctrl+b [`             | Normal mode: copy mode ([above](#copy-mode)): `h j k l w b 0 $ gg G` move the caret, `v` selects, `y` copies and leaves, `Esc` leaves.                        |
 | `Esc`                       | Insert mode: leave the text field, back to normal mode. In normal mode the page gets `Esc`.                                                                   |
 | `ctrl+b ?`                  | Opens the bindings overlay over any page, including `about:preferences` and the PDF viewer. Press it again to close.                                          |
 | `/` (in the overlay)        | Filters the list as you type.                                                                                                                                 |
@@ -217,6 +240,8 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `ctrl+b n` / `ctrl+b p`     | Next / previous tab, wrapping around at the ends. Hidden tabs are skipped. `gt` / `gT` in normal mode; `3gt` goes to tab 3.                                   |
 | `ctrl+b 1..9`               | Tab 1 to 9, counting visible tabs (pinned tabs first). With fewer tabs than N, nothing happens.                                                               |
 | `:`                         | Normal mode: opens the command line at the bottom of the window ([below](#the-command-line)). In a text field `:` is typed.                                   |
+| `ctrl+b g`, `b`             | Opens the goto picker over the page (`b` in normal mode): every tab of the window ([below](#goto-picker-and-tab-rename)).                                     |
+| `ctrl+b shift+t`            | Renames the tab ([below](#goto-picker-and-tab-rename)); an empty name restores the page title.                                                                |
 | `ctrl+b x`                  | Closes the pane; until split panes (M4) every tab is one pane, so it closes the tab, as `ctrl+b shift+x`.                                                     |
 | `ctrl+b shift+x`, `x`       | Closes the tab, as `ctrl+w` does: on a pinned tab it selects the first unpinned tab instead; the last tab closes the window. `x` in normal mode.              |
 | `ctrl+b` then anything else | Never leaks to the page. A binding that does not run yet shows "… not implemented yet" for 1.5 s; an unbound key does nothing. No more bookmarks sidebar.     |
@@ -228,17 +253,40 @@ digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 
 **Planned:**
 
-- **M1, the rest of the modal page layer:** back and forward (`H`/`L`), reload (`r`) and copy
-  mode (`v`, `ctrl+b [`). Until then these keys reach the page as before.
-- **M2, the rest of tabs:** `ctrl+b shift+t` rename (kept across restarts; an empty name
-  restores the page title), the `ctrl+b g` picker (`j`/`k` to move, `/` to search titles, URLs,
-  workspaces and renames, `Enter` to go, `Esc` to back out).
+- **Back, forward and reload** (`H`/`L`, `r`): bound, not built yet. Until then these keys
+  reach the page as before.
 - **M3, workspaces and the side panel:** `ctrl+i`/`ctrl+u` next/previous workspace, the
   `ctrl+b w` picker, new/rename/close workspace, and `ctrl+b b` or `<leader>n` for the side panel.
   Until then `ctrl+i` and `ctrl+u` keep Firefox's meaning (page info, view source).
 - **M4, split panes:** `ctrl+b v`/`-`, `ctrl+b h j k l`, swap, zoom, resize, close pane.
 - **M5, config and theme:** rebinding in `~/.config/vimma/config.toml`, `:source`, Omarchy
   colours.
+
+## Goto picker and tab rename
+
+`ctrl+b g` (or `b` in normal mode, or `:ls`) opens a list of the window's tabs over the page: the tab number (the
+one `ctrl+b 1..9` uses), the title or your rename, and the site. The current tab is selected.
+Like the bindings overlay it takes every key while open, so nothing reaches the page.
+
+- `j` / `k`, `Down` / `Up`, `ctrl+n` / `ctrl+p` move; `Enter` goes to the selected tab.
+- `/` starts a search: type a few letters of the title, URL or rename. Matches are highlighted,
+  best first: the start of a title beats a word inside it, which beats letters spread out.
+  Letters with diacritics count as their own letters first (`kä` puts "Käyttäjät" on top), and
+  still match without them, lower down (`ka` finds it after "Kalenteri"). `Backspace`,
+  `ctrl+w` and `ctrl+u` delete a letter, a word, everything.
+- `Esc` in a search goes back to moving through the filtered list; `Esc` or `q` then closes the
+  picker and focus returns to the page.
+
+The picker lists the current window only; with workspaces (M3) it lists every tab of every
+workspace.
+
+`ctrl+b shift+t` opens a one-line prompt at the foot of the window with the tab's current name.
+Type a name and press `Enter`; `Esc` cancels. An empty name removes the rename, so the page title
+shows again. `:tabrename name` does the same in one step (`:tabrename` alone opens the prompt).
+The name replaces the title in the status bar and the picker and is saved with the session, so
+it survives a restart (with Firefox's "Open previous windows and tabs") and undoing a closed tab.
+Invisible and direction-changing characters are removed, runs of spaces become one, and a name
+is cut at 100 characters.
 
 ## The command line
 
@@ -261,17 +309,18 @@ type reaches the page, and `ctrl+b` sequences still work.
 - An argument is the rest of the line, as typed. Quotes are removed only when one pair wraps all
   of it: `:tabrename "my  tab"`.
 
-| Command                                                      | What it does                                                                                                       |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `:open text`                                                 | Opens `text` in this tab as the URL bar would: `example.com` becomes a web address, other words a web search.      |
-| `:tabnew`, `:tabnew text`                                    | Opens a new tab; with text, opens it there (as `:open`).                                                           |
-| `:q`, `:quit`                                                | Closes the pane; with one pane (always, until M4) the tab, as `x`: a pinned tab is kept and the next one selected. |
-| `:map`, `:help`, `:h`                                        | Shows every binding (the `ctrl+b ?` overlay).                                                                      |
-| `:scroll_down`, `:tab.next`…                                 | Any action by its name in [bindings.md](bindings.md), or by its dotted id. Actions take no argument.               |
-| `:tabrename [name]`                                          | Not built yet (M2): says "… not implemented yet".                                                                  |
-| `:vsplit`/`:vs`, `:split`/`:sp`                              | Not built yet (M4).                                                                                                |
-| `:wsnext`, `:wsprev`, `:workspace [name]`, `:ls`, `:sidebar` | Not built yet (M2, M3); `:workspace name` says "… not available yet".                                              |
-| `:source`                                                    | Not built yet (M5).                                                                                                |
+| Command                                               | What it does                                                                                                       |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `:open text`                                          | Opens `text` in this tab as the URL bar would: `example.com` becomes a web address, other words a web search.      |
+| `:tabnew`, `:tabnew text`                             | Opens a new tab; with text, opens it there (as `:open`).                                                           |
+| `:q`, `:quit`                                         | Closes the pane; with one pane (always, until M4) the tab, as `x`: a pinned tab is kept and the next one selected. |
+| `:map`, `:help`, `:h`                                 | Shows every binding (the `ctrl+b ?` overlay).                                                                      |
+| `:scroll_down`, `:tab.next`…                          | Any action by its name in [bindings.md](bindings.md), or by its dotted id. Actions take no argument.               |
+| `:tabrename [name]`                                   | Renames the tab; without a name, opens the rename prompt.                                                          |
+| `:ls`, `:b`                                           | Opens the goto picker.                                                                                             |
+| `:vsplit`/`:vs`, `:split`/`:sp`                       | Not built yet (M4).                                                                                                |
+| `:wsnext`, `:wsprev`, `:workspace [name]`, `:sidebar` | Not built yet (M3); `:workspace name` says "… not available yet".                                                  |
+| `:source`                                             | Not built yet (M5).                                                                                                |
 
 A command that is not built yet says so for a moment, as its keys do.
 
@@ -440,8 +489,8 @@ has no Vimma builds and offers nothing. Removing it is in review ([limits.md](li
 **I want the tab strip back.** Set `vimma.ui.tabstrip.hidden` to `false` in `about:config`.
 
 **"List all tabs" is missing.** Firefox shows it only when the tab strip is visible. Show the
-strip, or move the "List all tabs" button to the toolbar in customize mode. Vimma's `ctrl+b g`
-picker replaces it in M2.
+strip, or move the "List all tabs" button to the toolbar in customize mode, or use Vimma's
+`ctrl+b g` picker.
 
 **I don't see window controls.** On tiling window managers such as Hyprland there are none, as in
 Firefox. On GNOME or KDE with client-side decorations they move to the navigation bar.

@@ -23,6 +23,9 @@ support-files = [
   "file_vimma_hints_many.html",
 ]
 
+["browser_vimma_copy_mode.js"]
+support-files = ["file_vimma_copy.html", "file_vimma_copy_frame.html"]
+
 ["browser_vimma_branding.js"]
 
 ["browser_vimma_user_agent.js"]
@@ -65,5 +68,9 @@ support-files = [
   "file_vimma_find_frame.html",
   "file_vimma_test.pdf",
 ]
+
+["browser_vimma_picker.js"]
+
+["browser_vimma_rename.js"]
 
 ["browser_vimma_start_page.js"]

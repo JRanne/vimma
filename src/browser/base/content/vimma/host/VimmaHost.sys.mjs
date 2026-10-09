@@ -4,7 +4,7 @@
 
 // Chrome-window key capture and dispatch (specs: docs/specs/m0-key-capture.md,
 // docs/specs/m0-help-overlay.md, docs/specs/m1-actor-insert-scroll.md,
-// docs/specs/m2-tab-keys.md, docs/specs/m1-cmdline.md). Sees every keydown
+// docs/specs/m2-tab-keys.md, docs/specs/m1-cmdline.md, docs/specs/m2-picker-rename.md). Sees every keydown
 // before the URL bar, about: pages and the PDF viewer, runs it through the vimma-core
 // dispatcher and consumes the keys that are ours.
 
@@ -21,8 +21,13 @@ import { HelpOverlay } from "../ui/help-overlay.mjs";
 import { HintOverlay } from "../ui/hint-overlay.mjs";
 import { StatusBar } from "../ui/statusbar.mjs";
 import { Find } from "./find.mjs";
+import { copyModeRunners } from "./copy-mode.mjs";
 import { Notice } from "../ui/notice.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
+import { GotoPicker } from "../ui/picker.mjs";
+import { RenamePrompt } from "../ui/rename-prompt.mjs";
+import { gotoItems, tabById } from "./goto.mjs";
+import { getTabLabel, setTabLabel } from "./tab-labels.mjs";
 import { BLOCKED_URL_TEXT, closeTab, newTab, openUrl, selectTab } from "./tab-ops.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
@@ -66,8 +71,26 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {HintOverlay} hintOverlay
  * @property {Set<() => void>} listeners  told after mode or pending keys may have changed
  * @property {StatusBar | null} statusBar  m2-statusbar-whichkey (the bar; no which-key strip)
+ * @property {GotoPicker} picker  the prefix+g overlay (m2-picker-rename)
+ * @property {RenamePrompt} rename  the prefix+shift+t prompt (m2-picker-rename)
  * @property {Find} find  `/`, `?`, `n`, `N` over Firefox's find bar (m1-find)
  */
+
+/**
+ * `tab.rename`: with a name (`:tabrename foo`) sets the label at once, else opens the prompt.
+ * @param {WindowState} s
+ * @param {string} [text]
+ */
+function renameTab(s, text) {
+  const tab = /** @type {{ gBrowser: { selectedTab: Element } }} */ (/** @type {unknown} */ (s.win))
+    .gBrowser.selectedTab;
+  if (text) {
+    setTabLabel(tab, text);
+    VimmaHost._emit(s);
+  } else {
+    s.rename.open(tab, getTabLabel(tab) ?? "");
+  }
+}
 
 /**
  * `:open` / `:tabnew` text, or the notice saying why not.
@@ -110,18 +133,26 @@ export const RUNNERS = Object.freeze({
     text ? openOrSay(s, text, "current") : s.cmdline.open("open "),
   "command.open": (/** @type {WindowState} */ s) => s.cmdline.open(),
   "command.cancel": (/** @type {WindowState} */ s) => s.cmdline.close(),
+  "goto.picker": (/** @type {WindowState} */ s) => {
+    s.notice.hide();
+    s.picker.open();
+  },
+  "tab.rename": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
+    renameTab(s, text),
 });
 
 /**
  * The page mode of each tab's <browser>, from the actor's focus reports; absent = normal.
  * Written only through setBrowserMode.
- * @type {WeakMap<object, "normal" | "insert">}
+ * @type {WeakMap<object, PageMode>}
  */
 const browserModes = new WeakMap();
 
+/** @typedef {"normal" | "insert" | "visual"} PageMode  visual: copy mode (m1-copy-mode) */
+
 /**
  * @param {any} browser
- * @param {"normal" | "insert"} mode
+ * @param {PageMode} mode
  */
 function setBrowserMode(browser, mode) {
   if ((browserModes.get(browser) ?? "normal") === mode) return;
@@ -147,6 +178,8 @@ export const CONTENT_RUNNERS = Object.freeze({
   "scroll.bottom": (b) => VimmaActors.scroll(b, "bottom"),
   // Esc in insert (escape.mjs: blur); the focusout recheck that follows stays in normal.
   "mode.normal": (b) => {
+    // Esc in copy mode: the frame drops its selection and caret first.
+    if (browserModes.get(b) === "visual") VimmaActors.caret(b, "exit");
     setBrowserMode(b, "normal");
     VimmaActors.blur(b);
   },
@@ -162,6 +195,11 @@ export const CONTENT_RUNNERS = Object.freeze({
   "find.backward": (b) => findOf(b)?.start(b, true),
   "find.next": (b) => findOf(b)?.again(b, false),
   "find.previous": (b) => findOf(b)?.again(b, true),
+  // Copy mode: caret, selection and yank in the focused frame (m1-copy-mode).
+  ...copyModeRunners(setBrowserMode, (b, text) => {
+    const win = b?.ownerDocument?.defaultView;
+    (win && states.get(win))?.notice.show(text);
+  }),
 });
 
 /**
@@ -223,6 +261,8 @@ export const VimmaHost = {
         this._cancelHints(state);
         state.help.close({ tabChanged: true });
         state.cmdline.close({ tabChanged: true });
+        state.picker.close({ tabChanged: true });
+        state.rename.close({ tabChanged: true });
       },
       dispatcher: createDispatcher(keymap),
       help: new HelpOverlay(win, keymap, RUNNABLE),
@@ -238,6 +278,27 @@ export const VimmaHost = {
       hintOverlay: new HintOverlay(win),
       listeners: new Set(),
       statusBar: null,
+      picker: new GotoPicker(win, {
+        items: () => gotoItems(win),
+        activeTabId: () =>
+          /** @type {{ gBrowser: { selectedTab: { linkedPanel: string } } }} */ (
+            /** @type {unknown} */ (win)
+          ).gBrowser.selectedTab.linkedPanel,
+        select: (tabId) => {
+          const tab = tabById(win, tabId);
+          if (!tab) return;
+          /** @type {{ gBrowser: { selectedTab: Element } }} */ (
+            /** @type {unknown} */ (win)
+          ).gBrowser.selectedTab = tab;
+        },
+      }),
+      rename: new RenamePrompt(win, {
+        apply: (tab, text) => {
+          setTabLabel(tab, text);
+          this._emit(state);
+        },
+        changed: () => this._emit(state),
+      }),
       find: new Find(win, () => this._emit(state)),
     };
     states.set(win, state);
@@ -258,6 +319,7 @@ export const VimmaHost = {
       const statusBar = new StatusBar(win, {
         status: () => this.status(win),
         subscribe: (fn) => this.onStateChange(win, fn),
+        labelFor: getTabLabel,
       });
       statusBar.init();
       state.statusBar = statusBar;
@@ -279,6 +341,8 @@ export const VimmaHost = {
     state.help.destroy();
     state.notice.destroy();
     state.cmdline.destroy();
+    state.picker.destroy();
+    state.rename.destroy();
     state.tabStrip?.uninit();
     state.statusBar?.uninit();
     state.find.destroy();
@@ -336,7 +400,10 @@ export const VimmaHost = {
    */
   onFocusReport(browser, { descriptor, trigger }) {
     const mode = browserModes.get(browser) ?? "normal";
-    const next = insertModeAfterFocus({ mode, trigger, descriptor });
+    // Copy mode lasts until a text field takes focus (m1-copy-mode).
+    const copy = mode === "visual";
+    const next = insertModeAfterFocus({ mode: copy ? "normal" : mode, trigger, descriptor });
+    if (copy && next !== "insert") return;
     setBrowserMode(browser, next === "insert" ? "insert" : "normal");
   },
 
@@ -344,7 +411,7 @@ export const VimmaHost = {
    * Called after a tab's page mode changes (normal ↔ insert), whatever caused it (a focus
    * report, `i`, `Esc`): tells the owning window's state listeners (the status bar).
    * The listeners read the mode back through `status(win)`, so the mode argument is unused.
-   * @type {(browser: any, mode: "normal" | "insert") => void}
+   * @type {(browser: any, mode: PageMode) => void}
    */
   onModeChange: (browser) => {
     // defaultView is the WindowProxy init() was given; ownerGlobal is the inner window, a
@@ -358,7 +425,7 @@ export const VimmaHost = {
    * The page mode keys get while `browser` has focus. A page without our actor (extension
    * pages, data:, view-source:) stays in insert, as every page was before M1.
    * @param {any} browser
-   * @returns {"normal" | "insert"}
+   * @returns {PageMode}
    */
   _browserMode(browser) {
     if (!VimmaActors.has(browser)) return "insert";
@@ -375,13 +442,14 @@ export const VimmaHost = {
   },
 
   /**
-   * `help` while the overlay is open; `command` while the `:` line is; the focused page's mode;
+   * `help` while the overlay or the goto picker (modal too) is open; `command` while the `:` line
+   * is; the focused page's mode;
    * `insert` in chrome, so chrome text fields keep their keys and only global chords are ours.
    * @param {WindowState} state
    * @returns {Mode}
    */
   _mode(state) {
-    if (state.help.isOpen) return "help";
+    if (state.help.isOpen || state.picker.isOpen) return "help";
     if (state.cmdline.isOpen) return "command";
     const browser = this._focusedBrowser(state.win);
     if (state.hint && state.hint.browser === browser) return "hint";
@@ -439,6 +507,14 @@ export const VimmaHost = {
       const mods = MODIFIERS.filter((m) => chord[m]);
       console.debug("vimma key", { key, mods, mode });
     }
+    // The goto picker takes every key, bare ones too, before any binding: nothing reaches the
+    // page or Firefox underneath (ctrl+w would close a tab), and its j / q are not keymap keys.
+    if (state.picker.isOpen) {
+      consume(e);
+      state.picker.key(key);
+      this._emit(state);
+      return;
+    }
     // Enter and Esc in a `/` search, and keys typed before its input exists (m1-find).
     if (state.dispatcher.pending().length === 0 && state.find.onKeyDown(e)) {
       this._emit(state);
@@ -469,6 +545,8 @@ export const VimmaHost = {
     switch (result.kind) {
       case "pass":
         if (modal) consume(e);
+        // Copy mode keeps plain keys from the page (m1-copy-mode); chords stay Firefox's (ctrl+c).
+        else if (mode === "visual" && !chord.ctrl && !chord.alt && !chord.meta) consume(e);
         if (mode === "hint") this._hintKey(state, chord);
         return;
       case "cancel":

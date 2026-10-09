@@ -6,8 +6,10 @@
    sheet is loaded (the status bar loads it), legible system colours otherwise. */
 
 /* A zero-height row in the chrome body's flex column, after #browser (before the status bar):
-   the panel overlays the bottom of the content, so opening the line never reflows the page. */
-#vimma-cmdline {
+   the panel overlays the bottom of the content, so opening the line never reflows the page.
+   The tab rename prompt (ui/rename-prompt.mjs) is the same row. */
+#vimma-cmdline,
+#vimma-rename {
   position: relative;
   flex: none;
   height: 0;
@@ -20,7 +22,8 @@
 }
 
 /* A fullscreen page (a video) gets the whole screen, as the status bar does (statusbar.css). */
-:root[inDOMFullscreen] #vimma-cmdline {
+:root[inDOMFullscreen] #vimma-cmdline,
+:root[inDOMFullscreen] #vimma-rename {
   display: none !important;
 }
 
@@ -81,7 +84,8 @@
   padding-inline-end: 0.15rem;
 }
 
-#vimma-cmdline-input {
+#vimma-cmdline-input,
+#vimma-rename-input {
   flex: 1;
   min-width: 0;
   margin: 0;

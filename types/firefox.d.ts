@@ -105,8 +105,23 @@ declare class JSWindowActorChild {
   readonly contentWindow: Window | null;
   // WindowGlobalChild: the other actors of this frame (spec m1-find: Firefox's FinderChild)
   readonly manager: { getActor(name: string): any };
+  // The frame's nsIDocShell (spec m1-copy-mode: its nsISelectionController)
+  readonly docShell: any;
   sendAsyncMessage(name: string, data?: unknown): void;
   sendQuery(name: string, data?: unknown): Promise<any>;
+}
+
+// engine/dom/base/nsISelectionController.idl (the members copy mode uses)
+interface nsISelectionController {
+  setDisplaySelection(toggle: number): void;
+  setCaretEnabled(enabled: boolean): void;
+  setCaretVisibilityDuringSelection(visibility: boolean): void;
+  characterMove(forward: boolean, extend: boolean): void;
+  wordMove(forward: boolean, extend: boolean): void;
+  lineMove(forward: boolean, extend: boolean): void;
+  intraLineMove(forward: boolean, extend: boolean): void;
+  completeMove(forward: boolean, extend: boolean): void;
+  scrollSelectionIntoView(type: number, region: number, flags: number): void;
 }
 
 // engine/dom/interfaces/base/nsIDOMWindowUtils.idl

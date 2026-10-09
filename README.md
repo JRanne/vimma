@@ -32,8 +32,8 @@ release channel.
 ## Status
 
 **Pre-alpha.** Milestone M0 ("fork boots + pipeline", [plan.md](plan.md) §6) is almost done,
-and M1's modal page layer has started (scrolling, insert mode, link hints, find and the `:`
-command line).
+and M1's modal page layer is complete (scrolling, insert mode, link hints, find, the `:`
+command line and copy mode); back, forward and reload keys (`H`/`L`/`r`) are not built yet.
 There are no binaries yet: you build from source. Version `0.1.0`, on Firefox 157.0.1.
 
 What works today:
@@ -48,6 +48,8 @@ What works today:
 - **Find.** `/` searches the page as you type (frames and PDFs too), with Vim's smartcase;
   `Enter` keeps the match, `Esc` goes back, `n`/`N` jump between matches and `?` searches
   backward. The status bar shows `/word [2/5]` or `not found`.
+- **Copy mode.** `v` or `ctrl+b [` puts a caret on the page (`VISUAL`); `h j k l w b 0 $ gg G`
+  move it, `v` starts a selection, `y` copies it as plain text and `Esc` leaves.
 - **`ctrl+b ?`** opens an overlay listing every binding, over any page, including
   `about:preferences` and the PDF viewer. `/` filters the list and `Esc` or `q` closes it.
   Bindings that do not run yet are dimmed.
@@ -60,7 +62,12 @@ What works today:
 - **Start page.** New windows and new tabs open a Vimma page with the logo and the keys to
   start from; the URL bar stays empty and focused.
 - **Status bar.** A one-line status bar at the foot of the window shows the mode, pending keys
-  (`prefix` after `ctrl+b`), `tab 2/5`, the page title, its URL and whether it is loading.
+  (`prefix` after `ctrl+b`), `tab 2/5`, the page title (or your rename), its URL and whether it
+  is loading.
+- **Goto picker and tab rename.** `ctrl+b g` (or `:ls`) lists the window's tabs: `j`/`k` to
+  move, `/` to search titles, URLs and renames (`kä` finds "Käyttäjät" first, `ka` still finds
+  it), `Enter` to go. `ctrl+b shift+t` or `:tabrename name` names a tab; the name shows in the
+  status bar and the picker and survives a restart.
   `ctrl+b ?` is the one place that lists the bindings.
 - **Hidden tab strip.** Firefox's tab strip is hidden. Firefox's own tab keys (`ctrl+t`,
   `ctrl+w`, `ctrl+tab`, `alt+1..9`, …) still work. Set `vimma.ui.tabstrip.hidden` to `false` in
@@ -80,8 +87,8 @@ What works today:
 
 What does not work yet: the dimmed bindings in the overlay. The overlay lists the full planned
 keymap; a `ctrl+b` sequence that does not run yet shows "… not implemented yet" for a moment.
-The rest of the modal page layer (copy mode) is M1. Tab
-rename and the `ctrl+b g` picker are M2. Workspaces, split
+`H`/`L`/`r` reach the page until they are built. M2 (tabs and the status bar) is
+complete; its which-key strip was dropped, and `ctrl+b ?` lists the bindings. Workspaces, split
 panes, `config.toml` and theming come later. The parser and validator for `config.toml` exist in
 `vimma-core`, but the browser does not read the file yet. See [docs/guide.md](docs/guide.md) and
 [docs/limits.md](docs/limits.md).
