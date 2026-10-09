@@ -143,6 +143,11 @@ group("Copy mode", [
   ["caret_right", "caret.right", "Move caret right"],
   ["caret_word_forward", "caret.word_forward", "Move caret a word forward"],
   ["caret_word_backward", "caret.word_backward", "Move caret a word back"],
+  ["caret_line_start", "caret.line_start", "Move caret to the start of the line"],
+  ["caret_line_end", "caret.line_end", "Move caret to the end of the line"],
+  ["caret_top", "caret.top", "Move caret to the top of the page"],
+  ["caret_bottom", "caret.bottom", "Move caret to the bottom of the page"],
+  ["toggle_selection", "selection.toggle", "Start or drop a selection at the caret"],
   ["yank_selection", "selection.yank", "Copy selection and leave copy mode"],
 ]);
 

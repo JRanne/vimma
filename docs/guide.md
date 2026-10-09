@@ -69,9 +69,9 @@ in the URL bar, `about:` pages and the PDF viewer.
   shows the bindings, `ctrl+b c` opens a tab, and later `ctrl+b v` splits the pane, and so on.
   The prefix works in every mode and waits for the next key with no timeout. `Esc` cancels it.
 - **The modal layer (Neovim).** Bare keys act on the page depending on the mode: `j`/`k` scroll
-  in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page. Planned
-  modes: `visual`/copy (caret and selection) and `panel` (the side panel); `hint` is link
-  hints, `help` the bindings overlay and `command` the `:` line.
+  in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page.
+  `visual` is copy mode (caret and selection), `hint` is link hints, `help` the bindings overlay
+  and `command` the `:` line; `panel` (the side panel) is planned.
 
 ### Normal and insert mode
 
@@ -151,6 +151,27 @@ is on screen), as Vim's starts at the cursor.
 
 `ctrl+f` still opens Firefox's own find bar, where `Enter` goes to the next match.
 
+### Copy mode
+
+`v` (or `ctrl+b [`, as in tmux) enters copy mode: a caret appears at the start of the first text
+you see, or at the selection if one is on screen, and the badge says `VISUAL`. It is Firefox's
+caret browsing (`F7`), for this page only, driven by Vim keys:
+
+- **`h` / `l`** move the caret a character, **`j` / `k`** a line, **`w` / `b`** a word (Firefox's
+  word steps: `w` stops at the end of a word), **`0` / `$`** to the start / end of the line,
+  **`gg` / `G`** to the top / bottom of the page. A count repeats: `3w`. The page scrolls to
+  keep the caret in view.
+- **`v`** starts a selection at the caret; the motions then extend it. `v` again drops it and
+  the caret moves on its own.
+- **`y`** copies the selection to the clipboard as plain text, says "yanked 12 chars" and goes
+  back to normal mode. With nothing selected it says "nothing to yank".
+- **`Esc`** drops the selection and goes back to normal mode.
+
+The page gets none of these keys, nor any other plain key while copy mode is on; chords such as
+`ctrl+c` or `ctrl+t` still work. In a frame (an embedded video page, a comment widget) copy mode
+works once the frame has focus (click it first). Text inside a text field is not reachable: focus
+the field and use its own selection.
+
 ## Status bar
 
 The status bar is the window's last line, always there (it hides only while a page is in
@@ -158,8 +179,8 @@ fullscreen, such as a video; browser fullscreen with `F11` keeps it). From the l
 
 - the **mode** badge in the mode's colour: `NORMAL` on a page, `INSERT` while a text field has
   focus (or after `i`), `COMMAND` while you type a `:` command or a `/` search, `HELP` while
-  the `ctrl+b ?` overlay or the `ctrl+b g` picker is open, `HINT` while link hints are up, and
-  later `VISUAL`, …;
+  the `ctrl+b ?` overlay or the `ctrl+b g` picker is open, `HINT` while link hints are up,
+  `VISUAL` in copy mode;
 - the **pending keys**, e.g. `prefix` after `ctrl+b`;
 - `tab 2/5`: the selected tab and how many there are;
 - the page **title**, or your rename (`ctrl+b shift+t`);
@@ -194,6 +215,7 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `f` / `F`                   | Normal mode: link hints. Type a label to follow it, or, with `F`, to open the link in a background tab. `Backspace` undoes a key, `Esc` cancels.              |
 | `/` / `?`                   | Normal mode: find in the page (below). `Enter` stays on the match, `Esc` goes back to where you were.                                                         |
 | `n` / `N`                   | Normal mode: next / previous match of the last search (`?` reverses them), wrapping around the page.                                                          |
+| `v`, `ctrl+b [`             | Normal mode: copy mode ([above](#copy-mode)): `h j k l w b 0 $ gg G` move the caret, `v` selects, `y` copies and leaves, `Esc` leaves.                        |
 | `Esc`                       | Insert mode: leave the text field, back to normal mode. In normal mode the page gets `Esc`.                                                                   |
 | `ctrl+b ?`                  | Opens the bindings overlay over any page, including `about:preferences` and the PDF viewer. Press it again to close.                                          |
 | `/` (in the overlay)        | Filters the list as you type.                                                                                                                                 |
@@ -215,8 +237,8 @@ digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 
 **Planned:**
 
-- **M1, the rest of the modal page layer:** back and forward (`H`/`L`), reload (`r`) and copy
-  mode (`v`, `ctrl+b [`). Until then these keys reach the page as before.
+- **Back, forward and reload** (`H`/`L`, `r`): bound, not built yet. Until then these keys
+  reach the page as before.
 - **M3, workspaces and the side panel:** `ctrl+i`/`ctrl+u` next/previous workspace, the
   `ctrl+b w` picker, new/rename/close workspace, and `ctrl+b b` or `<leader>n` for the side panel.
   Until then `ctrl+i` and `ctrl+u` keep Firefox's meaning (page info, view source).

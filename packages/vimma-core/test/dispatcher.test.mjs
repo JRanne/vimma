@@ -223,3 +223,23 @@ describe("dispatcher (spec acceptance criteria)", () => {
     expect(() => make().dispatch(/** @type {any} */ ("bogus"), parseKey("j"))).toThrow(/mode/);
   });
 });
+
+describe("copy mode keys (spec m1-copy-mode)", () => {
+  test.each([
+    ["v", "selection.toggle"],
+    ["0", "caret.line_start"],
+    ["$", "caret.line_end"],
+    ["g g", "caret.top"],
+    ["G", "caret.bottom"],
+    ["y", "selection.yank"],
+  ])("%s in visual mode runs %s", (keys, id) => {
+    expect(last(feed(make(), "visual", keys))).toEqual({ kind: "action", action: { id } });
+  });
+
+  test("a count repeats a caret motion", () => {
+    expect(last(feed(make(), "visual", "3 w"))).toEqual({
+      kind: "action",
+      action: { id: "caret.word_forward", count: 3 },
+    });
+  });
+});

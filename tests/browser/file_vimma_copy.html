@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Fixture for browser_vimma_copy_mode.js: short known lines at the top, a cross-origin frame,
+   - and a last line far below the fold so caret motions have to scroll. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vimma copy</title>
+    <style>
+      body {
+        font: 16px/1.5 monospace;
+        margin: 0;
+      }
+      p {
+        margin: 0;
+      }
+      iframe {
+        border: 0;
+        height: 40px;
+        width: 400px;
+      }
+      #spacer {
+        height: 3000px;
+      }
+    </style>
+  </head>
+  <body>
+    <p id="first">alpha beta gamma</p>
+    <p id="second">delta epsilon</p>
+    <iframe
+      id="frame"
+      src="https://example.org/browser/browser/base/zen-components/tests/browser/file_vimma_copy_frame.html"
+    ></iframe>
+    <div id="spacer"></div>
+    <p id="last">omega end</p>
+  </body>
+</html>

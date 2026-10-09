@@ -335,4 +335,26 @@ export const VimmaActors = {
   scrollTo(browser, at) {
     actorFor(browser.browsingContext)?.sendAsyncMessage("Vimma:ScrollTo", at);
   },
+
+  /**
+   * Copy mode (m1-copy-mode) in the focused frame: `enter`, a motion (caret.mjs), `toggle`,
+   * `yank` or `exit`. The reply is from a content process: anything but the expected type
+   * counts as a failure (false, or "" for `yank`).
+   * @param {any} browser XULBrowserElement
+   * @param {string} op
+   * @param {number} [count]
+   * @returns {Promise<boolean | string>}
+   */
+  async caret(browser, op, count) {
+    const data = count === undefined ? { op } : { op, count };
+    /** @type {unknown} */
+    let reply;
+    try {
+      reply = await actorFor(framesFor(browser)[0])?.sendQuery("Vimma:Caret", data);
+    } catch {
+      reply = null; // the frame navigated or its process went away
+    }
+    if (op === "yank") return typeof reply === "string" ? reply : "";
+    return reply === true;
+  },
 };

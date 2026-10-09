@@ -96,6 +96,7 @@ hint_chars = "asdfghjkl"
 "<Esc>" = "mode.normal"
 
 [modal.visual]
+"0" = "caret.line_start"
 "<Esc>" = "mode.normal"
 "h" = "caret.left"
 "j" = "caret.down"
@@ -103,6 +104,10 @@ hint_chars = "asdfghjkl"
 "l" = "caret.right"
 "w" = "caret.word_forward"
 "b" = "caret.word_backward"
+"$" = "caret.line_end"
+"gg" = "caret.top"
+"G" = "caret.bottom"
+"v" = "selection.toggle"
 "y" = "selection.yank"
 
 [modal.command]
