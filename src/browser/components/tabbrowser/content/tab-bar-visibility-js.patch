@@ -1,0 +1,20 @@
+diff --git a/browser/components/tabbrowser/content/tab-bar-visibility.js b/browser/components/tabbrowser/content/tab-bar-visibility.js
+index e21d3b673a593bfed6d8f83d4636e0467dfe63f4..3ac57ea1b9936d94f2e8dc7c2d629330f0a524ab 100644
+--- a/browser/components/tabbrowser/content/tab-bar-visibility.js
++++ b/browser/components/tabbrowser/content/tab-bar-visibility.js
+@@ -32,11 +32,13 @@ var TabBarVisibility = {
+ 
+     let tabsToolbar = document.getElementById("TabsToolbar");
+ 
+-    gNavToolbox.toggleAttribute("tabs-hidden", hideTabsToolbar);
++    // Vimma (vimma/ui/tabstrip.mjs): its CSS hides the strip; lay out the rest as if hidden.
++    let vimmaHidden = !isSingleTabWindow && document.documentElement.matches("[vimma-tabstrip-hidden]:not([customizing])");
++    gNavToolbox.toggleAttribute("tabs-hidden", hideTabsToolbar || vimmaHidden);
+     // Should the nav-bar and the toolbars underneath it look and function like
+     // a titlebar? When the tabs toolbar is hidden they form the top edge of the
+     // window, so they share the titlebar's background and inactive styling.
+-    let isTitlebar = CustomTitlebar.enabled && hideTabsToolbar;
++    let isTitlebar = CustomTitlebar.enabled && (hideTabsToolbar || vimmaHidden);
+     let titlebarIds = Services.prefs.getBoolPref("browser.nova.enabled")
+       ? ["nav-bar", "PersonalToolbar"]
+       : ["nav-bar"];

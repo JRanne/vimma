@@ -7,7 +7,7 @@ Status: implemented, awaiting review · Milestone: M0 · Area: UI (`src/browser/
 
 As a Vimma user, I don't see Firefox's tab strip: the window starts with the nav bar and URL bar
 at the top, like Vimma will look once M2 brings its own status bar and tab picker. Until then I
-still open, close, switch and list tabs with Firefox's own keys, the window controls are still
+still open, close and switch tabs with Firefox's own keys, the window controls are still
 there when the browser draws its own titlebar (GNOME/KDE with CSD), and I can bring the strip
 back from about:config without restarting.
 
@@ -16,21 +16,25 @@ back from about:config without restarting.
 - **Pref `vimma.ui.tabstrip.hidden`** (bool, default `true`, in our default pref file
   `browser/branding/vimma/pref/firefox-branding.js`). Read and observed per window: flipping it
   shows or hides the strip live, with no restart.
-- **Mechanism.** `ui/tabstrip.mjs` (a `TabStrip` per window, created by `VimmaHost.init`):
+- **Mechanism.** `ui/tabstrip.mjs` (a `TabStrip` per window, started by `VimmaHost.init` after
+  the key listener, in a `try`/`catch`: a failure there must never cost the Vimma keys):
   - sets the attribute `vimma-tabstrip-hidden` on the window root (`<html>`) from the pref;
   - loads `chrome://browser/skin/vimma/tabstrip.css` (author sheet, registered in our `jar.mn`
     from `browser/themes/shared/vimma/tabstrip.css`, as in m0-help-overlay), which keys off it:
     `#TabsToolbar` gets `visibility: collapse` (zero height, as Firefox's own `collapsed`), and
-    with vertical tabs (`sidebar.verticalTabs`) the tab list `#vertical-tabs` is `display: none`;
-  - tells Firefox the tab strip is hidden, so its own titlebar handling applies (see Settled):
-    after every `TabBarVisibility.update()` it sets `tabs-hidden` on `#navigator-toolbox` and
-    gives `#nav-bar` the `browser-titlebar` class when the titlebar is drawn by the browser.
-- **The "List all tabs" panel keeps working.** Firefox opens it only when `#alltabs-button`
-  (inside the hidden strip) has a size; while the strip is hidden and that button is not visible,
-  the panel anchors to the app menu button instead (`gTabsPanel.canOpen`, `showAllTabsPanel`).
+    with vertical tabs (`sidebar.verticalTabs`) the tab list `#vertical-tabs` is `display: none`.
+    Popups and taskbar tabs (`[popup-window]`, `[taskbartab]`) are excluded;
+  - re-runs `TabBarVisibility.update(true)` when the pref flips or customize mode starts or ends.
+- **One upstream patch**, `src/browser/components/tabbrowser/content/tab-bar-visibility-js.patch`
+  (one hunk): `TabBarVisibility.update()` treats the root attribute like its own hidden cases for
+  `tabs-hidden` on `#navigator-toolbox` and the nav bar's `browser-titlebar` class, so Firefox's
+  titlebar handling applies (see Settled). `TabsToolbar.collapsed` and the File menu are untouched.
+- **"List all tabs" is unavailable while the strip is hidden** (until M2's picker): Firefox opens
+  it only when `#alltabs-button` (inside the strip) has a size, and itself hides View > List All
+  Tabs and the ctrl+tab "show all" button when it cannot.
 - **Customize mode** shows the strip while customizing (`:root[customizing]`), so its widgets can
   still be moved; it hides again on leaving.
-- No upstream patch, no build-config change.
+- No build-config change: the patch is chrome JS, so `npm run import` + `npx surfer build --ui`.
 
 ## Tests (write first)
 
@@ -41,12 +45,16 @@ back from about:config without restarting.
   and the URL bar are visible; `ctrl+l` focuses the URL bar.
 - Given the strip hidden, when the pref is set to `false`, then `#TabsToolbar` is visible again
   without a restart; when it is set back to `true`, it is hidden again.
-- Given the strip hidden, when `ctrl+t`, then a new tab is selected; `ctrl+w` closes it.
+- Given the strip hidden, when `ctrl+t`, then a new tab is selected; `ctrl+w` closes it. After
+  each, with no manual update, `#navigator-toolbox[tabs-hidden]` and the nav bar's
+  `browser-titlebar` class are set (the test clears both first and simulates `customtitlebar`).
 - Given three tabs and the strip hidden, `ctrl+tab` and `ctrl+pagedown` select the next tab,
   `ctrl+shift+tab` the previous one, and the tab-number key (`ctrl+2`; `alt+2` on Linux)
   the second tab.
-- Given the strip hidden, when "List all tabs" runs (`Browser:ShowAllTabs`, and `ctrl+shift+tab`
-  with `browser.ctrlTab.sortByRecentlyUsed`), then the all-tabs panel opens and lists every tab.
+- Given the strip hidden, then `gTabsPanel.canOpen` is false; with the pref `false`,
+  `Browser:ShowAllTabs` opens the all-tabs panel listing every tab.
+- Given a popup window, when it gets a second tab, then its `#TabsToolbar` is visible (Firefox's
+  "prevent tabs being lost").
 - Given the strip hidden and a titlebar drawn by the browser (`customtitlebar`), then the window
   controls are in `#nav-bar` and visible, `#nav-bar` is a drag region (`browser-titlebar`), and
   none are left in `#TabsToolbar`. When the system cannot draw one (headless, tiling WMs), the
@@ -56,6 +64,7 @@ back from about:config without restarting.
 - Given vertical tabs (`sidebar.revamp`, `sidebar.verticalTabs`), the vertical tab list has no
   size; with the pref `false` it is visible.
 - Given the strip hidden, when `ctrl+b` `?`, then the help overlay opens.
+- Given `TabStrip.init` throws, when the host starts, then `ctrl+b` `?` still opens help.
 
 ## Out of scope
 
@@ -74,9 +83,8 @@ tokens (M5); a settings UI for the pref.
   in `#toolbar-menubar`, `#TabsToolbar` and `#nav-bar`; `browser-shared.css` shows them in the
   first visible toolbar only, keyed on `#navigator-toolbox[tabs-hidden]`, which
   `tab-bar-visibility.js` sets for popups and vertical tabs. Its `update()` recomputes that
-  attribute on every call (tab open/close, titlebar pref, customize mode), so `TabStrip` wraps
-  the window's `TabBarVisibility.update` and re-asserts `tabs-hidden` and the nav bar's
-  `browser-titlebar` class after it. This reuses upstream's maintained path rather than copying
+  attribute on every call (tab open/close, titlebar pref, customize mode), so the patch adds our
+  root attribute to its condition. This reuses upstream's maintained path rather than copying
   its CSS conditions (menubar shown permanently, fullscreen, CSD button order, spacers, inactive
   opacity, private-browsing indicator). Under Hyprland there is no `customtitlebar` and no
   controls anywhere, as in Firefox; nothing to replace. `menu_closeWindow` and the File menu's
@@ -89,23 +97,30 @@ tokens (M5); a settings UI for the pref.
   a tab strip and stay (M3 replaces them with the side panel). `@media -moz-pref(...)` as
   `sidebar-main.css` does.
 - **List all tabs.** `gTabsPanel.canOpen` is `isElementVisible(#alltabs-button)`, false while the
-  strip is hidden, so `ctrl+shift+tab` (with `browser.ctrlTab.sortByRecentlyUsed`, default
-  `false` in Firefox 157), View > List All Tabs and the ctrl+tab panel's "show all" would do
-  nothing. `TabStrip` wraps both on the window's `gTabsPanel`: if the strip is hidden by us and
-  the button has no size, anchor to `#PanelUI-menu-button`. If the user moves `#alltabs-button`
-  to the nav bar, it is used as before. With default prefs `ctrl+shift+tab` is "previous tab".
+  strip is hidden, so Firefox hides View > List All Tabs and the ctrl+tab panel's "show all";
+  `ctrl+shift+tab` with `browser.ctrlTab.sortByRecentlyUsed` (default `false` in Firefox 157)
+  does nothing. Accepted until M2. A user who moves `#alltabs-button` to the nav bar keeps it.
+  With default prefs `ctrl+shift+tab` is "previous tab".
 - **Zen** (`src/zen/tabs/zen-tabs/vertical-tabs.css`, `zen-browser-ui.css`) replaces the strip:
   it reparents `#TabsToolbar` into its own sidebar, moves the window controls into its sidebar
   top buttons and hides `#alltabs-button` outside customize mode. Nothing to vendor for M0.
 - **Fullscreen / kiosk / popups:** the toolbox's fullscreen auto-hide still works on the nav bar
   (`fullscreentoolbar="true"`); with `tabs-hidden` the nav bar shows the window controls in
-  fullscreen, as with vertical tabs. Popups already hide the strip; `TabStrip` leaves windows
-  without a toolbar (`window.toolbar.visible == false`) to Firefox.
+  fullscreen, as with vertical tabs. Popups and taskbar tabs are Firefox's `isSingleTabWindow`
+  (`!window.toolbar.visible`, the root's `popup-window`; `taskbartab`): the CSS and the patch
+  leave them alone, so a popup with a second tab shows its strip.
 - **`ctrl+1..9` is `alt+1..9` on Linux** (`NUM_SELECT_TAB_MODIFIER` is `alt` under `XP_GNOME`
   in `browser-sets.inc.xhtml`); the test reads the modifier from `#key_selectTab2`.
 - **Verified:** red run 13 passed / 21 failed; green 31/0; full suite 151/0. Mutation: making
   `fallbackAnchor()` return `null` while hidden fails "gTabsPanel.canOpen with the strip hidden"
   (reverted). Headless has no CSD, so the window-controls test sets `customtitlebar` itself.
-- **Open for M2:** Vimma's tab keys and the `prefix+g` picker replace "List all tabs"; decide
-  then whether the app-menu anchor stays. The pref has no Settings UI. Hyprland users get no
-  window controls (none needed); check the nav bar's drag region on GNOME by hand once.
+- **Review round 1 (2026-10-09):** the runtime wraps of `TabBarVisibility.update` and
+  `gTabsPanel` are gone. A one-hunk patch fails loudly at `surfer import` on a rebase (the
+  nightly catches it); a wrap of upstream internals would break silently at runtime. List All
+  Tabs while hidden is dropped on purpose. Popups keep Firefox's strip; the host starts
+  `TabStrip` after its keys, in a `try`. Red 36 passed / 4 failed (List All Tabs available,
+  two-tab popup strip hidden, init error kills the host); green 39/0. Mutation: `vimmaHidden`
+  forced `false` fails 11 assertions, including the ctrl+t/ctrl+w ones (reverted).
+- **Open for M2:** Vimma's tab keys and the `prefix+g` picker replace "List all tabs". The pref
+  has no Settings UI. Hyprland users get no window controls (none needed); check the nav bar's
+  drag region on GNOME by hand once.
