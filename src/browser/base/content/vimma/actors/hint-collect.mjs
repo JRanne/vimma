@@ -125,8 +125,50 @@ function visibleRect(el, vw, vh) {
 }
 
 /**
+ * @param {Element} el
+ * @param {Set<Element>} candidates
+ */
+function insideCandidate(el, candidates) {
+  for (let p = parentOf(el); p; p = parentOf(p)) if (candidates.has(p)) return true;
+  return false;
+}
+
+/**
+ * The parent element of a node, stepping out of a shadow root to its host.
+ * @param {Node} node
+ * @returns {Element | null}
+ */
+function parentOf(node) {
+  const p = node.parentNode;
+  if (!p) return null;
+  if (p.nodeType === 1) return /** @type {Element} */ (p);
+  return /** @type {ShadowRoot} */ (p).host ?? null;
+}
+
+/**
+ * Every element with a box in the viewport that takes pointer events: one hit test over the
+ * whole viewport (`nodesFromRect`, as `elementsFromPoint` but for an area). For event delivery
+ * every painted frame gets an item of its own, so the element of each box is in the list
+ * itself, and the list does not retarget, so elements in open and closed shadow trees are too.
+ * Off-screen, `visibility: hidden`, `display: none` and scrolled-away elements are never
+ * visited; the costlier checks below run only on what is on screen.
+ * @param {Window} win
+ * @param {number} vw
+ * @param {number} vh
+ * @returns {Set<Element>}
+ */
+function onScreenElements(win, vw, vh) {
+  const hit = win.windowUtils.nodesFromRect(0, 0, 0, vw, vh, 0, false, true, false);
+  /** @type {Set<Element>} */
+  const out = new Set();
+  for (const node of hit) if (node.nodeType === 1) out.add(/** @type {Element} */ (node));
+  return out;
+}
+
+/**
  * Whether a click at some point of `rect` lands on `el`: the centre, then the four corners
- * one pixel in. A fixed header or a modal over it fails all five.
+ * one pixel in. A fixed header or a modal over it fails all five. The viewport hit test above
+ * cannot tell this: it reports everything under the area, covered or not.
  * @param {Element} el
  * @param {Rect} rect
  */
@@ -148,25 +190,6 @@ function unoccluded(el, rect) {
 }
 
 /**
- * @param {Element} el
- * @param {Set<Element>} candidates
- */
-function insideCandidate(el, candidates) {
-  for (let p = parentOf(el); p; p = parentOf(p)) if (candidates.has(p)) return true;
-  return false;
-}
-
-/**
- * @param {Element} el
- * @returns {Element | null}
- */
-function parentOf(el) {
-  if (el.parentElement) return el.parentElement;
-  const root = el.getRootNode();
-  return "host" in root ? /** @type {ShadowRoot} */ (root).host : null;
-}
-
-/**
  * The hint targets of one frame, in no particular order (core orders them), and its visible
  * subframes.
  * @param {Window} win  the frame's content window
@@ -185,26 +208,16 @@ export function collectTargets(win, { linksOnly }) {
   const weak = new Set();
   /** @type {Element[]} */
   const frameEls = [];
-
-  // One pass per tree: the document, then every open or closed shadow root found in it.
-  /** @type {(Document | ShadowRoot)[]} */
-  const roots = [doc];
-  for (let i = 0; i < roots.length; i++) {
-    const root = /** @type {Document | ShadowRoot} */ (roots[i]);
-    for (const el of root.querySelectorAll(linksOnly ? LINKS : STRONG)) strong.add(el);
-    if (!linksOnly) for (const el of root.querySelectorAll(WEAK)) weak.add(el);
-    for (const el of root.querySelectorAll("*")) {
-      const shadow = el.openOrClosedShadowRoot;
-      if (shadow) roots.push(shadow);
-      const name = el.localName;
-      if (name === "iframe" || name === "frame") frameEls.push(el);
-      else if (!linksOnly && !NEVER.has(name) && !strong.has(el) && !weak.has(el)) {
-        for (const type of LISTENER_TYPES) {
-          if (els.hasListenersFor(el, type)) {
-            weak.add(el);
-            break;
-          }
-        }
+  const strongSelector = linksOnly ? LINKS : STRONG;
+  for (const el of onScreenElements(win, vw, vh)) {
+    const name = el.localName;
+    if (name === "iframe" || name === "frame") {
+      frameEls.push(el);
+    } else if (el.matches(strongSelector)) {
+      strong.add(el);
+    } else if (!linksOnly && !NEVER.has(name)) {
+      if (el.matches(WEAK) || LISTENER_TYPES.some((type) => els.hasListenersFor(el, type))) {
+        weak.add(el);
       }
     }
   }
@@ -228,10 +241,9 @@ export function collectTargets(win, { linksOnly }) {
     ) {
       continue; // only the editing host of a contenteditable region
     }
+    if (/** @type {HTMLInputElement} */ (el).disabled) continue;
     const rect = visibleRect(el, vw, vh);
     if (!rect) continue;
-    if (!el.checkVisibility({ visibilityProperty: true })) continue;
-    if (/** @type {HTMLInputElement} */ (el).disabled) continue;
     if (!unoccluded(el, rect)) continue;
     /** @type {Found} */
     const found = { el, rect, kind: kindOf(el) };
@@ -260,8 +272,6 @@ export function collectTargets(win, { linksOnly }) {
     const bc = /** @type {any} */ (el).browsingContext;
     if (!bc) continue;
     const r = el.getBoundingClientRect();
-    if (r.right <= 0 || r.bottom <= 0 || r.left >= vw || r.top >= vh) continue;
-    if (!el.checkVisibility({ visibilityProperty: true })) continue;
     // The frame's viewport starts inside its border and padding.
     const style = win.getComputedStyle(el);
     const pl = parseFloat(style.paddingLeft) || 0;

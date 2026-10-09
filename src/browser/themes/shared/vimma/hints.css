@@ -10,6 +10,8 @@
   overflow: hidden;
   pointer-events: none;
   z-index: 1;
+  /* Thousands of labels: their layout and paint stay inside the layer, which the stack sizes. */
+  contain: strict;
 
   & .vimma-hint {
     position: absolute;

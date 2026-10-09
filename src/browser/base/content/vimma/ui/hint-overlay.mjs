@@ -50,7 +50,7 @@ export class HintOverlay {
       el.dataset.label = label;
       el.style.left = `${Math.round(target.rect.x * zoom)}px`;
       el.style.top = `${Math.round(target.rect.y * zoom)}px`;
-      this.#fill(el, label, "");
+      el.textContent = label; // the typed part gets its own span only once there is one
       fragment.append(el);
       this.labels.set(label, el);
     }
@@ -67,7 +67,9 @@ export class HintOverlay {
     for (const [label, el] of this.labels) {
       const match = label.startsWith(typed);
       el.hidden = !match;
-      if (match) this.#fill(el, label, typed);
+      if (!match) continue;
+      if (typed) this.#fill(el, label, typed);
+      else el.textContent = label;
     }
   }
 
