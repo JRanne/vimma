@@ -7,8 +7,8 @@
 // planSplit says which tabs join, leave, move, show, hide, (de)activate; layout() gives each
 // pane its rectangle. Firefox's wrapper keeps deciding which browsers are live and which tab is
 // selected; the tree decides the geometry. The tree shown is the active workspace's; a switch
-// parks it (`swap`, m3-workspaces 2b) until M4 sub-spec 6 keeps it in the model. The pane keys (host/pane-ops.mjs, sub-spec 3) call split / focus / close /
-// zoom; nothing here binds a key.
+// parks it (`swap`, m3-workspaces 2b) until M4 sub-spec 6 keeps it in the model. The pane keys (host/pane-ops.mjs, sub-specs 3 and 5) call split / focus / close /
+// zoom / swapPane / resize; nothing here binds a key.
 
 import { mergeWithDefaults } from "../core/config.mjs";
 import {
@@ -18,8 +18,10 @@ import {
   layout,
   leaves,
   paneOfTab,
+  resize,
   split,
   splitRefusal,
+  swap as swapToward,
   toggleZoom,
 } from "../core/panes.mjs";
 import { planSplit } from "../core/splitplan.mjs";
@@ -32,7 +34,10 @@ import {
   setHidden,
 } from "./layout.mjs";
 
-/** @import { Direction, Panes, SplitDirection, SplitRefusal } from "../core/panes.mjs" */
+/**
+ * @import { Direction, Panes, ResizeDirection, SplitDirection, SplitRefusal }
+ *   from "../core/panes.mjs"
+ */
 /** @import { SplitPlan } from "../core/splitplan.mjs" */
 
 /**
@@ -228,6 +233,33 @@ export class PaneView {
   zoom() {
     if (!this.#panes) return { ok: false, reason: "only one pane" };
     this.#set(toggleZoom(this.#panes));
+    return { ok: true };
+  }
+
+  /**
+   * Swaps the focused pane with its geometric neighbour (core `swap`); focus stays with the
+   * moved pane, and any zoom ends. No neighbour: nothing changes. (`swap` is the workspace park.)
+   * @param {Direction} direction
+   * @returns {PaneResult}
+   */
+  swapPane(direction) {
+    if (!this.#panes) return { ok: true };
+    const next = swapToward(this.#panes, direction);
+    if (next !== this.#panes) this.#set(next);
+    return { ok: true };
+  }
+
+  /**
+   * Grows or shrinks the focused pane by `amount` (a share of its split, e.g. 0.05), clamped at
+   * MIN_RATIO by core. Nothing to resize on that axis, or at the clamp: nothing changes.
+   * @param {ResizeDirection} direction
+   * @param {number} amount
+   * @returns {PaneResult}
+   */
+  resize(direction, amount) {
+    if (!this.#panes) return { ok: false, reason: "only one pane" };
+    const next = resize(this.#panes, direction, amount);
+    if (next !== this.#panes) this.#set(next);
     return { ok: true };
   }
 

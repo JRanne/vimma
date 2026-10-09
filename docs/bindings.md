@@ -31,25 +31,26 @@ Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm 
 
 ## Panes
 
-| Action                                   | Config name        | Bindings                   |
-| ---------------------------------------- | ------------------ | -------------------------- |
-| Split right                              | `split_vertical`   | `prefix+v`                 |
-| Split down                               | `split_horizontal` | `prefix+minus`             |
-| Focus pane to the left                   | `focus_pane_left`  | `prefix+h`, `<C-w>h`       |
-| Focus pane below                         | `focus_pane_down`  | `prefix+j`, `<C-w>j`       |
-| Focus pane above                         | `focus_pane_up`    | `prefix+k`, `<C-w>k`       |
-| Focus pane to the right                  | `focus_pane_right` | `prefix+l`, `<C-w>l`       |
-| Swap with pane to the left               | `swap_pane_left`   | `prefix+shift+h`, `<C-w>H` |
-| Swap with pane below                     | `swap_pane_down`   | `prefix+shift+j`, `<C-w>J` |
-| Swap with pane above                     | `swap_pane_up`     | `prefix+shift+k`, `<C-w>K` |
-| Swap with pane to the right              | `swap_pane_right`  | `prefix+shift+l`, `<C-w>L` |
-| Zoom pane                                | `zoom`             | `prefix+z`, `<C-w>o`       |
-| Close pane; the last pane closes the tab | `close_pane`       | `prefix+x`                 |
-| Resize mode                              | `resize_mode`      | `prefix+r`                 |
-| Make pane narrower                       | `resize_narrower`  | `<C-w><`                   |
-| Make pane wider                          | `resize_wider`     | `<C-w>>`                   |
-| Make pane taller                         | `resize_taller`    | `<C-w>+`                   |
-| Make pane shorter                        | `resize_shorter`   | `<C-w>-`                   |
+| Action                                   | Config name        | Bindings                                                   |
+| ---------------------------------------- | ------------------ | ---------------------------------------------------------- |
+| Split right                              | `split_vertical`   | `prefix+v`                                                 |
+| Split down                               | `split_horizontal` | `prefix+minus`                                             |
+| Focus pane to the left                   | `focus_pane_left`  | `prefix+h`, `<C-w>h`                                       |
+| Focus pane below                         | `focus_pane_down`  | `prefix+j`, `<C-w>j`                                       |
+| Focus pane above                         | `focus_pane_up`    | `prefix+k`, `<C-w>k`                                       |
+| Focus pane to the right                  | `focus_pane_right` | `prefix+l`, `<C-w>l`                                       |
+| Swap with pane to the left               | `swap_pane_left`   | `prefix+shift+h`, `<C-w>H`                                 |
+| Swap with pane below                     | `swap_pane_down`   | `prefix+shift+j`, `<C-w>J`                                 |
+| Swap with pane above                     | `swap_pane_up`     | `prefix+shift+k`, `<C-w>K`                                 |
+| Swap with pane to the right              | `swap_pane_right`  | `prefix+shift+l`, `<C-w>L`                                 |
+| Zoom pane                                | `zoom`             | `prefix+z`, `<C-w>o`                                       |
+| Close pane; the last pane closes the tab | `close_pane`       | `prefix+x`                                                 |
+| Resize mode                              | `resize_mode`      | `prefix+r`                                                 |
+| Leave resize mode                        | `resize_exit`      | `<Esc> [resize]`, `<CR> [resize]`, `q [resize]`            |
+| Make pane narrower                       | `resize_narrower`  | `<C-w><`, `h [resize]`, `<Left> [resize]`, `<lt> [resize]` |
+| Make pane wider                          | `resize_wider`     | `<C-w>>`, `l [resize]`, `<Right> [resize]`, `> [resize]`   |
+| Make pane taller                         | `resize_taller`    | `<C-w>+`, `j [resize]`, `<Down> [resize]`, `+ [resize]`    |
+| Make pane shorter                        | `resize_shorter`   | `<C-w>-`, `k [resize]`, `<Up> [resize]`, `- [resize]`      |
 
 ## Workspaces
 

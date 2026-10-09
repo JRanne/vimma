@@ -87,7 +87,8 @@ in the URL bar, `about:` pages and the PDF viewer.
 - **The modal layer (Neovim).** Bare keys act on the page depending on the mode: `j`/`k` scroll
   in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page.
   `visual` is copy mode (caret and selection), `hint` is link hints, `help` the bindings overlay
-  and `command` the `:` line; `panel` (the side panel) is planned.
+  and `command` the `:` line, `resize` is resize mode for panes (`ctrl+b r`); `panel` (the side
+  panel) is planned.
 
 ### Normal and insert mode
 
@@ -119,7 +120,7 @@ site's own `Esc` (closing an autocomplete list or a dialog) does not fire from t
 has focus, so the page's document gets it, not the field).
 
 **A key that starts a sequence passes when nothing in that sequence works yet.** `ctrl+w`
-starts the `ctrl+w h/j/k/l` and `ctrl+w o` pane keys, which do something only with two panes or
+starts the `ctrl+w h/j/k/l`, `H/J/K/L`, `o` and `< > + -` pane keys, which do something only with two panes or
 more, so in a window with one pane `ctrl+w` still closes the tab. With a split, `ctrl+w` in
 normal mode waits for the pane key (`Esc` cancels); close the tab with `x` or `ctrl+b shift+x`. `g` starts `gg`, which works, so `g` is Vimma's: the page does not see it, and `Esc`
 cancels it.
@@ -258,6 +259,8 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `ctrl+b h j k l`            | Focuses the pane left / below / above / right; when several touch, the one used last. `ctrl+w h j k l` in normal mode. The page of that pane gets focus.      |
 | `ctrl+b z`, `ctrl+w o`      | Zooms the pane to the whole window, or back. The other panes' pages pause. A pane focus key unzooms when it moves.                                            |
 | `ctrl+b x`                  | Closes the pane; its tab stays open. With one pane it closes the tab, as `ctrl+b shift+x`.                                                                    |
+| `ctrl+b shift+h j k l`      | Swaps the pane with the one left / below / above / right; it keeps focus and its page. `ctrl+w H J K L` in normal mode.                                       |
+| `ctrl+b r`                  | Resize mode ([below](#resize-mode)): `h j k l` move the pane's divider, `Esc` leaves. `ctrl+w < > + -` resize directly in normal mode.                        |
 | `ctrl+b shift+x`, `x`       | Closes the tab, as `ctrl+w` does: on a pinned tab it selects the first unpinned tab instead; the last tab closes the window. `x` in normal mode.              |
 | `ctrl+b` then anything else | Never leaks to the page. A binding that does not run yet shows "… not implemented yet" for 1.5 s; an unbound key does nothing. No more bookmarks sidebar.     |
 | Firefox's own keys          | Unchanged: `ctrl+t`, `ctrl+w`, `ctrl+tab`, `ctrl+shift+tab`, `ctrl+pagedown`, `alt+1..9` (tab N on Linux), `ctrl+l`, `ctrl+f`, `ctrl+u`, `ctrl+i`, and so on. |
@@ -266,6 +269,20 @@ While the overlay is open it takes every key, so `ctrl+w` cannot close the tab b
 for bindings that do not run yet are dimmed, under a legend that says so. In normal mode bare
 digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 
+### Resize mode
+
+With two panes or more, `ctrl+b r` enters resize mode and the status bar says `RESIZE`. Each
+key moves the focused pane's nearest divider by 5 % of its split: `l` (or `→`, `>`) makes the
+pane wider, `h` (`←`, `<`) narrower, `j` (`↓`, `+`) taller, `k` (`↑`, `-`) shorter. A count
+repeats the step: `4l` is 20 %. Growing borrows from the nearest neighbour first, then the next
+one; no pane gets smaller than 10 % of its split. `Esc`, `Enter` or `q` leave the mode. The
+mode is modal like the bindings overlay: the page sees none of its keys, and other keys do
+nothing. `ctrl+b` keys still work in it. With one pane, `ctrl+b r` says so and does nothing.
+
+Without the mode, `ctrl+w >`, `ctrl+w <`, `ctrl+w +` and `ctrl+w -` resize by one step in
+normal mode (`3 ctrl+w >` by three), as in Vim. A config can rebind the mode's keys in
+`[modal.resize]`.
+
 **Planned:**
 
 - **Back, forward and reload** (`H`/`L`, `r`): bound, not built yet. Until then these keys
@@ -273,7 +290,7 @@ digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 - **M3, the rest of workspaces and the side panel:** the `ctrl+b w` picker, new/rename/close
   workspace, and `ctrl+b b` or `<leader>n` for the side panel. `ctrl+i` / `ctrl+u` and restoring
   workspaces after a restart work now (see [Workspaces](#workspaces)).
-- **M4, split panes:** swap (`ctrl+b shift+h j k l`), resize (`ctrl+b r`), click focus.
+- **M4, split panes:** click focus.
 
 ## Workspaces
 

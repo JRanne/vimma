@@ -78,6 +78,7 @@ group("Panes", [
   ["zoom", "pane.zoom", "Zoom pane"],
   ["close_pane", "pane.close", "Close pane; the last pane closes the tab"],
   ["resize_mode", "pane.resize_mode", "Resize mode"],
+  ["resize_exit", "pane.resize_exit", "Leave resize mode"],
   ["resize_narrower", "pane.resize_narrower", "Make pane narrower"],
   ["resize_wider", "pane.resize_wider", "Make pane wider"],
   ["resize_taller", "pane.resize_taller", "Make pane taller"],
