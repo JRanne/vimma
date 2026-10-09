@@ -320,7 +320,7 @@ The repo holds the memory. `CLAUDE.md` (appendix A), specs, ADRs, tests and the 
 
 Open questions to settle in M0 (each becomes an ADR or a line in `docs/limits.md`):
 
-- [ ] PR build strategy: `surfer build --ui` on a cached engine vs Firefox artifact builds — which works with release tarballs?
+- [x] PR build strategy: `surfer build --ui` on a cached engine vs Firefox artifact builds — which works with release tarballs? Artifact builds, on hosted runners (ADR-010).
 - [ ] Side panel: custom box in the window layout or Firefox's sidebar framework (`SidebarController`)?
 - [ ] Where does the control socket's auth token live, and should it be off by default in release builds?
 - [x] Omarchy adapter: neither; read the theme's `colors.toml`, which every Omarchy 4 theme ships (`docs/notes/omarchy-theming.md`).
