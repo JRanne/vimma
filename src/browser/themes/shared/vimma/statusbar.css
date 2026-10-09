@@ -1,0 +1,136 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* The status bar and the which-key strip (ui/statusbar.mjs). Colours and the font come only from
+   the --vimma-* theme tokens. Widths are counted in columns of the bar's monospace font, so
+   separators and badge padding are in ch. */
+
+#vimma-statusbar {
+  position: relative;
+  /* above the tabbox and an expanded sidebar (--browser-area-z-index-*), for the strip */
+  z-index: 5;
+  display: flex;
+  flex: none;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 0 1ch;
+  white-space: pre;
+  font-family: var(--vimma-font, monospace);
+  font-size: 12px;
+  line-height: 20px;
+  color-scheme: var(--vimma-color-scheme, dark);
+  background-color: var(--vimma-statusbar-bg);
+  color: var(--vimma-statusbar-fg);
+  user-select: none;
+
+  /* The page asked for the whole screen (a video, requestFullscreen): Firefox hides its chrome,
+     and so do we. Browser fullscreen (F11) keeps the bar. */
+  :root[inDOMFullscreen] &,
+  :root[customizing] & {
+    display: none;
+  }
+
+  & [hidden] {
+    display: none !important;
+  }
+}
+
+.vimma-sb-side {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  /* the bar never wraps or spills, even if a font draws a character wider than its columns */
+  overflow: clip;
+
+  & > * + * {
+    margin-inline-start: 1ch;
+  }
+}
+
+.vimma-sb-right {
+  margin-inline-start: auto;
+
+  &:not(:empty) {
+    padding-inline-start: 1ch;
+  }
+}
+
+.vimma-sb-badge {
+  padding: 0 0.5ch;
+  font-weight: bold;
+}
+
+.vimma-sb-live,
+.vimma-sb-probe {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.vimma-sb-live {
+  /* visually hidden, still read */
+  visibility: visible;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* Above the bar, over the bottom of the content: showing it never resizes the page. */
+#vimma-whichkey {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 3ch;
+  max-height: 40vh;
+  overflow: clip;
+  box-sizing: border-box;
+  padding: 6px 1ch;
+  border-top: 1px solid var(--vimma-muted);
+  background-color: var(--vimma-bg-dark);
+  color: var(--vimma-fg);
+  white-space: pre;
+}
+
+.vimma-wk-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.vimma-wk-group {
+  margin: 0;
+  font: inherit;
+  font-weight: bold;
+  color: var(--vimma-accent);
+}
+
+.vimma-wk-entry {
+  display: flex;
+  gap: 1ch;
+
+  &[aria-disabled="true"] {
+    color: var(--vimma-fg-dim);
+  }
+}
+
+.vimma-wk-key {
+  min-width: 7ch;
+  font: inherit;
+  color: var(--vimma-yellow);
+  text-align: end;
+
+  [aria-disabled="true"] > & {
+    color: var(--vimma-fg-dim);
+  }
+}
+
+.vimma-wk-more {
+  color: var(--vimma-magenta);
+
+  [aria-disabled="true"] > & {
+    color: inherit;
+  }
+}

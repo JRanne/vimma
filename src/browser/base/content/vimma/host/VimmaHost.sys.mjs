@@ -10,6 +10,7 @@ import { createDispatcher } from "../core/dispatcher.mjs";
 import { chordFromEvent, formatKey } from "../core/keys.mjs";
 import { compileKeymap } from "../core/keymap.mjs";
 import { HelpOverlay } from "../ui/help-overlay.mjs";
+import { StatusBar } from "../ui/statusbar.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
@@ -28,6 +29,8 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {HelpOverlay} help
  * @property {TabStrip | null} tabStrip  hides Firefox's tab strip (m0-tabstrip-hidden)
  * @property {number | null} timer   pending-sequence timeout (dispatcher.flush)
+ * @property {Set<() => void>} listeners  told after mode or pending keys may have changed
+ * @property {StatusBar | null} statusBar  m2-statusbar-whichkey
  */
 
 /**
@@ -76,6 +79,8 @@ export const VimmaHost = {
       help: new HelpOverlay(win, keymap),
       tabStrip: null,
       timer: null,
+      listeners: new Set(),
+      statusBar: null,
     };
     states.set(win, state);
     win.addEventListener("keydown", state.onKeyDown, true);
@@ -88,6 +93,18 @@ export const VimmaHost = {
     } catch (e) {
       console.error("vimma: tab strip not hidden", e);
     }
+    try {
+      const statusBar = new StatusBar(win, {
+        status: () => this.status(win),
+        subscribe: (fn) => this.onStateChange(win, fn),
+        runnable: () => this.runnable(),
+        keymap,
+      });
+      statusBar.init();
+      state.statusBar = statusBar;
+    } catch (e) {
+      console.error("vimma: no status bar", e);
+    }
   },
 
   /** @param {Window} win */
@@ -99,7 +116,54 @@ export const VimmaHost = {
     win.removeEventListener("TabSelect", state.onTabSelect, true);
     state.help.destroy();
     state.tabStrip?.uninit();
+    state.statusBar?.uninit();
+    state.listeners.clear();
     states.delete(win);
+  },
+
+  /**
+   * What the status bar and which-key strip show: the mode keys are dispatched in and the keys
+   * of a pending sequence (dispatcher.pending() labels).
+   * @param {Window} win
+   * @returns {{ mode: Mode, pending: string[] }}
+   */
+  status(win) {
+    const state = states.get(win);
+    if (!state) return { mode: "insert", pending: [] };
+    return { mode: this._mode(state), pending: state.dispatcher.pending() };
+  },
+
+  /**
+   * Calls `fn` after anything that may change `status(win)`. Cheap to call often: listeners
+   * debounce. Whatever changes the mode (focus detection, a content actor) calls `_emit`.
+   * @param {Window} win
+   * @param {() => void} fn
+   * @returns {() => void} unsubscribe
+   */
+  onStateChange(win, fn) {
+    const state = states.get(win);
+    if (!state) return () => {};
+    state.listeners.add(fn);
+    return () => state.listeners.delete(fn);
+  },
+
+  /**
+   * Action ids the host can run (RUNNERS): the which-key strip greys the rest.
+   * @returns {Set<string>}
+   */
+  runnable() {
+    return new Set(Object.keys(RUNNERS));
+  },
+
+  /** @param {WindowState} state */
+  _emit(state) {
+    for (const fn of state.listeners) {
+      try {
+        fn();
+      } catch (e) {
+        console.error("vimma: state listener failed", e);
+      }
+    }
   },
 
   /**
@@ -133,6 +197,7 @@ export const VimmaHost = {
     const typing = !chord.ctrl && !chord.alt && !chord.meta && chord.key !== "esc";
     if (typing && state.help.filterFocused && state.dispatcher.pending().length === 0) return;
     this._dispatch(win, state, e, mode, chord);
+    this._emit(state);
   },
 
   /**
@@ -163,6 +228,7 @@ export const VimmaHost = {
           state.timer = win.setTimeout(() => {
             state.timer = null;
             this._run(state, state.dispatcher.flush());
+            this._emit(state);
           }, state.dispatcher.timeoutMs);
         }
         return;
@@ -197,6 +263,7 @@ export const VimmaHost = {
   _cancelPending(win, state) {
     this._clearTimer(win, state);
     state.dispatcher.reset();
+    this._emit(state);
   },
 
   /**

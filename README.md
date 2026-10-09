@@ -18,6 +18,9 @@ What works today:
   a placeholder logo. Its profiles are separate from Firefox's.
 - **`ctrl+b ?`** opens an overlay listing every binding, over any page, including
   `about:preferences` and the PDF viewer. `/` filters the list and `Esc` or `q` closes it.
+- **Status bar and which-key.** A one-line status bar at the foot of the window shows the mode,
+  pending keys, `tab 2/5`, the page title, its URL and whether it is loading. After `ctrl+b` a
+  strip above it lists the keys you can press next; keys that do nothing yet are greyed.
 - **Hidden tab strip.** Firefox's tab strip is hidden. Firefox's own tab keys (`ctrl+t`,
   `ctrl+w`, `ctrl+tab`, `alt+1..9`, …) still work. Set `vimma.ui.tabstrip.hidden` to `false` in
   `about:config` to bring the strip back.
@@ -31,11 +34,10 @@ What works today:
 
 What does not work yet: every other binding in the overlay. The overlay lists the full planned
 keymap, but only `ctrl+b ?` runs today. Other `ctrl+b` sequences do nothing. The modal page
-layer (scrolling, link hints, find, `:` command line, copy mode) is M1. Vimma's own tab keys, the
-status bar, the which-key strip and the `ctrl+b g` picker are M2. Workspaces, split panes,
-`config.toml` and theming come later. The parser and validator for `config.toml` exist in
-`vimma-core`, but the browser does not read the file yet. See [docs/guide.md](docs/guide.md) and
-[docs/limits.md](docs/limits.md).
+layer (scrolling, link hints, find, `:` command line, copy mode) is M1. Vimma's own tab keys
+and the `ctrl+b g` picker are M2. Workspaces, split panes, `config.toml` and theming come
+later. The parser and validator for `config.toml` exist in `vimma-core`, but the browser does
+not read the file yet. See [docs/guide.md](docs/guide.md) and [docs/limits.md](docs/limits.md).
 
 ## Requirements
 

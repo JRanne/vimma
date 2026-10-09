@@ -55,7 +55,8 @@ Where Vimma keeps its files on Linux:
 | `~/.config/vimma/vimma/`      | Profiles and `profiles.ini`. If `~/.vimma/vimma/` already exists, Firefox's legacy rule uses that instead. |
 
 On first launch you see Firefox's interface without the tab strip: the window starts with the
-navigation bar and URL bar at the top. Press `ctrl+b`, then `?`, to see the bindings.
+navigation bar and URL bar at the top, and Vimma's status bar at the bottom. Press `ctrl+b`, then
+`?`, to see the bindings.
 
 ## The two layers
 
@@ -74,6 +75,28 @@ in the URL bar, `about:` pages and the PDF viewer.
 text field. Bare keys and Firefox's own shortcuts reach the page as in Firefox. Only `ctrl+b`
 sequences are Vimma's.
 
+## Status bar and which-key
+
+The status bar is the window's last line, always there (it hides only while a page is in
+fullscreen, such as a video; browser fullscreen with `F11` keeps it). From the left:
+
+- the **mode** badge (`INSERT`, `HELP`, later `NORMAL`, `VISUAL`, …), in the mode's colour;
+- the **pending keys**, e.g. `prefix` after `ctrl+b`;
+- `tab 2/5`: the selected tab and how many there are;
+- the page **title** (your rename, once tab rename lands);
+- on the right, `loading` while the page loads, then its **URL** without `https://`.
+
+On a narrow window the least important parts give way first: the URL is shortened in the middle,
+then dropped, then the title is shortened, and so on. The mode badge always stays. Screen
+readers announce mode changes, not every title change.
+
+After `ctrl+b` (or any key that starts a longer sequence) a **which-key strip** opens above the
+bar, listing every key you can press next with what it does, grouped like the `ctrl+b ?`
+overlay. Keys whose action is not built yet are greyed. The strip closes when the sequence
+completes, or on `Esc`.
+
+Colours are Tokyo Night until theming arrives (M5), which will follow your Omarchy theme.
+
 ## Keys
 
 [bindings.md](bindings.md) lists the full default keymap. It is generated from the same table
@@ -86,7 +109,7 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `ctrl+b ?`                  | Opens the bindings overlay over any page, including `about:preferences` and the PDF viewer. Press it again to close.                                          |
 | `/` (in the overlay)        | Filters the list as you type.                                                                                                                                 |
 | `Esc` or `q` (overlay)      | Closes the overlay. Focus returns to where it was.                                                                                                            |
-| `ctrl+b` then anything else | Consumed and does nothing yet (the key never leaks to the page). `ctrl+b` no longer opens Firefox's bookmarks sidebar.                                        |
+| `ctrl+b` then anything else | Consumed and does nothing yet (the key never leaks to the page; the which-key strip greys these). `ctrl+b` no longer opens Firefox's bookmarks sidebar.       |
 | Firefox's own keys          | Unchanged: `ctrl+t`, `ctrl+w`, `ctrl+tab`, `ctrl+shift+tab`, `ctrl+pagedown`, `alt+1..9` (tab N on Linux), `ctrl+l`, `ctrl+f`, `ctrl+u`, `ctrl+i`, and so on. |
 
 While the overlay is open it takes every key, so `ctrl+w` cannot close the tab behind it.
@@ -99,7 +122,7 @@ While the overlay is open it takes every key, so `ctrl+w` cannot close the tab b
 - **M2, tabs:** `ctrl+b c` new tab, `ctrl+b 1..9`, `ctrl+b n`/`p`, `ctrl+b shift+t` rename
   (kept across restarts; an empty name restores the page title), `ctrl+b shift+x` close, `t`, `x`,
   `gt`/`gT`, the `ctrl+b g` picker (`j`/`k` to move, `/` to search titles, URLs, workspaces and
-  renames, `Enter` to go, `Esc` to back out), the status bar and the which-key strip.
+  renames, `Enter` to go, `Esc` to back out).
 - **M3, workspaces and the side panel:** `ctrl+i`/`ctrl+u` next/previous workspace, the
   `ctrl+b w` picker, new/rename/close workspace, and `ctrl+b b` or `<leader>n` for the side panel.
   Until then `ctrl+i` and `ctrl+u` keep Firefox's meaning (page info, view source).
