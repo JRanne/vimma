@@ -6,6 +6,7 @@ import {
   toSnapshot,
   fromSnapshot,
   migrateSnapshot,
+  canWrite,
   SnapshotError,
 } from "../src/snapshot.mjs";
 import { activeWorkspace } from "../src/workspaces.mjs";
@@ -129,6 +130,26 @@ describe("validation", () => {
         "workspaces[0].panes.root.children[1].children[0].pane",
       ],
       [
+        "name with surrounding spaces",
+        (r) => (r.workspaces[1].name = " personal"),
+        "workspaces[1].name",
+      ],
+      [
+        "mru missing a pane",
+        (r) => (r.workspaces[0].panes.mru = ["p3", "p2"]),
+        "workspaces[0].panes.mru",
+      ],
+      [
+        "mru not led by focus",
+        (r) => (r.workspaces[0].panes.mru = ["p2", "p3", "p1"]),
+        "workspaces[0].panes.mru",
+      ],
+      [
+        "mru repeats a pane",
+        (r) => (r.workspaces[0].panes.mru = ["p3", "p3", "p1"]),
+        "workspaces[0].panes.mru",
+      ],
+      [
         "focus not a leaf",
         (r) => (r.workspaces[0].panes.focus = "p9"),
         "workspaces[0].panes.focus",
@@ -139,6 +160,17 @@ describe("validation", () => {
     ]),
   )("%s → %s", (_, mutate, path) => {
     expect(snapshotError(() => fromSnapshot(mutated(mutate))).path).toBe(path);
+  });
+
+  test("a same-axis child split is accepted when flattening would squeeze a pane below MIN_RATIO", () => {
+    const raw = mutated((r) => {
+      const inner = r.workspaces[0].panes.root.children[1];
+      inner.axis = "x";
+      inner.ratios = [0.15, 0.85]; // 0.15 × 0.5 < MIN_RATIO
+    });
+    expect(fromSnapshot(raw).workspaces[0]?.panes?.root).toMatchObject({
+      children: [{ type: "leaf" }, { axis: "x", ratios: [0.15, 0.85] }],
+    });
   });
 
   test("broken JSON and non-objects are rejected", () => {
@@ -186,8 +218,33 @@ describe("migrations", () => {
     expect(toSnapshot(fromSnapshot(v0, { migrations }))).toEqual(JSON.parse(fixture("valid.json")));
   });
 
+  test("a migration that does not advance the schema throws instead of looping", () => {
+    const v0 = mutated((r) => (r.schema = 0));
+    const stuck = { 0: (/** @type {any} */ raw) => raw };
+    const e = snapshotError(() => migrateSnapshot(v0, stuck));
+    expect(e.code).toBe("bad-migration");
+    expect(e.path).toBe("schema");
+    const garbage = { 0: () => 42 };
+    expect(snapshotError(() => migrateSnapshot(v0, garbage)).code).toBe("bad-migration");
+  });
+
   test("a current snapshot passes through migrateSnapshot untouched", () => {
     const raw = JSON.parse(fixture("valid.json"));
     expect(migrateSnapshot(raw)).toBe(raw);
+  });
+});
+
+describe("canWrite: never overwrite a file from a newer vimma", () => {
+  test.each([
+    ["no file", null, true],
+    ["a v1 file", fixture("valid.json"), true],
+    ["a v1 object", JSON.parse(fixture("valid.json")), true],
+    ["an older file", JSON.stringify({ schema: 0 }), true],
+    ["a newer file", JSON.stringify({ schema: 2, anything: true }), false],
+    ["a newer object", { schema: 7 }, false],
+    ["unreadable JSON", "{ not json", true],
+    ["no schema", JSON.stringify({ workspaces: [] }), true],
+  ])("%s → %s", (_, existing, expected) => {
+    expect(canWrite(existing)).toBe(expected);
   });
 });

@@ -15,11 +15,20 @@
           "axis": "x",
           "ratios": [0.7, 0.7],
           "children": [
-            { "type": "leaf", "pane": "p1", "tab": "tab-a" },
-            { "type": "leaf", "pane": "p2", "tab": "tab-b" }
+            {
+              "type": "leaf",
+              "pane": "p1",
+              "tab": "tab-a"
+            },
+            {
+              "type": "leaf",
+              "pane": "p2",
+              "tab": "tab-b"
+            }
           ]
         },
         "focus": "p1",
+        "mru": ["p1", "p2"],
         "zoom": null,
         "next": 3
       }

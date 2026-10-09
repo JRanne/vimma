@@ -15,6 +15,8 @@
 /** @import { PaneNode } from "./panes.mjs" */
 /** @typedef {(raw: any) => any} Migration a step from schema n to n + 1 */
 
+import { MIN_RATIO } from "./panes.mjs";
+
 export const SCHEMA_VERSION = 1;
 
 /**
@@ -25,7 +27,7 @@ export const SNAPSHOT_MIGRATIONS = Object.freeze({});
 
 export class SnapshotError extends Error {
   /**
-   * @param {"invalid" | "bad-json" | "unsupported-schema"} code
+   * @param {"invalid" | "bad-json" | "unsupported-schema" | "bad-migration"} code
    * @param {string} path JSON path of the offending value, "" for the whole document
    * @param {string} message
    */
@@ -40,7 +42,7 @@ export class SnapshotError extends Error {
 /**
  * @param {string} path
  * @param {string} message
- * @param {"invalid" | "bad-json" | "unsupported-schema"} [code]
+ * @param {"invalid" | "bad-json" | "unsupported-schema" | "bad-migration"} [code]
  * @returns {never}
  */
 function fail(path, message, code = "invalid") {
@@ -119,17 +121,44 @@ export function migrateSnapshot(raw, migrations = SNAPSHOT_MIGRATIONS) {
       return fail("schema", `schema ${schema} is not supported`, "unsupported-schema");
     }
     doc = step(doc);
+    if (!isObject(doc) || doc.schema !== schema + 1) {
+      return fail(
+        "schema",
+        `the migration from schema ${schema} did not produce ${schema + 1}`,
+        "bad-migration",
+      );
+    }
   }
+}
+
+/**
+ * Whether the host may overwrite the state file it found: false only for a file written by a
+ * newer vimma (schema above SCHEMA_VERSION), whose data this version would silently drop.
+ * Missing (null) or unreadable files may be overwritten.
+ * @param {unknown} existing the file's text, its parsed JSON, or null when there is no file
+ * @returns {boolean}
+ */
+export function canWrite(existing) {
+  let doc = existing;
+  if (typeof existing === "string") {
+    try {
+      doc = JSON.parse(existing);
+    } catch {
+      return true;
+    }
+  }
+  const schema = isObject(doc) ? doc.schema : undefined;
+  return !(Number.isInteger(schema) && /** @type {number} */ (schema) > SCHEMA_VERSION);
 }
 
 /**
  * @param {any} node
  * @param {string} path
- * @param {string | null} parentAxis
+ * @param {{ axis: string, share: number } | null} parent
  * @param {{ panes: Set<string>, shown: Set<string>, tabs: Set<string> }} ctx
  * @returns {PaneNode}
  */
-function readNode(node, path, parentAxis, ctx) {
+function readNode(node, path, parent, ctx) {
   if (!isObject(node)) return fail(path, "a pane node must be an object");
   if (node.type === "leaf") {
     if (!isId(node.pane) || ctx.panes.has(node.pane)) fail(`${path}.pane`, "missing or duplicate");
@@ -143,7 +172,6 @@ function readNode(node, path, parentAxis, ctx) {
   if (node.type !== "split") return fail(`${path}.type`, `must be "leaf" or "split"`);
   const axis = node.axis;
   if (axis !== "x" && axis !== "y") fail(`${path}.axis`, `must be "x" or "y"`);
-  if (axis === parentAxis) fail(`${path}.axis`, "same axis as the parent split");
   const { children, ratios } = node;
   if (!Array.isArray(children) || children.length < 2) {
     fail(`${path}.children`, "a split needs at least two children");
@@ -156,7 +184,17 @@ function readNode(node, path, parentAxis, ctx) {
   ) {
     fail(`${path}.ratios`, "one positive ratio per child, summing to 1");
   }
-  const kids = children.map((c, i) => readNode(c, `${path}.children[${i}]`, axis, ctx));
+  // the model keeps a same-axis child split only when flattening would squeeze a pane too far
+  if (
+    parent &&
+    parent.axis === axis &&
+    ratios.every((/** @type {number} */ r) => r * parent.share >= MIN_RATIO - 1e-9)
+  ) {
+    fail(`${path}.axis`, "same axis as the parent split");
+  }
+  const kids = children.map((c, i) =>
+    readNode(c, `${path}.children[${i}]`, { axis, share: ratios[i] }, ctx),
+  );
   return Object.freeze({
     type: "split",
     axis,
@@ -176,9 +214,25 @@ function readPanes(raw, path, tabs) {
   const ctx = { panes: new Set(), shown: new Set(), tabs };
   const root = readNode(raw.root, `${path}.root`, null, ctx);
   if (!ctx.panes.has(raw.focus)) fail(`${path}.focus`, "must name a pane");
+  const mru = raw.mru;
+  if (
+    !Array.isArray(mru) ||
+    mru.length !== ctx.panes.size ||
+    new Set(mru).size !== mru.length ||
+    !mru.every((p) => ctx.panes.has(p)) ||
+    mru[0] !== raw.focus
+  ) {
+    fail(`${path}.mru`, "every pane once, most recently focused first, starting with focus");
+  }
   if (raw.zoom !== null && !ctx.panes.has(raw.zoom)) fail(`${path}.zoom`, "must be null or a pane");
   checkNext(raw.next, ctx.panes, "p", `${path}.next`);
-  return Object.freeze({ root, focus: raw.focus, zoom: raw.zoom, next: raw.next });
+  return Object.freeze({
+    root,
+    focus: raw.focus,
+    mru: Object.freeze(mru.slice()),
+    zoom: raw.zoom,
+    next: raw.next,
+  });
 }
 
 /**
@@ -210,8 +264,8 @@ export function fromSnapshot(input, { migrations } = {}) {
     const at = `workspaces[${k}]`;
     if (!isObject(w)) return fail(at, "must be an object");
     if (!isId(w.id) || ids.has(w.id)) fail(`${at}.id`, "missing or duplicate");
-    if (typeof w.name !== "string" || !w.name.trim() || names.has(w.name)) {
-      fail(`${at}.name`, "empty or duplicate");
+    if (typeof w.name !== "string" || !w.name || w.name !== w.name.trim() || names.has(w.name)) {
+      fail(`${at}.name`, "empty, duplicate or with surrounding spaces");
     }
     if (!isId(w.container) || containers.has(w.container)) {
       fail(`${at}.container`, "empty or duplicate");
