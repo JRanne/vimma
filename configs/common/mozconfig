@@ -1,5 +1,7 @@
 ac_add_options --with-app-name=${binName}
-export MOZ_USER_DIR="${name}"
+# No MOZ_USER_DIR (Surfer's template exports it): configure reads only --with-user-appdir, so the
+# export did nothing. Profiles live under vendor/name (~/.config/vimma/vimma); any non-default
+# --with-user-appdir forces the legacy ~/.vimma/vimma home and would move them (spec m0-branding).
 export MOZ_APP_BASENAME=${name}
 export MOZ_DISTRIBUTION_ID=${appId}
 
