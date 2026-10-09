@@ -54,6 +54,8 @@ pub struct Welcome {
     pub protocol: u64,
     pub app: String,
     pub version: String,
+    /// `HMAC-SHA256(token, nonce)` in lowercase hex: the server knows the token.
+    pub proof: String,
 }
 
 /// A response's `error`.
@@ -118,14 +120,25 @@ impl fmt::Display for DecodeError {
 
 impl std::error::Error for DecodeError {}
 
-/// The `hello` line's value.
+/// The `hello` line's value; `nonce` is 64 lowercase hex chars, new for every connection.
 #[must_use]
-pub fn hello(token: &str) -> Value {
+pub fn hello(token: &str, nonce: &str) -> Value {
     object([
         ("type", text("hello")),
         ("protocol", Value::Number(1.0)),
         ("token", text(token)),
+        ("nonce", text(nonce)),
     ])
+}
+
+/// The proof a server must send for `nonce`: `HMAC-SHA256(key: token, message: nonce)`, both
+/// as their ASCII hex text, in lowercase hex.
+#[must_use]
+pub fn expected_proof(token: &str, nonce: &str) -> String {
+    crate::hmac::hex(&crate::hmac::hmac_sha256(
+        token.as_bytes(),
+        nonce.as_bytes(),
+    ))
 }
 
 /// A request's value. Ids are `u32`: a CLI invocation sends a handful, and every `u32` is exact
@@ -166,6 +179,10 @@ pub fn decode_welcome(value: &Value) -> Result<Welcome, DecodeError> {
         protocol: protocol_field(map)?,
         app: string_field(map, "app")?.to_string(),
         version: string_field(map, "version")?.to_string(),
+        proof: match map.get("proof") {
+            Some(Value::String(proof)) if is_token(proof) => proof.clone(),
+            _ => return Err(fail("proof must be 64 lowercase hex characters")),
+        },
     })
 }
 
@@ -450,7 +467,10 @@ mod tests {
     fn encode_fixture(fixture: &Value) -> Value {
         let message = fixture.get("message").unwrap();
         if str_field(fixture, "kind") == Some("hello") {
-            return hello(str_field(message, "token").unwrap());
+            return hello(
+                str_field(message, "token").unwrap(),
+                str_field(message, "nonce").unwrap(),
+            );
         }
         let id = u32::try_from(message.get("id").and_then(Value::as_u64).unwrap()).unwrap();
         let args = message.get("args").unwrap();
@@ -584,11 +604,45 @@ mod tests {
         );
     }
 
+    const NONCE: &str = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+
     #[test]
     fn hello_is_a_single_line() {
         assert_eq!(
-            hello(TOKEN).to_string(),
-            format!(r#"{{"protocol":1,"token":"{TOKEN}","type":"hello"}}"#)
+            hello(TOKEN, NONCE).to_string(),
+            format!(r#"{{"nonce":"{NONCE}","protocol":1,"token":"{TOKEN}","type":"hello"}}"#)
+        );
+    }
+
+    #[test]
+    fn welcome_fixture_proof_is_the_hmac_of_the_hello_fixture() {
+        let all = fixtures();
+        let find = |name: &str| all.iter().find(|(n, _)| n == name).unwrap().1.clone();
+        let hello = find("hello.valid.json");
+        let hello = hello.get("message").unwrap();
+        let welcome = decode_welcome(find("welcome.valid.json").get("message").unwrap()).unwrap();
+        let expected = crate::hmac::hmac_sha256(
+            str_field(hello, "token").unwrap().as_bytes(),
+            str_field(hello, "nonce").unwrap().as_bytes(),
+        );
+        assert_eq!(welcome.proof, crate::hmac::hex(&expected));
+    }
+
+    #[test]
+    fn decode_welcome_needs_a_64_hex_proof() {
+        let base = r#""type":"welcome","protocol":1,"app":"Vimma","version":"0.1.0""#;
+        assert!(decode_welcome(&parse(&format!("{{{base}}}")).unwrap()).is_err());
+        assert!(decode_welcome(&parse(&format!(r#"{{{base},"proof":"ab"}}"#)).unwrap()).is_err());
+        let upper = "AB".repeat(32);
+        assert!(
+            decode_welcome(&parse(&format!(r#"{{{base},"proof":"{upper}"}}"#)).unwrap()).is_err()
+        );
+        let ok = "ab".repeat(32);
+        assert_eq!(
+            decode_welcome(&parse(&format!(r#"{{{base},"proof":"{ok}"}}"#)).unwrap())
+                .unwrap()
+                .proof,
+            ok
         );
     }
 

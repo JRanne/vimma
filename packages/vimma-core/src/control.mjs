@@ -68,9 +68,11 @@ function checkProtocol(m, errors) {
 
 /** @param {Obj} m @param {string[]} errors */
 function checkHello(m, errors) {
-  noExtraFields(m, ["type", "protocol", "token"], errors);
+  noExtraFields(m, ["type", "protocol", "token", "nonce"], errors);
   checkProtocol(m, errors);
   if (!isToken(m.token)) errors.push("token must be 64 lowercase hex characters");
+  // A fresh random value per connection; the welcome's `proof` answers it.
+  if (!isToken(m.nonce)) errors.push("nonce must be 64 lowercase hex characters");
 }
 
 /** @param {Obj} m @param {string[]} errors */
@@ -78,6 +80,8 @@ function checkWelcome(m, errors) {
   checkProtocol(m, errors);
   if (typeof m.app !== "string") errors.push("app must be a string");
   if (typeof m.version !== "string") errors.push("version must be a string");
+  // HMAC-SHA256(key: the token, message: the hello's nonce), both as their ASCII hex text.
+  if (!isToken(m.proof)) errors.push("proof must be 64 lowercase hex characters");
 }
 
 /** @param {Obj} m @param {string[]} errors */

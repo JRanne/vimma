@@ -135,10 +135,19 @@ class Client {
     return this.writeRaw(JSON.stringify(message) + "\n");
   }
 
-  /** @param {string} token */
+  /**
+   * Sends a hello with a fresh nonce; a welcome must prove the token (HMAC-SHA256(token,
+   * nonce)), checked here with WebCrypto, independently of the server's code.
+   * @param {string} token
+   */
   async hello(token) {
-    await this.send({ type: "hello", protocol: 1, token });
-    return this.read();
+    const nonce = randomHex();
+    await this.send({ type: "hello", protocol: 1, token, nonce });
+    const reply = await this.read();
+    if (reply?.type === "welcome") {
+      Assert.equal(reply.proof, await hmacHex(token, nonce), "welcome proves the token");
+    }
+    return reply;
   }
 
   /** Sends a request and returns its response. */
@@ -155,6 +164,40 @@ class Client {
   close() {
     this.transport.close(Cr.NS_OK);
   }
+}
+
+function randomHex() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+/** HMAC-SHA256(key, message) over their UTF-8 bytes, as lowercase hex. */
+async function hmacHex(key, message) {
+  const enc = new TextEncoder();
+  const k = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(key),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(message)));
+  return Array.from(mac, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Runs vimma-ctl with `args` against this profile: { exitCode, out }. */
+async function runVimmaCtl(bin, args) {
+  const proc = await Subprocess.call({
+    command: bin,
+    arguments: ["--profile", PathUtils.profileDir, ...args],
+    stderr: "stdout",
+  });
+  let out = "";
+  let chunk;
+  while ((chunk = await proc.stdout.readString())) out += chunk;
+  const { exitCode } = await proc.wait();
+  return { exitCode, out };
 }
 
 async function readDiscovery() {
@@ -243,8 +286,13 @@ add_task(async function test_handshake() {
   Assert.equal((await http.read())?.error?.code, "bad-request", "an HTTP request is rejected");
   Assert.equal(await http.closed, 0, "and closed");
 
+  const noNonce = new Client(port);
+  await noNonce.send({ type: "hello", protocol: 1, token });
+  Assert.equal((await noNonce.read())?.error?.code, "bad-request", "a hello needs a nonce");
+  Assert.equal(await noNonce.closed, 0, "and closed");
+
   const v2 = new Client(port);
-  await v2.send({ type: "hello", protocol: 2, token });
+  await v2.send({ type: "hello", protocol: 2, token, nonce: randomHex() });
   Assert.equal((await v2.read())?.error?.code, "unsupported-protocol", "protocol 2 is refused");
   Assert.equal(await v2.closed, 0, "and closed");
 
@@ -388,15 +436,15 @@ add_task(async function test_open() {
 add_task(async function test_limits() {
   const { port, token } = await enable();
 
-  // Eight connections, handshaking or not, are allowed; the ninth gets busy and a close.
+  // Eight authenticated connections are allowed; the ninth's hello gets busy and a close.
   const open = [];
-  for (let i = 0; i < 4; i++) open.push(await session());
-  for (let i = 0; i < 4; i++) open.push(new Client(port));
-  await TestUtils.waitForCondition(() => VimmaControl.connections === 8, "8 connections");
+  for (let i = 0; i < 8; i++) open.push(await session());
+  Assert.equal(VimmaControl.connections, 8, "8 authenticated");
   const ninth = new Client(port);
-  const busy = await ninth.read();
+  const busy = await ninth.hello(token);
   Assert.equal(busy?.error?.code, "busy", "the ninth connection is told busy");
   Assert.equal(busy.id, null, "with id null");
+  Assert.ok(!busy.error.message.startsWith("busy"), `no doubled code: ${busy.error.message}`);
   Assert.equal(await ninth.closed, 0, "and closed");
   open.pop().close();
   await TestUtils.waitForCondition(() => VimmaControl.connections === 7, "one closed");
@@ -405,6 +453,24 @@ add_task(async function test_limits() {
   tenth.close();
   open.forEach((c) => c.close());
   await TestUtils.waitForCondition(() => VimmaControl.connections === 0, "all closed");
+
+  // Connections that never say hello cannot crowd out a client with the token: at most two wait
+  // for a hello, and a new one evicts the oldest (review of #38: a reconnect loop made every
+  // vimma-ctl call busy).
+  const flood = [];
+  for (let i = 0; i < 20; i++) flood.push(new Client(port));
+  await TestUtils.waitForCondition(
+    () => flood.filter((c) => c.closedWith !== null).length === 18,
+    "all but the two newest waiting connections are evicted",
+  );
+  Assert.equal(VimmaControl.waiting, 2, "two wait for a hello");
+  const evicted = flood[0].lines[0] && JSON.parse(flood[0].lines[0]);
+  Assert.equal(evicted?.error?.code, "busy", "an evicted connection is told busy");
+  const authed = await session();
+  Assert.equal((await authed.request(1, "state")).ok, true, "a client with the token gets in");
+  authed.close();
+  flood.forEach((c) => c.close());
+  await TestUtils.waitForCondition(() => VimmaControl.waiting === 0, "flood closed");
 
   // An oversized line: an error, then a close, without waiting for its newline.
   const big = await session();
@@ -455,18 +521,154 @@ add_task(async function test_vimma_ctl_end_to_end() {
     return;
   }
   await enable();
-  const proc = await Subprocess.call({
-    command: bin,
-    arguments: ["--profile", PathUtils.profileDir, "state", "--json"],
-    stderr: "stdout",
-  });
-  let out = "";
-  let chunk;
-  while ((chunk = await proc.stdout.readString())) out += chunk;
-  const { exitCode } = await proc.wait();
+  const { exitCode, out } = await runVimmaCtl(bin, ["state", "--json"]);
   Assert.equal(exitCode, 0, `vimma-ctl state exits 0: ${out}`);
   const state = JSON.parse(out);
   Assert.equal(state.mode, "normal", "vimma-ctl reads the live state");
   Assert.equal(state.tabs.length, gBrowser.visibleTabs.length, "with every tab");
+
+  // A flood of connections that never say hello does not lock vimma-ctl out.
+  const { port } = await readDiscovery();
+  const flood = [];
+  for (let i = 0; i < 30; i++) flood.push(new Client(port));
+  for (let i = 0; i < 5; i++) {
+    const run = await runVimmaCtl(bin, ["state"]);
+    Assert.equal(run.exitCode, 0, `vimma-ctl state during a flood, run ${i}: ${run.out}`);
+  }
+  flood.forEach((c) => c.close());
   await disable();
+
+  // A squatter on a stale discovery file's port, without the token: vimma-ctl refuses it and
+  // sends no command.
+  const squatter = Cc["@mozilla.org/network/server-socket;1"].createInstance(Ci.nsIServerSocket);
+  squatter.init(-1, true, 4);
+  const received = [];
+  squatter.asyncListen({
+    onSocketAccepted(_s, transport) {
+      const input = transport.openInputStream(0, 0, 0);
+      const output = transport.openOutputStream(0, 0, 0);
+      const sis = Cc["@mozilla.org/scriptableinputstream;1"].createInstance(
+        Ci.nsIScriptableInputStream,
+      );
+      sis.init(input);
+      input.QueryInterface(Ci.nsIAsyncInputStream).asyncWait(
+        {
+          onInputStreamReady() {
+            try {
+              received.push(sis.read(sis.available()));
+            } catch {
+              return;
+            }
+            const line =
+              '{"type":"welcome","protocol":1,"app":"Vimma","version":"0.1.0","proof":"' +
+              "0".repeat(64) +
+              '"}\n';
+            output.write(line, line.length);
+            input.QueryInterface(Ci.nsIAsyncInputStream).asyncWait(
+              {
+                onInputStreamReady() {
+                  try {
+                    received.push(sis.read(sis.available()));
+                  } catch {
+                    // closed: vimma-ctl hung up without sending anything more
+                  }
+                },
+              },
+              0,
+              0,
+              Services.tm.mainThread,
+            );
+          },
+        },
+        0,
+        0,
+        Services.tm.mainThread,
+      );
+    },
+    onStopListening() {},
+  });
+  const stale = {
+    protocol: 1,
+    port: squatter.port,
+    token: randomHex(),
+    pid: Services.appinfo.processID,
+  };
+  const tmp = await IOUtils.createUniqueFile(PathUtils.profileDir, "stale.tmp", 0o600);
+  await IOUtils.writeUTF8(tmp, JSON.stringify(stale));
+  await IOUtils.move(tmp, DISCOVERY);
+  const refused = await runVimmaCtl(bin, ["send-keys", "s e c r e t"]);
+  squatter.close();
+  await IOUtils.remove(DISCOVERY);
+  Assert.equal(refused.exitCode, 4, `vimma-ctl refuses the squatter: ${refused.out}`);
+  Assert.ok(
+    !received.join("").includes("send-keys"),
+    `no command reached the squatter: ${received.join("")}`,
+  );
+});
+
+add_task(async function test_server_checks_the_scheme_itself() {
+  // Not only the shared validator: the command re-parses the URL (review of #38).
+  for (const url of ["javascript:alert(1)", "data:text/html,x", "chrome://browser/content/"]) {
+    let code = null;
+    try {
+      VimmaControl._commands.open({ url });
+    } catch (e) {
+      code = e.code;
+    }
+    Assert.equal(code, "invalid-args", `${url.split(":")[0]}: refused by the server itself`);
+  }
+});
+
+add_task(async function test_stale_discovery_file_removed_at_start() {
+  // A file left by a crash goes at the next start, even with the socket off.
+  Services.prefs.setBoolPref(ENABLED, false);
+  await VimmaControl._restartForTests(window, async () => {
+    await IOUtils.writeUTF8(DISCOVERY, '{"protocol":1,"port":1,"token":"x","pid":1}');
+  });
+  Assert.ok(!(await IOUtils.exists(DISCOVERY)), "the stale file is removed with the pref off");
+  Assert.equal(VimmaControl.port, null, "and nothing listens");
+
+  // A directory there is left alone and the server does not start (no file moved into it).
+  await VimmaControl._restartForTests(window, () => IOUtils.makeDirectory(DISCOVERY));
+  Services.prefs.setBoolPref(ENABLED, true);
+  await VimmaControl.settled();
+  Assert.equal(VimmaControl.port, null, "no server over a directory");
+  Assert.equal((await IOUtils.stat(DISCOVERY)).type, "directory", "the directory is untouched");
+  Assert.deepEqual(await IOUtils.getChildren(DISCOVERY), [], "and nothing was moved into it");
+  await disable();
+  await IOUtils.remove(DISCOVERY, { recursive: true });
+
+  if (AppConstants.platform === "linux") {
+    // A symlink to a directory: the link is removed, not followed; the target is untouched.
+    const target = PathUtils.join(PathUtils.profileDir, "vimma-control-target");
+    await IOUtils.makeDirectory(target);
+    await VimmaControl._restartForTests(window, async () => {
+      const ln = await Subprocess.call({
+        command: "/usr/bin/ln",
+        arguments: ["-s", target, DISCOVERY],
+      });
+      Assert.equal((await ln.wait()).exitCode, 0, "symlink made");
+    });
+    const { port } = await enable();
+    Assert.ok(port, "the server starts in place of the link");
+    Assert.deepEqual(await IOUtils.getChildren(target), [], "the link's target is untouched");
+    await disable();
+    await IOUtils.remove(target, { recursive: true });
+  }
+});
+
+add_task(async function test_shutdown_does_not_wait_for_a_window_that_never_started() {
+  // The first window closed before its delayed startup: quitting must not hang on it.
+  const neverReady = { gBrowserInit: { delayedStartupFinished: false } };
+  Services.prefs.setBoolPref(ENABLED, true);
+  await VimmaControl._restartForTests(neverReady);
+  const done = await Promise.race([
+    VimmaControl.shutdown().then(() => "done"),
+    new Promise((resolve) => setTimeout(() => resolve("hung"), 3000)),
+  ]);
+  Assert.equal(done, "done", "shutdown finishes");
+  Assert.ok(!(await IOUtils.exists(DISCOVERY)), "no discovery file");
+  Assert.equal(VimmaControl.port, null, "no server");
+  Services.prefs.setBoolPref(ENABLED, false);
+  await VimmaControl._restartForTests(window);
 });

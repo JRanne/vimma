@@ -1,4 +1,5 @@
 import { describe, test, expect } from "vitest";
+import { createHmac } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
@@ -17,6 +18,14 @@ const files = readdirSync(FIXTURES).filter((f) => f.endsWith(".json"));
 const fixture = (name) => JSON.parse(readFileSync(FIXTURES + name, "utf8"));
 
 const TOKEN = "0123456789abcdef".repeat(4);
+const NONCE = "fedcba9876543210".repeat(4);
+const hello = (extra = {}) => ({
+  type: "hello",
+  protocol: 1,
+  token: TOKEN,
+  nonce: NONCE,
+  ...extra,
+});
 const req = (command, args = {}, id = 1) => ({ type: "request", id, command, args });
 const ok = (result, id = 1) => ({ type: "response", id, ok: true, result });
 const errorsOf = (message, options) => validateMessage(message, options).errors;
@@ -30,6 +39,12 @@ describe("contract fixtures (tests/contract/control/v1)", () => {
       expect(files).toContain(`${type}.invalid.json`);
     }
     expect(files.length).toBe(types.size * 2);
+  });
+
+  test("welcome.valid's proof is HMAC-SHA256(token, nonce) of hello.valid", () => {
+    const { token, nonce } = fixture("hello.valid.json").message;
+    const { proof } = fixture("welcome.valid.json").message;
+    expect(createHmac("sha256", token).update(nonce).digest("hex")).toBe(proof);
   });
 
   test.each(files)("%s validates as its name says", (name) => {
@@ -66,7 +81,7 @@ describe("validateMessage: envelopes", () => {
   });
 
   test("infers the kind from type and rejects an unknown type", () => {
-    expect(validateMessage({ type: "hello", protocol: 1, token: TOKEN }).valid).toBe(true);
+    expect(validateMessage(hello()).valid).toBe(true);
     expect(errorsOf({ type: "goodbye" })).toEqual(['unknown message type "goodbye"']);
   });
 
@@ -74,16 +89,16 @@ describe("validateMessage: envelopes", () => {
     expect(errorsOf(req("state"), { kind: "response" })).toContain('type must be "response"');
   });
 
-  test("hello: protocol must be a positive integer and the token 64 lowercase hex", () => {
-    expect(errorsOf({ type: "hello", protocol: 0, token: TOKEN })).toEqual([
-      "protocol must be an integer >= 1",
-    ]);
-    expect(errorsOf({ type: "hello", protocol: 1, token: TOKEN.toUpperCase() })).toEqual([
+  test("hello: protocol a positive integer, token and nonce 64 lowercase hex", () => {
+    expect(errorsOf(hello({ protocol: 0 }))).toEqual(["protocol must be an integer >= 1"]);
+    expect(errorsOf(hello({ token: TOKEN.toUpperCase() }))).toEqual([
       "token must be 64 lowercase hex characters",
     ]);
-    expect(errorsOf({ type: "hello", protocol: 1, token: TOKEN, extra: 1 })).toEqual([
-      'unknown field "extra"',
+    expect(errorsOf(hello({ extra: 1 }))).toEqual(['unknown field "extra"']);
+    expect(errorsOf(hello({ nonce: undefined }))).toEqual([
+      "nonce must be 64 lowercase hex characters",
     ]);
+    expect(errorsOf(hello({ nonce: "ab" }))).toEqual(["nonce must be 64 lowercase hex characters"]);
   });
 
   test("request ids are integers in 1..2^53-1", () => {
@@ -149,9 +164,13 @@ describe("validateMessage: envelopes", () => {
     ).toEqual(["error.message must be a string"]);
   });
 
-  test("welcome needs app and version strings and allows extra fields", () => {
-    expect(errorsOf({ type: "welcome", protocol: 1, app: "Vimma" })).toEqual([
+  test("welcome needs app and version strings and a proof, and allows extra fields", () => {
+    const proof = "ab".repeat(32);
+    expect(errorsOf({ type: "welcome", protocol: 1, app: "Vimma", proof })).toEqual([
       "version must be a string",
+    ]);
+    expect(errorsOf({ type: "welcome", protocol: 1, app: "Vimma", version: "1" })).toEqual([
+      "proof must be 64 lowercase hex characters",
     ]);
   });
 });

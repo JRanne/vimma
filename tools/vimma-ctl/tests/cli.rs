@@ -14,7 +14,25 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 const TOKEN: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
-const WELCOME: &str = r#"{"type":"welcome","protocol":1,"app":"Vimma","version":"0.1.0"}"#;
+/// The welcome a real server sends for this `hello` line: its proof is HMAC-SHA256(token, nonce).
+fn welcome(hello: &str) -> String {
+    welcome_with_key(hello, TOKEN)
+}
+
+/// A welcome proving knowledge of `key` (a squatter does not know the token).
+fn welcome_with_key(hello: &str, key: &str) -> String {
+    let value = vimma_ctl::json::parse(hello).expect("hello is JSON");
+    let Some(vimma_ctl::json::Value::String(nonce)) = value.get("nonce") else {
+        panic!("hello without a nonce: {hello}")
+    };
+    let proof = vimma_ctl::hmac::hex(&vimma_ctl::hmac::hmac_sha256(
+        key.as_bytes(),
+        nonce.as_bytes(),
+    ));
+    format!(
+        r#"{{"type":"welcome","protocol":1,"app":"Vimma","version":"0.1.0","proof":"{proof}"}}"#
+    )
+}
 
 fn temp_profile() -> PathBuf {
     static N: AtomicUsize = AtomicUsize::new(0);
@@ -79,8 +97,8 @@ impl Server {
 
     /// A well-behaved server: welcome, then `response` (with `"id":1`) to the first request.
     fn answering(response: &'static str) -> Self {
-        Self::start(move |n, _| match n {
-            0 => Some(vec![WELCOME.into()]),
+        Self::start(move |n, line| match n {
+            0 => Some(vec![welcome(line)]),
             1 => Some(vec![response.into()]),
             _ => None,
         })
@@ -116,9 +134,20 @@ fn authenticates_and_sends_keys() {
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
     assert_eq!(stdout(&out), "");
     let lines = server.lines();
+    let hello = vimma_ctl::json::parse(&lines[0]).unwrap();
+    let Some(vimma_ctl::json::Value::String(nonce)) = hello.get("nonce") else {
+        panic!("no nonce: {}", lines[0])
+    };
+    assert!(
+        nonce.len() == 64
+            && nonce
+                .bytes()
+                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()),
+        "nonce is 64 lowercase hex: {nonce}"
+    );
     assert_eq!(
         lines[0],
-        format!(r#"{{"protocol":1,"token":"{TOKEN}","type":"hello"}}"#)
+        format!(r#"{{"nonce":"{nonce}","protocol":1,"token":"{TOKEN}","type":"hello"}}"#)
     );
     assert_eq!(
         lines[1],
@@ -271,9 +300,9 @@ fn times_out_when_the_server_is_silent() {
 
 #[test]
 fn times_out_after_the_handshake_too() {
-    let server = Server::start(|n, _| {
+    let server = Server::start(|n, line| {
         if n == 0 {
-            Some(vec![WELCOME.into()])
+            Some(vec![welcome(line)])
         } else {
             Some(vec![])
         }
@@ -379,9 +408,9 @@ fn reports_a_busy_server_with_exit_3() {
 #[test]
 fn reports_a_drop_after_the_handshake_with_exit_5() {
     // The server's idle timeout or connection cap closing an authenticated connection.
-    let server = Server::start(|n, _| {
+    let server = Server::start(|n, line| {
         if n == 0 {
-            Some(vec![WELCOME.into()])
+            Some(vec![welcome(line)])
         } else {
             None
         }
@@ -419,4 +448,86 @@ fn the_fake_server_speaks_on_loopback_only() {
     );
     drop(TcpStream::connect(addr).unwrap());
     drop(server.lines());
+}
+
+#[test]
+fn a_fresh_nonce_per_connection() {
+    let first = Server::answering(r#"{"type":"response","id":1,"ok":true,"result":{"sent":1}}"#);
+    let second = Server::answering(r#"{"type":"response","id":1,"ok":true,"result":{"sent":1}}"#);
+    assert_eq!(
+        vimma_ctl(&first.profile, &["send-keys", "j"]).status.code(),
+        Some(0)
+    );
+    assert_eq!(
+        vimma_ctl(&second.profile, &["send-keys", "j"])
+            .status
+            .code(),
+        Some(0)
+    );
+    assert_ne!(first.lines()[0], second.lines()[0], "nonces differ");
+}
+
+#[test]
+fn refuses_a_squatter_that_cannot_prove_the_token() {
+    // Something else bound a stale discovery file's port: it answers welcome without knowing the
+    // token. vimma-ctl must stop before sending the command (exit 4).
+    let server = Server::start(|n, line| match n {
+        0 => Some(vec![welcome_with_key(line, &"f".repeat(64))]),
+        _ => Some(vec![
+            r#"{"type":"response","id":1,"ok":true,"result":{"sent":1}}"#.into(),
+        ]),
+    });
+    let out = vimma_ctl(&server.profile, &["send-keys", "secret"]);
+    assert_eq!(out.status.code(), Some(4), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("did not prove it knows the token"),
+        "{}",
+        stderr(&out)
+    );
+    assert_eq!(
+        server.lines().len(),
+        1,
+        "nothing sent after the bad welcome"
+    );
+}
+
+#[test]
+fn refuses_a_welcome_without_a_proof() {
+    let server = Server::start(|n, _| match n {
+        0 => Some(vec![
+            r#"{"type":"welcome","protocol":1,"app":"Vimma","version":"0.1.0"}"#.into(),
+        ]),
+        _ => Some(vec![
+            r#"{"type":"response","id":1,"ok":true,"result":{"sent":1}}"#.into(),
+        ]),
+    });
+    let out = vimma_ctl(&server.profile, &["send-keys", "secret"]);
+    assert_ne!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert_eq!(
+        server.lines().len(),
+        1,
+        "nothing sent after the bad welcome"
+    );
+}
+
+#[test]
+fn reports_a_discovery_file_whose_process_has_exited() {
+    let profile = temp_profile();
+    let path = profile.join("vimma-control.json");
+    fs::write(
+        &path,
+        format!(r#"{{"protocol":1,"port":4000,"token":"{TOKEN}","pid":999999999}}"#),
+    )
+    .unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+    }
+    let out = vimma_ctl(&profile, &["state"]);
+    assert_eq!(out.status.code(), Some(3), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("pid 999999999") && stderr(&out).contains("stale"),
+        "{}",
+        stderr(&out)
+    );
 }

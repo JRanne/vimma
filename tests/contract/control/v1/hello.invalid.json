@@ -4,6 +4,7 @@
   "message": {
     "type": "hello",
     "protocol": 1,
-    "token": "secret"
+    "token": "secret",
+    "nonce": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
   }
 }

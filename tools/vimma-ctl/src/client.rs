@@ -27,6 +27,8 @@ pub enum Error {
     Protocol(String),
     /// The server is at its connection limit (exit 3, like not reachable: retry later).
     Busy(ErrorBody),
+    /// The server's welcome did not prove it knows the token: not Vimma (exit 4).
+    Impostor(String),
 }
 
 /// Longest allowed timeout; [`Client::connect`] clamps to it so the deadline cannot overflow.
@@ -38,7 +40,7 @@ impl Error {
         match self {
             Error::Server(_) => 1,
             Error::NotRunning(_) | Error::Busy(_) => 3,
-            Error::Auth(_) => 4,
+            Error::Auth(_) | Error::Impostor(_) => 4,
             Error::Protocol(_) => 5,
         }
     }
@@ -48,7 +50,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Server(e) => write!(f, "{}: {}", e.code, e.message),
-            Error::NotRunning(message) => f.write_str(message),
+            Error::NotRunning(message) | Error::Impostor(message) => f.write_str(message),
             Error::Auth(e) => write!(f, "authentication failed: {}: {}", e.code, e.message),
             Error::Protocol(message) => write!(f, "protocol error: {message}"),
             Error::Busy(e) => write!(
@@ -97,7 +99,10 @@ impl Client {
             timeout,
             next_id: 1,
         };
-        client.send(&protocol::hello(&discovery.token))?;
+        let nonce = random_nonce().map_err(|e| {
+            Error::Protocol(format!("cannot read random bytes for the handshake: {e}"))
+        })?;
+        client.send(&protocol::hello(&discovery.token, &nonce))?;
         let reply = client.receive()?;
         if reply.get("type") == Some(&Value::String("response".into())) {
             return match protocol::decode_response(&reply).map_err(protocol_error)? {
@@ -109,6 +114,17 @@ impl Client {
             };
         }
         let welcome = protocol::decode_welcome(&reply).map_err(protocol_error)?;
+        // Before anything else is sent: whoever holds the port must know the token. A process
+        // squatting on a stale discovery file's port (the browser crashed) does not; the token it
+        // saw in the hello is dead, as every server start makes a new one.
+        let expected = protocol::expected_proof(&discovery.token, &nonce);
+        if !crate::hmac::constant_time_eq(welcome.proof.as_bytes(), expected.as_bytes()) {
+            return Err(Error::Impostor(format!(
+                "the server on port {} did not prove it knows the token: it is not this Vimma \
+                 (the discovery file may be stale); nothing was sent",
+                discovery.port
+            )));
+        }
         if welcome.protocol != PROTOCOL {
             return Err(Error::Protocol(format!(
                 "server speaks protocol {}, this vimma-ctl speaks {PROTOCOL}",
@@ -219,6 +235,14 @@ impl Client {
     }
 }
 
+/// 32 bytes from the OS CSPRNG as 64 lowercase hex chars.
+fn random_nonce() -> io::Result<String> {
+    use std::io::Read;
+    let mut bytes = [0u8; 32];
+    std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
+    Ok(crate::hmac::hex(&bytes))
+}
+
 fn protocol_error(e: protocol::DecodeError) -> Error {
     Error::Protocol(e.0)
 }
@@ -241,6 +265,7 @@ mod tests {
         assert_eq!(Error::Auth(body("unauthorized")).exit_code(), 4);
         assert_eq!(Error::Protocol("x".into()).exit_code(), 5);
         assert_eq!(Error::Busy(body("busy")).exit_code(), 3);
+        assert_eq!(Error::Impostor("x".into()).exit_code(), 4);
     }
 
     #[test]

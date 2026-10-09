@@ -2,7 +2,7 @@
 // for the harness's tests. Every line it receives and sends is checked with vimma-core's
 // validateMessage, the validator the real server will use, so a drift from the contract
 // fixtures fails here first. Behaviour switches simulate the failures the driver must handle.
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { rmSync, renameSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
@@ -158,7 +158,9 @@ export async function startFakeServer(profile, options = {}) {
             return;
           }
           authed = true;
-          send({ type: "welcome", protocol: 1, app: "Vimma", version: "0.1.0" });
+          // Prove the token, as the real server does: HMAC-SHA256(token, nonce).
+          const proof = createHmac("sha256", token).update(message.nonce).digest("hex");
+          send({ type: "welcome", protocol: 1, app: "Vimma", version: "0.1.0", proof });
           continue;
         }
         check(message, { kind: "request" });

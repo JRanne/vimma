@@ -35,7 +35,16 @@ const HELLO_TIMEOUT_PREF = "vimma.control.helloTimeoutMs";
 const IDLE_TIMEOUT_PREF = "vimma.control.idleTimeoutMs";
 const HELLO_TIMEOUT_MS = 5000;
 const IDLE_TIMEOUT_MS = 60000;
+/** Authenticated connections; the next hello is told busy. */
 const MAX_CONNECTIONS = 8;
+/**
+ * Connections still waiting for their hello. Anyone local can open those, so they are capped
+ * apart from the authenticated ones and a new one evicts the oldest: a flood of idle
+ * connections cannot lock out a client with the token (review of #38).
+ */
+const MAX_WAITING = 2;
+/** Unsent output beyond this means the client is not reading: close it. */
+const MAX_PENDING_OUT = 4 * 1024 * 1024;
 const BACKLOG = 16;
 const DISCOVERY_FILE = "vimma-control.json";
 const NEWLINE = 0x0a;
@@ -57,6 +66,22 @@ class ControlError extends Error {
 
 /** Bytes as a hex string. @param {Uint8Array} bytes */
 const hex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+
+/**
+ * HMAC-SHA256(key, message) over their UTF-8 bytes, as lowercase hex (protocol v1's `proof`).
+ * @param {string} key @param {string} message
+ */
+async function hmacHex(key, message) {
+  const enc = new TextEncoder();
+  const k = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(key),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return hex(new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(message))));
+}
 
 /** @param {unknown} v @returns {v is Record<string, unknown>} */
 const isObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -391,13 +416,28 @@ class Connection {
       this.fail(null, "bad-request", v.errors.join("; "));
       return;
     }
+    const { server: srv } = this;
+    srv.waiting.delete(this);
+    if (srv.connections.size >= MAX_CONNECTIONS) {
+      srv.closing.add(this);
+      this.fail(null, "busy", `${srv.connections.size} connections open`);
+      return;
+    }
+    srv.connections.add(this);
     this.authenticated = true;
     this.arm(Services.prefs.getIntPref(IDLE_TIMEOUT_PREF, IDLE_TIMEOUT_MS), () => this.close());
-    this.write({
-      type: "welcome",
-      protocol: CONTROL_PROTOCOL,
-      app: "Vimma",
-      version: lazy.AppConstants.MOZ_APP_VERSION_DISPLAY,
+    // The welcome proves the server knows the token, so a client can tell this server from a
+    // process squatting on a stale discovery file's port. Queued: requests answer after it.
+    const nonce = /** @type {string} */ (m.nonce);
+    this.queue = this.queue.then(async () => {
+      const proof = await hmacHex(srv.token, nonce);
+      this.write({
+        type: "welcome",
+        protocol: CONTROL_PROTOCOL,
+        app: "Vimma",
+        version: lazy.AppConstants.MOZ_APP_VERSION_DISPLAY,
+        proof,
+      });
     });
   }
 
@@ -489,6 +529,10 @@ class Connection {
       s += String.fromCharCode(...bytes.subarray(i, i + 8192));
     }
     this.pendingOut += s;
+    if (this.pendingOut.length > MAX_PENDING_OUT) {
+      this.close(); // the client stopped reading
+      return;
+    }
     this.flush();
   }
 
@@ -524,6 +568,7 @@ class Connection {
     this.output.close();
     this.transport.close(Cr.NS_OK);
     this.server.connections.delete(this);
+    this.server.waiting.delete(this);
     this.server.closing.delete(this);
   }
 }
@@ -535,8 +580,10 @@ class Server {
   /** @param {string} token */
   constructor(token) {
     this.token = token;
-    /** @type {Set<Connection>} */
+    /** Authenticated. @type {Set<Connection>} */
     this.connections = new Set();
+    /** Waiting for a hello, oldest first. @type {Set<Connection>} */
+    this.waiting = new Set();
     /** Refused (busy) connections waiting to close. @type {Set<Connection>} */
     this.closing = new Set();
     // Loopback only: Init(…, true, …) binds 127.0.0.1 (PR_IpAddrLoopback, AF_INET;
@@ -550,14 +597,19 @@ class Server {
   /** nsIServerSocketListener @param {any} _socket @param {any} transport */
   onSocketAccepted(_socket, transport) {
     const connection = new Connection(this, transport);
-    if (this.connections.size >= MAX_CONNECTIONS) {
-      // Answer, so the client can tell busy from not running; never queue.
-      // It lingers in `closing` (not counted) until the client closes or DRAIN_MS pass.
-      this.closing.add(connection);
-      connection.fail(null, "busy", `busy: ${this.connections.size} open`);
-      return;
+    if (this.waiting.size >= MAX_WAITING) {
+      // Evict the oldest waiting connection, answering busy so its client can retry; it lingers
+      // in `closing` (not counted) until its client closes or DRAIN_MS pass.
+      const oldest = /** @type {Connection} */ (this.waiting.values().next().value);
+      this.waiting.delete(oldest);
+      this.closing.add(oldest);
+      oldest.fail(
+        null,
+        "busy",
+        `evicted: ${MAX_WAITING} newer connections are waiting for a hello`,
+      );
     }
-    this.connections.add(connection);
+    this.waiting.add(connection);
     connection.start();
   }
 
@@ -565,23 +617,61 @@ class Server {
 
   stop() {
     this.socket.close();
-    for (const c of [...this.connections, ...this.closing]) c.stop();
+    for (const c of [...this.connections, ...this.waiting, ...this.closing]) c.stop();
   }
 }
 
 /** @type {Server | null} */
 let server = null;
 let initialised = false;
-/** Resolves once the first browser window has finished its delayed startup. */
+/** quit-application-granted and the shutdown blocker are registered once per process. */
+let hooksAdded = false;
+/** The pref observer is registered (init) and not yet removed (shutdown). */
+let watching = false;
+/** After shutdown nothing starts again (until _restartForTests). */
+let quitting = false;
+/** Resolves once the first browser window has finished its delayed startup, or at shutdown. */
 let windowReady = Promise.resolve();
+/** @type {(() => void) | null} */
+let releaseWindowWait = null;
 /** start/stop run one after another, so quick pref flips settle in order. */
 let chain = Promise.resolve();
 
 const discoveryPath = () => PathUtils.join(PathUtils.profileDir, DISCOVERY_FILE);
 
+/**
+ * Remove whatever a previous run left at the discovery path, so no client ever dials a port
+ * from a dead run (another local user could have bound it; review of #38). A symlink is
+ * removed, not followed. A real directory is left alone and reported: false means "do not
+ * write the file" (a rename would move it into the directory).
+ */
+function removeDiscoveryFile() {
+  const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+  file.initWithPath(discoveryPath());
+  // isSymlink() throws for a path that does not exist at all (not even a dangling link).
+  let link;
+  try {
+    link = file.isSymlink();
+  } catch (e) {
+    if (/** @type {any} */ (e).result === Cr.NS_ERROR_FILE_NOT_FOUND) return true;
+    throw e;
+  }
+  if (link) {
+    file.remove(false);
+    return true;
+  }
+  if (file.isDirectory()) {
+    console.error(`vimma control: ${file.path} is a directory; not starting the control socket`);
+    return false;
+  }
+  file.remove(false);
+  return true;
+}
+
 async function startServer() {
   await windowReady;
-  if (server || !Services.prefs.getBoolPref(ENABLED_PREF, false)) return;
+  if (quitting || server || !Services.prefs.getBoolPref(ENABLED_PREF, false)) return;
+  if (!removeDiscoveryFile()) return;
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   const s = new Server(hex(bytes));
@@ -616,15 +706,16 @@ async function writeDiscovery(discovery) {
   }
 }
 
+/** The file goes first, then the socket: no moment where the file names a free port. */
 async function stopServer() {
+  removeDiscoveryFile();
   if (!server) return;
   const s = server;
   server = null;
   s.stop();
-  await IOUtils.remove(discoveryPath(), { ignoreAbsent: true });
 }
 
-/** @param {() => Promise<void>} step */
+/** @param {() => Promise<void> | void} step */
 function enqueue(step) {
   chain = chain.then(step).catch((e) => console.error("vimma control:", e));
   return chain;
@@ -637,13 +728,12 @@ function apply() {
 }
 
 export const VimmaControl = {
-  /** Called by every browser window; starts watching the pref once per app. */
   /**
-   * Called by every browser window. The first call starts watching the pref, but the server
-   * starts only once that window has finished its delayed startup: a client that sees the
-   * discovery file must find a window to send keys to and report on (e2e harness, issue: state
-   * answered "no browser window" while the first window was still loading).
-   * @param {Window} win
+   * Called by every browser window. The first call removes a discovery file left by an earlier
+   * run (whatever the pref says) and starts watching the pref, but the server starts only once
+   * that window has finished its delayed startup: a client that sees the discovery file must
+   * find a window to send keys to and report on (the e2e harness saw "no browser window").
+   * @param {Window | { gBrowserInit?: { delayedStartupFinished?: boolean } }} win
    */
   init(win) {
     if (initialised) return;
@@ -654,25 +744,45 @@ export const VimmaControl = {
         /** @param {unknown} subject */
         const observer = (subject) => {
           if (subject !== win) return;
+          release();
+        };
+        const release = () => {
           Services.obs.removeObserver(observer, "browser-delayed-startup-finished");
+          releaseWindowWait = null;
           resolve(undefined);
         };
+        releaseWindowWait = release;
         Services.obs.addObserver(observer, "browser-delayed-startup-finished");
       });
     }
+    enqueue(() => {
+      removeDiscoveryFile();
+    });
     Services.prefs.addObserver(ENABLED_PREF, apply);
-    Services.obs.addObserver(() => this.shutdown(), "quit-application-granted");
-    // In case quit-application-granted was skipped (e.g. a forced quit): the file must go.
-    lazy.AsyncShutdown.profileBeforeChange.addBlocker(
-      "VimmaControl: remove the discovery file",
-      () => this.shutdown(),
-    );
+    watching = true;
+    if (!hooksAdded) {
+      hooksAdded = true;
+      Services.obs.addObserver(() => this.shutdown(), "quit-application-granted");
+      // In case quit-application-granted was skipped (e.g. a forced quit): the file must go.
+      lazy.AsyncShutdown.profileBeforeChange.addBlocker(
+        "VimmaControl: remove the discovery file",
+        () => this.shutdown(),
+      );
+    }
     apply();
   },
 
-  /** Stop the server and remove the discovery file. */
+  /**
+   * Stop the server and remove the discovery file. Never waits for a window: if the first one
+   * closed before its delayed startup, a pending start is released and does nothing.
+   */
   shutdown() {
-    Services.prefs.removeObserver(ENABLED_PREF, apply);
+    quitting = true;
+    releaseWindowWait?.();
+    if (watching) {
+      Services.prefs.removeObserver(ENABLED_PREF, apply);
+      watching = false;
+    }
     return enqueue(stopServer);
   },
 
@@ -681,13 +791,36 @@ export const VimmaControl = {
     return chain;
   },
 
+  /**
+   * Test-only: shut down, run `before` (e.g. leave a stale file), then start over as at app
+   * startup with `win` as the first window.
+   * @param {any} win
+   * @param {() => Promise<unknown> | unknown} [before]
+   */
+  async _restartForTests(win, before) {
+    await this.shutdown();
+    await before?.();
+    initialised = false;
+    quitting = false;
+    this.init(win);
+    if (win.gBrowserInit?.delayedStartupFinished) await chain;
+  },
+
+  /** Test-only: the commands, to check their own argument checks. */
+  _commands: COMMANDS,
+
   /** The listening port, or null while stopped. */
   get port() {
     return server?.port ?? null;
   },
 
-  /** Open connections, handshaking or authenticated (tests). */
+  /** Authenticated connections (tests). */
   get connections() {
     return server?.connections.size ?? 0;
+  },
+
+  /** Connections waiting for a hello (tests). */
+  get waiting() {
+    return server?.waiting.size ?? 0;
   },
 };

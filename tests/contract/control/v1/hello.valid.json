@@ -1,9 +1,10 @@
 {
-  "description": "Handshake with a 64-hex token for protocol 1",
+  "description": "Handshake for protocol 1: the token and a 64-hex client nonce the welcome must prove",
   "kind": "hello",
   "message": {
     "type": "hello",
     "protocol": 1,
-    "token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    "token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "nonce": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
   }
 }
