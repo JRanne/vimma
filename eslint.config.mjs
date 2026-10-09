@@ -81,6 +81,11 @@ export default [
         gBrowser: "readonly",
         gURLBar: "readonly",
         SidebarController: "readonly",
+        TestUtils: "readonly",
+        getRootDirectory: "readonly",
+        gTestPath: "readonly",
+        // the content global inside SpecialPowers.spawn callbacks
+        content: "readonly",
       },
     },
   },

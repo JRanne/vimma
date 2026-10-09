@@ -1,6 +1,6 @@
 # Spec: m0-help-overlay
 
-Status: ready (after m0-key-capture) · Milestone: M0 · Area: UI (`src/browser/base/content/vimma/ui/`)
+Status: implemented, awaiting review · Milestone: M0 · Area: UI (`src/browser/base/content/vimma/ui/`)
 
 ## User story
 
@@ -30,3 +30,31 @@ and the PDF viewer; I can type `/` to filter and `Esc` to close.
 ## Out of scope
 
 Which-key strip (M2), styling beyond legible defaults (M5 theme tokens).
+
+## Settled (2026-10-09, from the engine tree)
+
+- **Base mode is `insert` until M1.** There is no content actor yet to report focus in editable
+  elements, so outside the overlay the host dispatches every key as `insert`: only global chords
+  (prefix sequences, ctrl/alt/meta bindings) are ours. Dispatching as `normal` would swallow `j`,
+  `g` and digits typed into pages, the URL bar and about:preferences (and break m0-key-capture's
+  "page still receives `j`"). Mode is `help` while the overlay is open.
+- **Actions the host cannot run yet are left to Firefox when they are a single key**
+  (`esc` → `mode.normal`, `ctrl+i`, `ctrl+u`), so M0 does not regress Esc or those shortcuts.
+  Inside a sequence they are consumed: `ctrl+b <anything>` never leaks the second key. The
+  runnable set is `RUNNERS` in `VimmaHost.sys.mjs` (`help.show` toggles, `help.close`,
+  `help.filter`). `replay` runs the action, then re-dispatches the key, whose result decides
+  whether it is consumed. A pending sequence is also reset on `TabSelect`.
+- **Filter typing:** while the filter input has focus and nothing is pending, plain keys (no
+  ctrl/alt/meta, not `esc`) bypass the dispatcher and go to the input, so `q` and `/` can be typed.
+  `esc` from the filter closes the overlay (one press), as does `esc`/`q` outside it.
+- **Overlay is an `html:dialog` opened with `showModal()`**, appended to the chrome document's
+  body (same mechanism as `#window-modal-dialog` in browser.js): top layer above remote content,
+  about:preferences and pdf.js, page inert while open. `dialog.close()` returns focus to the
+  element focused before `showModal()` (verified for a remote `<browser>` and for the
+  about:preferences search box), so the overlay keeps no focus bookkeeping of its own.
+- **No new upstream patch.** Our `jar.mn` registers `ui/help-overlay.mjs` and the stylesheet with
+  a topsrcdir path (`(/browser/themes/shared/vimma/help-overlay.css)` → `chrome://browser/skin/
+vimma/help-overlay.css`); the overlay loads it with `windowUtils.loadSheetUsingURIString`
+  (author sheet) on first open.
+- **PDF test fixture:** `tests/browser/file_vimma_test.pdf` is a hand-written one-page PDF (no
+  third-party licence); pdf.js tests' own fixtures are not installed when only our manifest runs.

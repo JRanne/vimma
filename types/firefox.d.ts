@@ -6,3 +6,11 @@ declare const Services: {
     getBoolPref(name: string, defaultValue?: boolean): boolean;
   };
 };
+
+// engine/dom/interfaces/base/nsIDOMWindowUtils.idl
+interface Window {
+  readonly windowUtils: {
+    readonly AUTHOR_SHEET: number;
+    loadSheetUsingURIString(sheetURI: string, type: number): void;
+  };
+}
