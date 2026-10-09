@@ -1,0 +1,92 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// Link-hint labels (spec: docs/specs/m1-hints.md), drawn in the chrome document over the
+// page's <browser>, never in the page: the page cannot see, restyle or remove them. The layer
+// is a child of the browser's .browserStack (a XUL stack, so it covers exactly the browser),
+// ignores the mouse and clips to the content area.
+
+/** @import { Hint } from "../core/hints.mjs" */
+/** @import { HintTarget } from "../actors/VimmaActors.sys.mjs" */
+
+export const HINT_OVERLAY_ID = "vimma-hints";
+const STYLESHEET = "chrome://browser/skin/vimma/hints.css";
+const HTML_NS = "http://www.w3.org/1999/xhtml";
+/** @type {WeakSet<Window>} windows our stylesheet is loaded into */
+const styled = new WeakSet();
+
+export class HintOverlay {
+  /** @param {Window} win  a browser window */
+  constructor(win) {
+    this.win = win;
+    /** @type {HTMLElement | null} */
+    this.layer = null;
+    /** @type {Map<string, HTMLElement>} label → its element */
+    this.labels = new Map();
+  }
+
+  /**
+   * Draws a label at the top left of each target.
+   * @param {any} browser XULBrowserElement the targets belong to
+   * @param {readonly Hint<HintTarget>[]} hints
+   */
+  show(browser, hints) {
+    this.hide();
+    const doc = this.win.document;
+    if (!styled.has(this.win)) {
+      this.win.windowUtils.loadSheetUsingURIString(STYLESHEET, this.win.windowUtils.AUTHOR_SHEET);
+      styled.add(this.win);
+    }
+    const layer = /** @type {HTMLElement} */ (doc.createElementNS(HTML_NS, "div"));
+    layer.id = HINT_OVERLAY_ID;
+    // Content CSS pixels to chrome CSS pixels: the page's full zoom, from the parent, not
+    // from content.
+    const zoom = Number(browser.fullZoom) || 1;
+    const fragment = doc.createDocumentFragment();
+    for (const { label, target } of hints) {
+      const el = /** @type {HTMLElement} */ (doc.createElementNS(HTML_NS, "span"));
+      el.className = "vimma-hint";
+      el.dataset.label = label;
+      el.style.left = `${Math.round(target.rect.x * zoom)}px`;
+      el.style.top = `${Math.round(target.rect.y * zoom)}px`;
+      this.#fill(el, label, "");
+      fragment.append(el);
+      this.labels.set(label, el);
+    }
+    layer.append(fragment);
+    (browser.closest(".browserStack") ?? browser.parentNode).append(layer);
+    this.layer = layer;
+  }
+
+  /**
+   * Hides the labels that do not start with `typed` and marks the typed part of the others.
+   * @param {string} typed
+   */
+  filter(typed) {
+    for (const [label, el] of this.labels) {
+      const match = label.startsWith(typed);
+      el.hidden = !match;
+      if (match) this.#fill(el, label, typed);
+    }
+  }
+
+  hide() {
+    this.layer?.remove();
+    this.layer = null;
+    this.labels.clear();
+  }
+
+  /**
+   * @param {HTMLElement} el
+   * @param {string} label
+   * @param {string} typed
+   */
+  #fill(el, label, typed) {
+    const doc = this.win.document;
+    const done = doc.createElementNS(HTML_NS, "span");
+    done.className = "vimma-hint-typed";
+    done.textContent = typed;
+    el.replaceChildren(done, label.slice(typed.length));
+  }
+}

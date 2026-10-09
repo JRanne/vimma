@@ -7,6 +7,7 @@
 // EditableDescriptor (vimma-core editable.mjs) and runs scroll, blur and focus-input commands.
 
 import { isEditable } from "../core/editable.mjs";
+import { collectTargets } from "./hint-collect.mjs";
 
 /** @import { EditableDescriptor } from "../core/editable.mjs" */
 /** @import { ScrollKind } from "./VimmaActors.sys.mjs" */
@@ -78,9 +79,18 @@ function parentOf(el) {
   return "host" in root ? /** @type {ShadowRoot} */ (root).host : null;
 }
 
+/**
+ * @param {unknown} n
+ * @returns {n is number}
+ */
+const isIndex = (n) => Number.isSafeInteger(n) && /** @type {number} */ (n) >= 0;
+
 export class VimmaChild extends JSWindowActorChild {
   /** @type {WeakRef<Element> | null} the last largest scrollable, reused while it can scroll */
   #largest = null;
+
+  /** The last hint collection (m1-hints): its generation and its elements, by target id. */
+  #hints = { gen: -1, els: /** @type {WeakRef<Element>[]} */ ([]) };
 
   /** @param {Event} event */
   handleEvent(event) {
@@ -128,8 +138,78 @@ export class VimmaChild extends JSWindowActorChild {
       }
       case "Vimma:FocusInput":
         return this.#focusInput();
+      case "Vimma:CollectHints":
+        return this.#collectHints(msg.data);
+      case "Vimma:ActivateHint":
+        return this.#activateHint(msg.data);
     }
     return undefined;
+  }
+
+  /**
+   * The hint targets of this frame (m1-hints). Rects are in this frame's CSS pixels; the parent
+   * offsets them by the frame rects the embedding frame's child reports.
+   * @param {{ gen: number, linksOnly: boolean }} data
+   */
+  #collectHints(data) {
+    const gen = data?.gen;
+    const win = this.contentWindow;
+    if (!isIndex(gen) || !win) return null;
+    const t0 = ChromeUtils.now();
+    const { targets, frames } = collectTargets(win, {
+      linksOnly: data.linksOnly === true,
+    });
+    this.#hints = { gen, els: targets.map((t) => new WeakRef(t.el)) };
+    return {
+      targets: targets.map((t, id) => ({ id, rect: t.rect, kind: t.kind, href: t.href })),
+      frames: frames.map((f) => ({ id: f.bc.id, rect: f.rect })),
+      ms: ChromeUtils.now() - t0,
+    };
+  }
+
+  /**
+   * Follows a target of the last collection: a text field gets focus (its focusin report enters
+   * insert), anything else a click.
+   * @param {{ gen: number, id: number }} data
+   */
+  #activateHint(data) {
+    if (!isIndex(data?.gen) || !isIndex(data?.id) || data.gen !== this.#hints.gen) return false;
+    const el = this.#hints.els[data.id]?.deref();
+    this.#hints = { gen: -1, els: [] };
+    if (!el?.isConnected) return false;
+    const html = /** @type {HTMLElement} */ (el);
+    if (el.localName !== "a" && isEditable(describe(el)).editable) {
+      html.focus();
+      return true;
+    }
+    if (el.localName === "select") {
+      html.focus();
+      try {
+        /** @type {HTMLSelectElement} */ (el).showPicker();
+      } catch {
+        // Without user activation it throws; the select keeps focus and Alt+Down opens it.
+      }
+      return true;
+    }
+    // Events created by privileged code are trusted: mousedown and mouseup for pages that act
+    // on them (menus, Google's jsaction), then click(), whose activation behaviour follows links.
+    const r = el.getBoundingClientRect();
+    const init = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      view: this.contentWindow,
+      clientX: r.left + r.width / 2,
+      clientY: r.top + r.height / 2,
+      button: 0,
+    };
+    const win = /** @type {any} */ (this.contentWindow);
+    for (const type of ["mouseover", "mousedown", "mouseup"]) {
+      const buttons = type === "mousedown" ? 1 : 0;
+      el.dispatchEvent(new win.MouseEvent(type, { ...init, buttons }));
+    }
+    if (el.isConnected) html.click();
+    return true;
   }
 
   #focusInput() {

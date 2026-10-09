@@ -10,9 +10,11 @@
 import { VimmaActors } from "../actors/VimmaActors.sys.mjs";
 import { createDispatcher } from "../core/dispatcher.mjs";
 import { insertModeAfterFocus } from "../core/editable.mjs";
+import { HintError, hintKey, startHints } from "../core/hints.mjs";
 import { chordFromEvent, formatKey } from "../core/keys.mjs";
 import { compileKeymap } from "../core/keymap.mjs";
 import { HelpOverlay } from "../ui/help-overlay.mjs";
+import { HintOverlay } from "../ui/hint-overlay.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
@@ -20,6 +22,18 @@ import { TabStrip } from "../ui/tabstrip.mjs";
 /** @import { Action, DispatchResult } from "../core/dispatcher.mjs" */
 /** @import { EditableDescriptor, InsertTrigger } from "../core/editable.mjs" */
 /** @import { Keymap, TrieNode } from "../core/keymap.mjs" */
+/** @import { HintAction, HintState } from "../core/hints.mjs" */
+/** @import { HintTarget } from "../actors/VimmaActors.sys.mjs" */
+
+/**
+ * Hint mode in one window (m1-hints): from `f` until a label is chosen or Esc. While the
+ * targets are being collected, keys are kept and replayed once the labels are up.
+ * @typedef {object} HintSession
+ * @property {any} browser  the <browser> the hints are on
+ * @property {HintAction} action
+ * @property {HintState<HintTarget> | null} hs  null while collecting
+ * @property {Chord[]} buffered  keys typed while collecting
+ */
 
 const DEBUG_PREF = "vimma.debug.keys";
 const MAX_RECORDED = 50;
@@ -35,6 +49,9 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {HelpOverlay} help
  * @property {TabStrip | null} tabStrip  hides Firefox's tab strip (m0-tabstrip-hidden)
  * @property {number | null} timer   pending-sequence timeout (dispatcher.flush)
+ * @property {() => void} onCancelHints  resize, a mouse click in chrome
+ * @property {HintSession | null} hint
+ * @property {HintOverlay} hintOverlay
  */
 
 /**
@@ -48,6 +65,7 @@ const RUNNERS = {
   "help.show": (s) => s.help.toggle(),
   "help.close": (s) => s.help.close(),
   "help.filter": (s) => s.help.focusFilter(),
+  "hint.cancel": (s) => VimmaHost._cancelHints(s),
 };
 
 /**
@@ -76,6 +94,8 @@ const CONTENT_RUNNERS = {
     browserModes.set(b, "normal");
     VimmaActors.blur(b);
   },
+  "hint.follow": (b, a) => VimmaHost._startHints(b, a),
+  "hint.follow_new_tab": (b, a) => VimmaHost._startHints(b, a),
   // Explicit insert, even with no text field to focus (pass-through for pages that take keys).
   "mode.insert": (b) => {
     browserModes.set(b, "insert");
@@ -99,6 +119,12 @@ export const VimmaHost = {
    */
   _lastChords: [],
 
+  /**
+   * Test-only: hint collections finished (with or without targets), across windows.
+   * @type {number}
+   */
+  _hintRuns: 0,
+
   /** @param {Window} win */
   init(win) {
     if (states.has(win)) return;
@@ -112,16 +138,23 @@ export const VimmaHost = {
       // selected tab): close it and focus the newly selected browser.
       onTabSelect: () => {
         this._cancelPending(win, state);
+        this._cancelHints(state);
         state.help.close({ tabChanged: true });
       },
       dispatcher: createDispatcher(keymap),
       help: new HelpOverlay(win, keymap),
       tabStrip: null,
       timer: null,
+      onCancelHints: () => this._cancelHints(state),
+      hint: null,
+      hintOverlay: new HintOverlay(win),
     };
     states.set(win, state);
     win.addEventListener("keydown", state.onKeyDown, true);
     win.addEventListener("TabSelect", state.onTabSelect, true);
+    // The labels are drawn for one layout of the page: a resize or a click moves on.
+    win.addEventListener("resize", state.onCancelHints);
+    win.addEventListener("mousedown", state.onCancelHints, true);
     // After the keys: an upstream change in tab code must not cost us ctrl+b.
     try {
       const tabStrip = new TabStrip(win);
@@ -139,6 +172,9 @@ export const VimmaHost = {
     this._cancelPending(win, state);
     win.removeEventListener("keydown", state.onKeyDown, true);
     win.removeEventListener("TabSelect", state.onTabSelect, true);
+    win.removeEventListener("resize", state.onCancelHints);
+    win.removeEventListener("mousedown", state.onCancelHints, true);
+    this._cancelHints(state);
     state.help.destroy();
     state.tabStrip?.uninit();
     states.delete(win);
@@ -184,6 +220,7 @@ export const VimmaHost = {
   _mode(state) {
     if (state.help.isOpen) return "help";
     const browser = this._focusedBrowser(state.win);
+    if (state.hint && state.hint.browser === browser) return "hint";
     return browser ? this._browserMode(browser) : "insert";
   },
 
@@ -220,6 +257,8 @@ export const VimmaHost = {
     const chord = chordFromEvent(e);
     if (!chord) return; // a bare modifier
     const key = formatKey(chord);
+    // Focus left the page the hints are on (URL bar, another pane): they no longer apply.
+    if (state.hint && state.hint.browser !== this._focusedBrowser(win)) this._cancelHints(state);
     const mode = this._mode(state);
     this._lastChords.push(key);
     if (this._lastChords.length > MAX_RECORDED) this._lastChords.shift();
@@ -245,11 +284,13 @@ export const VimmaHost = {
     this._clearTimer(win, state);
     const result = state.dispatcher.dispatch(mode, chord);
     // The overlay is modal: in help mode every key is ours, handled or not, so nothing reaches
-    // the browser underneath (ctrl+w would close the tab behind it).
-    const modal = mode === "help";
+    // the browser underneath (ctrl+w would close the tab behind it). Hint mode too: every key
+    // is a label key or ignored, never the page's.
+    const modal = mode === "help" || mode === "hint";
     switch (result.kind) {
       case "pass":
         if (modal) consume(e);
+        if (mode === "hint") this._hintKey(state, chord);
         return;
       case "cancel":
         consume(e);
@@ -282,6 +323,8 @@ export const VimmaHost = {
         }
         if (first && !modal && !this._runnable(state, result.action.id)) return;
         consume(e);
+        // Another binding in hint mode (a ctrl+b sequence) leaves hint mode first.
+        if (mode === "hint" && result.action.id !== "hint.cancel") this._cancelHints(state);
         this._run(state, result);
       }
     }
@@ -300,6 +343,105 @@ export const VimmaHost = {
     }
     const browser = this._focusedBrowser(state.win);
     if (browser && VimmaActors.has(browser)) CONTENT_RUNNERS[action.id]?.(browser, action);
+  },
+
+  /**
+   * Test-only: a window's state.
+   * @param {Window} win
+   */
+  _state(win) {
+    return states.get(win);
+  },
+
+  /**
+   * Test-only: the window's hint mode, or null.
+   * @param {Window} win
+   */
+  _hints(win) {
+    const hint = states.get(win)?.hint;
+    if (!hint) return null;
+    return { action: hint.action, typed: hint.hs?.typed ?? "", hints: hint.hs?.hints ?? [] };
+  },
+
+  /**
+   * `f` / `F`: collects the targets, then enters hint mode with a label on each. With none,
+   * the tab stays in normal (the status bar will say so, M2).
+   * @param {any} browser
+   * @param {Action} action
+   */
+  _startHints(browser, action) {
+    // The window proxy init() was given; ownerGlobal is the inner window, another key.
+    const state = states.get(browser.ownerDocument.defaultView);
+    if (!state) return;
+    this._cancelHints(state);
+    const id = /** @type {HintAction} */ (action.id);
+    /** @type {HintSession} */
+    const session = { browser, action: id, hs: null, buffered: [] };
+    state.hint = session;
+    VimmaActors.collectHints(browser, id)
+      .then((targets) => {
+        if (state.hint !== session) return;
+        try {
+          session.hs = startHints(targets, { action: id });
+        } catch (e) {
+          if (!(e instanceof HintError && e.code === "no-targets")) throw e;
+          state.hint = null;
+          console.info("vimma: no hint targets");
+          return;
+        }
+        state.hintOverlay.show(browser, session.hs.hints);
+        for (const chord of session.buffered.splice(0)) {
+          if (state.hint !== session) break;
+          this._hintKey(state, chord);
+        }
+      })
+      .catch((e) => {
+        console.error("vimma: hints failed", e);
+        if (state.hint === session) this._cancelHints(state);
+      })
+      .finally(() => this._hintRuns++);
+  },
+
+  /**
+   * One key in hint mode (core hintKey): narrow, follow, or nothing.
+   * @param {WindowState} state
+   * @param {Chord} chord
+   */
+  _hintKey(state, chord) {
+    const session = state.hint;
+    if (!session) return;
+    if (!session.hs) {
+      session.buffered.push(chord);
+      return;
+    }
+    const { state: next, result } = hintKey(session.hs, chord);
+    session.hs = next;
+    switch (result.kind) {
+      case "cancel":
+        this._cancelHints(state);
+        return;
+      case "narrow":
+        state.hintOverlay.filter(next.typed);
+        return;
+      case "select":
+        this._cancelHints(state);
+        if (result.action === "hint.follow_new_tab") {
+          VimmaActors.openInBackground(session.browser, result.target);
+        } else {
+          VimmaActors.activateHint(result.target);
+        }
+    }
+  },
+
+  /**
+   * Leaves hint mode, if on: removes the labels and drops a collection in flight.
+   * @param {WindowState} state
+   */
+  _cancelHints(state) {
+    if (!state.hint) return;
+    state.hint = null;
+    state.hintOverlay.hide();
+    VimmaActors.cancelHints();
   },
 
   /**
