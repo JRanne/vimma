@@ -77,9 +77,10 @@ While the overlay is open it takes every key, so `ctrl+w` cannot close the tab b
 - **M1, the modal page layer:** scrolling (`j k h l`, `d`/`u`, `gg`/`G`), back and forward
   (`H`/`L`), reload (`r`), link hints (`f`/`F`), find (`/ ? n N`), the `:` command line, copy mode
   (`v`, `ctrl+b [`), `i` to focus the first input, and `Esc` back to normal mode.
-- **M2, tabs:** `ctrl+b c` new tab, `ctrl+b 1..9`, `ctrl+b n`/`p`, `ctrl+b shift+t` rename,
-  `ctrl+b shift+x` close, `t`, `x`, `gt`/`gT`, the `ctrl+b g` picker, the status bar and the
-  which-key strip.
+- **M2, tabs:** `ctrl+b c` new tab, `ctrl+b 1..9`, `ctrl+b n`/`p`, `ctrl+b shift+t` rename
+  (kept across restarts; an empty name restores the page title), `ctrl+b shift+x` close, `t`, `x`,
+  `gt`/`gT`, the `ctrl+b g` picker (`j`/`k` to move, `/` to search titles, URLs, workspaces and
+  renames, `Enter` to go, `Esc` to back out), the status bar and the which-key strip.
 - **M3, workspaces and the side panel:** `ctrl+i`/`ctrl+u` next/previous workspace, the
   `ctrl+b w` picker, new/rename/close workspace, and `ctrl+b b` or `<leader>n` for the side panel.
   Until then `ctrl+i` and `ctrl+u` keep Firefox's meaning (page info, view source).
