@@ -7,6 +7,7 @@ browser.jar:
         content/browser/vimma/host/VimmaHost.sys.mjs      (host/VimmaHost.sys.mjs)
         content/browser/vimma/ctl/VimmaControl.sys.mjs    (ctl/VimmaControl.sys.mjs)
         content/browser/vimma/host/tab-ops.mjs            (host/tab-ops.mjs)
+        content/browser/vimma/host/pane-ops.mjs           (host/pane-ops.mjs)
         content/browser/vimma/host/find.mjs               (host/find.mjs)
         content/browser/vimma/host/copy-mode.mjs          (host/copy-mode.mjs)
         content/browser/vimma/actors/VimmaActors.sys.mjs  (actors/VimmaActors.sys.mjs)

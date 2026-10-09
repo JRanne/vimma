@@ -119,8 +119,9 @@ site's own `Esc` (closing an autocomplete list or a dialog) does not fire from t
 has focus, so the page's document gets it, not the field).
 
 **A key that starts a sequence passes when nothing in that sequence works yet.** `ctrl+w`
-starts the planned `ctrl+w h/j/k/l` pane keys (M4), but until they work `ctrl+w` still closes
-the tab. `g` starts `gg`, which works, so `g` is Vimma's: the page does not see it, and `Esc`
+starts the `ctrl+w h/j/k/l` and `ctrl+w o` pane keys, which do something only with two panes or
+more, so in a window with one pane `ctrl+w` still closes the tab. With a split, `ctrl+w` in
+normal mode waits for the pane key (`Esc` cancels); close the tab with `x` or `ctrl+b shift+x`. `g` starts `gg`, which works, so `g` is Vimma's: the page does not see it, and `Esc`
 cancels it.
 
 **A binding that does not work yet is never silent once it is Vimma's.** A `ctrl+b` sequence, or
@@ -252,7 +253,10 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `:`                         | Normal mode: opens the command line at the bottom of the window ([below](#the-command-line)). In a text field `:` is typed.                                   |
 | `ctrl+b g`, `b`             | Opens the goto picker over the page (`b` in normal mode): every tab of the window ([below](#goto-picker-and-tab-rename)).                                     |
 | `ctrl+b shift+t`            | Renames the tab ([below](#goto-picker-and-tab-rename)); an empty name restores the page title.                                                                |
-| `ctrl+b x`                  | Closes the pane; until split panes (M4) every tab is one pane, so it closes the tab, as `ctrl+b shift+x`.                                                     |
+| `ctrl+b v` / `ctrl+b -`     | Splits the pane right / down. The new pane opens a new tab (the start page, URL bar focused). At most 4 panes (`[panes] max`); a refused split says why.      |
+| `ctrl+b h j k l`            | Focuses the pane left / below / above / right; when several touch, the one used last. `ctrl+w h j k l` in normal mode. The page of that pane gets focus.      |
+| `ctrl+b z`, `ctrl+w o`      | Zooms the pane to the whole window, or back. The other panes' pages pause. A pane focus key unzooms when it moves.                                            |
+| `ctrl+b x`                  | Closes the pane; its tab stays open. With one pane it closes the tab, as `ctrl+b shift+x`.                                                                    |
 | `ctrl+b shift+x`, `x`       | Closes the tab, as `ctrl+w` does: on a pinned tab it selects the first unpinned tab instead; the last tab closes the window. `x` in normal mode.              |
 | `ctrl+b` then anything else | Never leaks to the page. A binding that does not run yet shows "… not implemented yet" for 1.5 s; an unbound key does nothing. No more bookmarks sidebar.     |
 | Firefox's own keys          | Unchanged: `ctrl+t`, `ctrl+w`, `ctrl+tab`, `ctrl+shift+tab`, `ctrl+pagedown`, `alt+1..9` (tab N on Linux), `ctrl+l`, `ctrl+f`, `ctrl+u`, `ctrl+i`, and so on. |
@@ -268,7 +272,8 @@ digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 - **M3, workspaces and the side panel:** `ctrl+i`/`ctrl+u` next/previous workspace, the
   `ctrl+b w` picker, new/rename/close workspace, and `ctrl+b b` or `<leader>n` for the side panel.
   Until then `ctrl+i` and `ctrl+u` keep Firefox's meaning (page info, view source).
-- **M4, split panes:** `ctrl+b v`/`-`, `ctrl+b h j k l`, swap, zoom, resize, close pane.
+- **M4, split panes:** swap (`ctrl+b shift+h j k l`), resize (`ctrl+b r`), click focus, one
+  layout per workspace and restore after a restart.
 - **M5, config:** rebinding in `~/.config/vimma/config.toml`, `:source`. (Omarchy colours
   work already: see [Colours](#colours-your-omarchy-theme).)
 
@@ -319,18 +324,18 @@ type reaches the page, and `ctrl+b` sequences still work.
 - An argument is the rest of the line, as typed. Quotes are removed only when one pair wraps all
   of it: `:tabrename "my  tab"`.
 
-| Command                                               | What it does                                                                                                       |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `:open text`                                          | Opens `text` in this tab as the URL bar would: `example.com` becomes a web address, other words a web search.      |
-| `:tabnew`, `:tabnew text`                             | Opens a new tab; with text, opens it there (as `:open`).                                                           |
-| `:q`, `:quit`                                         | Closes the pane; with one pane (always, until M4) the tab, as `x`: a pinned tab is kept and the next one selected. |
-| `:map`, `:help`, `:h`                                 | Shows every binding (the `ctrl+b ?` overlay).                                                                      |
-| `:scroll_down`, `:tab.next`…                          | Any action by its name in [bindings.md](bindings.md), or by its dotted id. Actions take no argument.               |
-| `:tabrename [name]`                                   | Renames the tab; without a name, opens the rename prompt.                                                          |
-| `:ls`, `:b`                                           | Opens the goto picker.                                                                                             |
-| `:vsplit`/`:vs`, `:split`/`:sp`                       | Not built yet (M4).                                                                                                |
-| `:wsnext`, `:wsprev`, `:workspace [name]`, `:sidebar` | Not built yet (M3); `:workspace name` says "… not available yet".                                                  |
-| `:source`                                             | Not built yet (M5).                                                                                                |
+| Command                                               | What it does                                                                                                   |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `:open text`                                          | Opens `text` in this tab as the URL bar would: `example.com` becomes a web address, other words a web search.  |
+| `:tabnew`, `:tabnew text`                             | Opens a new tab; with text, opens it there (as `:open`).                                                       |
+| `:q`, `:quit`                                         | Closes the pane, as `ctrl+b x`; with one pane the tab, as `x`: a pinned tab is kept and the next one selected. |
+| `:map`, `:help`, `:h`                                 | Shows every binding (the `ctrl+b ?` overlay).                                                                  |
+| `:scroll_down`, `:tab.next`…                          | Any action by its name in [bindings.md](bindings.md), or by its dotted id. Actions take no argument.           |
+| `:tabrename [name]`                                   | Renames the tab; without a name, opens the rename prompt.                                                      |
+| `:ls`, `:b`                                           | Opens the goto picker.                                                                                         |
+| `:vsplit`/`:vs`, `:split`/`:sp`                       | Splits the pane right / down, as `ctrl+b v` / `ctrl+b -`.                                                      |
+| `:wsnext`, `:wsprev`, `:workspace [name]`, `:sidebar` | Not built yet (M3); `:workspace name` says "… not available yet".                                              |
+| `:source`                                             | Not built yet (M5).                                                                                            |
 
 A command that is not built yet says so for a moment, as its keys do.
 
