@@ -10,3 +10,6 @@ surfer.json
 tools/upstream/fixtures/surfer-*.json
 tools/upstream/fixtures/versions-malformed.json
 .claude/
+
+# vendored smol-toml, generated from the upstream tarball by tools/vendor-smol-toml.mjs
+packages/vimma-core/src/vendor/smol-toml/smol-toml.mjs
