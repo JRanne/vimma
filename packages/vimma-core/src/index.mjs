@@ -12,3 +12,7 @@ export * from "./help.mjs";
 export * from "./toml.mjs";
 export * from "./config.mjs";
 export * from "./theme.mjs";
+export * from "./editable.mjs";
+export * from "./hints.mjs";
+export * from "./cmdline.mjs";
+export * from "./escape.mjs";
