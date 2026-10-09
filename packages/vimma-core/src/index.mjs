@@ -12,3 +12,7 @@ export * from "./help.mjs";
 export * from "./toml.mjs";
 export * from "./config.mjs";
 export * from "./theme.mjs";
+export * from "./tablabels.mjs";
+export * from "./whichkey.mjs";
+export * from "./statusbar.mjs";
+export * from "./picker.mjs";
