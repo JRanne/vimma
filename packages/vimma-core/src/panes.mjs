@@ -5,30 +5,32 @@
 /**
  * The pane tree (spec m3-m4-core-models): an immutable tree of splits and leaves that the host
  * mirrors onto the split view, one `<browser>` per leaf. Every operation is pure and returns a new
- * frozen state; a no-op returns the input state itself.
+ * frozen state; a no-op returns the input state itself (zoom included).
  */
 
 /** @typedef {{ readonly type: "leaf", readonly pane: string, readonly tab: string }} Leaf */
 /**
  * `axis: "x"` lays children out left → right, `"y"` top → bottom. ≥ 2 children, one ratio each,
- * ratios sum to 1, and no child split has its parent's axis (canonical form).
+ * ratios ≥ MIN_RATIO summing to 1, and no child split has its parent's axis (canonical form)
+ * unless flattening it would push a pane below MIN_RATIO.
  * @typedef {{ readonly type: "split", readonly axis: Axis, readonly children: readonly PaneNode[],
  *   readonly ratios: readonly number[] }} Split
  */
 /** @typedef {Leaf | Split} PaneNode */
 /** @typedef {"x" | "y"} Axis */
 /**
- * `next` mints pane ids (`p<next>`).
- * @typedef {{ readonly root: PaneNode, readonly focus: string, readonly zoom: string | null,
- *   readonly next: number }} Panes
+ * `mru` lists every pane, most recently focused first (`mru[0] === focus`); `next` mints pane ids.
+ * @typedef {{ readonly root: PaneNode, readonly focus: string, readonly mru: readonly string[],
+ *   readonly zoom: string | null, readonly next: number }} Panes
  */
 /** @typedef {"left" | "down" | "up" | "right"} Direction */
 /** @typedef {"vertical" | "horizontal"} SplitDirection */
 /** @typedef {"wider" | "narrower" | "taller" | "shorter"} ResizeDirection */
 /** @typedef {{ x: number, y: number, width: number, height: number }} Rect */
 /** @typedef {{ pane: string, tab: string, rect: Rect }} PaneRect */
+/** @typedef {{ code: "no-space", message: string }} SplitRefusal */
 
-/** Smallest share of a split a pane can be resized down to. */
+/** Smallest share of a split a pane can have: splits and resizes never go below it. */
 export const MIN_RATIO = 0.1;
 
 export class PaneError extends Error {
@@ -62,7 +64,8 @@ function leafNode(pane, tab) {
 
 /**
  * Builds a split in canonical form: a single child is returned as is (sibling promotion) and
- * child splits on the same axis are flattened into this one, scaling their ratios.
+ * child splits on the same axis are flattened into this one, scaling their ratios, unless that
+ * would push one of their panes below MIN_RATIO.
  * @param {Axis} axis
  * @param {readonly PaneNode[]} children
  * @param {readonly number[]} ratios
@@ -76,7 +79,11 @@ function makeSplit(axis, children, ratios) {
   const rs = [];
   children.forEach((c, i) => {
     const r = /** @type {number} */ (ratios[i]);
-    if (c.type === "split" && c.axis === axis) {
+    if (
+      c.type === "split" &&
+      c.axis === axis &&
+      c.ratios.every((cr) => cr * r >= MIN_RATIO - EPS)
+    ) {
       kids.push(...c.children);
       rs.push(...c.ratios.map((cr) => cr * r));
     } else {
@@ -99,6 +106,18 @@ function makeSplit(axis, children, ratios) {
  */
 function update(s, changes) {
   return Object.freeze({ ...s, ...changes });
+}
+
+/**
+ * Focuses `paneId` (moving it to the front of the MRU order) and clears the zoom.
+ * @param {Panes} s
+ * @param {string} paneId
+ * @param {Partial<Panes>} [changes]
+ * @returns {Panes}
+ */
+function focused(s, paneId, changes = {}) {
+  const mru = Object.freeze([paneId, ...(changes.mru ?? s.mru).filter((p) => p !== paneId)]);
+  return update(s, { ...changes, focus: paneId, mru, zoom: null });
 }
 
 /**
@@ -172,7 +191,13 @@ function firstLeaf(node) {
  * @returns {Panes}
  */
 export function createPanes(tabId) {
-  return Object.freeze({ root: leafNode("p1", tabId), focus: "p1", zoom: null, next: 2 });
+  return Object.freeze({
+    root: leafNode("p1", tabId),
+    focus: "p1",
+    mru: Object.freeze(["p1"]),
+    zoom: null,
+    next: 2,
+  });
 }
 
 /**
@@ -199,8 +224,38 @@ export function paneOfTab(s, tabId) {
 }
 
 /**
+ * @param {SplitDirection} direction
+ * @returns {Axis}
+ */
+function splitAxis(direction) {
+  const axis = SPLIT_AXIS[direction];
+  if (!axis) throw new PaneError("bad-direction", `bad split direction "${direction}"`);
+  return axis;
+}
+
+/**
+ * Why `split` would refuse (tmux: "no space for new pane"), or null when it would not. Splitting
+ * along the parent's axis halves the pane's share; that must not fall below MIN_RATIO.
+ * @param {Panes} s
+ * @param {string} paneId
+ * @param {SplitDirection} direction
+ * @returns {SplitRefusal | null}
+ */
+export function splitRefusal(s, paneId, direction) {
+  const axis = splitAxis(direction);
+  const path = mustPath(s, paneId);
+  if (path.length === 0) return null;
+  const parent = /** @type {Split} */ (nodeAt(s.root, path.slice(0, -1)));
+  const share = /** @type {number} */ (parent.ratios[/** @type {number} */ (path.at(-1))]);
+  return parent.axis === axis && share / 2 < MIN_RATIO - EPS
+    ? { code: "no-space", message: `no space for a new pane next to ${paneId}` }
+    : null;
+}
+
+/**
  * Splits `paneId`; the new pane shows `newTabId`, goes right after it and gets focus.
- * `vertical` = split right (`:vsplit`), `horizontal` = split down (`:split`).
+ * `vertical` = split right (`:vsplit`), `horizontal` = split down (`:split`). Returns the input
+ * unchanged when `splitRefusal` gives a reason.
  * @param {Panes} s
  * @param {string} paneId
  * @param {SplitDirection} direction
@@ -208,12 +263,12 @@ export function paneOfTab(s, tabId) {
  * @returns {Panes}
  */
 export function split(s, paneId, direction, newTabId) {
-  const axis = SPLIT_AXIS[direction];
-  if (!axis) throw new PaneError("bad-direction", `bad split direction "${direction}"`);
+  const axis = splitAxis(direction);
   const path = mustPath(s, paneId);
   if (paneOfTab(s, newTabId) !== undefined) {
     throw new PaneError("tab-shown", `tab "${newTabId}" is already shown in a pane`);
   }
+  if (splitRefusal(s, paneId, direction)) return s;
   const id = `p${s.next}`;
   const fresh = leafNode(id, newTabId);
   const leaf = nodeAt(s.root, path);
@@ -231,7 +286,7 @@ export function split(s, paneId, direction, newTabId) {
   } else {
     root = replaceAt(s.root, path, makeSplit(axis, [leaf, fresh], [0.5, 0.5]));
   }
-  return update(s, { root, focus: id, zoom: null, next: s.next + 1 });
+  return focused(s, id, { root, next: s.next + 1 });
 }
 
 /**
@@ -253,16 +308,18 @@ export function closePane(s, paneId) {
   ratios[j] = /** @type {number} */ (ratios[j]) + /** @type {number} */ (parent.ratios[i]);
   const absorber = /** @type {PaneNode} */ (children[j]);
   const root = replaceAt(s.root, parentPath, makeSplit(parent.axis, children, ratios));
+  const mru = s.mru.filter((p) => p !== paneId);
   const focus = s.focus === paneId ? firstLeaf(absorber).pane : s.focus;
-  return update(s, { root, focus, zoom: null });
+  return focused(s, focus, { root, mru });
 }
 
 /**
  * @param {PaneNode} node
  * @param {Rect} rect
+ * @param {boolean} round
  * @param {PaneRect[]} out
  */
-function layoutNode(node, rect, out) {
+function layoutNode(node, rect, round, out) {
   if (node.type === "leaf") {
     out.push({ pane: node.pane, tab: node.tab, rect });
     return;
@@ -275,7 +332,8 @@ function layoutNode(node, rect, out) {
   let cum = 0;
   for (let i = 0; i < n - 1; i++) {
     cum += /** @type {number} */ (node.ratios[i]);
-    edges.push(start + size * cum);
+    const edge = start + size * cum;
+    edges.push(round ? Math.round(edge) : edge);
   }
   edges.push(start + size);
   node.children.forEach((child, i) => {
@@ -286,6 +344,7 @@ function layoutNode(node, rect, out) {
       horizontal
         ? { x: a, y: rect.y, width: b - a, height: rect.height }
         : { x: rect.x, y: a, width: rect.width, height: b - a },
+      round,
       out,
     );
   });
@@ -293,11 +352,14 @@ function layoutNode(node, rect, out) {
 
 /**
  * Pane rectangles inside `rect`, in reading order. A zoomed state yields the zoomed pane alone.
+ * Interior edges are rounded to whole pixels (edges, not widths, so neighbours share one edge and
+ * integer input tiles exactly); `{ round: false }` gives the exact fractional edges.
  * @param {Panes} s
  * @param {Rect} rect
+ * @param {{ round?: boolean }} [options]
  * @returns {PaneRect[]}
  */
-export function layout(s, rect) {
+export function layout(s, rect, { round = true } = {}) {
   const r = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
   if (s.zoom !== null) {
     const leaf = /** @type {Leaf} */ (nodeAt(s.root, mustPath(s, s.zoom)));
@@ -305,13 +367,13 @@ export function layout(s, rect) {
   }
   /** @type {PaneRect[]} */
   const out = [];
-  layoutNode(s.root, r, out);
+  layoutNode(s.root, r, round, out);
   return out;
 }
 
 /**
- * The pane just past the focused pane's `direction` edge, in line with its top (left/right) or
- * left (up/down) edge, as tmux does. Undefined when the focused pane is at the window's edge.
+ * The pane across the focused pane's `direction` edge, as tmux picks it: of all panes touching
+ * that edge and overlapping the focused pane, the most recently used. Undefined at the window edge.
  * @param {Panes} s
  * @param {Direction} direction
  * @returns {string | undefined}
@@ -320,7 +382,7 @@ function neighbour(s, direction) {
   if (!DIRECTIONS.includes(direction)) {
     throw new PaneError("bad-direction", `bad direction "${direction}"`);
   }
-  const rects = layout(update(s, { zoom: null }), UNIT);
+  const rects = layout(update(s, { zoom: null }), UNIT, { round: false });
   const a = /** @type {PaneRect} */ (rects.find((r) => r.pane === s.focus)).rect;
   const across = direction === "left" || direction === "right";
   /** @param {Rect} b */
@@ -336,13 +398,17 @@ function neighbour(s, direction) {
         return Math.abs(a.y + a.height - b.y) < EPS;
     }
   };
-  // on the other axis: [start, end) of a candidate must contain the focused pane's start
   /** @param {Rect} b */
-  const inLine = (b) => {
-    const [b0, b1, a0] = across ? [b.y, b.y + b.height, a.y] : [b.x, b.x + b.width, a.x];
-    return b0 <= a0 + EPS && a0 < b1 - EPS;
-  };
-  return rects.find((r) => r.pane !== s.focus && touches(r.rect) && inLine(r.rect))?.pane;
+  const overlaps = (b) =>
+    across
+      ? Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > EPS
+      : Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > EPS;
+  const candidates = new Set(
+    rects
+      .filter((r) => r.pane !== s.focus && touches(r.rect) && overlaps(r.rect))
+      .map((r) => r.pane),
+  );
+  return s.mru.find((p) => candidates.has(p));
 }
 
 /**
@@ -353,7 +419,7 @@ function neighbour(s, direction) {
  */
 export function focus(s, direction) {
   const target = neighbour(s, direction);
-  return target === undefined ? s : update(s, { focus: target, zoom: null });
+  return target === undefined ? s : focused(s, target);
 }
 
 /**
@@ -363,7 +429,7 @@ export function focus(s, direction) {
  */
 export function focusPane(s, paneId) {
   mustPath(s, paneId);
-  return s.focus === paneId && s.zoom === null ? s : update(s, { focus: paneId, zoom: null });
+  return s.focus === paneId ? s : focused(s, paneId);
 }
 
 /**
@@ -393,8 +459,23 @@ export function toggleZoom(s) {
 }
 
 /**
- * Grows or shrinks the focused pane's share of its nearest ancestor split on the matching axis,
- * trading with the next sibling (previous if last). Both stay ≥ MIN_RATIO; the change is clamped.
+ * Indices of a split's other children, nearest to `i` first (the next one before the previous).
+ * @param {number} i
+ * @param {number} n
+ */
+function nearestFirst(i, n) {
+  const out = [];
+  for (let d = 1; d < n; d++) {
+    if (i + d < n) out.push(i + d);
+    if (i - d >= 0) out.push(i - d);
+  }
+  return out;
+}
+
+/**
+ * Grows or shrinks the focused pane's share of its nearest ancestor split on the matching axis.
+ * Growing takes from the siblings nearest first, each down to MIN_RATIO; shrinking gives to the
+ * next sibling (previous if last) and stops at MIN_RATIO. Clamped, never rejected.
  * @param {Panes} s
  * @param {ResizeDirection} direction
  * @param {number} amount a share of the split, e.g. 0.05
@@ -408,28 +489,39 @@ export function resize(s, direction, amount) {
   }
   const [axis, sign] = spec;
   const path = mustPath(s, s.focus);
-  const unzoomed = s.zoom === null ? s : update(s, { zoom: null });
   for (let k = path.length - 1; k >= 0; k--) {
     const at = path.slice(0, k);
     const node = /** @type {Split} */ (nodeAt(s.root, at));
     if (node.axis !== axis) continue;
     const i = /** @type {number} */ (path[k]);
-    const j = i < node.ratios.length - 1 ? i + 1 : i - 1;
-    const ri = /** @type {number} */ (node.ratios[i]);
-    const rj = /** @type {number} */ (node.ratios[j]);
-    let ni = ri + sign * amount;
-    let nj = rj - sign * amount;
-    if (nj < MIN_RATIO) [ni, nj] = [ri + rj - MIN_RATIO, MIN_RATIO];
-    if (ni < MIN_RATIO) [ni, nj] = [MIN_RATIO, ri + rj - MIN_RATIO];
-    // never move the wrong way (a pane already below MIN_RATIO after splits) or past the pair
-    if (sign * (ni - ri) <= 0 || ni < MIN_RATIO || nj < MIN_RATIO) return unzoomed;
+    const n = node.ratios.length;
     const ratios = node.ratios.slice();
-    ratios[i] = ni;
-    ratios[j] = nj;
+    /**
+     * Moves up to `want` from `from` (not below MIN_RATIO) to `to`; returns what moved.
+     * @param {number} from @param {number} to @param {number} want
+     */
+    const move = (from, to, want) => {
+      const spare = /** @type {number} */ (ratios[from]) - MIN_RATIO;
+      if (spare <= 0) return 0;
+      const give = Math.min(want, spare);
+      ratios[from] = give === spare ? MIN_RATIO : /** @type {number} */ (ratios[from]) - give;
+      ratios[to] = /** @type {number} */ (ratios[to]) + give;
+      return give;
+    };
+    let moved = 0;
+    if (sign > 0) {
+      for (const j of nearestFirst(i, n)) {
+        moved += move(j, i, amount - moved);
+        if (moved >= amount) break;
+      }
+    } else {
+      moved = move(i, i < n - 1 ? i + 1 : i - 1, amount);
+    }
+    if (moved <= 0) return s;
     const root = replaceAt(s.root, at, makeSplit(axis, node.children, ratios));
     return update(s, { root, zoom: null });
   }
-  return unzoomed;
+  return s;
 }
 
 /**
