@@ -1,0 +1,8 @@
+{
+  "description": "Token is not 64 lowercase hex characters",
+  "kind": "auth",
+  "message": {
+    "type": "auth",
+    "token": "secret"
+  }
+}

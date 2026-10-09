@@ -32,10 +32,12 @@ const MAX_ID = 2 ** 53 - 1;
 const MAX_CHORDS = 256;
 const MAX_URL = 65536;
 const URL_SCHEMES = ["http", "https", "file", "about"];
-const KINDS = ["hello", "welcome", "request", "response", "discovery"];
+const KINDS = ["hello", "challenge", "auth", "welcome", "request", "response", "discovery"];
+/** Prefix of the challenge's HMAC message, so the proof is good for nothing else. */
+export const CHALLENGE_CONTEXT = "vimma-server\0";
 
 /**
- * @typedef {"hello" | "welcome" | "request" | "response" | "discovery"} MessageKind
+ * @typedef {"hello" | "challenge" | "auth" | "welcome" | "request" | "response" | "discovery"} MessageKind
  * @typedef {{ kind?: MessageKind, command?: string }} ValidateOptions
  * @typedef {{ valid: boolean, errors: string[] }} Validation
  * @typedef {Record<string, unknown>} Obj
@@ -66,13 +68,30 @@ function checkProtocol(m, errors) {
   if (!isInt(m.protocol, 1, MAX_ID)) errors.push("protocol must be an integer >= 1");
 }
 
-/** @param {Obj} m @param {string[]} errors */
+/**
+ * The handshake (spec m0-control-protocol-and-vimma-ctl): hello {nonce} → challenge {proof} →
+ * auth {token} → welcome. The token is sent only after the server proved it knows it.
+ * @param {Obj} m @param {string[]} errors
+ */
 function checkHello(m, errors) {
-  noExtraFields(m, ["type", "protocol", "token", "nonce"], errors);
+  noExtraFields(m, ["type", "protocol", "nonce"], errors);
   checkProtocol(m, errors);
-  if (!isToken(m.token)) errors.push("token must be 64 lowercase hex characters");
-  // A fresh random value per connection; the welcome's `proof` answers it.
   if (!isToken(m.nonce)) errors.push("nonce must be 64 lowercase hex characters");
+}
+
+/**
+ * proof = HMAC-SHA256(key: the token, message: CHALLENGE_CONTEXT + the hello's nonce), ASCII.
+ * @param {Obj} m @param {string[]} errors
+ */
+function checkChallenge(m, errors) {
+  checkProtocol(m, errors);
+  if (!isToken(m.proof)) errors.push("proof must be 64 lowercase hex characters");
+}
+
+/** @param {Obj} m @param {string[]} errors */
+function checkAuth(m, errors) {
+  noExtraFields(m, ["type", "token"], errors);
+  if (!isToken(m.token)) errors.push("token must be 64 lowercase hex characters");
 }
 
 /** @param {Obj} m @param {string[]} errors */
@@ -80,8 +99,6 @@ function checkWelcome(m, errors) {
   checkProtocol(m, errors);
   if (typeof m.app !== "string") errors.push("app must be a string");
   if (typeof m.version !== "string") errors.push("version must be a string");
-  // HMAC-SHA256(key: the token, message: the hello's nonce), both as their ASCII hex text.
-  if (!isToken(m.proof)) errors.push("proof must be 64 lowercase hex characters");
 }
 
 /** @param {Obj} m @param {string[]} errors */
@@ -261,6 +278,12 @@ export function validateMessage(message, { kind, command } = {}) {
   switch (effective) {
     case "hello":
       checkHello(message, errors);
+      break;
+    case "challenge":
+      checkChallenge(message, errors);
+      break;
+    case "auth":
+      checkAuth(message, errors);
       break;
     case "welcome":
       checkWelcome(message, errors);

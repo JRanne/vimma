@@ -1,10 +1,10 @@
 {
-  "description": "Token is not 64 lowercase hex characters",
+  "description": "A hello must not carry the token (it would reach a squatter before the server has proved anything)",
   "kind": "hello",
   "message": {
     "type": "hello",
     "protocol": 1,
-    "token": "secret",
-    "nonce": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+    "nonce": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+    "token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
   }
 }

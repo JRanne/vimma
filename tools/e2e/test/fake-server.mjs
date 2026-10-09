@@ -6,7 +6,11 @@ import { createHmac, randomBytes } from "node:crypto";
 import { rmSync, renameSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
-import { tokensEqual, validateMessage } from "../../../packages/vimma-core/src/control.mjs";
+import {
+  CHALLENGE_CONTEXT,
+  tokensEqual,
+  validateMessage,
+} from "../../../packages/vimma-core/src/control.mjs";
 
 /**
  * @typedef {{ id: string, url: string, title: string, selected: boolean }} FakeTab
@@ -135,6 +139,7 @@ export async function startFakeServer(profile, options = {}) {
       socket.end();
       return;
     }
+    let greeted = false;
     let authed = false;
     let buffer = "";
     socket.setEncoding("utf8");
@@ -145,8 +150,18 @@ export async function startFakeServer(profile, options = {}) {
         const line = buffer.slice(0, newline).replace(/\r$/, "");
         buffer = buffer.slice(newline + 1);
         const message = JSON.parse(line);
-        if (!authed) {
+        if (!greeted) {
+          // hello {nonce} → challenge: prove the token as the real server does.
           check(message, { kind: "hello" });
+          greeted = true;
+          const proof = createHmac("sha256", token)
+            .update(`${CHALLENGE_CONTEXT}${message.nonce}`)
+            .digest("hex");
+          send({ type: "challenge", protocol: 1, proof });
+          continue;
+        }
+        if (!authed) {
+          check(message, { kind: "auth" });
           if (fake.options.rejectAuth || !tokensEqual(message.token, token)) {
             send({
               type: "response",
@@ -158,9 +173,7 @@ export async function startFakeServer(profile, options = {}) {
             return;
           }
           authed = true;
-          // Prove the token, as the real server does: HMAC-SHA256(token, nonce).
-          const proof = createHmac("sha256", token).update(message.nonce).digest("hex");
-          send({ type: "welcome", protocol: 1, app: "Vimma", version: "0.1.0", proof });
+          send({ type: "welcome", protocol: 1, app: "Vimma", version: "0.1.0" });
           continue;
         }
         check(message, { kind: "request" });

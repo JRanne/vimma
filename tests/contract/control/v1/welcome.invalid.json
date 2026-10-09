@@ -5,7 +5,6 @@
     "type": "welcome",
     "protocol": "1",
     "app": "Vimma",
-    "version": "0.1.0",
-    "proof": "4ce32973405f130a885fc346f0394d9077298ec3d78d71433f1a4d3d99573adf"
+    "version": "0.1.0"
   }
 }

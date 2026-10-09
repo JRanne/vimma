@@ -3,9 +3,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 //! SHA-256 (FIPS 180-4) and HMAC-SHA256 (RFC 2104), std only (ADR-011), for the handshake's
-//! proof: the server answers the client's nonce with `HMAC-SHA256(token, nonce)`, so a process
-//! squatting on a stale discovery file's port, which does not know the token, is refused before
-//! any command is sent. Tested against the FIPS 180-4 and RFC 4231 vectors.
+//! challenge: the server answers the client's nonce with
+//! `HMAC-SHA256(token, "vimma-server\0" + nonce)` before the client sends the token, so a process
+//! squatting on a stale discovery file's port, which does not know the token, gets neither the
+//! token nor a command. Tested against the FIPS 180-4 and RFC 4231 vectors.
 
 const K: [u32; 64] = [
     0x428a_2f98,
@@ -189,7 +190,8 @@ pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    a.iter().zip(b).fold(0u8, |diff, (x, y)| diff | (x ^ y)) == 0
+    // black_box: keep the optimiser from turning the fold into an early-exit comparison.
+    std::hint::black_box(a.iter().zip(b).fold(0u8, |diff, (x, y)| diff | (x ^ y))) == 0
 }
 
 #[cfg(test)]
@@ -264,6 +266,68 @@ mod tests {
 block-size data. The key needs to be hashed before being used by the HMAC algorithm."
             )),
             "9b09ffa71b942fcb27635fbcd5b0e944bfdc63644f0713938a7f51535c3a35e2"
+        );
+    }
+
+    #[test]
+    fn sha256_padding_edges_63_and_65() {
+        assert_eq!(
+            hex(&sha256(&[b'x'; 63])),
+            "75220b47218278e656f2013bb8f0c455a25eaf01e86c64924e9d48d89776d6f2"
+        );
+        assert_eq!(
+            hex(&sha256(&[b'x'; 65])),
+            "9537c5fdf120482f7d58d25e9ed583f52c02b4e304ea814db1633ad565aed7e9"
+        );
+    }
+
+    #[test]
+    fn hmac_empty_key_padding_edges_and_block_sized_keys() {
+        // Python's hmac module.
+        assert_eq!(
+            hex(&hmac_sha256(b"", b"")),
+            "b613679a0814d9ec772f95d778c35fc5ff1697c493715653c6c712144292c5ad"
+        );
+        assert_eq!(
+            hex(&hmac_sha256(b"", b"abc")),
+            "fd7adb152c05ef80dccf50a1fa4c05d5a3ec6da95575fc312ae7c5d091836351"
+        );
+        for (len, mac) in [
+            (
+                55,
+                "7435020c46cf8de53b8635605e185d34426bf37a0a0f0293abcf30860a58370e",
+            ),
+            (
+                56,
+                "89d0ea3a1e32e5f3c1778ea1f4669418195dc09a20de52b710d3a7da7ce9d3a6",
+            ),
+            (
+                63,
+                "f8808770316556c3d6d04b7894fad221fe4851864f80b66cfc769f6e61967b5f",
+            ),
+            (
+                64,
+                "598ad0490c427fcccbc595f0f755c8efa047857dd3b76336a02f8001c949cacc",
+            ),
+            (
+                65,
+                "04dc5eecfe19ee44c7f420a3c6832ee7bfda6d3f4690dc8fcc0145f3fba90d67",
+            ),
+        ] {
+            assert_eq!(
+                hex(&hmac_sha256(b"key", &vec![b'm'; len])),
+                mac,
+                "{len}-byte message"
+            );
+        }
+        // A 64-byte key is used as is; a 65-byte one is hashed first.
+        assert_eq!(
+            hex(&hmac_sha256(&[b'k'; 64], b"msg")),
+            "d62ad25bb128e96ab6ef43464aaf2bb91b5b85f013381e9ba6be747e8d0911b2"
+        );
+        assert_eq!(
+            hex(&hmac_sha256(&[b'k'; 65], b"msg")),
+            "c65585780e821bd312cfaa440c33cb28d6af6b323d4977ae83934834ce589e38"
         );
     }
 

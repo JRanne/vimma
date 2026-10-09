@@ -1,0 +1,9 @@
+{
+  "description": "proof must be 64 lowercase hex characters",
+  "kind": "challenge",
+  "message": {
+    "type": "challenge",
+    "protocol": 1,
+    "proof": "DFA7036DF27761C79AA0A83E40EE29270903D00E65E5A1B7249BC93098B29BB0"
+  }
+}

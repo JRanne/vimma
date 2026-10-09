@@ -14,6 +14,7 @@ import {
   RESERVED_COMMANDS,
   tokensEqual,
   validateMessage,
+  CHALLENGE_CONTEXT,
 } from "../core/control.mjs";
 import { parseKey } from "../core/keys.mjs";
 import { VimmaHost } from "../host/VimmaHost.sys.mjs";
@@ -45,6 +46,8 @@ const MAX_CONNECTIONS = 8;
 const MAX_WAITING = 2;
 /** Unsent output beyond this means the client is not reading: close it. */
 const MAX_PENDING_OUT = 4 * 1024 * 1024;
+/** Refused connections allowed to linger for their answer at once. */
+const MAX_CLOSING = 16;
 const BACKLOG = 16;
 const DISCOVERY_FILE = "vimma-control.json";
 const NEWLINE = 0x0a;
@@ -289,6 +292,8 @@ class Connection {
     this.chunks = [];
     this.lineLength = 0;
     this.authenticated = false;
+    /** Which handshake line comes next. @type {"hello" | "auth"} */
+    this.stage = "hello";
     this.closed = false;
     /** Binary string waiting for the socket to accept it. */
     this.pendingOut = "";
@@ -389,21 +394,45 @@ class Connection {
     }
     if (this.stopping) return;
     if (!this.authenticated) {
-      this.handshake(message);
+      // In order, like requests: the challenge's HMAC is computed asynchronously.
+      this.queue = this.queue.then(() => this.handshake(message));
       return;
     }
     this.arm(Services.prefs.getIntPref(IDLE_TIMEOUT_PREF, IDLE_TIMEOUT_MS), () => this.close());
     this.queue = this.queue.then(() => this.request(message));
   }
 
-  /** @param {unknown} m */
-  handshake(m) {
-    if (!isObject(m) || m.type !== "hello") {
-      this.fail(null, "bad-request", "the first line must be a hello");
+  /**
+   * hello {nonce} → challenge {proof} → auth {token} → welcome (spec
+   * m0-control-protocol-and-vimma-ctl). The server proves it knows the token before the client
+   * sends it, so a squatter on a stale port never sees it. One deadline (`start`) covers the
+   * whole handshake; anything out of order ends the connection.
+   * @param {unknown} m
+   */
+  async handshake(m) {
+    if (this.closed || this.draining) return;
+    if (this.stage === "hello") {
+      if (!isObject(m) || m.type !== "hello") {
+        this.fail(null, "bad-request", "the first line must be a hello");
+        return;
+      }
+      if (Number.isInteger(m.protocol) && m.protocol !== CONTROL_PROTOCOL) {
+        this.fail(null, "unsupported-protocol", `this server speaks protocol ${CONTROL_PROTOCOL}`);
+        return;
+      }
+      const v = validateMessage(m, { kind: "hello" });
+      if (!v.valid) {
+        this.fail(null, "bad-request", v.errors.join("; "));
+        return;
+      }
+      this.stage = "auth";
+      // Domain-separated, so this answer to an unauthenticated nonce is good for nothing else.
+      const proof = await hmacHex(this.server.token, CHALLENGE_CONTEXT + m.nonce);
+      this.write({ type: "challenge", protocol: CONTROL_PROTOCOL, proof });
       return;
     }
-    if (Number.isInteger(m.protocol) && m.protocol !== CONTROL_PROTOCOL) {
-      this.fail(null, "unsupported-protocol", `this server speaks protocol ${CONTROL_PROTOCOL}`);
+    if (!isObject(m) || m.type !== "auth") {
+      this.fail(null, "bad-request", "expected auth after the challenge");
       return;
     }
     // Constant time in where the tokens differ; a malformed token simply does not match.
@@ -411,7 +440,7 @@ class Connection {
       this.fail(null, "unauthorized", "bad token");
       return;
     }
-    const v = validateMessage(m, { kind: "hello" });
+    const v = validateMessage(m, { kind: "auth" });
     if (!v.valid) {
       this.fail(null, "bad-request", v.errors.join("; "));
       return;
@@ -419,25 +448,17 @@ class Connection {
     const { server: srv } = this;
     srv.waiting.delete(this);
     if (srv.connections.size >= MAX_CONNECTIONS) {
-      srv.closing.add(this);
-      this.fail(null, "busy", `${srv.connections.size} connections open`);
+      srv.refuse(this, "busy", `${srv.connections.size} connections open`);
       return;
     }
     srv.connections.add(this);
     this.authenticated = true;
     this.arm(Services.prefs.getIntPref(IDLE_TIMEOUT_PREF, IDLE_TIMEOUT_MS), () => this.close());
-    // The welcome proves the server knows the token, so a client can tell this server from a
-    // process squatting on a stale discovery file's port. Queued: requests answer after it.
-    const nonce = /** @type {string} */ (m.nonce);
-    this.queue = this.queue.then(async () => {
-      const proof = await hmacHex(srv.token, nonce);
-      this.write({
-        type: "welcome",
-        protocol: CONTROL_PROTOCOL,
-        app: "Vimma",
-        version: lazy.AppConstants.MOZ_APP_VERSION_DISPLAY,
-        proof,
-      });
+    this.write({
+      type: "welcome",
+      protocol: CONTROL_PROTOCOL,
+      app: "Vimma",
+      version: lazy.AppConstants.MOZ_APP_VERSION_DISPLAY,
     });
   }
 
@@ -602,15 +623,27 @@ class Server {
       // in `closing` (not counted) until its client closes or DRAIN_MS pass.
       const oldest = /** @type {Connection} */ (this.waiting.values().next().value);
       this.waiting.delete(oldest);
-      this.closing.add(oldest);
-      oldest.fail(
-        null,
-        "busy",
-        `evicted: ${MAX_WAITING} newer connections are waiting for a hello`,
-      );
+      this.refuse(oldest, "busy", `evicted: ${MAX_WAITING} newer connections are waiting`);
     }
     this.waiting.add(connection);
     connection.start();
+  }
+
+  /**
+   * Answer `code` and close. Up to MAX_CLOSING refused connections linger to let their client
+   * read the answer (see Connection.fail); beyond that a flood gets the answer written and an
+   * immediate close, so refused connections cannot pile up either.
+   * @param {Connection} connection @param {string} code @param {string} message
+   */
+  refuse(connection, code, message) {
+    if (this.closing.size >= MAX_CLOSING) {
+      connection.respond(null, { error: { code, message } });
+      connection.closeAfterWrite = true;
+      connection.flush();
+      return;
+    }
+    this.closing.add(connection);
+    connection.fail(null, code, message);
   }
 
   onStopListening() {}
@@ -817,6 +850,11 @@ export const VimmaControl = {
   /** Authenticated connections (tests). */
   get connections() {
     return server?.connections.size ?? 0;
+  },
+
+  /** Refused connections lingering for their answer (tests). */
+  get closing() {
+    return server?.closing.size ?? 0;
   },
 
   /** Connections waiting for a hello (tests). */

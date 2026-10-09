@@ -208,7 +208,9 @@ pub fn read_discovery(profile: &Path) -> Result<Discovery, DiscoveryError> {
 }
 
 /// A crashed or killed browser cannot delete its file: say so instead of dialling a port that
-/// something else may have taken. (A reused pid gets past this; the handshake's proof does not.)
+/// something else may have taken. This is only a hint: a reused pid passes it. What protects the
+/// user is the handshake: the server must prove it knows the token (the challenge) before the
+/// client sends the token or any command, so a squatter on the port learns neither.
 #[cfg(target_os = "linux")]
 fn check_pid(path: &Path, pid: u64) -> Result<(), DiscoveryError> {
     if Path::new(&format!("/proc/{pid}")).exists() {

@@ -136,18 +136,26 @@ class Client {
   }
 
   /**
-   * Sends a hello with a fresh nonce; a welcome must prove the token (HMAC-SHA256(token,
-   * nonce)), checked here with WebCrypto, independently of the server's code.
+   * The handshake: hello {nonce} (no token) → challenge, whose proof is checked here with
+   * WebCrypto, independently of the server's code → auth {token} → the server's last reply.
+   * Returns early with any reply that is not a challenge.
    * @param {string} token
+   * @param {{ checkProof?: boolean }} [options] false for a client holding a wrong token
    */
-  async hello(token) {
+  async hello(token, { checkProof = true } = {}) {
     const nonce = randomHex();
-    await this.send({ type: "hello", protocol: 1, token, nonce });
-    const reply = await this.read();
-    if (reply?.type === "welcome") {
-      Assert.equal(reply.proof, await hmacHex(token, nonce), "welcome proves the token");
+    await this.send({ type: "hello", protocol: 1, nonce });
+    const challenge = await this.read();
+    if (challenge?.type !== "challenge") return challenge;
+    if (checkProof) {
+      Assert.equal(
+        challenge.proof,
+        await hmacHex(token, `vimma-server\0${nonce}`),
+        "the challenge proves the token",
+      );
     }
-    return reply;
+    await this.send({ type: "auth", token });
+    return this.read();
   }
 
   /** Sends a request and returns its response. */
@@ -268,7 +276,10 @@ add_task(async function test_handshake() {
   const { port, token } = await enable();
 
   const wrong = new Client(port);
-  const bad = await wrong.hello(token.replace(/^./, (c) => (c === "0" ? "1" : "0")));
+  const bad = await wrong.hello(
+    token.replace(/^./, (c) => (c === "0" ? "1" : "0")),
+    { checkProof: false },
+  );
   Assert.deepEqual(
     bad,
     {
@@ -287,12 +298,29 @@ add_task(async function test_handshake() {
   Assert.equal(await http.closed, 0, "and closed");
 
   const noNonce = new Client(port);
-  await noNonce.send({ type: "hello", protocol: 1, token });
+  await noNonce.send({ type: "hello", protocol: 1 });
   Assert.equal((await noNonce.read())?.error?.code, "bad-request", "a hello needs a nonce");
   Assert.equal(await noNonce.closed, 0, "and closed");
 
+  const tokenInHello = new Client(port);
+  await tokenInHello.send({ type: "hello", protocol: 1, nonce: randomHex(), token });
+  Assert.equal((await tokenInHello.read())?.error?.code, "bad-request", "no token in a hello");
+  Assert.equal(await tokenInHello.closed, 0, "and closed");
+
+  const authFirst = new Client(port);
+  await authFirst.send({ type: "auth", token });
+  Assert.equal((await authFirst.read())?.error?.code, "bad-request", "auth before hello");
+  Assert.equal(await authFirst.closed, 0, "and closed");
+
+  const skipAuth = new Client(port);
+  await skipAuth.send({ type: "hello", protocol: 1, nonce: randomHex() });
+  Assert.equal((await skipAuth.read())?.type, "challenge", "a hello is challenged");
+  await skipAuth.send({ type: "request", id: 1, command: "state", args: {} });
+  Assert.equal((await skipAuth.read())?.error?.code, "bad-request", "no request before auth");
+  Assert.equal(await skipAuth.closed, 0, "and closed");
+
   const v2 = new Client(port);
-  await v2.send({ type: "hello", protocol: 2, token, nonce: randomHex() });
+  await v2.send({ type: "hello", protocol: 2, nonce: randomHex() });
   Assert.equal((await v2.read())?.error?.code, "unsupported-protocol", "protocol 2 is refused");
   Assert.equal(await v2.closed, 0, "and closed");
 
@@ -458,12 +486,16 @@ add_task(async function test_limits() {
   // for a hello, and a new one evicts the oldest (review of #38: a reconnect loop made every
   // vimma-ctl call busy).
   const flood = [];
-  for (let i = 0; i < 20; i++) flood.push(new Client(port));
-  await TestUtils.waitForCondition(
-    () => flood.filter((c) => c.closedWith !== null).length === 18,
-    "all but the two newest waiting connections are evicted",
-  );
-  Assert.equal(VimmaControl.waiting, 2, "two wait for a hello");
+  for (let i = 0; i < 40; i++) flood.push(new Client(port));
+  // All but the 2 newest are evicted: up to 16 linger 1 s to deliver their "busy", the rest
+  // close at once. (Connects beyond the listen backlog may only arrive seconds later.)
+  let maxClosing = 0;
+  await TestUtils.waitForCondition(() => {
+    maxClosing = Math.max(maxClosing, VimmaControl.closing);
+    return flood.filter((c) => c.closedWith !== null).length >= 22;
+  }, "evictions beyond the lingering cap close at once");
+  Assert.lessOrEqual(maxClosing, 16, `at most 16 refused connections linger (${maxClosing})`);
+  Assert.lessOrEqual(VimmaControl.waiting, 2, "at most two wait for a hello");
   const evicted = flood[0].lines[0] && JSON.parse(flood[0].lines[0]);
   Assert.equal(evicted?.error?.code, "busy", "an evicted connection is told busy");
   const authed = await session();
@@ -491,6 +523,12 @@ add_task(async function test_limits() {
   const silent = new Client(port);
   Assert.equal((await silent.read())?.error?.code, "bad-request", "no hello in time");
   Assert.equal(await silent.closed, 0, "closed");
+  // The deadline covers the whole handshake: a hello without an auth is closed too.
+  const halfway = new Client(port);
+  await halfway.send({ type: "hello", protocol: 1, nonce: randomHex() });
+  Assert.equal((await halfway.read())?.type, "challenge", "challenged");
+  Assert.equal((await halfway.read())?.error?.code, "bad-request", "no auth in time");
+  Assert.equal(await halfway.closed, 0, "closed");
   await SpecialPowers.popPrefEnv();
   await disable();
 });
@@ -559,10 +597,7 @@ add_task(async function test_vimma_ctl_end_to_end() {
             } catch {
               return;
             }
-            const line =
-              '{"type":"welcome","protocol":1,"app":"Vimma","version":"0.1.0","proof":"' +
-              "0".repeat(64) +
-              '"}\n';
+            const line = '{"type":"challenge","protocol":1,"proof":"' + "0".repeat(64) + '"}\n';
             output.write(line, line.length);
             input.QueryInterface(Ci.nsIAsyncInputStream).asyncWait(
               {
@@ -601,8 +636,8 @@ add_task(async function test_vimma_ctl_end_to_end() {
   await IOUtils.remove(DISCOVERY);
   Assert.equal(refused.exitCode, 4, `vimma-ctl refuses the squatter: ${refused.out}`);
   Assert.ok(
-    !received.join("").includes("send-keys"),
-    `no command reached the squatter: ${received.join("")}`,
+    !received.join("").includes("send-keys") && !received.join("").includes(stale.token),
+    `neither the token nor a command reached the squatter: ${received.join("")}`,
   );
 });
 

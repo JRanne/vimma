@@ -19,13 +19,7 @@ const fixture = (name) => JSON.parse(readFileSync(FIXTURES + name, "utf8"));
 
 const TOKEN = "0123456789abcdef".repeat(4);
 const NONCE = "fedcba9876543210".repeat(4);
-const hello = (extra = {}) => ({
-  type: "hello",
-  protocol: 1,
-  token: TOKEN,
-  nonce: NONCE,
-  ...extra,
-});
+const hello = (extra = {}) => ({ type: "hello", protocol: 1, nonce: NONCE, ...extra });
 const req = (command, args = {}, id = 1) => ({ type: "request", id, command, args });
 const ok = (result, id = 1) => ({ type: "response", id, ok: true, result });
 const errorsOf = (message, options) => validateMessage(message, options).errors;
@@ -41,10 +35,13 @@ describe("contract fixtures (tests/contract/control/v1)", () => {
     expect(files.length).toBe(types.size * 2);
   });
 
-  test("welcome.valid's proof is HMAC-SHA256(token, nonce) of hello.valid", () => {
-    const { token, nonce } = fixture("hello.valid.json").message;
-    const { proof } = fixture("welcome.valid.json").message;
-    expect(createHmac("sha256", token).update(nonce).digest("hex")).toBe(proof);
+  test("challenge.valid's proof is HMAC-SHA256(token, vimma-server NUL nonce)", () => {
+    const { nonce } = fixture("hello.valid.json").message;
+    const { token } = fixture("auth.valid.json").message;
+    const { proof } = fixture("challenge.valid.json").message;
+    const mac = (text) => createHmac("sha256", token).update(text).digest("hex");
+    expect(mac(`vimma-server\0${nonce}`)).toBe(proof);
+    expect(mac(nonce)).not.toBe(proof); // domain-separated
   });
 
   test.each(files)("%s validates as its name says", (name) => {
@@ -89,16 +86,37 @@ describe("validateMessage: envelopes", () => {
     expect(errorsOf(req("state"), { kind: "response" })).toContain('type must be "response"');
   });
 
-  test("hello: protocol a positive integer, token and nonce 64 lowercase hex", () => {
+  test("hello: protocol a positive integer and a 64-hex nonce; never the token", () => {
     expect(errorsOf(hello({ protocol: 0 }))).toEqual(["protocol must be an integer >= 1"]);
-    expect(errorsOf(hello({ token: TOKEN.toUpperCase() }))).toEqual([
-      "token must be 64 lowercase hex characters",
-    ]);
     expect(errorsOf(hello({ extra: 1 }))).toEqual(['unknown field "extra"']);
+    expect(errorsOf(hello({ token: TOKEN }))).toEqual(['unknown field "token"']);
     expect(errorsOf(hello({ nonce: undefined }))).toEqual([
       "nonce must be 64 lowercase hex characters",
     ]);
-    expect(errorsOf(hello({ nonce: "ab" }))).toEqual(["nonce must be 64 lowercase hex characters"]);
+    expect(errorsOf(hello({ nonce: NONCE.toUpperCase() }))).toEqual([
+      "nonce must be 64 lowercase hex characters",
+    ]);
+  });
+
+  test("challenge: a 64-hex proof; extra fields allowed", () => {
+    const proof = "ab".repeat(32);
+    expect(errorsOf({ type: "challenge", protocol: 1, proof, more: 1 })).toEqual([]);
+    expect(errorsOf({ type: "challenge", protocol: 1 })).toEqual([
+      "proof must be 64 lowercase hex characters",
+    ]);
+    expect(errorsOf({ type: "challenge", protocol: 1.5, proof })).toEqual([
+      "protocol must be an integer >= 1",
+    ]);
+  });
+
+  test("auth: exactly a 64-hex token", () => {
+    expect(errorsOf({ type: "auth", token: TOKEN })).toEqual([]);
+    expect(errorsOf({ type: "auth", token: TOKEN.toUpperCase() })).toEqual([
+      "token must be 64 lowercase hex characters",
+    ]);
+    expect(errorsOf({ type: "auth", token: TOKEN, nonce: NONCE })).toEqual([
+      'unknown field "nonce"',
+    ]);
   });
 
   test("request ids are integers in 1..2^53-1", () => {
@@ -164,14 +182,11 @@ describe("validateMessage: envelopes", () => {
     ).toEqual(["error.message must be a string"]);
   });
 
-  test("welcome needs app and version strings and a proof, and allows extra fields", () => {
-    const proof = "ab".repeat(32);
-    expect(errorsOf({ type: "welcome", protocol: 1, app: "Vimma", proof })).toEqual([
+  test("welcome needs app and version strings and allows extra fields", () => {
+    expect(errorsOf({ type: "welcome", protocol: 1, app: "Vimma" })).toEqual([
       "version must be a string",
     ]);
-    expect(errorsOf({ type: "welcome", protocol: 1, app: "Vimma", version: "1" })).toEqual([
-      "proof must be 64 lowercase hex characters",
-    ]);
+    expect(errorsOf({ type: "welcome", protocol: 1, app: "Vimma", version: "1" })).toEqual([]);
   });
 });
 
