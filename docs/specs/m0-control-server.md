@@ -23,7 +23,7 @@ running browser, and with it off nothing listens and no token file exists.
   (as a backstop) in an `AsyncShutdown.profileBeforeChange` blocker.
 - Line framing, 1 MiB limit, 5 s hello deadline, 60 s idle timeout, 8 authenticated connections
   then `busy`, at most 2 waiting for a hello (a new one evicts the oldest), constant-time token
-  check (`tokensEqual`), the welcome's `proof` (HMAC-SHA256 of the client's nonce), every message
+  check (`tokensEqual`), a challenge proving the token before the client sends it, every message
   checked with `validateMessage`.
 - Commands `send-keys`, `state`, `open`; `list-tabs`, `screenshot`, `reload-config` answer
   `not-implemented`.
@@ -117,8 +117,10 @@ running browser, and with it off nothing listens and no token file exists.
 - `vimma-ctl --profile <test profile> state --json` exits 0 with the live state; 5 more runs
   succeed during a flood of 30 idle connections; against a squatting socket (a stale discovery
   file with a token it does not know) it exits 4 and the squatter receives no command.
-- Every welcome's `proof` is checked by the test client with WebCrypto; a hello without a
-  nonce is `bad-request`.
+- The handshake: every challenge's proof is checked by the test client with WebCrypto; a hello
+  without a nonce, a hello carrying the token, an auth before the hello and a request before
+  the auth are `bad-request` and close; a hello that never gets its auth is closed at the
+  deadline. 40 connections in a burst: at most 16 refused ones linger.
 - The server's own scheme check, called directly (`_commands.open`): `javascript:`, `data:`,
   `chrome:` → `invalid-args`.
 - Start-up cleanup (`_restartForTests`): a stale file goes with the pref off; a directory at the
@@ -164,7 +166,8 @@ Must-fix:
    off), stop removes the file before closing the socket, a real directory there is left alone
    and blocks the start, a symlink is removed and not followed; (b) protocol v1 is amended: the
    `hello` carries a random `nonce`, the `welcome` a `proof` = HMAC-SHA256(token, nonce), and
-   vimma-ctl sends nothing else until the proof checks out (constant time); (c) vimma-ctl
+   vimma-ctl sends nothing else until the proof checks out (constant time; forgeable, as the
+   token went in the hello: superseded, see the security review below); (c) vimma-ctl
    reports a stale file when its `pid` is not alive (`/proc/<pid>`, Linux). HMAC-SHA256 is
    ~100 lines of std-only Rust (`tools/vimma-ctl/src/hmac.rs`, FIPS 180-4 and RFC 4231 vectors)
    rather than a crate (ADR-011: no dependencies); the server uses WebCrypto.
@@ -184,6 +187,26 @@ one argument, no `proof`), then 53 unit + 24 integration passed; the mochitest 2
 (no proof, no `_restartForTests`, `busy: busy:`, flood timed out), then 207 passed on the
 artifact lane. Mutation: with the server's scheme check removed, `javascript:` and `data:` passed
 through `_commands.open` (2 failures; `chrome:` crashed the browser loading it); reverted.
+
+## Security review of #38 (2026-10-09)
+
+**The proof was forgeable.** The client sent the token in the `hello`, next to the nonce, before
+checking anything, so a squatter received the key and computed HMAC(token, nonce) itself; the
+reviewer's squatter received `send-keys hunter2<cr>`. The handshake is now hello {nonce, no
+token} → challenge {proof = HMAC-SHA256(token, "vimma-server\0" + nonce)} → auth {token} →
+welcome, still an amended v1. The client checks the proof in constant time (`black_box` around
+the fold) and sends nothing more on a mismatch. One 5 s deadline and the waiting-slot rules
+cover the whole handshake. Refused connections lingering for their answer are capped at 16;
+beyond that they close at once. SHA-256/HMAC gained empty-key, 55/56/63/64/65-byte message and
+64/65-byte key vectors (from Python's `hmac`; these passed at once, as the implementation was
+already right). Docs now state what is guaranteed (no token or command to a squatter) and what
+is not (a squatter can make the client wait; a fast connect flood can evict a client mid-handshake).
+
+Red/green: Vitest 10 failed (fixtures and table tests for hello/challenge/auth), then 96
+passed; cargo did not compile (`hello` takes one argument, `expected_proof` gone), then 55 unit
+and 25 integration passed, among them the reviewer's squatter ported to `tests/cli.rs` (it answers
+with an HMAC keyed by any token it saw: it receives only the hello) and a squatter that never
+answers (clean timeout, exit 5); the mochitest 33 failed, then 219 passed.
 
 ## For the e2e harness (PR #35)
 

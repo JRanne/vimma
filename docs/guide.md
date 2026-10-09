@@ -294,18 +294,23 @@ What keeps others out:
   compared in constant time. The file is readable by you alone (mode 0600), and `vimma-ctl`
   refuses a file anyone else can read. Other users on the machine cannot get it; anything
   running as you can, just as it can already read your profile's cookies and history.
-- The browser proves it knows the token too: `vimma-ctl` sends a random nonce and checks the
-  browser's HMAC of it before sending any command. If Vimma crashed and another program took its
-  old port, `vimma-ctl` refuses it (exit 4) instead of sending it your keys.
-- A stale file (Vimma crashed or was killed with `kill -9` or `SIGTERM`) is removed at the next
-  start, whether or not the socket is on; until then `vimma-ctl` sees that its process is gone
-  and says Vimma is not running.
+- The browser proves it knows the token first: `vimma-ctl` sends only a random nonce, and sends
+  the token only after the browser has answered with an HMAC of that nonce made with the token.
+  If Vimma crashed and another program took its old port, that program gets the nonce and
+  nothing else: no token and no command (`vimma-ctl` exits 4). It can still make `vimma-ctl`
+  wait until its timeout.
+- A stale file (Vimma crashed or was killed with `kill -9` or `SIGTERM`) is removed at Vimma's
+  next start, whether or not the socket is on. Until then, on Linux, `vimma-ctl` sees that the
+  process named in it has exited and says Vimma is not running; if that process number has been
+  reused, the handshake above still protects you.
 
 Limits against a local denial of service: at most 8 authenticated connections (the next is told
-"busy"); at most 2 connections waiting to authenticate, a new one pushing out the oldest, so
-idle connections cannot lock `vimma-ctl` out; 5 s to authenticate; an idle connection closes
-after 60 s; lines over 1 MiB and clients that stop reading are disconnected. Any program running
-as you can still keep the 8 slots busy; turn the pref off to stop it.
+"busy"); at most 2 connections still authenticating, a new one pushing out the oldest, so idle
+connections cannot lock `vimma-ctl` out; 5 s to authenticate; an idle connection closes after
+60 s; lines over 1 MiB and clients that stop reading are disconnected. These are limits, not a
+defence against an active attack: a program of any local user that connects fast enough keeps
+pushing `vimma-ctl` out before it authenticates, and any program running as you can keep the 8
+slots busy. Turn the pref off to stop either.
 
 With the help overlay open, every key goes to the overlay, `ctrl+q` included, as when typing;
 send `esc` first (`vimma-ctl send-keys "esc ctrl+q"`).

@@ -62,30 +62,36 @@ file at that path when it starts (whatever the pref) and when it stops.
 
 ### Handshake
 
-The client's first line must be `hello`; anything else, or no `hello` within 5 s, closes the
-connection with an error.
+Four lines, in this order; anything else, or no `welcome` within 5 s of connecting (one deadline
+for the whole handshake), closes the connection with an error. The server proves it knows the
+token **before** the client sends it.
 
-```json
-{ "type": "hello", "protocol": 1, "token": "<token from the discovery file>", "nonce": "<64 hex>" }
-```
+1. Client: `{ "type": "hello", "protocol": 1, "nonce": "<64 hex>" }`. `nonce`: 32 fresh bytes
+   from a CSPRNG per connection, lowercase hex. **No token**: a `hello` with a `token` is
+   `bad-request`.
+2. Server: `{ "type": "challenge", "protocol": 1, "proof": "<64 hex>" }`, where
+   `proof` = HMAC-SHA256(key: the token, message: `"vimma-server\0"` + the nonce), ASCII
+   (vimma-core `CHALLENGE_CONTEXT`), in lowercase hex. The prefix separates this use of the token
+   from any other, so a proof the server hands to an unauthenticated client is good for nothing
+   else.
+3. Client: compares the proof with its own in constant time. On a mismatch it closes and sends
+   **nothing more**: neither the token nor a command. Otherwise `{ "type": "auth", "token": "<token
+from the discovery file>" }`.
+4. Server: `{ "type": "welcome", "protocol": 1, "app": "Vimma", "version": "0.1.0" }`.
 
-`nonce`: 32 fresh bytes from a CSPRNG per connection, lowercase hex. Success:
+Fixtures: `challenge.valid.json` answers `hello.valid.json` for the token of `auth.valid.json`.
 
-```json
-{ "type": "welcome", "protocol": 1, "app": "Vimma", "version": "0.1.0", "proof": "<64 hex>" }
-```
+**What this guarantees.** A process squatting on a stale discovery file's port (the browser
+crashed; another local user bound the port) learns only the nonce: it cannot produce the proof,
+so it never receives the token or a command (`vimma-ctl` exits 4). It does not stop a squatter
+from making the client wait (no reply: the client's timeout ends it) or from learning that a
+client tried to connect.
 
-`proof` = HMAC-SHA256(key: the token, message: the nonce), both as their ASCII hex text, in
-lowercase hex (fixtures: `welcome.valid.json` answers `hello.valid.json`). The client compares
-it in constant time and sends nothing else unless it matches: a process squatting on a stale
-discovery file's port (the browser crashed, another local user bound the port) cannot produce it,
-so it never receives a command. The token it saw in the `hello` is dead: every start makes a new
-one, and the server deletes the file before closing its socket.
-
-**Amended in v1, not v2** (review of #38): `nonce` and `proof` were added as required fields
-before any server shipped. The v1 server first lands with them, and `vimma-ctl` and the e2e
-harness are in the same repository, so no deployed peer speaks the earlier form; a v2 would
-only carry dead compatibility code.
+**Amended in v1, not v2** (reviews of #38): the handshake was reordered before any server
+shipped. The v1 server first lands with it, and `vimma-ctl` and the e2e harness live in the same
+repository, so no deployed peer speaks an earlier form; a v2 would only carry dead compatibility
+code. (An intermediate form sent the token in the `hello` next to the nonce, so a squatter could
+compute the proof itself; a security review found it.)
 
 Failure: an error response with `"id": null`, then the server closes the connection:
 
@@ -99,8 +105,10 @@ Failure: an error response with `"id": null`, then the server closes the connect
 ```
 
 The server compares tokens with `tokensEqual` (vimma-core), which takes time independent of where
-the strings differ. A wrong token, a `protocol` the server does not speak (`unsupported-protocol`)
-and a malformed `hello` (`bad-request`) all end the connection.
+the strings differ. A wrong token (`unauthorized`), a `protocol` the server does not speak
+(`unsupported-protocol`), and a malformed or out-of-order line (`bad-request`) all end the
+connection. `busy` may come instead of a `challenge` (evicted while waiting) or instead of the
+`welcome` (8 authenticated connections).
 
 ### Requests and responses
 
@@ -191,16 +199,20 @@ the tab's id, as in `state`.
   context through it.
 - **Connection limits.** Any local user can connect before proving the token, so the server
   bounds what a connection may hold:
-  - **At most 8 authenticated connections** and, apart from them, **at most 2 waiting for a
-    hello**. Real use is one short-lived `vimma-ctl` per command plus the e2e harness; 8 leaves
+  - **At most 8 authenticated connections** and, apart from them, **at most 2 still in the
+    handshake**. Real use is one short-lived `vimma-ctl` per command plus the e2e harness; 8 leaves
     room for scripts running in parallel. Anyone local can open waiting connections, so a new
-    one evicts the oldest waiting one (answered `busy`) instead of being refused: a flood of
-    idle connections cannot lock out a client that holds the token, which says hello at once.
-  - **Handshake deadline 5 s** (above): no complete `hello` in 5 s → close.
+    one evicts the oldest waiting one (answered `busy`) instead of being refused: idle
+    connections cannot lock out a client that holds the token, which answers at once. A fast
+    **connect flood still can**: two new connections arriving between a client's connect and its
+    `auth` evict it. That is an active local denial of service by a process of some local user;
+    the remedy is turning the pref off. Up to 16 refused connections linger 1 s to deliver their
+    `busy`; beyond that they are closed at once.
+  - **Handshake deadline 5 s** (above): no `welcome` earned within 5 s of connecting → close.
   - **Idle timeout 60 s after the handshake**: no complete request line for 60 s → the server
     closes the connection without a message. A client that wants a long-lived connection sends
     a request (e.g. `state`) at least every 60 s.
-  - **At the limit**, the 9th authenticated hello is answered with one line
+  - **At the limit**, the 9th correct `auth` is answered with one line
     `{"type":"response","id":null,"ok":false,"error":{"code":"busy","message":"…"}}` and the
     connection closes, so the client can tell "busy" from "not running". It never queues.
   - **A client that stops reading** (over 4 MiB of unsent replies) is disconnected.
