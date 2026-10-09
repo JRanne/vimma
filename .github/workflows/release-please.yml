@@ -1,0 +1,35 @@
+# Plan §4 step 6 / §7: release-please keeps one release PR open with the next version and its
+# CHANGELOG.md entry, built from the Conventional Commits on main. Merging that PR is the
+# release: release-please tags vX.Y.Z and creates the GitHub Release. Config:
+# release-please-config.json, .release-please-manifest.json; setup in docs/runbook.md (Releases).
+# The version's single source of truth is surfer.json brands.vimma.release.displayVersion,
+# bumped through extra-files; the Firefox pin (version.version) is never touched.
+name: release-please
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # release branch, CHANGELOG.md/surfer.json commits, tags, GitHub Release
+      pull-requests: write # open and update the release PR
+      issues: write # labels ("autorelease: pending/tagged") use the issues API
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          # GITHUB_TOKEN PRs trigger no workflows; an optional fine-grained token (Contents +
+          # Pull requests + Issues: read/write, this repo only) makes CI run on the release PR.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
