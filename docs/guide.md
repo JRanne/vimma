@@ -239,15 +239,35 @@ is **off by default**. Spec: [m0-control-server](specs/m0-control-server.md), pr
 would: Vimma's bindings, Firefox's shortcuts (`ctrl+t`, `ctrl+q`) and the page all see them. Keys
 meant for the page reach it only while that window has focus, as with a real keyboard.
 
-**Security.** The socket listens on `127.0.0.1` only, on a random port. A client must first
-send the token from `vimma-control.json`, a 256-bit random value made new at every start and
-compared in constant time; the file is readable by you alone (mode 0600) and `vimma-ctl` refuses
-a file anyone else can read. So other users on the machine and web pages cannot use the socket;
-anything running as you can, just as it can already read your profile's cookies and history.
-`open` refuses `javascript:` and `data:` URLs. At most 8 connections are open at once (the next
-is told "busy"), a client must authenticate within 5 s, and an idle connection is closed after
-60 s. If Vimma crashes or is killed (`kill -9`, `SIGTERM`), the file stays behind and
-`vimma-ctl` says Vimma is not running; the next start replaces it.
+**Security.** Turning the socket on hands **full control of the browser** to whoever has the
+token: they can type into any page (including your logged-in sites), open `about:config` and
+change any setting, and quit Vimma. `open` loads with the system principal, like a URL given on
+the command line, so it can open local files (`file:`) and privileged pages such as
+`about:config`; only `javascript:` and `data:` are refused. Leave the pref off unless you use it.
+
+What keeps others out:
+
+- The socket listens on `127.0.0.1` only, on a random port. Web pages cannot speak to it (they
+  cannot read the token, and an HTTP request is rejected).
+- A client must send the token from `vimma-control.json`: 256 random bits, new at every start,
+  compared in constant time. The file is readable by you alone (mode 0600), and `vimma-ctl`
+  refuses a file anyone else can read. Other users on the machine cannot get it; anything
+  running as you can, just as it can already read your profile's cookies and history.
+- The browser proves it knows the token too: `vimma-ctl` sends a random nonce and checks the
+  browser's HMAC of it before sending any command. If Vimma crashed and another program took its
+  old port, `vimma-ctl` refuses it (exit 4) instead of sending it your keys.
+- A stale file (Vimma crashed or was killed with `kill -9` or `SIGTERM`) is removed at the next
+  start, whether or not the socket is on; until then `vimma-ctl` sees that its process is gone
+  and says Vimma is not running.
+
+Limits against a local denial of service: at most 8 authenticated connections (the next is told
+"busy"); at most 2 connections waiting to authenticate, a new one pushing out the oldest, so
+idle connections cannot lock `vimma-ctl` out; 5 s to authenticate; an idle connection closes
+after 60 s; lines over 1 MiB and clients that stop reading are disconnected. Any program running
+as you can still keep the 8 slots busy; turn the pref off to stop it.
+
+With the help overlay open, every key goes to the overlay, `ctrl+q` included, as when typing;
+send `esc` first (`vimma-ctl send-keys "esc ctrl+q"`).
 
 ## Privacy defaults
 

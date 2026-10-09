@@ -18,10 +18,13 @@ running browser, and with it off nothing listens and no token file exists.
   branding prefs file) starts and stops it live; starts and stops run one after another.
 - `nsIServerSocket.init(-1, /* loopbackOnly */ true, 16)`: 127.0.0.1, an OS-chosen port.
 - Discovery file `<profile>/vimma-control.json` `{protocol, port, token, pid}`, 0600 from creation,
-  renamed into place; deleted when the pref goes off, at `quit-application-granted`, and (as a
-  backstop) in an `AsyncShutdown.profileBeforeChange` blocker.
-- Line framing, 1 MiB limit, 5 s hello deadline, 60 s idle timeout, 8 connections then `busy`,
-  constant-time token check (`tokensEqual`), every message checked with `validateMessage`.
+  renamed into place. Whatever is at that path is removed when the first window starts (pref
+  on or off), before a start, and when the pref goes off, at `quit-application-granted` and
+  (as a backstop) in an `AsyncShutdown.profileBeforeChange` blocker.
+- Line framing, 1 MiB limit, 5 s hello deadline, 60 s idle timeout, 8 authenticated connections
+  then `busy`, at most 2 waiting for a hello (a new one evicts the oldest), constant-time token
+  check (`tokensEqual`), the welcome's `proof` (HMAC-SHA256 of the client's nonce), every message
+  checked with `validateMessage`.
 - Commands `send-keys`, `state`, `open`; `list-tabs`, `screenshot`, `reload-config` answer
   `not-implemented`.
 - Host seam: none of our own. `state` reads `VimmaHost.status(win)` (`{ mode, pending }`, added
@@ -107,10 +110,22 @@ running browser, and with it off nothing listens and no token file exists.
 - `open https://example.com/` → new selected tab, result id, content principal; `where: current`
   reuses it; `about:blank` → a new selected tab at `about:blank`; `javascript:`, `data:`,
   `chrome:` → `invalid-args`, nothing opened.
-- Limits: 8 connections (4 authenticated, 4 handshaking), the 9th gets `busy` (id null) and a
-  close, a freed slot works; an oversized line → `bad-request` and a close; idle (500 ms pref) →
+- Limits: 8 authenticated connections, the 9th hello gets `busy` (id null, no doubled "busy:")
+  and a close, a freed slot works; 20 connections that never say hello leave 2 waiting (the
+  evicted told `busy`) and a client with the token still gets in; an oversized line → `bad-request` and a close; idle (500 ms pref) →
   closed without a message; no hello (300 ms pref) → `bad-request` and a close.
-- `vimma-ctl --profile <test profile> state --json` exits 0 with the live state.
+- `vimma-ctl --profile <test profile> state --json` exits 0 with the live state; 5 more runs
+  succeed during a flood of 30 idle connections; against a squatting socket (a stale discovery
+  file with a token it does not know) it exits 4 and the squatter receives no command.
+- Every welcome's `proof` is checked by the test client with WebCrypto; a hello without a
+  nonce is `bad-request`.
+- The server's own scheme check, called directly (`_commands.open`): `javascript:`, `data:`,
+  `chrome:` → `invalid-args`.
+- Start-up cleanup (`_restartForTests`): a stale file goes with the pref off; a directory at the
+  path is left alone and the server does not start; a symlink to a directory is removed, its
+  target untouched.
+- Shutdown with a first window that never finished its delayed startup completes (no hang), and
+  no file or listener is left.
 
 Every response is checked with `validateMessage(kind: response, command)`.
 
@@ -134,6 +149,41 @@ Every response is checked with `validateMessage(kind: response, command)`.
   workflow's existing `vimma-ctl` build (debug) serves the mochitest too.
 - Merged main again (#34 status bar): `state` now reads `VimmaHost.status(win)` instead of our
   own `controlState`. Full build 981 passed, artifact build 964 passed, 0 failed.
+
+## Review of #38 (2026-10-09)
+
+Must-fix:
+
+1. **Waiting connections could lock out clients.** Eight shared slots, each held ~5.7 s by a
+   connection that never says hello: a reconnect loop made `vimma-ctl state` fail `busy` 10/10.
+   Now 8 authenticated slots and, apart, 2 waiting ones; a new connection evicts the oldest
+   waiting one (`busy`). vimma-ctl says hello right after connecting, so it wins the race.
+2. **A stale discovery file let a squatter impersonate the server.** With the pref off nothing
+   removed a crashed run's file, so another local user could bind its port and receive
+   `send-keys`. Now: (a) the first window's `init` removes whatever is at the path (pref on or
+   off), stop removes the file before closing the socket, a real directory there is left alone
+   and blocks the start, a symlink is removed and not followed; (b) protocol v1 is amended: the
+   `hello` carries a random `nonce`, the `welcome` a `proof` = HMAC-SHA256(token, nonce), and
+   vimma-ctl sends nothing else until the proof checks out (constant time); (c) vimma-ctl
+   reports a stale file when its `pid` is not alive (`/proc/<pid>`, Linux). HMAC-SHA256 is
+   ~100 lines of std-only Rust (`tools/vimma-ctl/src/hmac.rs`, FIPS 180-4 and RFC 4231 vectors)
+   rather than a crate (ADR-011: no dependencies); the server uses WebCrypto.
+
+Should-fix: the guide's Security section says the token is full control of the browser, that
+`open` uses the system principal (`file:`, privileged `about:` pages), that stale files go at
+every start, and lists the denial-of-service limits. `shutdown()` releases the wait for the first
+window, so the `profileBeforeChange` blocker cannot hang when that window closed before its
+delayed startup. The server's own scheme check has a direct test. Nits: "busy: busy:" is gone
+(messages no longer start with the code), more than 4 MiB of unsent output closes a client that
+stopped reading (not tested: the kernel's socket buffers would have to fill first), and `ctrl+q`
+with the help overlay open is swallowed like any key there, as when typing: documented (send
+`esc` first) rather than special-cased.
+
+Red/green: Vitest 4 failed (nonce, proof), then 90 passed; cargo did not compile (`hello` takes
+one argument, no `proof`), then 53 unit + 24 integration passed; the mochitest 24 failed
+(no proof, no `_restartForTests`, `busy: busy:`, flood timed out), then 207 passed on the
+artifact lane. Mutation: with the server's scheme check removed, `javascript:` and `data:` passed
+through `_commands.open` (2 failures; `chrome:` crashed the browser loading it); reverted.
 
 ## For the e2e harness (PR #35)
 

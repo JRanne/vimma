@@ -56,7 +56,9 @@ When the server starts it writes `<profile>/vimma-control.json`, mode **0600**, 
 
 Clients refuse a discovery file readable or writable by group or others (`mode & 0o077 != 0`),
 like `ssh` with a private key, and say how to fix it. A stale file (nothing listening) is reported
-as "Vimma is not running (or the control socket is off)".
+as "Vimma is not running (or the control socket is off)". On Linux the client also checks that
+`pid` is alive (`/proc/<pid>`) and reports a stale file when it is not. The server removes any
+file at that path when it starts (whatever the pref) and when it stops.
 
 ### Handshake
 
@@ -64,14 +66,26 @@ The client's first line must be `hello`; anything else, or no `hello` within 5 s
 connection with an error.
 
 ```json
-{ "type": "hello", "protocol": 1, "token": "<token from the discovery file>" }
+{ "type": "hello", "protocol": 1, "token": "<token from the discovery file>", "nonce": "<64 hex>" }
 ```
 
-Success:
+`nonce`: 32 fresh bytes from a CSPRNG per connection, lowercase hex. Success:
 
 ```json
-{ "type": "welcome", "protocol": 1, "app": "Vimma", "version": "0.1.0" }
+{ "type": "welcome", "protocol": 1, "app": "Vimma", "version": "0.1.0", "proof": "<64 hex>" }
 ```
+
+`proof` = HMAC-SHA256(key: the token, message: the nonce), both as their ASCII hex text, in
+lowercase hex (fixtures: `welcome.valid.json` answers `hello.valid.json`). The client compares
+it in constant time and sends nothing else unless it matches: a process squatting on a stale
+discovery file's port (the browser crashed, another local user bound the port) cannot produce it,
+so it never receives a command. The token it saw in the `hello` is dead: every start makes a new
+one, and the server deletes the file before closing its socket.
+
+**Amended in v1, not v2** (review of #38): `nonce` and `proof` were added as required fields
+before any server shipped. The v1 server first lands with them, and `vimma-ctl` and the e2e
+harness are in the same repository, so no deployed peer speaks the earlier form; a v2 would
+only carry dead compatibility code.
 
 Failure: an error response with `"id": null`, then the server closes the connection:
 
@@ -177,16 +191,19 @@ the tab's id, as in `state`.
   context through it.
 - **Connection limits.** Any local user can connect before proving the token, so the server
   bounds what a connection may hold:
-  - **At most 8 open connections** (handshaking or authenticated together). Real use is one
-    short-lived `vimma-ctl` per command plus the e2e harness; 8 leaves room for scripts running
-    in parallel while capping the sockets, buffers and timers another local user can pin.
+  - **At most 8 authenticated connections** and, apart from them, **at most 2 waiting for a
+    hello**. Real use is one short-lived `vimma-ctl` per command plus the e2e harness; 8 leaves
+    room for scripts running in parallel. Anyone local can open waiting connections, so a new
+    one evicts the oldest waiting one (answered `busy`) instead of being refused: a flood of
+    idle connections cannot lock out a client that holds the token, which says hello at once.
   - **Handshake deadline 5 s** (above): no complete `hello` in 5 s → close.
   - **Idle timeout 60 s after the handshake**: no complete request line for 60 s → the server
     closes the connection without a message. A client that wants a long-lived connection sends
     a request (e.g. `state`) at least every 60 s.
-  - **At the limit**, the server accepts the 9th connection, writes one line
-    `{"type":"response","id":null,"ok":false,"error":{"code":"busy","message":"…"}}` and closes
-    it, so the client can tell "busy" from "not running". It never queues connections.
+  - **At the limit**, the 9th authenticated hello is answered with one line
+    `{"type":"response","id":null,"ok":false,"error":{"code":"busy","message":"…"}}` and the
+    connection closes, so the client can tell "busy" from "not running". It never queues.
+  - **A client that stops reading** (over 4 MiB of unsent replies) is disconnected.
   - `vimma-ctl` reports `busy` as "Vimma's control socket is busy (…); try again" with exit 3;
     a refused connection is exit 3 ("not running"); a connection dropped mid-reply (idle
     timeout, shutdown) is exit 5 "connection closed before a complete reply".
@@ -234,14 +251,14 @@ vimma-ctl [--profile DIR] [--timeout SECS] state [--json]
 vimma-ctl [--profile DIR] [--timeout SECS] open URL
 ```
 
-| Exit | Meaning                                                                              |
-| ---- | ------------------------------------------------------------------------------------ |
-| 0    | success                                                                              |
-| 1    | the server answered with an error (code and message printed to stderr)               |
-| 2    | usage error                                                                          |
-| 3    | Vimma not reachable: no profile, no discovery file, insecure file, no server, `busy` |
-| 4    | authentication failed (`unauthorized`, `unsupported-protocol`)                       |
-| 5    | protocol error: malformed response, wrong id, connection closed, timeout             |
+| Exit | Meaning                                                                                       |
+| ---- | --------------------------------------------------------------------------------------------- |
+| 0    | success                                                                                       |
+| 1    | the server answered with an error (code and message printed to stderr)                        |
+| 2    | usage error                                                                                   |
+| 3    | Vimma not reachable: no profile, no or stale discovery file, insecure file, no server, `busy` |
+| 4    | authentication failed (`unauthorized`, `unsupported-protocol`, or no valid `proof`)           |
+| 5    | protocol error: malformed response, wrong id, connection closed, timeout                      |
 
 The timeout (default 5 s, at most 3600 s) covers connect, handshake and the response.
 
