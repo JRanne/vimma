@@ -5,6 +5,11 @@
 // Loaded by browser.xhtml (browser-xhtml.patch) right after browser-main.js.
 
 {
+  const { MozillaServices } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/services/MozillaServices.sys.mjs",
+  );
+  MozillaServices.applyUserDefaults();
+
   const { VimmaHost } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
   );

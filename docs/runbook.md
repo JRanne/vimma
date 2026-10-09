@@ -45,6 +45,14 @@ bookmarks and logs "Failed to import bookmarks … 0x8046001e" (`NS_ERROR_ILLEGA
 That is an upstream shutdown race, not a broken import: hence the warm-up run above.
 `tests/browser/browser_vimma_branding.js` checks the import itself.
 
+Mozilla services (spec m0-mozilla-services): builds have no crash reporter
+(`--disable-crashreporter` in `configs/common/mozconfig`), so a crash leaves a systemd-coredump
+core (`coredumpctl list vimma`), not a minidump, and nothing is sent anywhere. Studies,
+experiments, sponsored content and Mozilla promos are off by default in
+`src/browser/branding/vimma/pref/firefox-branding.js`; `about:config` turns any back on. In a
+local build `dist/bin` symlinks that file, so an edit to it applies at the next launch, no build
+needed; the crash-reporter flag needs `npm run import && (cd engine && ./mach build)`.
+
 Placeholder artwork: `configs/branding/vimma/*.svg`, rendered by `tools/branding/render.sh`
 (`rsvg-convert`, ImageMagick). Replace the SVGs, re-run the script, commit the PNG/ICO outputs.
 
