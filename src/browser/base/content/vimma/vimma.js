@@ -22,6 +22,13 @@
   );
   VimmaActors.register();
 
+  // The theme tokens, before any UI uses them (m5-omarchy-theme): Tokyo Night now, the Omarchy
+  // theme once read, then whatever omarchy-theme-set switches to.
+  const { ThemeHost } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/ui/theme-host.mjs",
+  );
+  ThemeHost.init(window);
+
   const { VimmaHost } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
   );
