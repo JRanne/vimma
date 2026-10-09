@@ -8,6 +8,7 @@
 
 import { isEditable } from "../core/editable.mjs";
 import { collectTargets } from "./hint-collect.mjs";
+import { Caret, isCaretMessage } from "./caret.mjs";
 
 /** @import { EditableDescriptor } from "../core/editable.mjs" */
 /** @import { ScrollKind } from "./VimmaActors.sys.mjs" */
@@ -138,6 +139,8 @@ export class VimmaChild extends JSWindowActorChild {
   #hints = { gen: -1, els: /** @type {WeakRef<Element>[]} */ ([]) };
   /** When a search for the largest scrollable last found nothing (0: not since focus moved). */
   #emptySearchAt = 0;
+  /** Copy mode in this document (m1-copy-mode). */
+  #caret = new Caret();
 
   /** @param {Event} event */
   handleEvent(event) {
@@ -231,6 +234,17 @@ export class VimmaChild extends JSWindowActorChild {
         return this.#collectHints(msg.data);
       case "Vimma:ActivateHint":
         return this.#activateHint(msg.data);
+      case "Vimma:Caret": {
+        // Only the frame with focus has the user's caret (the parent sends to that one).
+        const win = this.contentWindow;
+        if (!isCaretMessage(msg.data) || !win || !this.document.hasFocus()) return false;
+        // The frame's nsISelectionController, got as ViewSourcePageChild gets it.
+        const selCon = this.docShell
+          .QueryInterface(Ci.nsIInterfaceRequestor)
+          .getInterface(Ci.nsISelectionDisplay)
+          .QueryInterface(Ci.nsISelectionController);
+        return this.#caret.run(win, selCon, msg.data);
+      }
     }
     return undefined;
   }
