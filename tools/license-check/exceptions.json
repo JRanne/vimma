@@ -1,0 +1,21 @@
+{
+  "$comment": "Reviewed licence exceptions, keyed by exact name@version so every upgrade is re-checked. Each licence below is permissive (OSI-approved or public-domain-like) but not on the spec allowlist.",
+  "exceptions": {
+    "argparse@2.0.1": {
+      "license": "Python-2.0",
+      "reason": "PSF licence, permissive; dev-only, via @zen-browser/surfer > xmlbuilder2 > js-yaml"
+    },
+    "minimatch@10.2.6": {
+      "license": "BlueOak-1.0.0",
+      "reason": "Blue Oak Model License, permissive; dev-only, via eslint"
+    },
+    "os-shim@0.1.3": {
+      "license": null,
+      "reason": "LICENSE file and legacy `licenses` field are MIT; the lockfile records none; dev-only, via surfer > fast-extract"
+    },
+    "pako@1.0.11": {
+      "license": "(MIT AND Zlib)",
+      "reason": "MIT and zlib licences, both permissive; dev-only, via surfer > fast-extract"
+    }
+  }
+}
