@@ -1,0 +1,10 @@
+{
+  "description": "Port out of range",
+  "kind": "discovery",
+  "message": {
+    "protocol": 1,
+    "port": 70000,
+    "token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "pid": 12345
+  }
+}

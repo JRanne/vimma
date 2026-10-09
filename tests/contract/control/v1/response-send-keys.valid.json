@@ -1,0 +1,13 @@
+{
+  "description": "Two chords sent",
+  "kind": "response",
+  "command": "send-keys",
+  "message": {
+    "type": "response",
+    "id": 1,
+    "ok": true,
+    "result": {
+      "sent": 2
+    }
+  }
+}

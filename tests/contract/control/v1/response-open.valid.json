@@ -1,0 +1,13 @@
+{
+  "description": "The new tab id",
+  "kind": "response",
+  "command": "open",
+  "message": {
+    "type": "response",
+    "id": 3,
+    "ok": true,
+    "result": {
+      "tab": "14"
+    }
+  }
+}

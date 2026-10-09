@@ -1,0 +1,10 @@
+{
+  "description": "A reserved command is a valid request; the server answers not-implemented",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 4,
+    "command": "list-tabs",
+    "args": {}
+  }
+}

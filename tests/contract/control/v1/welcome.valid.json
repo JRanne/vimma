@@ -1,0 +1,11 @@
+{
+  "description": "Server accepts; unknown extra fields are allowed",
+  "kind": "welcome",
+  "message": {
+    "type": "welcome",
+    "protocol": 1,
+    "app": "Vimma",
+    "version": "0.1.0",
+    "build": "future-field"
+  }
+}
