@@ -12,6 +12,7 @@ import { fitStatus, statusSegments } from "../core/statusbar.mjs";
 import { resolveTheme, tokensToCss } from "../core/theme.mjs";
 
 /** @import { Mode } from "../core/modes.mjs" */
+/** @import { FindStatus } from "../core/find.mjs" */
 /** @import { Segment, StatusInput } from "../core/statusbar.mjs" */
 
 export const STATUSBAR_ID = "vimma-statusbar";
@@ -56,7 +57,7 @@ function defaultThemeCss() {
 
 /**
  * @typedef {object} StatusBarHost  what the bar needs from VimmaHost, as plain functions
- * @property {() => { mode: Mode, pending: readonly string[] }} status
+ * @property {() => { mode: Mode, pending: readonly string[], find?: FindStatus | null }} status
  * @property {(fn: () => void) => () => void} subscribe  host state changes; returns unsubscribe
  * @property {(tab: Element) => string | null} [labelFor]  a user's tab rename (tab rename spec)
  */
@@ -206,7 +207,7 @@ export class StatusBar {
 
   /** @private */
   input() {
-    const { mode, pending } = this.host.status();
+    const { mode, pending, find = null } = this.host.status();
     const gBrowser = this.win.gBrowser;
     const tab = gBrowser.selectedTab;
     const visible = gBrowser.visibleTabs;
@@ -223,6 +224,7 @@ export class StatusBar {
         label: this.host.labelFor?.(tab) ?? null,
       },
       loading: tab.hasAttribute("busy"),
+      find,
     };
     return input;
   }

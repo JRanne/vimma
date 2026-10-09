@@ -234,13 +234,16 @@ add_task(async function tab_select_resets_a_pending_prefix() {
     await BrowserTestUtils.switchTab(gBrowser, gBrowser.tabs[0]);
     await BrowserTestUtils.switchTab(gBrowser, tab);
     await focusContent(browser);
+    // `?` is normal mode's backward find since m1-find: it opens the find bar, not help.
     EventUtils.synthesizeKey("?", { shiftKey: true });
-    Assert.deepEqual(
-      await pageKeysThenZ(browser),
-      ["?", "z"],
-      "after a tab switch ? is typed, not ctrl+b ?",
+    await TestUtils.waitForCondition(
+      () => gBrowser.getCachedFindBar()?.hidden === false,
+      "after a tab switch ? is normal mode's ?, not ctrl+b ?",
     );
     Assert.ok(!isShown(), "help did not open");
+    EventUtils.synthesizeKey("KEY_Escape");
+    await TestUtils.waitForCondition(() => document.activeElement === browser, "find cancelled");
+    Assert.deepEqual(await pageKeysThenZ(browser), ["z"], "neither ? nor Esc reached the page");
   });
 });
 
