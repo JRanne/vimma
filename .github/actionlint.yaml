@@ -1,0 +1,4 @@
+self-hosted-runner:
+  # nightly.yml: the full Firefox build machine (docs/runbook.md, "Nightly build runner")
+  labels:
+    - vimma-build
