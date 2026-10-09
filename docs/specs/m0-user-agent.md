@@ -34,7 +34,8 @@ sniff for `Firefox/` work, and nothing in the UA reveals or depends on the Vimma
   places that read it (see Open issues).
 - Update URLs and the update server (M6).
 - `navigator.userAgentData`/Client Hints (not shipped by Firefox 157 on desktop).
-- Per-site UA overrides (the bundled webcompat interventions keep working unchanged).
+- Per-site UA overrides. The bundled webcompat interventions are version-gated and currently
+  misfire (see Open issues).
 
 ## Settled (2026-10-09, from the Firefox 157.0.1 tree, Surfer 1.14.9 and Zen's `dev` branch)
 
@@ -80,6 +81,10 @@ that read them as a Firefox version (Zen patches each of them against its own
 - Normandy, Nimbus and Remote Settings JEXL filters see `env.version` = `0.1.0`
   (`ClientEnvironment.sys.mjs` returns `MOZ_APP_VERSION_DISPLAY`), so records gated on a Firefox
   version are filtered out. ASRouter's `firefoxVersion` is `0`.
+- Webcompat interventions gate on `Services.appinfo.version`
+  (`browser/extensions/webcompat/lib/interventions.js:276`): 16 with `min_version` are skipped and
+  11 with `max_version` ≤ 150 still apply, so sites fixed upstream keep old UA spoofs. This PR does
+  fix `ua_helpers.js:45`, which fell back to `Firefox/58.0` without a Firefox token.
 - Telemetry probe expiry compares `MOZ_APP_VERSION` (`TelemetryControllerParent.sys.mjs`), so no
   probe ever expires; newtab looks for `runtime-metrics-0.json`
   (`AboutNewTabResourceMapping.sys.mjs`); backups record `appVersion: 0.1.0` and refuse to
