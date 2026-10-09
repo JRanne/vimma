@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* The status bar and the which-key strip (ui/statusbar.mjs). Colours and the font come only from
+/* The status bar (ui/statusbar.mjs). Colours and the font come only from
    the --vimma-* theme tokens. Widths are counted in columns of the bar's monospace font, so
    separators and badge padding are in ch. */
 
@@ -18,7 +18,7 @@
 
 #vimma-statusbar {
   position: relative;
-  /* above the tabbox and an expanded sidebar (--browser-area-z-index-*), for the strip */
+  /* above the tabbox and an expanded sidebar (--browser-area-z-index-*) */
   z-index: 5;
   display: flex;
   flex: none;
@@ -86,71 +86,4 @@
   height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
-}
-
-/* Above the bar, over the bottom of the content: showing it never resizes the page. */
-#vimma-whichkey {
-  position: absolute;
-  inset-inline: 0;
-  bottom: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 3ch;
-  max-height: 40vh;
-  overflow: clip;
-  box-sizing: border-box;
-  padding: 6px 1ch;
-  border-top: 1px solid var(--vimma-muted);
-  background-color: var(--vimma-bg-dark);
-  color: var(--vimma-fg);
-  white-space: pre;
-}
-
-.vimma-wk-section {
-  display: flex;
-  flex-direction: column;
-}
-
-.vimma-wk-group {
-  margin: 0;
-  font: inherit;
-  font-weight: bold;
-  color: var(--vimma-accent);
-}
-
-.vimma-wk-entry {
-  display: flex;
-  gap: 1ch;
-
-  &[aria-disabled="true"] {
-    color: var(--vimma-fg-dim);
-  }
-}
-
-.vimma-wk-key {
-  min-width: 7ch;
-  font: inherit;
-  color: var(--vimma-yellow);
-  text-align: end;
-
-  [aria-disabled="true"] > & {
-    color: var(--vimma-fg-dim);
-  }
-}
-
-.vimma-wk-more {
-  color: var(--vimma-magenta);
-
-  [aria-disabled="true"] > & {
-    color: inherit;
-  }
-}
-
-.vimma-wk-clipped {
-  position: absolute;
-  inset-inline-end: 1ch;
-  bottom: 2px;
-  padding: 0 0.5ch;
-  background-color: var(--vimma-bg-dark);
-  color: var(--vimma-accent);
 }

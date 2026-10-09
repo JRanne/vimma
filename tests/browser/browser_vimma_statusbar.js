@@ -156,28 +156,81 @@ add_task(async function font_change_re_measures_the_column() {
   });
 });
 
-add_task(async function notice_sits_above_the_bar_and_gives_way_to_the_strip() {
+/**
+ * Visible and on top: elementFromPoint at its centre lands on it or inside it.
+ * @param {Element | null} el
+ */
+function onTop(el) {
+  if (!el || /** @type {HTMLElement} */ (el).hidden) return false;
+  const r = el.getBoundingClientRect();
+  if (r.width <= 0 || r.height <= 0 || getComputedStyle(el).visibility !== "visible") return false;
+  const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+  return !!top && (top === el || el.contains(top));
+}
+
+function noticeShown() {
+  const n = $("vimma-notice");
+  return !!n?.matches(":popover-open") && getComputedStyle(n).visibility === "visible";
+}
+
+/** Everything that could list keys or sit over a list: the overlay, a strip, the toast. */
+function lists() {
+  const found = [];
+  if (onTop($("vimma-help"))) found.push("vimma-help");
+  if ($("vimma-whichkey") || document.documentElement.hasAttribute("vimma-whichkey-open")) {
+    found.push("vimma-whichkey");
+  }
+  if (noticeShown()) found.push("vimma-notice");
+  return found;
+}
+
+/** @param {number} n */
+async function afterFrames(n) {
+  for (let i = 0; i < n; i++) await new Promise((r) => requestAnimationFrame(r));
+}
+
+add_task(async function notice_sits_above_the_bar() {
   await BrowserTestUtils.withNewTab(TITLE_PAGE, async (browser) => {
     await focusContent(browser);
-    const notice = () => $("vimma-notice");
-    const noticeShown = () =>
-      !!notice()?.matches(":popover-open") && getComputedStyle(notice()).visibility === "visible";
     EventUtils.synthesizeKey("b", { ctrlKey: true });
     EventUtils.synthesizeKey("v"); // split_vertical: M4, not implemented yet
     await until(noticeShown, "ctrl+b v shows the notice");
     Assert.lessOrEqual(
-      notice().getBoundingClientRect().bottom,
+      $("vimma-notice").getBoundingClientRect().bottom,
       bar().getBoundingClientRect().top,
       "the notice is above the status bar",
     );
+    $("vimma-notice").hidePopover();
+  });
+});
+
+// The user's decision (2026-10-09): only prefix+? lists the bindings; there is no which-key strip.
+add_task(async function prefix_alone_shows_no_list() {
+  await BrowserTestUtils.withNewTab(TITLE_PAGE, async (browser) => {
+    await focusContent(browser);
     EventUtils.synthesizeKey("b", { ctrlKey: true });
-    await until(() => !$("vimma-whichkey").hidden, "strip open");
-    Assert.ok(
-      !notice().matches(":popover-open") || getComputedStyle(notice()).visibility === "hidden",
-      "the notice gives way to the which-key strip",
-    );
+    await until(() => segText("pending") === "prefix", "the bar shows the pending prefix");
+    await afterFrames(3); // time to render a list, were one coming
+    Assert.deepEqual(lists(), [], "ctrl+b alone shows no keybinding list");
     EventUtils.synthesizeKey("KEY_Escape");
-    await until(() => $("vimma-whichkey").hidden, "strip closed");
+    await until(() => segText("pending") === null, "Esc clears the pending segment");
+  });
+});
+
+add_task(async function prefix_question_shows_exactly_one_list() {
+  await BrowserTestUtils.withNewTab(TITLE_PAGE, async (browser) => {
+    await focusContent(browser);
+    // A toast from an earlier key must not linger over the overlay.
+    EventUtils.synthesizeKey("b", { ctrlKey: true });
+    EventUtils.synthesizeKey("v");
+    await until(noticeShown, "ctrl+b v shows the notice");
+    EventUtils.synthesizeKey("b", { ctrlKey: true });
+    EventUtils.synthesizeKey("?", { shiftKey: true });
+    await until(() => $("vimma-help")?.open, "ctrl+b ? opens the help overlay");
+    await afterFrames(2);
+    Assert.deepEqual(lists(), ["vimma-help"], "the overlay is the one list on screen");
+    EventUtils.synthesizeKey("KEY_Escape");
+    await until(() => !$("vimma-help")?.open, "help closed");
   });
 });
 

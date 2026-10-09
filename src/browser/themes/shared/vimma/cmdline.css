@@ -19,12 +19,6 @@
   }
 }
 
-/* While a prefix is pending the which-key strip (a child of the status bar, z-index 5) owns the
-   window's foot: drop the line under it so the strip is never covered. */
-:root[vimma-whichkey-open] #vimma-cmdline {
-  z-index: 4;
-}
-
 /* A fullscreen page (a video) gets the whole screen, as the status bar does (statusbar.css). */
 :root[inDOMFullscreen] #vimma-cmdline {
   display: none !important;

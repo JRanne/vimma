@@ -423,30 +423,6 @@ add_task(async function each_window_keeps_its_own_history_cursor() {
   closeTabs(tabs);
 });
 
-add_task(async function the_which_key_strip_stays_above_the_line() {
-  const tabs = await openTabs(1);
-  typeCommand("ta");
-  Assert.greater(options().length, 3, "sanity: the completion list is up");
-  EventUtils.synthesizeKey("b", { ctrlKey: true });
-  await TestUtils.waitForCondition(
-    () => document.documentElement.hasAttribute("vimma-whichkey-open"),
-    "the which-key strip opens",
-  );
-  const strip = document.getElementById("vimma-whichkey");
-  const r = strip.getBoundingClientRect();
-  for (const [x, y] of [
-    [r.left + r.width / 2, r.top + r.height / 2],
-    [r.left + 4, r.top + 4],
-    [r.right - 4, r.bottom - 4],
-  ]) {
-    Assert.ok(strip.contains(document.elementFromPoint(x, y)), `the strip is on top at ${x},${y}`);
-  }
-  EventUtils.synthesizeKey("KEY_Escape");
-  Assert.ok(isOpen(), "Esc cancels the prefix and keeps the line");
-  EventUtils.synthesizeKey("KEY_Escape");
-  closeTabs(tabs);
-});
-
 add_task(async function a_notice_does_not_cover_the_line() {
   const tabs = await openTabs(1);
   typeCommand("ta");
@@ -454,9 +430,14 @@ add_task(async function a_notice_does_not_cover_the_line() {
   EventUtils.synthesizeKey("v");
   Assert.ok(noticeShown(), "ctrl+b v from the line shows the notice");
   Assert.ok(isOpen(), "and the line stays open");
-  const notice = document.getElementById(NOTICE_ID).getBoundingClientRect();
-  const panel = container().firstElementChild.getBoundingClientRect();
-  Assert.lessOrEqual(notice.bottom, panel.top + 1, "the notice sits above the line");
+  const gap = () =>
+    document.getElementById(NOTICE_ID).getBoundingClientRect().bottom -
+    container().firstElementChild.getBoundingClientRect().top;
+  // --vimma-cmdline-height comes from a ResizeObserver: the completion list just grew, so the
+  // notice moves on the observer's next callback, not in this tick. The deleted which-key test
+  // before this one left the variable at the same list's height, which hid the wait.
+  await TestUtils.waitForCondition(() => gap() <= 1, "the notice moves above the line");
+  Assert.lessOrEqual(gap(), 1, "the notice sits above the line");
   document.getElementById(NOTICE_ID).hidePopover();
   EventUtils.synthesizeKey("KEY_Escape");
   closeTabs(tabs);

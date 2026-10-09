@@ -170,8 +170,8 @@ for (const a of ACTIONS) {
 }
 
 /**
- * The one rule for greying out actions the host has not built yet, shared by the which-key strip
- * and the bindings overlay. Without a set (undefined) every action counts as runnable.
+ * The one rule for greying out actions the host has not built yet, used by the bindings overlay.
+ * Without a set (undefined) every action counts as runnable.
  * @param {string} id action id
  * @param {ReadonlySet<string>} [runnable] ids the host implements
  */

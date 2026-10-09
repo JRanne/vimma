@@ -35,7 +35,7 @@ Read plan.md once per milestone; read docs/specs/<current>.md every session.
 - packages/vimma-core: dispatcher, key notation, actions.mjs, keymap, state tree (pure)
 - src/.../vimma/host: VimmaHost.sys.mjs (key capture, applies actions to gBrowser)
 - src/.../vimma/actors: JSWindowActor parent/child (focus, scroll, hints, caret)
-- src/.../vimma/ui: status bar, which-key, help overlay, command line, side panel, pickers
+- src/.../vimma/ui: status bar, help overlay, command line, side panel, pickers
 - src/.../vimma/workspaces, split, config, ctl
 - tests/browser: mochitests; tests/e2e: socket scenarios + baselines
 
