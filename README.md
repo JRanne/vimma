@@ -40,8 +40,9 @@ status bar, the which-key strip and the `ctrl+b g` picker are M2. Workspaces, sp
 ## Requirements
 
 - Linux x86_64 (the only platform built and tested so far).
-- About 25 GB of free disk space: `engine/` is 22 GB after a full build, plus the Firefox source
-  download and toolchains in `~/.mozbuild`.
+- About 35 GB of free disk space, as measured on the dev box: `engine/` 27 GB (source and the
+  full build), the sccache compiler cache 6.8 GB, toolchains in `~/.mozbuild` 3.1 GB and the
+  Firefox source download in `.surfer/` 0.8 GB.
 - Node.js 20 or later, Python 3, git.
 - Time: the first full build took 39 min on a 16-thread Ryzen with 58 GB RAM. The Firefox source
   download took 12.5 min. See [docs/runbook.md](docs/runbook.md).
@@ -114,7 +115,8 @@ Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
   criteria written as Given/When/Then. Boundary changes and new upstream patches need an ADR in
   `docs/adr/`.
 - **TDD.** Write the failing test and run it, then implement until it passes. Never loosen a test.
-- **Commits.** Use Conventional Commits with a body: the body is the changelog line.
+- **Commits.** Use Conventional Commits with a body: the subject is the changelog line; the body
+  explains why.
   `npx commitlint --from origin/main` checks this, and CI rejects `feat` and `fix` commits
   without a body.
 - **Docs.** A user-visible change updates [docs/guide.md](docs/guide.md), and this README's
