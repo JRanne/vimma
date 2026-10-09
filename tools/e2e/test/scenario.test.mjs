@@ -68,8 +68,9 @@ describe("loadScenarios", () => {
 
 describe("the m0-happy-path scenario", () => {
   const happy = loadScenarios(SCENARIOS, { filter: "m0-happy-path" })[0];
-  it("is pending until the control server exists, with a reason", () => {
-    expect(happy?.pending).toMatch(/control server/);
+  it("runs (is not pending) now that the control server exists (PR #38)", () => {
+    expect(happy).toBeDefined();
+    expect(happy?.pending).toBeUndefined();
   });
   it("opens about:blank, sends ctrl+b ? and expects help mode and a screenshot", () => {
     const steps = JSON.stringify(happy?.steps);

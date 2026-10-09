@@ -21,6 +21,7 @@ import {
   createProfile,
   findBuild,
   launch,
+  quitBrowser,
   userJs,
   waitForDiscovery,
   xvfbArgs,
@@ -110,6 +111,8 @@ describe("profile", () => {
     expect(prefs["toolkit.telemetry.enabled"]).toBe(false);
     expect(prefs["app.update.disabledForTesting"]).toBe(true);
     expect(prefs["browser.sessionstore.resume_from_crash"]).toBe(false);
+    // ctrl+q quits without a dialog, so teardown can quit cleanly (spec m0-control-server)
+    expect(prefs["browser.warnOnQuitShortcut"]).toBe(false);
   });
 
   it("writes user.js lines that Firefox's pref parser reads", () => {
@@ -548,5 +551,74 @@ describe("cancelling while Xvfb starts (fake Xvfb)", () => {
     expect(alive(pid)).toBe(false);
     expect(existsSync(fbdir)).toBe(false);
     expect(readdirSync(tmp)).toEqual([]);
+  });
+});
+
+describe("quitBrowser (ctrl+q first, so the discovery file is removed)", () => {
+  /** A child that exits when told to, like the browser after ctrl+q. */
+  const fakeChild = () => {
+    /** @type {Array<() => void>} */
+    const waiters = [];
+    const child = {
+      exitCode: /** @type {number | null} */ (null),
+      signalCode: null,
+      once: (/** @type {string} */ _e, /** @type {() => void} */ f) => void waiters.push(f),
+      exit() {
+        child.exitCode = 0;
+        for (const f of waiters.splice(0)) f();
+      },
+    };
+    return child;
+  };
+  /**
+   * @param {{ mode?: string, quits?: boolean, fail?: boolean }} o
+   */
+  const fakeCtl = ({ mode = "normal", quits = true, fail = false }, child = fakeChild()) => {
+    /** @type {string[]} */
+    const sent = [];
+    let current = mode;
+    const ctl = {
+      sent,
+      async state() {
+        if (fail) throw new Error("not running");
+        return { mode: current, pending: null };
+      },
+      async sendKeys(/** @type {string} */ keys) {
+        sent.push(keys);
+        if (keys === "esc" && current === "help") current = "normal";
+        if (keys === "ctrl+q" && quits) setTimeout(() => child.exit(), 5);
+      },
+    };
+    return { ctl, child };
+  };
+
+  it("sends ctrl+q and reports a clean exit", async () => {
+    const { ctl, child } = fakeCtl({});
+    expect(await quitBrowser({ ctl, child, timeoutMs: 1000 })).toBe(true);
+    expect(ctl.sent).toEqual(["ctrl+q"]);
+  });
+
+  it("closes the help overlay first: ctrl+q while help is open is swallowed", async () => {
+    const { ctl, child } = fakeCtl({ mode: "help" });
+    expect(await quitBrowser({ ctl, child, timeoutMs: 1000, pollMs: 5 })).toBe(true);
+    expect(ctl.sent).toEqual(["esc", "ctrl+q"]);
+  });
+
+  it("gives up (false) when the browser does not exit, so the caller signals it", async () => {
+    const { ctl, child } = fakeCtl({ quits: false });
+    expect(await quitBrowser({ ctl, child, timeoutMs: 100 })).toBe(false);
+  });
+
+  it("gives up (false) when the socket does not answer, without throwing", async () => {
+    const { ctl, child } = fakeCtl({ fail: true });
+    expect(await quitBrowser({ ctl, child, timeoutMs: 100 })).toBe(false);
+    expect(ctl.sent).toEqual([]);
+  });
+
+  it("does nothing for a browser that already exited", async () => {
+    const { ctl, child } = fakeCtl({});
+    child.exit();
+    expect(await quitBrowser({ ctl, child, timeoutMs: 100 })).toBe(true);
+    expect(ctl.sent).toEqual([]);
   });
 });

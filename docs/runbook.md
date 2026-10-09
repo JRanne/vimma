@@ -138,8 +138,9 @@ cleanly, send `ctrl+q` (with `browser.warnOnQuitShortcut` = `false` in `user.js`
 Scenarios in `tests/e2e/scenarios/*.json` run against a real build, each in a fresh temp profile
 (`vimma.control.enabled=true`, no first-run pages, no telemetry), driven through `vimma-ctl`.
 Names: `m<N>-<slug>` for a milestone happy path, `issue-<N>-<slug>` (plus `"issue": N`) for a
-regression test. **Until the control server spec lands every scenario is pending**: the run
-reports them as `PENDING`, launches nothing and passes nothing.
+regression test. A scenario with a `pending` reason is reported as `PENDING`, launched never
+and passed never. Each run ends with `send-keys ctrl+q` (after `esc` if the help overlay is
+open), so the browser removes its discovery file; signals are the fallback.
 
 ```sh
 (cd tools/vimma-ctl && cargo build --locked)     # the driver runs this binary
@@ -172,7 +173,9 @@ npm run e2e -- --xvfb --update-baselines --filter <scenario>   # refused when CI
 look at the new PNG, and commit it with a changelog line saying which baseline changed and why
 (CLAUDE.md: never edit a baseline without one). A missing baseline fails; nothing creates one
 silently. Fonts differ between machines: if CI's diff exceeds 0.5 % on a baseline made locally,
-take CI's actual image from the `e2e-output` artifact of the failed run (kept 7 days) instead. Baselines are plain git blobs, not LFS
+take CI's actual image from the `e2e-output` artifact of the failed run (kept 7 days) instead.
+A missing baseline also leaves `<name>.actual.png` there, so a new scenario's first baseline
+comes from CI the same way: `gh run download <run-id> -n e2e-output`. Baselines are plain git blobs, not LFS
 (the spec's "LFS: not now" says when to revisit).
 
 **Troubleshooting Xvfb.**

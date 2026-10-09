@@ -225,10 +225,14 @@ describe("checkBaseline", () => {
 
   it("fails when the baseline is missing and says how to create it", () => {
     const dir = tempDir();
-    const r = checkBaseline({ name: "m0-x", image: img, baselineDir: dir, outDir: dir });
+    const out = tempDir();
+    const r = checkBaseline({ name: "m0-x", image: img, baselineDir: dir, outDir: out });
     expect(r.status).toBe("missing");
     expect(r.message).toMatch(/--update-baselines[^]*changelog/);
     expect(existsSync(join(dir, "m0-x.png"))).toBe(false);
+    // the actual image lands in e2e-output/, so CI's run can supply the first baseline
+    expect(decodePng(readFileSync(join(out, "m0-x.actual.png")))).toEqual(img);
+    expect(r.message).toContain(join(out, "m0-x.actual.png"));
   });
 
   it("writes the baseline only with update, then matches it", () => {

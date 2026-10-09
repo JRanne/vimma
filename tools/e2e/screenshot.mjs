@@ -88,11 +88,17 @@ export function checkBaseline({ name, image, baselineDir, outDir, update = false
     };
   }
   if (!existsSync(path)) {
+    // The actual image goes to outDir, so a CI run's e2e-output artifact can supply a baseline
+    // made in CI's environment (runbook, "Baselines").
+    mkdirSync(outDir, { recursive: true });
+    const actualPath = join(outDir, `${name}.actual.png`);
+    writeFileSync(actualPath, encodePng(image));
     return {
       status: "missing",
       message:
-        `no baseline ${path}. Create it with --update-baselines, check it by eye, and commit ` +
-        "it with a changelog line (CLAUDE.md: never change a baseline without one)",
+        `no baseline ${path}; this run's image is ${actualPath}. Create it with ` +
+        "--update-baselines (or take CI's), check it by eye, and commit it with a changelog " +
+        "line (CLAUDE.md: never change a baseline without one)",
     };
   }
   const result = diffImages(decodePng(readFileSync(path)), image);

@@ -48,6 +48,9 @@ export const PROFILE_PREFS = Object.freeze([
   ["toolkit.startup.max_resumed_crashes", -1],
   ["browser.tabs.warnOnClose", false],
   ["browser.warnOnQuit", false],
+  // ctrl+q quits without a dialog: teardown quits that way, so quit observers remove the
+  // discovery file (a signal skips them; spec m0-control-server)
+  ["browser.warnOnQuitShortcut", false],
   ["browser.newtabpage.enabled", false],
   ["browser.uitour.enabled", false],
   // telemetry and data reporting
@@ -445,6 +448,48 @@ export async function killTree(child, { graceMs = 5000 } = {}) {
   await exited;
   const reapDeadline = Date.now() + 5000;
   while (groupAlive(pid) && Date.now() < reapDeadline) await sleep(25);
+}
+
+/**
+ * Quit the browser the way a user would, `send-keys ctrl+q`, so quit observers run and remove
+ * the discovery file; a signal skips them (spec m0-control-server). The help overlay swallows
+ * ctrl+q, so it is closed with `esc` first. Never throws: on any trouble, or when the browser has
+ * not exited within `timeoutMs`, it returns false and the caller falls back to killTree.
+ * @param {{
+ *   ctl: { state: () => Promise<Record<string, any>>, sendKeys: (keys: string) => Promise<void> },
+ *   child: { exitCode: number | null, signalCode: string | null,
+ *     once: (event: "exit", f: () => void) => unknown },
+ *   timeoutMs?: number,
+ *   pollMs?: number,
+ * }} options
+ * @returns {Promise<boolean>} whether the browser exited
+ */
+export async function quitBrowser({ ctl, child, timeoutMs = 10_000, pollMs = 50 }) {
+  const gone = () => child.exitCode !== null || child.signalCode !== null;
+  if (gone()) return true;
+  const exited = new Promise((resolve) => child.once("exit", () => resolve(true)));
+  const deadline = Date.now() + timeoutMs;
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let timer;
+  const timeout = new Promise((resolve) => (timer = setTimeout(() => resolve(false), timeoutMs)));
+  const attempt = async () => {
+    let state = await ctl.state();
+    if (state.mode === "help") {
+      await ctl.sendKeys("esc");
+      while (state.mode === "help" && Date.now() < deadline) {
+        await sleep(pollMs);
+        state = await ctl.state();
+      }
+    }
+    // The reply may be lost as the browser goes down; the exit is what counts.
+    await ctl.sendKeys("ctrl+q").catch(() => {});
+    return exited;
+  };
+  try {
+    return /** @type {boolean} */ (await Promise.race([attempt().catch(() => false), timeout]));
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
