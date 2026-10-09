@@ -82,6 +82,7 @@ Placeholder artwork: `configs/branding/vimma/*.svg`, rendered by `tools/branding
 | `upstream.yml`       | every 6 h (`:17`), manual        | `ubuntu-latest`           | allow Actions to open PRs; optional token  |
 | `claude.yml`         | `@claude`, `spec`+`claude:go`    | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
 | `release-please.yml` | push to `main`, manual           | `ubuntu-latest`           | Actions may open PRs; optional token       |
+| `release.yml`        | release published, manual        | `vimma-build` + hosted    | see "Release packages" (gated off)         |
 | Renovate             | Mondays before 07:00 Helsinki    | Renovate's own            | install the Renovate app                   |
 
 Locally, before pushing: `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:py`,
@@ -252,7 +253,7 @@ Plan §4/§7: [release-please](https://github.com/googleapis/release-please-acti
 by SHA) keeps one release PR open, `chore(main): release X.Y.Z`, updated on every push to `main`.
 It holds the next version and that release's `CHANGELOG.md` entry. **Merging it is the release**:
 release-please tags `vX.Y.Z` and creates the GitHub Release with the same notes. Nothing is built
-or uploaded yet; `release.yml` (packages, signatures, AUR) is M6.
+or uploaded by release-please itself; `release.yml` does that (below, "Release packages").
 
 - **Version source:** `surfer.json` `brands.vimma.release.displayVersion`, the version
   `vimma --version` and the About dialog show (spec m0-app-version). The release PR bumps it
@@ -289,12 +290,95 @@ One-time setup:
    `gh workflow run ci.yml --ref release-please--branches--main` before merging, or store a
    fine-grained token for this repo only (Contents, Pull requests and Issues: read/write) as
    `gh secret set RELEASE_PLEASE_TOKEN`; the workflow uses it when present.
-3. M6: tags created with `GITHUB_TOKEN` trigger no workflows either, so `release.yml` cannot rely
-   on `on: push: tags`. Call it from `release-please.yml` when `release_created` is set, or use
-   the token above.
+3. Tags and releases created with `GITHUB_TOKEN` trigger no workflows, so `release.yml`
+   (on `release: published`) runs by itself only with `RELEASE_PLEASE_TOKEN` set; without it,
+   start it by hand (see "Release packages").
 
 The job's token has `contents`, `pull-requests` and `issues: write` (labels go through the issues
 API). It runs no repository code.
+
+### Release packages (`release.yml`, spec m6-packaging)
+
+When a GitHub Release is published (release-please, above), `release.yml` builds Vimma on the
+`vimma-build` runner, packages it on a hosted runner, signs, uploads to that release and pushes
+AUR `vimma-bin`. **Every job is off until `RELEASE_ENABLED` is `true`**, manual runs included.
+
+| Asset                             | What                                                            |
+| --------------------------------- | --------------------------------------------------------------- |
+| `vimma-X.Y.Z-linux-x86_64.tar.xz` | `./mach package`'s tarball, renamed (one `vimma/` directory)    |
+| `vimma-X.Y.Z-x86_64.AppImage`     | AppImage (appimagetool 1.9.1, runtime 20251108, both pinned)    |
+| `vimma_X.Y.Z_amd64.deb`           | `/usr/lib/vimma`, `/usr/bin/vimma`, desktop file, icons         |
+| `vimma-X.Y.Z.cdx.json`            | CycloneDX 1.6 SBOM (`tools/package/sbom.mjs`)                   |
+| `SHA256SUMS`                      | checksums of the four files above                               |
+| `*.sigstore.json`                 | cosign keyless bundles, one per file above (when signing is on) |
+
+Jobs: `build` (self-hosted, read-only token, no secrets) → `package` (AppImage, `.deb`, AUR
+files, checksums; installs the `.deb` and starts it headless) → `sign` (only job with
+`id-token: write`) → `publish` (only job with `contents: write`) → `aur` (no GitHub token; the
+SSH key only) → `failure` (opens a `release-failure` issue). Locally, from a mach tarball:
+
+```sh
+tools/package/fetch-appimagetool.sh /tmp/ait
+node tools/package/package.mjs --tarball engine/obj-x86_64-pc-linux-gnu/dist/vimma-*.tar.xz \
+  --out dist --maintainer 'Name <email>' --appimagetool /tmp/ait/appimagetool \
+  --runtime /tmp/ait/runtime-x86_64 --no-deb   # dpkg-deb only exists on Debian/Ubuntu
+node tools/package/sbom.mjs --engine engine --out dist/vimma-$(node -p 'require("./surfer.json").brands.vimma.release.displayVersion').cdx.json
+```
+
+**Enable it (one time):**
+
+1. Runner: the nightly's `vimma-build` runner ("Nightly build runner" above) must be online
+   when a release is published. With the runner stopped outside the nightly window, start it
+   before merging the release PR (the job waits up to 24 h in the queue).
+2. Trigger: `gh secret set RELEASE_PLEASE_TOKEN` (fine-grained, this repo only: Contents, Pull
+   requests and Issues read/write), so the release release-please creates starts `release.yml`.
+   Without it, run it by hand after each release: `gh workflow run release.yml -f tag=vX.Y.Z`.
+3. Maintainer line for the `.deb` and the PKGBUILD:
+   `gh variable set PACKAGE_MAINTAINER --body 'Your Name <you@example.org>'` (public in every
+   package; the `package` job fails without it).
+4. Signing (recommended: keyless, no key to keep): `gh variable set SIGNING_ENABLED --body true`.
+   Each signature records `JRanne/vimma`'s `release.yml` and the tag in the public Rekor log.
+   Without the variable, `sign` is skipped and the assets go up unsigned.
+5. AUR (optional; skipped with a notice until the secret exists):
+   - Check the name is free: `curl -s 'https://aur.archlinux.org/rpc/v5/info?arg[]=vimma-bin'`
+     must say `"resultcount":0` (and look at `vimma` too, which `vimma-bin` provides).
+   - Create an account at <https://aur.archlinux.org/register>.
+   - Make a key for the workflow only: `ssh-keygen -t ed25519 -N '' -C vimma-release -f aur_key`;
+     paste `aur_key.pub` into My Account → SSH Public Key.
+   - `gh secret set AUR_SSH_KEY < aur_key`, then delete `aur_key`. The first push creates
+     `vimma-bin`; its maintainer is that account.
+6. Enable: `gh variable set RELEASE_ENABLED --body true` (disable: `gh variable delete
+RELEASE_ENABLED`). Try it on the next release, or re-run the last one with
+   `gh workflow run release.yml -f tag=vX.Y.Z` (assets are replaced, `--clobber`).
+
+**Before the repo goes public:** fork PRs could add a workflow with `runs-on: vimma-build`.
+Keep the runner stopped except during nightly and release runs, and set Settings → Actions →
+General → "Require approval for all outside collaborators", or move releases to a machine that
+is only online for them. Release jobs themselves cannot be started from a fork.
+
+**Verify a release** (the user guide's "Installing" points here):
+
+```sh
+v=0.1.0
+gh release download "v$v" -R JRanne/vimma
+sha256sum -c SHA256SUMS              # every file OK
+cosign verify-blob --bundle "vimma-$v-x86_64.AppImage.sigstore.json" \
+  --certificate-identity "https://github.com/JRanne/vimma/.github/workflows/release.yml@refs/tags/v$v" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  "vimma-$v-x86_64.AppImage"         # "Verified OK"
+```
+
+A release re-run by hand from the Actions tab signs with the ref it was started from
+(`@refs/heads/main`); verify those with `--certificate-identity-regexp
+'^https://github.com/JRanne/vimma/\.github/workflows/release\.yml@refs/'`. `SHA256SUMS` has its
+own bundle, so checking that one signature and then `sha256sum -c` covers every file.
+
+**When it fails:** a `release-failure` issue links the run. Fix on `main`, then re-run for the
+same tag. The tag is not deleted (plan §4 said so): release-please has already moved its
+manifest and changelog past it, and the release notes stay valid. If the fix changes what is
+built, release a patch version instead. To pull a bad release: `gh release edit vX.Y.Z --draft`
+(hides it); the AUR package cannot go back a version without an `epoch`, so ship a fixed
+release instead.
 
 ### Licences
 
