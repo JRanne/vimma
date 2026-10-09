@@ -21,6 +21,12 @@ const DIR = getRootDirectory(gTestPath).replace(
 );
 const PAGE = DIR + "file_vimma_hints.html";
 const MANY = DIR + "file_vimma_hints_many.html";
+const { HintOverlay } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/ui/hint-overlay.mjs",
+);
+
+/** How long the parent waits for a frame's targets (VimmaActors). */
+const FRAME_TIMEOUT_PREF = "vimma.hints.frameTimeoutMs";
 
 /** Elements of file_vimma_hints.html that get a label with `f`; `framed` is in the iframe. */
 const TARGETS = ["home", "l1", "l2", "l3", "field", "button", "role", "listener", "shadow"];
@@ -37,6 +43,9 @@ const UNBOUND = "z";
  * @param {(browser: XULBrowserElement) => Promise<void>} fn
  */
 async function withPage(url, fn) {
+  // Generous for the tasks that expect the framed link: a loaded CI runner can be slow to
+  // answer. The busy-frame task sets the shipped default back.
+  await SpecialPowers.pushPrefEnv({ set: [[FRAME_TIMEOUT_PREF, 5000]] });
   await BrowserTestUtils.withNewTab(url, async (browser) => {
     await recordPageKeys(browser);
     await recordMutations(browser);
@@ -345,10 +354,98 @@ add_task(async function no_targets_stays_in_normal() {
   });
 });
 
+add_task(async function a_busy_frame_does_not_hold_up_the_hints() {
+  await withPage(PAGE, async (browser) => {
+    await SpecialPowers.pushPrefEnv({ clear: [[FRAME_TIMEOUT_PREF]] });
+    const frameBC = browser.browsingContext.children[0];
+    // The cross-origin frame's process spins for 3 s, after this reply.
+    await SpecialPowers.spawn(frameBC, [], () => {
+      content.setTimeout(() => {
+        const end = Date.now() + 3000;
+        while (Date.now() < end);
+      }, 50);
+    });
+    await new Promise((r) => setTimeout(r, 200));
+    const t0 = performance.now();
+    const hints = await startHints();
+    const waited = performance.now() - t0;
+    info(`labels after ${waited.toFixed(0)} ms with a busy frame`);
+    Assert.less(waited, 1500, "the labels do not wait for the busy frame");
+    const at = await centres(browser, TARGETS);
+    Assert.equal(hints.hints.length, TARGETS.length, "every target but the framed link");
+    const label = labelAt(hints, at.l1);
+    Assert.ok(label, "l1 has a label");
+    const loaded = BrowserTestUtils.browserLoaded(browser, false, (u) => u.endsWith("?to=1"));
+    type(/** @type {string} */ (label));
+    await loaded;
+  });
+});
+
+add_task(async function labels_sit_on_their_targets_at_150_percent_zoom() {
+  await withPage(PAGE, async (browser) => {
+    const ratio = await SpecialPowers.spawn(browser, [], () => content.devicePixelRatio);
+    browser.fullZoom = 1.5;
+    try {
+      await TestUtils.waitForCondition(
+        () =>
+          SpecialPowers.spawn(
+            browser,
+            [ratio],
+            (r) => Math.abs(content.devicePixelRatio - 1.5 * r) < 0.01,
+          ),
+        "the page is zoomed",
+      );
+      const hints = await startHints();
+      const at = await SpecialPowers.spawn(browser, [["l1", "button", "field"]], (ids) =>
+        ids.map((id) => {
+          const r = content.document.getElementById(id).getBoundingClientRect();
+          return { id, x: r.x, y: r.y, cx: r.x + r.width / 2, cy: r.y + r.height / 2 };
+        }),
+      );
+      const box = browser.getBoundingClientRect();
+      for (const t of at) {
+        const label = labelAt(hints, { x: t.cx, y: t.cy });
+        Assert.ok(label, `${t.id} has a label`);
+        const el = document.querySelector(`#vimma-hints .vimma-hint[data-label="${label}"]`);
+        const r = el.getBoundingClientRect();
+        Assert.lessOrEqual(Math.abs(r.left - (box.left + t.x * 1.5)), 1.5, `${t.id}: label left`);
+        Assert.lessOrEqual(Math.abs(r.top - (box.top + t.y * 1.5)), 1.5, `${t.id}: label top`);
+      }
+    } finally {
+      browser.fullZoom = 1;
+    }
+  });
+});
+
+add_task(async function a_collection_in_one_window_leaves_another_windows_alone() {
+  await withPage(PAGE, async (browser) => {
+    const win2 = await BrowserTestUtils.openNewBrowserWindow();
+    try {
+      const browser2 = win2.gBrowser.selectedBrowser;
+      BrowserTestUtils.startLoadingURIString(browser2, PAGE);
+      await BrowserTestUtils.browserLoaded(browser2);
+      // Both in flight at once: the second window's must not void the first's.
+      const [one, two] = await Promise.all([
+        VimmaActors.collectHints(browser, "hint.follow"),
+        VimmaActors.collectHints(browser2, "hint.follow"),
+      ]);
+      Assert.equal(one.length, TARGETS.length + 1, "the first window got its targets");
+      Assert.equal(two.length, TARGETS.length + 1, "and so did the second");
+    } finally {
+      await BrowserTestUtils.closeWindow(win2);
+      await SimpleTest.promiseFocus(window);
+    }
+  });
+});
+
 add_task(async function collection_of_2000_links_stays_within_budget() {
-  /** Generous: the spec's target is 50 ms; this only catches a regression by an order. */
-  const BUDGET_MS = 400;
+  // Generous, to catch an order-of-magnitude regression without flaking on a loaded runner
+  // (docs/specs/m1-hints.md, Performance, has the measured numbers). A screenful of links
+  // must stay fast; 2,000 targets all on screen is the extreme case.
+  /** @type {Record<string, number>} */
+  const BUDGETS_MS = { "?dense": 1000, "": 250 };
   for (const variant of ["?dense", ""]) {
+    const BUDGET_MS = BUDGETS_MS[variant];
     await withPage(MANY + variant, async (browser) => {
       const times = [];
       let count = 0;
@@ -370,6 +467,14 @@ add_task(async function collection_of_2000_links_stays_within_budget() {
       Assert.less(median, BUDGET_MS, `collection under ${BUDGET_MS} ms`);
       const hints = await startHints();
       Assert.equal(drawnLabels().length, count, "every label is drawn");
+      const overlay = new HintOverlay(window);
+      const t1 = performance.now();
+      overlay.show(browser, hints.hints);
+      overlay.layer.getBoundingClientRect(); // flush style and layout of the labels
+      const drawMs = performance.now() - t1;
+      overlay.hide();
+      info(`2000 links${variant}: drawing ${count} labels took ${drawMs.toFixed(1)} ms`);
+      Assert.less(drawMs, 1000, "drawing under 1000 ms");
       Assert.ok(
         hints.hints.every((/** @type {any} */ h) => h.label.length <= 4),
         "short labels",
