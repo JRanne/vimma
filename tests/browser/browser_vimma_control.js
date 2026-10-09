@@ -275,7 +275,7 @@ add_task(async function test_send_keys_and_state() {
   const client = await session();
 
   let { result } = await client.request(1, "state");
-  Assert.equal(result.mode, "insert", "M0 base mode with no overlay");
+  Assert.equal(result.mode, "normal", "the page's mode, normal (m1-actor-insert-scroll)");
   Assert.equal(result.pending, null, "nothing pending");
   Assert.equal(result.workspace, null, "no workspaces before M3");
   Assert.equal(result.panes, null, "no panes before split view");
@@ -307,7 +307,7 @@ add_task(async function test_send_keys_and_state() {
   await client.request(6, "send-keys", { keys: "esc" });
   await TestUtils.waitForCondition(() => !helpShown(), "send-keys esc closes it");
   ({ result } = await client.request(7, "state"));
-  Assert.equal(result.mode, "insert", "back to insert");
+  Assert.equal(result.mode, "normal", "back to normal");
 
   const invalid = await client.request(8, "send-keys", { keys: "ctrl+b nosuchkey" });
   Assert.equal(invalid.error.code, "invalid-args", "an unparseable chord");
@@ -325,8 +325,10 @@ add_task(async function test_send_keys_reach_the_page() {
     await focusContent(browser);
     const r = await client.request(1, "send-keys", { keys: "j shift+k" });
     Assert.deepEqual(r.result, { sent: 2 }, "two chords sent");
-    Assert.ok(await waitForPageKey(browser, ["K"]), "the page received the keys");
-    Assert.deepEqual(await pageKeys(browser), ["j", "Shift", "K"], "as real key presses");
+    Assert.ok(await waitForPageKey(browser, ["K"]), "the page received the unbound key");
+    // Like a real j in normal mode: Vimma takes it (scroll), so the page never sees it.
+    Assert.deepEqual(VimmaHost._lastChords.slice(-2), ["j", "shift+k"], "Vimma saw both");
+    Assert.deepEqual(await pageKeys(browser), ["Shift", "K"], "as real key presses");
   });
   client.close();
   await disable();
@@ -464,7 +466,7 @@ add_task(async function test_vimma_ctl_end_to_end() {
   const { exitCode } = await proc.wait();
   Assert.equal(exitCode, 0, `vimma-ctl state exits 0: ${out}`);
   const state = JSON.parse(out);
-  Assert.equal(state.mode, "insert", "vimma-ctl reads the live state");
+  Assert.equal(state.mode, "normal", "vimma-ctl reads the live state");
   Assert.equal(state.tabs.length, gBrowser.visibleTabs.length, "with every tab");
   await disable();
 });

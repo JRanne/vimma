@@ -2,8 +2,13 @@
 # GitHub-hosted runner. The engine is the Firefox release source tarball with our patches and
 # front end; the compiled binaries are Mozilla's own build of that exact release (the revision
 # in engine/sourcestamp.txt), downloaded from Taskcluster by `mach build`. No self-hosted runner,
-# no secrets: safe for pull requests from forks once the repo is public (read-only token).
-# The socket-driven e2e and screenshot diffs (plan §4) join this job when they exist.
+# no secrets: safe for pull requests from forks once the repo is public (read-only token). So no
+# Google Safe Browsing key either: the build is keyless, as browser_vimma_safebrowsing.js checks
+# (spec m0-safebrowsing-key). Never add SAFEBROWSING_API_KEY here.
+# Spec m0-e2e-harness: the same job builds vimma-ctl and runs the e2e harness's own tests (fake
+# control server, real Xvfb) first, and the socket-driven scenarios on the artifact build last.
+# Until the control server spec lands every scenario is pending: that step reports them as a
+# notice and passes nothing.
 name: e2e
 
 on:
@@ -26,7 +31,9 @@ on:
       - "tools/mochitest.mjs"
       - "tools/sync-core.mjs"
       - "tools/version-files/**"
+      - "tools/e2e/**"
       - "tools/vimma-ctl/**"
+      - "tests/e2e/**"
       - ".github/workflows/e2e.yml"
   workflow_dispatch:
 
@@ -54,6 +61,19 @@ jobs:
 
       - name: npm ci
         run: npm ci
+
+      # Before the Firefox download, so a harness bug fails in about a minute. The runner image
+      # ships rustup (installs the toolchain pinned in rust-toolchain.toml) and Xvfb (package
+      # xvfb). E2E_REQUIRE_*: the vimma-ctl and Xvfb tests must not skip here.
+      - name: Build vimma-ctl (tools/vimma-ctl/rust-toolchain.toml)
+        working-directory: tools/vimma-ctl
+        run: rustup toolchain install && cargo build --locked
+
+      - name: e2e harness tests (fake control server, real vimma-ctl and Xvfb)
+        env:
+          E2E_REQUIRE_CTL: "1"
+          E2E_REQUIRE_XVFB: "1"
+        run: npx vitest run tools/e2e/
 
       # Disk guards. Measured (PR #8): ~13 GB free before the download; the tarball (0.8 GB) and
       # tree (4.7 GB) leave ~8.3 GB once the tarball is deleted; build and tests then use 1.2 GB,
@@ -97,14 +117,27 @@ jobs:
       - name: Artifact build (tools/artifact-build)
         run: node tools/artifact-build/artifact-build.mjs
 
-      # browser_vimma_control.js runs the client against the live server; without the binary it
-      # skips, and VIMMA_REQUIRE_CTL=1 turns that skip into a failure here.
-      - name: Build vimma-ctl for the control-socket mochitest (tools/vimma-ctl)
-        working-directory: tools/vimma-ctl
-        run: rustup toolchain install && cargo build --locked --release
-
+      # browser_vimma_control.js runs the vimma-ctl built above (target/debug) against the live
+      # server; without it the task skips, and VIMMA_REQUIRE_CTL=1 makes that skip a failure.
       - name: Mochitests (npm run mochitest -- --artifact tests/browser/)
         run: |
           npm run mochitest -- --artifact --setenv=VIMMA_REQUIRE_CTL=1 tests/browser/
           df -h . | tail -1
           du -sh engine engine/obj-artifact ~/.mozbuild 2>/dev/null || true
+
+      # Spec m0-e2e-harness. Pending scenarios are reported as ::notice:: and in the step summary,
+      # never as passed; once the control server lands they run here on the artifact build
+      # under Xvfb, with screenshots compared at 0.5 %.
+      - name: e2e scenarios (npm run e2e -- --artifact)
+        run: npm run e2e -- --artifact
+
+      # The actual and diff screenshots of a failed comparison (tools/e2e/screenshot.mjs), for
+      # judging a regression or taking a new baseline from the runner's fonts (runbook).
+      - name: Upload e2e-output/ (screenshots of failed comparisons)
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-output
+          path: e2e-output/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -75,6 +75,18 @@ pref("browser.promo.relay.enabled", false);
 pref("browser.contentblocking.report.show_mobile_app", false);
 pref("browser.contentblocking.report.hide_vpn_banner", true);
 
+// Google Safe Browsing (spec m0-safebrowsing-key). Google serves the download lists
+// goog-badbinurl-proto and goog-downloadwhite-proto, and the remote download check, only to
+// Mozilla's key: ours gets 404/403, and one refused list fails the whole update, so no list would
+// arrive. The provider lists are upstream's (all.js) without those two; carry upstream changes
+// on rebase. Phishing and malware stay on; keyless builds turn them off (MozillaServices.sys.mjs).
+// One line each: wrapped, prettier adds a trailing comma that libpref's parser rejects.
+// prettier-ignore
+pref("browser.safebrowsing.provider.google4.lists", "goog-phish-proto,googpub-phish-proto,goog-malware-proto,goog-unwanted-proto,goog-harmful-proto");
+// prettier-ignore
+pref("browser.safebrowsing.provider.google5.lists", "goog-phish-proto,googpub-phish-proto,goog-malware-proto,goog-unwanted-proto,goog-harmful-proto,goog-globalcache-proto");
+pref("browser.safebrowsing.downloads.remote.enabled", false);
+
 // System add-on updates (spec m0-updater): Mozilla's update server (aus5) is asked with our
 // version, build, OS and locale, and answers nothing for 157; webcompat fixes come through Remote
 // Settings instead. App updates are off at build time (configs/common/mozconfig). Add-on updates

@@ -10,6 +10,12 @@
   );
   MozillaServices.init();
 
+  // Once per process, before the host dispatches page keys (m1-actor-insert-scroll).
+  const { VimmaActors } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/actors/VimmaActors.sys.mjs",
+  );
+  VimmaActors.register();
+
   const { VimmaHost } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
   );

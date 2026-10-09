@@ -109,7 +109,7 @@ retries in CI; a flaky test gets quarantined and an issue the same day.
 `tests/browser/browser_vimma_control.js` drives the server with a raw socket client, and its last
 task runs the real `vimma-ctl state` against it. It finds the binary through the test file's
 symlink into this checkout (`tools/vimma-ctl/target/{release,debug}/vimma-ctl`), or `VIMMA_CTL`.
-Without one it skips that task; the e2e workflow builds the binary and passes
+Without one it skips that task; the e2e workflow builds the binary (debug) and passes
 `--setenv=VIMMA_REQUIRE_CTL=1`, which turns the skip into a failure. Locally:
 
 ```sh
@@ -132,6 +132,65 @@ measured on 157.0.1 (headless), the process dies by the signal within ~20 ms (ex
 running quit observers, so the file stays and `vimma-ctl` reports "not running". To end a run
 cleanly, send `ctrl+q` (with `browser.warnOnQuitShortcut` = `false` in `user.js`) and keep
 `SIGTERM`/`SIGKILL` as the fallback.
+
+### End-to-end tests (`npm run e2e`, spec m0-e2e-harness)
+
+Scenarios in `tests/e2e/scenarios/*.json` run against a real build, each in a fresh temp profile
+(`vimma.control.enabled=true`, no first-run pages, no telemetry), driven through `vimma-ctl`.
+Names: `m<N>-<slug>` for a milestone happy path, `issue-<N>-<slug>` (plus `"issue": N`) for a
+regression test. **Until the control server spec lands every scenario is pending**: the run
+reports them as `PENDING`, launches nothing and passes nothing.
+
+```sh
+(cd tools/vimma-ctl && cargo build --locked)     # the driver runs this binary
+npx vitest run tools/e2e/                        # the harness's own tests (fake server)
+npm run e2e                                      # all scenarios, full objdir build
+npm run e2e -- --filter m0-happy-path            # names containing the text
+npm run e2e -- --artifact                        # engine/obj-artifact, as CI does
+npm run e2e -- --build path/to/dist/bin | --tarball vimma-0.1.0-linux-x86_64.tar.xz
+npm run e2e -- --xvfb --keep                     # own Xvfb on a desktop; keep the profiles
+npm run e2e -- --run-pending --filter m0         # run a pending scenario anyway (to watch it fail)
+```
+
+Without `DISPLAY` (CI) the harness starts its own Xvfb at 1280×800×24; with a desktop, pass
+`--xvfb` for screenshots and to keep the window off your screen. The browser never inherits
+your desktop's environment: it gets an allowlisted env (no `GDK_SCALE`, `QT_*`, `GTK_THEME`,
+Wayland or locale; `HOME` and `TMPDIR` inside the temp profile) and the profile pins
+`layout.css.devPixelsPerPx=1.0` and a light theme, so local screenshots match CI's. Timeouts are
+hard: a scenario's deadline kills its launch and any running `vimma-ctl`. The whole suite has a
+5-minute budget (`--budget SECS`).
+Exit 0: nothing failed (pending is not failure, nor a pass); 1: a failure; 2: usage.
+
+**Baselines.** Screenshots are compared with `tests/e2e/baselines/<name>.png`; more than 0.5 % of
+differing pixels fails, and the actual and diff images land in `e2e-output/`. To change a
+baseline:
+
+```sh
+npm run e2e -- --xvfb --update-baselines --filter <scenario>   # refused when CI is set
+```
+
+look at the new PNG, and commit it with a changelog line saying which baseline changed and why
+(CLAUDE.md: never edit a baseline without one). A missing baseline fails; nothing creates one
+silently. Fonts differ between machines: if CI's diff exceeds 0.5 % on a baseline made locally,
+take CI's actual image from the `e2e-output` artifact of the failed run (kept 7 days) instead. Baselines are plain git blobs, not LFS
+(the spec's "LFS: not now" says when to revisit).
+
+**Troubleshooting Xvfb.**
+
+- `Xvfb not found`: install `xvfb` (Ubuntu/Debian), `xorg-server-xvfb` (Arch) or
+  `xorg-x11-server-Xvfb` (Fedora). GitHub's `ubuntu-24.04` image has it.
+- `Xvfb exited with code 1`: read the stderr in the message. The harness picks a free display
+  with `-displayfd`, so a stale `/tmp/.X*-lock` should not matter; a sandbox without
+  `/tmp/.X11-unix` write access does.
+- The browser opens on your desktop: you have `DISPLAY` set and did not pass `--xvfb`.
+- `no usable control socket within 30000 ms`: the build has no control server yet, the pref did
+  not apply (check `user.js` with `--keep`), or the browser is stuck; the message ends with the
+  browser's stderr. `--discovery-timeout SECS` for a slow machine.
+- A black screenshot: the window has not painted; the capture waits for two identical frames
+  200 ms apart (at most 2 s), so check the scenario waits for the state it photographs.
+- Leftovers after a crash of the harness itself: `pkill -f vimma-e2e-profile-` and
+  `rm -rf /tmp/vimma-e2e-*`. Normally SIGINT/SIGTERM kill the browser's process group, stop Xvfb
+  and remove the profile.
 
 ## Parallel browser lanes
 
@@ -246,7 +305,9 @@ npm run mochitest -- --artifact tests/browser/
 ```
 
 It runs only when a PR touches `src/`, `tests/browser/`, `packages/vimma-core/`, `configs/`,
-`surfer.json`, `package*.json`, the tools it uses or `e2e.yml` (paths filter). For a PR opened
+`surfer.json`, `package*.json`, the tools it uses (including `tools/e2e/`, `tools/vimma-ctl/`),
+`tests/e2e/` or `e2e.yml` (paths filter). Before the Firefox download it builds `vimma-ctl` and
+runs the e2e harness's tests; after the mochitests, `npm run e2e -- --artifact`. For a PR opened
 with `GITHUB_TOKEN`, mark it ready for review or `gh workflow run e2e.yml --ref <branch>`.
 
 What it does not cover: compiled-in build config (C++ defines such as `--version`'s display
@@ -310,6 +371,53 @@ The job keeps `engine/` between runs (`clean: false`) and re-downloads Firefox o
 `nightly` pre-release; on failure it uploads the log and opens (or comments on) an issue labelled
 `nightly-failure`. Comment `@claude` on that issue to hand it to Claude Code.
 
+### Google Safe Browsing key (spec m0-safebrowsing-key)
+
+Safe Browsing's phishing, malware and download lists need a Google API key compiled into the
+build. `configs/common/mozconfig` passes it to configure only when the key file exists:
+`$VIMMA_SAFEBROWSING_KEYFILE` if set (it must then name a file), else
+`~/.config/vimma/keys/safebrowsing`. Without one the build is keyless and Vimma defaults Safe
+Browsing off, so Settings shows it unticked. The key is a secret: never echo, log or commit it.
+
+Get a key: Google Cloud console → a project → enable the **Safe Browsing API** → Credentials →
+Create API key → restrict it to that API. Its use is free but non-commercial; Google's quota is
+per key (see [limits.md](limits.md)).
+
+**Locally**, store it without it reaching the terminal or the shell history, then rebuild:
+
+```sh
+mkdir -p ~/.config/vimma/keys && chmod 700 ~/.config/vimma/keys
+( umask 077; read -rs -p "Safe Browsing API key: " k; echo
+  printf '%s' "$k" > ~/.config/vimma/keys/safebrowsing )
+npm run import && (cd engine && ./mach build)   # the key is a configure input: full build
+tools/safebrowsing-smoke/safebrowsing-smoke.sh   # needs the network; prints table names and sizes
+```
+
+The local artifact build copies the same mozconfig, so it is keyed too (rebuild it with
+`node tools/artifact-build/artifact-build.mjs`). `npm run mochitest` passes
+`VIMMA_EXPECT_SAFEBROWSING_KEY=1` when the key file exists, so a stale keyless build fails
+`browser_vimma_safebrowsing.js`; set `VIMMA_EXPECT_SAFEBROWSING_KEY=0` to test a keyless build
+on purpose.
+
+**In CI**, the key is the repository secret `SAFEBROWSING_API_KEY` (`gh secret set
+SAFEBROWSING_API_KEY < ~/.config/vimma/keys/safebrowsing`). `nightly.yml` writes it to a mode-600
+file in `$RUNNER_TEMP` and deletes it after its last `mach` call. PR builds (`e2e.yml`) never get
+it: they build keyless, which `browser_vimma_safebrowsing.js` checks. `release.yml`'s `build` job
+does the same as the nightly, and its smoke check fails a release built without the key.
+
+Debugging: `browser.safebrowsing.debug` = `true` logs list updates to stdout, with the key
+replaced by `[trimmed-google-api-key]`. Still check before pasting a log anywhere.
+
+**Forks:** the nightly and release builds fail closed without `SAFEBROWSING_API_KEY`. Set your
+own key as that secret, or remove the key step (your builds then ship keyless, with Safe
+Browsing honestly off).
+
+**Rotate** (quota trouble or abuse; the key is extractable from every binary by design, so a
+"leak" alone is no reason): create the new key in the console, replace the local file
+(the `read -rs` line above) and the secret (`gh secret set` as above), rebuild and run the smoke
+script, then delete the old key in the console. Builds already shipped keep the old key and
+stop getting lists once it is deleted, so rotate before a release, not after.
+
 ### Upstream bumps (`upstream.yml`)
 
 **The procedure for a bump, from this PR to merge, is [docs/rebase.md](rebase.md)** (the rebase
@@ -331,6 +439,9 @@ from `main` and force-pushed, so a failed run is retried 6 h later.
 Every bump PR: refresh the copy of `browser.newtabpage.activity-stream.asrouter.providers.cfr`
 in `src/browser/branding/vimma/pref/firefox-branding.js` from `engine/browser/app/profile/firefox.js`,
 keeping `"enabled":false` (spec m0-mozilla-services). A stale copy shadows upstream's provider.
+Likewise `browser.safebrowsing.provider.google{4,5}.lists`: upstream's value from
+`engine/modules/libpref/init/all.js` without `goog-badbinurl-proto` and `goog-downloadwhite-proto`
+(spec m0-safebrowsing-key), then run `tools/safebrowsing-smoke/safebrowsing-smoke.sh`.
 docs/rebase.md, step 6, has a one-line comparison.
 
 One-time setup:
@@ -476,13 +587,15 @@ node tools/package/sbom.mjs --engine engine --out dist/vimma-$(node -p 'require(
 2. Trigger: `gh secret set RELEASE_PLEASE_TOKEN` (fine-grained, this repo only: Contents, Pull
    requests and Issues read/write), so the release release-please creates starts `release.yml`.
    Without it, run it by hand after each release: `gh workflow run release.yml -f tag=vX.Y.Z`.
-3. Maintainer line for the `.deb` and the PKGBUILD:
+3. Safe Browsing key: the `SAFEBROWSING_API_KEY` secret ("Google Safe Browsing key" above);
+   the `build` job fails without it, and its smoke check fails a build that lacks the key.
+4. Maintainer line for the `.deb` and the PKGBUILD:
    `gh variable set PACKAGE_MAINTAINER --body 'Your Name <you@example.org>'` (public in every
    package; the `package` job fails without it).
-4. Signing (recommended: keyless, no key to keep): `gh variable set SIGNING_ENABLED --body true`.
+5. Signing (recommended: keyless, no key to keep): `gh variable set SIGNING_ENABLED --body true`.
    Each signature records `JRanne/vimma`'s `release.yml` and the tag in the public Rekor log.
    Without the variable, `sign` is skipped and the assets go up unsigned.
-5. AUR (optional; skipped with a notice until the secret exists):
+6. AUR (optional; skipped with a notice until the secret exists):
    - Check the name is free: `curl -s 'https://aur.archlinux.org/rpc/v5/info?arg[]=vimma-bin'`
      must say `"resultcount":0` (and look at `vimma` too, which `vimma-bin` provides).
    - Create an account at <https://aur.archlinux.org/register>.
@@ -490,7 +603,7 @@ node tools/package/sbom.mjs --engine engine --out dist/vimma-$(node -p 'require(
      paste `aur_key.pub` into My Account → SSH Public Key.
    - `gh secret set AUR_SSH_KEY < aur_key`, then delete `aur_key`. The first push creates
      `vimma-bin`; its maintainer is that account.
-6. Enable: `gh variable set RELEASE_ENABLED --body true` (disable: `gh variable delete
+7. Enable: `gh variable set RELEASE_ENABLED --body true` (disable: `gh variable delete
 RELEASE_ENABLED`). Try it on the next release, or re-run the last one with
    `gh workflow run release.yml -f tag=vX.Y.Z` (assets are replaced, `--clobber`).
 

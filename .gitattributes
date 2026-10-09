@@ -1,1 +1,7 @@
 *.pdf binary
+# e2e screenshot baselines: plain blobs, not LFS (spec m0-e2e-harness, "LFS: not now")
+tests/e2e/baselines/*.png binary
+# image fixtures of the e2e harness's PNG and XWD decoders
+tools/e2e/test/fixtures/*.png binary
+tools/e2e/test/fixtures/*.raw binary
+tools/e2e/test/fixtures/*.xwd binary

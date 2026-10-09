@@ -7,6 +7,9 @@ declare const Services: {
     setBoolPref(name: string, value: boolean): void;
     getIntPref(name: string, defaultValue?: number): number;
     prefHasUserValue(name: string): boolean;
+    getDefaultBranch(root: string): {
+      setBoolPref(name: string, value: boolean): void;
+    };
     addObserver(
       name: string,
       observer: (subject: unknown, topic: string, data: string) => void,
@@ -19,6 +22,7 @@ declare const Services: {
   // engine/dom/interfaces/base/nsIFocusManager.idl
   focus: {
     readonly focusedElement: Element | null;
+    readonly focusedContentBrowsingContext: any;
   };
   // engine/netwerk/base/nsIIOService.idl
   io: { newURI(spec: string): { readonly scheme: string; readonly spec: string } };
@@ -61,7 +65,24 @@ declare const IOUtils: {
 declare const ChromeUtils: {
   importESModule(url: string): any;
   defineESModuleGetters(target: object, modules: Record<string, string>): void;
+  registerWindowActor(name: string, options: object): void;
 };
+
+// engine/dom/chrome-webidl/JSWindowActor.webidl
+declare class JSWindowActorParent {
+  readonly browsingContext: any;
+  /** engine/dom/chrome-webidl/WindowGlobalActors.webidl (WindowGlobalParent) */
+  readonly manager: { readonly isInProcess: boolean };
+  sendAsyncMessage(name: string, data?: unknown): void;
+  sendQuery(name: string, data?: unknown): Promise<any>;
+}
+declare class JSWindowActorChild {
+  readonly browsingContext: any;
+  readonly document: Document;
+  readonly contentWindow: Window | null;
+  sendAsyncMessage(name: string, data?: unknown): void;
+  sendQuery(name: string, data?: unknown): Promise<any>;
+}
 
 // engine/dom/interfaces/base/nsIDOMWindowUtils.idl
 interface Window {
@@ -69,4 +90,17 @@ interface Window {
     readonly AUTHOR_SHEET: number;
     loadSheetUsingURIString(sheetURI: string, type: number): void;
   };
+}
+
+// engine/dom/webidl/Element.webidl, Node.webidl and Event.webidl (chrome-only members)
+interface Element {
+  readonly openOrClosedShadowRoot: ShadowRoot | null;
+  readonly scrollTopMax: number;
+  readonly scrollLeftMax: number;
+}
+interface Node {
+  readonly ownerGlobal: Window;
+}
+interface Event {
+  readonly originalTarget: EventTarget | null;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mochitestCommand } from "../mochitest.mjs";
+import { expectSafeBrowsingKey, mochitestCommand } from "../mochitest.mjs";
 
 const ENGINE = "/repo/engine/";
 const TESTS = "browser/base/zen-components/tests/browser/";
@@ -30,5 +30,44 @@ describe("mochitestCommand", () => {
       "--setenv=XUL_APP_FILE=/repo/engine/obj-artifact/dist/bin/browser/application.ini",
       TESTS,
     ]);
+  });
+
+  it("passes the Safe Browsing key expectation to the browser (spec m0-safebrowsing-key)", () => {
+    expect(mochitestCommand([], ENGINE, true).args).toEqual([
+      "mochitest",
+      "--headless",
+      "--setenv=VIMMA_EXPECT_SAFEBROWSING_KEY=1",
+      TESTS,
+    ]);
+    expect(mochitestCommand(["--artifact"], ENGINE, false).args).toContain(
+      "--setenv=VIMMA_EXPECT_SAFEBROWSING_KEY=0",
+    );
+  });
+});
+
+describe("expectSafeBrowsingKey", () => {
+  const HOME = "/home/u";
+  const DEFAULT = "/home/u/.config/vimma/keys/safebrowsing";
+  /** @param {string[]} files */
+  const exists = (files) => (/** @type {string} */ p) => files.includes(p);
+
+  it("expects a key when the default key file exists", () => {
+    expect(expectSafeBrowsingKey({}, HOME, exists([DEFAULT]))).toBe(true);
+    expect(expectSafeBrowsingKey({}, HOME, exists([]))).toBe(false);
+  });
+
+  it("uses VIMMA_SAFEBROWSING_KEYFILE instead of the default path, as the mozconfig does", () => {
+    const env = { VIMMA_SAFEBROWSING_KEYFILE: "/tmp/k" };
+    expect(expectSafeBrowsingKey(env, HOME, exists(["/tmp/k"]))).toBe(true);
+    expect(expectSafeBrowsingKey(env, HOME, exists([DEFAULT]))).toBe(false);
+  });
+
+  it("lets VIMMA_EXPECT_SAFEBROWSING_KEY override (the nightly deletes its key file before tests)", () => {
+    expect(expectSafeBrowsingKey({ VIMMA_EXPECT_SAFEBROWSING_KEY: "1" }, HOME, exists([]))).toBe(
+      true,
+    );
+    expect(
+      expectSafeBrowsingKey({ VIMMA_EXPECT_SAFEBROWSING_KEY: "0" }, HOME, exists([DEFAULT])),
+    ).toBe(false);
   });
 });

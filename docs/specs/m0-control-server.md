@@ -39,8 +39,9 @@ running browser, and with it off nothing listens and no token file exists.
   the page only while the window has focus, as with a real keyboard. `?` is sent without shift
   (vimma-core's canonical chord), which the host treats the same.
 - **`state.pending`** is `dispatcher.pending().join(" ")`, what the status bar shows: `"prefix"`
-  after `ctrl+b`, `null` when empty. `mode` is the host's (`insert` in M0 without the overlay,
-  `help` with it; PR #32's normal mode will flow through `controlState` unchanged). Each tab also
+  after `ctrl+b`, `null` when empty. `mode` is the host's `_mode`: `help` with the overlay
+  open, else the focused page's mode (`normal` on a page with Vimma's actor, `insert` in a text
+  field, a page without the actor, or chrome; m1-actor-insert-scroll). Each tab also
   has `index` (strip order among visible tabs) and `pinned`; clients ignore fields they do not
   know. `workspace` and `panes` are `null` until M3/M4.
 - **`open`**: the URL is re-parsed with `Services.io.newURI` and its scheme checked again
@@ -82,8 +83,8 @@ running browser, and with it off nothing listens and no token file exists.
   connection, unset in builds).
 - **vimma-ctl in mochitests**: the test resolves `tools/vimma-ctl/target/{release,debug}/vimma-ctl`
   through its symlink into the checkout (or `VIMMA_CTL`) and runs it with `Subprocess.sys.mjs`.
-  Absent → skip with a message; `e2e.yml` builds it (`cargo build --locked --release`) and sets
-  `VIMMA_REQUIRE_CTL=1` so CI cannot silently skip. The nightly full-build run skips it.
+  Absent → skip with a message; `e2e.yml` builds it (`cargo build --locked`, the harness's step)
+  and sets `VIMMA_REQUIRE_CTL=1` so CI cannot silently skip. The nightly full-build run skips it.
 
 ## Tests (written first)
 
@@ -97,9 +98,10 @@ running browser, and with it off nothing listens and no token file exists.
   `welcome` (app, version). After it: not-JSON → `bad-request`, unknown command, reserved →
   `not-implemented`, unknown args → `invalid-args`, connection still usable.
 - `send-keys ctrl+b` → `state.pending` `"prefix"`; `?` → overlay opens, host saw real keydowns,
-  `state.mode` `help`; `esc` closes it, back to `insert`; a bad chord → `invalid-args` and nothing
+  `state.mode` `help`; `esc` closes it, back to `normal`; a bad chord → `invalid-args` and nothing
   sent. `state` fields: tabs, ids (`browserId`), url, index, pinned, null workspace/panes.
-- `send-keys "j shift+k"` with the page focused: the page records `j`, `Shift`, `K`.
+- `send-keys "j shift+k"` with the page focused, in normal mode: Vimma takes `j` (as with a real
+  `j`), the page records `Shift`, `K`.
 - `open https://example.com/` → new selected tab, result id, content principal; `where: current`
   reuses it; `about:blank` → a new selected tab at `about:blank`; `javascript:`, `data:`,
   `chrome:` → `invalid-args`, nothing opened.
@@ -124,11 +126,18 @@ Every response is checked with `validateMessage(kind: response, command)`.
   succeeded every time (mode 0600); `open about:blank` then `send-keys "ctrl+b ?"` gave two tabs,
   the new one selected at `about:blank`, mode `help`.
 - Suites: full build `tests/browser/` 602 passed, 0 failed; artifact build 585 passed, 0 failed.
+- Merged main (#28 tab keys, #32 normal mode and actors, #35 e2e harness). Red: 4 failures, the
+  page now starts in `normal` and takes `j`; the tests now expect `normal` and the page to see
+  only `Shift`, `K`. Green: full build 903 passed, artifact build 886 passed, 0 failed. The e2e
+  workflow's existing `vimma-ctl` build (debug) serves the mochitest too.
 
 ## For the e2e harness (PR #35)
 
 1. File within 30 s: yes, right after the first window's delayed startup.
-2. `state`: `insert` with no overlay, `help` with it; tabs with `url` and `selected`.
+2. `state`: the host's mode. Measured after the m1-actor-insert-scroll merge on the real build
+   (headless, fresh profile, `about:blank` start page): **`insert`** at startup (focus is in
+   chrome), so the scenario's `insert` holds; `normal` once a page has focus (the
+   mochitest's case); `help` with the overlay. Tabs carry `url` and `selected`.
 3. Fresh profile with `browser.startup.page=0`: one `about:blank` tab; `open about:blank` adds
    a second, selected, at `about:blank`.
 4. `send-keys "ctrl+b ?"`: real key presses (TextInputProcessor).

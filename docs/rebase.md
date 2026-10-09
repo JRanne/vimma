@@ -17,7 +17,7 @@ to roll back. Background: [ADR-002](adr/002-upstream-release-channel.md),
 | 3   | Import; fix any patch that fails         | build machine                        | 1 min, plus fixes       |
 | 4   | Full build + full mochitest suite        | build machine                        | 39 min cold + suite     |
 | 5   | Artifact build + suite (preflight first) | build machine, and `e2e.yml` on PR   | 5 min                   |
-| 6   | Version files, branding prefs, cfr pref  | build machine                        | 5 min                   |
+| 6   | Version files, branding prefs, cfr, SB   | build machine                        | 5 min                   |
 | 7   | Split-view contract (M4 canary)          | both builds                          | part of the suite       |
 | 8   | Mark ready, CI, merge                    | GitHub                               | CI ≈ 8 min              |
 
@@ -257,6 +257,13 @@ process.exit(same ? 0 : 1);'
 If it says "refresh", put the printed JSON into our pref line, escaped as in the existing one. That
 line stays one line, under `// prettier-ignore`. If the regexp finds nothing (a `TypeError`),
 upstream renamed or removed the provider: read `firefox.js` and the spec before changing anything.
+
+**Safe Browsing lists (spec m0-safebrowsing-key).** Our branding prefs override
+`browser.safebrowsing.provider.google4.lists` and `…google5.lists` with upstream's value from
+`engine/modules/libpref/init/all.js` minus `goog-badbinurl-proto` and `goog-downloadwhite-proto`
+(Mozilla-key only; one refused list fails every update). Re-derive both from the new `all.js`,
+then run `tools/safebrowsing-smoke/safebrowsing-smoke.sh` on the keyed full build: phishing,
+malware and unwanted lists must arrive.
 
 ## 7. Split-view contract: the canary (M4)
 
