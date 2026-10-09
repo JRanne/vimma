@@ -6,10 +6,11 @@ delete its line in the same PR.
 
 ## Features
 
-- Only `ctrl+b ?`, scrolling (`j k h l d u gg G`), `i` and `Esc` run. Every other binding in
-  the overlay and in [bindings.md](bindings.md) is planned, and other `ctrl+b` sequences are
-  consumed and do nothing ([m0-help-overlay](specs/m0-help-overlay.md), Settled).
-- Single-key actions the host cannot run yet (`f`, `/`, `r`, `ctrl+i`, `ctrl+u`, …) pass through
+- Only `ctrl+b ?`, scrolling (`j k h l d u gg G`), `i`, `Esc` and link hints (`f`, `F`) run.
+  Every other binding in the overlay and in [bindings.md](bindings.md) is planned, and other
+  `ctrl+b` sequences are consumed and do nothing
+  ([m0-help-overlay](specs/m0-help-overlay.md), Settled).
+- Single-key actions the host cannot run yet (`/`, `r`, `ctrl+i`, `ctrl+u`, …) pass through
   to the page or Firefox, and so does the first key of a sequence with nothing runnable under it
   (`ctrl+w`, the M4 pane keys) ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md),
   Settled).
@@ -24,6 +25,13 @@ delete its line in the same PR.
 - Closed shadow roots in pages are seen (the actor is privileged), but a page script that moves
   focus from a frame to the top page's `<body>` can leave insert on until `Esc`
   ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Limits).
+- Link hints label only what the page has as elements: canvas and WebGL apps (Google Docs,
+  Figma, maps, games) have nothing to label, and delegated click handlers with no role or
+  listener of their own, image-map `<area>` links and pinch-zoomed pages are missed or
+  misplaced ([m1-hints](specs/m1-hints.md), Limits).
+- Hint labels are drawn for the layout at `f`; a page that scrolls itself while they show
+  leaves them stale. Frames inside a CSS-transformed `<iframe>` get misplaced labels
+  ([m1-hints](specs/m1-hints.md), Limits).
 - `config.toml` is not read by the browser. Its validator and theme tokens exist in `vimma-core`,
   but loading, polling, `:source` and theming wait for the M5 host spec
   ([m5-core-config-and-theme](specs/m5-core-config-and-theme.md)).

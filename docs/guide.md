@@ -67,8 +67,8 @@ in the URL bar, `about:` pages and the PDF viewer.
   The prefix works in every mode and waits for the next key with no timeout. `Esc` cancels it.
 - **The modal layer (Neovim).** Bare keys act on the page depending on the mode: `j`/`k` scroll
   in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page. Planned
-  modes: `visual`/copy (caret and selection), `command` (`:` line), `hint` (link hints) and
-  `panel` (the side panel); `help` is the bindings overlay.
+  modes: `visual`/copy (caret and selection), `command` (`:` line) and `panel` (the side
+  panel); `hint` is link hints and `help` the bindings overlay.
 
 ### Normal and insert mode
 
@@ -89,6 +89,24 @@ way. Pages Vimma does not reach (extension pages, `data:` and `view-source:` pag
 insert, so their keys are untouched. With focus in the URL bar or the find bar, keys belong to
 that field; only `ctrl+b` sequences are Vimma's there.
 
+### Link hints
+
+`f` puts a yellow label on everything you could click on screen: links, buttons, form fields,
+and elements the page made clickable (ARIA buttons and tabs, elements with a click handler),
+also inside web components and in frames from other sites. Things off screen, hidden or covered
+by something else (a fixed header, a cookie banner) get no label. Type a label to pick its
+target: a link is followed, a button is pressed, a text field gets focus and the tab is in
+insert mode. Labels use the home row (`a s d f g h j k l`), in reading order: targets near the
+top get the shortest. As you type, labels that no longer match disappear. `Backspace` takes back a key and
+`Esc` leaves hints without doing anything.
+
+`F` labels links only and opens the one you pick in a new tab in the background, so you stay
+on the page and can pick more.
+
+The labels are drawn by the browser, over the page, not inside it: the page cannot see them,
+restyle them or hide them. Apps that draw their own controls on a canvas (Google Docs, Figma,
+maps, games) have nothing to label.
+
 ## Keys
 
 [bindings.md](bindings.md) lists the full default keymap. It is generated from the same table
@@ -102,6 +120,7 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `d` / `u`                   | Normal mode: scroll half a page down / up (`ctrl+u` is reserved for workspaces).                                                                              |
 | `gg` / `G`                  | Normal mode: go to the top / bottom of the page.                                                                                                              |
 | `i`                         | Normal mode: focus the first text field and enter insert mode.                                                                                                |
+| `f` / `F`                   | Normal mode: link hints. Type a label to follow it, or, with `F`, to open the link in a background tab. `Backspace` undoes a key, `Esc` cancels.              |
 | `Esc`                       | Insert mode: leave the text field, back to normal mode. In normal mode the page gets `Esc`.                                                                   |
 | `ctrl+b ?`                  | Opens the bindings overlay over any page, including `about:preferences` and the PDF viewer. Press it again to close.                                          |
 | `/` (in the overlay)        | Filters the list as you type.                                                                                                                                 |
@@ -114,9 +133,9 @@ normal mode bare digits start a count (`3j`), so a page's own digit shortcuts ne
 
 **Planned:**
 
-- **M1, the rest of the modal page layer:** back and forward (`H`/`L`), reload (`r`), link
-  hints (`f`/`F`), find (`/ ? n N`), the `:` command line and copy mode (`v`, `ctrl+b [`). Until
-  then these keys reach the page as before.
+- **M1, the rest of the modal page layer:** back and forward (`H`/`L`), reload (`r`), find
+  (`/ ? n N`), the `:` command line and copy mode (`v`, `ctrl+b [`). Until then these keys
+  reach the page as before.
 - **M2, tabs:** `ctrl+b c` new tab, `ctrl+b 1..9`, `ctrl+b n`/`p`, `ctrl+b shift+t` rename
   (kept across restarts; an empty name restores the page title), `ctrl+b shift+x` close, `t`, `x`,
   `gt`/`gT`, the `ctrl+b g` picker (`j`/`k` to move, `/` to search titles, URLs, workspaces and
