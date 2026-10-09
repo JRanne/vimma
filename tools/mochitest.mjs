@@ -2,6 +2,7 @@
 // --artifact: against the artifact build (ADR-010, tools/artifact-build/artifact-build.mjs).
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { refreshAppIni } from "./artifact-build/artifact-build.mjs";
 
 const ENGINE_TESTS = "browser/base/zen-components/";
 
@@ -35,6 +36,8 @@ export function mochitestCommand(argv, engine) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const engine = new URL("../engine/", import.meta.url).pathname;
   const { args, env } = mochitestCommand(process.argv.slice(2), engine);
+  // A bare `./mach build` since the artifact build regenerates application.ini, not our copy.
+  if (env.MOZCONFIG) refreshAppIni(engine);
   const res = spawnSync("./mach", args, {
     cwd: engine,
     stdio: "inherit",
