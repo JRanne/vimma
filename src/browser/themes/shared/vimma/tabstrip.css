@@ -3,9 +3,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* Firefox's tab strip, hidden while the pref vimma.ui.tabstrip.hidden is on (ui/tabstrip.mjs sets
- * the root attribute). Customize mode shows it, so its widgets can still be moved. */
+ * the root attribute). Customize mode shows it, so its widgets can still be moved. Popups and
+ * taskbar tabs are left to Firefox (tab-bar-visibility.js `isSingleTabWindow`): it shows their
+ * strip once they hold a second tab, so that tab is not lost. */
 
-:root[vimma-tabstrip-hidden]:not([customizing]) {
+:root[vimma-tabstrip-hidden]:not([customizing], [popup-window], [taskbartab]) {
   /* What Firefox's own `collapsed` does for popups and vertical tabs: zero height. */
   #TabsToolbar {
     visibility: collapse;

@@ -26,7 +26,7 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {() => void} onTabSelect
  * @property {ReturnType<typeof createDispatcher>} dispatcher
  * @property {HelpOverlay} help
- * @property {TabStrip} tabStrip  hides Firefox's tab strip (m0-tabstrip-hidden)
+ * @property {TabStrip | null} tabStrip  hides Firefox's tab strip (m0-tabstrip-hidden)
  * @property {number | null} timer   pending-sequence timeout (dispatcher.flush)
  */
 
@@ -74,13 +74,20 @@ export const VimmaHost = {
       },
       dispatcher: createDispatcher(keymap),
       help: new HelpOverlay(win, keymap),
-      tabStrip: new TabStrip(win),
+      tabStrip: null,
       timer: null,
     };
     states.set(win, state);
-    state.tabStrip.init();
     win.addEventListener("keydown", state.onKeyDown, true);
     win.addEventListener("TabSelect", state.onTabSelect, true);
+    // After the keys: an upstream change in tab code must not cost us ctrl+b.
+    try {
+      const tabStrip = new TabStrip(win);
+      tabStrip.init();
+      state.tabStrip = tabStrip;
+    } catch (e) {
+      console.error("vimma: tab strip not hidden", e);
+    }
   },
 
   /** @param {Window} win */
@@ -91,7 +98,7 @@ export const VimmaHost = {
     win.removeEventListener("keydown", state.onKeyDown, true);
     win.removeEventListener("TabSelect", state.onTabSelect, true);
     state.help.destroy();
-    state.tabStrip.uninit();
+    state.tabStrip?.uninit();
     states.delete(win);
   },
 
