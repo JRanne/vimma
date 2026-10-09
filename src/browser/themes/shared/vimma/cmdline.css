@@ -19,6 +19,22 @@
   }
 }
 
+/* While a prefix is pending the which-key strip (a child of the status bar, z-index 5) owns the
+   window's foot: drop the line under it so the strip is never covered. */
+:root[vimma-whichkey-open] #vimma-cmdline {
+  z-index: 4;
+}
+
+/* A fullscreen page (a video) gets the whole screen, as the status bar does (statusbar.css). */
+:root[inDOMFullscreen] #vimma-cmdline {
+  display: none !important;
+}
+
+/* The notice (notice.css) sits above the status bar; while the line is open, above the line. */
+:root[vimma-cmdline-open] #vimma-notice {
+  bottom: calc(var(--vimma-statusbar-height, 0px) + var(--vimma-cmdline-height, 0px) + 0.5rem);
+}
+
 .vimma-cmdline-panel {
   position: absolute;
   inset: auto 0 0 0;

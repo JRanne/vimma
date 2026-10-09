@@ -351,3 +351,151 @@ add_task(async function the_status_bar_shows_command_and_the_line_sits_above_it(
   await until(() => modeText() !== "COMMAND", "and the status bar leaves COMMAND");
   closeTabs(tabs);
 });
+
+/** A new window (private if asked) with one page focused in normal mode. */
+async function windowWithPage(options = {}) {
+  const win = await BrowserTestUtils.openNewBrowserWindow(options);
+  const browser = win.gBrowser.selectedBrowser;
+  BrowserTestUtils.startLoadingURIString(browser, PAGE);
+  await BrowserTestUtils.browserLoaded(browser, false, PAGE);
+  await SimpleTest.promiseFocus(win);
+  await SimpleTest.promiseFocus(browser);
+  return win;
+}
+
+add_task(async function private_window_lines_stay_out_of_the_shared_history() {
+  const priv = await windowWithPage({ private: true });
+  runCommand("tabrename secret-private-thing", priv);
+  Assert.ok(!isOpen(priv), "sanity: it ran (not implemented yet) and closed");
+  await SimpleTest.promiseFocus(priv.gBrowser.selectedBrowser);
+  colon(priv);
+  EventUtils.synthesizeKey("KEY_ArrowUp", {}, priv);
+  Assert.equal(
+    input(priv).value,
+    "tabrename secret-private-thing",
+    "the private window recalls it",
+  );
+  EventUtils.synthesizeKey("KEY_Escape", {}, priv);
+  await BrowserTestUtils.closeWindow(priv);
+
+  const tabs = await openTabs(1);
+  colon();
+  EventUtils.synthesizeKey("KEY_ArrowUp");
+  Assert.ok(!input().value.includes("secret"), `a normal window does not (${input().value})`);
+  EventUtils.synthesizeKey("KEY_Escape");
+
+  const priv2 = await windowWithPage({ private: true });
+  colon(priv2);
+  EventUtils.synthesizeKey("KEY_ArrowUp", {}, priv2);
+  Assert.ok(!input(priv2).value.includes("secret"), "nor does the next private window");
+  EventUtils.synthesizeKey("KEY_Escape", {}, priv2);
+  await BrowserTestUtils.closeWindow(priv2);
+  closeTabs(tabs);
+});
+
+add_task(async function each_window_keeps_its_own_history_cursor() {
+  const tabs = await openTabs(1);
+  runCommand("scroll_top");
+  await focusContent(tabs[0].linkedBrowser);
+  runCommand("scroll_bottom");
+  await focusContent(tabs[0].linkedBrowser);
+  typeCommand("scroll");
+  EventUtils.synthesizeKey("KEY_ArrowUp");
+  Assert.equal(input().value, "scroll_bottom", "Up recalls the newest match");
+
+  const other = await windowWithPage();
+  colon(other);
+  EventUtils.synthesizeKey("KEY_ArrowUp", {}, other);
+  Assert.equal(input(other).value, "scroll_bottom", "another window shares the entries");
+  EventUtils.synthesizeKey("KEY_ArrowUp", {}, other);
+  Assert.equal(input(other).value, "scroll_top", "and walks them with its own cursor");
+
+  await SimpleTest.promiseFocus(window);
+  Assert.ok(isOpen(), "the first window's line stayed open while it was in the background");
+  Assert.equal(document.activeElement, input(), "with focus back in it");
+  EventUtils.synthesizeKey("KEY_ArrowUp");
+  Assert.equal(input().value, "scroll_top", "its cursor and draft were kept: Up goes on");
+  EventUtils.synthesizeKey("KEY_ArrowDown");
+  EventUtils.synthesizeKey("KEY_ArrowDown");
+  Assert.equal(input().value, "scroll", "and Down returns to its own draft");
+  EventUtils.synthesizeKey("KEY_Escape");
+  await BrowserTestUtils.closeWindow(other);
+  closeTabs(tabs);
+});
+
+add_task(async function the_which_key_strip_stays_above_the_line() {
+  const tabs = await openTabs(1);
+  typeCommand("ta");
+  Assert.greater(options().length, 3, "sanity: the completion list is up");
+  EventUtils.synthesizeKey("b", { ctrlKey: true });
+  await TestUtils.waitForCondition(
+    () => document.documentElement.hasAttribute("vimma-whichkey-open"),
+    "the which-key strip opens",
+  );
+  const strip = document.getElementById("vimma-whichkey");
+  const r = strip.getBoundingClientRect();
+  for (const [x, y] of [
+    [r.left + r.width / 2, r.top + r.height / 2],
+    [r.left + 4, r.top + 4],
+    [r.right - 4, r.bottom - 4],
+  ]) {
+    Assert.ok(strip.contains(document.elementFromPoint(x, y)), `the strip is on top at ${x},${y}`);
+  }
+  EventUtils.synthesizeKey("KEY_Escape");
+  Assert.ok(isOpen(), "Esc cancels the prefix and keeps the line");
+  EventUtils.synthesizeKey("KEY_Escape");
+  closeTabs(tabs);
+});
+
+add_task(async function a_notice_does_not_cover_the_line() {
+  const tabs = await openTabs(1);
+  typeCommand("ta");
+  EventUtils.synthesizeKey("b", { ctrlKey: true });
+  EventUtils.synthesizeKey("v");
+  Assert.ok(noticeShown(), "ctrl+b v from the line shows the notice");
+  Assert.ok(isOpen(), "and the line stays open");
+  const notice = document.getElementById(NOTICE_ID).getBoundingClientRect();
+  const panel = container().firstElementChild.getBoundingClientRect();
+  Assert.lessOrEqual(notice.bottom, panel.top + 1, "the notice sits above the line");
+  document.getElementById(NOTICE_ID).hidePopover();
+  EventUtils.synthesizeKey("KEY_Escape");
+  closeTabs(tabs);
+});
+
+add_task(async function no_command_line_in_dom_fullscreen() {
+  const tabs = await openTabs(1);
+  const root = document.documentElement;
+  root.setAttribute("inDOMFullscreen", "true"); // as browser-fullScreenAndPointerLock.js does
+  try {
+    colon();
+    Assert.ok(!isOpen(), ": does not open over a fullscreen page");
+  } finally {
+    root.removeAttribute("inDOMFullscreen");
+  }
+  colon();
+  root.setAttribute("inDOMFullscreen", "true");
+  try {
+    Assert.ok(!BrowserTestUtils.isVisible(input()), "an open line is hidden in fullscreen");
+  } finally {
+    root.removeAttribute("inDOMFullscreen");
+  }
+  EventUtils.synthesizeKey("KEY_Escape");
+  Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "the page saw none of the keys");
+  closeTabs(tabs);
+});
+
+add_task(async function javascript_urls_are_blocked_with_a_notice() {
+  const tabs = await openTabs(1);
+  const count = gBrowser.tabs.length;
+  const blocked = "blocked: javascript: URLs can't be opened from the command line";
+  runCommand("tabnew javascript:void(0)");
+  Assert.equal(document.getElementById(NOTICE_ID)?.textContent, blocked, ":tabnew says so");
+  Assert.equal(gBrowser.tabs.length, count, "and leaves no blank tab");
+  await focusContent(tabs[0].linkedBrowser);
+  const url = tabs[0].linkedBrowser.currentURI.spec;
+  runCommand("open  JavaScript:alert(1)");
+  Assert.equal(document.getElementById(NOTICE_ID).textContent, blocked, ":open says so");
+  Assert.equal(tabs[0].linkedBrowser.currentURI.spec, url, "and loads nothing");
+  document.getElementById(NOTICE_ID).hidePopover();
+  closeTabs(tabs);
+});

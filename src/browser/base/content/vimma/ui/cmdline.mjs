@@ -14,7 +14,6 @@ import {
   historyPrevious,
   parseCommandLine,
   pushHistory,
-  resetHistoryCursor,
 } from "../core/cmdline.mjs";
 
 /** @import { Candidate, CommandError, CommandResult, History } from "../core/cmdline.mjs" */
@@ -28,12 +27,29 @@ const HTML_NS = "http://www.w3.org/1999/xhtml";
 /** @type {WeakSet<Window>} windows our stylesheet is loaded into */
 const styled = new WeakSet();
 
+/** Set on the chrome root while the line is open (cmdline.css moves the notice above it). */
+const OPEN_ATTR = "vimma-cmdline-open";
+/** The open line's height on the chrome root, for the notice. */
+const HEIGHT_VAR = "--vimma-cmdline-height";
+
+/** @typedef {{ history: History }} HistoryStore  the entries; cursors stay per command line */
+
 /**
- * One history for every window of the session, in memory (Vim's is global too). Persisting it
- * is later work: a file in the profile directory, not a pref (spec, Settled).
- * @type {History}
+ * The entries every non-private window of the session shares, in memory (Vim's history is
+ * global too). A private window gets its own store, dropped with the window, and never writes
+ * here. Persisting this later (a file in the profile, not a pref) must keep that rule: nothing
+ * typed in a private window is stored (spec, Settled).
+ * @type {HistoryStore}
  */
-let history = createHistory();
+const sharedHistory = { history: createHistory() };
+
+/** @param {Window} win */
+function isPrivate(win) {
+  const { PrivateBrowsingUtils } = ChromeUtils.importESModule(
+    "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
+  );
+  return /** @type {boolean} */ (PrivateBrowsingUtils.isWindowPrivate(win));
+}
 
 /**
  * @typedef {object} Callbacks
@@ -62,6 +78,13 @@ export class CommandLine {
     this.opener = null;
     /** @type {{ candidates: Candidate[], index: number } | null} while Tab cycles */
     this.cycle = null;
+    /** @type {HistoryStore} */
+    this.store = isPrivate(win) ? { history: createHistory() } : sharedHistory;
+    /** This line's own history cursor: another window browsing the shared entries keeps it. */
+    /** @type {{ index: number | null, draft: string }} */
+    this.cursor = { index: null, draft: "" };
+    /** @type {ResizeObserver | null} */
+    this.resizeObserver = null;
   }
 
   get isOpen() {
@@ -70,14 +93,18 @@ export class CommandLine {
 
   /** @param {string} [text]  the line to start with (`open ` for an unbound `open_url` key) */
   open(text = "") {
+    const root = this.win.document.documentElement;
+    // Not over a fullscreen page (a video): Firefox hides its chrome there, as the bar does.
+    if (!this.isOpen && root.hasAttribute("inDOMFullscreen")) return;
     const input = this.input ?? this.build().input;
     if (!this.isOpen) {
       this.opener = Services.focus.focusedElement;
       input.value = text;
       this.cycle = null;
       this.showError(null);
-      history = resetHistoryCursor(history);
+      this.resetCursor();
       /** @type {HTMLElement} */ (this.el).hidden = false;
+      root.setAttribute(OPEN_ATTR, "true");
       this.refreshList();
     }
     input.focus();
@@ -95,7 +122,7 @@ export class CommandLine {
     const opener = this.opener;
     this.opener = null;
     this.cycle = null;
-    history = resetHistoryCursor(history);
+    this.resetCursor();
     // Focus first, then hide: hiding the focused input would drop focus to nowhere.
     if (tabChanged || (restoreFocus && !opener?.isConnected)) {
       /** @type {{ gBrowser?: { selectedBrowser: HTMLElement } }} */ (
@@ -105,12 +132,16 @@ export class CommandLine {
       /** @type {HTMLElement} */ (opener).focus();
     }
     /** @type {HTMLElement} */ (this.el).hidden = true;
+    this.win.document.documentElement.removeAttribute(OPEN_ATTR);
     this.changed();
   }
 
   /** Close and remove the element (VimmaHost.uninit). */
   destroy() {
     this.close({ restoreFocus: false });
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+    this.win.document.documentElement.style.removeProperty(HEIGHT_VAR);
     this.el?.remove();
     this.el = this.input = this.list = this.error = null;
   }
@@ -131,8 +162,9 @@ export class CommandLine {
       case "ArrowUp":
       case "ArrowDown": {
         const step = e.key === "ArrowUp" ? historyPrevious : historyNext;
-        const next = step(history, input.value);
-        history = next.history;
+        const view = Object.freeze({ ...this.store.history, ...this.cursor });
+        const next = step(view, input.value);
+        this.cursor = { index: next.history.index, draft: next.history.draft };
         input.value = next.text;
         this.cycle = null;
         this.showError(null);
@@ -152,7 +184,7 @@ export class CommandLine {
   /** @private */
   onInput() {
     this.cycle = null;
-    history = resetHistoryCursor(history);
+    this.resetCursor();
     this.showError(null);
     this.refreshList();
   }
@@ -172,11 +204,17 @@ export class CommandLine {
   }
 
   /** @private */
+  resetCursor() {
+    this.cursor = { index: null, draft: "" };
+  }
+
+  /** @private */
   submit() {
     const input = /** @type {HTMLInputElement} */ (this.input);
     const line = input.value;
     const result = parseCommandLine(line);
-    history = pushHistory(history, line);
+    this.store.history = pushHistory(this.store.history, line);
+    this.resetCursor();
     if (result.kind === "error") {
       this.cycle = null;
       this.renderList([]);
@@ -351,6 +389,16 @@ export class CommandLine {
     if (statusBar) statusBar.before(container);
     else if (browser) browser.after(container);
     else doc.body.append(container);
+
+    const Observer = /** @type {Window & { ResizeObserver: typeof ResizeObserver }} */ (this.win)
+      .ResizeObserver;
+    const observer = new Observer(() => {
+      if (!this.isOpen) return;
+      const height = Math.ceil(panel.getBoundingClientRect().height);
+      doc.documentElement.style.setProperty(HEIGHT_VAR, `${height}px`);
+    });
+    observer.observe(panel);
+    this.resizeObserver = observer;
 
     this.el = container;
     this.input = input;

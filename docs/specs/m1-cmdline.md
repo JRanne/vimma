@@ -75,11 +75,16 @@ completion list.
   focused and `:tabnew` can move focus to the new tab's URL bar. Focus moving elsewhere in the
   window (a click, `ctrl+b c`) closes the line without running; the window losing focus
   (alt+tab) keeps it open. A tab switch underneath closes it and focuses the new tab.
-- **History** is in memory, one list shared by the windows of a session (Vim's is global too),
-  newest 100 lines, kept by core's `pushHistory` (every executed line, errors included, as Vim).
+- **History** is in memory: one list of entries shared by the non-private windows of a session
+  (Vim's is global too), newest 100 lines, kept by core's `pushHistory` (every executed line,
+  errors included, as Vim). Each command line keeps its own cursor and draft, so browsing in one
+  window never moves another's (review round 1). **A private window gets its own throwaway
+  history**, dropped with the window, and nothing typed there enters the shared list (review
+  round 1: `:tabrename secret` in a private window was recalled by a normal window's `Up`).
   Persisting it later goes to a file in the profile directory (`vimma/cmdline-history.json`,
   like Vim's shada), not a pref: prefs are settings, are rewritten whole to `prefs.js` on change
-  and are not meant for growing lists.
+  and are not meant for growing lists. **Persistence must exclude private-window input**: only
+  the shared store is ever written.
 - **Completion popup:** a plain list (`ul[role=listbox]`) above the input, keyboard only, up to
   core's 20 candidates with a scroll, each row the name and its description. It follows typing
   while the line is just the command word; `Tab` selects the next candidate into the input
@@ -111,6 +116,17 @@ completion list.
 - **Theme:** the stylesheet reads M5's tokens (`--vimma-bg-dark`, `--vimma-fg`,
   `--vimma-accent`, `--vimma-selection`, `--vimma-error`, `--vimma-font`) with `Canvas` /
   `CanvasText` fallbacks; the status bar (#34) loads the token sheet once per window.
+- **Which-key, notice, fullscreen (review round 1).** While a prefix is pending
+  (`:root[vimma-whichkey-open]`) the line drops to `z-index: 4`, under the status bar's 5, so the
+  strip (the bar's child) is never covered. While the line is open (`:root[vimma-cmdline-open]`)
+  the notice moves above it: a `ResizeObserver` on the panel sets `--vimma-cmdline-height` on
+  the root. In DOM fullscreen (`:root[inDOMFullscreen]`) `:` does not open the line and an open
+  one is hidden, as the status bar is; entering DOM fullscreen needs focus in the page, which
+  already closes the line.
+- **`javascript:` URLs (review round 1)** are refused by `:open` and `:tabnew` before loading,
+  with the notice "blocked: javascript: URLs can't be opened from the command line": the load
+  failed silently and `:tabnew` left a blank tab. The check ignores case, surrounding space,
+  tabs and newlines, as URL parsing does.
 - **Verified:** core red 4 failed (`:help`, `:h`, `PENDING_ACTIONS`, `open_url`), green 1044/0
   (the `prefix+?` snapshot gains the `open_url` row). Browser red, host without the line: 20/26
   passed (": opens the command line - false == true", the page saw `[":", "z"]`, `:q` timed
@@ -123,3 +139,9 @@ completion list.
   closes the line; the line's bottom meets the bar's top. It passed before the `changed`
   callback (the bar's debounced refresh happened to run after the close), so the callback is
   there to make it deterministic, not to fix an observed failure. Full `tests/browser/` 973/0.
+- **Review round 1:** six new tests, red first (12 failures: a normal window recalled the
+  private line, the other window reset this one's cursor, the strip was covered at 2 of 3
+  points, the notice bottom 741 > line top 512, `:` opened in fullscreen, `javascript:` showed no
+  notice and left a tab). Green: `browser_vimma_cmdline.js` 201/0 after merging main (mutation
+  testing CI, #36). Mutation: private windows using the shared store fail "a normal window does
+  not"; reverted. Full `tests/browser/` 1033/0 on the artifact build; `npm test` 1418/0.

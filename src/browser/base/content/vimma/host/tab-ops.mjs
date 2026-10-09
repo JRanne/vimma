@@ -87,9 +87,24 @@ export function selectTab(win, action) {
  * @param {Window} win
  * @param {string} text
  * @param {"current" | "tab"} where
+ * @returns {boolean} false when refused (a `javascript:` URL)
  */
 export function openUrl(win, text, where) {
+  if (isJavascriptUrl(text)) return false;
   /** @type {{ openTrustedLinkIn: (url: string, where: string, params: object) => void }} */ (
     /** @type {unknown} */ (win)
   ).openTrustedLinkIn(text, where, { allowThirdPartyFixup: true, inBackground: false });
+  return true;
+}
+
+export const BLOCKED_URL_TEXT = "blocked: javascript: URLs can't be opened from the command line";
+
+/**
+ * Whether `text` would load as a `javascript:` URL. The load would fail silently (and `"tab"`
+ * would leave a blank tab), so the runners refuse it up front, with a notice. URL parsing drops
+ * tabs and newlines and ignores case, so the check does too.
+ * @param {string} text
+ */
+export function isJavascriptUrl(text) {
+  return /^javascript:/i.test(text.replace(/[\t\n\r]/g, "").trim());
 }

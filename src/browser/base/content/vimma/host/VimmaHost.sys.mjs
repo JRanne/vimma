@@ -20,7 +20,7 @@ import { HelpOverlay } from "../ui/help-overlay.mjs";
 import { StatusBar } from "../ui/statusbar.mjs";
 import { Notice } from "../ui/notice.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
-import { closeTab, newTab, openUrl, selectTab } from "./tab-ops.mjs";
+import { BLOCKED_URL_TEXT, closeTab, newTab, openUrl, selectTab } from "./tab-ops.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
 /** @import { Mode } from "../core/modes.mjs" */
@@ -50,6 +50,16 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  */
 
 /**
+ * `:open` / `:tabnew` text, or the notice saying why not.
+ * @param {WindowState} s
+ * @param {string} text
+ * @param {"current" | "tab"} where
+ */
+function openOrSay(s, text, where) {
+  if (!openUrl(s.win, text, where)) s.notice.show(BLOCKED_URL_TEXT);
+}
+
+/**
  * What the host can execute so far, with CONTENT_RUNNERS. An action without an entry is left to
  * Firefox when it is a single key outside help (ctrl+i, ctrl+u keep working until their
  * milestones land); inside a sequence (or after a count) it is consumed and shows "<action>: not
@@ -63,7 +73,7 @@ export const RUNNERS = Object.freeze({
   "help.close": (/** @type {WindowState} */ s) => s.help.close(),
   "help.filter": (/** @type {WindowState} */ s) => s.help.focusFilter(),
   "tab.new": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
-    text ? openUrl(s.win, text, "tab") : newTab(s.win),
+    text ? openOrSay(s, text, "tab") : newTab(s.win),
   "tab.next": (/** @type {WindowState} */ s, /** @type {Action} */ a) => selectTab(s.win, a),
   "tab.previous": (/** @type {WindowState} */ s, /** @type {Action} */ a) => selectTab(s.win, a),
   "tab.goto": (/** @type {WindowState} */ s, /** @type {Action} */ a) => selectTab(s.win, a),
@@ -72,7 +82,7 @@ export const RUNNERS = Object.freeze({
   "pane.close": (/** @type {WindowState} */ s) => closeTab(s.win),
   // Without text (a key bound to open_url) it asks for the URL on the command line.
   "page.open": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
-    text ? openUrl(s.win, text, "current") : s.cmdline.open("open "),
+    text ? openOrSay(s, text, "current") : s.cmdline.open("open "),
   "command.open": (/** @type {WindowState} */ s) => s.cmdline.open(),
   "command.cancel": (/** @type {WindowState} */ s) => s.cmdline.close(),
 });
