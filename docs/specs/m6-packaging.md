@@ -16,9 +16,11 @@ packages, signs and publishes all of it without me, once I have enabled it.
 ## Scope
 
 - `tools/package/package.mjs`: from the `./mach package` tarball, writes the release tarball,
-  the AppImage, the `.deb`, the AUR `PKGBUILD` + `.SRCINFO` + `vimma.desktop`, and `SHA256SUMS`.
+  the AppImage, the `.deb`, the AUR `PKGBUILD` + `.SRCINFO` + `vimma-vimma.desktop`, and
+  `SHA256SUMS`.
 - `tools/package/sbom.mjs`: a CycloneDX 1.6 JSON SBOM from `surfer.json`, `engine/Cargo.lock`,
-  the vendored crates' `Cargo.toml` and every `moz.yaml` in the engine tree.
+  the vendored crates' `Cargo.toml`, every `moz.yaml` in the engine tree and our vendored
+  smol-toml; `validate-sbom.mjs` checks it against the official CycloneDX 1.6 JSON schema.
 - `tools/package/fetch-appimagetool.sh`: downloads appimagetool and the AppImage runtime, pinned
   by version and SHA-256.
 - `.github/workflows/release.yml`: build → package (+ smoke install) → sign → upload → AUR push,
@@ -38,19 +40,20 @@ where makepkg exists).
 so a release can never carry packages of another version. Firefox's version (`version.version`)
 appears in no file name; it is in `vimma --version`'s About dialog line and the SBOM.
 
-| Artifact           | Name                                    | Contents                                                                                                        |
-| ------------------ | --------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Tarball            | `vimma-V-linux-x86_64.tar.xz`           | `./mach package`'s `vimma-<firefox>.en-US.linux-x86_64.tar.xz`, renamed, unchanged: one top-level `vimma/` dir  |
-| AppImage           | `vimma-V-x86_64.AppImage`               | type-2 AppImage of `usr/lib/vimma/` + desktop file + icons; `AppRun` (below)                                    |
-| Debian package     | `vimma_V_amd64.deb`                     | `usr/lib/vimma/`, `usr/bin/vimma` → `../lib/vimma/vimma`, desktop file, hicolor icons, `usr/share/doc/vimma/`   |
-| SBOM               | `vimma-V.cdx.json`                      | CycloneDX 1.6 JSON                                                                                              |
-| Checksums          | `SHA256SUMS`                            | `sha256sum` format over the four files above                                                                    |
-| Signatures         | `<file>.sigstore.json`                  | one cosign bundle (signature, certificate, Rekor entry) per file above and for `SHA256SUMS`                     |
-| AUR (not an asset) | `PKGBUILD`, `.SRCINFO`, `vimma.desktop` | pushed to `aur.archlinux.org/vimma-bin.git`; the source is the tarball's release URL with its SHA-256 filled in |
+| Artifact           | Name                                          | Contents                                                                                                        |
+| ------------------ | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Tarball            | `vimma-V-linux-x86_64.tar.xz`                 | `./mach package`'s `vimma-<firefox>.en-US.linux-x86_64.tar.xz`, renamed, unchanged: one top-level `vimma/` dir  |
+| AppImage           | `vimma-V-x86_64.AppImage`                     | type-2 AppImage of `usr/lib/vimma/` + desktop file + icons; `AppRun` (below)                                    |
+| Debian package     | `vimma_V_amd64.deb`                           | `usr/lib/vimma/`, `usr/bin/vimma` → `../lib/vimma/vimma`, desktop file, hicolor icons, `usr/share/doc/vimma/`   |
+| SBOM               | `vimma-V.cdx.json`                            | CycloneDX 1.6 JSON                                                                                              |
+| Checksums          | `SHA256SUMS`                                  | `sha256sum` format over the four files above                                                                    |
+| Signatures         | `<file>.sigstore.json`                        | one cosign bundle (signature, certificate, Rekor entry) per file above and for `SHA256SUMS`                     |
+| AUR (not an asset) | `PKGBUILD`, `.SRCINFO`, `vimma-vimma.desktop` | pushed to `aur.archlinux.org/vimma-bin.git`; the source is the tarball's release URL with its SHA-256 filled in |
 
 A SemVer pre-release (`0.2.0-rc.1`, nightlies) becomes `0.2.0~rc.1` in the `.deb` (sorts before
-`0.2.0`) and `0.2.0_rc.1` as `pkgver` (no hyphens allowed). release-please makes only plain
-`X.Y.Z` releases; the mappings exist so the tool never writes an invalid control file.
+`0.2.0`). The AUR gets releases only: `pkgbuild()` refuses a pre-release (its `pkgver` could not
+hold the hyphen its download URL needs), `package.mjs` writes no AUR files for one, and
+`release.yml` accepts `vX.Y.Z` tags only.
 
 `package.mjs` reads `RemotingName` from the tarball's `application.ini` for `StartupWMClass`
 (today `vimma-vimma`, see Findings) and refuses a tarball without `vimma/vimma` or with an
@@ -58,8 +61,9 @@ A SemVer pre-release (`0.2.0-rc.1`, nightlies) becomes `0.2.0~rc.1` in the `.deb
 
 ## Desktop integration
 
-One `vimma.desktop` (desktop file ID `vimma`, as Mozilla's own `.deb` names it after the
-package), shared by all three packages. Generated by `desktopEntry()`, checked by
+One `vimma-vimma.desktop` (desktop file ID = `RemotingName` from `application.ini`, so it
+matches the X11 `WM_CLASS`, the Wayland `app_id` and the MPRIS name), shared by all three
+packages. Generated by `desktopEntry()`, checked by
 `desktop-file-validate` when it is installed (the test skips that part otherwise, and always runs
 structural checks: group order, required keys, `;`-terminated lists, every action has a group).
 
@@ -70,7 +74,7 @@ structural checks: group order, required keys, `;`-terminated lists, every actio
   surprise): `text/html`, `application/xhtml+xml`, `x-scheme-handler/http`,
   `x-scheme-handler/https`, PDF, images, audio/video, feeds, XML, JSON, `application/x-xpinstall`.
   Becoming the default browser stays the user's choice (`xdg-settings set default-web-browser
-vimma.desktop`); the `.deb` also registers `x-www-browser`/`gnome-www-browser` alternatives at
+vimma-vimma.desktop`); the `.deb` also registers `x-www-browser`/`gnome-www-browser` alternatives at
   priority 40, below Firefox's 100, so it never takes over by itself.
 - Actions: `new-window`, `new-private-window`, `open-profile-manager` (as upstream).
 - Icons: `configs/branding/vimma/logo{16,22,24,32,48,64,128,256,512}.png` →
@@ -85,8 +89,15 @@ vimma.desktop`); the `.deb` also registers `x-www-browser`/`gnome-www-browser` a
 - `MOZ_LEGACY_PROFILES=1`: the runtime mounts the image at a new `/tmp/.mount_vimma…` path on
   every start; Firefox's dedicated profiles are keyed by install path, so without this every
   launch would open a fresh profile.
-- `MOZ_APP_LAUNCHER="$APPIMAGE"`: "make default browser" and the remoting service record the
-  `.AppImage` path, not the temporary mount.
+- `MOZ_APP_LAUNCHER="$APPIMAGE"`, only when the runtime set `$APPIMAGE` (never empty):
+  "make default browser" and the remoting service record the `.AppImage` path, not the
+  temporary mount.
+
+The runtime statically links libfuse 3.15.0 (LGPL-2.1+), so the AppDir carries
+`usr/share/doc/vimma/LGPL-2.1.txt` (gnu.org's text) and `APPIMAGE-RUNTIME-NOTICE.txt`: which
+runtime release, where its complete source and build scripts are, and how to relink or replace
+the runtime (`--appimage-extract`, then appimagetool with `--runtime-file`). `publish` appends a
+short "Third-party notice" to the release notes (once; a re-run finds the heading).
 
 appimagetool runs with `--no-appstream` (no metainfo yet) and `--runtime-file` (the pinned
 runtime; without it appimagetool downloads the latest one at build time, which is unpinned).
@@ -100,10 +111,13 @@ runtime; without it appimagetool downloads the latest one at build time, which i
 | `dpkg-deb`                                          | GPL-2.0+ (system tool on `ubuntu-24.04`, not shipped)                                                   | preinstalled                                                                                                                                                                                                                                       |
 | `desktop-file-validate`                             | GPL-2.0+ (system tool, tests only)                                                                      | `apt-get install desktop-file-utils` in the package job                                                                                                                                                                                            |
 | cosign 3.0.6 via `sigstore/cosign-installer` v4.1.2 | Apache-2.0                                                                                              | action pinned by SHA; it verifies the cosign binary it downloads                                                                                                                                                                                   |
-| SBOM generator                                      | ours (MPL-2.0), no dependency                                                                           | `tools/package/sbom.mjs`                                                                                                                                                                                                                           |
+| SBOM generator                                      | ours (MPL-2.0)                                                                                          | `tools/package/sbom.mjs`                                                                                                                                                                                                                           |
+| ajv 8.20.0 (schema validation)                      | MIT                                                                                                     | npm devDependency; it was already in the lockfile through eslint, now direct (no new package)                                                                                                                                                      |
+| CycloneDX 1.6.2 JSON schemas, SPDX list 3.24.0      | Apache-2.0; CC0-1.0                                                                                     | vendored in `tools/package/vendor/`, sources and SHA-256 in its README                                                                                                                                                                             |
 
-No npm dependency is added. Every tool runs in CI or at release time only; nothing but the
-AppImage runtime ends up in an artifact.
+No new npm package (ajv becomes a direct devDependency at the version already installed).
+Every tool runs in CI or at release time only; nothing but the AppImage runtime ends up in an
+artifact.
 
 ## SBOM
 
@@ -116,8 +130,18 @@ almost nothing. Firefox's own inventory is in the tree:
 - Every crates.io and git package in `engine/Cargo.lock` (`pkg:cargo/name@version`, the lockfile
   SHA-256 for registry crates, licence from `third_party/rust/<name>[-<version>]/Cargo.toml`).
   In-tree crates (no `source`) are part of Firefox and not listed.
-- Every `moz.yaml` `origin` (name, release or revision, licence, URL): the C/C++ libraries Mozilla
-  vendors (libvpx, ffvpx, …).
+- Every `moz.yaml` `origin` (name, licence, URL): the C/C++ libraries Mozilla vendors (libvpx,
+  ffvpx, …). The version is the `revision` (a commit) when there is one, else the `release`
+  without the trailing "(date)." Mozilla's tooling writes.
+- smol-toml, which `packages/vimma-core` vendors (`pkg:npm/smol-toml@1.9.0`, BSD-3-Clause; the
+  version is read from the vendored file's header).
+
+Licences: a single id is looked up case-insensitively in the SPDX License List 3.24.0 (the
+version CycloneDX 1.6.2's `spdx.schema.json` enumerates) and written in SPDX's spelling
+(`libpng` → `Libpng`); an expression is kept only if every id and exception is on the list
+(operators upper-cased, the old `MIT/Apache-2.0` form becomes `MIT OR Apache-2.0`); anything
+else becomes `license.name`. `validate-sbom.mjs` validates against the official schema in the
+tests and in the `build` job, so an invalid SBOM fails the release.
 
 It lists what the source tree vendors, a superset of what is linked into the shipped binary
 (test-only crates are included). That is stated in the SBOM's `metadata.properties`. npm
@@ -131,7 +155,10 @@ packages are dev tools only and never ship, so they are not listed.
 | Key pair (`COSIGN_PRIVATE_KEY`) | generate, store, rotate a key and its password; publish the public key | `--key cosign.pub`                                                     | a leaked secret signs anything; rotation is manual                                          |
 
 **Keyless**: there is no secret to leak, and the signature proves the file came from
-`release.yml` in `JRanne/vimma` at that tag. Only the `sign` job gets `id-token: write`; it runs
+`release.yml` in `JRanne/vimma`, run for a `vX.Y.Z` tag or from `main`. Users verify with
+`--certificate-identity-regexp` `IDENTITY_REGEXP` (`package.mjs`; anchored, exact repo, only
+`refs/tags/vX.Y.Z` or `refs/heads/main`) and `--certificate-oidc-issuer
+https://token.actions.githubusercontent.com`; a test keeps the runbook's command equal to it. Only the `sign` job gets `id-token: write`; it runs
 on a GitHub-hosted runner with no repository code except the downloaded artifacts.
 
 Each file is signed with `cosign sign-blob --yes --bundle <file>.sigstore.json <file>`.
@@ -148,18 +175,34 @@ Each file is signed with `cosign sign-blob --yes --bundle <file>.sigstore.json <
   the case without it and re-runs after a failure.
 - `release` and `workflow_dispatch` cannot come from a fork or a pull request, so nothing from
   outside runs on the self-hosted runner through this workflow.
+- A manual run executes the `release.yml` of the branch it is started on, so a pushed branch
+  could otherwise rewrite the jobs and sign or upload anything. Every job therefore also needs
+  `github.event_name == 'release' || github.ref == 'refs/heads/main'`, and the verify identity
+  accepts only those refs.
 
-Every job has `if: vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma'`
-(manual runs too: the runner and secrets must be ready first). Top-level `permissions: {}`.
+Every job has `if: vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&
+(github.event_name == 'release' || github.ref == 'refs/heads/main')` (manual runs too: the
+runner and secrets must be ready first). Top-level `permissions: {}`.
+`tools/package/test/release-workflow.test.mjs` checks the gate on every job, that only `sign`
+has `id-token: write` and only `publish` `contents: write`, and that there is no PR or push
+trigger.
 
-| Job       | Runner                    | Permissions       | Gate                       | Does                                                                                                                                                         |
-| --------- | ------------------------- | ----------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `build`   | self-hosted `vimma-build` | `contents: read`  | `RELEASE_ENABLED`          | checkout the tag (`clean: false`), check tag = `vV`, `npm run import`, `surfer build`, `--version` smoke, `./mach package`, SBOM; uploads the tarball + SBOM |
-| `package` | `ubuntu-24.04`            | `contents: read`  | `RELEASE_ENABLED`          | `fetch-appimagetool.sh`, `package.mjs`, `desktop-file-validate`, smoke: `apt install ./vimma_V_amd64.deb`, `vimma --version`, AppImage `--version`           |
-| `sign`    | `ubuntu-24.04`            | `id-token: write` | + `SIGNING_ENABLED`        | cosign keyless bundles for every asset and `SHA256SUMS`                                                                                                      |
-| `publish` | `ubuntu-24.04`            | `contents: write` | `RELEASE_ENABLED`          | `gh release upload <tag> … --clobber` (assets, `SHA256SUMS`, bundles when signed)                                                                            |
-| `aur`     | `ubuntu-24.04`            | none              | + `AUR_SSH_KEY` secret set | clone `ssh://aur@aur.archlinux.org/vimma-bin.git`, replace `PKGBUILD`, `.SRCINFO`, `vimma.desktop`, commit, push                                             |
-| `failure` | `ubuntu-24.04`            | `issues: write`   | any job failed             | opens or comments on a `release-failure` issue                                                                                                               |
+**Build trust.** The `build` job uses a fresh objdir (`MOZ_OBJDIR=engine/obj-release`, deleted
+first) and an empty sccache directory of its own (the nightly's sccache server is stopped first
+and again at the end), so nothing a nightly or any other job left on the runner reaches signed
+binaries. The cost is a cold build (~40 min) per release. The Firefox source in `engine/` is
+still reused between runs (re-downloaded when `surfer.json` changes). **Until the repo has
+"Require approval for all outside collaborators" set, the `vimma-build` runner must stay
+offline outside builds.**
+
+| Job       | Runner                    | Permissions       | Gate                       | Does                                                                                                                                                                        |
+| --------- | ------------------------- | ----------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `build`   | self-hosted `vimma-build` | `contents: read`  | `RELEASE_ENABLED`          | checkout the tag, check tag = `vV`, fresh objdir + cache, `npm run import`, `surfer build`, `--version` and `application.ini` checks, `./mach package`, SBOM + schema check |
+| `package` | `ubuntu-24.04`            | `contents: read`  | `RELEASE_ENABLED`          | `fetch-appimagetool.sh`, `package.mjs`, `desktop-file-validate`, smoke: `apt install ./vimma_V_amd64.deb`, `vimma --version`, AppImage `--version`                          |
+| `sign`    | `ubuntu-24.04`            | `id-token: write` | + `SIGNING_ENABLED`        | cosign keyless bundles for every asset and `SHA256SUMS`                                                                                                                     |
+| `publish` | `ubuntu-24.04`            | `contents: write` | `RELEASE_ENABLED`          | `gh release upload <tag> … --clobber` (assets, `SHA256SUMS`, bundles when signed); appends the third-party notice to the notes                                              |
+| `aur`     | `ubuntu-24.04`            | none              | + `AUR_SSH_KEY` secret set | clone `ssh://aur@aur.archlinux.org/vimma-bin.git`, replace `PKGBUILD`, `.SRCINFO`, `vimma-vimma.desktop`, commit, push                                                      |
+| `failure` | `ubuntu-24.04`            | `issues: write`   | any job failed             | opens or comments on a `release-failure` issue                                                                                                                              |
 
 `publish` waits for `sign` and uploads the bundles when signing is enabled; with
 `SIGNING_ENABLED` unset, `sign` is skipped and `publish` uploads unsigned assets. The AUR host key is pinned in the workflow (from `aur.archlinux.org`'s published fingerprints), not
@@ -188,7 +231,7 @@ a temp dir (`vimma/vimma` shell stub, `vimma-bin`, `application.ini`, `libxul.so
 `browser/chrome/icons/default/default*.png`), `tar -cJf`:
 
 - Version: `releaseVersion(surfer.json)` returns `displayVersion`; a mismatching `--tag` and a
-  non-SemVer version throw; `debVersion`/`pkgver` map pre-releases.
+  non-SemVer version throw; `debVersion` maps pre-releases; `pkgbuild`/`srcinfo` refuse them.
 - Names: the table above, from the version.
 - `application.ini`: `RemotingName` is read; a tarball without `vimma/vimma` or with another
   `Name` is refused.
@@ -196,8 +239,10 @@ a temp dir (`vimma/vimma` shell stub, `vimma-bin`, `application.ini`, `libxul.so
   `StartupWMClass` from `application.ini`, every `Actions=` entry has a group; passes
   `desktop-file-validate` (skipped without it).
 - Release tarball: same bytes as the input, renamed.
-- AppDir: `AppRun` 0755 with `MOZ_LEGACY_PROFILES=1`, `MOZ_APP_LAUNCHER`, exec of
-  `usr/lib/vimma/vimma`; root `vimma.desktop` and `vimma.png`; icons at every size;
+- AppDir: `AppRun` 0755 with `MOZ_LEGACY_PROFILES=1`, `MOZ_APP_LAUNCHER` only under the
+  runtime (run with and without `$APPIMAGE`), exec of `usr/lib/vimma/vimma`; root
+  `vimma-vimma.desktop` and `vimma.png`; `usr/share/doc/vimma/LGPL-2.1.txt` and the runtime
+  notice (release, source URL, libfuse version, how to replace it); icons at every size;
   executables keep 0755, data files 0644, directories 0755. appimagetool is invoked (a stub that
   records its arguments) with `ARCH=x86_64`, `--no-appstream`, `--runtime-file`.
 - `.deb` staging: `DEBIAN/control` fields (Package, Version, Architecture amd64, Maintainer,
@@ -212,9 +257,17 @@ a temp dir (`vimma/vimma` shell stub, `vimma-bin`, `application.ini`, `libxul.so
 `tools/package/test/sbom.test.mjs`: fixture `Cargo.lock`, vendored `Cargo.toml`s and
 `moz.yaml`s: registry crates get purl, hash and licence; path crates are left out; git crates get
 their VCS URL; `moz.yaml` licence lists become `OR`-free `licenses` arrays; the document has
-`bomFormat`, `specVersion` 1.6, `serialNumber` as `urn:uuid:`, the Vimma metadata component.
+`bomFormat`, `specVersion` 1.6, `serialNumber` as `urn:uuid:`, the Vimma metadata component;
+licence ids in SPDX's spelling (`libpng` → `Libpng`), expressions canonicalised, unknown text as
+a name; moz.yaml versions without the date; smol-toml listed; the document validates against
+the official CycloneDX 1.6 schema, which rejects `license.id: "libpng"`.
 
-Workflow: actionlint clean.
+`package.test.mjs` also: `IDENTITY_REGEXP` accepts `release.yml` at `refs/tags/vX.Y.Z` and
+`refs/heads/main` only (not other branches, pre-release tags, PR refs, other workflows or
+repos) and is what the runbook's `cosign verify-blob` uses; `RUNTIME_RELEASE` is the one
+`fetch-appimagetool.sh` pins; the third-party release notes name it.
+
+`release-workflow.test.mjs`: the gates and permissions above. Workflow: actionlint clean.
 
 ## Findings
 
@@ -224,9 +277,11 @@ Workflow: actionlint clean.
   for an updater we compile out. The nightly now runs `./mach package` and publishes the tarball.
 - **`StartupWMClass` is `vimma-vimma`.** `MOZ_APP_REMOTINGNAME` defaults to
   `<app name>-<update channel>` unless the channel is `release`, and Surfer sets the channel to
-  the brand (`vimma`). That is also the Wayland `app_id`. The desktop file follows it (read from
-  `application.ini`), so window matching works; renaming it (`MOZ_APP_REMOTINGNAME=vimma` or the
-  channel) changes the remoting name and is left for the updater spec, which owns the channel.
+  the brand (`vimma`). That is also the Wayland `app_id`. The desktop file is named after it
+  (`vimma-vimma.desktop`, read from `application.ini`), so shells match windows to it. A
+  possible later cleanup: `MOZ_APP_REMOTINGNAME=vimma` (or the channel) for a plain `vimma`;
+  that needs a full rebuild and changes the remoting name, so it is a separate decision (the
+  updater spec owns the channel).
 - `./mach package` on Linux makes `dist/vimma-<MOZ_PKG_VERSION>.en-US.linux-x86_64.tar.xz`
   (`MOZ_PKG_FORMAT=XZ` for GTK in `toolkit/moz.configure`; name from
   `toolkit/mozapps/installer/package-name.mk`). `MOZ_PKG_VERSION` is the Firefox version, hence
@@ -234,7 +289,18 @@ Workflow: actionlint clean.
 
 ## Settled
 
-- Node scripts with Vitest (the repo's test runner), no new dependency; Python was not needed.
+- Node scripts with Vitest (the repo's test runner); Python was not needed.
+
+## Review changes (2026-10-09)
+
+The first review asked for: the main/release gate on every job and an anchored verify identity
+(must-fix 1); SPDX-canonical licence ids and validation against the official schema (2); the
+LGPL text and runtime notice in the AppImage plus a release-notes notice (3); smol-toml and
+clean moz.yaml versions in the SBOM (4); a fresh objdir and cache for release builds (5); the
+desktop file ID `vimma-vimma` (6); and nits (AUR releases only, `ubuntu-24.04` in `failure`,
+no empty `MOZ_APP_LAUNCHER`, the `application.ini` version check in the release build). All are
+in, test-first where there is code.
+
 - Install path `usr/lib/vimma` in the `.deb` (Mozilla's own `.deb` uses `usr/lib/firefox`), and
   `/opt/vimma` in the AUR package (Arch's convention for `-bin` browsers).
 - The `.deb` `Depends:` is a static list of the libraries Firefox's binaries link against
