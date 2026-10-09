@@ -93,6 +93,11 @@ export default [
         FluentResource: "readonly",
         getRootDirectory: "readonly",
         gTestPath: "readonly",
+        WebExtensionPolicy: "readonly",
+        ExtensionTestUtils: "readonly",
+        openAboutDialog: "readonly",
+        // the WebExtension global inside ExtensionTestUtils.loadExtension backgrounds
+        browser: "readonly",
         // the content global inside SpecialPowers.spawn callbacks
         content: "readonly",
       },
