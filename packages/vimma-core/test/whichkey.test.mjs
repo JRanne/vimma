@@ -3,7 +3,8 @@ import fc from "fast-check";
 import { compileKeymap } from "../src/keymap.mjs";
 import { ACTIONS } from "../src/actions.mjs";
 import { bindingTable } from "../src/help.mjs";
-import { compareKeys, isRunnable, whichKey } from "../src/whichkey.mjs";
+import { compareKeys, whichKey } from "../src/whichkey.mjs";
+import { isRunnable } from "../src/actions.mjs";
 import { formatKey, NAMED_KEYS } from "../src/keys.mjs";
 
 const ALL = new Set(ACTIONS.map((a) => a.id));
@@ -69,7 +70,14 @@ describe("which-key", () => {
     const rows = bindingTable(km, { runnable });
     expect(rows.find((r) => r.name === "new_tab")?.runnable).toBe(true);
     expect(rows.find((r) => r.name === "zoom")?.runnable).toBe(false);
-    expect(bindingTable(km)[0]).not.toHaveProperty("runnable");
+  });
+
+  test("runnable is optional: without a set nothing is greyed, in the strip and in help", () => {
+    const entries = whichKey(km, "normal", ["prefix"])?.sections.flatMap((s) => s.entries) ?? [];
+    expect(entries.length).toBeGreaterThan(0);
+    expect(entries.every((e) => e.runnable)).toBe(true);
+    expect(bindingTable(km).every((r) => r.runnable === true)).toBe(true);
+    expect(isRunnable("pane.zoom", undefined)).toBe(true);
   });
 
   test("ctrl+w in normal mode lists the window keys", () => {

@@ -6,8 +6,7 @@
  * The binding table behind `prefix+?`, `:map` and docs/bindings.md. Rendered from the same
  * compiled keymap the dispatcher uses, so help cannot drift from behaviour.
  */
-import { ACTIONS } from "./actions.mjs";
-import { isRunnable } from "./whichkey.mjs";
+import { ACTIONS, isRunnable } from "./actions.mjs";
 
 /** @import { Keymap } from "./keymap.mjs" */
 /**
@@ -18,13 +17,13 @@ import { isRunnable } from "./whichkey.mjs";
  * @property {string} description
  * @property {string[]} bindings
  * @property {boolean} overridden
- * @property {boolean} [runnable]   only when `bindingTable` is given a runnable set
+ * @property {boolean} runnable     false greys the row out (see isRunnable)
  */
 
 /**
  * @param {Keymap} keymap
- * @param {{ runnable?: ReadonlySet<string> }} [options] action ids the host implements; rows
- *   then carry `runnable`, the same rule the which-key strip uses
+ * @param {{ runnable?: ReadonlySet<string> }} [options] action ids the host implements;
+ *   undefined marks every row runnable (the same default as the which-key strip)
  * @returns {BindingRow[]}
  */
 export function bindingTable(keymap, { runnable } = {}) {
@@ -35,7 +34,7 @@ export function bindingTable(keymap, { runnable } = {}) {
     description: a.description,
     bindings: keymap.bindingsFor(a.name),
     overridden: keymap.isOverridden(a.name),
-    ...(runnable ? { runnable: isRunnable(a.id, runnable) } : {}),
+    runnable: isRunnable(a.id, runnable),
   }));
 }
 

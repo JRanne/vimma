@@ -6,7 +6,7 @@
  * The which-key strip shown while a key sequence is pending (spec m2-core-logic): the next keys
  * from the same compiled keymap the dispatcher walks, with labels, grouped like `prefix+?`.
  */
-import { ACTIONS } from "./actions.mjs";
+import { ACTIONS, isRunnable } from "./actions.mjs";
 import { NAMED_KEYS, parseKey } from "./keys.mjs";
 import { COUNT_MODES } from "./modes.mjs";
 
@@ -31,15 +31,6 @@ import { COUNT_MODES } from "./modes.mjs";
 
 const MORE = "More";
 const GROUP_ORDER = [...new Set(ACTIONS.map((a) => a.group))];
-
-/**
- * The one rule for greying out unbuilt actions, shared with `bindingTable`.
- * @param {string} id action id
- * @param {ReadonlySet<string>} runnable ids the host implements
- */
-export function isRunnable(id, runnable) {
-  return runnable.has(id);
-}
 
 /** @type {Record<string, string>} */
 const SYMBOL_NAMES = { minus: "-", plus: "+" };
@@ -148,10 +139,11 @@ function walk(root, mode, pending) {
  * @param {Keymap} keymap
  * @param {Mode} mode
  * @param {readonly string[]} pending
- * @param {{ runnable: ReadonlySet<string> }} options
+ * @param {{ runnable?: ReadonlySet<string> }} [options] action ids the host implements;
+ *   undefined shows every action as runnable
  * @returns {WhichKey | null}
  */
-export function whichKey(keymap, mode, pending, { runnable }) {
+export function whichKey(keymap, mode, pending, { runnable } = {}) {
   const node = walk(keymap.trie(mode), mode, pending);
   if (!node || node.children.size === 0) return null;
   /** @type {Map<string, WhichKeyEntry[]>} */
