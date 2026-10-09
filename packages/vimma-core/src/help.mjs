@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 /**
  * The binding table behind `prefix+?`, `:map` and docs/bindings.md. Rendered from the same
  * compiled keymap the dispatcher uses, so help cannot drift from behaviour.

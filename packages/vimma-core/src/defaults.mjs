@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 /**
  * Default configuration, as the object a TOML parser would produce from defaults.toml.
  * packages/vimma-core/defaults.toml is generated from this (npm run gen-docs).

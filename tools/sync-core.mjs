@@ -1,12 +1,17 @@
-// Copies packages/vimma-core/src/*.mjs into the chrome tree (git-ignored; see m0-key-capture spec).
-import { copyFileSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+// Copies packages/vimma-core/src into the chrome tree (git-ignored; see m0-key-capture spec).
+import { cpSync, existsSync, readdirSync, rmSync } from "node:fs";
 
 const root = new URL("../", import.meta.url);
 const from = new URL("packages/vimma-core/src/", root);
 const to = new URL("src/browser/base/content/vimma/core/", root);
+// `surfer import` symlinks each file here; drop links left behind by renamed or removed modules.
+const linked = new URL("engine/browser/base/content/vimma/core/", root);
 
 rmSync(to, { recursive: true, force: true });
-mkdirSync(to, { recursive: true });
-const files = readdirSync(from).filter((f) => f.endsWith(".mjs"));
-for (const f of files) copyFileSync(new URL(f, from), new URL(f, to));
-console.log(`sync-core: ${files.length} modules -> ${to.pathname}`);
+cpSync(from, to, { recursive: true, filter: (p) => !p.endsWith(".test.mjs") });
+if (existsSync(linked)) {
+  for (const f of readdirSync(linked)) {
+    if (!existsSync(new URL(f, to))) rmSync(new URL(f, linked), { recursive: true });
+  }
+}
+console.log(`sync-core: ${readdirSync(to).length} entries -> ${to.pathname}`);
