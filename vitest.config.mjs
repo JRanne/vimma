@@ -2,7 +2,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ["packages/**/test/**/*.test.mjs"],
+    include: ["packages/**/test/**/*.test.mjs", "tools/**/test/**/*.test.mjs"],
     coverage: {
       provider: "v8",
       include: ["packages/vimma-core/src/**"],
