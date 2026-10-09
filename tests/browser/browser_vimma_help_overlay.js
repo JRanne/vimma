@@ -4,6 +4,8 @@
 
 // Spec: docs/specs/m0-help-overlay.md
 
+/* global focusContent, recordPageKeys, pageKeys, waitForPageKey -- from head.js */
+
 "use strict";
 
 const { bindingTable, compileKeymap, filterBindings } = ChromeUtils.importESModule(
@@ -153,58 +155,31 @@ add_task(async function help_show_while_open_closes_it() {
   });
 });
 
+/**
+ * Presses j (never ours outside help) and returns the page's keys (recordPageKeys), ending with
+ * "j". A key that is not ours proves the listener works and flushes any in-flight events. Gives
+ * up after 5 s, so a swallowed j fails the assertion instead of timing out the whole file.
+ */
+async function pageKeysThenJ(browser) {
+  EventUtils.synthesizeKey("j");
+  await waitForPageKey(browser, ["j", "!j"]);
+  return pageKeys(browser);
+}
+
 add_task(async function page_receives_no_keydown_for_the_chord() {
   await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
-    await SpecialPowers.spawn(browser, [], () => {
-      content.wrappedJSObject.vimmaKeys = [];
-      content.addEventListener(
-        "keydown",
-        (e) => content.wrappedJSObject.vimmaKeys.push(e.key),
-        true,
-      );
-    });
-    browser.focus();
+    await recordPageKeys(browser);
+    await focusContent(browser);
     await openHelp();
     await closeHelp();
-
-    // A key that is not ours proves the listener works and flushes any in-flight events.
-    const sentinel = BrowserTestUtils.waitForContentEvent(browser, "keydown", true, (e) => {
-      return e.key === "j";
-    });
-    EventUtils.synthesizeKey("j");
-    await sentinel;
-    const keys = await SpecialPowers.spawn(browser, [], () => [
-      ...content.wrappedJSObject.vimmaKeys,
-    ]);
-    Assert.deepEqual(keys, ["j"], "the page saw neither ctrl+b nor ? (nor Esc)");
+    Assert.deepEqual(
+      await pageKeysThenJ(browser),
+      ["j"],
+      "the page saw neither ctrl+b nor ? (nor Esc)",
+    );
     Assert.ok(!SidebarController.isOpen, "ctrl+b no longer toggles the bookmarks sidebar");
   });
 });
-
-/** Records every keydown the page sees, with whether something upstream prevented it. */
-async function recordPageKeys(browser) {
-  await SpecialPowers.spawn(browser, [], () => {
-    content.wrappedJSObject.vimmaKeys = [];
-    content.addEventListener(
-      "keydown",
-      (e) => content.wrappedJSObject.vimmaKeys.push(e.defaultPrevented ? `!${e.key}` : e.key),
-      true,
-    );
-  });
-}
-
-/**
- * Presses j (never ours outside help) and returns the page's keys, ending with "j". Gives up
- * after 5 s, so a swallowed j fails the assertion instead of timing out the whole file.
- */
-async function pageKeysThenJ(browser) {
-  const sentinel = BrowserTestUtils.waitForContentEvent(browser, "keydown", true, (e) => {
-    return e.key === "j";
-  });
-  EventUtils.synthesizeKey("j");
-  await Promise.race([sentinel, wait(5000)]);
-  return SpecialPowers.spawn(browser, [], () => [...content.wrappedJSObject.vimmaKeys]);
-}
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -213,7 +188,7 @@ function wait(ms) {
 add_task(async function bare_prefix_does_not_time_out() {
   await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
     await recordPageKeys(browser);
-    browser.focus();
+    await focusContent(browser);
     EventUtils.synthesizeKey("b", { ctrlKey: true });
     await wait(compileKeymap().timeoutMs + 400);
     EventUtils.synthesizeKey("?", { shiftKey: true });
@@ -226,7 +201,7 @@ add_task(async function bare_prefix_does_not_time_out() {
 add_task(async function unrunnable_single_key_action_reaches_the_page() {
   await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
     await recordPageKeys(browser);
-    browser.focus();
+    await focusContent(browser);
     // Esc is bound to mode.normal, which the host cannot run before M1.
     EventUtils.synthesizeKey("KEY_Escape");
     Assert.deepEqual(
@@ -240,7 +215,7 @@ add_task(async function unrunnable_single_key_action_reaches_the_page() {
 add_task(async function unrunnable_key_inside_a_prefix_sequence_is_consumed() {
   await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
     await recordPageKeys(browser);
-    browser.focus();
+    await focusContent(browser);
     const tabs = gBrowser.tabs.length;
     EventUtils.synthesizeKey("b", { ctrlKey: true });
     EventUtils.synthesizeKey("c"); // new_tab: not runnable yet
@@ -252,12 +227,12 @@ add_task(async function unrunnable_key_inside_a_prefix_sequence_is_consumed() {
 add_task(async function tab_select_resets_a_pending_prefix() {
   await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
     await recordPageKeys(browser);
-    browser.focus();
+    await focusContent(browser);
     const tab = gBrowser.selectedTab;
     EventUtils.synthesizeKey("b", { ctrlKey: true });
     await BrowserTestUtils.switchTab(gBrowser, gBrowser.tabs[0]);
     await BrowserTestUtils.switchTab(gBrowser, tab);
-    browser.focus();
+    await focusContent(browser);
     EventUtils.synthesizeKey("?", { shiftKey: true });
     Assert.deepEqual(
       await pageKeysThenJ(browser),

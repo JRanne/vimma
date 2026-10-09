@@ -72,6 +72,106 @@ needed; the crash-reporter flag needs `npm run import && (cd engine && ./mach bu
 Placeholder artwork: `configs/branding/vimma/*.svg`, rendered by `tools/branding/render.sh`
 (`rsvg-convert`, ImageMagick). Replace the SVGs, re-run the script, commit the PNG/ICO outputs.
 
+## Testing
+
+### Mochitests that send keys to a page
+
+Set up, await, then press (issues #14, #18). `tests/browser/head.js`, which the harness loads
+before every test in the directory, has the helpers:
+
+```js
+await recordPageKeys(browser); // listener in place in the content process
+await focusContent(browser); // chrome and content focus
+EventUtils.synthesizeKey("j");
+Assert.ok(await waitForPageKey(browser, ["j"]), "page received j, not default-prevented");
+Assert.deepEqual(await pageKeys(browser), ["j"], "and nothing else");
+```
+
+Do not use `BrowserTestUtils.waitForContentEvent` followed by `synthesizeKey`: it installs its
+listener through `sharedData.flush()`, which the content process picks up later, so the key can
+beat the listener. Do not rely on `browser.focus()` either: it moves chrome focus; the content
+process takes focus later. On a 2-CPU runner both race the key. Neither matters for keys that
+only chrome handles (Vimma's chords, the help overlay, the URL bar).
+
+To shake out a race, run a test repeatedly on two busy CPUs (what the hosted runner has):
+
+```sh
+for i in 1 2 3 4; do taskset -c 0,1 sh -c 'while :; do :; done' & done
+taskset -c 0,1 npm run mochitest -- --repeat=49 tests/browser/browser_vimma_<name>.js
+kill $(jobs -p)
+```
+
+Pass `--repeat=N` with `=`: `tools/mochitest.mjs` treats a bare `N` as a test path. Plan §5: no
+retries in CI; a flaky test gets quarantined and an issue the same day.
+
+## Parallel browser lanes
+
+A lane is a git worktree (e.g. an agent's under `.claude/worktrees/`) with its own `engine/` and
+artifact build, so several agents can run browser specs at once without sharing a tree. In the
+worktree:
+
+```sh
+ln -s /home/juuso/repositories/VimHerdr/node_modules node_modules   # or npm ci
+npm run lane:setup          # copy, reset, import, artifact build, verify
+npm run mochitest -- --artifact tests/browser/
+npm run lane:teardown       # when done: removes this worktree's engine/
+```
+
+`tools/lanes/lane-setup.mjs`:
+
+1. reflink-copies the main checkout's `engine/` (`--source <checkout>` for another) without
+   any `obj-*` dir, keeping the engine's own `.git` and modes (`cp -a --reflink=always`);
+2. resets the copy to upstream as Surfer's `surfer reset` would, but scoped: unlinks the
+   symlinks that lead into the source checkout (the source's `surfer import` made them, with
+   absolute paths), `git checkout -- .` (undoes our `.patch` files and the lines import added
+   to `engine/.gitignore`), `git clean -fd` (no `-x`: what import added, not upstream-ignored
+   files) and removes `mozconfig*`;
+3. runs this worktree's `npm run import` and `tools/artifact-build` into `engine/obj-artifact`;
+4. checks that no symlink leads into the source checkout and some lead into the lane, runs
+   `browser_vimma_branding.js`, and prints timings and disk (`btrfs filesystem du`).
+
+Cost, measured 2026-10-09 (Firefox 157.0.1, 16 threads, Mozilla's artifacts already cached in
+`~/.mozbuild/package-frontend`; a cold cache downloads 163 MB once, shared by all lanes):
+
+| Phase          | Time   |
+| -------------- | ------ |
+| copy (reflink) | 4.8 s  |
+| reset          | 23.2 s |
+| import         | 1.0 s  |
+| artifact build | 36.5 s |
+| mochitest      | 8.6 s  |
+
+About 75 s in all. Disk: 5.06 GB total but **0.59 GB exclusive** (the reflinked tree shares
+its extents with the source; `obj-artifact` and rewritten files are the lane's own). The whole
+`tests/browser/` suite then takes 22 s in the lane.
+
+Protection of the main checkout: setup and teardown refuse to run in it (the first entry of
+`git worktree list`), whatever path it is reached by; setup only reads the source `engine/` and
+writes under the lane's; teardown refuses an `engine/` that is a symlink or resolves into the
+main checkout's. Setup refuses an existing `engine/` unless `--force`, and refuses a non-reflink
+copy (about 6 GB, minutes) unless `--allow-copy`: the lane must be on the same btrfs filesystem.
+
+Limits:
+
+- **Artifact builds only.** Specs that change build config, `moz.configure`, compiled-in
+  defines or C++ (ADR-010 "Known gaps", `skip-if = ["artifact"]` tests) need the main
+  checkout's full build; do them there, one at a time.
+- **One lane per worktree** (its `engine/`). After changing `src/` or `tests/` paths, rerun
+  `npm run import` there; after a Firefox bump, `npm run lane:setup -- --force` from a source
+  checkout on the new release.
+- **CPU:** an artifact build is CPU-bound (the front-end build). On this 16-thread box run at
+  most about 3 artifact builds at once, and none while the main checkout runs a full build;
+  mochitests are light, a few in parallel are fine.
+- **Don't set up a lane while the source checkout is mid-import** (or mid-`git` in its
+  `engine/`): the copy is a snapshot. Stray `*.lock` files copied from its `engine/.git` are
+  removed in the lane (and logged), never in the source; a half-applied import is undone by
+  the reset, but rerun setup with `--force` if anything looks off.
+- With `--source <other worktree>`, links into both that worktree and the main checkout are
+  removed and checked. All git (and import) children run without inherited `GIT_*`
+  variables, and reset refuses an `engine/` that is not the top of its own git repo.
+- mach keeps a small per-tree state dir in `~/.mozbuild/srcdirs/engine-<hash>` (about 2 MB
+  per lane); teardown leaves it.
+
 ## CI and automation (spec m0-pipeline)
 
 | Workflow             | Trigger                          | Runner                    | Needs from you                             |
