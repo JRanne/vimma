@@ -97,9 +97,22 @@ Workspaces are not built yet; these are the limits their design accepts
 
 ## Privacy, security and services
 
-- Safe Browsing does not work: there is no Google API key, so no phishing, malware or download
-  lists are fetched, yet Settings shows the protection ticked. Follow-up spec
-  `m0-safebrowsing-key` ([m0-mozilla-services](specs/m0-mozilla-services.md), Open issues).
+- Safe Browsing works only in builds made with a Google API key (the nightly, and local builds
+  with the key file). Keyless builds, including PR CI's, fetch no phishing, malware or download
+  lists and default the protection off, so Settings shows it unticked
+  ([m0-safebrowsing-key](specs/m0-safebrowsing-key.md)).
+- Every keyed build shares one Google key. Google's Safe Browsing API is free for
+  non-commercial use only and has per-project quotas (Cloud console → Quotas); a large user base
+  or commercial use needs a quota increase or Google's Web Risk API. The key is compiled into
+  the binaries and can be extracted from them; that is normal for browsers (Firefox ships its
+  own the same way) and accepted. Rotation: [runbook](runbook.md)
+  ([m0-safebrowsing-key](specs/m0-safebrowsing-key.md)).
+- No download reputation: Google serves its download lists (`goog-badbinurl-proto`,
+  `goog-downloadwhite-proto`) and its remote download check only to Mozilla's key, so Vimma asks
+  for neither, and "Block dangerous downloads" in Settings adds nothing beyond the site lists
+  ([m0-safebrowsing-key](specs/m0-safebrowsing-key.md), Settled).
+- `release.yml` (PR #23) does not pass the key yet; it must copy the nightly's key-file steps
+  before the first release ([m0-safebrowsing-key](specs/m0-safebrowsing-key.md), Open issues).
 - Firefox's app updater is still built in and asks `aus5.mozilla.org` for updates on the `vimma`
   channel, and system add-on updates are on. Removing both is in review (PR #15, spec
   `m0-updater`).

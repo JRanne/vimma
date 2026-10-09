@@ -138,13 +138,37 @@ Vimma changes Firefox's defaults, without locking them: each one can be changed 
 | Telemetry upload                         | Not built in (no official telemetry). The data-collection switches in Settings are off to match.                                                                                                      |
 
 Kept as in Firefox: Remote Settings (CRLite certificate revocation, intermediate certificates),
-the add-on blocklist, Firefox Sync and add-ons from addons.mozilla.org. Safe Browsing is switched
-on but **does not work yet**: see the FAQ. Firefox's app updater and system add-on updates still
-contact Mozilla's update server; see [limits.md](limits.md).
+the add-on blocklist, Firefox Sync, add-ons from addons.mozilla.org and Google Safe Browsing
+(see below). Firefox's app updater and system add-on updates still contact Mozilla's update
+server; see [limits.md](limits.md).
 
 Sites see Firefox 157's user agent, with no Vimma token, and add-ons see Firefox's version
 (`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. `vimma --version` and the About
 dialog show Vimma's own version (`0.1.0`).
+
+### Safe Browsing
+
+Google Safe Browsing is on by default, as in Firefox: Vimma downloads Google's lists of phishing,
+malware and unwanted-software sites and warns before you open one. Your browsing stays local:
+only when an address matches the local list does Vimma send Google a short hash prefix of it to
+confirm. Spec: [m0-safebrowsing-key](specs/m0-safebrowsing-key.md).
+
+Firefox's extra download checks (Google's lists of bad and known-good downloads, and its file
+reputation service) are open only to Mozilla's own key, so Vimma does not use them: the "Block
+dangerous downloads" box adds nothing beyond the site lists ([limits.md](limits.md)).
+
+To turn Safe Browsing off: Settings → Privacy & Security → untick "Block dangerous
+and deceptive content". In `about:config` that is `browser.safebrowsing.phishing.enabled` and
+`browser.safebrowsing.malware.enabled` = `false`.
+
+A Vimma you build yourself has Safe Browsing only if you build it with a Google API key
+([runbook](runbook.md)). Without one it fetches no lists, and Settings shows the protection off.
+
+Whether or not you use Safe Browsing, we recommend [uBlock Origin](https://ublockorigin.com/)
+from addons.mozilla.org as a second line: in its dashboard → Filter lists, keep "uBlock filters
+– Badware risks" on and tick the lists under "Malware protection, security" (Online Malicious URL
+Blocklist, Phishing URL Blocklist). They block known malware and phishing sites without asking
+any server about the pages you visit.
 
 ## Firefox behaviour Vimma changes
 
@@ -167,9 +191,10 @@ the version that last used them. Builds from before the app-version change repor
 instead of `157.0.1`, so they treat any newer profile as a downgrade. Give each build its own
 `--profile`, or start with `--allow-downgrade` if you accept the risk.
 
-**Does Safe Browsing protect me?** Not yet. The phishing and malware lists need a Google API key
-that the build does not have yet, so no lists are fetched, even though Settings shows "Block
-dangerous and deceptive content" ticked. Mozilla's tracking-protection lists do update.
+**Does Safe Browsing protect me?** Yes, in builds made with a Google API key, which are on by
+default (see [Safe Browsing](#safe-browsing)). A build without a key fetches no phishing or
+malware lists; Settings then shows "Block dangerous and deceptive content" unticked, and ticking
+it does not help. Mozilla's tracking-protection lists update either way.
 
 **Does Vimma update itself?** No. There are no releases yet, so build a newer `main` yourself.
 Firefox's updater is still built in and asks Mozilla's update server (`aus5.mozilla.org`), which

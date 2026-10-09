@@ -46,8 +46,9 @@ What works today:
 - **Privacy defaults.** Mozilla studies, experiments and rollouts (Normandy, Nimbus) are off, and
   so are sponsored new-tab content, sponsored suggestions and Mozilla promos. The build has no
   crash reporter and no official telemetry, so nothing is uploaded. Remote Settings, CRLite,
-  the add-on blocklist, Sync and AMO work as in Firefox. Each default can be turned back on in
-  `about:config`.
+  the add-on blocklist, Sync and AMO work as in Firefox. Google Safe Browsing is on in builds
+  made with a Google API key; a build without one shows it off in Settings. Each default can be
+  turned back on, or off, in `about:config`.
 - **Firefox-compatible.** Sites see Firefox 157's user agent, byte for byte. Add-ons, webcompat
   fixes and Remote Settings see Firefox's version number.
 

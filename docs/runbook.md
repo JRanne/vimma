@@ -280,6 +280,48 @@ The job keeps `engine/` between runs (`clean: false`) and re-downloads Firefox o
 `nightly` pre-release; on failure it uploads the log and opens (or comments on) an issue labelled
 `nightly-failure`. Comment `@claude` on that issue to hand it to Claude Code.
 
+### Google Safe Browsing key (spec m0-safebrowsing-key)
+
+Safe Browsing's phishing, malware and download lists need a Google API key compiled into the
+build. `configs/common/mozconfig` passes it to configure only when the key file exists:
+`$VIMMA_SAFEBROWSING_KEYFILE` if set (it must then name a file), else
+`~/.config/vimma/keys/safebrowsing`. Without one the build is keyless and Vimma defaults Safe
+Browsing off, so Settings shows it unticked. The key is a secret: never echo, log or commit it.
+
+Get a key: Google Cloud console → a project → enable the **Safe Browsing API** → Credentials →
+Create API key → restrict it to that API. Its use is free but non-commercial; Google's quota is
+per key (see [limits.md](limits.md)).
+
+**Locally**, store it without it reaching the terminal or the shell history, then rebuild:
+
+```sh
+mkdir -p ~/.config/vimma/keys && chmod 700 ~/.config/vimma/keys
+( umask 077; read -rs -p "Safe Browsing API key: " k; echo
+  printf '%s' "$k" > ~/.config/vimma/keys/safebrowsing )
+npm run import && (cd engine && ./mach build)   # the key is a configure input: full build
+tools/safebrowsing-smoke/safebrowsing-smoke.sh   # needs the network; prints table names and sizes
+```
+
+The local artifact build copies the same mozconfig, so it is keyed too (rebuild it with
+`node tools/artifact-build/artifact-build.mjs`). `npm run mochitest` passes
+`VIMMA_EXPECT_SAFEBROWSING_KEY=1` when the key file exists, so a stale keyless build fails
+`browser_vimma_safebrowsing.js`; set `VIMMA_EXPECT_SAFEBROWSING_KEY=0` to test a keyless build
+on purpose.
+
+**In CI**, the key is the repository secret `SAFEBROWSING_API_KEY` (`gh secret set
+SAFEBROWSING_API_KEY < ~/.config/vimma/keys/safebrowsing`). `nightly.yml` writes it to a mode-600
+file in `$RUNNER_TEMP` and deletes it after its last `mach` call. PR builds (`e2e.yml`) never get
+it: they build keyless, which `browser_vimma_safebrowsing.js` checks. A release workflow must
+copy the nightly's two steps.
+
+Debugging: `browser.safebrowsing.debug` = `true` logs list updates to stdout, with the key
+replaced by `[trimmed-google-api-key]`. Still check before pasting a log anywhere.
+
+**Rotate** (leaked or quota trouble): create the new key in the console, replace the local file
+(the `read -rs` line above) and the secret (`gh secret set` as above), rebuild and run the smoke
+script, then delete the old key in the console. Builds already shipped keep the old key and
+stop getting lists once it is deleted, so rotate before a release, not after.
+
 ### Upstream bumps (`upstream.yml`)
 
 `tools/upstream/check-release.py` prints `LATEST_FIREFOX_VERSION` from product-details when it
@@ -291,6 +333,9 @@ from `main` and force-pushed, so a failed run is retried 6 h later.
 Every bump PR: refresh the copy of `browser.newtabpage.activity-stream.asrouter.providers.cfr`
 in `src/browser/branding/vimma/pref/firefox-branding.js` from `engine/browser/app/profile/firefox.js`,
 keeping `"enabled":false` (spec m0-mozilla-services). A stale copy shadows upstream's provider.
+Likewise `browser.safebrowsing.provider.google{4,5}.lists`: upstream's value from
+`engine/modules/libpref/init/all.js` without `goog-badbinurl-proto` and `goog-downloadwhite-proto`
+(spec m0-safebrowsing-key), then run `tools/safebrowsing-smoke/safebrowsing-smoke.sh`.
 
 One-time setup:
 
