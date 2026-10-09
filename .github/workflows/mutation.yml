@@ -1,0 +1,130 @@
+# Spec ci-quality-gates (plan §5, unit layer): Stryker mutation testing of packages/vimma-core/src,
+# weekly. Survivors become ONE tracking issue (label `mutation`), rewritten by every run; they never
+# fail the workflow. Only a broken run (Stryker or the dry run erroring) is red.
+#
+# Minutes: incremental mode reuses the previous run's results (artifact `mutation-report`), so a
+# weekly run re-tests only mutants in changed core files. The first Sunday of each month (or a manual
+# run with `full`) re-tests everything, so survivors killed by new tests drop off the issue.
+# Two jobs, so the step running repository code (npm ci, Stryker, the tests) never holds a token
+# that can write issues; the report job costs one extra billed minute a week.
+name: mutation
+
+on:
+  schedule:
+    - cron: "23 4 * * 0" # Sundays 04:23 UTC
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Re-test every mutant (ignore the previous run's results)
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: mutation
+  cancel-in-progress: false
+
+jobs:
+  stryker:
+    name: Stryker on vimma-core
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      actions: read # download the previous run's incremental file
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Previous run's results (incremental mode)
+        env:
+          FULL: ${{ inputs.full }}
+        run: |
+          if [ "$FULL" = "true" ] || [ "$(date -u +%d)" -le 7 ]; then
+            echo "Full run: every mutant is re-tested."
+            echo "STRYKER_FORCE=--force" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow mutation.yml \
+            --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -n "$run_id" ] && gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+            --name mutation-report --dir reports/mutation; then
+            echo "Reusing results of run $run_id."
+          else
+            echo "No previous results; this is a full run."
+          fi
+
+      - name: Stryker
+        run: npx stryker run $STRYKER_FORCE # empty or --force, from the step above
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutation-report
+          path: |
+            reports/mutation/mutation.html
+            reports/mutation/mutation.json
+            reports/mutation/stryker-incremental.json
+          retention-days: 35 # outlives four weekly runs, so one missed run still finds it
+
+  report:
+    name: Update the tracking issue
+    needs: stryker
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write # create, edit or close the one `mutation` issue, and its label
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/mutation
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: mutation-report
+          path: reports/mutation
+
+      - name: Issue body
+        id: body
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT: ${{ github.sha }}
+        run: node tools/mutation/report.mjs reports/mutation/mutation.json > body.md
+
+      - name: Create, update or close the tracking issue
+        env:
+          SCORE: ${{ steps.body.outputs.score }}
+          SURVIVORS: ${{ steps.body.outputs.survivors }}
+        run: |
+          gh label create mutation --repo "$GITHUB_REPOSITORY" --force --color FBCA04 \
+            --description "Surviving mutants from the weekly Stryker run (mutation.yml)"
+          issue=$(gh issue list --repo "$GITHUB_REPOSITORY" --label mutation --state open \
+            --limit 1 --json number --jq '.[0].number // empty')
+          title="Mutation testing: $SURVIVORS surviving mutants in vimma-core (score $SCORE %)"
+          if [ "$SURVIVORS" = "0" ]; then
+            if [ -n "$issue" ]; then
+              gh issue edit "$issue" --repo "$GITHUB_REPOSITORY" --title "$title" --body-file body.md
+              gh issue close "$issue" --repo "$GITHUB_REPOSITORY" --comment "No survivors left."
+            fi
+          elif [ -n "$issue" ]; then
+            gh issue edit "$issue" --repo "$GITHUB_REPOSITORY" --title "$title" --body-file body.md
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label mutation \
+              --body-file body.md
+          fi
+          echo "Score $SCORE %, $SURVIVORS survivors." >> "$GITHUB_STEP_SUMMARY"
