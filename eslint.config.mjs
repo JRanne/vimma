@@ -77,6 +77,7 @@ export default [
         ChromeUtils: "readonly",
         Services: "readonly",
         add_task: "readonly",
+        info: "readonly",
         registerCleanupFunction: "readonly",
         Assert: "readonly",
         BrowserTestUtils: "readonly",
