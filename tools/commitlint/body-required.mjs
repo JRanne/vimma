@@ -1,20 +1,49 @@
 /**
- * commitlint rule `body-required-for-types`: commits of the listed types must have a non-empty
- * body, because the body is the changelog line (CLAUDE.md). Usage in commitlint.config.mjs:
- * `"body-required-for-types": [2, "always", ["feat", "fix"]]`.
+ * commitlint plugin for Vimma (CLAUDE.md: the commit body is the changelog line).
  *
- * @param {{ type?: string | null, body?: string | null }} parsed
+ * Rule `body-required-for-types`: commits of the listed types must have a non-empty body. Usage:
+ * `"body-required-for-types": [2, "always", ["feat", "fix", "revert"]]`.
+ * Footers and trailers do not count as a body: `Closes #3`, `BREAKING CHANGE: …`,
+ * `Co-Authored-By: …` are parsed into the footer, so `feat: x` + only footers fails.
+ * A git-style `Revert "feat: x"` / `Reapply "…"` header counts as type `revert`.
+ */
+
+const GIT_REVERT = /^(Revert|Reapply) "/;
+const TRAILER = /^(BREAKING[ -]CHANGE|[A-Za-z][\w-]*)(: | #)/;
+
+/**
+ * @param {{ type?: string | null, header?: string | null, body?: string | null }} parsed
  * @param {"always" | "never"} [when]
  * @param {string[]} [types]
  * @returns {[boolean, string?]}
  */
 export function bodyRequiredForTypes(parsed, when = "always", types = []) {
-  if (when !== "always" || !parsed.type || !types.includes(parsed.type)) return [true];
+  const type = parsed.type || (GIT_REVERT.test(parsed.header ?? "") ? "revert" : null);
+  if (when !== "always" || !type || !types.includes(type)) return [true];
   if ((parsed.body ?? "").trim() !== "") return [true];
   return [
     false,
-    `${parsed.type} commits need a body: it is the changelog line (types: ${types.join(", ")})`,
+    `${type} commits need a body: it is the changelog line (types: ${types.join(", ")})`,
   ];
+}
+
+/**
+ * Replaces commitlint's default ignores (set `defaultIgnores: false`). Those skip every
+ * `Revert "…"` commit, which would let a body-less revert through; here a git-style revert is
+ * skipped only when it has a body (git writes "This reverts commit …"). Merges and
+ * fixup!/squash!/amend! commits stay ignored.
+ * @param {string} message
+ */
+export function ignoreCommit(message) {
+  const [header = "", ...rest] = message.split("\n");
+  if (/^(Merge (pull request|branch|tag|remote-tracking branch)|Merge .+ into )/.test(header)) {
+    return true;
+  }
+  if (/^(amend|fixup|squash)!/.test(header)) return true;
+  if (GIT_REVERT.test(header)) {
+    return rest.some((line) => line.trim() !== "" && !TRAILER.test(line));
+  }
+  return false;
 }
 
 export default {
