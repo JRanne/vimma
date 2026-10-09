@@ -9,6 +9,8 @@ export default [
       "engine/",
       ".surfer/",
       "dist/",
+      "reports/",
+      ".stryker-tmp/",
       // copies of packages/vimma-core/src, linted there (npm run sync-core)
       "src/browser/base/content/vimma/core/",
     ],
@@ -79,7 +81,14 @@ export default [
     // JSWindowActor base classes, globals in the system modules that define actors.
     files: ["src/**/vimma/actors/**"],
     languageOptions: {
-      globals: { JSWindowActorChild: "readonly", JSWindowActorParent: "readonly" },
+      globals: {
+        JSWindowActorChild: "readonly",
+        JSWindowActorParent: "readonly",
+        // System-module globals the parent side uses to check and open `F` targets.
+        BrowsingContext: "readonly",
+        Ci: "readonly",
+        Components: "readonly",
+      },
     },
   },
   {

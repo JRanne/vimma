@@ -1,0 +1,82 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Fixture for browser_vimma_hints.js: every kind of hint target, a link hidden under a fixed
+   - header, links below the fold and one in a cross-origin frame. Ids name the targets the
+   - test expects; `.no-hint` marks elements that must not get a label. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vimma hints</title>
+    <style>
+      body {
+        margin: 0;
+        font: 16px/1.5 sans-serif;
+      }
+      header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 80px;
+        background: #ccc;
+        z-index: 1;
+      }
+      main {
+        padding-top: 100px;
+      }
+      #covered {
+        position: absolute;
+        top: 20px;
+        left: 300px;
+      }
+      #far {
+        margin-top: 4000px;
+      }
+      iframe {
+        width: 300px;
+        height: 80px;
+        border: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <header><a id="home" href="?to=home">home</a></header>
+    <a id="covered" class="no-hint" href="?to=covered">covered by the header</a>
+    <main>
+      <p>
+        <a id="l1" href="?to=1">one</a> <a id="l2" href="?to=2">two</a>
+        <a id="l3" href="?to=3">three</a>
+      </p>
+      <p><input id="field" /> <button id="button" type="button">button</button></p>
+      <p>
+        <span id="role" role="button" tabindex="0">role button</span>
+        <span id="listener">click listener</span>
+        <span id="plain" class="no-hint">plain text</span>
+      </p>
+      <p>
+        <span style="visibility: hidden"><a id="invisible" class="no-hint" href="?h">x</a></span>
+      </p>
+      <div id="host"></div>
+      <iframe
+        id="frame"
+        src="https://example.org/browser/browser/base/zen-components/tests/browser/file_vimma_hints_frame.html"
+      ></iframe>
+      <p id="far">
+        <a id="far1" class="no-hint" href="?to=far1">far one</a>
+        <a id="far2" class="no-hint" href="?to=far2">far two</a>
+      </p>
+    </main>
+    <script>
+      document.getElementById("listener").addEventListener("click", () => {
+        window.listenerClicked = true;
+      });
+      document.getElementById("button").addEventListener("click", () => {
+        window.buttonClicked = true;
+      });
+      document.getElementById("host").attachShadow({ mode: "open" }).innerHTML =
+        '<a id="shadow" href="?to=shadow">in a shadow root</a>';
+    </script>
+  </body>
+</html>
