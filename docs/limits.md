@@ -108,6 +108,9 @@ Workspaces are not built yet; these are the limits their design accepts
   own the same way) and accepted. Rotation: [runbook](runbook.md)
   ([m0-safebrowsing-key](specs/m0-safebrowsing-key.md)).
 - No download reputation: Google serves its download lists (`goog-badbinurl-proto`,
+- Safe Browsing's `goog-harmful-proto` list is requested but did not arrive in the smoke run
+  with our key (phishing, malware and unwanted did); treat it as unavailable. See
+  [m0-safebrowsing-key](specs/m0-safebrowsing-key.md).
   `goog-downloadwhite-proto`) and its remote download check only to Mozilla's key, so Vimma asks
   for neither, and "Block dangerous downloads" in Settings adds nothing beyond the site lists
   ([m0-safebrowsing-key](specs/m0-safebrowsing-key.md), Settled).

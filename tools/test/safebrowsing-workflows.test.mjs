@@ -44,12 +44,28 @@ describe("Safe Browsing key in CI", () => {
     const block = job(text, "build");
     checkKeyFileSteps(block);
     // No mochitests here: the smoke check fails a release built without the key.
-    expect(block).toContain(
-      `grep -q '"no-google-safebrowsing-api-key"' "$MOZ_OBJDIR/dist/bin/modules/AppConstants.sys.mjs"`,
-    );
+    // Fails closed: a missing or moved AppConstants, or one without the key constant, fails too.
+    expect(block).toContain('[ -f "$appconstants" ] || {');
+    expect(block).toContain(`grep -q 'MOZ_GOOGLE_SAFEBROWSING_API_KEY' "$appconstants"`);
+    expect(block).toContain(`grep -q '"no-google-safebrowsing-api-key"' "$appconstants"`);
     for (const id of ["package", "sign", "publish", "aur", "failure"]) {
       expect(job(text, id), id).not.toContain("SAFEBROWSING");
     }
+  });
+
+  it("a manual nightly runs only from main, and the key is scrubbed from what goes public", () => {
+    const block = job(workflow("nightly.yml"), "build");
+    expect(block).toContain(
+      "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'",
+    );
+    const redact = block.indexOf("- name: Redact the Safe Browsing key from the log");
+    expect(redact, "redaction step").toBeGreaterThan(-1);
+    expect(block.indexOf("- name: Upload log"), "upload after redaction").toBeGreaterThan(redact);
+    expect(
+      block.indexOf("- name: Open or update the failure issue"),
+      "issue after redaction",
+    ).toBeGreaterThan(redact);
+    expect(block).toContain('sed -i "s|${SB_KEY}|[redacted]|g" "$LOG"');
   });
 
   it("PR builds never get it", () => {

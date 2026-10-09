@@ -11,7 +11,7 @@ const ENGINE_TESTS = "browser/base/zen-components/";
 
 /**
  * Whether the build under test should have a Google Safe Browsing key (spec m0-safebrowsing-key):
- * VIMMA_EXPECT_SAFEBROWSING_KEY if set (the nightly deletes its key file before the tests), else
+ * VIMMA_EXPECT_SAFEBROWSING_KEY if set (the nightly deletes its key file after packaging), else
  * whether the key file configs/common/mozconfig reads exists.
  * @param {Record<string, string | undefined>} env
  * @param {string} home

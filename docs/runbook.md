@@ -317,7 +317,12 @@ does the same as the nightly, and its smoke check fails a release built without 
 Debugging: `browser.safebrowsing.debug` = `true` logs list updates to stdout, with the key
 replaced by `[trimmed-google-api-key]`. Still check before pasting a log anywhere.
 
-**Rotate** (leaked or quota trouble): create the new key in the console, replace the local file
+**Forks:** the nightly and release builds fail closed without `SAFEBROWSING_API_KEY`. Set your
+own key as that secret, or remove the key step (your builds then ship keyless, with Safe
+Browsing honestly off).
+
+**Rotate** (quota trouble or abuse; the key is extractable from every binary by design, so a
+"leak" alone is no reason): create the new key in the console, replace the local file
 (the `read -rs` line above) and the secret (`gh secret set` as above), rebuild and run the smoke
 script, then delete the old key in the console. Builds already shipped keep the old key and
 stop getting lists once it is deleted, so rotate before a release, not after.

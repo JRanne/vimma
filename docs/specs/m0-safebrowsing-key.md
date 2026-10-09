@@ -31,7 +31,12 @@ off instead of showing it ticked.
   `browser.safebrowsing.phishing.enabled` and `browser.safebrowsing.malware.enabled` to false when
   `AppConstants` has no key. With a key it changes nothing (Firefox's defaults, true).
 - **CI.** `nightly.yml` writes the `SAFEBROWSING_API_KEY` secret to a mode-600 file in
-  `$RUNNER_TEMP` with a shell builtin (never echoed, never on a command line), exports
+  `$RUNNER_TEMP` with a shell builtin (our steps never echo it nor put it on a command line;
+  upstream's build does: it passes `-DMOZ_GOOGLE_SAFEBROWSING_API_KEY=…` to the preprocessor, so
+  the key shows in `/proc` during the build, and it stays in mode-644 configure output in the
+  objdir: `config.status*`, `config/autoconf.mk`, `toolkit/modules/backend.mk`; keep the runner
+  single-user. The nightly scrubs the key from its log before the artifact upload and the failure
+  issue, where secret masking doesn't apply), exports
   `VIMMA_SAFEBROWSING_KEYFILE`, and deletes the file after the last `mach` call (`if: always()`;
   `mach` re-reads the mozconfig on every call, so the file must outlive tests and packaging). A
   missing secret fails the nightly. PR builds (`e2e.yml`) get no secret and build keyless.

@@ -119,7 +119,12 @@ jobs:
           firefox=$(node -p 'require("./surfer.json").version.version')
           [ "$appver" = "$firefox" ] || { echo "::error::app version is '$appver', want '$firefox'"; exit 1; }
           # Safe Browsing needs the key compiled in; configure's placeholder means it is missing.
-          if grep -q '"no-google-safebrowsing-api-key"' "$MOZ_OBJDIR/dist/bin/modules/AppConstants.sys.mjs"; then
+          # Fail closed: a moved or missing AppConstants must not pass as "keyed".
+          appconstants="$MOZ_OBJDIR/dist/bin/modules/AppConstants.sys.mjs"
+          [ -f "$appconstants" ] || { echo "::error::$appconstants not found"; exit 1; }
+          grep -q 'MOZ_GOOGLE_SAFEBROWSING_API_KEY' "$appconstants" \
+            || { echo "::error::no Safe Browsing key constant in AppConstants"; exit 1; }
+          if grep -q '"no-google-safebrowsing-api-key"' "$appconstants"; then
             echo "::error::built without the Safe Browsing key"; exit 1
           fi
 
