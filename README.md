@@ -16,9 +16,10 @@ your hands never leave the keyboard.
 
 ### The name
 
-_Vimma_ is a Finnish word for a frenzy or craze, a burst of eager energy, as in _ostosvimma_
-(shopping frenzy) or _työvimma_ (a fit of working). It also happens to start with _Vim_. Fittingly,
-that is how browsing should feel: fast, fluent and a little bit obsessive.
+_Vimma_ is a Finnish word for a burst of eager, focused energy: the state of being on a roll. You
+hear it in _työvimma_ (a spell of working when everything flows) and _luomisvimma_ (a creative
+rush). It also happens to start with _Vim_. That is how browsing should feel: fast, fluent and
+absorbed.
 
 ### What it is
 
