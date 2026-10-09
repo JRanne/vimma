@@ -37,3 +37,8 @@ for _vimma_version_file in version.txt version_display.txt; do
   fi
 done
 unset _vimma_version_file
+
+# App updates (docs/specs/m0-updater.md). No updater until M6 brings our own update manifest:
+# the built-in one asks aus5.mozilla.org for Firefox builds. Without it, application.ini has no
+# [AppUpdate] URL, the About dialog shows the version only and Settings no update controls.
+ac_add_options --disable-updater

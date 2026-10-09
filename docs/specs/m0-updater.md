@@ -1,6 +1,6 @@
 # Spec: m0-updater
 
-Status: in progress · Milestone: M0 · Area: build config (`configs/*/mozconfig`), default prefs
+Status: implemented, awaiting review · Milestone: M0 · Area: build config (`configs/*/mozconfig`), default prefs
 (`src/browser/branding/vimma/pref/`), `tools/artifact-build`
 Prerequisite: m0-mozilla-services and m0-app-version merged.
 
@@ -133,3 +133,16 @@ once live). ADR-010 lists it. The system add-on half is prefs and runs in CI.
   are managed by your operating system" (accurate for a package-managed install; for a source
   build it means "not by Vimma"); the security card omits its update bullet
   (`#okUpdateStatus` treats no updater as OK). No button, no error.
+- **Build cost**: after `npm run import`, `./mach build` with `--disable-updater` took 1805 s
+  (30 min, reconfigure plus a libxul rebuild); no clobber. The artifact build with the flag
+  configured and built in 27 s, then crashed at startup ("Missing chrome or resource URLs"
+  for `UpdateServiceStub.sys.mjs`), hence the drop.
+- **Red/green** (full build): before the change the two mochitests failed 10 checks:
+  `MOZ_UPDATER` `true === false`; `Services.appinfo.updateURL` the aus5 URL; both system add-on
+  defaults; `getUpdateURL` `"https://aus5.mozilla.org/updates/browser/Linux_x86_64-gcc3/vimma/update.xml" == null`;
+  the add-on manager's check requested
+  `https://aus5.mozilla.org/update/3/SystemAddons/157.0.1/<buildid>/Linux_x86_64-gcc3/en-US/vimma/…`;
+  the About dialog had `#updateDeck` and `#checkForUpdatesButton`; Settings showed `updateApp`
+  and `installationFieldset`. After it, 26/26 pass; the whole suite passes on the full build
+  (204 passed, 0 failed) and on the artifact build (186 passed, 0 failed,
+  `browser_vimma_updater.js` and `browser_vimma_crash_reporter.js` skipped).
