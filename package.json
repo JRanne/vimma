@@ -15,7 +15,10 @@
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "gen-docs": "node tools/gen-docs.mjs && prettier --log-level warn --write docs/bindings.md"
+    "gen-docs": "node tools/gen-docs.mjs && prettier --log-level warn --write docs/bindings.md",
+    "sync-core": "node tools/sync-core.mjs",
+    "import": "npm run sync-core && surfer import",
+    "mochitest": "node tools/mochitest.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",

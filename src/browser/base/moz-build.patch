@@ -1,0 +1,12 @@
+diff --git a/browser/base/moz.build b/browser/base/moz.build
+index bb312509ae9167854792e5bfa7adbb96f5361cae..e3b39de828a6646f43052b79d430cd70fbcf0ec3 100644
+--- a/browser/base/moz.build
++++ b/browser/base/moz.build
+@@ -72,6 +72,7 @@ BROWSER_CHROME_MANIFESTS += [
+ DIRS += [
+     "content/test/performance/",
+     "content/test/fullscreen/",
++    "content/vimma",
+ ]
+ 
+ PERFTESTS_MANIFESTS += ["content/test/perftest.toml"]
