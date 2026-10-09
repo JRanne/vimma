@@ -33,6 +33,7 @@
     "@eslint/js": "^10.0.1",
     "@vitest/coverage-v8": "^5.0.3",
     "@zen-browser/surfer": "^1.14.9",
+    "ajv": "^8.20.0",
     "eslint": "^10.12.0",
     "fast-check": "^4.10.2",
     "globals": "^17.13.0",
