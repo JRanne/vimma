@@ -1,0 +1,22 @@
+diff --git a/toolkit/failed.txt b/toolkit/failed.txt
+index 7742d8ce28d41326ab07aee383ed10f6ded60f02..80c2f5eaf8eccc44e156d1e5530e07bb8bc893cf 100644
+--- a/toolkit/failed.txt
++++ b/toolkit/failed.txt
+@@ -2,7 +2,7 @@ failed line 1
+ failed line 2
+ failed line 3
+ failed line 4
+-failed line 5
++failed line 5, patched by Vimma
+ failed line 6
+ failed line 7
+ failed line 8
+@@ -22,7 +22,7 @@ failed line 21
+ failed line 22
+ failed line 23
+ failed line 24
+-failed line 25
++failed line 25, patched by Vimma
+ failed line 26
+ failed line 27
+ failed line 28

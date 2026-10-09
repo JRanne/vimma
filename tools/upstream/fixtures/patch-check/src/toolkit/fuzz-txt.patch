@@ -1,0 +1,13 @@
+diff --git a/toolkit/fuzz.txt b/toolkit/fuzz.txt
+index 10f42a30b260f6d6420f85c4c7f1396723b8d94e..485e07d48eb3637c0c3450ab3a2bf57f841f61c7 100644
+--- a/toolkit/fuzz.txt
++++ b/toolkit/fuzz.txt
+@@ -7,7 +7,7 @@ fuzz line 6
+ fuzz line 7
+ fuzz line 8
+ fuzz line 9
+-fuzz line 10
++fuzz line 10, patched by Vimma
+ fuzz line 11
+ fuzz line 12
+ fuzz line 13
