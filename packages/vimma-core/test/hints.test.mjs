@@ -364,6 +364,7 @@ describe("parseHintReply: untrusted Vimma:CollectHints replies from a content pr
     ["an array", []],
     ["no ms", { targets: [], frames: [] }],
     ["ms not finite", { ...good, ms: Infinity }],
+    ["a negative ms", { ...good, ms: -1 }],
     ["targets not an array", { ...good, targets: {} }],
     ["frames not an array", { ...good, frames: "x" }],
     [
@@ -382,6 +383,17 @@ describe("parseHintReply: untrusted Vimma:CollectHints replies from a content pr
     ["an href not a string", { ...good, targets: [{ ...t0, href: 1 }] }],
     ["a long href", { ...good, targets: [{ ...t0, href: "h".repeat(8193) }] }],
     ["a frame id not an integer", { ...good, frames: [{ id: "42", rect }] }],
+    [
+      "a duplicate frame id",
+      {
+        ...good,
+        frames: [
+          { id: 42, rect },
+          { id: 42, rect },
+        ],
+      },
+    ],
+    ["a negative frame id", { ...good, frames: [{ id: -1, rect }] }],
     ["a frame with no rect", { ...good, frames: [{ id: 42 }] }],
   ])("%s → null", (_, value) => {
     expect(parseHintReply(value)).toBeNull();

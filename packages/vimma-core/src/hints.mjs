@@ -243,7 +243,7 @@ export function parseHintReply(value) {
   try {
     if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
     const { targets, frames, ms } = /** @type {Record<string, unknown>} */ (value);
-    if (typeof ms !== "number" || !Number.isFinite(ms)) return null;
+    if (typeof ms !== "number" || !Number.isFinite(ms) || ms < 0) return null;
     if (!Array.isArray(targets) || targets.length > HINT_REPLY_MAX_TARGETS) return null;
     if (!Array.isArray(frames) || frames.length > HINT_REPLY_MAX_FRAMES) return null;
     /** @type {ReplyTarget[]} */
@@ -270,11 +270,14 @@ export function parseHintReply(value) {
     }
     /** @type {ReplyFrame[]} */
     const outFrames = [];
+    // One entry per frame: a repeated id would have the parent collect one frame many times.
+    const frameIds = new Set();
     for (const f of [...frames]) {
       if (typeof f !== "object" || f === null) return null;
       const { id, rect } = /** @type {Record<string, unknown>} */ (f);
       const r = parseRect(rect);
-      if (!isIndex(id) || !r) return null;
+      if (!isIndex(id) || !r || frameIds.has(id)) return null;
+      frameIds.add(id);
       outFrames.push({ id: /** @type {number} */ (id), rect: r });
     }
     return { targets: outTargets, frames: outFrames, ms };
