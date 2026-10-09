@@ -1,0 +1,212 @@
+#!/usr/bin/env node
+/**
+ * End-to-end scenarios on a real Vimma build (spec m0-e2e-harness, plan §5). Each scenario in
+ * tests/e2e/scenarios/ gets a fresh temp profile and browser (under Xvfb when DISPLAY is unset),
+ * driven through vimma-ctl; screenshots are compared with tests/e2e/baselines/.
+ *
+ *   npm run e2e                                  # every scenario, the default build
+ *   npm run e2e -- --filter m0-happy-path        # names containing the text
+ *   npm run e2e -- --artifact                    # engine/obj-artifact (ADR-010)
+ *   npm run e2e -- --build path/to/vimma | --tarball vimma-*.tar.xz
+ *   npm run e2e -- --xvfb --keep                 # own Xvfb even with a display; keep profiles
+ *   npm run e2e -- --update-baselines            # rewrite baselines: needs a changelog line
+ *   npm run e2e -- --run-pending                 # also run scenarios marked pending
+ *
+ * Exit 0 when nothing failed (pending scenarios are reported, not passed), 1 on failures,
+ * 2 on usage errors.
+ */
+import { appendFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
+import { Ctl, findVimmaCtl } from "./driver.mjs";
+import { findBuild, launch, unpackTarball } from "./launcher.mjs";
+import { exitCode, formatReport, githubAnnotations, runScenarios } from "./runner.mjs";
+import { loadScenarios } from "./scenario.mjs";
+import { capture, checkBaseline } from "./screenshot.mjs";
+
+const REPO = fileURLToPath(new URL("../../", import.meta.url));
+
+const OPTIONS = /** @type {const} */ ({
+  filter: { type: "string" },
+  build: { type: "string" },
+  artifact: { type: "boolean", default: false },
+  tarball: { type: "string" },
+  "vimma-ctl": { type: "string" },
+  keep: { type: "boolean", default: false },
+  xvfb: { type: "boolean", default: false },
+  "update-baselines": { type: "boolean", default: false },
+  "run-pending": { type: "boolean", default: false },
+  budget: { type: "string", default: "300" },
+  "discovery-timeout": { type: "string", default: "30" },
+  scenarios: { type: "string", default: join(REPO, "tests/e2e/scenarios") },
+  baselines: { type: "string", default: join(REPO, "tests/e2e/baselines") },
+  out: { type: "string", default: join(REPO, "e2e-output") },
+  help: { type: "boolean", short: "h", default: false },
+});
+
+/** @param {string} message */
+function usage(message) {
+  process.stderr.write(`e2e: ${message}\nSee the comment at the top of tools/e2e/e2e.mjs.\n`);
+  process.exit(2);
+}
+
+async function main() {
+  let values;
+  try {
+    ({ values } = parseArgs({ options: OPTIONS, allowPositionals: false }));
+  } catch (e) {
+    return usage(/** @type {Error} */ (e).message);
+  }
+  if (values.help) {
+    process.stdout.write(`${readHelp()}\n`);
+    return 0;
+  }
+  if (values["update-baselines"] && process.env.CI) {
+    return usage("--update-baselines is refused in CI: baselines change only in a reviewed commit");
+  }
+  const budgetMs = Number(values.budget) * 1000;
+  const discoveryTimeoutMs = Number(values["discovery-timeout"]) * 1000;
+  if (!(budgetMs > 0) || !(discoveryTimeoutMs > 0))
+    return usage("--budget and --discovery-timeout are seconds > 0");
+  if ([values.build, values.artifact || undefined, values.tarball].filter(Boolean).length > 1) {
+    return usage("pass at most one of --build, --artifact, --tarball");
+  }
+
+  const scenarios = loadScenarios(values.scenarios, { filter: values.filter });
+  const runnable = scenarios.filter((s) => values["run-pending"] || !s.pending);
+
+  /** @type {Array<() => Promise<void>>} */
+  const cleanups = [];
+  const cleanupAll = async () => {
+    for (const c of cleanups.splice(0).reverse()) await c().catch(() => {});
+  };
+  for (const [sig, code] of /** @type {const} */ ([
+    ["SIGINT", 130],
+    ["SIGTERM", 143],
+  ])) {
+    process.once(sig, () => {
+      process.stderr.write(`\ne2e: ${sig}, cleaning up\n`);
+      cleanupAll().finally(() => process.exit(code));
+    });
+  }
+
+  try {
+    /** @type {import("./launcher.mjs").Build | null} */
+    let build = null;
+    /** @type {string} */
+    let ctlBin = "";
+    if (runnable.length) {
+      if (values.tarball) {
+        const dir = mkdtempSync(join(tmpdir(), "vimma-e2e-build-"));
+        cleanups.push(async () => rmSync(dir, { recursive: true, force: true }));
+        build = unpackTarball(values.tarball, dir);
+      } else {
+        build = findBuild({ build: values.build, artifact: values.artifact, env: process.env });
+      }
+      ctlBin = findVimmaCtl({ flag: values["vimma-ctl"], env: process.env });
+      console.log(`build: ${build.binary}\nvimma-ctl: ${ctlBin}`);
+    }
+    const xvfb = values.xvfb || !process.env.DISPLAY;
+
+    const startSession = async () => {
+      /** @type {() => Promise<void>} */
+      let registered = async () => {};
+      const teardown = async () => {
+        const i = cleanups.indexOf(registered);
+        if (i >= 0) cleanups.splice(i, 1);
+        await registered();
+      };
+      const session = await launch({
+        build: /** @type {import("./launcher.mjs").Build} */ (build),
+        xvfb,
+        keep: values.keep,
+        discoveryTimeoutMs,
+        // registered before the browser starts, so SIGINT during the launch cleans it up
+        onTeardown: (t) => {
+          registered = t;
+          cleanups.push(t);
+        },
+        log: (line) => console.log(`        ${line}`),
+      }).catch(async (e) => {
+        await teardown();
+        throw e;
+      });
+      const ctl = new Ctl({ bin: ctlBin, profile: session.profile });
+      try {
+        await ctl.ready();
+      } catch (e) {
+        await teardown();
+        throw e;
+      }
+      /** @param {string} name */
+      const screenshot = async (name) => {
+        if (!session.display) {
+          throw new Error(
+            "screenshots need the harness's own Xvfb: run with --xvfb (or without DISPLAY)",
+          );
+        }
+        const image = await capture(session.display.fbFile);
+        const result = checkBaseline({
+          name,
+          image,
+          baselineDir: values.baselines,
+          outDir: values.out,
+          update: values["update-baselines"],
+        });
+        console.log(`        screenshot ${name}: ${result.status}: ${result.message}`);
+        if (result.status === "missing" || result.status === "mismatch")
+          throw new Error(result.message);
+      };
+      return { ctl, screenshot, teardown };
+    };
+
+    const results = await runScenarios(scenarios, {
+      startSession,
+      budgetMs,
+      runPending: values["run-pending"],
+      log: (line) => console.log(line),
+    });
+    const report = formatReport(results);
+    console.log(`\n${report}`);
+    if (process.env.GITHUB_ACTIONS) {
+      for (const line of githubAnnotations(results)) console.log(line);
+      if (process.env.GITHUB_STEP_SUMMARY) {
+        appendFileSync(
+          process.env.GITHUB_STEP_SUMMARY,
+          `### e2e scenarios\n\n\`\`\`\n${report}\n\`\`\`\n`,
+        );
+      }
+    }
+    if (values["update-baselines"]) {
+      console.log(
+        "\nBaselines rewritten. Check them by eye and commit with a changelog line saying why " +
+          "(CLAUDE.md: never change a baseline without one).",
+      );
+    }
+    return exitCode(results);
+  } finally {
+    await cleanupAll();
+  }
+}
+
+function readHelp() {
+  const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
+  const doc = /\/\*\*([^]*?)\*\//.exec(src)?.[1] ?? "";
+  return doc
+    .split("\n")
+    .map((l) => l.replace(/^\s*\* ?/, ""))
+    .join("\n")
+    .trim();
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().then(
+    (code) => process.exit(code),
+    (e) => {
+      process.stderr.write(`e2e: ${e instanceof Error ? e.message : String(e)}\n`);
+      process.exit(1);
+    },
+  );
+}

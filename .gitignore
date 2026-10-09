@@ -21,3 +21,5 @@ __pycache__/
 .claude/
 # cargo build output (tools/vimma-ctl, ADR-011)
 tools/vimma-ctl/target/
+# e2e failure output: actual and diff screenshots (tools/e2e, spec m0-e2e-harness)
+e2e-output/

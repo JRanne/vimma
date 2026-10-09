@@ -1,0 +1,163 @@
+import { describe, expect, it } from "vitest";
+import { exitCode, formatReport, githubAnnotations, runScenarios } from "../runner.mjs";
+
+/** @param {string} name @param {object} [over] */
+const scn = (name, over = {}) => ({
+  name,
+  description: name,
+  steps: [{ "assert-state": { mode: "insert" } }],
+  ...over,
+});
+
+/**
+ * A session factory over a scripted fake ctl; records launches and teardowns.
+ * @param {Record<string, object>} [statesByName]
+ */
+function sessions(statesByName = {}) {
+  /** @type {string[]} */
+  const events = [];
+  return {
+    events,
+    /** @param {{ name: string }} s */
+    startSession: async (s) => {
+      events.push(`launch ${s.name}`);
+      if (s.name.includes("nolaunch")) throw new Error("no control socket within 30000 ms");
+      const state = statesByName[s.name] ?? { mode: "insert" };
+      return {
+        ctl: {
+          state: async () => state,
+          sendKeys: async () => {},
+          open: async () => "2",
+        },
+        screenshot: async () => {},
+        teardown: async () => void events.push(`teardown ${s.name}`),
+      };
+    },
+  };
+}
+
+describe("runScenarios", () => {
+  it("passes, fails with the step, and tears every session down", async () => {
+    const { events, startSession } = sessions({ "m0-bad": { mode: "help" } });
+    const results = await runScenarios([scn("m0-good"), scn("m0-bad")], { startSession });
+    expect(results.map((r) => r.status)).toEqual(["pass", "fail"]);
+    expect(results[1]?.error).toMatch(/step 1 \(assert-state\)/);
+    expect(events).toEqual([
+      "launch m0-good",
+      "teardown m0-good",
+      "launch m0-bad",
+      "teardown m0-bad",
+    ]);
+    expect(exitCode(results)).toBe(1);
+  });
+
+  it("reports a launch failure as a failure of that scenario", async () => {
+    const { startSession } = sessions();
+    const [r] = await runScenarios([scn("m0-nolaunch")], { startSession });
+    expect(r).toMatchObject({ status: "fail" });
+    expect(r?.error).toMatch(/launch: no control socket/);
+  });
+
+  it("times a scenario out and still tears it down", async () => {
+    const { events, startSession } = sessions({ "m0-slow": { mode: "insert" } });
+    const results = await runScenarios(
+      [
+        scn("m0-slow", {
+          timeoutSeconds: 0.3,
+          steps: [{ "wait-for-state": { mode: "help" }, timeoutSeconds: 30 }],
+        }),
+      ],
+      { startSession, pollMs: 10 },
+    );
+    expect(results[0]).toMatchObject({ status: "timeout" });
+    expect(results[0]?.error).toMatch(/0\.3 s/);
+    expect(events).toContain("teardown m0-slow");
+    expect(exitCode(results)).toBe(1);
+  });
+
+  it("reports pending scenarios without launching them, and never as passed", async () => {
+    const { events, startSession } = sessions();
+    const results = await runScenarios([scn("m0-wip", { pending: "needs the control server" })], {
+      startSession,
+    });
+    expect(results).toEqual([
+      expect.objectContaining({
+        name: "m0-wip",
+        status: "pending",
+        error: "needs the control server",
+      }),
+    ]);
+    expect(events).toEqual([]);
+    expect(exitCode(results)).toBe(0);
+    expect(formatReport(results)).toMatch(
+      /PENDING\s+m0-wip[^]*needs the control server[^]*0 passed, 0 failed, 1 pending/,
+    );
+  });
+
+  it("runs a pending scenario with runPending", async () => {
+    const { events, startSession } = sessions();
+    const results = await runScenarios([scn("m0-wip", { pending: "x" })], {
+      startSession,
+      runPending: true,
+    });
+    expect(results[0]?.status).toBe("pass");
+    expect(events).toEqual(["launch m0-wip", "teardown m0-wip"]);
+  });
+
+  it("skips what does not fit the total budget and fails the run", async () => {
+    const { events, startSession } = sessions();
+    let t = 0;
+    const now = () => t;
+    const slowStart = async (/** @type {{ name: string }} */ s) => {
+      t += 4000;
+      return startSession(s);
+    };
+    const results = await runScenarios([scn("m0-a"), scn("m0-b")], {
+      startSession: slowStart,
+      budgetMs: 3000,
+      now,
+    });
+    expect(results.map((r) => r.status)).toEqual(["pass", "skipped"]);
+    expect(results[1]?.error).toMatch(/budget/);
+    expect(events).toEqual(["launch m0-a", "teardown m0-a"]);
+    expect(exitCode(results)).toBe(1);
+  });
+
+  it("caps a scenario's timeout at what is left of the budget", async () => {
+    const { startSession } = sessions();
+    const results = await runScenarios(
+      [
+        scn("m0-slow", {
+          timeoutSeconds: 60,
+          steps: [{ "wait-for-state": { mode: "help" }, timeoutSeconds: 60 }],
+        }),
+      ],
+      { startSession, budgetMs: 300, pollMs: 10 },
+    );
+    expect(results[0]).toMatchObject({ status: "timeout" });
+  });
+
+  it("an empty selection is not a pass", () => {
+    expect(exitCode([])).toBe(1);
+  });
+});
+
+describe("report", () => {
+  const results = [
+    { name: "m0-a", status: "pass", ms: 1200 },
+    { name: "issue-7-x", status: "fail", ms: 300, error: "step 2 (keys): boom" },
+    { name: "m1-b", status: "pending", ms: 0, error: "needs the server" },
+  ];
+  it("lists each scenario and the totals", () => {
+    const text = formatReport(/** @type {any} */ (results));
+    expect(text).toMatch(/PASS\s+m0-a\s+1\.2 s/);
+    expect(text).toMatch(/FAIL\s+issue-7-x[^]*step 2 \(keys\): boom/);
+    expect(text).toMatch(/1 passed, 1 failed, 1 pending/);
+  });
+  it("emits GitHub annotations: errors for failures, a notice for pending", () => {
+    expect(githubAnnotations(/** @type {any} */ (results))).toEqual([
+      "::error title=e2e issue-7-x::step 2 (keys): boom",
+      "::notice title=e2e pending::m1-b is pending, not run and not passed: needs the server",
+    ]);
+  });
+});
