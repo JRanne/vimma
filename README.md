@@ -31,15 +31,23 @@ release channel.
 
 ## Status
 
-**Pre-alpha.** Milestone M0 ("fork boots + pipeline", [plan.md](plan.md) §6) is almost done.
+**Pre-alpha.** Milestone M0 ("fork boots + pipeline", [plan.md](plan.md) §6) is almost done,
+and M1's modal page layer has started (scrolling and insert mode).
 There are no binaries yet: you build from source. Version `0.1.0`, on Firefox 157.0.1.
 
 What works today:
 
 - **Branding.** The browser calls itself Vimma (`vimma --version`, the window title, About), with
   a placeholder logo. Its profiles are separate from Firefox's.
+- **Vim keys on pages.** In normal mode `j`/`k` scroll, `d`/`u` scroll half a page and `gg`/`G`
+  go to the top and bottom. Focusing a text field enters insert mode, so typing works as usual;
+  `Esc` leaves it and `i` enters it.
 - **`ctrl+b ?`** opens an overlay listing every binding, over any page, including
   `about:preferences` and the PDF viewer. `/` filters the list and `Esc` or `q` closes it.
+  Bindings that do not run yet are dimmed.
+- **Herdr tab keys.** `ctrl+b c` new tab, `ctrl+b n`/`p` next/previous (wrapping),
+  `ctrl+b 1..9` tab N, `ctrl+b shift+x` close tab, from any page and the URL bar; in normal
+  mode also `t`, `x`, `gt`/`gT`.
 - **Status bar and which-key.** A one-line status bar at the foot of the window shows the mode,
   pending keys, `tab 2/5`, the page title, its URL and whether it is loading. After `ctrl+b` a
   strip above it lists the keys you can press next; keys that do nothing yet are greyed.
@@ -49,17 +57,19 @@ What works today:
 - **Privacy defaults.** Mozilla studies, experiments and rollouts (Normandy, Nimbus) are off, and
   so are sponsored new-tab content, sponsored suggestions and Mozilla promos. The build has no
   crash reporter and no official telemetry, so nothing is uploaded. Remote Settings, CRLite,
-  the add-on blocklist, Sync and AMO work as in Firefox. Each default can be turned back on in
-  `about:config`.
+  the add-on blocklist, Sync and AMO work as in Firefox. Google Safe Browsing is on in builds
+  made with a Google API key; a build without one shows it off in Settings. Each default can be
+  turned back on, or off, in `about:config`.
 - **Firefox-compatible.** Sites see Firefox 157's user agent, byte for byte. Add-ons, webcompat
   fixes and Remote Settings see Firefox's version number.
 
-What does not work yet: every other binding in the overlay. The overlay lists the full planned
-keymap, but only `ctrl+b ?` runs today. Other `ctrl+b` sequences do nothing. The modal page
-layer (scrolling, link hints, find, `:` command line, copy mode) is M1. Vimma's own tab keys
-and the `ctrl+b g` picker are M2. Workspaces, split panes, `config.toml` and theming come
-later. The parser and validator for `config.toml` exist in `vimma-core`, but the browser does
-not read the file yet. See [docs/guide.md](docs/guide.md) and [docs/limits.md](docs/limits.md).
+What does not work yet: the dimmed bindings in the overlay. The overlay lists the full planned
+keymap; a `ctrl+b` sequence that does not run yet shows "… not implemented yet" for a moment.
+The rest of the modal page layer (link hints, find, `:` command line, copy mode) is M1. Tab
+rename and the `ctrl+b g` picker are M2. Workspaces, split
+panes, `config.toml` and theming come later. The parser and validator for `config.toml` exist in
+`vimma-core`, but the browser does not read the file yet. See [docs/guide.md](docs/guide.md) and
+[docs/limits.md](docs/limits.md).
 
 ## Requirements
 

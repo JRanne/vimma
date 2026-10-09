@@ -1,0 +1,21 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* The brief toast (ui/notice.mjs). Legible defaults only; theme tokens come in M5. */
+
+#vimma-notice {
+  position: fixed;
+  inset: auto 1rem 1rem auto;
+  margin: 0;
+  max-width: min(32rem, calc(100vw - 2rem));
+  padding: 0.4rem 0.75rem;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  border-radius: 6px;
+  background: Canvas;
+  color: CanvasText;
+  font: message-box;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+  pointer-events: none;
+}

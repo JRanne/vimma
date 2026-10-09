@@ -1,0 +1,13 @@
+diff --git a/browser/clean.txt b/browser/clean.txt
+index 189dd73d57b18f7ceacae2ae086142a970e35b86..aac5ea5aede69412ae7848648789167968345839 100644
+--- a/browser/clean.txt
++++ b/browser/clean.txt
+@@ -7,7 +7,7 @@ clean line 6
+ clean line 7
+ clean line 8
+ clean line 9
+-clean line 10
++clean line 10, patched by Vimma
+ clean line 11
+ clean line 12
+ clean line 13

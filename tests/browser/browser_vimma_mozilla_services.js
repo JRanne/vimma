@@ -41,12 +41,13 @@ const OFF_BOOL_PREFS = [
   ["browser.contentblocking.report.hide_vpn_banner", true],
 ];
 
-/** Security-critical services that must keep Firefox's defaults. */
+/**
+ * Security-critical services that must keep Firefox's defaults. Safe Browsing's prefs depend on
+ * the build's Google key: browser_vimma_safebrowsing.js checks them (spec m0-safebrowsing-key).
+ */
 const KEPT_BOOL_PREFS = [
   "security.remote_settings.crlite_filters.enabled",
   "extensions.blocklist.enabled",
-  "browser.safebrowsing.phishing.enabled",
-  "browser.safebrowsing.malware.enabled",
   "identity.fxaccounts.enabled",
   "extensions.update.enabled",
 ];

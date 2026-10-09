@@ -21,11 +21,15 @@ export class HelpOverlay {
   /**
    * @param {Window} win  a browser window
    * @param {Keymap} keymap  the keymap the dispatcher uses, so help cannot drift from behaviour
+   * @param {ReadonlySet<string>} [runnable]  action ids the host runs (VimmaHost's RUNNABLE);
+   *   the others are dimmed, under a legend (core's isRunnable, the which-key strip's rule).
+   *   Without it every row counts as runnable and there is no legend.
    */
-  constructor(win, keymap) {
+  constructor(win, keymap, runnable) {
     this.win = win;
     /** @type {BindingRow[]} */
-    this.rows = bindingTable(keymap);
+    this.rows = bindingTable(keymap, { runnable });
+    this.runnable = runnable;
     /** @type {HTMLDialogElement | null} */
     this.dialog = null;
     /** @type {HTMLInputElement | null} */
@@ -143,6 +147,9 @@ export class HelpOverlay {
     input.addEventListener("input", () => this.applyFilter());
     header.append(input);
     dialog.append(header);
+    if (this.runnable) {
+      dialog.append(el("p", "vimma-help-legend", "Dimmed rows: not implemented yet"));
+    }
 
     /** @type {HTMLElement | null} */
     let section = null;
@@ -156,6 +163,9 @@ export class HelpOverlay {
       }
       const row = el("div", "vimma-help-row");
       row.dataset.action = r.name;
+      row.dataset.runnable = String(r.runnable);
+      // Screen readers get the mark the dimming shows.
+      if (!r.runnable) row.setAttribute("aria-description", "not implemented yet");
       row.append(
         el("span", "vimma-help-override", r.overridden ? "*" : ""),
         el("span", "vimma-help-keys", r.bindings.length ? r.bindings.join(", ") : "(unbound)"),

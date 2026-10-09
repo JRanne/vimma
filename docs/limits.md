@@ -6,14 +6,31 @@ delete its line in the same PR.
 
 ## Features
 
-- Only `ctrl+b ?` runs. Every other binding in the overlay and in [bindings.md](bindings.md) is
-  planned, and other `ctrl+b` sequences are consumed and do nothing
-  ([m0-help-overlay](specs/m0-help-overlay.md), Settled).
-- Every page is in `insert` mode until M1's content actor can detect editable focus. Bare keys go
-  to the page ([m0-help-overlay](specs/m0-help-overlay.md)).
-- Single-key actions the host cannot run yet (`Esc`, `ctrl+i`, `ctrl+u`) pass through to Firefox.
-  This is an M0 stopgap, to be revisited per action in M1
-  ([m0-help-overlay](specs/m0-help-overlay.md)).
+- Only `ctrl+b ?`, the tab keys (`ctrl+b c`, `n`, `p`, `1..9`, `shift+x`; `t`, `x`, `gt`, `gT`
+  in normal mode), scrolling (`j k h l d u gg G`), `i` and `Esc` run. The other bindings are
+  dimmed in the overlay; their `ctrl+b` sequences (or a count before them) are consumed and show
+  "… not implemented yet" ([m2-tab-keys](specs/m2-tab-keys.md), Settled).
+- Tab keys count Firefox's visible tabs; workspaces (M3) will narrow them to the current one.
+- Single-key actions the host cannot run yet (`f`, `/`, `r`, `ctrl+i`, `ctrl+u`, …) pass through
+  to the page or Firefox, and so does the first key of a sequence with nothing runnable under it
+  (`ctrl+w`, the M4 pane keys) ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md),
+  Settled).
+- Pages that take keys outside a text field (games, Google Docs' canvas, Figma) lose their bare
+  keys to normal mode; press `i` to let every key through until `Esc`. Text editors are
+  detected ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Limits).
+- Bare digits are counts in normal mode, so a page's own digit shortcuts need `i` first
+  ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Limits).
+- Extension pages (`moz-extension:`), `data:`, `view-source:` and `blob:` pages have no content
+  actor: they stay in insert, with no Vim keys ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md),
+  Settled).
+- Closed shadow roots in pages are seen (the actor is privileged), but a page script that moves
+  focus from a frame to the top page's `<body>` can leave insert on until `Esc`
+  ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Limits).
+- `Esc` in a text field leaves insert and does not reach the page; press `Esc` again for the
+  site's own `Esc` (closing an autocomplete or a dialog)
+  ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled).
+- After `Esc` in a `designMode` page, it stays in normal until the next click into it
+  ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled).
 - `config.toml` is not read by the browser. Its validator and theme tokens exist in `vimma-core`,
   but loading, polling, `:source` and theming wait for the M5 host spec
   ([m5-core-config-and-theme](specs/m5-core-config-and-theme.md)).
@@ -97,9 +114,23 @@ Workspaces are not built yet; these are the limits their design accepts
 
 ## Privacy, security and services
 
-- Safe Browsing does not work: there is no Google API key, so no phishing, malware or download
-  lists are fetched, yet Settings shows the protection ticked. Follow-up spec
-  `m0-safebrowsing-key` ([m0-mozilla-services](specs/m0-mozilla-services.md), Open issues).
+- Safe Browsing works only in builds made with a Google API key (the nightly, and local builds
+  with the key file). Keyless builds, including PR CI's, fetch no phishing, malware or download
+  lists and default the protection off, so Settings shows it unticked
+  ([m0-safebrowsing-key](specs/m0-safebrowsing-key.md)).
+- Every keyed build shares one Google key. Google's Safe Browsing API is free for
+  non-commercial use only and has per-project quotas (Cloud console → Quotas); a large user base
+  or commercial use needs a quota increase or Google's Web Risk API. The key is compiled into
+  the binaries and can be extracted from them; that is normal for browsers (Firefox ships its
+  own the same way) and accepted. Rotation: [runbook](runbook.md)
+  ([m0-safebrowsing-key](specs/m0-safebrowsing-key.md)).
+- No download reputation: Google serves its download lists (`goog-badbinurl-proto`,
+- Safe Browsing's `goog-harmful-proto` list is requested but did not arrive in the smoke run
+  with our key (phishing, malware and unwanted did); treat it as unavailable. See
+  [m0-safebrowsing-key](specs/m0-safebrowsing-key.md).
+  `goog-downloadwhite-proto`) and its remote download check only to Mozilla's key, so Vimma asks
+  for neither, and "Block dangerous downloads" in Settings adds nothing beyond the site lists
+  ([m0-safebrowsing-key](specs/m0-safebrowsing-key.md), Settled).
 - Firefox's app updater is still built in and asks `aus5.mozilla.org` for updates on the `vimma`
   channel, and system add-on updates are on. Removing both is in review (PR #15, spec
   `m0-updater`).
@@ -178,6 +209,13 @@ Workspaces are not built yet; these are the limits their design accepts
   `browser_vimma_help_overlay.js` (issue #18).
 - PRs opened by `GITHUB_TOKEN` (upstream bumps, Claude, release-please) do not trigger CI by
   themselves ([runbook](runbook.md)).
+- Firefox bumps are manual after the bot's PR. Plan §4's Claude conflict resolution (≤3 pushes),
+  auto-merge of clean bumps and the auto-approved `security` path are not built. The bump PR
+  carries a dry run of every patch against the new release ([rebase playbook](rebase.md),
+  [m0-rebase-playbook](specs/m0-rebase-playbook.md)).
+- `surfer import` stops at the first patch that fails, and `git apply` has no fuzz: a hunk whose
+  context drifted fails like one whose code is gone. `tools/upstream/patch-check.py` reports
+  every patch and hunk, and tells the two apart ([m0-rebase-playbook](specs/m0-rebase-playbook.md)).
 - No branch protection on `main` (free private plan); write-token jobs could push to it
   ([m0-pipeline](specs/m0-pipeline.md), [runbook](runbook.md)).
 - A change to build config needs a full rebuild of 15–30 min on 16 threads: 927 s
