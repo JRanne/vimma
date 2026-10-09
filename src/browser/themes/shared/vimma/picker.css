@@ -1,0 +1,97 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* The prefix+g goto picker (ui/picker.mjs): the help overlay's look (help-overlay.css), theme
+   tokens when the status bar has loaded them, legible system colours otherwise. */
+
+#vimma-picker {
+  box-sizing: border-box;
+  width: min(48rem, calc(100vw - 4rem));
+  max-height: calc(100vh - 4rem);
+  overflow: auto;
+  padding: 0 0 0.75rem;
+  border: 1px solid var(--vimma-muted, color-mix(in srgb, CanvasText 25%, transparent));
+  border-radius: 8px;
+  background: var(--vimma-bg-dark, Canvas);
+  color: var(--vimma-fg, CanvasText);
+  font: message-box;
+  font-size: 13px;
+  outline: none;
+  color-scheme: var(--vimma-color-scheme, light dark);
+
+  &::backdrop {
+    background: rgb(0 0 0 / 0.45);
+  }
+
+  & [hidden] {
+    display: none !important;
+  }
+
+  & header {
+    position: sticky;
+    top: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.75rem 1.25rem 0.5rem;
+    background: var(--vimma-bg-dark, Canvas);
+  }
+
+  & h1 {
+    flex: 1;
+    margin: 0;
+    font-size: 1.15em;
+  }
+
+  & .vimma-picker-query {
+    font-family: var(--vimma-font, monospace);
+    color: var(--vimma-accent, AccentColor);
+  }
+
+  & .vimma-picker-hint {
+    font-size: 0.85em;
+    opacity: 0.7;
+  }
+
+  & ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  & .vimma-picker-row {
+    display: grid;
+    grid-template-columns: 2.5ch 1fr minmax(0, 16rem);
+    gap: 0.75rem;
+    padding: 0.15rem 1.25rem;
+  }
+
+  & .vimma-picker-row[aria-selected="true"] {
+    background: var(--vimma-selection, SelectedItem);
+    color: var(--vimma-fg-bright, SelectedItemText);
+  }
+
+  & .vimma-picker-index {
+    font-family: var(--vimma-font, monospace);
+    text-align: end;
+    opacity: 0.7;
+  }
+
+  & .vimma-picker-title,
+  & .vimma-picker-host {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  & .vimma-picker-host {
+    opacity: 0.7;
+  }
+
+  & mark {
+    background: none;
+    color: var(--vimma-accent, AccentColor);
+    font-weight: bold;
+  }
+}
