@@ -147,7 +147,7 @@ Key mechanics:
 - **Key capture:** `window.addEventListener('keydown', handler, true)` in the chrome window sees keys before the URL bar, sidebar, about: pages and the PDF viewer. Keys the dispatcher returns `pass` for continue untouched.
 - **Content side:** a `JSWindowActor` pair. The child reports focus changes (insert mode), executes scroll/hint/caret commands, and returns hint targets; the parent is the only thing that talks to it. This is the one Firefox-specific concept to learn properly in M1.
 - **Panes:** a pane tree in `vimma-core` (`split`, `zoom`, `swap`, `focus`, `close`) mirrored onto Firefox's split view, laid out by our CSS (ADR-013). One `<browser>` per pane; the active pane owns the URL bar.
-- **Workspaces:** model in core; host maps to containers and hidden tabs; persisted through `SessionStore.setCustomTabValue` (tab → workspace) plus a JSON file for workspace definitions and pane layouts; restored on startup.
+- **Workspaces:** model in core; host maps to containers and hidden tabs; persisted through `SessionStore.setCustomTabValue` (tab → workspace) plus a JSON file for workspace definitions; per-window state and pane layouts in a SessionStore window value (`docs/specs/m3-workspaces.md`); restored on startup.
 - **Theme:** tokens → CSS custom properties on the chrome document. Omarchy adapter polls `~/.local/state/omarchy/current/theme/colors.toml` and remaps on change (see `docs/notes/omarchy-theming.md`).
 - **Config reload:** poll the file's mtime every 2 s (Firefox has no portable fs watcher); `:source` forces it.
 
@@ -321,10 +321,10 @@ The repo holds the memory. `CLAUDE.md` (appendix A), specs, ADRs, tests and the 
 Open questions to settle in M0 (each becomes an ADR or a line in `docs/limits.md`):
 
 - [x] PR build strategy: `surfer build --ui` on a cached engine vs Firefox artifact builds — which works with release tarballs? Artifact builds, on hosted runners (ADR-010).
-- [ ] Side panel: custom box in the window layout or Firefox's sidebar framework (`SidebarController`)?
+- [x] Side panel: custom box in the window layout or Firefox's sidebar framework (`SidebarController`)? Our own box, inserted from JS (`docs/specs/m3-workspaces.md`).
 - [ ] Where does the control socket's auth token live, and should it be off by default in release builds?
 - [x] Omarchy adapter: neither; read the theme's `colors.toml`, which every Omarchy 4 theme ships (`docs/notes/omarchy-theming.md`).
-- [ ] Starter workspaces (work/admin/personal) created on first run, or only shipped as the commented example?
+- [x] Starter workspaces (work/admin/personal) created on first run, or only shipped as the commented example? Commented example; first run creates one `main` (`docs/specs/m3-workspaces.md`).
 - [ ] Flatpak alongside AUR from M6, or later?
 
 ---
