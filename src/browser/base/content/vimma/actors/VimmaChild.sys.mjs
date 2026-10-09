@@ -267,7 +267,10 @@ export class VimmaChild extends JSWindowActorChild {
       const buttons = type === "mousedown" ? 1 : 0;
       el.dispatchEvent(new win.MouseEvent(type, { ...init, buttons }));
     }
-    if (el.isConnected) html.click();
+    if (!el.isConnected) return true;
+    // SVG elements have no click(): dispatch the click event for them.
+    if (typeof html.click === "function") html.click();
+    else el.dispatchEvent(new win.MouseEvent("click", init));
     return true;
   }
 

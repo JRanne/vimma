@@ -6,6 +6,12 @@
 // process, in VimmaChild. Finds what a user could click in the viewport, skips what is hidden or
 // covered, and reports subframes so the parent can ask their own child.
 
+import {
+  HINT_REPLY_MAX_FRAMES,
+  HINT_REPLY_MAX_HREF,
+  HINT_REPLY_MAX_TARGETS,
+} from "../core/hints.mjs";
+
 /** @typedef {{ x: number, y: number, width: number, height: number }} Rect */
 /** @typedef {"link" | "input" | "click"} TargetKind */
 /**
@@ -17,8 +23,9 @@
  */
 /** @typedef {{ bc: any, rect: Rect }} FoundFrame */
 
-/** At most this many targets per frame; the rest are dropped. */
-export const MAX_TARGETS = 5000;
+/** At most this many targets and subframes per frame (the parent's caps); the rest are dropped. */
+const MAX_TARGETS = HINT_REPLY_MAX_TARGETS;
+const MAX_FRAMES = HINT_REPLY_MAX_FRAMES;
 
 /**
  * Hintable by what they are: the HTML and ARIA vocabulary Vimium (`LocalHints.isClickable`) and
@@ -228,7 +235,11 @@ export function collectTargets(win, { linksOnly }) {
     if (!unoccluded(el, rect)) continue;
     /** @type {Found} */
     const found = { el, rect, kind: kindOf(el) };
-    if (found.kind === "link") found.href = /** @type {HTMLAnchorElement} */ (el).href;
+    // An SVG <a> has an SVGAnimatedString href, and F cannot open a URL over the cap: no href.
+    const href = /** @type {HTMLAnchorElement} */ (el).href;
+    if (found.kind === "link" && typeof href === "string" && href.length <= HINT_REPLY_MAX_HREF) {
+      found.href = href;
+    }
     targets.push(found);
     shown.add(el);
     if (el.localName === "label") labels.push(el);
@@ -245,6 +256,7 @@ export function collectTargets(win, { linksOnly }) {
   /** @type {FoundFrame[]} */
   const frames = [];
   for (const el of frameEls) {
+    if (frames.length >= MAX_FRAMES) break;
     const bc = /** @type {any} */ (el).browsingContext;
     if (!bc) continue;
     const r = el.getBoundingClientRect();

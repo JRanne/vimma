@@ -197,3 +197,88 @@ export function hintKey(state, chord) {
  * @returns {{ kind: "narrow", visible: number }}
  */
 const narrow = (state) => Object.freeze({ kind: "narrow", visible: visibleHints(state).length });
+
+/** Most targets one frame may report (`Vimma:CollectHints`, docs/specs/m1-hints.md). */
+export const HINT_REPLY_MAX_TARGETS = 5000;
+/** Most subframes one frame may report. */
+export const HINT_REPLY_MAX_FRAMES = 64;
+/** Longest href a link target may carry (for `F`). */
+export const HINT_REPLY_MAX_HREF = 8192;
+/** Coordinates beyond this are not on any screen. */
+const MAX_COORD = 1e6;
+/** @type {ReadonlySet<string>} */
+const TARGET_KINDS = new Set(["link", "input", "click"]);
+
+/** @typedef {"link" | "input" | "click"} TargetKind */
+/** @typedef {{ id: number, rect: Rect, kind: TargetKind, href?: string }} ReplyTarget */
+/** @typedef {{ id: number, rect: Rect }} ReplyFrame */
+/** @typedef {{ targets: ReplyTarget[], frames: ReplyFrame[], ms: number }} HintReply */
+
+/** @param {unknown} n */
+const isIndex = (n) => Number.isSafeInteger(n) && /** @type {number} */ (n) >= 0;
+
+/** @param {unknown} n */
+const isCoord = (n) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) < MAX_COORD;
+
+/**
+ * @param {unknown} value
+ * @returns {Rect | null}
+ */
+function parseRect(value) {
+  if (typeof value !== "object" || value === null) return null;
+  const { x, y, width, height } = /** @type {Record<string, unknown>} */ (value);
+  if (!isCoord(x) || !isCoord(y) || !isCoord(width) || !isCoord(height)) return null;
+  const r = /** @type {Rect} */ ({ x, y, width, height });
+  return r.width > 0 && r.height > 0 ? r : null;
+}
+
+/**
+ * A `Vimma:CollectHints` reply from a content process, which may be compromised: a fresh copy
+ * with only the known fields, each of its exact type and within the caps, or null if anything
+ * is wrong. Never throws. The hint counterpart of `parseDescriptor` (editable.mjs).
+ * @param {unknown} value
+ * @returns {HintReply | null}
+ */
+export function parseHintReply(value) {
+  try {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+    const { targets, frames, ms } = /** @type {Record<string, unknown>} */ (value);
+    if (typeof ms !== "number" || !Number.isFinite(ms)) return null;
+    if (!Array.isArray(targets) || targets.length > HINT_REPLY_MAX_TARGETS) return null;
+    if (!Array.isArray(frames) || frames.length > HINT_REPLY_MAX_FRAMES) return null;
+    /** @type {ReplyTarget[]} */
+    const outTargets = [];
+    const ids = new Set();
+    for (const t of [...targets]) {
+      if (typeof t !== "object" || t === null) return null;
+      const { id, rect, kind, href } = /** @type {Record<string, unknown>} */ (t);
+      if (!isIndex(id) || ids.has(id)) return null;
+      ids.add(id);
+      const r = parseRect(rect);
+      if (!r || typeof kind !== "string" || !TARGET_KINDS.has(kind)) return null;
+      /** @type {ReplyTarget} */
+      const out = {
+        id: /** @type {number} */ (id),
+        rect: r,
+        kind: /** @type {TargetKind} */ (kind),
+      };
+      if (href !== undefined) {
+        if (typeof href !== "string" || href.length > HINT_REPLY_MAX_HREF) return null;
+        out.href = href;
+      }
+      outTargets.push(out);
+    }
+    /** @type {ReplyFrame[]} */
+    const outFrames = [];
+    for (const f of [...frames]) {
+      if (typeof f !== "object" || f === null) return null;
+      const { id, rect } = /** @type {Record<string, unknown>} */ (f);
+      const r = parseRect(rect);
+      if (!isIndex(id) || !r) return null;
+      outFrames.push({ id: /** @type {number} */ (id), rect: r });
+    }
+    return { targets: outTargets, frames: outFrames, ms };
+  } catch {
+    return null;
+  }
+}

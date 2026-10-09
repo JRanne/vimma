@@ -5,6 +5,8 @@
 // Registers the Vimma JSWindowActor pair and sends it commands (spec:
 // docs/specs/m1-actor-insert-scroll.md). The host talks to content only through here.
 
+import { HINT_REPLY_MAX_TARGETS, parseHintReply } from "../core/hints.mjs";
+
 const NAME = "Vimma";
 const BASE = "chrome://browser/content/vimma/actors/";
 
@@ -28,14 +30,10 @@ let registered = false;
 /** Hint collections so far; a reply or an activation from an older one is ignored. */
 let hintGen = 0;
 
-/** At most this many targets in all frames, and per frame (hint-collect.mjs MAX_TARGETS). */
-const MAX_HINTS = 5000;
-/** At most this many subframes per frame, and this deep. */
-const MAX_FRAMES = 64;
+/** At most this many targets in all frames (each frame: core HINT_REPLY_MAX_TARGETS). */
+const MAX_HINTS = HINT_REPLY_MAX_TARGETS;
+/** At most this deep in frames. */
 const MAX_FRAME_DEPTH = 8;
-/** The longest href taken for `F`. */
-const MAX_HREF = 8192;
-const KINDS = new Set(["link", "input", "click"]);
 /** Schemes `F` opens; the page's principal must be allowed to load them too. */
 const OPENABLE = new Set(["http:", "https:", "file:"]);
 
@@ -44,43 +42,6 @@ const ReferrerInfo = Components.Constructor(
   "nsIReferrerInfo",
   "init",
 );
-
-/**
- * @param {any} r
- * @returns {r is Rect}
- */
-function validRect(r) {
-  return (
-    !!r &&
-    typeof r === "object" &&
-    ["x", "y", "width", "height"].every((k) => Number.isFinite(r[k]) && Math.abs(r[k]) < 1e6) &&
-    r.width > 0 &&
-    r.height > 0
-  );
-}
-
-/**
- * A Vimma:CollectHints reply as VimmaChild builds it, and nothing else.
- * @param {any} reply
- */
-function validHintReply(reply) {
-  if (!reply || typeof reply !== "object" || !Number.isFinite(reply.ms)) return false;
-  const { targets, frames } = reply;
-  if (!Array.isArray(targets) || targets.length > MAX_HINTS) return false;
-  if (!Array.isArray(frames) || frames.length > MAX_FRAMES) return false;
-  const ids = new Set();
-  for (const t of targets) {
-    if (!t || !Number.isSafeInteger(t.id) || t.id < 0 || ids.has(t.id)) return false;
-    ids.add(t.id);
-    if (!validRect(t.rect) || !KINDS.has(t.kind)) return false;
-    if (t.href !== undefined && (typeof t.href !== "string" || t.href.length > MAX_HREF)) {
-      return false;
-    }
-  }
-  return frames.every(
-    (/** @type {any} */ f) => !!f && Number.isSafeInteger(f.id) && validRect(f.rect),
-  );
-}
 
 /**
  * @param {Rect} r
@@ -213,14 +174,16 @@ export const VimmaActors = {
      */
     const visit = async (bc, frame, origin, depth) => {
       const wg = bc.currentWindowGlobal;
-      /** @type {any} */
-      let reply;
+      /** @type {unknown} */
+      let raw;
       try {
-        reply = await actorFor(bc)?.sendQuery("Vimma:CollectHints", { gen, linksOnly });
+        raw = await actorFor(bc)?.sendQuery("Vimma:CollectHints", { gen, linksOnly });
       } catch {
         return; // the frame navigated or its process went away
       }
-      if (!validHintReply(reply) || gen !== hintGen) return;
+      // From a content process, which may be compromised: a fresh, checked copy or nothing.
+      const reply = parseHintReply(raw);
+      if (!reply || gen !== hintGen) return;
       ms += reply.ms;
       for (const t of reply.targets) {
         if (out.length >= MAX_HINTS) break;
@@ -229,7 +192,7 @@ export const VimmaActors = {
         out.push({ gen, bc, wg, id: t.id, kind: t.kind, href: t.href, rect });
       }
       if (depth >= MAX_FRAME_DEPTH) return;
-      const children = reply.frames.map((/** @type {any} */ f) => {
+      const children = reply.frames.map((f) => {
         const child = BrowsingContext.get(f.id);
         // Only a frame this document embeds: a content process names no other.
         if (!child || child.parent !== bc) return null;

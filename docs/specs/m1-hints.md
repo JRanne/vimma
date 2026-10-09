@@ -17,7 +17,9 @@ takes back a key and `Esc` leaves hint mode. The page cannot tell that hints wer
 - `actors/hint-collect.mjs`: target collection in one frame (content process).
 - `actors/VimmaChild.sys.mjs`: `Vimma:CollectHints` and `Vimma:ActivateHint`.
 - `actors/VimmaActors.sys.mjs`: `collectHints` (merges frames), `activateHint`,
-  `openInBackground`, `cancelHints`; strict checks on every reply.
+  `openInBackground`, `cancelHints`.
+- `packages/vimma-core/src/hints.mjs`: `parseHintReply` and `HINT_REPLY_MAX_*`, the strict
+  check of a collection reply (unit tests in `test/hints.test.mjs`).
 - `ui/hint-overlay.mjs`, `themes/shared/vimma/hints.css`: labels drawn in chrome.
 - `host/VimmaHost.sys.mjs`: `hint.follow` (`f`), `hint.follow_new_tab` (`F`), `hint.cancel`
   (`Esc`, the dispatcher's `hint` mode); every other key in hint mode goes to core `hintKey`.
@@ -80,8 +82,7 @@ reverted.
   `{ browsingContext id, content-box rect }`. The parent queries those frames' children (in
   their own processes for cross-origin frames), offsets their rects by the frame's origin and
   clips them to the frame's visible rect. So same-origin and cross-origin frames work alike, up
-  to 8 levels deep and 64 frames per document. A frame id is taken only when that
-  `BrowsingContext`'s parent is the reporting frame.
+  to 8 levels deep and 64 frames per document.
 - **Rendering in chrome.** The labels are a `<div id="vimma-hints">` appended to the tab's
   `.browserStack` (a XUL stack, so the layer covers exactly the `<browser>`, also in split
   view), `pointer-events: none`, `overflow: hidden`. Rects go from content to chrome CSS pixels
@@ -92,19 +93,28 @@ reverted.
   Colours: `--vimma-hint-bg` / `--vimma-hint-fg` (m5-core-config-and-theme) with Tokyo Night's
   yellow as the fallback until M5 sets the tokens.
 - **Messages.** `Vimma:CollectHints { gen, linksOnly }` → `{ targets: [{ id, rect, kind,
-href? }], frames: [{ id, rect }], ms }`. The parent checks the whole reply and drops a frame
-  whose reply is malformed: arrays and caps (5,000 targets, 64 frames), integer unique ids,
-  finite rects with positive size and coordinates under 10^6, `kind` in `link`/`input`/`click`,
-  `href` a string under 8 KiB. Labels are made in the parent; content supplies only rects, so
-  the worst a page can do is put labels in odd places inside its own content area.
-  `Vimma:ActivateHint { gen, id }` goes to the target's frame only if that frame still has the
-  same `WindowGlobalParent` as at collection; the child acts only if `gen` is its last
-  collection's, and forgets the collection after one activation.
+href? }], frames: [{ id, rect }], ms }`, and `Vimma:ActivateHint { gen, id }`. Both are
+  queries the parent sends to a frame it chose; the child never starts a hint message, so the
+  focused-frame rule of focus reports (m1-actor-insert-scroll) has no counterpart here: each
+  reply comes from the frame that was asked. The parent runs every reply through core
+  `parseHintReply` (`hints.mjs`, the counterpart of `parseDescriptor`), which returns a fresh
+  copy with only the known fields or null, and never throws: caps of 5,000 targets, 64 frames
+  and 8 KiB per href (`HINT_REPLY_MAX_*`, which the child also applies to its own reply, so a
+  page with 65 frames loses its 65th, not all of them), unique non-negative integer ids,
+  finite rects with positive size and coordinates under 10^6, `kind` in
+  `link`/`input`/`click`, `href` a string (an SVG `<a>` sends none). A null reply drops that
+  frame. A reported frame id is taken only when that `BrowsingContext`'s parent is the frame
+  that reported it. Labels are made in the parent; content supplies only rects, so the worst a
+  page can do is put labels in odd places inside its own content area. An activation goes to
+  the target's frame only if that frame still has the same `WindowGlobalParent` as at
+  collection; the child acts only if `gen` is its last collection's, and forgets the
+  collection after one activation.
 - **Activation in the child.** A text field (core `isEditable`, the same rules as insert)
   gets `focus()`, and the actor's `focusin` report enters insert. A `select` gets focus and
   `showPicker()` (which may need activation; Limits). Anything else gets `mouseover`,
   `mousedown`, `mouseup` (created by privileged code, so trusted) and `click()`, whose
-  activation behaviour follows links. `windowUtils.sendMouseEvent` would be a real pointer
+  activation behaviour follows links (SVG elements, which have no `click()`, get a click
+  event). `windowUtils.sendMouseEvent` would be a real pointer
   click, but Firefox 157 no longer has it outside tests.
 - **`F`.** Links only (`a[href]`). The parent opens `href` with `openLinkIn(url, "tab",
 { inBackground: true })`, as the context menu's "Open Link in New Tab" does: the frame's
