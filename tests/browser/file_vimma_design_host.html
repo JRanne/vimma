@@ -1,0 +1,24 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Fixture for browser_vimma_insert_scroll.js: a long page framing a cross-origin designMode
+   - document. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vimma designMode frame host</title>
+    <style>
+      body {
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <iframe
+      id="frame"
+      src="https://example.org/browser/browser/base/zen-components/tests/browser/file_vimma_design.html"
+    ></iframe>
+    <div style="height: 20000px"></div>
+  </body>
+</html>

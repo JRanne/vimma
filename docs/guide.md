@@ -65,14 +65,43 @@ in the URL bar, `about:` pages and the PDF viewer.
 - **The prefix layer (Herdr).** `ctrl+b` is the prefix. The next key is a command: `ctrl+b ?`
   shows the bindings, and later `ctrl+b c` opens a tab, `ctrl+b v` splits the pane, and so on.
   The prefix works in every mode and waits for the next key with no timeout. `Esc` cancels it.
-- **The modal layer (Neovim) — planned, M1.** Bare keys act on the page depending on the mode:
-  `j`/`k` scroll in `normal` mode, while in `insert` mode (focus in a text field) keys go to the
-  page. Other modes: `visual`/copy (caret and selection), `command` (`:` line), `hint` (link
-  hints), `help` (the bindings overlay) and `panel` (the side panel).
+- **The modal layer (Neovim).** Bare keys act on the page depending on the mode: `j`/`k` scroll
+  in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page. Planned
+  modes: `visual`/copy (caret and selection), `command` (`:` line), `hint` (link hints) and
+  `panel` (the side panel); `help` is the bindings overlay.
 
-**Today** every page is in `insert` mode, because nothing can yet tell whether focus is in a
-text field. Bare keys and Firefox's own shortcuts reach the page as in Firefox. Only `ctrl+b`
-sequences are Vimma's.
+### Normal and insert mode
+
+Every tab starts in **normal** mode: Vimma's bare keys (the table below) act on the page, and
+the page never sees them. Keys Vimma has no binding for, such as `z` or a site's own `s` or `m`,
+still reach the page.
+
+Focusing a text field puts the tab in **insert** mode, so typing works as in Firefox: inputs,
+text areas, editable regions (`contenteditable`), ARIA text boxes, code editors (Monaco,
+CodeMirror, Ace, ProseMirror, Quill), fields inside web components and inside frames from
+other sites. Focusing a checkbox, button or link does not. `Esc` leaves insert: it takes focus
+out of the field and the tab is back in normal. `i` enters insert explicitly: it focuses the
+first text field on the page, or, on a page without one (a game), lets every key through until
+`Esc`.
+
+Clicking into a page that is editable as a whole (a `designMode` document, such as some rich
+text editors' frames) also enters insert.
+
+Each tab keeps its own mode. Settings (`about:preferences`) and the PDF viewer work the same
+way, but Settings focuses its search box when it opens, so it starts in insert: press `Esc`
+before `j`/`k`. Pages Vimma does not reach (extension pages, `data:` and `view-source:` pages)
+stay in insert, so their keys are untouched. With focus in the URL bar or the find bar, keys
+belong to that field; only `ctrl+b` sequences are Vimma's there.
+
+**`Esc` in a text field is Vimma's.** It leaves insert, so the page does not see that `Esc`: a
+site's own `Esc` (closing an autocomplete list or a dialog) does not fire from the field. Press
+`Esc` again: in normal mode `Esc` has no binding, so it reaches the page (the field no longer
+has focus, so the page's document gets it, not the field).
+
+**A key that starts a sequence passes when nothing in that sequence works yet.** `ctrl+w`
+starts the planned `ctrl+w h/j/k/l` pane keys (M4), but until they work `ctrl+w` still closes
+the tab. `g` starts `gg`, which works, so `g` is Vimma's: the page does not see it, and `Esc`
+cancels it.
 
 ## Keys
 
@@ -83,19 +112,25 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 
 | Keys                        | What it does                                                                                                                                                  |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `j` / `k`, `h` / `l`        | Normal mode: scroll down / up, left / right by a step. A count repeats: `3j`.                                                                                 |
+| `d` / `u`                   | Normal mode: scroll half a page down / up (`ctrl+u` is reserved for workspaces).                                                                              |
+| `gg` / `G`                  | Normal mode: go to the top / bottom of the page.                                                                                                              |
+| `i`                         | Normal mode: focus the first text field and enter insert mode.                                                                                                |
+| `Esc`                       | Insert mode: leave the text field, back to normal mode. In normal mode the page gets `Esc`.                                                                   |
 | `ctrl+b ?`                  | Opens the bindings overlay over any page, including `about:preferences` and the PDF viewer. Press it again to close.                                          |
 | `/` (in the overlay)        | Filters the list as you type.                                                                                                                                 |
 | `Esc` or `q` (overlay)      | Closes the overlay. Focus returns to where it was.                                                                                                            |
 | `ctrl+b` then anything else | Consumed and does nothing yet (the key never leaks to the page). `ctrl+b` no longer opens Firefox's bookmarks sidebar.                                        |
 | Firefox's own keys          | Unchanged: `ctrl+t`, `ctrl+w`, `ctrl+tab`, `ctrl+shift+tab`, `ctrl+pagedown`, `alt+1..9` (tab N on Linux), `ctrl+l`, `ctrl+f`, `ctrl+u`, `ctrl+i`, and so on. |
 
-While the overlay is open it takes every key, so `ctrl+w` cannot close the tab behind it.
+While the overlay is open it takes every key, so `ctrl+w` cannot close the tab behind it. In
+normal mode bare digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 
 **Planned:**
 
-- **M1, the modal page layer:** scrolling (`j k h l`, `d`/`u`, `gg`/`G`), back and forward
-  (`H`/`L`), reload (`r`), link hints (`f`/`F`), find (`/ ? n N`), the `:` command line, copy mode
-  (`v`, `ctrl+b [`), `i` to focus the first input, and `Esc` back to normal mode.
+- **M1, the rest of the modal page layer:** back and forward (`H`/`L`), reload (`r`), link
+  hints (`f`/`F`), find (`/ ? n N`), the `:` command line and copy mode (`v`, `ctrl+b [`). Until
+  then these keys reach the page as before.
 - **M2, tabs:** `ctrl+b c` new tab, `ctrl+b 1..9`, `ctrl+b n`/`p`, `ctrl+b shift+t` rename
   (kept across restarts; an empty name restores the page title), `ctrl+b shift+x` close, `t`, `x`,
   `gt`/`gT`, the `ctrl+b g` picker (`j`/`k` to move, `/` to search titles, URLs, workspaces and
@@ -138,13 +173,37 @@ Vimma changes Firefox's defaults, without locking them: each one can be changed 
 | Telemetry upload                         | Not built in (no official telemetry). The data-collection switches in Settings are off to match.                                                                                                      |
 
 Kept as in Firefox: Remote Settings (CRLite certificate revocation, intermediate certificates),
-the add-on blocklist, Firefox Sync and add-ons from addons.mozilla.org. Safe Browsing is switched
-on but **does not work yet**: see the FAQ. Firefox's app updater and system add-on updates still
-contact Mozilla's update server; see [limits.md](limits.md).
+the add-on blocklist, Firefox Sync, add-ons from addons.mozilla.org and Google Safe Browsing
+(see below). Firefox's app updater and system add-on updates still contact Mozilla's update
+server; see [limits.md](limits.md).
 
 Sites see Firefox 157's user agent, with no Vimma token, and add-ons see Firefox's version
 (`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. `vimma --version` and the About
 dialog show Vimma's own version (`0.1.0`).
+
+### Safe Browsing
+
+Google Safe Browsing is on by default, as in Firefox: Vimma downloads Google's lists of phishing,
+malware and unwanted-software sites and warns before you open one. Your browsing stays local:
+only when an address matches the local list does Vimma send Google a short hash prefix of it to
+confirm. Spec: [m0-safebrowsing-key](specs/m0-safebrowsing-key.md).
+
+Firefox's extra download checks (Google's lists of bad and known-good downloads, and its file
+reputation service) are open only to Mozilla's own key, so Vimma does not use them: the "Block
+dangerous downloads" box adds nothing beyond the site lists ([limits.md](limits.md)).
+
+To turn Safe Browsing off: Settings → Privacy & Security → untick "Block dangerous
+and deceptive content". In `about:config` that is `browser.safebrowsing.phishing.enabled` and
+`browser.safebrowsing.malware.enabled` = `false`.
+
+A Vimma you build yourself has Safe Browsing only if you build it with a Google API key
+([runbook](runbook.md)). Without one it fetches no lists, and Settings shows the protection off.
+
+Whether or not you use Safe Browsing, we recommend [uBlock Origin](https://ublockorigin.com/)
+from addons.mozilla.org as a second line: in its dashboard → Filter lists, keep "uBlock filters
+– Badware risks" on and tick the lists under "Malware protection, security" (Online Malicious URL
+Blocklist, Phishing URL Blocklist). They block known malware and phishing sites without asking
+any server about the pages you visit.
 
 ## Firefox behaviour Vimma changes
 
@@ -167,9 +226,10 @@ the version that last used them. Builds from before the app-version change repor
 instead of `157.0.1`, so they treat any newer profile as a downgrade. Give each build its own
 `--profile`, or start with `--allow-downgrade` if you accept the risk.
 
-**Does Safe Browsing protect me?** Not yet. The phishing and malware lists need a Google API key
-that the build does not have yet, so no lists are fetched, even though Settings shows "Block
-dangerous and deceptive content" ticked. Mozilla's tracking-protection lists do update.
+**Does Safe Browsing protect me?** Yes, in builds made with a Google API key, which are on by
+default (see [Safe Browsing](#safe-browsing)). A build without a key fetches no phishing or
+malware lists; Settings then shows "Block dangerous and deceptive content" unticked, and ticking
+it does not help. Mozilla's tracking-protection lists update either way.
 
 **Does Vimma update itself?** No. There are no releases yet, so build a newer `main` yourself.
 Firefox's updater is still built in and asks Mozilla's update server (`aus5.mozilla.org`), which
