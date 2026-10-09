@@ -65,6 +65,19 @@ delete its line in the same PR.
 - A search starts at the top-left corner of the viewport; a fixed header there makes it start at
   the header's place in the document ([m1-find](specs/m1-find.md)).
 
+## Copy mode
+
+- Copy mode works in the frame that has focus; a frame from another site needs a click first,
+  and the caret does not cross from one frame into another
+  ([m1-copy-mode](specs/m1-copy-mode.md)).
+- `w` / `b` are Firefox's word steps: on Linux `w` stops at the end of a word, not at the start
+  of the next as in Vim. No `e`, `W`, `B`, `o` or line-wise `V`
+  ([m1-copy-mode](specs/m1-copy-mode.md)).
+- `y` copies plain text only. Text inside text fields is not part of the page's selection: focus
+  the field and use `ctrl+c` ([m1-copy-mode](specs/m1-copy-mode.md)).
+- After the page navigates, the first copy-mode key only ends copy mode
+  ([m1-copy-mode](specs/m1-copy-mode.md)).
+
 ## Tabs and window
 
 - "List all tabs" (View menu, `#alltabs-button`, the `ctrl+tab` panel's "show all") is unavailable

@@ -110,15 +110,20 @@ Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm 
 
 ## Copy mode
 
-| Action                             | Config name           | Bindings     |
-| ---------------------------------- | --------------------- | ------------ |
-| Move caret left                    | `caret_left`          | `h [visual]` |
-| Move caret down                    | `caret_down`          | `j [visual]` |
-| Move caret up                      | `caret_up`            | `k [visual]` |
-| Move caret right                   | `caret_right`         | `l [visual]` |
-| Move caret a word forward          | `caret_word_forward`  | `w [visual]` |
-| Move caret a word back             | `caret_word_backward` | `b [visual]` |
-| Copy selection and leave copy mode | `yank_selection`      | `y [visual]` |
+| Action                                 | Config name           | Bindings      |
+| -------------------------------------- | --------------------- | ------------- |
+| Move caret left                        | `caret_left`          | `h [visual]`  |
+| Move caret down                        | `caret_down`          | `j [visual]`  |
+| Move caret up                          | `caret_up`            | `k [visual]`  |
+| Move caret right                       | `caret_right`         | `l [visual]`  |
+| Move caret a word forward              | `caret_word_forward`  | `w [visual]`  |
+| Move caret a word back                 | `caret_word_backward` | `b [visual]`  |
+| Move caret to the start of the line    | `caret_line_start`    | `0 [visual]`  |
+| Move caret to the end of the line      | `caret_line_end`      | `$ [visual]`  |
+| Move caret to the top of the page      | `caret_top`           | `gg [visual]` |
+| Move caret to the bottom of the page   | `caret_bottom`        | `G [visual]`  |
+| Start or drop a selection at the caret | `toggle_selection`    | `v [visual]`  |
+| Copy selection and leave copy mode     | `yank_selection`      | `y [visual]`  |
 
 ## Side panel
 

@@ -90,6 +90,11 @@ Copy mode
   caret_right          l [visual]                      Move caret right
   caret_word_forward   w [visual]                      Move caret a word forward
   caret_word_backward  b [visual]                      Move caret a word back
+  caret_line_start     0 [visual]                      Move caret to the start of the line
+  caret_line_end       $ [visual]                      Move caret to the end of the line
+  caret_top            gg [visual]                     Move caret to the top of the page
+  caret_bottom         G [visual]                      Move caret to the bottom of the page
+  toggle_selection     v [visual]                      Start or drop a selection at the caret
   yank_selection       y [visual]                      Copy selection and leave copy mode
 
 Side panel

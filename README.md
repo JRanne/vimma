@@ -32,8 +32,8 @@ release channel.
 ## Status
 
 **Pre-alpha.** Milestone M0 ("fork boots + pipeline", [plan.md](plan.md) §6) is almost done,
-and M1's modal page layer has started (scrolling, insert mode, link hints, find and the `:`
-command line).
+and M1's modal page layer is complete (scrolling, insert mode, link hints, find, the `:`
+command line and copy mode); back, forward and reload keys (`H`/`L`/`r`) are not built yet.
 There are no binaries yet: you build from source. Version `0.1.0`, on Firefox 157.0.1.
 
 What works today:
@@ -48,6 +48,8 @@ What works today:
 - **Find.** `/` searches the page as you type (frames and PDFs too), with Vim's smartcase;
   `Enter` keeps the match, `Esc` goes back, `n`/`N` jump between matches and `?` searches
   backward. The status bar shows `/word [2/5]` or `not found`.
+- **Copy mode.** `v` or `ctrl+b [` puts a caret on the page (`VISUAL`); `h j k l w b 0 $ gg G`
+  move it, `v` starts a selection, `y` copies it as plain text and `Esc` leaves.
 - **`ctrl+b ?`** opens an overlay listing every binding, over any page, including
   `about:preferences` and the PDF viewer. `/` filters the list and `Esc` or `q` closes it.
   Bindings that do not run yet are dimmed.
@@ -83,7 +85,7 @@ What works today:
 
 What does not work yet: the dimmed bindings in the overlay. The overlay lists the full planned
 keymap; a `ctrl+b` sequence that does not run yet shows "… not implemented yet" for a moment.
-The rest of the modal page layer (copy mode) is M1. M2 (tabs and the status bar) is
+`H`/`L`/`r` reach the page until they are built. M2 (tabs and the status bar) is
 complete; its which-key strip was dropped, and `ctrl+b ?` lists the bindings. Workspaces, split
 panes, `config.toml` and theming come later. The parser and validator for `config.toml` exist in
 `vimma-core`, but the browser does not read the file yet. See [docs/guide.md](docs/guide.md) and
