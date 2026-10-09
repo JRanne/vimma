@@ -5,6 +5,7 @@ declare const Services: {
   prefs: {
     getBoolPref(name: string, defaultValue?: boolean): boolean;
     getIntPref(name: string, defaultValue?: number): number;
+    getStringPref(name: string, defaultValue?: string): string;
     setBoolPref(name: string, value: boolean): void;
     setIntPref(name: string, value: number): void;
     prefHasUserValue(name: string): boolean;
@@ -51,6 +52,8 @@ declare const Services: {
   };
   // engine/xpcom/base/nsIUUIDGenerator.idl
   uuid: { generateUUID(): { toString(): string } };
+  // engine/xpcom/io/nsIDirectoryService.idl (nsIProperties)
+  dirsvc: { get(prop: string, iface: unknown): { readonly path: string } };
   // engine/xpcom/base/nsIWindowMediator.idl
   wm: { getMostRecentWindow(type: string): Window | null };
 };
@@ -71,6 +74,12 @@ declare const IOUtils: {
   createUniqueFile(parent: string, prefix: string, permissions?: number): Promise<string>;
   writeUTF8(path: string, data: string): Promise<number>;
   readUTF8(path: string): Promise<string>;
+  stat(path: string): Promise<{
+    size: number;
+    lastModified: number;
+    creationTime?: number;
+  }>;
+  exists(path: string): Promise<boolean>;
   copy(from: string, to: string): Promise<void>;
   move(from: string, to: string): Promise<void>;
   remove(path: string, options?: { ignoreAbsent?: boolean; recursive?: boolean }): Promise<void>;
@@ -134,6 +143,7 @@ interface Window {
   readonly windowUtils: {
     readonly AUTHOR_SHEET: number;
     loadSheetUsingURIString(sheetURI: string, type: number): void;
+    removeSheetUsingURIString(sheetURI: string, type: number): void;
     nodesFromRect(
       x: number,
       y: number,
