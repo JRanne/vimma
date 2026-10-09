@@ -26,8 +26,8 @@
 /** @typedef {"left" | "down" | "up" | "right"} Direction */
 /** @typedef {"vertical" | "horizontal"} SplitDirection */
 /** @typedef {"wider" | "narrower" | "taller" | "shorter"} ResizeDirection */
-/** @typedef {{ x: number, y: number, width: number, height: number }} Rect */
-/** @typedef {{ pane: string, tab: string, rect: Rect }} PaneRect */
+/** @typedef {{ x: number, y: number, width: number, height: number }} LayoutRect */
+/** @typedef {{ pane: string, tab: string, rect: LayoutRect }} PaneRect */
 /** @typedef {{ code: "no-space", message: string }} SplitRefusal */
 
 /** Smallest share of a split a pane can have: splits and resizes never go below it. */
@@ -315,7 +315,7 @@ export function closePane(s, paneId) {
 
 /**
  * @param {PaneNode} node
- * @param {Rect} rect
+ * @param {LayoutRect} rect
  * @param {boolean} round
  * @param {PaneRect[]} out
  */
@@ -355,7 +355,7 @@ function layoutNode(node, rect, round, out) {
  * Interior edges are rounded to whole pixels (edges, not widths, so neighbours share one edge and
  * integer input tiles exactly); `{ round: false }` gives the exact fractional edges.
  * @param {Panes} s
- * @param {Rect} rect
+ * @param {LayoutRect} rect
  * @param {{ round?: boolean }} [options]
  * @returns {PaneRect[]}
  */
@@ -385,7 +385,7 @@ function neighbour(s, direction) {
   const rects = layout(update(s, { zoom: null }), UNIT, { round: false });
   const a = /** @type {PaneRect} */ (rects.find((r) => r.pane === s.focus)).rect;
   const across = direction === "left" || direction === "right";
-  /** @param {Rect} b */
+  /** @param {LayoutRect} b */
   const touches = (b) => {
     switch (direction) {
       case "left":
@@ -398,7 +398,7 @@ function neighbour(s, direction) {
         return Math.abs(a.y + a.height - b.y) < EPS;
     }
   };
-  /** @param {Rect} b */
+  /** @param {LayoutRect} b */
   const overlaps = (b) =>
     across
       ? Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > EPS
