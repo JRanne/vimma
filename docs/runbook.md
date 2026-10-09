@@ -13,7 +13,7 @@
 | `surfer bootstrap`     | 2026-10-09 | toolchains into `~/.mozbuild` (clang, cbindgen, …); no errors                                                                                                                                                  |
 | `surfer build`         | 2026-10-09 | 2321 s (38.7 min) wall, CPU 75 %, on Ryzen AI 7 PRO 350 (16 threads), 58 GB RAM. `engine/` 22 GB after build.                                                                                                  |
 
-`configs/common/mozconfig` still has `MOZ_SOURCE_REPO=https://github.com/example/example`; set it when the GitHub repo exists.
+Repository: <https://github.com/JRanne/vimma> (private); `MOZ_SOURCE_REPO` in `configs/common/mozconfig` points at it.
 
 ```sh
 npx surfer setup-project   # interactive: name vimma, Firefox release
