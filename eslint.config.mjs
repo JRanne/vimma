@@ -63,6 +63,11 @@ export default [
     languageOptions: { sourceType: "script" },
   },
   {
+    // Default-pref files (browser/branding/*/pref/): `pref()` is the only global.
+    files: ["src/browser/branding/**/pref/*.js"],
+    languageOptions: { sourceType: "script", globals: { pref: "readonly" } },
+  },
+  {
     // mochitest browser-chrome: runs in the browser window scope.
     files: ["tests/browser/**"],
     languageOptions: {
@@ -82,6 +87,9 @@ export default [
         gURLBar: "readonly",
         SidebarController: "readonly",
         TestUtils: "readonly",
+        PlacesUtils: "readonly",
+        L10nRegistry: "readonly",
+        FluentResource: "readonly",
         getRootDirectory: "readonly",
         gTestPath: "readonly",
         // the content global inside SpecialPowers.spawn callbacks
