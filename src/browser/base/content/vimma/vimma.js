@@ -10,6 +10,12 @@
   );
   MozillaServices.init();
 
+  // The start page as the new-tab page, before this window opens its first tab (start-page).
+  const { StartPage } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/start/StartPage.sys.mjs",
+  );
+  StartPage.init(window);
+
   // Once per process, before the host dispatches page keys (m1-actor-insert-scroll).
   const { VimmaActors } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/actors/VimmaActors.sys.mjs",

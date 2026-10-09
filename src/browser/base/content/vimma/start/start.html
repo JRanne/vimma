@@ -1,0 +1,27 @@
+<!doctype html>
+
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
+<!-- The Vimma start page (spec: docs/specs/start-page.md): the home page and the new-tab page.
+   - Static: the one script only sets the theme tokens, and the page has nothing to scroll. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="dark light" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src chrome:; style-src chrome: 'unsafe-inline'; img-src chrome:; object-src 'none'"
+    />
+    <title>Vimma</title>
+    <link rel="stylesheet" href="chrome://browser/skin/vimma/start.css" />
+    <script type="module" src="chrome://browser/content/vimma/start/start.mjs"></script>
+  </head>
+  <body>
+    <main>
+      <img src="chrome://browser/content/vimma/start/vimma-logo.png" alt="Vimma" />
+      <p class="hint"><kbd>ctrl+b ?</kbd> keys · <kbd>:</kbd> commands · <kbd>f</kbd> hints</p>
+    </main>
+  </body>
+</html>
