@@ -45,19 +45,38 @@ target, a link under a fixed header, links below the fold, an open shadow root),
 - A MutationObserver in the page (document and shadow root, subtree, attributes) records
   nothing through `f`, a filter key and `Esc`; nothing with `vimma` in its id or class.
 - `f` on a page with no targets stays in normal and the next key reaches the page.
-- 2,000 links: collection round trip under a generous 400 ms (the budget is 50 ms; the assert
-  only catches an order-of-magnitude regression), all labels drawn, at most 4 keys each.
+- A cross-origin frame whose process spins for 3 s does not hold up the labels: they show in
+  about 200 ms (assert < 1,500 ms) without the framed link, and a label still follows.
+- At 150 % page zoom each label's chrome-space left and top match its target's content rect
+  times 1.5 (within 1.5 px).
+- Two windows collecting at once both get their targets (the live collection is per window).
+- 2,000 links: collection round trip under 1,000 ms all on screen and 250 ms down a long page
+  (generous, against an order-of-magnitude regression; numbers under Performance), drawing the
+  labels under 1,000 ms, all drawn, at most 4 keys each.
 
 Red: before the implementation, all 10 tasks failed (`VimmaHost._hints is not a function`).
 Mutation check: with the occlusion check off in `hint-collect.mjs`, the first task fails
 (`11 == 10`, `covered has no label - "s" == "undefined"`) and so does `F` (`7 == 6`);
 reverted.
 
+Review round (2026-10-09). Red: the busy frame held the labels for 2,942 ms and they
+included its link (`10 == 9`); two windows collecting at once voided the first
+(`the first window got its targets - 0 == 10`); `parseHintReply` accepted duplicate frame ids
+and a negative `ms`. The zoom task passed at once, so it was mutation-checked: without
+`* zoom` in `hint-overlay.mjs` it fails (`button: label left - 92.7 <= 1.5`, three more);
+reverted.
+
 ## Settled (2026-10-09, from the engine tree, Vimium and Tridactyl)
 
 - **Collection in the child, per frame.** Each frame's `VimmaChild` collects in its own
-  document and walks open and closed shadow roots (`openOrClosedShadowRoot`, privileged).
-  Candidates:
+  document, starting from one hit test over the viewport: `windowUtils.nodesFromRect` (an
+  area version of `elementsFromPoint`). For event delivery every painted frame gets an item of
+  its own, so each box's element is in the list, and the list is not retargeted, so elements in
+  open and closed shadow roots are too. Off-screen, `display: none`, `visibility: hidden`,
+  scrolled-away and `pointer-events: none` elements never reach the costlier checks. The first
+  version walked every element of the document and its shadow roots; on a long page with 91 of
+  2,000 links on screen the child went from about 25 ms to 2 ms idle. Candidates among the
+  elements on screen:
   - _By what they are_ (the vocabulary of Vimium's `LocalHints` clickable check and Tridactyl's
     `HINTTAGS_selectors`; no code copied): `a[href]`, `button`, `input` (not hidden), `select`,
     `textarea`, `summary`, contenteditable roots.
@@ -70,19 +89,25 @@ reverted.
     the page. `html` and `body` are never targets (React and jQuery delegate there). A
     behaviour target inside another target is dropped (a link's inner span), and a label whose
     control is itself shown is dropped (one hint per control).
-  - Not used: `cursor: pointer`. It needs a computed style for every element on screen, on top
-    of a walk that already takes about half the budget on a 2,000-link page; left out of the
-    prototype, so delegated click handlers without a role stay unhinted (Limits).
-- **Visible and in the viewport.** The first client rect that meets the viewport (an inline
-  link that wraps gets its first line on screen), clipped to it; `checkVisibility` with
-  `visibilityProperty`; not `disabled`; and not covered: `elementFromPoint` (on the element's
-  own document or shadow root) at the centre and at four inner corners must hit the element or
-  a descendant. A fixed header, a cookie banner or a modal covers what is under it.
+  - Not used: `cursor: pointer`. It needs a computed style for every element on screen, which
+    is a large share of the budget with 2,000 on screen; left out of the prototype, so
+    delegated click handlers without a role stay unhinted (Limits).
+- **Visible and in the viewport.** On screen per the hit test above; not `disabled`; the
+  first client rect that meets the viewport (an inline link that wraps gets its first line on
+  screen), clipped to it; and not covered: `elementFromPoint` (on the element's own document or
+  shadow root) at the centre and at four inner corners must hit the element or a descendant. A
+  fixed header, a cookie banner or a modal covers what is under it. The area hit test cannot
+  replace this: with `onlyVisible` it drops an item only when one opaque item covers the whole
+  queried area (`nsDisplayList.cpp`, `mHitOccludingItem`), so for the viewport it drops nothing.
 - **Frames.** The child reports its visible `<iframe>`/`<frame>` elements as
   `{ browsingContext id, content-box rect }`. The parent queries those frames' children (in
   their own processes for cross-origin frames), offsets their rects by the frame's origin and
   clips them to the frame's visible rect. So same-origin and cross-origin frames work alike, up
-  to 8 levels deep and 64 frames per document.
+  to 8 levels deep and 64 frames per document, each frame at most once. A subframe that has
+  not answered in 150 ms (`vimma.hints.frameTimeoutMs`) is left out and the others' labels
+  show: a busy or hung frame process (a 3 s loop, tested) no longer holds hint mode, and the
+  keys typed meanwhile, for seconds. The top frame gets 2 s. The live collection is per window,
+  so `f` in one window does not void another window's collection in flight.
 - **Rendering in chrome.** The labels are a `<div id="vimma-hints">` appended to the tab's
   `.browserStack` (a XUL stack, so the layer covers exactly the `<browser>`, also in split
   view), `pointer-events: none`, `overflow: hidden`. Rects go from content to chrome CSS pixels
@@ -119,7 +144,8 @@ href? }], frames: [{ id, rect }], ms }`, and `Vimma:ActivateHint { gen, id }`. B
 - **`F`.** Links only (`a[href]`). The parent opens `href` with `openLinkIn(url, "tab",
 { inBackground: true })`, as the context menu's "Open Link in New Tab" does: the frame's
   document principal triggers the load, after `checkLoadURIWithPrincipal`, so a page cannot
-  open what it could not link to; `http:`, `https:` and `file:` only; same container
+  open what it could not link to; `http:`, `https:` and `file:` only (not `blob:`, `data:` or
+  `javascript:`); same container
   (`userContextId`) as the tab; the frame's URL as referrer. Background always: plan §2 says
   "in new tab", and Tridactyl's `F` (`hint -b`) opens in the background too, so several links
   can be collected without leaving the page.
@@ -128,9 +154,22 @@ href? }], frames: [{ id, rect }], ms }`, and `Vimma:ActivateHint { gen, id }`. B
   Hint mode is modal: every key is a label key or ignored, never the page's. Another binding
   (a `ctrl+b` sequence) leaves hint mode first. A tab switch, a window resize, a mouse click in
   chrome or focus leaving the page leaves hint mode.
-- **Performance** (lane, 16 threads, headless, 2026-10-09): 2,000 links all in the viewport,
-  child 30 ms, round trip median 44 ms; 2,000 links down a long page (91 on screen), child 25 ms,
-  round trip 23 ms. The full walk for shadow roots and listeners is most of it.
+- **Performance** (lane, 16 threads, headless, 2026-10-09; the machine shared with other
+  lanes' builds, load average 12-22, so only same-run comparisons mean much). Child time /
+  round-trip median over 5 runs, 2,000-link fixture:
+
+  | Case                  | Idle          | Two busy CPUs (`taskset -c 0,1`, 4 spinning loops)   |
+  | --------------------- | ------------- | ---------------------------------------------------- |
+  | 91 of 2,000 on screen | 1.4 / 3 ms    | 3-28 / 10-29 ms (first version: 51-99 / 53-112 ms)   |
+  | 2,000 all on screen   | 30 / 40-48 ms | 74-280 / 95-400 ms (first version: 65-126 / 108-251) |
+  | Drawing 2,000 labels  | 17-21 ms      | 170-350 ms                                           |
+  | Drawing 91 labels     | 1.5 ms        | 8-25 ms                                              |
+
+  So the 50 ms target holds for a screenful of links even under load. 2,000 hintable targets
+  all on screen is the extreme case: the cost is per target (a client rect and an
+  `elementFromPoint` each, about 10 µs idle through privileged wrappers), and it stays at
+  about 30 ms idle, several times that on a starved CPU. Labels are plain text until a key is
+  typed, and the layer has `contain: strict`.
 
 ## Limits
 
@@ -146,6 +185,11 @@ href? }], frames: [{ id, rect }], ms }`, and `Vimma:ActivateHint { gen, id }`. B
 - A `select` may not open from a hint (no user activation for `showPicker`); it has focus, so
   `Alt+Down` opens it.
 - Pinch zoom (the visual viewport) is not accounted for.
+- A frame that takes more than 150 ms to answer (a busy page, a slow process) gets no labels
+  that time; press `f` again once it is idle.
+- `F` opens `http:`, `https:` and `file:` links only: `blob:` links (downloads made by the page)
+  need `f`.
+- With thousands of targets on screen, labels take a few hundred ms on a starved CPU.
 
 ## Out of scope
 

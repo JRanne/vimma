@@ -37,8 +37,9 @@ delete its line in the same PR.
   listener of their own, image-map `<area>` links and pinch-zoomed pages are missed or
   misplaced ([m1-hints](specs/m1-hints.md), Limits).
 - Hint labels are drawn for the layout at `f`; a page that scrolls itself while they show
-  leaves them stale. Frames inside a CSS-transformed `<iframe>` get misplaced labels
-  ([m1-hints](specs/m1-hints.md), Limits).
+  leaves them stale. Frames inside a CSS-transformed `<iframe>` get misplaced labels, and a
+  frame that takes over 150 ms to answer (busy) gets none that time. `F` does not open `blob:`
+  links ([m1-hints](specs/m1-hints.md), Limits).
 - `config.toml` is not read by the browser. Its validator and theme tokens exist in `vimma-core`,
   but loading, polling, `:source` and theming wait for the M5 host spec
   ([m5-core-config-and-theme](specs/m5-core-config-and-theme.md)).
