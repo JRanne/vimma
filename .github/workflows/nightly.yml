@@ -1,0 +1,112 @@
+# Spec m0-pipeline: full Linux x86_64 build, rolling `nightly` release, issue on failure.
+# A full build does not fit a GitHub-hosted runner (engine/ is 22 GB after a build; 39 min on 16
+# threads), so it runs on a self-hosted runner labelled `vimma-build`. The schedule does nothing
+# until the repository variable NIGHTLY_ENABLED is `true`; a manual run (workflow_dispatch) is
+# allowed before that to test the runner. Setup: docs/runbook.md, "Nightly build runner".
+name: nightly
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || vars.NIGHTLY_ENABLED == 'true'
+    runs-on: [self-hosted, linux, x64, vimma-build]
+    timeout-minutes: 240
+    permissions:
+      contents: write # publish the rolling `nightly` release
+      issues: write # open an issue when the build fails
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LOG: ${{ github.workspace }}/nightly.log
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Keep the git-ignored engine/ and .surfer/ between runs: re-downloading Firefox costs
+          # 12 min and a cold build 39 min. engine/ is re-downloaded when surfer.json changes.
+          clean: false
+
+      - name: npm ci
+        run: npm ci 2>&1 | tee -a "$LOG"
+
+      - name: Firefox source matching surfer.json
+        run: |
+          set -o pipefail
+          want=$(node -p 'require("./surfer.json").version.version')
+          have=$(cat engine/.vimma-firefox-version 2>/dev/null || true)
+          if [ "$want" != "$have" ]; then
+            npx surfer download --force 2>&1 | tee -a "$LOG"
+            echo "$want" > engine/.vimma-firefox-version
+          fi
+
+      - name: Import patches and our sources
+        run: |
+          set -o pipefail
+          npm run import 2>&1 | tee -a "$LOG"
+
+      - name: Build
+        run: |
+          set -o pipefail
+          npx surfer build 2>&1 | tee -a "$LOG"
+
+      - name: Smoke check
+        run: |
+          set -o pipefail
+          engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma --version 2>&1 | tee -a "$LOG"
+          # TODO(M0 build-strategy ADR): full e2e on this build once e2e.yml has a suite.
+
+      - name: Package
+        run: |
+          set -o pipefail
+          rm -rf dist
+          npx surfer package 2>&1 | tee -a "$LOG"
+          ls -l dist
+
+      - name: Publish rolling nightly release
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          gh release delete nightly --cleanup-tag --yes || true
+          gh release create nightly dist/* --prerelease --target "$SHA" --title "Vimma nightly" \
+            --notes "Rolling nightly build of ${SHA}, $(date -u +%Y-%m-%d). Not signed (M6)."
+
+      - name: Upload log
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nightly-log
+          path: nightly.log
+          retention-days: 14
+
+      - name: Open or update the failure issue
+        if: failure()
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create nightly-failure --color B60205 \
+            --description "nightly.yml failed" --force
+          {
+            echo "Nightly build failed: ${RUN_URL} (full log in the run's \`nightly-log\` artifact)."
+            echo
+            echo "Last 150 log lines:"
+            echo
+            echo '```text'
+            tail -n 150 "$LOG" 2>/dev/null || echo "(no log)"
+            echo '```'
+          } > issue.md
+          open=$(gh issue list --label nightly-failure --state open --json number --jq '.[0].number')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body-file issue.md
+          else
+            gh issue create --title "Nightly build failed $(date -u +%Y-%m-%d)" \
+              --label nightly-failure --body-file issue.md
+          fi

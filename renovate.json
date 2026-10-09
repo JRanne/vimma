@@ -1,0 +1,25 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Spec m0-pipeline: npm + GitHub Actions, weekly; patch/minor automerged after CI.",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "enabledManagers": ["npm", "github-actions"],
+  "timezone": "Europe/Helsinki",
+  "schedule": ["* 0-6 * * 1"],
+  "labels": ["deps", "bot"],
+  "semanticCommits": "enabled",
+  "minimumReleaseAge": "3 days",
+  "platformAutomerge": false,
+  "packageRules": [
+    {
+      "description": "Patch, minor and digest updates merge themselves once every check is green.",
+      "matchUpdateTypes": ["patch", "minor", "pin", "digest"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Surfer drives the Firefox build; a build on the runner must prove it first.",
+      "matchPackageNames": ["@zen-browser/surfer"],
+      "automerge": false
+    }
+  ]
+}
