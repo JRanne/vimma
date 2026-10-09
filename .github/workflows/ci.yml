@@ -1,0 +1,70 @@
+# Spec m0-pipeline. One job on purpose: Actions minutes on the free private plan are billed per
+# job, rounded up to the minute.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: lint, typecheck, test, commitlint, licences
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # commitlint reads the whole PR range
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Lint (eslint + prettier)
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Vitest with coverage gate (vitest.config.mjs)
+        run: npm run coverage
+
+      - name: Python tests (tools/upstream)
+        run: npm run test:py
+
+      - name: Licences of package-lock.json
+        run: npm run license-check
+
+      - name: MPL headers in src/
+        run: npx surfer license-check
+
+      - name: commitlint (PR range)
+        if: github.event_name == 'pull_request'
+        env:
+          FROM: ${{ github.event.pull_request.base.sha }}
+          TO: ${{ github.event.pull_request.head.sha }}
+        run: npx commitlint --from "$FROM" --to "$TO" --verbose
+
+      - name: commitlint (pushed range)
+        if: github.event_name == 'push'
+        env:
+          FROM: ${{ github.event.before }}
+          TO: ${{ github.sha }}
+        run: |
+          if [ "$FROM" = "0000000000000000000000000000000000000000" ]; then
+            npx commitlint --last --verbose
+          else
+            npx commitlint --from "$FROM" --to "$TO" --verbose
+          fi

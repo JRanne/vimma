@@ -1,0 +1,22 @@
+# Spec m0-pipeline: skeleton only.
+# TODO(M0 build-strategy ADR, docs/adr/010-*, not yet written): that ADR picks a UI-only build
+# (`surfer build --ui` on a cached engine, needs the self-hosted runner) or an artifact build.
+# Until it is accepted this job is a deliberate no-op; then it runs the mochitest browser-chrome
+# suite and the socket-driven e2e under Xvfb with screenshot diffs (plan §4).
+name: e2e
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: No-op until the build-strategy ADR is accepted
+        run: |
+          echo "e2e is a skeleton: no build strategy yet (M0 build-strategy ADR, docs/adr/010-*)."
+          echo "e2e skipped: waiting for the M0 build-strategy ADR." >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,66 @@
+# Spec m0-pipeline, ADR-002: poll Firefox release versions; on a new release open
+# `chore(upstream): Firefox X.Y` bumping surfer.json. Cheap on purpose (Python stdlib, no
+# npm ci): it runs 4 times a day on the free plan's minutes.
+#
+# PRs opened with the default GITHUB_TOKEN do not trigger other workflows, so CI would not run on
+# them. Add a fine-grained token as the UPSTREAM_PR_TOKEN secret to fix that (docs/runbook.md).
+name: upstream
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write # create the `upstream` label if missing
+    env:
+      GH_TOKEN: ${{ secrets.UPSTREAM_PR_TOKEN || github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ secrets.UPSTREAM_PR_TOKEN || github.token }}
+
+      - name: Check for a new Firefox release
+        id: check
+        run: |
+          latest=$(python3 tools/upstream/check-release.py)
+          echo "version=$latest" >> "$GITHUB_OUTPUT"
+          echo "Latest newer release: ${latest:-none}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open the bump PR
+        if: steps.check.outputs.version != ''
+        env:
+          VERSION: ${{ steps.check.outputs.version }}
+        run: |
+          branch="upstream/firefox-$VERSION"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            echo "$branch already exists; nothing to do."
+            exit 0
+          fi
+          old=$(python3 tools/upstream/bump-surfer-json.py "$VERSION" | cut -d' ' -f1)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -am "chore(upstream): Firefox $VERSION" \
+            -m "Bump surfer.json from Firefox $old to $VERSION (ADR-002)."
+          git push origin "$branch"
+          gh label create upstream --color 1D76DB --description "Firefox upstream bump" --force
+          gh pr create --base main --head "$branch" --label upstream \
+            --title "chore(upstream): Firefox $VERSION" \
+            --body "Firefox $VERSION is out (was $old). Opened by upstream.yml.
+
+          Before merging: \`npm run import && npx surfer build\` on the build machine and check the
+          patches still apply (nightly.yml does this once merged). ADR-002."
