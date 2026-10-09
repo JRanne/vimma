@@ -5,3 +5,7 @@ engine/
 package-lock.json
 packages/vimma-core/test/__snapshots__/
 surfer.json
+
+# upstream fixtures: byte-exact surfer.json as Surfer writes it, and one deliberately invalid JSON
+tools/upstream/fixtures/surfer-*.json
+tools/upstream/fixtures/versions-malformed.json
