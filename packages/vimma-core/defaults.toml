@@ -215,3 +215,9 @@ max = 4
 # A host also covers its subdomains. None by default.
 # [sites."docs.google.com"]
 # insert = "always"
+
+# Which workspace a link opens in: by domain (and its subdomains), url prefix, or the app
+# that opened it (vimma-open). The first matching rule wins. None by default.
+# [[routes]]
+# domain = "github.com"
+# workspace = "work"

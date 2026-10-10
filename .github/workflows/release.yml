@@ -209,6 +209,7 @@ jobs:
           sudo apt-get install -y -q "./dist/vimma_${v}_amd64.deb"
           [ "$(vimma --version)" = "Vimma Vimma $v" ] || { echo "::error::.deb: $(vimma --version)"; exit 1; }
           test -f /usr/share/applications/vimma-vimma.desktop
+          test -x /usr/bin/vimma-open
           p=$(mktemp -d)
           # First run creates the profile; --screenshot on a fresh profile races the bookmarks
           # import (docs/runbook.md, Smoke check). timeout exits 124.
@@ -301,8 +302,9 @@ jobs:
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
           fi
 
-  # Pushes PKGBUILD, .SRCINFO and vimma-vimma.desktop to aur.archlinux.org/vimma-bin.git. No GitHub
-  # token at all; skipped (green, with a notice) until the AUR_SSH_KEY secret exists.
+  # Pushes PKGBUILD, .SRCINFO, vimma-vimma.desktop and vimma-open to
+  # aur.archlinux.org/vimma-bin.git. No GitHub token at all; skipped (green, with a notice)
+  # until the AUR_SSH_KEY secret exists.
   aur:
     needs: publish
     if: >-
@@ -337,12 +339,12 @@ jobs:
           printf '%s\n' "$AUR_HOST_KEY" > ~/.ssh/known_hosts
           export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
           git clone ssh://aur@aur.archlinux.org/vimma-bin.git aur
-          cp dist/aur/PKGBUILD dist/aur/.SRCINFO dist/aur/vimma-vimma.desktop aur/
+          cp dist/aur/PKGBUILD dist/aur/.SRCINFO dist/aur/vimma-vimma.desktop dist/aur/vimma-open aur/
           cd aur
           name=$(printf '%s' "$MAINTAINER" | sed -E 's/ *<.*//')
           email=$(printf '%s' "$MAINTAINER" | sed -E 's/.*<(.*)>.*/\1/')
           git rm -q --ignore-unmatch vimma.desktop
-          git add PKGBUILD .SRCINFO vimma-vimma.desktop
+          git add PKGBUILD .SRCINFO vimma-vimma.desktop vimma-open
           if git diff --cached --quiet; then
             echo "::notice::vimma-bin already at ${TAG#v}"
           else

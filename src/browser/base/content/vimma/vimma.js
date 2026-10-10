@@ -55,6 +55,13 @@
   );
   WorkspaceStore.init().catch((e) => console.error("vimma: workspaces not loaded", e));
 
+  // Workspace routing (spec workspace-routing): `-vimma-from <app>` from vimma-open, once per
+  // process; the [[routes]] rules come with config.toml below.
+  const { WorkspaceRouter } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/workspaces/WorkspaceRouter.sys.mjs",
+  );
+  WorkspaceRouter.init();
+
   // Split panes (spec m4-split-panes): the window's pane tree; sub-spec 3's keys drive it.
   const { PaneViews } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/split/PaneView.mjs",

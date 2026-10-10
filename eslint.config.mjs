@@ -102,6 +102,11 @@ export default [
     languageOptions: { globals: { Components: "readonly", Cu: "readonly" } },
   },
   {
+    // The -vimma-from command-line handler: the component registrar (workspace-routing).
+    files: ["src/**/vimma/workspaces/WorkspaceRouter.sys.mjs"],
+    languageOptions: { globals: { Components: "readonly" } },
+  },
+  {
     files: ["src/**/vimma/**/*.js"],
     languageOptions: { sourceType: "script" },
   },

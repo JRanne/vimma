@@ -168,6 +168,25 @@ These are the limits the workspaces' design accepts
   sidebar beside Vimma's side panel; Firefox's four default containers stay in Settings.
 - Extensions that hide or show tabs (`tabs.hide`) conflict with workspace visibility.
 
+### Routing rules ([workspace-routing](specs/workspace-routing.md))
+
+- A page's own navigation (link click, redirect, sign-in bounce) is never moved to the workspace
+  a rule names; the status bar hints and `:route move` reopens it there, without its history.
+- Rules never route a link a page opens (a click, middle- or ctrl-click, `F` hints,
+  `target="_blank"`, `window.open`): it stays in the page's container, so a page cannot open a
+  site with another workspace's cookies. The tab gets the same hint when shown.
+- App rules need `vimma-open` (the packages' desktop entry). Apps in Flatpak or other sandboxes
+  open links through the desktop portal, apps started by systemd (`uwsm app`, `app2unit`) are not
+  in the link's process tree, and `gio open` may exit before `vimma-open` looks: those links have
+  no app. A script run by an interpreter may be named after the interpreter (`python3`). A link
+  opened from a shell is the terminal's.
+- The app name is a hint any local program can send (`vimma -vimma-from slack <url>`); it can
+  only pick a workspace a rule already names, as typing the URL would.
+- With `browser.link.open_newwindow` set to open external links in a window or in the current
+  tab, app rules do not apply to them (domain rules do in a new window).
+- A cold start from a link routes its first tab with the rules cached at the last run; a rule
+  added while Vimma was closed applies from its next read of `config.toml`.
+
 ## Bookmarks
 
 - Tags, keywords, separators, sorting, drag and drop, undo and editing a bookmark's address are

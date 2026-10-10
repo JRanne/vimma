@@ -20,6 +20,7 @@ import { PANES_MAX_DEFAULT } from "./panes.mjs";
  * @property {ThemeInput} [theme]
  * @property {{ max?: number }} [panes]
  * @property {Record<string, { insert?: import("./editable.mjs").InsertSiteMode }>} [sites]
+ * @property {Record<string, string>[]} [routes]  `[[routes]]` (workspace-routing)
  */
 
 /**
@@ -288,6 +289,12 @@ export function formatDefaultsToml() {
     "# A host also covers its subdomains. None by default.",
     '# [sites."docs.google.com"]',
     '# insert = "always"',
+    "",
+    "# Which workspace a link opens in: by domain (and its subdomains), url prefix, or the app",
+    "# that opened it (vimma-open). The first matching rule wins. None by default.",
+    "# [[routes]]",
+    '# domain = "github.com"',
+    '# workspace = "work"',
     "",
   );
   return lines.join("\n");

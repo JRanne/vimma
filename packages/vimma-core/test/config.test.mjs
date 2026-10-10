@@ -372,6 +372,7 @@ describe("mergeWithDefaults", () => {
       panes: { max: 4 },
       hintChars: "asdfghjkl",
       sites: [],
+      routes: [],
     });
   });
 });

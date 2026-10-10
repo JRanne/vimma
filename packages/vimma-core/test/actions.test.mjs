@@ -36,6 +36,7 @@ describe("actions", () => {
       "rename_workspace",
       "close_workspace",
       "move_to_workspace",
+      "route_rules",
       "goto_picker",
       "toggle_sidebar",
     ]) {

@@ -8,6 +8,7 @@ declare const Services: {
     getStringPref(name: string, defaultValue?: string): string;
     setBoolPref(name: string, value: boolean): void;
     setIntPref(name: string, value: number): void;
+    setStringPref(name: string, value: string): void;
     prefHasUserValue(name: string): boolean;
     clearUserPref(name: string): void;
     getDefaultBranch(root: string): {
@@ -48,7 +49,14 @@ declare const Services: {
     hasListenersFor(target: EventTarget, type: string): boolean;
   };
   // engine/xpcom/threads/nsIThreadManager.idl
-  tm: { readonly mainThread: unknown };
+  tm: { readonly mainThread: unknown; dispatchToMainThread(task: () => void): void };
+  // engine/docshell/base/nsIURIFixup.idl
+  uriFixup: {
+    getFixupURIInfo(
+      text: string,
+      flags: number,
+    ): { readonly preferredURI: { spec: string } | null };
+  };
   // engine/xpcom/system/nsIXULRuntime.idl
   appinfo: { readonly processID: number; readonly version: string; readonly appBuildID: string };
   // engine/xpcom/ds/nsIObserverService.idl
@@ -68,7 +76,11 @@ declare const Services: {
   // engine/xpcom/io/nsIDirectoryService.idl (nsIProperties)
   dirsvc: { get(prop: string, iface: unknown): { readonly path: string } };
   // engine/xpcom/system/nsIEnvironment.idl ("" for an unset variable)
-  env: { get(name: string): string; exists(name: string): boolean };
+  env: {
+    get(name: string): string;
+    exists(name: string): boolean;
+    set(name: string, value: string): void;
+  };
   // engine/xpcom/base/nsIWindowMediator.idl
   wm: { getMostRecentWindow(type: string): Window | null };
   // engine/xpcom/ds/nsICategoryManager.idl
