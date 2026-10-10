@@ -210,9 +210,13 @@ add_task(async function tab_keys_work_from_about_preferences() {
 add_task(async function unimplemented_prefix_action_shows_a_notice_that_hides() {
   const tabs = await openTabs(1);
   const count = gBrowser.tabs.length;
-  prefix("w"); // workspace_picker: not built yet (split_vertical was the example until M4)
-  Assert.ok(noticeShown(), "ctrl+b w shows a notice");
-  Assert.equal(notice().textContent, "Workspace picker: not implemented yet", "naming the action");
+  prefix("b"); // toggle_sidebar: not built yet (workspace_picker was the example until M3)
+  Assert.ok(noticeShown(), "ctrl+b b shows a notice");
+  Assert.equal(
+    notice().textContent,
+    "Open / close the side panel: not implemented yet",
+    "naming the action",
+  );
   Assert.equal(notice().getAttribute("role"), "status", "announced politely");
   Assert.equal(document.activeElement, tabs[0].linkedBrowser, "the notice takes no focus");
   Assert.equal(gBrowser.tabs.length, count, "and nothing else happens");

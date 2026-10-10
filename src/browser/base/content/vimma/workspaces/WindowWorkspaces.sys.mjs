@@ -65,6 +65,9 @@ export const TAB_WORKSPACE_KEY = "vimma-workspace";
  *   showTab: (t: Tab) => void, addTrustedTab: (url: string, options?: object) => Tab,
  *   insertBrowser: (t: Tab) => void,
  *   selectedBrowser: Element & { focus: () => void } }} TabBrowser
+ * @typedef {object} WindowWorkspacesOptions
+ * @property {() => void} [onChange]  told after the model or visibility changed
+ * @property {(text: string) => void} [notify]  a status message (`opened in "work"`)
  */
 
 const TAB_EVENTS = ["TabOpen", "TabClose", "TabSelect", "TabPinned", "TabUnpinned", LABEL_EVENT];
@@ -131,16 +134,18 @@ export class WindowWorkspacesImpl {
   /** The window value as last written, to tell our own value from a restored one. */
   #written = "";
   #onChange;
+  #notify;
   /** Resolves once the model is built (or the window has none). */
   ready;
 
   /**
    * @param {Window} win
-   * @param {{ onChange?: () => void }} [options]  told after the model or visibility changed
+   * @param {WindowWorkspacesOptions} [options]
    */
-  constructor(win, { onChange = () => {} } = {}) {
+  constructor(win, { onChange = () => {}, notify = () => {} } = {}) {
     this.#win = /** @type {any} */ (win);
     this.#onChange = onChange;
+    this.#notify = notify;
     for (const type of [...TAB_EVENTS, ...SESSION_EVENTS]) win.addEventListener(type, this);
     Services.obs.addObserver(this.#observer, CHANGED_TOPIC);
     this.ready = this.#start().catch((e) => console.error("vimma: no workspaces", e));
@@ -575,21 +580,24 @@ export class WindowWorkspacesImpl {
    * Puts a tab in the model: in the workspace owning its container, else the active one, marked
    * foreign. A tab joining a workspace that is not shown is hidden (decision 12: no switch).
    * @param {Tab} tab
+   * @returns {string | null} the name of the workspace it was hidden in, if it was
    */
   #adopt(tab) {
     const model = /** @type {Workspaces} */ (this.#model);
     const id = this.#idOf(tab);
-    if (workspaceOfTab(model, id)) return;
+    if (workspaceOfTab(model, id)) return null;
     const owner = this.#owner(tab.userContextId);
     const ws = owner ?? activeWorkspace(model);
     if (!owner) this.#foreign.add(id);
     this.#model = openTab(model, id, { workspace: { id: ws.id }, activate: false });
-    if (ws.id === model.active || tab.selected) return;
+    if (ws.id === model.active || tab.selected) return null;
     // Firefox's replacement for a closing last tab must stay visible: it is about to be
     // selected, and with it hidden the close would find no tab to select. Its selection then
     // switches to its workspace.
     const others = this.#gBrowser.visibleTabs.filter((t) => t !== tab && !t.closing);
-    if (others.length) this.#gBrowser.hideTab(tab);
+    if (!others.length) return null;
+    this.#gBrowser.hideTab(tab);
+    return ws.name;
   }
 
   /** @param {Tab} tab */
@@ -608,7 +616,9 @@ export class WindowWorkspacesImpl {
       this.#model = moveTab(model, moving.from, { id: moving.to }, { newTabId: this.#idOf(tab) });
       if (moving.to !== model.active) this.#gBrowser.hideTab(tab);
     } else {
-      this.#adopt(tab);
+      // Decision 12: a background open into another workspace never switches; it says where.
+      const hiddenIn = this.#adopt(tab);
+      if (hiddenIn !== null) this.#notify(`opened in "${hiddenIn}"`);
     }
     this.#changed();
   }
@@ -867,7 +877,7 @@ const windows = new WeakMap();
 export const WindowWorkspaces = Object.freeze({
   /**
    * @param {Window} win
-   * @param {{ onChange?: () => void }} [options]
+   * @param {WindowWorkspacesOptions} [options]
    */
   init(win, options) {
     if (!windows.has(win)) windows.set(win, new WindowWorkspacesImpl(win, options));

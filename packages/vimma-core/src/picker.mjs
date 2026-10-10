@@ -4,7 +4,8 @@
 
 /**
  * The `prefix+g` goto picker (spec m2-core-logic): every tab of every workspace, fuzzy matching
- * with highlight ranges, and the picker's key handling as a pure state machine.
+ * with highlight ranges, and the picker's key handling as a pure state machine. The `prefix+w`
+ * workspace picker (m3-workspaces 5) is the same machine over one item per workspace.
  */
 import { displayLabel } from "./tablabels.mjs";
 import { graphemes } from "./textwidth.mjs";
@@ -24,24 +25,40 @@ import { graphemes } from "./textwidth.mjs";
  * @property {string} display        displayLabel(label, title, url)
  * @property {boolean} active        the active workspace's active tab
  */
+/**
+ * @typedef {object} WorkspaceItem
+ * @property {"workspace"} kind
+ * @property {string} workspaceId
+ * @property {string} workspaceName
+ * @property {number} workspaceIndex 1-based, the ctrl+i order
+ * @property {number} tabCount
+ * @property {number} foreignCount   tabs adopted from a container no workspace owns
+ * @property {string} display        the name
+ * @property {boolean} active        the window's active workspace
+ */
+/** @typedef {PickerItem | WorkspaceItem} AnyItem */
 /** @typedef {"display" | "title" | "url" | "workspace"} Field */
 /** @typedef {[start: number, end: number]} Range */
 /** @typedef {{ tier: number, score: number, ranges: Range[] }} FieldMatch */
 /**
  * @typedef {object} Match
- * @property {PickerItem} item
+ * @property {AnyItem} item
  * @property {number} score
  * @property {Partial<Record<Field, Range[]>>} highlights
  */
 /**
  * @typedef {object} PickerState
- * @property {readonly PickerItem[]} items
+ * @property {readonly AnyItem[]} items
  * @property {string} query
  * @property {"browse" | "search"} mode
  * @property {readonly Match[]} matches
  * @property {number} selected  index into matches
  */
-/** @typedef {null | { type: "select", tabId: string } | { type: "close" }} PickerEffect */
+/**
+ * `select`: Enter on an item (a tab id or a workspace id); `move`: `m` on a workspace, the
+ * current tab to go there.
+ * @typedef {null | { type: "select" | "move", id: string } | { type: "close" }} PickerEffect
+ */
 
 /**
  * Match tiers; each owns a score band [tier·1000, tier·1000 + 999]. `folded` (diacritics
@@ -250,20 +267,32 @@ function mergeRanges(a, b) {
 }
 
 /**
- * Every whitespace-separated term must match some field; per term the best field counts.
- * @param {PickerItem} item
+ * The id an item is selected by: a tab's, or a workspace's.
+ * @param {AnyItem} item
+ */
+export function itemId(item) {
+  return "kind" in item ? item.workspaceId : item.tabId;
+}
+
+/**
+ * Every whitespace-separated term must match some field; per term the best field counts. A
+ * workspace matches by its name only.
+ * @param {AnyItem} item
  * @param {string} query
  * @returns {Match | null}
  */
 export function matchItem(item, query) {
   const terms = query.trim().split(/\s+/).filter(Boolean);
   /** @type {[Field, string][]} */
-  const fields = [
-    ["display", item.display],
-    ...(item.label ? [/** @type {[Field, string]} */ (["title", item.title])] : []),
-    ["url", item.url],
-    ["workspace", item.workspaceName],
-  ];
+  const fields =
+    "kind" in item
+      ? [["display", item.display]]
+      : [
+          ["display", item.display],
+          ...(item.label ? [/** @type {[Field, string]} */ (["title", item.title])] : []),
+          ["url", item.url],
+          ["workspace", item.workspaceName],
+        ];
   /** @type {Partial<Record<Field, Range[]>>} */
   const highlights = {};
   let score = 0;
@@ -283,7 +312,7 @@ export function matchItem(item, query) {
 
 /**
  * Matches sorted by score, ties in input order; a blank query lists every item in order.
- * @param {readonly PickerItem[]} items
+ * @param {readonly AnyItem[]} items
  * @param {string} query
  * @returns {Match[]}
  */
@@ -324,6 +353,28 @@ export function pickerItems(state, info, labels) {
 }
 
 /**
+ * One item per workspace, in `ctrl+i` order, with its tab count (`isForeign` tells the foreign
+ * ones among them).
+ * @param {Workspaces} state
+ * @param {(tabId: string) => boolean} [isForeign]
+ * @returns {WorkspaceItem[]}
+ */
+export function workspaceItems(state, isForeign = () => false) {
+  return state.workspaces.map((w, wi) =>
+    Object.freeze({
+      kind: /** @type {const} */ ("workspace"),
+      workspaceId: w.id,
+      workspaceName: w.name,
+      workspaceIndex: wi + 1,
+      tabCount: w.tabs.length,
+      foreignCount: w.tabs.filter(isForeign).length,
+      display: w.name,
+      active: w.id === state.active,
+    }),
+  );
+}
+
+/**
  * @param {PickerState} s
  * @param {Partial<PickerState>} changes
  * @returns {PickerState}
@@ -333,13 +384,13 @@ function update(s, changes) {
 }
 
 /**
- * @param {readonly PickerItem[]} items
- * @param {{ activeTabId?: string | null }} [options]
+ * @param {readonly AnyItem[]} items
+ * @param {{ activeId?: string | null }} [options]  the item selected at first (`itemId`)
  * @returns {PickerState}
  */
-export function openPicker(items, { activeTabId = null } = {}) {
+export function openPicker(items, { activeId = null } = {}) {
   const matches = filterItems(items, "");
-  const at = matches.findIndex((m) => m.item.tabId === activeTabId);
+  const at = matches.findIndex((m) => itemId(m.item) === activeId);
   return Object.freeze({ items, query: "", mode: "browse", matches, selected: Math.max(0, at) });
 }
 
@@ -352,15 +403,16 @@ export function pickerSelection(state) {
 }
 
 /**
- * New items (a tab opened, closed or retitled); the selected tab stays selected if it survives.
+ * New items (a tab opened, closed or retitled); the selected item stays selected if it survives.
  * @param {PickerState} state
- * @param {readonly PickerItem[]} items
+ * @param {readonly AnyItem[]} items
  * @returns {PickerState}
  */
 export function setPickerItems(state, items) {
-  const tabId = pickerSelection(state)?.item.tabId;
+  const current = pickerSelection(state);
+  const id = current && itemId(current.item);
   const matches = filterItems(items, state.query);
-  const at = matches.findIndex((m) => m.item.tabId === tabId);
+  const at = matches.findIndex((m) => itemId(m.item) === id);
   const selected = at >= 0 ? at : Math.max(0, Math.min(state.selected, matches.length - 1));
   return update(state, { items, matches, selected });
 }
@@ -438,7 +490,7 @@ export function pickerKey(state, key) {
       return done(select(state, state.selected - 1));
     case "enter": {
       const m = pickerSelection(state);
-      return done(state, m ? { type: "select", tabId: m.item.tabId } : null);
+      return done(state, m ? { type: "select", id: itemId(m.item) } : null);
     }
   }
   if (state.mode === "browse") {
@@ -453,6 +505,10 @@ export function pickerKey(state, key) {
         return done(jumpSection(state, -1));
       case "/":
         return done(update(state, { mode: "search" }));
+      case "m": {
+        const m = pickerSelection(state);
+        return done(state, m && "kind" in m.item ? { type: "move", id: m.item.workspaceId } : null);
+      }
       case "esc":
       case "q":
         return done(state, { type: "close" });

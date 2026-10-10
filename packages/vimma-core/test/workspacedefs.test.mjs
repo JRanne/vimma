@@ -9,6 +9,7 @@ import {
   canWriteDefinitions,
   closeWorkspaceQuestion,
   emptyDefinitions,
+  moveTabQuestion,
   newWorkspaceLooks,
   planContainers,
   readDefinitions,
@@ -405,6 +406,13 @@ describe("workspace lifecycle", () => {
     );
     expect(closeWorkspaceQuestion(/** @type {any} */ (work), 2)).toBe(
       'Close the 2 tabs of "work"? It stays, as it is in config.toml. y/N',
+    );
+  });
+
+  test("moving a tab asks first, saying that its history stays behind (decision 6)", () => {
+    expect(moveTabQuestion("beta")).toBe(
+      'Move this tab to "beta"? It is reopened there; its back/forward history and form data ' +
+        "are lost. y/N",
     );
   });
 
