@@ -11,7 +11,7 @@
 
 import { VimmaActors } from "../actors/VimmaActors.sys.mjs";
 import { createDispatcher } from "../core/dispatcher.mjs";
-import { insertModeAfterFocus, matchSiteRule } from "../core/editable.mjs";
+import { insertEditCommand, insertModeAfterFocus, matchSiteRule } from "../core/editable.mjs";
 import { HintError, hintKey, startHints } from "../core/hints.mjs";
 import { chordFromEvent, formatKey } from "../core/keys.mjs";
 import { compileKeymap } from "../core/keymap.mjs";
@@ -34,7 +34,17 @@ import { quickAdd, runBookmarkEffect } from "./bookmark-actions.mjs";
 import { loadTree, observeBookmarks } from "./bookmark-ops.mjs";
 import { gotoItems, pickerWorkspaces, tabById } from "./goto.mjs";
 import { getTabLabel, setTabLabel } from "./tab-labels.mjs";
-import { BLOCKED_URL_TEXT, closeTab, newTab, openUrl, selectTab } from "./tab-ops.mjs";
+import {
+  BLOCKED_URL_TEXT,
+  closeTab,
+  closeTabById,
+  newTab,
+  openUrl,
+  restoreTab,
+  selectTab,
+} from "./tab-ops.mjs";
+import { DEFAULT_FIREFOX_KEYS, FirefoxKeys } from "./firefox-keys.mjs";
+import { focusedChromeField, runChromeEdit } from "./edit-keys.mjs";
 import { runRoute } from "./route-ops.mjs";
 import {
   closePane,
@@ -85,6 +95,7 @@ import {
 /** @import { HintAction, HintState } from "../core/hints.mjs" */
 /** @import { HintTarget } from "../actors/VimmaActors.sys.mjs" */
 /** @import { AddonOp } from "../core/picker.mjs" */
+/** @import { FirefoxKeySetting } from "../core/config.mjs" */
 
 /**
  * Hint mode in one window (m1-hints): from `f` until a label is chosen or Esc. While the
@@ -99,12 +110,23 @@ import {
 const DEBUG_PREF = "vimma.debug.keys";
 const MAX_RECORDED = 50;
 const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
+const MAC = /** @type {{ OS?: string }} */ (Services.appinfo).OS === "Darwin";
+/** After the page, as Firefox's own key handlers (Tabbrowser's, the keysets). */
+const SYSTEM_GROUP = /** @type {AddEventListenerOptions} */ ({ mozSystemGroup: true });
+
+/**
+ * A keydown with Gecko's chrome-only members for keys that went to a page in another process.
+ * @typedef {KeyboardEvent & { isReplyEventFromRemoteContent: boolean,
+ *   requestReplyFromRemoteContent: () => void }} ChromeKeyEvent
+ */
 
 /**
  * @typedef {object} WindowState
  * @property {Window} win
  * @property {Keymap} keymap
  * @property {(e: KeyboardEvent) => void} onKeyDown
+ * @property {(e: KeyboardEvent) => void} onKeyDownAfter  after the page: text-field keys
+ * @property {FirefoxKeys | null} firefoxKeys  Firefox's own shortcuts off (key-handling-batch)
  * @property {() => void} onTabSelect
  * @property {ReturnType<typeof createDispatcher>} dispatcher
  * @property {HelpOverlay} help
@@ -323,8 +345,9 @@ function bookmarkContext(s) {
 
 /**
  * Pane actions that do something only with two panes or more: as single keys they are
- * runnable only then, so the first ctrl+w of `<C-w>h` passes to Firefox (close tab) while the
- * window has one pane (plan §2). `prefix+h` is consumed either way (ctrl+b is ours).
+ * runnable only then, so the first ctrl+w of `<C-w>h` passes to the page while the window has
+ * one pane (plan §2; Firefox's ctrl+w close tab is off, key-handling-batch). `prefix+h` is
+ * consumed either way (ctrl+b is ours).
  */
 const MULTI_PANE = new Set([
   "pane.focus_left",
@@ -454,6 +477,12 @@ export const RUNNERS = Object.freeze({
   "panel.open": panelAction,
   "panel.select": panelAction,
   "panel.close": panelAction,
+  // key-handling-batch § 4: x in the side panel; nothing in the bookmarks panel (d deletes there).
+  "panel.close_tab": (/** @type {WindowState} */ s, /** @type {Action} */ a) => {
+    if (!s.bookmarks.isOpen) s.panel.action(a);
+  },
+  // Firefox's ctrl+shift+t, which panel mode would otherwise consume.
+  "tab.restore": (/** @type {WindowState} */ s) => restoreTab(s.win),
   // docs/specs/bookmarks.md: the bookmarks panel, in the side panel's slot and mode.
   "bookmarks.toggle": (/** @type {WindowState} */ s) => {
     s.notice.hide();
@@ -624,8 +653,11 @@ const windows = new Set();
  * What config.toml sets for every window (m5-config-load; ConfigHost calls `configure`). Null
  * keymap: the built-in one, compiled per window as before M5.
  * `configFile` names the file `configErrors` are about (config.toml, or `:source <path>`'s).
+ * `firefox`: Firefox's own shortcuts that are off; `insertEditing`: ctrl+w, ctrl+u, ctrl+h in
+ * text fields (docs/specs/key-handling-batch.md).
  * @type {{ keymap: Keymap | null, hintChars: string | undefined,
- *   sites: readonly InsertSiteRule[], configErrors: readonly ConfigError[], configFile: string }}
+ *   sites: readonly InsertSiteRule[], configErrors: readonly ConfigError[], configFile: string,
+ *   firefox: FirefoxKeySetting, insertEditing: boolean }}
  */
 const settings = {
   keymap: null,
@@ -633,7 +665,13 @@ const settings = {
   sites: [],
   configErrors: [],
   configFile: "config.toml",
+  firefox: DEFAULT_FIREFOX_KEYS,
+  insertEditing: true,
 };
+
+/** Keydowns from a parent-process page whose text-field key waits for the page (`_editKey`). */
+/** @type {WeakSet<Event>} */
+const editAfterPage = new WeakSet();
 
 /** Told by `:source` (config.reload); ConfigHost observes it, so the host never imports it. */
 export const CONFIG_RELOAD_TOPIC = "vimma-config-reload";
@@ -709,6 +747,8 @@ export const VimmaHost = {
       win,
       keymap,
       onKeyDown: (e) => this._onKeyDown(win, state, e),
+      onKeyDownAfter: (e) => this._onKeyDownAfter(state, e),
+      firefoxKeys: null,
       // The overlay is modal, but tabs can still change underneath it (a script closes the
       // selected tab): close it and focus the newly selected browser.
       onTabSelect: () => {
@@ -793,7 +833,12 @@ export const VimmaHost = {
             label: getTabLabel(tab),
             foreign: !!WindowWorkspaces.get(win)?.isForeign(tab),
             playing: !!tab.soundPlaying,
+            pinned: !!tab.pinned,
           };
+        },
+        closeTab: (tabId) => {
+          const tab = tabById(win, tabId);
+          if (tab) closeTabById(win, tab);
         },
         color: () => WindowWorkspaces.get(win)?.status()?.color,
         select: (tabId) => {
@@ -814,7 +859,18 @@ export const VimmaHost = {
     states.set(win, state);
     windows.add(win);
     win.addEventListener("keydown", state.onKeyDown, true);
+    // After the page and in the system group, as Tabbrowser's own key handling: text-field keys
+    // the page left alone (key-handling-batch § 2).
+    win.addEventListener("keydown", state.onKeyDownAfter, SYSTEM_GROUP);
     win.addEventListener("TabSelect", state.onTabSelect, true);
+    // After the keys too: Firefox's shortcuts that overlap ours, off (key-handling-batch § 1).
+    try {
+      const firefoxKeys = new FirefoxKeys(win, settings.firefox);
+      firefoxKeys.init();
+      state.firefoxKeys = firefoxKeys;
+    } catch (e) {
+      console.error("vimma: Firefox's shortcuts left on", e);
+    }
     // The labels are drawn for one layout of the page: a resize or a click moves on.
     win.addEventListener("resize", state.onCancelHints);
     win.addEventListener("mousedown", state.onCancelHints, true);
@@ -864,7 +920,9 @@ export const VimmaHost = {
     if (!state) return;
     this._cancelPending(win, state);
     win.removeEventListener("keydown", state.onKeyDown, true);
+    win.removeEventListener("keydown", state.onKeyDownAfter, SYSTEM_GROUP);
     win.removeEventListener("TabSelect", state.onTabSelect, true);
+    state.firefoxKeys?.destroy();
     win.removeEventListener("resize", state.onCancelHints);
     win.removeEventListener("mousedown", state.onCancelHints, true);
     this._cancelHints(state);
@@ -915,6 +973,15 @@ export const VimmaHost = {
   },
 
   /**
+   * Firefox's own shortcuts that are off in `win`, and the chords of `[firefox] disable` that
+   * match none (about:vimma; docs/specs/key-handling-batch.md § 1).
+   * @param {Window} win
+   */
+  firefoxKeys(win) {
+    return states.get(win)?.firefoxKeys?.status() ?? { off: [], unmatched: [] };
+  },
+
+  /**
    * Shows `text` as the window's notice (ConfigHost's `:config` when it cannot create the file).
    * @param {Window} win
    * @param {string} text
@@ -928,10 +995,16 @@ export const VimmaHost = {
    * field is optional: absent keeps the current value. A new keymap drops a pending sequence
    * and closes the bindings overlay, which is rebuilt from it.
    * @param {{ keymap?: Keymap, hintChars?: string, sites?: readonly InsertSiteRule[],
-   *   configErrors?: readonly ConfigError[], configFile?: string }} next
+   *   configErrors?: readonly ConfigError[], configFile?: string,
+   *   firefox?: FirefoxKeySetting, insertEditing?: boolean }} next
    */
   configure(next) {
     if (next.hintChars !== undefined) settings.hintChars = next.hintChars;
+    if (next.insertEditing !== undefined) settings.insertEditing = next.insertEditing;
+    if (next.firefox) {
+      settings.firefox = next.firefox;
+      for (const win of windows) states.get(win)?.firefoxKeys?.set(next.firefox);
+    }
     if (next.sites) settings.sites = next.sites;
     if (next.configErrors) settings.configErrors = next.configErrors;
     if (next.configFile) settings.configFile = next.configFile;
@@ -1098,6 +1171,9 @@ export const VimmaHost = {
    * @param {KeyboardEvent} e
    */
   _onKeyDown(win, state, e) {
+    // A key the page has had, back for chrome's shortcuts (requestReplyFromRemoteContent): it
+    // was dispatched once already, before the page.
+    if (/** @type {ChromeKeyEvent} */ (e).isReplyEventFromRemoteContent) return;
     const chord = chordFromEvent(e);
     if (!chord) return; // a bare modifier
     const key = formatKey(chord);
@@ -1150,6 +1226,7 @@ export const VimmaHost = {
     const modal = mode === "help" || mode === "hint" || mode === "resize" || mode === "panel";
     switch (result.kind) {
       case "pass":
+        if (this._editKey(state, e, mode, chord)) return;
         if (modal) consume(e);
         // Copy mode keeps plain keys from the page (m1-copy-mode); chords stay Firefox's (ctrl+c).
         else if (mode === "visual" && !chord.ctrl && !chord.alt && !chord.meta) consume(e);
@@ -1160,7 +1237,8 @@ export const VimmaHost = {
         return;
       case "pending": {
         // The first key of a sequence that leads to nothing runnable yet passes, so ctrl+w (the
-        // M4 <C-w> pane keys) keeps closing the tab. A count is not in the trie, so it is ours.
+        // M4 <C-w> pane keys) reaches the page with one pane. A count is not in the trie, so it
+        // is ours.
         const node = first && !modal && state.keymap.trie(mode).children.get(formatKey(chord));
         if (node && !this._leadsToRunnable(state, node)) {
           state.dispatcher.reset();
@@ -1192,6 +1270,67 @@ export const VimmaHost = {
         this._run(state, result);
       }
     }
+  },
+
+  /**
+   * The text-field command of a chord no binding took (ctrl+w, ctrl+u, ctrl+h), or null: off
+   * in config, or a Firefox shortcut the config keeps on for that chord wins.
+   * @param {WindowState} state
+   * @param {Chord} chord
+   */
+  _editCommand(state, chord) {
+    if (!settings.insertEditing) return null;
+    const key = formatKey(chord);
+    const command = insertEditCommand(key, { mac: MAC });
+    if (!command || state.firefoxKeys?.fires(key)) return null;
+    return command;
+  },
+
+  /**
+   * A text-field key (docs/specs/key-handling-batch.md § 2) that the dispatcher passed. In a
+   * chrome text field it runs now and is consumed. In a page in insert mode it waits for the
+   * page, which may take the key itself (a web terminal): a remote page through Firefox's reply
+   * event, a parent-process page in this window's bubble phase; `_onKeyDownAfter` runs it.
+   * @param {WindowState} state
+   * @param {KeyboardEvent} e
+   * @param {Mode} mode
+   * @param {Chord} chord
+   * @returns {boolean} whether the key was consumed
+   */
+  _editKey(state, e, mode, chord) {
+    const command = this._editCommand(state, chord);
+    if (!command) return false;
+    const browser = this._focusedBrowser(state.win);
+    if (!browser) {
+      if (!focusedChromeField(state.win) || !runChromeEdit(state.win, command)) return false;
+      consume(e);
+      return true;
+    }
+    if (mode !== "insert" || !VimmaActors.has(browser)) return false;
+    if (/** @type {any} */ (browser).isRemoteBrowser) {
+      /** @type {ChromeKeyEvent} */ (e).requestReplyFromRemoteContent();
+    } else {
+      editAfterPage.add(e);
+    }
+    return false;
+  },
+
+  /**
+   * A keydown after the page had it (system group, bubble phase): the text-field key `_editKey`
+   * left to the page, unless the page took it.
+   * @param {WindowState} state
+   * @param {KeyboardEvent} e
+   */
+  _onKeyDownAfter(state, e) {
+    const ours =
+      /** @type {ChromeKeyEvent} */ (e).isReplyEventFromRemoteContent || editAfterPage.has(e);
+    if (!ours || e.defaultPrevented) return;
+    const chord = chordFromEvent(e);
+    const command = chord && this._editCommand(state, chord);
+    const browser = this._contentBrowser(state);
+    if (!command || !browser || this._mode(state) !== "insert") return;
+    e.preventDefault();
+    VimmaActors.edit(browser, command);
   },
 
   /**

@@ -224,6 +224,8 @@ group("Side panel", [
   ["panel_up", "panel.up", "Previous row"],
   ["panel_open", "panel.open", "Open the selected row"],
   ["panel_close", "panel.close", "Close the side panel"],
+  ["panel_close_tab", "panel.close_tab", "Close the selected tab; the panel stays open"],
+  ["restore_tab", "tab.restore", "Reopen the last closed tab (Firefox's ctrl+shift+t)"],
 ]);
 
 group("Bookmarks", [

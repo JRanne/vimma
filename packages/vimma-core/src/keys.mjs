@@ -132,6 +132,16 @@ function makeChord(key, mods) {
 }
 
 /**
+ * Canonical text for a key and modifiers, as `formatKey` writes it (`+` with ctrl → `ctrl+plus`).
+ * @param {string} key  one character or a name from NAMED_KEYS
+ * @param {Partial<Record<"ctrl" | "alt" | "shift" | "meta", boolean>>} mods
+ * @returns {string}
+ */
+export function makeChordText(key, mods) {
+  return formatKey(makeChord(key, mods));
+}
+
+/**
  * Parse one chord in Herdr notation: `ctrl+b`, `shift+t`, `T`, `?`, `minus`, `esc`, `ctrl+alt+]`.
  * @param {string} text
  * @returns {Chord}

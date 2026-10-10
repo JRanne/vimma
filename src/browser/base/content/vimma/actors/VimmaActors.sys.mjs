@@ -157,6 +157,16 @@ export const VimmaActors = {
   },
 
   /**
+   * Runs a text-field command (ctrl+w, ctrl+u, ctrl+h; docs/specs/key-handling-batch.md § 2)
+   * in the focused frame, on its focused text field, if any.
+   * @param {any} browser XULBrowserElement
+   * @param {string} command  one of core INSERT_EDIT_COMMANDS
+   */
+  edit(browser, command) {
+    actorFor(framesFor(browser)[0])?.sendAsyncMessage("Vimma:Edit", { command });
+  },
+
+  /**
    * Blurs the focused element of the focused frame (Esc in insert).
    * @param {any} browser XULBrowserElement
    */

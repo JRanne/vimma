@@ -54,6 +54,8 @@ leader = " "
 timeout_ms = 800
 # Hint labels are made of these characters, the first ones most often.
 hint_chars = "asdfghjkl"
+# In text fields ctrl+w deletes a word, ctrl+u to the line's start, ctrl+h a character.
+insert_editing = true
 
 [modal.normal]
 "j" = "scroll.down"
@@ -172,6 +174,8 @@ hint_chars = "asdfghjkl"
 "k" = "panel.up"
 "<CR>" = "panel.open"
 "<Esc>" = "panel.close"
+"x" = "panel.close_tab"
+"<C-S-t>" = "tab.restore"
 "I" = "urlbar.focus"
 "h" = "bookmarks.collapse"
 "l" = "bookmarks.expand"
@@ -205,6 +209,12 @@ hint_chars = "asdfghjkl"
 
 [unbind]
 normal = []
+
+# Firefox's own shortcuts that are off, so they never fire on Vimma's keys. disable = "all"
+# turns off every Firefox shortcut with ctrl, alt or meta but ctrl+q; enable keeps chords on.
+[firefox]
+disable = ["ctrl+b", "ctrl+d", "ctrl+e", "ctrl+h", "ctrl+i", "ctrl+k", "ctrl+o", "ctrl+u", "ctrl+w", "ctrl+y"]
+enable = []
 
 # Order here is the order ctrl+b ) goes in; each workspace is a Firefox container. None by default.
 # Left-out keys: color = "gray", icon = "circle", autofill = true.

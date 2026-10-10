@@ -105,7 +105,13 @@ function applyToWindow(win, config) {
 /** @param {ActiveConfig} next */
 function apply(next) {
   const { config, keymap } = next;
-  VimmaHost.configure({ keymap, hintChars: config.hintChars, sites: config.sites });
+  VimmaHost.configure({
+    keymap,
+    hintChars: config.hintChars,
+    sites: config.sites,
+    firefox: config.firefox,
+    insertEditing: config.insertEditing,
+  });
   for (const win of windows) applyToWindow(win, config);
   ThemeHost.setConfig(config.theme);
   WorkspaceRouter.setRoutes(config.routes);

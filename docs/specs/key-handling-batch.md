@@ -47,7 +47,9 @@ key is no longer reserved either, so the page gets the chord. The letters come f
 (`data-l10n-id`), maybe after our init, and other locales may use other letters: a
 MutationObserver on the keyset re-applies when a `key`, `keycode`, `modifiers` or `disabled`
 attribute changes (Firefox flips `disabled` itself on some keys). Matching is by chord, from
-the element's own `key`/`keycode`/`modifiers` (`accel` is ctrl, meta on macOS).
+the element's own `key`/`keycode`/`modifiers` (`accel` is ctrl, meta on macOS). VimmaHost starts in
+browser.xhtml's `<head>`, before `#mainKeyset` is parsed, so the first pass runs at
+`DOMContentLoaded`.
 
 **Kept** (not overlapping): `ctrl+t`, `ctrl+n`, `ctrl+shift+t`, `ctrl+l`, `ctrl+f`, `ctrl+tab`,
 `alt+1..9`, `ctrl+q`, and every other `#mainKeyset` key.
@@ -133,9 +135,12 @@ modifiers. Alt alone with `AltGraph` false (Linux, Windows) is always a genuine 
 - `[modal.panel] "x" = "panel.close_tab"` (`panel_close_tab`): closes the selected row's tab with
   Firefox's `removeTab`; the selection moves to the next row (the previous one at the end) and the
   panel stays open, so `x x x` closes three.
-- A pinned tab is not closed: the notice says "pinned tab: unpin it to close it".
+- A pinned tab is not closed: the notice says "pinned tab: unpin it to close it". Pinned tabs
+  belong to no workspace (limits.md), so the panel never lists one; the guard covers a row pinned
+  since the last render, and `closeTabById` refuses a pinned tab too.
 - Counts: panel mode has none (`COUNT_MODES` is normal, visual, resize, and `1`..`9` select a row),
-  so `3x` selects row 3 and then closes it. Noted in limits.md.
+  so `3x` selects row 3 (which goes to its tab and closes the panel), and the `x` is then normal
+  mode's `tab.close`, which closes that tab. Noted in limits.md.
 - `ctrl+shift+t` reopens the last closed tab: `[modal.panel] "<C-S-t>" = "tab.restore"`
   (`restore_tab`), Firefox's `History:RestoreLastClosedTabOrWindowOrSession` command, since panel
   mode consumes every other key.

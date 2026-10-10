@@ -17,6 +17,7 @@ import { tabTarget } from "../core/tabs.mjs";
  * @property {number} pinnedTabCount
  * @property {{ selectedIndex: number }} tabContainer
  * @property {(options?: object) => void} removeCurrentTab
+ * @property {(tab: object, options?: object) => void} removeTab
  * @property {{ userTriggeredContext: (source: string) => object,
  *   METRIC_SOURCE: { KEYBOARD: string } }} TabMetrics
  */
@@ -66,6 +67,33 @@ export function closeTab(win) {
     animate: true,
     metricsContext: TabMetrics.userTriggeredContext(TabMetrics.METRIC_SOURCE.KEYBOARD),
   });
+}
+
+/**
+ * `x` in the side panel (docs/specs/key-handling-batch.md § 4): closes `tab` as the tab
+ * strip's close button would, selected or not. A pinned tab stays (core refuses it first).
+ * @param {Window} win
+ * @param {any} tab
+ */
+export function closeTabById(win, tab) {
+  if (tab.pinned) return;
+  const gBrowser = gBrowserOf(win);
+  const { TabMetrics } = gBrowser;
+  gBrowser.removeTab(tab, {
+    animate: true,
+    metricsContext: TabMetrics.userTriggeredContext(TabMetrics.METRIC_SOURCE.KEYBOARD),
+  });
+}
+
+/**
+ * `tab.restore` (ctrl+shift+t in the side panel): Firefox's own command for its ctrl+shift+t,
+ * which reopens the last closed tab (or window, or the last session).
+ * @param {Window} win
+ */
+export function restoreTab(win) {
+  /** @type {any} */ (
+    win.document.getElementById("History:RestoreLastClosedTabOrWindowOrSession")
+  )?.doCommand();
 }
 
 /**

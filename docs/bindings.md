@@ -168,21 +168,23 @@ shows as `space n` ([guide](guide.md#configtoml)).
 
 ## Side panel
 
-| Action                | Config name      | Bindings        |
-| --------------------- | ---------------- | --------------- |
-| Select row 1          | `panel_select_1` | `1 [panel]`     |
-| Select row 2          | `panel_select_2` | `2 [panel]`     |
-| Select row 3          | `panel_select_3` | `3 [panel]`     |
-| Select row 4          | `panel_select_4` | `4 [panel]`     |
-| Select row 5          | `panel_select_5` | `5 [panel]`     |
-| Select row 6          | `panel_select_6` | `6 [panel]`     |
-| Select row 7          | `panel_select_7` | `7 [panel]`     |
-| Select row 8          | `panel_select_8` | `8 [panel]`     |
-| Select row 9          | `panel_select_9` | `9 [panel]`     |
-| Next row              | `panel_down`     | `j [panel]`     |
-| Previous row          | `panel_up`       | `k [panel]`     |
-| Open the selected row | `panel_open`     | `enter [panel]` |
-| Close the side panel  | `panel_close`    | `esc [panel]`   |
+| Action                                              | Config name       | Bindings               |
+| --------------------------------------------------- | ----------------- | ---------------------- |
+| Select row 1                                        | `panel_select_1`  | `1 [panel]`            |
+| Select row 2                                        | `panel_select_2`  | `2 [panel]`            |
+| Select row 3                                        | `panel_select_3`  | `3 [panel]`            |
+| Select row 4                                        | `panel_select_4`  | `4 [panel]`            |
+| Select row 5                                        | `panel_select_5`  | `5 [panel]`            |
+| Select row 6                                        | `panel_select_6`  | `6 [panel]`            |
+| Select row 7                                        | `panel_select_7`  | `7 [panel]`            |
+| Select row 8                                        | `panel_select_8`  | `8 [panel]`            |
+| Select row 9                                        | `panel_select_9`  | `9 [panel]`            |
+| Next row                                            | `panel_down`      | `j [panel]`            |
+| Previous row                                        | `panel_up`        | `k [panel]`            |
+| Open the selected row                               | `panel_open`      | `enter [panel]`        |
+| Close the side panel                                | `panel_close`     | `esc [panel]`          |
+| Close the selected tab; the panel stays open        | `panel_close_tab` | `x [panel]`            |
+| Reopen the last closed tab (Firefox's ctrl+shift+t) | `restore_tab`     | `ctrl+shift+t [panel]` |
 
 ## Bookmarks
 

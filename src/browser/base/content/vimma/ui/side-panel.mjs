@@ -28,6 +28,7 @@ const TAB_EVENTS = ["TabOpen", "TabClose", "TabSelect", "TabAttrModified", "TabM
  * @property {() => string | undefined} color  the active workspace's colour name
  * @property {(tabId: string) => void} select  a row was picked; the panel closes right after
  * @property {(text: string) => void} say  a refusal for the notice
+ * @property {(tabId: string) => void} closeTab  `x`: close that tab; the panel stays open
  */
 
 export class SidePanel {
@@ -102,7 +103,8 @@ export class SidePanel {
   }
 
   /**
-   * One `[modal.panel]` action (panel.down, panel.up, panel.open, panel.select, panel.close).
+   * One `[modal.panel]` action (panel.down, panel.up, panel.open, panel.select, panel.close,
+   * panel.close_tab).
    * @param {{ id: string, arg?: number }} action
    */
   action(action) {
@@ -114,6 +116,8 @@ export class SidePanel {
     }
     if (effect?.type === "close") this.close();
     if (effect?.type === "refuse") this.host.say(effect.text);
+    // The highlight is on the next row already: the TabClose refresh keeps it there.
+    if (effect?.type === "closeTab") this.host.closeTab(effect.id);
     // Select first, so closing focuses the new page, not the one being left.
     if (effect?.type === "select") {
       this.host.select(effect.id);
@@ -215,7 +219,7 @@ export class SidePanel {
     const { box, list } = buildPanelBox(this.win, {
       id: PANEL_ID,
       label: "Side panel",
-      hint: "j/k move · 1-9 or Enter go · Esc close",
+      hint: "j/k move · 1-9 or Enter go · x close tab · Esc close",
     });
     this.box = box;
     this.list = list;

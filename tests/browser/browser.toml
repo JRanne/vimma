@@ -123,6 +123,12 @@ support-files = ["file_vimma_cookie.html"]
 
 ["browser_vimma_side_panel.js"]
 
+["browser_vimma_firefox_keys.js"]
+support-files = ["file_vimma_plain.html"]
+
+["browser_vimma_edit_keys.js"]
+support-files = ["file_vimma_insert_scroll.html", "file_vimma_frame.html"]
+
 ["browser_vimma_bookmarks.js"]
 
 ["browser_vimma_workspace_restore.js"]

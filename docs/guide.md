@@ -153,6 +153,16 @@ and copy mode ends. `Esc` is then Firefox's: the first closes the suggestions li
 (with the address unchanged) puts focus back in the page, in normal mode. In insert mode `I` is
 a capital I typed into the field, as in Vim; press `Esc` first.
 
+**Text fields have Vim's editing keys.** In insert mode, and in the URL bar, the `:` line, the
+find bar and the panels' filters, `ctrl+w` deletes the word before the caret, `ctrl+u`
+everything before it on the line, and `ctrl+h` one character, as `Backspace`. They are the
+text field's own delete commands, so `ctrl+z` undoes them. A page that handles one of these keys
+itself (a web terminal, an editor with its own `ctrl+w`) keeps it: Vimma edits only when the page
+left the key alone. In normal mode the keys stay Vimma's (`ctrl+u` scrolls, `ctrl+w h` moves
+between panes). `[modal] insert_editing = false` in `config.toml` turns them off; Firefox's own
+actions on those keys stay off either way. On macOS, `ctrl+h` is already a backspace in text
+fields, so Vimma adds nothing there.
+
 **`Esc` in a text field is Vimma's.** It leaves insert, so the page does not see that `Esc`: a
 site's own `Esc` (closing an autocomplete list or a dialog) does not fire from the field. Press
 `Esc` again: in normal mode `Esc` has no binding, so it reaches the page (the field no longer
@@ -160,7 +170,8 @@ has focus, so the page's document gets it, not the field).
 
 **A key that starts a sequence passes when nothing in that sequence works yet.** `ctrl+w`
 starts the `ctrl+w h/j/k/l`, `H/J/K/L`, `o` and `< > + -` pane keys, which do something only with two panes or
-more, so in a window with one pane `ctrl+w` still closes the tab. With a split, `ctrl+w` in
+more, so in a window with one pane `ctrl+w` reaches the page (Firefox's own `ctrl+w`, close
+tab, is off: [below](#firefoxs-own-shortcuts)). With a split, `ctrl+w` in
 normal mode waits for the pane key (`Esc` cancels); close the tab with `x` or `ctrl+b shift+x`. `g` starts `gg`, which works, so `g` is Vimma's: the page does not see it, and `Esc`
 cancels it.
 
@@ -323,46 +334,46 @@ keys. A `[panel]` after a key means it works only in that mode.
 
 **What works today:**
 
-| Keys                           | What it does                                                                                                                                                                                                                                                                                                                                                                             |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `j` / `k`, `h` / `l`           | Normal mode: scroll down / up, left / right by a step. A count repeats: `3j`.                                                                                                                                                                                                                                                                                                            |
-| `d` / `u`, `ctrl+d` / `ctrl+u` | Normal mode: scroll half a page down / up, as in Vimium and vim. `ctrl+e` / `ctrl+y` scroll a step down / up, as `j` / `k`. In insert mode the page gets them.                                                                                                                                                                                                                           |
-| `gg` / `G`                     | Normal mode: go to the top / bottom of the page.                                                                                                                                                                                                                                                                                                                                         |
-| `H` / `L`, `ctrl+o` / `ctrl+i` | Normal mode: back / forward in the page's history (in a split, the focused pane's), `ctrl+o` / `ctrl+i` as vim's jump list. A count moves that many pages, stopping at the first or last: `3H`.                                                                                                                                                                                          |
-| `r`                            | Normal mode: reloads the page (in a split, the focused pane's). In insert mode `H`, `L` and `r` are typed into the field.                                                                                                                                                                                                                                                                |
-| `i`                            | Normal mode: focus the first text field and enter insert mode.                                                                                                                                                                                                                                                                                                                           |
-| `gi`                           | Normal mode: focus the first visible text field, insert mode; `3gi` the third (or the last). With none, it says so and stays normal.                                                                                                                                                                                                                                                     |
-| `yy`                           | Normal mode: copies the page's URL (in a split, the focused pane's); the notice shows it.                                                                                                                                                                                                                                                                                                |
-| `p` / `P`                      | Normal mode: opens the clipboard here / in a new tab, as `:open` / `:tabnew`: a URL loads, other text is searched. No `javascript:`, `data:`.                                                                                                                                                                                                                                            |
-| `gu` / `gU`                    | Normal mode: up one level in the URL / to the site's root, without query and hash; `2gu` goes up two. At the top it says so.                                                                                                                                                                                                                                                             |
-| `gf`                           | Normal mode: the page's source in a new tab, as Firefox's `ctrl+u` does. In insert mode `gi`, `yy`, `p`, `P`, `gu`, `gU` and `gf` are typed into the field.                                                                                                                                                                                                                              |
-| `I`                            | Normal and copy mode: focus the address bar with its text selected, as `ctrl+l` (in a split, the focused pane's); closes an open panel first.                                                                                                                                                                                                                                            |
-| `f` / `F`                      | Normal mode: link hints. Type a label to follow it, or, with `F`, to open the link in a background tab. `Backspace` undoes a key, `Esc` cancels.                                                                                                                                                                                                                                         |
-| `/` / `?`                      | Normal mode: find in the page (below). `Enter` stays on the match, `Esc` goes back to where you were.                                                                                                                                                                                                                                                                                    |
-| `n` / `N`                      | Normal mode: next / previous match of the last search (`?` reverses them), wrapping around the page.                                                                                                                                                                                                                                                                                     |
-| `v`, `ctrl+b [`                | Normal mode: copy mode ([above](#copy-mode)): `h j k l w b e ge W B E 0 ^ $ { } gg G f t F T ; ,` move, `v V o iw aw` select, `y Y` copy, `Esc` leaves.                                                                                                                                                                                                                                  |
-| `Esc`                          | Insert mode: leave the text field, back to normal mode. In normal mode the page gets `Esc`.                                                                                                                                                                                                                                                                                              |
-| `ctrl+b ?`                     | Opens the bindings overlay over any page, including `about:preferences` and the PDF viewer. Press it again to close.                                                                                                                                                                                                                                                                     |
-| `/` (in the overlay)           | Filters the list as you type.                                                                                                                                                                                                                                                                                                                                                            |
-| `Esc` or `q` (overlay)         | Closes the overlay. Focus returns to where it was.                                                                                                                                                                                                                                                                                                                                       |
-| `ctrl+b c`, `t`                | Opens a new tab (Firefox's new-tab page, URL bar focused), as `ctrl+t` does. `t` in normal mode.                                                                                                                                                                                                                                                                                         |
-| `ctrl+b n` / `ctrl+b p`        | Next / previous tab, wrapping around at the ends. Hidden tabs are skipped. `gt` / `gT` in normal mode; `3gt` goes to tab 3.                                                                                                                                                                                                                                                              |
-| `ctrl+b 1..9`                  | Tab 1 to 9, counting visible tabs (pinned tabs first). With fewer tabs than N, nothing happens.                                                                                                                                                                                                                                                                                          |
-| `:`                            | Normal mode: opens the command line at the bottom of the window ([below](#the-command-line)). In a text field `:` is typed.                                                                                                                                                                                                                                                              |
-| `ctrl+b g`, `b`                | Opens the goto picker over the page (`b` in normal mode): every tab of the window ([below](#goto-picker-and-tab-rename)).                                                                                                                                                                                                                                                                |
-| `ctrl+b shift+t`               | Renames the tab ([below](#goto-picker-and-tab-rename)); an empty name restores the page title.                                                                                                                                                                                                                                                                                           |
-| `ctrl+b a`                     | Bookmarks the page; type folders before its title: `work/docs/title` ([below](#bookmarks)).                                                                                                                                                                                                                                                                                              |
-| `ctrl+b shift+b`               | Opens or closes the bookmarks panel ([below](#bookmarks)).                                                                                                                                                                                                                                                                                                                               |
-| `ctrl+b e`                     | Opens the add-on picker: popups, options, enable/disable, remove, updates ([below](#add-ons)).                                                                                                                                                                                                                                                                                           |
-| `ctrl+b v` / `ctrl+b -`        | Splits the pane right / down. The new pane opens a new tab (the start page, URL bar focused). At most 4 panes (`[panes] max`); a refused split says why.                                                                                                                                                                                                                                 |
-| `ctrl+b h j k l`               | Focuses the pane left / below / above / right; when several touch, the one used last. `ctrl+w h j k l` in normal mode. The page of that pane gets focus.                                                                                                                                                                                                                                 |
-| `ctrl+b z`, `ctrl+w o`         | Zooms the pane to the whole window, or back. The other panes' pages pause. A pane focus key unzooms when it moves.                                                                                                                                                                                                                                                                       |
-| `ctrl+b x`                     | Closes the pane; its tab stays open. With one pane it closes the tab, as `ctrl+b shift+x`.                                                                                                                                                                                                                                                                                               |
-| `ctrl+b shift+h j k l`         | Swaps the pane with the one left / below / above / right; it keeps focus and its page. `ctrl+w H J K L` in normal mode.                                                                                                                                                                                                                                                                  |
-| `ctrl+b r`                     | Resize mode ([below](#resize-mode)): `h j k l` move the pane's divider, `Esc` leaves. `ctrl+w < > + -` resize directly in normal mode.                                                                                                                                                                                                                                                   |
-| `ctrl+b shift+x`, `x`          | Closes the tab, as `ctrl+w` does: on a pinned tab it selects the first unpinned tab instead; the last tab closes the window. `x` in normal mode.                                                                                                                                                                                                                                         |
-| `ctrl+b` then anything else    | Never leaks to the page. A binding that does not run yet shows "… not implemented yet" for 1.5 s; an unbound key does nothing. No more bookmarks sidebar.                                                                                                                                                                                                                                |
-| Firefox's own keys             | Unchanged: `ctrl+t`, `ctrl+w`, `ctrl+tab`, `ctrl+shift+tab`, `ctrl+pagedown`, `alt+1..9` (tab N on Linux), `ctrl+l`, `ctrl+f`, and so on. In normal mode `ctrl+d`, `ctrl+u`, `ctrl+e`, `ctrl+y`, `ctrl+o` and `ctrl+i` are vim's (above); in insert mode and the URL bar they are Firefox's. `ctrl+o` is no longer Open File in normal mode: use the File menu, or `:open file:///path`. |
+| Keys                           | What it does                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `j` / `k`, `h` / `l`           | Normal mode: scroll down / up, left / right by a step. A count repeats: `3j`.                                                                                                                                                                                                                                                                                                              |
+| `d` / `u`, `ctrl+d` / `ctrl+u` | Normal mode: scroll half a page down / up, as in Vimium and vim. `ctrl+e` / `ctrl+y` scroll a step down / up, as `j` / `k`. In insert mode the page gets them; in a text field `ctrl+u` deletes to the line's start.                                                                                                                                                                       |
+| `gg` / `G`                     | Normal mode: go to the top / bottom of the page.                                                                                                                                                                                                                                                                                                                                           |
+| `H` / `L`, `ctrl+o` / `ctrl+i` | Normal mode: back / forward in the page's history (in a split, the focused pane's), `ctrl+o` / `ctrl+i` as vim's jump list. A count moves that many pages, stopping at the first or last: `3H`.                                                                                                                                                                                            |
+| `r`                            | Normal mode: reloads the page (in a split, the focused pane's). In insert mode `H`, `L` and `r` are typed into the field.                                                                                                                                                                                                                                                                  |
+| `i`                            | Normal mode: focus the first text field and enter insert mode.                                                                                                                                                                                                                                                                                                                             |
+| `gi`                           | Normal mode: focus the first visible text field, insert mode; `3gi` the third (or the last). With none, it says so and stays normal.                                                                                                                                                                                                                                                       |
+| `yy`                           | Normal mode: copies the page's URL (in a split, the focused pane's); the notice shows it.                                                                                                                                                                                                                                                                                                  |
+| `p` / `P`                      | Normal mode: opens the clipboard here / in a new tab, as `:open` / `:tabnew`: a URL loads, other text is searched. No `javascript:`, `data:`.                                                                                                                                                                                                                                              |
+| `gu` / `gU`                    | Normal mode: up one level in the URL / to the site's root, without query and hash; `2gu` goes up two. At the top it says so.                                                                                                                                                                                                                                                               |
+| `gf`                           | Normal mode: the page's source in a new tab, as Firefox's `ctrl+u` does. In insert mode `gi`, `yy`, `p`, `P`, `gu`, `gU` and `gf` are typed into the field.                                                                                                                                                                                                                                |
+| `I`                            | Normal and copy mode: focus the address bar with its text selected, as `ctrl+l` (in a split, the focused pane's); closes an open panel first.                                                                                                                                                                                                                                              |
+| `f` / `F`                      | Normal mode: link hints. Type a label to follow it, or, with `F`, to open the link in a background tab. `Backspace` undoes a key, `Esc` cancels.                                                                                                                                                                                                                                           |
+| `/` / `?`                      | Normal mode: find in the page (below). `Enter` stays on the match, `Esc` goes back to where you were.                                                                                                                                                                                                                                                                                      |
+| `n` / `N`                      | Normal mode: next / previous match of the last search (`?` reverses them), wrapping around the page.                                                                                                                                                                                                                                                                                       |
+| `v`, `ctrl+b [`                | Normal mode: copy mode ([above](#copy-mode)): `h j k l w b e ge W B E 0 ^ $ { } gg G f t F T ; ,` move, `v V o iw aw` select, `y Y` copy, `Esc` leaves.                                                                                                                                                                                                                                    |
+| `Esc`                          | Insert mode: leave the text field, back to normal mode. In normal mode the page gets `Esc`.                                                                                                                                                                                                                                                                                                |
+| `ctrl+b ?`                     | Opens the bindings overlay over any page, including `about:preferences` and the PDF viewer. Press it again to close.                                                                                                                                                                                                                                                                       |
+| `/` (in the overlay)           | Filters the list as you type.                                                                                                                                                                                                                                                                                                                                                              |
+| `Esc` or `q` (overlay)         | Closes the overlay. Focus returns to where it was.                                                                                                                                                                                                                                                                                                                                         |
+| `ctrl+b c`, `t`                | Opens a new tab (Firefox's new-tab page, URL bar focused), as `ctrl+t` does. `t` in normal mode.                                                                                                                                                                                                                                                                                           |
+| `ctrl+b n` / `ctrl+b p`        | Next / previous tab, wrapping around at the ends. Hidden tabs are skipped. `gt` / `gT` in normal mode; `3gt` goes to tab 3.                                                                                                                                                                                                                                                                |
+| `ctrl+b 1..9`                  | Tab 1 to 9, counting visible tabs (pinned tabs first). With fewer tabs than N, nothing happens.                                                                                                                                                                                                                                                                                            |
+| `:`                            | Normal mode: opens the command line at the bottom of the window ([below](#the-command-line)). In a text field `:` is typed.                                                                                                                                                                                                                                                                |
+| `ctrl+b g`, `b`                | Opens the goto picker over the page (`b` in normal mode): every tab of the window ([below](#goto-picker-and-tab-rename)).                                                                                                                                                                                                                                                                  |
+| `ctrl+b shift+t`               | Renames the tab ([below](#goto-picker-and-tab-rename)); an empty name restores the page title.                                                                                                                                                                                                                                                                                             |
+| `ctrl+b a`                     | Bookmarks the page; type folders before its title: `work/docs/title` ([below](#bookmarks)).                                                                                                                                                                                                                                                                                                |
+| `ctrl+b shift+b`               | Opens or closes the bookmarks panel ([below](#bookmarks)).                                                                                                                                                                                                                                                                                                                                 |
+| `ctrl+b e`                     | Opens the add-on picker: popups, options, enable/disable, remove, updates ([below](#add-ons)).                                                                                                                                                                                                                                                                                             |
+| `ctrl+b v` / `ctrl+b -`        | Splits the pane right / down. The new pane opens a new tab (the start page, URL bar focused). At most 4 panes (`[panes] max`); a refused split says why.                                                                                                                                                                                                                                   |
+| `ctrl+b h j k l`               | Focuses the pane left / below / above / right; when several touch, the one used last. `ctrl+w h j k l` in normal mode. The page of that pane gets focus.                                                                                                                                                                                                                                   |
+| `ctrl+b z`, `ctrl+w o`         | Zooms the pane to the whole window, or back. The other panes' pages pause. A pane focus key unzooms when it moves.                                                                                                                                                                                                                                                                         |
+| `ctrl+b x`                     | Closes the pane; its tab stays open. With one pane it closes the tab, as `ctrl+b shift+x`.                                                                                                                                                                                                                                                                                                 |
+| `ctrl+b shift+h j k l`         | Swaps the pane with the one left / below / above / right; it keeps focus and its page. `ctrl+w H J K L` in normal mode.                                                                                                                                                                                                                                                                    |
+| `ctrl+b r`                     | Resize mode ([below](#resize-mode)): `h j k l` move the pane's divider, `Esc` leaves. `ctrl+w < > + -` resize directly in normal mode.                                                                                                                                                                                                                                                     |
+| `ctrl+b shift+x`, `x`          | Closes the tab, as Firefox's `ctrl+w` did: on a pinned tab it selects the first unpinned tab instead; the last tab closes the window. `x` in normal mode.                                                                                                                                                                                                                                  |
+| `ctrl+b` then anything else    | Never leaks to the page. A binding that does not run yet shows "… not implemented yet" for 1.5 s; an unbound key does nothing. No more bookmarks sidebar.                                                                                                                                                                                                                                  |
+| Firefox's own keys             | Unchanged where they do not overlap Vimma's: `ctrl+t`, `ctrl+shift+t`, `ctrl+tab`, `ctrl+shift+tab`, `ctrl+pagedown`, `alt+1..9` (tab N on Linux), `ctrl+l`, `ctrl+f`, `ctrl+n`, `ctrl+q`, and so on. The ones on Vimma's keys (`ctrl+w`, `ctrl+u`, `ctrl+h`, `ctrl+d`, `ctrl+o`, `ctrl+i`, `ctrl+k`, `ctrl+b`) are off in every mode: [Firefox's own shortcuts](#firefoxs-own-shortcuts). |
 
 `p` and `P` read the system clipboard (the one `yy` and copy mode's `y` write). The text is
 trimmed and its line breaks become spaces; one word with a scheme, a dot or a port (`https://…`,
@@ -405,6 +416,65 @@ nothing. `ctrl+b` keys still work in it. With one pane, `ctrl+b r` says so and d
 Without the mode, `ctrl+w >`, `ctrl+w <`, `ctrl+w +` and `ctrl+w -` resize by one step in
 normal mode (`3 ctrl+w >` by three), as in Vim. A config can rebind the mode's keys in
 `[modal.resize]`.
+
+### Keyboard layouts
+
+A binding names a character, and the character counts, not the keys that type it. On a
+Finnish or German layout `{` is `AltGr+7` on Linux and Windows and `Option+shift+8` on a Mac,
+and it matches a `{` binding (copy mode's `{` and `}`) the same as on a US layout. Vimma treats
+a character typed with AltGr or Option as that character, the way `shift` is already part of
+`?` or `G`. A real `alt` chord stays one: `alt+1` is still `alt+1`, and a `ctrl` or `ctrl+alt`
+chord on a key that types its own character (`ctrl+w`, `ctrl+alt+]` on a US layout) keeps its
+modifiers. Windows' `ctrl+alt` stand-in for AltGr counts as AltGr when it types another
+character.
+
+## Firefox's own shortcuts
+
+Firefox binds some of the keys Vimma and Vim use. So that the two never overlap, those Firefox
+shortcuts are off in every mode: in insert mode, in the URL bar, and when Vimma lets a key pass
+(`ctrl+w` with one pane).
+
+| Key      | Firefox's action, now off | Why it is off                                     | Where it is now                            |
+| -------- | ------------------------- | ------------------------------------------------- | ------------------------------------------ |
+| `ctrl+w` | close tab                 | `ctrl+w h/j/k/l` panes; delete a word when typing | `x`, `ctrl+b shift+x`, `:q`                |
+| `ctrl+u` | view page source          | half page up; delete to the line's start          | `gf`                                       |
+| `ctrl+h` | history sidebar           | backspace when typing                             | `ctrl+shift+h` (the Library's history)     |
+| `ctrl+d` | bookmark this page        | half page down                                    | `ctrl+b a`                                 |
+| `ctrl+o` | open a file               | history back                                      | `:open file:///path`, the File menu        |
+| `ctrl+i` | page info                 | history forward                                   | the page's context menu, View Page Info    |
+| `ctrl+k` | web search                | Vim's insert `ctrl+k`, readline's kill to the end | `I`, then type the search                  |
+| `ctrl+b` | bookmarks sidebar         | Vimma's prefix                                    | `ctrl+b shift+b` (Vimma's bookmarks panel) |
+
+`ctrl+e` and `ctrl+y` (scroll a step) are on the list too; Firefox binds neither on Linux (its
+second web-search key is `ctrl+j` there, and downloads is `ctrl+shift+y`), so nothing changes.
+Every other Firefox shortcut works as before: `ctrl+t`, `ctrl+shift+t`, `ctrl+n`, `ctrl+l`,
+`ctrl+f`, `ctrl+tab`, `alt+1..9`, `ctrl+plus`, `ctrl+q`, `F5`, and so on.
+
+Vimma turns them off at startup by disabling Firefox's own `<key>` elements (`#mainKeyset`), with
+no change to Firefox's code; `about:vimma` lists each one that is off (key, Firefox's id and
+command) under "Firefox shortcuts off", and the chords on the list that Firefox does not bind.
+Change the list in `config.toml`:
+
+```toml
+schema = 2
+
+[firefox]
+disable = ["ctrl+b", "ctrl+d", "ctrl+e", "ctrl+h", "ctrl+i", "ctrl+k", "ctrl+o", "ctrl+u", "ctrl+w", "ctrl+y"]
+enable = []
+```
+
+- **`disable`** is a list of keys, which replaces the default list (`disable = []` gives every
+  shortcut back), or `"all"`: every Firefox shortcut with `ctrl`, `alt` or `meta` except
+  `ctrl+q` (quit; `cmd+q` on macOS). `"all"` leaves plain keys (`F5`, `F11`, `F3`, `Esc` to
+  stop loading) and the text keys the field itself runs (`ctrl+c`, `ctrl+v`, `ctrl+z`,
+  `ctrl+a`). It also leaves what is not one of the window's shortcuts: tab switching
+  (`ctrl+tab`, `ctrl+pagedown`) and the developer tools' keys.
+- **`enable`** is a list of keys that stay Firefox's whatever `disable` says:
+  `disable = "all"` with `enable = ["ctrl+t", "ctrl+l"]` keeps just those two (and `ctrl+q`).
+  A Firefox shortcut you enable on a text-field key wins over it: `enable = ["ctrl+w"]` closes
+  the tab from a text field again.
+- A key must have `ctrl`, `alt` or `meta`, or be a function key (`f5`); anything else, or a key
+  that does not parse, is an error at its line.
 
 ## Workspaces
 
@@ -514,14 +584,22 @@ the workspace's tabs, numbered, each with its name (or title) and its site. The 
 highlighted and its number coloured; a tab playing sound shows `♪`, one from another container
 `foreign`.
 
-| Key                     | What it does                                               |
-| ----------------------- | ---------------------------------------------------------- |
-| `j` / `k`               | Move the highlight down / up.                              |
-| `Enter`                 | Go to the highlighted tab and close the panel.             |
-| `1` … `9`               | Go to that row's tab and close the panel.                  |
-| `ctrl+b )` / `ctrl+b (` | Switch workspace; the panel stays open and lists that one. |
-| `I`                     | Close the panel and focus the address bar.                 |
-| `Esc`, `ctrl+b b`       | Close the panel; the page has the keys again.              |
+| Key                     | What it does                                                                                                      |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `j` / `k`               | Move the highlight down / up.                                                                                     |
+| `Enter`                 | Go to the highlighted tab and close the panel.                                                                    |
+| `1` … `9`               | Go to that row's tab and close the panel.                                                                         |
+| `x`                     | Close the highlighted tab; the highlight moves to the next row and the panel stays open, so `x x x` closes three. |
+| `ctrl+shift+t`          | Reopen the last closed tab, as in Firefox.                                                                        |
+| `ctrl+b )` / `ctrl+b (` | Switch workspace; the panel stays open and lists that one.                                                        |
+| `I`                     | Close the panel and focus the address bar.                                                                        |
+| `Esc`, `ctrl+b b`       | Close the panel; the page has the keys again.                                                                     |
+
+Pinned tabs belong to no workspace, so the panel never lists them and `x` never closes one (a
+row pinned since it was drawn says "pinned tab: unpin it to close it"). The panel takes no
+count: digits pick rows, so `3x` goes to row 3's tab and closes the panel, and that `x` is then
+normal mode's, which closes the tab. In the bookmarks panel `x` does nothing;
+`d` deletes a bookmark there.
 
 While it is open, every other plain key is the panel's and never reaches the page; `ctrl+b`
 keys and `:` commands still work, and a tab you open meanwhile shows up in the list. The panel
@@ -868,8 +946,11 @@ accent = "#ff9e64"
   site and its subdomains takes insert mode); `[theme]` `source` (`omarchy` or `file`, the
   built-in Tokyo Night), `font` and `[theme.colors]` (single colours over either source);
   `[workspaces]` (a new one gets its container at once; one removed from the file stays, as a
-  workspace you can close yourself).
-- **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]` and `hint_chars`; every key,
+  workspace you can close yourself); `[firefox] disable` and `enable` (which of Firefox's own
+  shortcuts are off, [above](#firefoxs-own-shortcuts)); `[modal] insert_editing` (`ctrl+w`,
+  `ctrl+u`, `ctrl+h` in text fields, default `true`).
+- **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]`, `[firefox]`, `hint_chars`
+  and `insert_editing`; every key,
   its type and default are in [m5-core-config-and-theme](specs/m5-core-config-and-theme.md#schema-v1)
   and [m3-m4-core-prep](specs/m3-m4-core-prep.md#config-schema-2), and
   `packages/vimma-core/defaults.toml` lists them with their defaults.

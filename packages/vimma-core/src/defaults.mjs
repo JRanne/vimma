@@ -9,6 +9,7 @@
 
 import { DEFAULT_HINT_CHARS } from "./hints.mjs";
 import { PANES_MAX_DEFAULT } from "./panes.mjs";
+import { OVERLAP_CHORDS } from "./firefox-keys.mjs";
 
 /**
  * @typedef {object} UserConfig
@@ -21,6 +22,8 @@ import { PANES_MAX_DEFAULT } from "./panes.mjs";
  * @property {{ max?: number }} [panes]
  * @property {Record<string, { insert?: import("./editable.mjs").InsertSiteMode }>} [sites]
  * @property {Record<string, string>[]} [routes]  `[[routes]]` (workspace-routing)
+ * @property {{ disable?: "all" | readonly string[], enable?: readonly string[] }} [firefox]
+ *   Firefox's own shortcuts that are off (docs/specs/key-handling-batch.md)
  */
 
 /**
@@ -81,6 +84,8 @@ const modal = {
   leader: " ",
   timeout_ms: 800,
   hint_chars: DEFAULT_HINT_CHARS,
+  // ctrl+w, ctrl+u, ctrl+h edit text fields as in Vim's insert mode (key-handling-batch).
+  insert_editing: true,
   normal: {
     j: "scroll.down",
     k: "scroll.up",
@@ -182,6 +187,11 @@ const modal = {
     k: "panel.up",
     "<CR>": "panel.open",
     "<Esc>": "panel.close",
+    // The selected tab; the panel stays open on the next row (key-handling-batch). The bookmarks
+    // panel shares the mode and ignores it (d deletes there).
+    x: "panel.close_tab",
+    // The panel takes every key: Firefox's ctrl+shift+t, as an action of its own.
+    "<C-S-t>": "tab.restore",
     // Closes the panel, then focuses the address bar (as I does in normal mode).
     I: "urlbar.focus",
     // The bookmarks panel (docs/specs/bookmarks.md), neo-tree's keys; nothing in the tabs panel.
@@ -233,6 +243,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   theme,
   panes: { max: PANES_MAX_DEFAULT },
   sites: {},
+  firefox: { disable: OVERLAP_CHORDS, enable: [] },
 });
 
 /** @param {string} s */
@@ -265,6 +276,8 @@ export function formatDefaultsToml() {
     `timeout_ms = ${modal.timeout_ms}`,
     "# Hint labels are made of these characters, the first ones most often.",
     `hint_chars = ${tomlString(modal.hint_chars)}`,
+    "# In text fields ctrl+w deletes a word, ctrl+u to the line's start, ctrl+h a character.",
+    `insert_editing = ${modal.insert_editing}`,
   );
   for (const [mode, table] of Object.entries(modal)) {
     if (typeof table !== "object") continue;
@@ -277,6 +290,12 @@ export function formatDefaultsToml() {
     "",
     "[unbind]",
     "normal = []",
+    "",
+    "# Firefox's own shortcuts that are off, so they never fire on Vimma's keys. disable = \"all\"",
+    "# turns off every Firefox shortcut with ctrl, alt or meta but ctrl+q; enable keeps chords on.",
+    "[firefox]",
+    `disable = [${OVERLAP_CHORDS.map(tomlString).join(", ")}]`,
+    "enable = []",
     "",
     "# Order here is the order ctrl+b ) goes in; each workspace is a Firefox container. None by default.",
     `# Left-out keys: color = ${tomlString(WORKSPACE_DEFAULTS.color)}, icon = ${tomlString(WORKSPACE_DEFAULTS.icon)}, autofill = ${WORKSPACE_DEFAULTS.autofill}.`,
