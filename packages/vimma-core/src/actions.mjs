@@ -128,6 +128,7 @@ group("Navigation", [
   ["open_url", "page.open", "Open a URL or search in this tab"],
   ["url_up", "page.url_up", "Go up a level in the URL path"],
   ["url_root", "page.url_root", "Go to the site's root"],
+  ["focus_urlbar", "urlbar.focus", "Focus the address bar (as ctrl+l)"],
 ]);
 
 group("Page", [
