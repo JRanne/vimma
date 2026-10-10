@@ -1,0 +1,10 @@
+{
+  "description": "reload-theme takes no args",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 3,
+    "command": "reload-theme",
+    "args": {}
+  }
+}

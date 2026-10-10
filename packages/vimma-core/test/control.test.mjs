@@ -60,7 +60,7 @@ describe("contract fixtures (tests/contract/control/v1)", () => {
 describe("constants", () => {
   test("protocol version 1 with the commands of ADR-007", () => {
     expect(CONTROL_PROTOCOL).toBe(1);
-    expect([...CONTROL_COMMANDS]).toEqual(["send-keys", "state", "open"]);
+    expect([...CONTROL_COMMANDS]).toEqual(["send-keys", "state", "open", "reload-theme"]);
     expect([...RESERVED_COMMANDS]).toEqual(["list-tabs", "screenshot", "reload-config"]);
     expect(ERROR_CODES).toContain("not-implemented");
     expect(ERROR_CODES).toContain("busy");
@@ -252,6 +252,23 @@ describe("validateMessage: open", () => {
   test("result is a tab id string", () => {
     expect(errorsOf(ok({ tab: "1" }), { command: "open" })).toEqual([]);
     expect(errorsOf(ok({}), { command: "open" })).toEqual(["result.tab must be a string"]);
+  });
+});
+
+describe("validateMessage: reload-theme", () => {
+  test("takes no args", () => {
+    expect(errorsOf(req("reload-theme"))).toEqual([]);
+    expect(errorsOf(req("reload-theme", { path: "/tmp/colors.toml" }))).toEqual([
+      'unknown field "args.path"',
+    ]);
+  });
+
+  test("result says whether the colours changed", () => {
+    expect(errorsOf(ok({ changed: false }), { command: "reload-theme" })).toEqual([]);
+    expect(errorsOf(ok({ changed: true, extra: 1 }), { command: "reload-theme" })).toEqual([]);
+    expect(errorsOf(ok({}), { command: "reload-theme" })).toEqual([
+      "result.changed must be a boolean",
+    ]);
   });
 });
 

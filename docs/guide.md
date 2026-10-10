@@ -228,6 +228,27 @@ Tokyo Night. A `colors.toml` Vimma cannot read (a value that is not a `#rrggbb` 
 missing key) is ignored: the colours stay as they were, and the Browser Console
 (`ctrl+shift+j`) says which line is wrong.
 
+**Instant theme changes.** To have Vimma recolour as soon as `omarchy-theme-set` finishes,
+instead of within 2 seconds, install the Omarchy hook that ships in this repository. It asks the
+running Vimma, through [vimma-ctl](#scripting-with-vimma-ctl), to read the theme again:
+
+1. Turn the control socket on (`vimma.control.enabled` = `true` in `about:config`) and put
+   `vimma-ctl` on your `PATH` (steps 1 and 2 of [Scripting with vimma-ctl](#scripting-with-vimma-ctl)).
+2. Install the hook. Omarchy runs every file in `~/.config/omarchy/hooks/theme-set.d/` after it
+   sets a theme:
+
+   ```sh
+   install -Dm644 tools/omarchy/vimma-theme-reload.sh \
+     ~/.config/omarchy/hooks/theme-set.d/vimma-theme-reload.sh
+   ```
+
+3. Check it: `vimma-ctl reload-theme` prints `changed` or `unchanged`.
+
+To remove it: `rm ~/.config/omarchy/hooks/theme-set.d/vimma-theme-reload.sh`. The hook is silent
+and harmless when Vimma is not running, the socket is off or `vimma-ctl` is missing; the 2-second
+check keeps working either way. Omarchy runs its hooks after it has restarted the terminals and
+retinted the other apps, so Vimma changes together with them, not before.
+
 ## Keys
 
 [bindings.md](bindings.md) lists the full default keymap. It is generated from the same table
@@ -592,6 +613,7 @@ is **off by default**. Spec: [m0-control-server](specs/m0-control-server.md), pr
    vimma-ctl send-keys "ctrl+b ?"     # typed as if on the keyboard: opens the help overlay
    vimma-ctl send-keys esc
    vimma-ctl open https://example.com # a new tab; only http, https, file and about URLs
+   vimma-ctl reload-theme             # read the Omarchy theme now (the theme-set hook)
    ```
 
    It finds your default profile itself; pass `--profile DIR` (or set `VIMMA_PROFILE`) for

@@ -26,6 +26,7 @@ Commands:
   send-keys KEYS...   send chords in Herdr notation, e.g. send-keys ctrl+b c
   state [--json]      print mode, workspace and tabs (--json: the raw result)
   open URL            open an http(s), file or about URL in a new tab
+  reload-theme        re-read the Omarchy theme now (prints changed or unchanged)
 
 Options:
   --profile DIR       the Vimma profile (default: VIMMA_PROFILE, else profiles.ini's default)
@@ -114,6 +115,10 @@ pub fn parse_args(args: &[String]) -> Result<Parsed, String> {
         },
         "state" if !rest.is_empty() => return Err("state takes no arguments".to_string()),
         "state" => Command::State,
+        "reload-theme" if !rest.is_empty() => {
+            return Err("reload-theme takes no arguments".to_string());
+        }
+        "reload-theme" => Command::ReloadTheme,
         "open" if rest.len() != 1 => return Err("open needs exactly one URL".to_string()),
         "open" => Command::Open {
             url: rest[0].clone(),
@@ -194,6 +199,9 @@ pub fn run(args: &[String], env: &Env, out: &mut dyn Write, err: &mut dyn Write)
         Ok(CommandResult::Open { tab }) => {
             let _ = writeln!(out, "{tab}");
         }
+        Ok(CommandResult::ReloadTheme { changed }) => {
+            let _ = writeln!(out, "{}", if changed { "changed" } else { "unchanged" });
+        }
         Ok(CommandResult::State(state)) if options.json => {
             let _ = writeln!(out, "{}", state.raw);
         }
@@ -240,6 +248,7 @@ mod tests {
         let o = run_opts(&["state", "--json"]);
         assert_eq!(o.command, Command::State);
         assert!(o.json);
+        assert_eq!(run_opts(&["reload-theme"]).command, Command::ReloadTheme);
         let o = run_opts(&["open", "https://example.com/"]);
         assert_eq!(
             o.command,
@@ -291,6 +300,14 @@ mod tests {
             (&["open"][..], "open needs exactly one URL"),
             (&["open", "a", "b"][..], "open needs exactly one URL"),
             (&["state", "x"][..], "state takes no arguments"),
+            (
+                &["reload-theme", "x"][..],
+                "reload-theme takes no arguments",
+            ),
+            (
+                &["reload-theme", "--json"][..],
+                "--json applies to state only",
+            ),
             (&["open", "a", "--json"][..], "--json applies to state only"),
             (&["state", "--profile"][..], "--profile needs a value"),
             (

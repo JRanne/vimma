@@ -19,6 +19,7 @@ import {
 import { parseKey } from "../core/keys.mjs";
 import { VimmaHost } from "../host/VimmaHost.sys.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
+import { ThemeHost } from "../ui/theme-host.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
 
@@ -303,6 +304,12 @@ const COMMANDS = {
       tab.linkedBrowser.loadURI(uri, { triggeringPrincipal: principal });
     }
     return { tab: String(tab.linkedBrowser.browserId) };
+  },
+
+  // Omarchy's theme-set hook (spec m5-omarchy-theme). No args: the browser reads only the
+  // theme directory its own prefs name, with the same validation as the poll.
+  "reload-theme"() {
+    return ThemeHost.reload();
   },
 };
 
