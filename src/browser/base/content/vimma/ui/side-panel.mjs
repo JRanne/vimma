@@ -26,7 +26,7 @@ const TAB_EVENTS = ["TabOpen", "TabClose", "TabSelect", "TabAttrModified", "TabM
  * @property {() => Workspaces | null} model  the window's workspaces, tabs in window order
  * @property {(tabId: string) => PanelTabInfo | undefined} info
  * @property {() => string | undefined} color  the active workspace's colour name
- * @property {(tabId: string) => void} select  a row was picked; the panel has closed already
+ * @property {(tabId: string) => void} select  a row was picked; the panel closes right after
  * @property {(text: string) => void} say  a refusal for the notice
  */
 
@@ -79,7 +79,10 @@ export class SidePanel {
     else this.open();
   }
 
-  /** Closes it; focus goes to the selected page when it was in the panel. */
+  /**
+   * Closes it; focus goes to the selected page when it was in the panel, or nowhere (a tab
+   * switch just blurred the panel: Tabbrowser's _adjustFocusBeforeTabSwitch).
+   */
   close() {
     if (!this.isOpen) return;
     this.state = null;
@@ -87,7 +90,9 @@ export class SidePanel {
     for (const type of TAB_EVENTS) tabs?.removeEventListener(type, this.onTabEvent);
     this.win.removeEventListener("TabSwitchDone", this.onSwitchDone);
     const box = /** @type {HTMLElement} */ (this.box);
-    const hadFocus = box.contains(this.win.document.activeElement);
+    const doc = this.win.document;
+    const el = doc.activeElement;
+    const hadFocus = !el || el === doc.body || box.contains(el);
     box.hidden = true;
     if (hadFocus) {
       /** @type {{ gBrowser?: { selectedBrowser: HTMLElement } }} */ (
@@ -109,9 +114,10 @@ export class SidePanel {
     }
     if (effect?.type === "close") this.close();
     if (effect?.type === "refuse") this.host.say(effect.text);
+    // Select first, so closing focuses the new page, not the one being left.
     if (effect?.type === "select") {
-      this.close();
       this.host.select(effect.id);
+      this.close();
     }
   }
 

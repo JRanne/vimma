@@ -165,7 +165,8 @@ add_task(async function j_k_and_enter_select_a_tab_and_close() {
   EventUtils.synthesizeKey("KEY_Enter");
   await until(() => !isOpen(), "Enter closes the panel");
   Assert.equal(gBrowser.selectedTab.label, "main-two", "and selects the highlighted tab");
-  Assert.equal(document.activeElement, gBrowser.selectedBrowser, "focus is on its page");
+  // A tab switch ends asynchronously (AsyncTabSwitcher), and focus may move again then.
+  await until(() => document.activeElement === gBrowser.selectedBrowser, "focus is on its page");
   Assert.deepEqual(ww().model.workspaces[0].tabs, main, "no tab moved or closed");
 });
 
