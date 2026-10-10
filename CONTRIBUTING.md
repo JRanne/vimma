@@ -44,6 +44,14 @@ After editing JavaScript or CSS under `src/`, run `npm run import && npx surfer 
 rebuilds only the front end. Changes to branding, `configs/` or `moz.configure` need a full
 `npx surfer build`.
 
+`npm run import` first restores the upstream files our `.patch` files touch
+(`tools/import/restore-patched.mjs`, the `+++ b/` paths, `--dry-run` to list them), so an edited
+patch re-applies cleanly instead of failing on its old version; nothing else in `engine/` is
+reset. After moving the checkout to another path, run
+`node tools/import/relocate-checkout.mjs --from <old path>` before importing: it retargets
+`engine/`'s absolute symlinks and rewrites the old path in the objdir
+([runbook](docs/runbook.md#moving-the-checkout)).
+
 ## Testing
 
 ```sh
