@@ -147,6 +147,11 @@ export function compileKeymap(user = {}) {
       const global =
         !!first &&
         ("special" in first ? first.special === "prefix" : first.ctrl || first.alt || first.meta);
+      // A leader binding works in the side panel too: `<leader>n` closes what it opened
+      // (m3-workspaces 6). The panel takes plain keys itself, so a leader there types nothing.
+      const leader = !!first && "special" in first && first.special === "leader";
+      /** @type {Mode[]} */
+      const modes = global ? [...MODES] : leader ? ["normal", "panel"] : ["normal"];
       const { chords, labels } = concretise(els);
       entries.push({
         text,
@@ -155,7 +160,7 @@ export function compileKeymap(user = {}) {
         chords,
         labels,
         layer: "keys",
-        modes: new Set(global ? MODES : ["normal"]),
+        modes: new Set(modes),
       });
     });
   }

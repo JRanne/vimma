@@ -28,5 +28,6 @@ export * from "./tablabels.mjs";
 export * from "./find.mjs";
 export * from "./statusbar.mjs";
 export * from "./picker.mjs";
+export * from "./sidepanel.mjs";
 export * from "./control.mjs";
 export * from "./report.mjs";

@@ -3,7 +3,8 @@
 Status: research and plan; split into sub-specs (see Breakdown). Sub-specs 1 (store), 2a
 (routing) and 2b (switching) merged; sub-spec 3 (persistence) implemented, awaiting review;
 4a (lifecycle) and 4b (move) implemented together, awaiting review, with the open items in their
-Settled section; 5 (picker) implemented, awaiting review ·
+Settled section; 5 (picker) implemented, awaiting review; 6 (side panel) implemented, awaiting
+review ·
 Milestone: M3 · Area: host
 (`src/browser/base/content/vimma/workspaces/`, `ui/`), four upstream patch files (five hunks)
 
@@ -954,6 +955,52 @@ dependency for 4b, 5 and parts of 4a.
 - **Not done here:** a moved lazy background tab still needs selecting first (the picker moves
   the selected tab); `contextual-identity-deleted` and the startup `privacy.userContext.enabled`
   error stay open from 4a.
+
+## Settled: sub-spec 6, m3-side-panel (2026-10-10)
+
+- **What it shows** (as the "Side panel" section planned): the current workspace only, never a
+  list of every workspace (plan §2). Head: a dot in the workspace's colour (the status bar's
+  `WORKSPACE_COLOR_TOKENS`), `index:name`, and `ctrl+u <previous> · ctrl+i <next>` (wrapping;
+  none with one workspace). Rows: number, label (rename > title > URL, as the picker), host,
+  `♪` while playing, `foreign`; the selected tab's row is `.vimma-panel-active`. Tabs in window
+  order (`pickerWorkspaces`); pinned tabs are in no workspace and not listed, so a row's number
+  is the place among the workspace's tabs, not `prefix+N`'s (which counts pinned tabs first).
+- **Core** `sidepanel.mjs`: `openPanel(model, info, { color, selectedId })`,
+  `refreshPanel` (the highlight stays on its tab within the same workspace, else the active tab)
+  and `panelKey`: `panel.down`/`up` clamp at the ends (as the pickers), `panel.open` and
+  `panel.select` give `{ type: "select", id }`, a digit past the last row
+  `{ type: "refuse", text: "no tab 9 in work" }` (a notice; the panel stays open),
+  `panel.close` `{ type: "close" }`.
+- **Keymap:** a `[keys]` binding that starts with `<leader>` now lives in `normal` and `panel`
+  mode, so `<leader>n` closes what it opened, and a user's rebinding of `toggle_sidebar` does too.
+  Prefix and ctrl/alt chords were global already (`prefix+b`, `ctrl+i`).
+- **Host:** `ui/side-panel.mjs` (`SidePanel`), a XUL `vbox#vimma-panel` prepended to `#browser`
+  on first open, `side-panel.css` with `order: -1 !important` and `--vimma-panel-width` (18rem).
+  `sidebar.toggle` opens or closes it (no workspaces, a private window: the picker's notice).
+  `_mode` is `panel` while it is open (after help, the pickers and the `:` line, which go over
+  it); `panel` is modal like `help`: an unbound plain key is consumed, never the page's.
+  Re-rendered on `WindowWorkspaces`' change (switch, rename) and on `TabOpen`/`TabClose`/
+  `TabSelect`/`TabAttrModified`/`TabMove` while open.
+- **Focus:** opening focuses the panel; closing focuses the selected page if focus was in the
+  panel. Firefox moves focus to the page at the end of every tab switch
+  (`_adjustFocusBeforeTabSwitch` blurs chrome, `AsyncTabSwitcher` focuses the browser), so the
+  panel takes focus back on `TabSwitchDone` while open (ctrl+i, prefix+c from the panel).
+- **Not-yet examples:** with `ctrl+b b` built, no default binding under the prefix and no `:`
+  command is unbuilt. `head.js` `bindUnbuiltPrefixKey()` binds `history_back` to `ctrl+b o` for
+  the notice tests in `browser_vimma_tab_keys.js`, `_statusbar.js`, `_cmdline.js` and
+  `_help_overlay.js` (same assertions, the notice now names "Go back"; the overlay's dimmed
+  example row is `history_back`). `:sidebar` in `browser_vimma_cmdline.js` now asserts the panel
+  opens: the unbuilt-command notice is the keys' `_run` path, still covered by `ctrl+b o`.
+- **Tests:** `browser_vimma_side_panel.js` (9 tasks): hidden at start, `<leader>n` opens it
+  leftmost with header, neighbours, numbered rows, the active row, focus, `panel` mode and the
+  theme token; j/k clamp, Enter selects and focuses the page; a digit selects, a missing one is
+  refused; Esc, `prefix+b` and unbound keys never reach the page; ctrl+i/ctrl+u re-render with
+  focus kept; a tab opened while open gets a row; leftmost with `sidebar.position_start=false`;
+  `:sidebar`. Red before (8 failures: no panel), green after; the whole `tests/browser/`
+  suite passes. Vitest `sidepanel.test.mjs` (18). Mutation check: dropping `!important` from
+  the panel's `order` fails "still the leftmost box".
+- **Left:** a mouse (clicking a row); a configurable width in `config.toml`; a web page in the
+  panel stays out of scope.
 
 ## Out of scope
 
