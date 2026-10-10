@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/vimma-logo.png" alt="Vimma: Vim and Tmux inspired" width="320">
+  <img src="docs/assets/vimma-logo-wide.jpg" alt="Vimma: Vim and Tmux inspired" width="640">
 </p>
 
 # Vimma
