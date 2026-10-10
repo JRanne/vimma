@@ -1,0 +1,14 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- The promo video: signin.html#<who> signs in to http://mail.example/ as <who> (a cookie in
+     the tab's container, that is in its workspace) and goes on to inbox.html, so the address
+     the video shows is the same in every workspace. -->
+<meta charset="utf-8" />
+<title>Signing in · mail.example</title>
+<script>
+  const who = location.hash.slice(1);
+  if (/^[a-z]+$/.test(who)) document.cookie = `who=${who}; max-age=86400; path=/; samesite=lax`;
+  location.replace("inbox.html");
+</script>
