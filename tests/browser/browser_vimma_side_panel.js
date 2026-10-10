@@ -279,11 +279,16 @@ add_task(async function x_closes_the_selected_tab_and_the_panel_stays_open_on_th
   Assert.ok(isOpen(), "still open");
 
   // ctrl+shift+t: Firefox's reopen, which panel mode would otherwise consume.
-  const reopened = BrowserTestUtils.waitForEvent(gBrowser.tabContainer, "TabOpen");
+  // SessionStore's event once the page is back: a busy runner takes seconds to get there.
+  const restored = BrowserTestUtils.waitForEvent(gBrowser.tabContainer, "SSTabRestored");
   EventUtils.synthesizeKey("t", { ctrlKey: true, shiftKey: true });
-  const { target: back } = await reopened;
-  await until(() => back.linkedBrowser.currentURI.spec.includes("x-four"), "x-four reopens");
-  await until(() => titles().includes("x-four"), "and gets its row back");
+  const { target: back } = await restored;
+  Assert.stringContains(back.linkedBrowser.currentURI.spec, "x-four", "x-four reopens");
+  // Its title was set by the test's script before; the reloaded page has its own.
+  await until(
+    () => rows().some((r) => r.dataset.tabId === back.linkedPanel),
+    "and gets its row back",
+  );
   Assert.ok(isOpen(), "the panel is still open");
 
   EventUtils.synthesizeKey("KEY_Escape");
