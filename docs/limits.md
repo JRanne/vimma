@@ -179,8 +179,12 @@ accepts
   "at most N panes". Every visible pane's page stays live, so each one costs memory and CPU;
   a zoomed-away pane is paused (its docshell inactive) until unzoom
   ([m4-split-panes](specs/m4-split-panes.md), sub-spec 2).
-- Planned for M4: until workspaces own panes (sub-spec 6), a window has one pane tree, and a
-  tab whose pane is closed stays open in the background rather than hidden.
+- A tab whose pane is closed stays open in its workspace rather than hidden.
+- One split per workspace: a split made outside Vimma (Firefox's split-view command, an
+  extension, a restored Firefox session) is adopted as a row of panes; a second one in the same
+  workspace, or one whose tabs are in different workspaces, is separated with a notice. Firefox's
+  `about:opentabs` tab in such a split closes when Vimma separates it, as in Firefox
+  ([m4-split-panes](specs/m4-split-panes.md), sub-spec 6).
 - The accessible name of the third pane on ("<title>, pane 3 of 4") is English only; Firefox
   names the first two panes "left" and "right" whatever the layout
   ([m4-split-panes](specs/m4-split-panes.md), sub-spec 2).

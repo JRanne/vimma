@@ -2,6 +2,7 @@ import { describe, test, expect } from "vitest";
 import fc from "fast-check";
 import {
   createPanes,
+  createRow,
   split,
   closePane,
   focus,
@@ -408,6 +409,50 @@ describe("layout, setPaneTab, leaves", () => {
 
   test("leaves are in reading order", () => {
     expect(leaves(threePanes()).map((l) => l.pane)).toEqual(["p1", "p2", "p3"]);
+  });
+});
+
+describe("createRow (a split made outside Vimma, adopted: m4-split-panes sub-spec 6)", () => {
+  test("tabs side by side with equal shares, focus on the given tab", () => {
+    const s = createRow(["t1", "t2", "t3"], { focus: "t2" });
+    expect(shape(s.root)).toBe("x[p1,p2,p3]");
+    expect(leaves(s).map((l) => l.tab)).toEqual(["t1", "t2", "t3"]);
+    expect(/** @type {any} */ (s.root).ratios).toEqual([1 / 3, 1 / 3, 1 / 3]);
+    expect(s.focus).toBe("p2");
+    expect(s.mru[0]).toBe("p2");
+    expect(new Set(s.mru)).toEqual(new Set(["p1", "p2", "p3"]));
+    expect(s.zoom).toBeNull();
+    expect(s.next).toBe(4);
+    expect(split(s, "p2", "vertical", "t4").focus).toBe("p4");
+  });
+
+  test("shares are normalised and clamped at MIN_RATIO", () => {
+    expect(/** @type {any} */ (createRow(["a", "b"], { ratios: [600, 400] }).root).ratios).toEqual([
+      0.6, 0.4,
+    ]);
+    const clamped = /** @type {any} */ (createRow(["a", "b"], { ratios: [0.97, 0.03] }).root);
+    expect(clamped.ratios[1]).toBeCloseTo(MIN_RATIO);
+    expect(clamped.ratios[0]).toBeCloseTo(1 - MIN_RATIO);
+    const three = /** @type {any} */ (createRow(["a", "b", "c"], { ratios: [0.9, 0.05, 0.05] }));
+    expect(three.root.ratios.every((/** @type {number} */ r) => r >= MIN_RATIO - 1e-9)).toBe(true);
+    expect(
+      three.root.ratios.reduce((/** @type {number} */ a, /** @type {number} */ b) => a + b),
+    ).toBeCloseTo(1);
+  });
+
+  test("unusable shares fall back to equal ones; focus defaults to the first tab", () => {
+    for (const ratios of [[1], [0, 1], [NaN, 1], [-1, 2]]) {
+      const s = createRow(["a", "b"], { ratios });
+      expect(/** @type {any} */ (s.root).ratios).toEqual([0.5, 0.5]);
+      expect(s.focus).toBe("p1");
+    }
+    expect(createRow(["a", "b"], { focus: "zz" }).focus).toBe("p1");
+  });
+
+  test("one tab is one pane; none or a repeated tab is refused", () => {
+    expect(createRow(["a"])).toEqual(createPanes("a"));
+    expectPaneError(() => createRow([]), "bad-tabs");
+    expectPaneError(() => createRow(["a", "a"]), "tab-shown");
   });
 });
 

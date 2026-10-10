@@ -15,6 +15,9 @@
 const { applyLayout, setHidden, clearLayout } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/split/layout.mjs",
 );
+const { PaneViews, PANE_VIEW_EVENTS } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/split/PaneView.mjs",
+);
 const { DOMFullscreenTestUtils } = ChromeUtils.importESModule(
   "resource://testing-common/DOMFullscreenTestUtils.sys.mjs",
 );
@@ -210,8 +213,14 @@ function nextFrame() {
   return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 }
 
+// This file pins Firefox's split view on its own. Vimma's PaneView adopts any split made with
+// Firefox's API (sub-spec 6), so its listeners are off while this file runs.
+const paneView = PaneViews.get(window);
+for (const type of PANE_VIEW_EVENTS) window.removeEventListener(type, paneView);
+
 const startSize = [window.outerWidth, window.outerHeight];
 registerCleanupFunction(() => {
+  for (const type of PANE_VIEW_EVENTS) window.addEventListener(type, paneView);
   window.resizeTo(...startSize);
   // A failed task leaves its tabs: close them so later tasks start from one tab.
   for (const tab of opened) if (!tab.closing && tab.parentNode) gBrowser.removeTab(tab);

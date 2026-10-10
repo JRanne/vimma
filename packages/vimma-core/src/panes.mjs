@@ -46,7 +46,7 @@ export const PANES_MAX_LIMIT = 16;
 export class PaneError extends Error {
   /**
    * @param {"unknown-pane" | "tab-shown" | "last-pane" | "bad-direction" | "bad-amount" |
-   *   "bad-max"} code
+   *   "bad-max" | "bad-tabs"} code
    * @param {string} message
    */
   constructor(code, message) {
@@ -209,6 +209,53 @@ export function createPanes(tabId) {
     zoom: null,
     next: 2,
   });
+}
+
+/**
+ * Shares for a row of `n` panes: `ratios` normalised to sum 1, any below MIN_RATIO raised to it
+ * and the rest scaled down to make room; equal shares when `ratios` is missing or unusable.
+ * @param {number} n
+ * @param {readonly number[] | undefined} ratios
+ * @returns {number[]}
+ */
+function rowShares(n, ratios) {
+  const equal = Array.from({ length: n }, () => 1 / n);
+  if (!ratios || ratios.length !== n || !ratios.every((r) => Number.isFinite(r) && r > 0)) {
+    return equal;
+  }
+  const sum = ratios.reduce((a, b) => a + b, 0);
+  let shares = ratios.map((r) => r / sum);
+  // Each pass fixes at least one more share at MIN_RATIO, so n passes settle it.
+  for (let pass = 0; pass < n; pass++) {
+    const low = shares.map((r) => r < MIN_RATIO - EPS);
+    if (!low.some(Boolean)) break;
+    const free = shares.reduce((a, r, i) => (low[i] ? a : a + r), 0);
+    const room = 1 - MIN_RATIO * low.filter(Boolean).length;
+    shares = shares.map((r, i) => (low[i] ? MIN_RATIO : (r * room) / free));
+  }
+  return shares;
+}
+
+/**
+ * Panes side by side, left → right, one per tab in `tabIds`: a split made outside Vimma (Firefox's
+ * own split view lays its tabs out in a row) adopted as a tree. `ratios`: each pane's share, in
+ * any unit (normalised, clamped at MIN_RATIO; unusable: equal shares). `focus`: the tab whose pane
+ * has focus (default, or not in the row: the first).
+ * @param {readonly string[]} tabIds
+ * @param {{ ratios?: readonly number[], focus?: string }} [options]
+ * @returns {Panes}
+ */
+export function createRow(tabIds, { ratios, focus: focusTab } = {}) {
+  if (!tabIds.length) throw new PaneError("bad-tabs", "a row needs at least one tab");
+  if (new Set(tabIds).size !== tabIds.length) {
+    throw new PaneError("tab-shown", "a tab can be shown in one pane only");
+  }
+  if (tabIds.length === 1) return createPanes(/** @type {string} */ (tabIds[0]));
+  const kids = tabIds.map((t, i) => leafNode(`p${i + 1}`, t));
+  const root = makeSplit("x", kids, rowShares(kids.length, ratios));
+  const focus = `p${Math.max(0, tabIds.indexOf(focusTab ?? "")) + 1}`;
+  const mru = Object.freeze([focus, ...kids.map((k) => k.pane).filter((p) => p !== focus)]);
+  return Object.freeze({ root, focus, mru, zoom: null, next: kids.length + 1 });
 }
 
 /**

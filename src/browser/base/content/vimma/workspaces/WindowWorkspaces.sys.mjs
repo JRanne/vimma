@@ -161,6 +161,7 @@ export class WindowWorkspacesImpl {
     if (view) {
       view.onChange = null;
       view.accepts = null;
+      view.adoption = null;
     }
     this.#model = null;
   }
@@ -183,6 +184,17 @@ export class WindowWorkspacesImpl {
         const model = this.#model;
         if (!model || this.#switching || this.#pending) return false;
         return workspaceOfTab(model, this.#idOf(tab))?.id === model.active;
+      };
+      // Splits made outside Vimma (M4 sub-spec 6): adopted into the workspace their tabs are in,
+      // unsplit with a notice when those are several (decision 14).
+      view.adoption = {
+        workspaceOf: (/** @type {any} */ tab) => {
+          const model = this.#model;
+          return model ? workspaceOfTab(model, this.#idOf(tab))?.id : undefined;
+        },
+        active: () => /** @type {Workspaces} */ (this.#model).active,
+        busy: () => !this.#model || this.#switching || this.#pending,
+        notify: (text) => this.#notify(text),
       };
     }
     // A restore under way builds on its SSWindowStateReady, from the restored values.
@@ -266,8 +278,9 @@ export class WindowWorkspacesImpl {
     const principal = this.#principalFor(tab, userContextId);
     if (!principal) return "this tab's page cannot be reopened";
     const view = PaneViews.get(this.#win);
-    // Out of the split first: closing the focused pane keeps its tab (pane.close).
-    if (tab.splitview && tab.selected && view?.panes) view.close();
+    // Out of the split first: closing its pane keeps its tab (pane.close); a split Vimma has
+    // not adopted is undone.
+    view?.release(/** @type {any} */ (tab));
     if (tab.splitview) tab.splitview.unsplitTabs();
     if (from.id === model.active && from.tabs.length === 1) {
       this.#openHome(from.id, Number(from.container));
@@ -768,12 +781,17 @@ export class WindowWorkspacesImpl {
         const t = this.#tab(id);
         if (t) gBrowser.hideTab(t);
       }
-      // Decision 14 broken outside Vimma; adopting such splits is M4 sub-spec 6.
-      if (plan.unsplit.length) console.warn("vimma: a split spans workspaces", plan.unsplit);
       view?.reconcile();
       if (view?.panes) this.#focusPane();
     } finally {
       this.#switching = false;
+    }
+    // Splits made outside Vimma that this switch shows, a restore brought back without a tree,
+    // or that span workspaces (`plan.unsplit`, decision 14): adopted or undone now (M4 sub-spec 6).
+    if (view) {
+      view.adopt();
+      view.reconcile();
+      if (view.panes) this.#focusPane();
     }
     const active = /** @type {Workspaces} */ (this.#model).active;
     if (active !== prev.active) WorkspaceStore.setActive(this.#win, active);
