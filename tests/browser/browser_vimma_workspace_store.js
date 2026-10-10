@@ -240,3 +240,56 @@ add_task(async function private_windows_get_no_default_container() {
   Assert.equal(store.defaultUserContextId(window), main.userContextId, "a normal window");
   await store.finalize();
 });
+
+// docs/security.md: the y/N answer stands only for the workspace the question described. A
+// config reload in between can turn a config workspace (close = its tabs) into a runtime one
+// (close = delete its site data), and a rename can put another workspace under the same id.
+add_task(async function a_stale_answer_closes_nothing() {
+  const path = freshPath();
+  const store = await started(path, {
+    config: [{ name: "work", color: "blue", icon: "briefcase", autofill: true }],
+  });
+  const shop = store.addWorkspace({ name: "shop", color: "pink", icon: "cart" });
+  const work = store.definitions.workspaces.find((w) => w.name === "work");
+  setCookie(shop.userContextId);
+  setCookie(work.userContextId);
+  const asked = (/** @type {any} */ w) => ({
+    source: w.source,
+    name: w.name,
+    userContextId: w.userContextId,
+  });
+
+  const askedShop = asked(shop);
+  store.renameWorkspace(shop.id, "shop2");
+  await Assert.rejects(
+    store.closeWorkspace(shop.id, { confirmed: true, asked: askedShop }),
+    /changed since you were asked/,
+    "a rename after the question refuses",
+  );
+  Assert.ok(identity(shop.userContextId), "shop's container stays");
+  Assert.equal(cookieCount(shop.userContextId), 1, "and its cookie");
+
+  const askedWork = asked(work);
+  Assert.equal(askedWork.source, "config", "sanity: asked about a config workspace");
+  await store.setConfig([]);
+  Assert.equal(
+    store.definitions.workspaces.find((w) => w.id === work.id)?.source,
+    "runtime",
+    "the reload made work a runtime workspace, whose close would delete its data",
+  );
+  await Assert.rejects(
+    store.closeWorkspace(work.id, { confirmed: true, asked: askedWork }),
+    /changed since you were asked/,
+    "a config reload after the question refuses",
+  );
+  Assert.ok(identity(work.userContextId), "work's container stays");
+  Assert.equal(cookieCount(work.userContextId), 1, "and its cookie");
+
+  for (const ucid of [shop.userContextId, work.userContextId]) {
+    Services.cookies.removeCookiesWithOriginAttributes(
+      JSON.stringify({ userContextId: ucid }),
+      "example.com",
+    );
+  }
+  await store.finalize();
+});
