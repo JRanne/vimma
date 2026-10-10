@@ -181,7 +181,19 @@ interface nsISelectionController {
   lineMove(forward: boolean, extend: boolean): void;
   intraLineMove(forward: boolean, extend: boolean): void;
   completeMove(forward: boolean, extend: boolean): void;
+  paragraphMove(forward: boolean, extend: boolean): void;
   scrollSelectionIntoView(type: number, region: number, flags: number): void;
+}
+
+// engine/dom/base/nsISelectionListener.idl (spec m1-copy-mode: mouse selection)
+interface nsISelectionListener {
+  notifySelectionChanged(doc: Document, sel: Selection, reason: number, amount?: number): void;
+}
+
+// engine/dom/webidl/Selection.webidl (chrome-only part)
+interface Selection {
+  addSelectionListener(listener: nsISelectionListener): void;
+  removeSelectionListener(listener: nsISelectionListener): void;
 }
 
 // engine/dom/interfaces/base/nsIDOMWindowUtils.idl

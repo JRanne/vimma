@@ -87,7 +87,22 @@ delete its line in the same PR.
   and the caret does not cross from one frame into another
   ([m1-copy-mode](specs/m1-copy-mode.md)).
 - `w` / `b` are Firefox's word steps: on Linux `w` stops at the end of a word, not at the start
-  of the next as in Vim. No `e`, `W`, `B`, `o` or line-wise `V`
+  of the next as in Vim; `e`, `W`, `B` and `E` are Vim's ([m1-copy-mode](specs/m1-copy-mode.md)).
+- `e`, `ge`, `W`, `B`, `E`, `^`, `f`, `t`, `iw` and `aw` read the text around the caret (a few
+  thousand characters each way, more with a count) and stop at its edge. They do not enter a
+  shadow root or a frame, and `f` / `t` search the text between line breaks, not the wrapped
+  line on screen ([m1-copy-mode](specs/m1-copy-mode.md)).
+- `V` selects visual lines, as `j` / `k` move: a paragraph the page wraps is several lines. At a
+  soft wrap the end of one line and the start of the next are the same point, so `V` there can
+  take the neighbouring line ([m1-copy-mode](specs/m1-copy-mode.md)).
+- `iw` / `aw` always select the word at the caret; they do not grow a selection by a word as in
+  Vim, and take no count. `Y` copies the lines without a trailing line break
+  ([m1-copy-mode](specs/m1-copy-mode.md)).
+- The primary selection (middle-click paste) follows the mouse and the motions Firefox moves
+  (`h j k l w b 0 $ { } gg G`); after `e`, `W`, `f`, `V`, `o`, `iw` and the other Vim text
+  motions it still holds the selection from before them. `y` copies to the clipboard
+  ([m1-copy-mode](specs/m1-copy-mode.md)).
+- A click in copy mode that selects nothing moves the caret there and stays in copy mode
   ([m1-copy-mode](specs/m1-copy-mode.md)).
 - `y` copies plain text only. Text inside text fields is not part of the page's selection: focus
   the field and use `ctrl+c` ([m1-copy-mode](specs/m1-copy-mode.md)).

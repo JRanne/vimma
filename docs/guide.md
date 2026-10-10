@@ -177,13 +177,32 @@ caret browsing (`F7`), for this page only, driven by Vim keys:
 
 - **`h` / `l`** move the caret a character, **`j` / `k`** a line, **`w` / `b`** a word (Firefox's
   word steps: `w` stops at the end of a word), **`0` / `$`** to the start / end of the line,
-  **`gg` / `G`** to the top / bottom of the page. A count repeats: `3w`. The page scrolls to
-  keep the caret in view.
+  **`gg` / `G`** to the top / bottom of the page. The page scrolls to keep the caret in view.
+- **`e`** goes to the end of the word, **`ge`** to the end of the previous one. **`W` / `B` /
+  `E`** are the same for WORDs, which only spaces delimit (`beta.gamma` is one WORD).
+  **`^`** goes to the first non-blank character of the line, **`{` / `}`** to the start / end of
+  the paragraph (the next one from its edge).
+- **`f` / `F`** and a character go to the next / previous one on the line, including it in the
+  selection; **`t` / `T`** stop just before it. **`;`** repeats the last of these, **`,`** repeats
+  it the other way. The line here is the text between line breaks, even if the page wraps it.
+- A count repeats any motion: `3e`, `5j`, `2f,`.
 - **`v`** starts a selection at the caret; the motions then extend it. `v` again drops it and
-  the caret moves on its own.
+  the caret moves on its own. **`V`** selects whole lines instead: the motions add lines, and
+  `V` again drops it (`v` keeps the same text, character by character). **`o`** swaps the ends,
+  so the motions move the other one. **`iw`** selects the word at the caret, **`aw`** the word
+  and the spaces after it.
 - **`y`** copies the selection to the clipboard as plain text, says "yanked 12 chars" and goes
-  back to normal mode. With nothing selected it says "nothing to yank".
+  back to normal mode. With nothing selected it says "nothing to yank". **`Y`** copies the whole
+  lines the selection (or the caret) is on, then leaves the same way.
 - **`Esc`** drops the selection and goes back to normal mode.
+
+**With the mouse.** Selecting text with the mouse in normal mode (dragging, a double click for a
+word, a triple click for a paragraph, shift+click) enters copy mode with that selection: the
+badge says `VISUAL`, `y` copies it, the motions extend it (a double click on a word, then `e`,
+takes the next word too) and `Esc` clears it. A click that selects nothing stays in normal mode,
+and so do links, text fields (insert mode, as always), drag and drop, and a page that selects text
+by itself. Firefox's own copying keeps working in every mode and in each pane: `ctrl+c`, the
+context menu's Copy, and a middle click pasting the mouse selection.
 
 The page gets none of these keys, nor any other plain key while copy mode is on; chords such as
 `ctrl+c` or `ctrl+t` still work. In a frame (an embedded video page, a comment widget) copy mode
@@ -267,7 +286,7 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `f` / `F`                   | Normal mode: link hints. Type a label to follow it, or, with `F`, to open the link in a background tab. `Backspace` undoes a key, `Esc` cancels.              |
 | `/` / `?`                   | Normal mode: find in the page (below). `Enter` stays on the match, `Esc` goes back to where you were.                                                         |
 | `n` / `N`                   | Normal mode: next / previous match of the last search (`?` reverses them), wrapping around the page.                                                          |
-| `v`, `ctrl+b [`             | Normal mode: copy mode ([above](#copy-mode)): `h j k l w b 0 $ gg G` move the caret, `v` selects, `y` copies and leaves, `Esc` leaves.                        |
+| `v`, `ctrl+b [`             | Normal mode: copy mode ([above](#copy-mode)): `h j k l w b e ge W B E 0 ^ $ { } gg G f t F T ; ,` move, `v V o iw aw` select, `y Y` copy, `Esc` leaves.       |
 | `Esc`                       | Insert mode: leave the text field, back to normal mode. In normal mode the page gets `Esc`.                                                                   |
 | `ctrl+b ?`                  | Opens the bindings overlay over any page, including `about:preferences` and the PDF viewer. Press it again to close.                                          |
 | `/` (in the overlay)        | Filters the list as you type.                                                                                                                                 |
