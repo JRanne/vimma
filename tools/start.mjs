@@ -24,6 +24,7 @@ import {
   readFileSync,
   readlinkSync,
   realpathSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -165,9 +166,19 @@ export function mergeUserJs(existing, prefs) {
 export function prepareProfile(profile, prefs) {
   mkdirSync(profile, { recursive: true });
   const userJs = join(profile, "user.js");
-  const existing = existsSync(userJs) ? readFileSync(userJs, "utf8") : "";
+  // Read, not exists-then-read; replace by rename, so a reader never sees half a file and a
+  // link at user.js is replaced rather than written through (CodeQL js/file-system-race).
+  let existing = "";
+  try {
+    existing = readFileSync(userJs, "utf8");
+  } catch (e) {
+    if (/** @type {NodeJS.ErrnoException} */ (e).code !== "ENOENT") throw e;
+  }
   const merged = mergeUserJs(existing, prefs);
-  if (merged !== existing) writeFileSync(userJs, merged);
+  if (merged === existing) return;
+  const tmp = `${userJs}.${process.pid}.tmp`;
+  writeFileSync(tmp, merged, { flag: "wx" });
+  renameSync(tmp, userJs);
 }
 
 /** @param {number} pid */

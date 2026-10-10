@@ -4,9 +4,12 @@
 // and tears it all down again: the whole process tree, Xvfb, the profile unless kept.
 import { execFileSync, spawn } from "node:child_process";
 import {
+  closeSync,
   existsSync,
+  fstatSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   rmSync,
   statSync,
@@ -381,6 +384,21 @@ export async function startXvfb({
 }
 
 /**
+ * A file's permission bits and text, both from one open descriptor: the mode checked is the mode
+ * of the file read, even if the path is replaced in between (CodeQL js/file-system-race).
+ * @param {string} path
+ * @returns {{ mode: number, text: string }}
+ */
+function readWithMode(path) {
+  const fd = openSync(path, "r");
+  try {
+    return { mode: fstatSync(fd).mode & 0o777, text: readFileSync(fd, "utf8") };
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
  * Wait for the control server's discovery file: present, valid protocol v1, mode 0600. After a
  * crash-style kill the dead browser's file is still there: `stalePid` (its pid) makes the wait
  * skip it until the new browser replaces it.
@@ -413,10 +431,19 @@ export async function waitForDiscovery(
       const how = exit.signal ? `signal ${exit.signal}` : `code ${exit.code}`;
       throw new Error(`the browser exited with ${how} before its control socket came up${tail()}`);
     }
-    if (existsSync(path)) {
+    /** @type {{ mode: number, text: string } | null} */
+    let file = null;
+    try {
+      file = readWithMode(path);
+    } catch (e) {
+      if (/** @type {NodeJS.ErrnoException} */ (e).code !== "ENOENT") {
+        problem = `it cannot be read yet: ${/** @type {Error} */ (e).message}`;
+      }
+    }
+    if (file) {
       try {
-        const mode = statSync(path).mode & 0o777;
-        const body = JSON.parse(readFileSync(path, "utf8"));
+        const { mode } = file;
+        const body = JSON.parse(file.text);
         const { valid, errors } = validateMessage(body, { kind: "discovery" });
         if (mode & 0o077) problem = `it has mode ${mode.toString(8)}, not 600`;
         else if (!valid) problem = `it is invalid: ${errors.join("; ")}`;

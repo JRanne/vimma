@@ -16,13 +16,17 @@
  * CLI: node tools/import/relocate-checkout.mjs --from /old/path [--dry-run]
  */
 import {
-  lstatSync,
+  closeSync,
+  constants as fsConstants,
+  fstatSync,
+  ftruncateSync,
+  openSync,
   readdirSync,
   readFileSync,
   readlinkSync,
   symlinkSync,
   unlinkSync,
-  writeFileSync,
+  writeSync,
 } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -93,16 +97,34 @@ export function relocate({ root, from, dryRun = false }) {
     for (const top of readdirSync(objdir, { withFileTypes: true })) {
       if (top.name === "dist") continue;
       const visit = (/** @type {string} */ p) => {
-        const st = lstatSync(p);
-        // Big files are build products (libxul is gigabytes), never text worth rewriting.
-        if (!st.isFile() || st.size > MAX_TEXT) return;
-        const buf = readFileSync(p);
-        if (!buf.includes(needle) || buf.includes(0)) return;
-        const text = buf.toString("utf8");
-        const next = replacePath(text, old, now);
-        if (next === text) return;
-        files++;
-        if (!dryRun) writeFileSync(p, next);
+        // One descriptor for the check, the read and the write, opened without following a
+        // link: a file swapped for a link between them cannot be written through
+        // (CodeQL js/file-system-race). O_NONBLOCK: a FIFO is opened, seen and skipped.
+        const { O_RDONLY, O_RDWR, O_NOFOLLOW, O_NONBLOCK } = fsConstants;
+        let fd;
+        try {
+          fd = openSync(p, (dryRun ? O_RDONLY : O_RDWR) | O_NOFOLLOW | O_NONBLOCK);
+        } catch (e) {
+          if (/** @type {NodeJS.ErrnoException} */ (e).code === "ELOOP") return; // a link
+          throw e;
+        }
+        try {
+          const st = fstatSync(fd);
+          // Big files are build products (libxul is gigabytes), never text worth rewriting.
+          if (!st.isFile() || st.size > MAX_TEXT) return;
+          const buf = readFileSync(fd);
+          if (!buf.includes(needle) || buf.includes(0)) return;
+          const text = buf.toString("utf8");
+          const next = replacePath(text, old, now);
+          if (next === text) return;
+          files++;
+          if (dryRun) return;
+          const out = Buffer.from(next);
+          ftruncateSync(fd, 0);
+          writeSync(fd, out, 0, out.length, 0);
+        } finally {
+          closeSync(fd);
+        }
       };
       const p = join(objdir, top.name);
       if (top.isDirectory()) walk(p, (f) => visit(f));
