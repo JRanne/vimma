@@ -1,0 +1,120 @@
+{
+  "name": "m3-restart-restore",
+  "description": "M3 gate 2 on a real restart (m3-workspaces sub-spec 7): three workspaces, a cookie in each one's container and a split in one; ctrl+q, then a start on the same profile with Vimma's own browser.startup.page (3) brings back the workspaces in order, the active one, each one's tabs, the split and the cookies, each only in its own container.",
+  "timeoutSeconds": 120,
+  "prefs": { "browser.startup.page": null },
+  "steps": [
+    { "wait-for-state": { "workspace": "main" }, "timeoutSeconds": 20 },
+    { "open": "fixture:cookie.html#main" },
+    {
+      "wait-for-state": {
+        "workspace": "main",
+        "tabs": [{}, { "title": "cookie ws=main", "selected": true }]
+      }
+    },
+
+    { "keys": "ctrl+b shift+n" },
+    { "wait-for-state": { "mode": "command" } },
+    { "keys": "w o r k enter" },
+    { "wait-for-state": { "workspace": "work", "tabs": [{ "selected": true }] } },
+    { "open": "fixture:cookie.html#work" },
+    {
+      "wait-for-state": {
+        "workspace": "work",
+        "tabs": [{}, { "title": "cookie ws=work", "selected": true }]
+      }
+    },
+    { "keys": "ctrl+b v" },
+    {
+      "wait-for-state": {
+        "workspace": "work",
+        "tabs": [{}, {}, {}],
+        "panes": { "zoomed": false, "root": { "axis": "x", "children": [{}, {}] } }
+      }
+    },
+
+    { "keys": "ctrl+b shift+n" },
+    { "wait-for-state": { "mode": "command" } },
+    { "keys": "p e r s o n a l enter" },
+    { "wait-for-state": { "workspace": "personal", "tabs": [{ "selected": true }] } },
+    { "open": "fixture:cookie.html#personal" },
+    {
+      "wait-for-state": {
+        "workspace": "personal",
+        "tabs": [{}, { "title": "cookie ws=personal", "selected": true }],
+        "panes": null
+      }
+    },
+    { "keys": "ctrl+u" },
+    {
+      "wait-for-state": {
+        "workspace": "work",
+        "tabs": [{}, {}, {}],
+        "panes": { "root": { "axis": "x", "children": [{}, {}] } }
+      }
+    },
+
+    { "restart": "quit" },
+
+    {
+      "wait-for-state": {
+        "workspace": "work",
+        "tabs": [{}, { "title": "cookie ws=work" }, {}],
+        "panes": { "zoomed": false, "root": { "axis": "x", "children": [{}, {}] } }
+      },
+      "timeoutSeconds": 20
+    },
+    { "keys": "ctrl+i" },
+    {
+      "wait-for-state": {
+        "workspace": "personal",
+        "tabs": [{}, { "title": "cookie ws=personal", "selected": true }],
+        "panes": null
+      }
+    },
+    { "keys": "ctrl+i" },
+    {
+      "wait-for-state": {
+        "workspace": "main",
+        "tabs": [{}, { "title": "cookie ws=main", "selected": true }],
+        "panes": null
+      }
+    },
+    { "keys": "ctrl+i" },
+    {
+      "wait-for-state": {
+        "workspace": "work",
+        "panes": { "root": { "axis": "x", "children": [{}, {}] } }
+      }
+    },
+
+    { "keys": "ctrl+u" },
+    { "wait-for-state": { "workspace": "main" } },
+    { "open": "fixture:cookie.html" },
+    {
+      "wait-for-state": {
+        "workspace": "main",
+        "tabs": [{}, {}, { "title": "cookie ws=main", "selected": true }]
+      }
+    },
+    { "keys": "ctrl+u" },
+    { "wait-for-state": { "workspace": "personal" } },
+    { "open": "fixture:cookie.html" },
+    {
+      "wait-for-state": {
+        "workspace": "personal",
+        "tabs": [{}, {}, { "title": "cookie ws=personal", "selected": true }]
+      }
+    },
+    { "keys": "ctrl+u" },
+    { "wait-for-state": { "workspace": "work" } },
+    { "open": "fixture:cookie.html" },
+    {
+      "wait-for-state": {
+        "workspace": "work",
+        "tabs": [{}, {}, { "title": "cookie ws=work", "selected": true }, {}],
+        "panes": { "root": { "axis": "x", "children": [{ "index": 1 }, { "index": 2 }] } }
+      }
+    }
+  ]
+}

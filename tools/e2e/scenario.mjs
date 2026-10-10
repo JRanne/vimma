@@ -1,6 +1,7 @@
 // Declarative e2e scenarios (spec m0-e2e-harness, "Scenario format"): one JSON file per
 // scenario in tests/e2e/scenarios/, steps open / keys / wait-for-state / assert-state /
-// screenshot. Names carry the milestone (m<N>-…) or, for regression tests, the issue (issue-<N>-…).
+// screenshot / restart, and optional `prefs` overriding the harness profile's. Names carry the
+// milestone (m<N>-…) or, for regression tests, the issue (issue-<N>-…).
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -8,16 +9,19 @@ import { setTimeout as sleep } from "node:timers/promises";
 /**
  * @typedef {{
  *   open?: string, keys?: string, "wait-for-state"?: Record<string, unknown>,
- *   "assert-state"?: Record<string, unknown>, screenshot?: string, timeoutSeconds?: number,
+ *   "assert-state"?: Record<string, unknown>, screenshot?: string, restart?: "quit",
+ *   timeoutSeconds?: number,
  * }} Step
  * @typedef {{
  *   name: string, description: string, issue?: number, pending?: string,
- *   timeoutSeconds?: number, steps: Step[],
+ *   timeoutSeconds?: number, prefs?: Record<string, boolean | number | string | null>,
+ *   steps: Step[],
  * }} Scenario
  * @typedef {{
  *   ctl: { state: () => Promise<any>, sendKeys: (keys: string) => Promise<void>,
  *     open: (url: string) => Promise<string> },
  *   screenshot: (name: string) => Promise<void>,
+ *   restart?: (how: "quit") => Promise<void>,
  *   pollMs?: number,
  *   signal?: AbortSignal,
  * }} StepContext
@@ -29,8 +33,20 @@ export const STEP_KINDS = Object.freeze([
   "wait-for-state",
   "assert-state",
   "screenshot",
+  "restart",
 ]);
-const FIELDS = new Set(["name", "description", "issue", "pending", "timeoutSeconds", "steps"]);
+const FIELDS = new Set([
+  "name",
+  "description",
+  "issue",
+  "pending",
+  "timeoutSeconds",
+  "prefs",
+  "steps",
+]);
+const PREF_NAME = /^[\w.-]+$/;
+/** How `restart` restarts: `quit` is ctrl+q, then a launch on the same profile. */
+const RESTARTS = ["quit"];
 const MILESTONE_NAME = /^m\d+-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const ISSUE_NAME = /^issue-(\d+)-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SHOT_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -77,6 +93,20 @@ export function validateScenario(s, fileName) {
   if ("timeoutSeconds" in s && !positive(s.timeoutSeconds)) {
     errors.push("timeoutSeconds must be a positive number");
   }
+  if ("prefs" in s) {
+    if (!isObject(s.prefs)) {
+      errors.push("prefs must be an object of pref name to value (null: the build's default)");
+    } else {
+      for (const [name, value] of Object.entries(s.prefs)) {
+        const ok = value === null || ["boolean", "number", "string"].includes(typeof value);
+        if (!PREF_NAME.test(name) || !ok) {
+          errors.push(
+            `prefs: "${name}" must be a pref name with a boolean, number, string or null`,
+          );
+        }
+      }
+    }
+  }
   if (!Array.isArray(s.steps) || s.steps.length === 0) {
     errors.push("steps must be an array with at least one step");
     return errors;
@@ -101,6 +131,9 @@ export function validateScenario(s, fileName) {
     }
     if (kind === "screenshot" && (typeof value !== "string" || !SHOT_NAME.test(value))) {
       errors.push(`${at}: screenshot needs a baseline name of [a-z0-9-]`);
+    }
+    if (kind === "restart" && !RESTARTS.includes(/** @type {string} */ (value))) {
+      errors.push(`${at}: restart is one of ${RESTARTS.join(", ")}`);
     }
     if ("timeoutSeconds" in step && (kind !== "wait-for-state" || !positive(step.timeoutSeconds))) {
       errors.push(`${at}: timeoutSeconds is a positive number, on wait-for-state only`);
@@ -175,7 +208,7 @@ function checkAborted(signal) {
  * @param {Scenario} scenario
  * @param {StepContext} context
  */
-export async function runSteps(scenario, { ctl, screenshot, pollMs = 100, signal }) {
+export async function runSteps(scenario, { ctl, screenshot, restart, pollMs = 100, signal }) {
   for (const [i, step] of scenario.steps.entries()) {
     const kind = /** @type {string} */ (Object.keys(step).find((k) => k !== "timeoutSeconds"));
     const at = `step ${i + 1} (${kind})`;
@@ -184,7 +217,10 @@ export async function runSteps(scenario, { ctl, screenshot, pollMs = 100, signal
       if (step.open !== undefined) await ctl.open(step.open);
       else if (step.keys !== undefined) await ctl.sendKeys(step.keys);
       else if (step.screenshot !== undefined) await screenshot(step.screenshot);
-      else if (step["assert-state"] !== undefined) {
+      else if (step.restart !== undefined) {
+        if (!restart) throw new Error("this session cannot restart");
+        await restart(step.restart);
+      } else if (step["assert-state"] !== undefined) {
         const mismatches = matchState(step["assert-state"], await ctl.state());
         if (mismatches.length) throw new Error(mismatches.join("; "));
       } else if (step["wait-for-state"] !== undefined) {

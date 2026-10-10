@@ -128,6 +128,16 @@ describe("profile", () => {
     ).toBe('user_pref("a.b", true);\nuser_pref("c", 3);\nuser_pref("d", "say \\"hi\\"\\\\");\n');
   });
 
+  it("lets a scenario override a pref, or drop it (null) to keep the build's default", () => {
+    const dir = createProfile(tempDir(), { "browser.startup.page": null, "x.y": 2 });
+    const js = readFileSync(join(dir, "user.js"), "utf8");
+    expect(js).not.toContain('"browser.startup.page"');
+    expect(js).toContain('user_pref("x.y", 2);');
+    expect(js).toContain('user_pref("vimma.control.enabled", true);');
+    const plain = readFileSync(join(createProfile(tempDir()), "user.js"), "utf8");
+    expect(plain).toContain('user_pref("browser.startup.page", 0);');
+  });
+
   it("creates a private temp profile holding user.js", () => {
     const dir = createProfile(tempDir());
     expect(readFileSync(join(dir, "user.js"), "utf8")).toContain(
@@ -160,6 +170,12 @@ describe("browser command line and environment", () => {
       "0",
       "about:blank",
     ]);
+  });
+
+  it("opens no URL on a restart, which would add a tab to the restored session", () => {
+    const args = browserArgs("/p", { width: 1280, height: 800 }, { url: null });
+    expect(args).not.toContain("about:blank");
+    expect(args.slice(0, 3)).toEqual(["-no-remote", "-profile", "/p"]);
   });
 
   it("points the browser at our Xvfb and away from Wayland", () => {
@@ -383,6 +399,29 @@ describe("launch and teardown (fake browser)", () => {
     await session.teardown();
     expect(alive(pid)).toBe(false);
     expect(alive(grandchild)).toBe(false);
+    expect(existsSync(session.profile)).toBe(false);
+  });
+
+  it("relaunches in the same profile once the browser has exited (a restart)", async () => {
+    const session = await start({ FAKE_BROWSER_DELAY_MS: "100" });
+    cleanups.push(() => session.teardown());
+    const first = /** @type {number} */ (session.child.pid);
+    await expect(session.relaunch()).rejects.toThrow(/still running/);
+    const exited = new Promise((resolve) => session.child.once("exit", resolve));
+    process.kill(first, "SIGTERM");
+    await exited;
+    rmSync(join(session.profile, "vimma-control.json"), { force: true });
+    writeFileSync(join(session.profile, "kept.txt"), "x");
+    await session.relaunch();
+    const second = /** @type {number} */ (session.child.pid);
+    expect(second).not.toBe(first);
+    expect(session.discovery.pid).toBe(second);
+    expect(existsSync(join(session.profile, "kept.txt"))).toBe(true);
+    const seen = JSON.parse(readFileSync(join(session.profile, "fake-browser.json"), "utf8"));
+    expect(seen.argv).toContain(session.profile);
+    expect(seen.argv).not.toContain("about:blank"); // like a user's restart: the session only
+    await session.teardown();
+    expect(alive(second)).toBe(false);
     expect(existsSync(session.profile)).toBe(false);
   });
 

@@ -3,7 +3,8 @@
 Status: research and plan; split into sub-specs (see Breakdown). Sub-specs 1 (store), 2a
 (routing) and 2b (switching) merged; sub-spec 3 (persistence) implemented, awaiting review;
 4a (lifecycle) and 4b (move) implemented together, awaiting review, with the open items in their
-Settled section; 5 (picker) implemented, awaiting review ·
+Settled section; 5 (picker) implemented, awaiting review; 7 (e2e) restart scenario implemented,
+awaiting review, the 200-tab measurement still open ·
 Milestone: M3 · Area: host
 (`src/browser/base/content/vimma/workspaces/`, `ui/`), four upstream patch files (five hunks)
 
@@ -954,6 +955,35 @@ dependency for 4b, 5 and parts of 4a.
 - **Not done here:** a moved lazy background tab still needs selecting first (the picker moves
   the selected tab); `contextual-identity-deleted` and the startup `privacy.userContext.enabled`
   error stay open from 4a.
+
+## Settled: sub-spec 7, m3-e2e (restart part, 2026-10-10)
+
+- **Scenario** `tests/e2e/scenarios/m3-restart-restore.json`, gate 2 on a real quit and start:
+  fresh profile; `main` gets a page that sets the persistent cookie `ws=main` in its container
+  (`tests/e2e/fixtures/cookie.html#<name>`); `prefix+shift+n` creates `work` (cookie
+  `ws=work`, then `prefix+v` splits it) and `personal` (`ws=personal`); `ctrl+u` back to `work`;
+  `ctrl+q`; the same profile starts again. Asserted after the start: `work` active with its
+  three tabs and its split (axis `x`, two leaves); `ctrl+i` → `personal`, → `main`, → `work`
+  (order, count and wrap), each with its tabs, titles and no split where there was none; then
+  a fresh tab of `cookie.html` in each workspace sees only that workspace's cookie, so the
+  containers and their cookie jars came back mapped to the right workspaces. In `work` that
+  tab shows in the focused pane and the split stays. Stable 3/3 locally (headless, artifact
+  build); with `browser.startup.page = 0` instead of Vimma's 3 it fails at the first check
+  after the start (one tab, no split), as it should.
+- **Harness** (spec m0-e2e-harness): a `restart: "quit"` step (`ctrl+q`, the discovery file
+  must be gone, `launch`'s new `relaunch()` on the same profile and display), a scenario
+  `prefs` field (`null` drops one of the harness's prefs, here `browser.startup.page = 0`), and
+  `fixture:<name>#<fragment>`. The relaunch passes no `about:blank` on the command line: a URL
+  argument opens beside the restored session, which gave `work` a fourth tab on the first try
+  (a harness artefact, not a product bug: a user's `vimma <url>` does the same, by design).
+- **Control server**: `state.workspace` is the active workspace's name and `state.panes` the
+  pane tree in `state`'s tab ids (shape in m0-control-protocol-and-vimma-ctl), read-only; no
+  new command and no change to `vimma-ctl` (it prints `state --json` as received).
+  `browser_vimma_control.js` asserts both (red before: 3 failures).
+- **Not done here:** the 200-tab `ctrl+i` measurement (plan §9 risk) needs a paint timestamp
+  the control socket does not report; a crash-style kill and crash-recovery restore (the
+  harness profile turns `resume_from_crash` off, and the 15 s save interval makes it a timing
+  test); the scroll position after a real restart (gate 2's mochitest covers it).
 
 ## Out of scope
 
