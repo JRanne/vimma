@@ -422,22 +422,24 @@ to approve the first run of a first-time contributor (Settings → Actions → G
 
 ### Actions minutes budget
 
-The free plan has a limited monthly budget of minutes for private repos, billed per job and rounded
-up to the minute. Rough use: CI ≈ 2 min per PR push, e2e ≈ 6 min per PR push that touches the
-browser (5.5 min wall, ADR-010); upstream 6 × 1 min a day (≈ 180 min a month), plus ≈ 16 min
-(issue, patch check, the e2e suites, PR) when a release is found, ≈ 270 a month in all (spec
-m7-upstream-autopilot); claude.yml only
-when triggered. `nightly.yml` uses the self-hosted runner, which costs no hosted minutes. Check usage in Settings → Billing → Usage. Once the repo is public,
-standard hosted runners are free and unlimited; the e2e paths filter can then go.
+The repo is public (since 2026-10-10), so standard GitHub-hosted runners cost nothing and have
+no monthly cap: minutes are no longer a reason to skip a job. What still matters is wall time
+(a PR waits for its slowest required check) and the concurrency limit on hosted runners (20
+jobs at once on the free plan), so keep jobs lean all the same. Rough use per PR push: CI ≈ 2
+min, e2e ≈ 6 min (5.5 min wall, ADR-010), Semgrep ≈ 1 min, CodeQL a few minutes per language.
 
-Semgrep: one job, 51 s measured (1 billed min) per PR push, push to `main` and Monday. CodeQL is
-skipped while the repo is private and costs nothing until then.
+e2e.yml has no paths filter any more: "mochitest (artifact build)" is a required check, so it
+runs on every PR, docs-only ones included (a required check that never reports blocks the
+merge). The upstream autopilot runs 6 × 1 min a day, plus ≈ 16 min (issue, patch check, the
+e2e suites, PR) when a release is found (spec m7-upstream-autopilot); claude.yml only when
+triggered. `nightly.yml` uses the self-hosted runner, which is not a GitHub-hosted runner and
+never was billed. Usage is still listed in Settings → Billing → Usage.
 
 The bench step adds about half a minute to each CI run. `mutation.yml` is the largest scheduled
 cost: a full run (first Sunday of the month) is estimated at 60–90 min on the 2-CPU runner
 (4 916 mutants; 22 min with 12 workers locally, about 0.6 s per mutant per CPU), an incremental
-week a few minutes plus one for the report job: roughly 100 min a month. If that is too much
-before the repo goes public, narrow `mutate` in `stryker.config.mjs` or drop the monthly full run.
+week a few minutes plus one for the report job: roughly 100 min a month, free now. If the full
+run gets too slow, narrow `mutate` in `stryker.config.mjs` or drop the monthly full run.
 
 `fuzz.yml` runs one job of about 5 min a night (≈ 150 min a month), plus a one-minute report job
 on a failure. To halve it, run it on fewer nights (its `cron`) or lower `VIMMA_FUZZ_TIME_MS`.
