@@ -5,7 +5,7 @@
 - Reference machine for the timings below: 16 threads (Ryzen AI 7 PRO 350), 58 GiB RAM, Linux
   (Omarchy), Node 22, Python 3.
 
-## First Firefox build (plan §10 step 3)
+## First Firefox build
 
 | Step                   | Date       | Result                                                                                                                                                                                                         |
 | ---------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -14,7 +14,7 @@
 | `surfer bootstrap`     | 2026-10-09 | toolchains into `~/.mozbuild` (clang, cbindgen, …); no errors                                                                                                                                                  |
 | `surfer build`         | 2026-10-09 | 2321 s (38.7 min) wall, CPU 75 %, on Ryzen AI 7 PRO 350 (16 threads), 58 GB RAM. `engine/` 22 GB after build.                                                                                                  |
 
-Repository: <https://github.com/JRanne/vimma> (private); `MOZ_SOURCE_REPO` in `configs/common/mozconfig` points at it.
+Repository: <https://github.com/JRanne/vimma>; `MOZ_SOURCE_REPO` in `configs/common/mozconfig` points at it.
 
 ```sh
 npx surfer setup-project   # interactive: name vimma, Firefox release
@@ -844,13 +844,13 @@ install -Dm755 target/release/vimma-ctl ~/.local/bin/vimma-ctl
 ```
 
 The control socket is **off by default**. Turn it on in `about:config`: `vimma.control.enabled`
-= `true` (until the server spec lands, nothing listens; `vimma-ctl` then exits 3). The browser
+= `true` (with it off nothing listens, and `vimma-ctl` exits 3). The browser
 writes `<profile>/vimma-control.json` (port, token, pid; mode 0600) while it runs.
 
 ```sh
 vimma-ctl state                     # mode, pending keys, workspace, tabs (* = selected)
 vimma-ctl state --json | jq .tabs   # the raw result; unknown fields pass through
-vimma-ctl send-keys ctrl+b c        # chords in Herdr notation, space-separated
+vimma-ctl send-keys ctrl+b c        # chords in Vimma's key notation, space-separated
 vimma-ctl open https://example.com  # new tab; prints its id
 vimma-ctl --profile /tmp/p --timeout 2 state   # --timeout: seconds, at most 3600
 ```

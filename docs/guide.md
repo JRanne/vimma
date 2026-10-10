@@ -892,9 +892,8 @@ Vimma's own preferences today:
 | `vimma.theme.source`       | `omarchy`                              | `omarchy` follows your Omarchy theme (see [Colours](#colours-your-omarchy-theme)); `builtin` forces the built-in Tokyo Night. Applies at once.             |
 | `vimma.theme.omarchyPath`  | `~/.local/state/omarchy/current/theme` | The Omarchy theme directory to read `colors.toml` and `light.mode` from. Applies at once.                                                                  |
 | `vimma.theme.omarchyHook`  | `true`                                 | Installs the Omarchy theme-set hook for instant theme changes (see [Colours](#colours-your-omarchy-theme)). `false` removes Vimma's unedited hook at once. |
-
-| `vimma.config.path` | unset | A different config file than `$XDG_CONFIG_HOME/vimma/config.toml` (tests use it). Applies at once. |
-| `vimma.config.pollMs` | `2000` | How often Vimma checks `config.toml` for a change, in milliseconds. Applies at once. |
+| `vimma.config.path`        | unset                                  | A different config file than `$XDG_CONFIG_HOME/vimma/config.toml` (tests use it). Applies at once.                                                         |
+| `vimma.config.pollMs`      | `2000`                                 | How often Vimma checks `config.toml` for a change, in milliseconds. Applies at once.                                                                       |
 
 ## config.toml
 
