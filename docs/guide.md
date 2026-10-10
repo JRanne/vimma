@@ -254,7 +254,10 @@ The 2-second check keeps working in every case.
 ## Keys
 
 [bindings.md](bindings.md) lists the full default keymap. It is generated from the same table
-the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
+the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree. Both show the keys
+you press, with your prefix and leader filled in (`ctrl+b b`, `space n`), under a line that says
+what they are (`prefix = ctrl+b · leader = space`); a binding you remap in `config.toml` shows
+there with your keys. A `[panel]` after a key means it works only in that mode.
 
 **What works today:**
 
@@ -338,7 +341,7 @@ profile has one workspace, `main`; you make more as you need them (see
   around; `:workspace work` or `:workspace 2` goes to one by name or number. The status bar
   shows where you are (`● 2:work`).
 - `ctrl+b w` (or `:workspace` with no name) opens the [workspace picker](#workspace-picker).
-- `<leader>n` (space, then `n`), `ctrl+b b` or `:sidebar` opens the [side panel](#side-panel):
+- `space n` (the leader, then `n`), `ctrl+b b` or `:sidebar` opens the [side panel](#side-panel):
   the current workspace's tabs down the left of the window.
 - A window shows **one workspace at a time**: the other workspaces' tabs are hidden, not closed.
   Coming back selects the tab you left, and a split comes back with its panes laid out as
@@ -423,20 +426,20 @@ rename or close a workspace, use `ctrl+b shift+n`, `shift+w` and `shift+d`.
 
 ### Side panel
 
-`<leader>n`, `ctrl+b b` or `:sidebar` opens a panel on the left of the window. It is closed when
+`space n`, `ctrl+b b` or `:sidebar` opens a panel on the left of the window. It is closed when
 Vimma starts and stays out of the way until you ask for it. Its head shows the workspace you are
 in (`● 2:work`, in the workspace's colour) and the ones `ctrl+u` and `ctrl+i` go to; below are
 the workspace's tabs, numbered, each with its name (or title) and its site. The tab you are on is
 highlighted and its number coloured; a tab playing sound shows `♪`, one from another container
 `foreign`.
 
-| Key                            | What it does                                               |
-| ------------------------------ | ---------------------------------------------------------- |
-| `j` / `k`                      | Move the highlight down / up.                              |
-| `Enter`                        | Go to the highlighted tab and close the panel.             |
-| `1` … `9`                      | Go to that row's tab and close the panel.                  |
-| `ctrl+i` / `ctrl+u`            | Switch workspace; the panel stays open and lists that one. |
-| `Esc`, `<leader>n`, `ctrl+b b` | Close the panel; the page has the keys again.              |
+| Key                          | What it does                                               |
+| ---------------------------- | ---------------------------------------------------------- |
+| `j` / `k`                    | Move the highlight down / up.                              |
+| `Enter`                      | Go to the highlighted tab and close the panel.             |
+| `1` … `9`                    | Go to that row's tab and close the panel.                  |
+| `ctrl+i` / `ctrl+u`          | Switch workspace; the panel stays open and lists that one. |
+| `Esc`, `space n`, `ctrl+b b` | Close the panel; the page has the keys again.              |
 
 While it is open, every other plain key is the panel's and never reaches the page; `ctrl+b`
 keys and `:` commands still work, and a tab you open meanwhile shows up in the list. The panel
@@ -505,7 +508,7 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:wsnext`, `:wsprev`              | Next / previous workspace, as `ctrl+i` / `ctrl+u`.                                                             |
 | `:workspace name`, `:workspace 2` | Switches to the workspace with that name, or that number in `ctrl+i` order.                                    |
 | `:workspace`                      | Opens the workspace picker.                                                                                    |
-| `:sidebar`                        | Opens or closes the side panel, as `<leader>n`.                                                                |
+| `:sidebar`                        | Opens or closes the side panel, as `space n`.                                                                  |
 | `:source`                         | Reads `config.toml` now instead of within 2 seconds (see [config.toml](#configtoml)).                          |
 | `:source path`                    | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                |
 | `:config`                         | Opens `config.toml` in a new tab (read-only view); creates it from a commented template when it is missing.    |
@@ -579,6 +582,10 @@ source = "file"               # Tokyo Night instead of your Omarchy theme
 accent = "#ff9e64"
 ```
 
+- **Notation:** `prefix+t` means the prefix (`[keys] prefix`, default `ctrl+b`), then `t`;
+  `<leader>ff` means the leader (`[modal] leader`, default `space`), then `f f`; keys in a
+  sequence are separated by spaces. The `ctrl+b ?` overlay, `:map` and `about:vimma` show
+  bindings as the keys you press, with your prefix and leader.
 - **Reload:** save the file and Vimma picks it up within 2 seconds, in every window, without a
   restart. `:source` reads it at once.
 - **Another file:** `:source work.toml` loads that file instead, the same way: whole, over the

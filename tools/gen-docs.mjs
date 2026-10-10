@@ -4,12 +4,14 @@ import {
   bindingTable,
   compileKeymap,
   formatDefaultsToml,
+  keyLegend,
 } from "../packages/vimma-core/src/index.mjs";
 
 const root = new URL("../", import.meta.url);
 writeFileSync(new URL("packages/vimma-core/defaults.toml", root), formatDefaultsToml());
 
-const rows = bindingTable(compileKeymap());
+const keymap = compileKeymap();
+const rows = bindingTable(keymap);
 /** @param {string} s */
 const cell = (s) => s.replaceAll("|", "\\|");
 const lines = [
@@ -17,6 +19,10 @@ const lines = [
   "",
   "Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm run gen-docs`; do not edit.",
   "",
+  `Keys as you press them, with the default prefix and leader (\`${keyLegend(keymap)}\`).`,
+  "A `[mode]` after a key means it works only in that mode. In `config.toml` the same bindings",
+  "are written in notation: `ctrl+b b` is `prefix+b`, `space n` is `<leader>n`",
+  "([guide](guide.md#configtoml)).",
 ];
 let group = "";
 for (const r of rows) {

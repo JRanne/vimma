@@ -87,7 +87,7 @@ add_task(async function shows_bindings_over_about_preferences() {
     await openHelp();
     Assert.ok(visibleNames().includes("new_tab"), "overlay lists new_tab");
     Assert.ok(
-      overlay().querySelector('[data-action="new_tab"]').textContent.includes("prefix+c"),
+      overlay().querySelector('[data-action="new_tab"]').textContent.includes("ctrl+b c"),
       "new_tab row shows its binding",
     );
     await closeHelp();
@@ -127,6 +127,57 @@ add_task(async function slash_filters_the_rows() {
     await closeHelp();
     Assert.equal(document.activeElement, browser, "Esc from the filter returns focus to content");
   });
+});
+
+/** The text of a row's keys column. */
+function keysOf(dialog, name) {
+  return dialog.querySelector(`[data-action="${name}"] .vimma-help-keys`).textContent;
+}
+
+add_task(async function rows_show_the_keys_to_press_under_a_legend() {
+  await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
+    browser.focus();
+    await openHelp();
+    const legend = overlay().querySelector(".vimma-help-key-legend");
+    Assert.ok(legend && BrowserTestUtils.isVisible(legend), "a legend heads the overlay");
+    Assert.equal(legend.textContent, "prefix = ctrl+b · leader = space");
+    Assert.equal(
+      overlay().querySelector("header").nextElementSibling,
+      legend,
+      "the legend comes right under the header",
+    );
+    Assert.equal(keysOf(overlay(), "toggle_sidebar"), "ctrl+b b, space n", "the sidebar keys");
+    Assert.equal(keysOf(overlay(), "close_tab"), "ctrl+b shift+x, x", "close_tab's keys");
+    Assert.ok(!overlay().textContent.includes("prefix+"), "no prefix+ notation anywhere");
+    Assert.ok(!overlay().textContent.includes("<leader>"), "no <leader> notation anywhere");
+
+    for (const query of ["ctrl+b b", "sidebar"]) {
+      EventUtils.synthesizeKey("/");
+      filterInput().value = "";
+      EventUtils.sendString(query);
+      Assert.ok(visibleNames().includes("toggle_sidebar"), `"${query}" finds toggle_sidebar`);
+    }
+    Assert.ok(!visibleNames().includes("new_tab"), "and filters new_tab out");
+    await closeHelp();
+  });
+});
+
+add_task(async function a_remapped_prefix_and_leader_show_in_the_rows_and_legend() {
+  const km = compileKeymap({ keys: { prefix: "ctrl+a" }, modal: { leader: "," } });
+  const help = new HelpOverlay(window, compileKeymap());
+  help.setKeymap(km);
+  gBrowser.selectedBrowser.focus();
+  help.open();
+  try {
+    Assert.equal(keysOf(help.dialog, "toggle_sidebar"), "ctrl+a b, , n", "the remapped keys");
+    Assert.equal(
+      help.dialog.querySelector(".vimma-help-key-legend").textContent,
+      "prefix = ctrl+a · leader = ,",
+    );
+  } finally {
+    help.close();
+    help.destroy();
+  }
 });
 
 add_task(async function esc_closes_and_restores_focus() {

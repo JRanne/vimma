@@ -79,7 +79,7 @@ What works today:
   `ctrl+b shift+n/w/d` (or `:wsnew`, `:wsrename`, `:wsdelete`) create, rename and delete
   them; delete asks first. `:wsmove` or `m` in the picker moves a tab to another workspace.
   Each workspace keeps its tabs and its split, across switches and restarts.
-- **Side panel.** `<leader>n`, `ctrl+b b` or `:sidebar` toggles a panel listing the current
+- **Side panel.** `space n`, `ctrl+b b` or `:sidebar` toggles a panel listing the current
   workspace's tabs; `j`/`k`, `Enter` or `1..9` pick one.
 - **`config.toml`.** `$XDG_CONFIG_HOME/vimma/config.toml` sets options, key bindings and
   workspaces, and is re-read within 2 seconds of a save; `:source` reads it at once,

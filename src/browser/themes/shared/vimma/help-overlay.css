@@ -85,7 +85,8 @@
     opacity: 0.45;
   }
 
-  & .vimma-help-legend {
+  & .vimma-help-legend,
+  & .vimma-help-key-legend {
     margin: 0 0 0.25rem;
     color: var(--vimma-fg-dim, GrayText);
     font-size: 0.85em;

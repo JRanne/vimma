@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest";
 import { compileKeymap } from "../src/keymap.mjs";
-import { bindingTable, filterBindings, renderHelpText } from "../src/help.mjs";
+import { bindingTable, filterBindings, keyLegend, renderHelpText } from "../src/help.mjs";
 import { ACTIONS } from "../src/actions.mjs";
 
 describe("help table", () => {
@@ -9,9 +9,37 @@ describe("help table", () => {
     expect(rows.map((r) => r.name)).toEqual(ACTIONS.map((a) => a.name));
   });
 
-  test("shows prefix+? for show_keybinds", () => {
-    const row = bindingTable(compileKeymap()).find((r) => r.name === "show_keybinds");
-    expect(row?.bindings).toContain("prefix+?");
+  test("shows the keys a user presses, not config notation", () => {
+    const rows = bindingTable(compileKeymap());
+    const keys = (name) => rows.find((r) => r.name === name)?.bindings;
+    expect(keys("show_keybinds")).toContain("ctrl+b ?");
+    expect(keys("toggle_sidebar")).toEqual(["ctrl+b b", "space n"]);
+    expect(keys("close_tab")).toEqual(["ctrl+b shift+x", "x"]);
+    expect(keys("focus_pane_left")).toEqual(["ctrl+b h", "ctrl+w h"]);
+    for (const r of rows) {
+      for (const b of r.bindings) expect(b, r.name).not.toMatch(/prefix|<leader>|<[a-z]/i);
+    }
+  });
+
+  test("mode-scoped bindings keep their mode", () => {
+    const rows = bindingTable(compileKeymap());
+    const all = rows.flatMap((r) => r.bindings);
+    expect(all).toContain("esc [panel]");
+    expect(all).toContain("enter [resize]");
+    expect(all).toContain("< [resize]");
+  });
+
+  test("follows a remapped prefix and leader", () => {
+    const km = compileKeymap({ keys: { prefix: "ctrl+a" }, modal: { leader: "," } });
+    const row = bindingTable(km).find((r) => r.name === "toggle_sidebar");
+    expect(row?.bindings).toEqual(["ctrl+a b", ", n"]);
+  });
+
+  test("the legend names the prefix and leader keys", () => {
+    expect(keyLegend(compileKeymap())).toBe("prefix = ctrl+b · leader = space");
+    expect(keyLegend(compileKeymap({ keys: { prefix: "ctrl+a" }, modal: { leader: "," } }))).toBe(
+      "prefix = ctrl+a · leader = ,",
+    );
   });
 
   test("marks user overrides", () => {
@@ -27,7 +55,9 @@ describe("help table", () => {
     expect(filterBindings(rows, "RENAME").map((r) => r.name)).toEqual(
       expect.arrayContaining(["rename_tab", "rename_workspace"]),
     );
-    expect(filterBindings(rows, "prefix+?").map((r) => r.name)).toContain("show_keybinds");
+    expect(filterBindings(rows, "ctrl+b ?").map((r) => r.name)).toContain("show_keybinds");
+    expect(filterBindings(rows, "ctrl+b b").map((r) => r.name)).toContain("toggle_sidebar");
+    expect(filterBindings(rows, "sidebar").map((r) => r.name)).toContain("toggle_sidebar");
     expect(filterBindings(rows, "")).toHaveLength(rows.length);
     expect(filterBindings(rows, "zzzz")).toEqual([]);
   });
