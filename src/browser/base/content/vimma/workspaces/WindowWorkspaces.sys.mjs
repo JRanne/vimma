@@ -415,26 +415,35 @@ export class WindowWorkspacesImpl {
       if (!webProgress?.isTopLevel || !this.#model || this.#pending) return;
       if (flags & Ci.nsIWebProgressListener.LOCATION_CHANGE_SAME_DOCUMENT) return;
       const tab = /** @type {Tab | null} */ (this.#gBrowser.getTabForBrowser(browser));
-      if (!tab?.selected || tab.pinned || !location) return;
-      const hit = lazy.WorkspaceRouter.match(location.spec, null);
-      if (!hit || hit.workspace.userContextId === tab.userContextId) {
-        this.#hinted.delete(tab);
-        return;
-      }
-      /** @type {string} */
-      let host;
-      try {
-        host = location.host;
-      } catch {
-        return;
-      }
-      if (this.#hinted.get(tab) === host) return;
-      this.#hinted.set(tab, host);
-      this.#notify(
-        `${host} goes to "${hit.workspace.name}" (route ${hit.route.index}): :route move`,
-      );
+      if (tab?.selected) this.#hint(tab, location);
     },
   };
+
+  /**
+   * The hint for `tab` (selected) when a rule sends its page to another workspace's container:
+   * a page's own navigation, or a link a page opened (never routed: spec workspace-routing,
+   * decision 3), once per tab and host.
+   * @param {Tab} tab
+   * @param {any} [location]  nsIURI, the browser's current one by default
+   */
+  #hint(tab, location = tab.linkedBrowser?.currentURI) {
+    if (tab.pinned || !location) return;
+    const hit = lazy.WorkspaceRouter.match(location.spec, null);
+    if (!hit || hit.workspace.userContextId === tab.userContextId) {
+      this.#hinted.delete(tab);
+      return;
+    }
+    /** @type {string} */
+    let host;
+    try {
+      host = location.host;
+    } catch {
+      return;
+    }
+    if (this.#hinted.get(tab) === host) return;
+    this.#hinted.set(tab, host);
+    this.#notify(`${host} goes to "${hit.workspace.name}" (route ${hit.route.index}): :route move`);
+  }
 
   /** Observer: the store's definitions changed (a workspace added, renamed or deleted). */
   #observer = () => {
@@ -725,6 +734,7 @@ export class WindowWorkspacesImpl {
    * @param {Tab} tab
    */
   #onSelect(tab) {
+    if (!this.#switching) this.#hint(tab);
     const model = /** @type {Workspaces} */ (this.#model);
     const id = this.#idOf(tab);
     if (this.#switching || tab.pinned || !workspaceOfTab(model, id)) return;

@@ -242,6 +242,20 @@ describe("url rules", () => {
     ).toBe("w");
   });
 
+  test("end on a boundary: a path segment, a query, a fragment or the end", () => {
+    const app = [{ url: "https://example.com/app", workspace: "w" }];
+    expect(target(app, "https://example.com/app")).toBe("w");
+    expect(target(app, "https://example.com/app/x")).toBe("w");
+    expect(target(app, "https://example.com/app?x=1")).toBe("w");
+    expect(target(app, "https://example.com/app#top")).toBe("w");
+    expect(target(app, "https://example.com/apples")).toBeNull();
+    expect(target(app, "https://example.com/app.html")).toBeNull();
+    // A prefix that ends in "/" is its own boundary.
+    const dir = [{ url: "file:///home/me/work/", workspace: "w" }];
+    expect(target(dir, "file:///home/me/work/a.md")).toBe("w");
+    expect(target([{ url: "about:pref", workspace: "w" }], "about:preferences")).toBeNull();
+  });
+
   test("normalise the prefix as the URL parser does", () => {
     const gh = [{ url: "HTTPS://GitHub.com", workspace: "w" }];
     expect(resolveRoutes(gh)[0]?.url).toBe("https://github.com/");

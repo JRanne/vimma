@@ -17,7 +17,8 @@ installed here, `modules/zen/spacerouting/ZenSpaceRoutingManager.sys.mjs` and
 
 - As a user, `[[routes]]` tables in `config.toml` say which workspace a site opens in:
   `domain = "github.com"` with `workspace = "work"` opens GitHub (and `gist.github.com`) in
-  `work`'s container, wherever I open it from.
+  `work`'s container when I open it: typed, from `:open`, a bookmark or another app. A link a
+  page opens stays in the page's container, with a hint (decision 3).
 - As a user, `app = "slack"` sends every link Slack opens to `work`, and `app = "discord"` to
   `personal`, whatever the site.
 - As a user, a link opened in the foreground takes me to its workspace; one opened in the
@@ -122,7 +123,9 @@ caller reaches the running Vimma.
      Unicode names are compared as punycode (`bücher.example` = `xn--bcher-kva.example`, both ways).
      An IP literal (`10.0.0.5`, `::1` or `[::1]`) matches only itself. `*.` only as the first
      label. A scheme, port, path or `*` elsewhere is an error with a suggestion (as `[sites]`).
-   - **`url`** is a prefix of the parsed URL (`URL.href`), any scheme but `javascript:`. `about:`,
+   - **`url`** is a prefix of the parsed URL (`URL.href`), any scheme but `javascript:`, ending on
+     a boundary: the URL ends there or goes on with `/`, `?` or `#`, unless the prefix itself ends
+     in `/` (`https://example.com/app` matches `/app/x`, `/app?q`, not `/apples`). `about:`,
      `file:`, `data:`, `moz-extension:` and the like are never matched by a `domain` rule.
    - **`app`** is a token (`[a-z0-9][a-z0-9._+-]{0,31}`, compared lower-case).
    - New in schema 2, no schema bump: nothing has been released (release gate), so no older Vimma
@@ -139,13 +142,23 @@ caller reaches the running Vimma.
    does not exist (a typo, a runtime workspace closed) is skipped and flagged in `:route` and
    about:vimma; matching goes on to the next rule.
 
-3. **Where rules apply** (the routing points):
+3. **Where rules apply: only opens the user or chrome starts** (the routing points):
    - **`openLinkIn`**, through the existing `URILoadingHelper-sys-mjs.patch` hunk, before its
-     new-window default: (a) a load the user started (system triggering principal: URL bar,
-     `:open`, `:tabnew`, bookmarks, history) with no container given, any `where`; (b) a link a page
-     opened in a new tab or window (`where != "current"`, content principal) whose container is
-     the page's own. An explicit other container ("Open in New Container Tab", an extension) is
-     the user's choice and stays. When a rule names another container and `where` is `current`,
+     new-window default: a load with the system triggering principal and no container given (URL
+     bar, `:open`, `:tabnew`, bookmarks, history, and `p`/`P` once they exist), any `where`. An
+     explicit container ("Open in New Container Tab", an extension) is the user's choice and
+     stays.
+   - **Never an open a page triggers** (review of PR #88; this replaces the first draft's "(b)",
+     which routed a page's links opened in a new tab or window in the page's own container). The
+     threat: `ClickHandlerChild` accepts synthetic ctrl- and middle-clicks from the page's own
+     script once the page has a user gesture, and `ClickHandlerParent` opens them in a
+     background tab with the page's principal. With (b), a page in `personal` could open
+     `https://github.com/login/oauth/authorize?...` (any URL a rule routes) hidden in `work`'s
+     container, with `work`'s cookies: a login-CSRF or token grant the user never sees, and a way
+     to probe `work`'s logged-in state. So every open whose triggering principal is web content (a
+     link click, middle- or ctrl-click, `target=_blank`, `window.open`, the context menu's "Open
+     Link in New Tab", `F` hints) stays in the opener's container, as Firefox does; when it is
+     shown, the hint of decision 5 tells the user, and `:route move` moves it. When a rule names another container and `where` is `current`,
      Firefox's own rule makes it a new tab; an untouched new-tab page left behind is closed (as
      Multi-Account Containers closes a just-created tab).
    - **External links**, through the existing `BrowserDOMWindow-sys-mjs.patch` line: a rule
@@ -153,14 +166,15 @@ caller reaches the running Vimma.
    - **A new window's first tab**, through hunk 2 of `Tabbrowser-sys-mjs.patch`, which now calls
      `WorkspaceStore.firstTabUserContextId(window)`: the window's single URL argument is routed
      (a cold start from a link, an external link opened as a window, `ctrl+n` to a routed home
-     page), else the default as before. `openLinkIn`'s windows are routed by (a)/(b) already.
+     page), else the default as before. `openLinkIn`'s own windows are routed by its hunk.
    - **Not:** same-tab navigation (link clicks, redirects, form posts, history), session restore,
      pinned tabs, Vimma's own moves, `target=_blank` / `window.open` (fixed by the opener, above),
      private windows and popups.
 
 4. **Foreground and background.** The routed tab opens in the window it was opened from, in the
    target workspace's container. A foreground open selects it, and `WindowWorkspaces`' existing
-   `TabSelect` handling switches to its workspace. A background open (middle-click, `F`) joins
+   `TabSelect` handling switches to its workspace. A background open (a bookmark opened in the
+   background, a link from another app with `browser.tabs.loadDivertedInBackground`) joins
    that workspace hidden with the existing `opened in "work"` notice (m3 decision 12). Change to
    `WindowWorkspaces.#adopt`: the hide and the notice now wait for a microtask and are skipped
    when the tab got selected meanwhile, so a foreground open is never hidden first and never says
@@ -170,7 +184,8 @@ caller reaches the running Vimma.
 
 5. **Same-tab navigation to a routed site is never moved** (Zen's lesson). A tabs progress
    listener in `WindowWorkspaces` looks at each top-level location change (not same-document) of
-   the selected tab: when a rule names another workspace than the tab's, the notice says
+   the selected tab, and at each tab selected: when a rule names another workspace than the
+   tab's (a page's navigation, or a link a page opened, decision 3), the notice says
    `github.com goes to "work" (route 1): :route move` once per tab and host. `:route move`
    reopens the tab there with m3's move (history stays behind, as `:wsmove` says).
 
@@ -181,9 +196,13 @@ caller reaches the running Vimma.
    `gtk-launch`, `kde-open*`, `kioclient*`, `exo-open`, shells, `env`, `nohup`, `setsid`, the
    AppImage runtime) and takes the first other process (`slack`, `discord`, `alacritty`, `nvim`).
    It stops with no app at pid 1, `systemd`, `init`, the portal (`xdg-desktop-portal*`,
-   `flatpak-portal`), after 16 steps, or at a name that is not a token. With an app and exactly
-   one non-flag argument it runs `vimma -vimma-from <app> <url>` with `VIMMA_FROM=<app>` in the
-   environment; otherwise `vimma "$@"` unchanged.
+   `flatpak-portal`), after 16 steps, or at a name that is not a token (a shell `case`, so a
+   name with a newline cannot pass line by line). With an app and exactly one argument it runs
+   `vimma -vimma-from <app> <url>` with `VIMMA_FROM=<app>` in the environment; a single argument
+   that starts with `-` is refused (exit 64): `%u` must never smuggle a flag such as `-profile`
+   into vimma. Otherwise it unsets any inherited `VIMMA_FROM` and runs `vimma "$@"`. The
+   AppImage's `AppRun` sends only a single non-flag argument through it; desktop actions'
+   flags go straight to vimma.
    - **Running Vimma:** `WorkspaceRouter.init()` (once per process, from `vimma.js`) registers a
      command-line handler under `k-vimma-from` (before x-default). It takes `-vimma-from <app>`
      off the line (`handleFlagWithParam`), keeps it only if it is a token, and holds it until the
@@ -191,8 +210,12 @@ caller reaches the running Vimma.
      `handURIToExistingBrowser` → `openURI` runs synchronously inside the same task, so the
      external routing point sees it, and nothing later can.
    - **Cold start:** the handler is registered by the first window, after the command line ran.
-     x-default logs the unknown flag and skips the app name; the first tab's routing reads
-     `VIMMA_FROM` once and clears it.
+     x-default logs the unknown flag and skips the app name. `WorkspaceRouter.init()` (and the
+     first tab's routing, whichever comes first) reads `VIMMA_FROM` and clears it at once,
+     unconditionally, so it never reaches child processes; the value is kept for the first
+     window's first tab only and dropped at the first `browser-delayed-startup-finished` (a
+     private first window or containers off never ask for it). A new window opened for an
+     external link takes the startup app, else the command line's `-vimma-from`.
    - **Untrusted hint:** any process can run `vimma -vimma-from slack <url>`. The name is checked
      as a token in the launcher and again in Vimma, never used in a path, a shell or a pref name,
      only compared with `app` keys; it can only select a workspace a rule names, the same as the
@@ -244,15 +267,19 @@ WindowWorkspaces: TabOpen/TabSelect (switch or notice), location changes (hint)
 - Mochitests (`browser_vimma_workspace_routes.js`): the URL bar and `:open` route to another
   workspace (foreground: switch, no "opened in"; the blank tab closed); a background open says
   where and does not switch; `:open` in the target workspace stays in the tab (no loop, no new
-  tab); a link opened in a new tab from a page in another workspace; an explicit container stays;
+  tab); a page's scripted ctrl- and middle-click (through ClickHandler), `target=_blank`,
+  `window.open` and a page's `openLinkIn` stay in the page's container, also in no container;
+  a redirect inside a tab stays; an explicit container stays;
   same-tab navigation stays and hints, `:route move` moves; an external link through the
   command-line path with `-vimma-from` (app rule) and without (domain rule); an invalid app name
-  is ignored; a new window's first tab with `VIMMA_FROM`; private windows never routed;
+  is ignored even by a rule naming exactly it; a new window's first tab with `VIMMA_FROM`, not
+  a later one, and none after a private first window; private windows never routed;
   `:route add` appends and the rule applies; `:route` and about:vimma list the rules and the
   match.
 - Shell (`tools/package/test/vimma-open.test.mjs`): fake `/proc` trees: xdg-open → slack,
   sh → xdg-open → nvim, gio, a portal (unknown), systemd (unknown), the AppImage runtime, a bad
-  name, a loop, flags passed through, the sibling binary.
+  name, a name with a newline, a loop, flags passed through, a single flag refused, an
+  inherited `VIMMA_FROM` dropped, the sibling binary.
 
 ## Settled (2026-10-10)
 
@@ -266,8 +293,6 @@ WindowWorkspaces: TabOpen/TabSelect (switch or notice), location changes (hint)
     not `params.userContextId`, to `addTab` for `tab`; only `current` (its container check) and
     windows read `params`. The first green attempt routed nothing in tabs (10 unexpected in the
     new test): the hunk now assigns the router's answer to both.
-  - A page's link routed into another container loses its referrer, as Firefox's own "Open Link
-    in New Container Tab" does (`nsContextMenu._openLinkInParameters`).
   - `WindowWorkspaces.#adopt` on `TabOpen` hides a tab of another workspace in a microtask, and
     only if it was not selected meanwhile (decision 4). Before, a foreground open into another
     workspace was hidden, said `opened in`, then shown again by its selection.
@@ -290,6 +315,26 @@ WindowWorkspaces: TabOpen/TabSelect (switch or notice), location changes (hint)
   notice in the test, a private-window helper), then green; whole `tests/browser/` green.
   Mutation check: hiding a foreground-opened tab anyway (dropping `tab.selected` from the
   microtask's guard) fails "a foreground open does not say 'opened in'"; reverted.
+
+## Review round 1 (PR #88)
+
+- **Decision 3b dropped** (the coordinator's decision): a page's opens are never routed; the
+  cookie threat is in decision 3. The router routes `openLinkIn` only for the system principal
+  with no container given; the referrer stripping that (b) needed went with it. The hint now also
+  fires when a tab is selected, so a link a page opened in the background is hinted when looked
+  at. Tests: a scripted ctrl-click and middle-click through ClickHandler, `openLinkIn` with a
+  page's principal, `target=_blank` (hinted), `window.open`, a page in no container, a
+  `location.replace` redirect. Red: 3 of them opened in `rt-work`; green after.
+- `VIMMA_FROM` is read and cleared in `init()`, kept for the first window only, and unset by the
+  launcher's fallback (red: still set after init; a later window took it).
+- Launcher: the token check is a `case` (a newline in `comm` passed `grep -x`); a single flag
+  argument is refused; `AppRun` keeps desktop actions' flags away from it.
+- `url` rules match on a boundary (`/app` is not `/apples`), Vitest red then green.
+- The invalid-app mochitest sets a rule whose `app` is that very string, so it fails if the hint
+  were passed unchecked.
+- Mutation check: without the system-principal check, the page in no container's scripted
+  ctrl-click opens in `rt-work` ("its scripted ctrl-click stays in no container" fails);
+  reverted. (With a container, ClickHandler's explicit container already stops it.)
 
 ## Out of scope
 

@@ -69,12 +69,25 @@ while [ "$steps" -lt 16 ] && [ "$pid" -gt 1 ] 2>/dev/null; do
 done
 
 # Only a token: never a path, never anything a shell or Vimma would read as more than a name.
-if ! printf '%s' "$app" | LC_ALL=C grep -Eqx '[a-z0-9][a-z0-9._+-]{0,31}'; then app=""; fi
+# A case pattern, not grep: grep -x would pass a name with a newline line by line.
+case $app in
+  *[!a-z0-9._+-]* | [!a-z0-9]* | '') app= ;;
+esac
+[ "${#app}" -gt 32 ] && app=
 
-if [ -n "$app" ] && [ "$#" -eq 1 ]; then
+# The desktop entry passes the link as one argument (%u). One that starts with "-" would reach
+# vimma as a flag (-profile, -remote-debugging-port...): refuse it.
+if [ "$#" -eq 1 ]; then
   case "$1" in
-    -*) ;;
-    *) VIMMA_FROM=$app exec "$bin" -vimma-from "$app" "$1" ;;
+    -*)
+      echo "vimma-open: refusing a single argument that is a flag: $1" >&2
+      exit 64
+      ;;
   esac
+  if [ -n "$app" ]; then
+    VIMMA_FROM=$app exec "$bin" -vimma-from "$app" "$1"
+  fi
 fi
+# Never a VIMMA_FROM this launcher did not set (one inherited from the caller's environment).
+unset VIMMA_FROM
 exec "$bin" "$@"

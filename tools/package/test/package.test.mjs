@@ -247,10 +247,26 @@ describe("AppRun", () => {
         encoding: "utf8",
       }),
     ).toBe("launcher=/x/v.AppImage legacy=1\n");
-    expect(script).toMatch(/exec "\$HERE\/usr\/lib\/vimma\/vimma-open" "\$@"/);
+    expect(script).toMatch(/exec "\$HERE\/usr\/lib\/vimma\/vimma-open" "\$1"/);
+    expect(script).toMatch(/exec "\$HERE\/usr\/lib\/vimma\/vimma" "\$@"/);
   });
   it("is valid sh", () => {
     expect(spawnSync("sh", ["-n"], { input: script }).status).toBe(0);
+  });
+  it("sends one link through vimma-open, and flags (desktop actions) straight to vimma", () => {
+    const dir = mkdtempSync(join(tmpdir(), "vimma-apprun-"));
+    mkdirSync(join(dir, "usr/lib/vimma"), { recursive: true });
+    writeFileSync(join(dir, "AppRun"), script, { mode: 0o755 });
+    copyFileSync(LAUNCHER, join(dir, "usr/lib/vimma/vimma-open"));
+    chmodSync(join(dir, "usr/lib/vimma/vimma-open"), 0o755);
+    writeFileSync(join(dir, "usr/lib/vimma/vimma"), '#!/bin/sh\necho "$@"\n', { mode: 0o755 });
+    const env = { PATH: process.env.PATH ?? "", VIMMA_OPEN_PPID: "1" };
+    const run = (/** @type {string[]} */ args) =>
+      execFileSync(join(dir, "AppRun"), args, { env, encoding: "utf8" });
+    expect(run(["--private-window"])).toBe("--private-window\n");
+    expect(run(["--new-window"])).toBe("--new-window\n");
+    expect(run(["https://example.com/"])).toBe("https://example.com/\n");
+    expect(run([])).toBe("\n");
   });
 });
 

@@ -502,8 +502,11 @@ workspace = "notes"
 - A rule naming a workspace that does not exist is skipped (`:route` says so).
 
 **Where rules apply:** an address you type in the URL bar or with `:open` / `:tabnew`, a
-bookmark, a link from another app, a link a page opens in a new tab (middle-click, `F` hints, the
-context menu) and a new window opened on a URL. Opened in front, the tab takes you to its
+bookmark, a link from another app and a new window opened on a URL: what you or Vimma open. A
+link a page opens (a click, middle-click, `F` hints, `target=_blank`, a pop-up) stays in that
+page's workspace, because a page could otherwise open any site with another workspace's logins;
+when you look at such a tab, the status bar names the workspace its rule would choose and
+`:route move` moves it. Opened in front, the tab takes you to its
 workspace; opened in the background, it waits there and the status bar says
 `opened in "work"`. If you typed the address on an empty new tab, that tab is closed.
 

@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -177,7 +178,45 @@ describe("vimma-open", () => {
     expect(run([], { ppid: 100 }).args).toEqual([]);
     expect(run(["--new-window", LINK], { ppid: 100 }).args).toEqual(["--new-window", LINK]);
     expect(run([LINK, LINK], { ppid: 100 }).args).toEqual([LINK, LINK]);
-    expect(run(["-private-window"], { ppid: 100 }).args).toEqual(["-private-window"]);
+  });
+
+  it("refuses a single argument that is a flag: %u must never smuggle one in", () => {
+    processEntry(1, "systemd", 0);
+    processEntry(100, "slack", 1);
+    for (const arg of ["-private-window", "--profile", "-"]) {
+      const r = spawnSync("sh", [LAUNCHER, arg], {
+        env: {
+          PATH: "/usr/bin:/bin",
+          VIMMA_OPEN_PROC: proc,
+          VIMMA_OPEN_PPID: "100",
+          VIMMA_BIN: join(dir, "vimma"),
+        },
+        encoding: "utf8",
+      });
+      expect(r.status, arg).not.toBe(0);
+      expect(r.stderr, arg).toMatch(/vimma-open: refusing/);
+      expect(existsSync(join(dir, "calls")), arg).toBe(false);
+    }
+  });
+
+  it("never passes a VIMMA_FROM it did not set", () => {
+    processEntry(1, "systemd", 0);
+    processEntry(500, "xdg-desktop-portal", 1);
+    expect(run([LINK], { ppid: 500, env: { VIMMA_FROM: "slack" } })).toEqual({
+      args: [LINK],
+      from: "VIMMA_FROM=unset",
+      status: 0,
+    });
+  });
+
+  it("refuses a name with a newline in it", () => {
+    processEntry(1, "systemd", 0);
+    // comm "slack\nwork": a grep -x on lines would pass each line.
+    const d = join(proc, "810");
+    mkdirSync(d);
+    writeFileSync(join(d, "stat"), "810 (slack\nwork) S 1 810 810 0 -1 4194304 1 0\n");
+    writeFileSync(join(d, "comm"), "slack\nwork\n");
+    expect(run([LINK], { ppid: 810 }).args).toEqual([LINK]);
   });
 
   it("runs the vimma next to it when VIMMA_BIN is not set", () => {

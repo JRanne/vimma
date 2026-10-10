@@ -220,6 +220,18 @@ function domainHit(u, d) {
 }
 
 /**
+ * `href` starts with `prefix` on a boundary: the prefix ends in "/", or what follows it is the
+ * end, "/", "?" or "#" (`/app` is not `/apples`).
+ * @param {string} href
+ * @param {string} prefix
+ */
+function urlHit(href, prefix) {
+  if (!href.startsWith(prefix)) return false;
+  if (prefix.endsWith("/") || href.length === prefix.length) return true;
+  return "/?#".includes(/** @type {string} */ (href[prefix.length]));
+}
+
+/**
  * The first rule, in file order, that matches `url` opened by `app` (null: not known). With
  * `workspaces`, a rule naming a workspace not in it is skipped. Every key of a rule must match.
  * @param {readonly Route[]} routes
@@ -241,7 +253,7 @@ export function matchRoute(routes, { url, app = null }, { workspaces } = {}) {
     if (workspaces && !workspaces.includes(r.workspace)) continue;
     if (r.app !== undefined && r.app !== token) continue;
     if (r.domain && !(u && domainHit(u, r.domain))) continue;
-    if (r.url !== undefined && !(u && u.href.startsWith(r.url))) continue;
+    if (r.url !== undefined && !(u && urlHit(u.href, r.url))) continue;
     return r;
   }
   return null;

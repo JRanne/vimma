@@ -172,8 +172,9 @@ These are the limits the workspaces' design accepts
 
 - A page's own navigation (link click, redirect, sign-in bounce) is never moved to the workspace
   a rule names; the status bar hints and `:route move` reopens it there, without its history.
-- Links a page opens with `target="_blank"` or `window.open` stay in the page's container: the
-  new tab is tied to its opener. They get the same hint.
+- Rules never route a link a page opens (a click, middle- or ctrl-click, `F` hints,
+  `target="_blank"`, `window.open`): it stays in the page's container, so a page cannot open a
+  site with another workspace's cookies. The tab gets the same hint when shown.
 - App rules need `vimma-open` (the packages' desktop entry). Apps in Flatpak or other sandboxes
   open links through the desktop portal, apps started by systemd (`uwsm app`, `app2unit`) are not
   in the link's process tree, and `gio open` may exit before `vimma-open` looks: those links have

@@ -337,8 +337,15 @@ export function appRun() {
     '# "Make default browser" and remoting record the .AppImage, not the temporary mount.',
     "# Set only when the AppImage runtime started us ($APPIMAGE), never to an empty value.",
     'if [ -n "${APPIMAGE:-}" ]; then export MOZ_APP_LAUNCHER="$APPIMAGE"; fi',
-    "# Through vimma-open, which names the app that opened a link (spec workspace-routing).",
-    `exec "$HERE/usr/lib/${APP}/${LAUNCHER_NAME}" "$@"`,
+    "# One link (the desktop entry's %u) through vimma-open, which names the app that opened it",
+    "# (spec workspace-routing); anything else, such as a desktop action's flag, straight to vimma.",
+    'if [ "$#" -eq 1 ]; then',
+    '  case "$1" in',
+    `    -*) ;;`,
+    `    *) exec "$HERE/usr/lib/${APP}/${LAUNCHER_NAME}" "$1" ;;`,
+    "  esac",
+    "fi",
+    `exec "$HERE/usr/lib/${APP}/${APP}" "$@"`,
     "",
   ].join("\n");
 }

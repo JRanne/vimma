@@ -27,12 +27,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
 });
 
-const ReferrerInfo = Components.Constructor(
-  "@mozilla.org/referrer-info;1",
-  "nsIReferrerInfo",
-  "init",
-);
-
 const FLAG = "vimma-from";
 const ENV = "VIMMA_FROM";
 const CONTRACT = "@vimma.org/routing/from-clh;1";
@@ -46,8 +40,37 @@ let routes = readCache();
 /** The app of the command line being handled, until the current task ends. */
 /** @type {string | null} */
 let pendingApp = null;
-/** `VIMMA_FROM`, read once (the first window of a cold start). */
+/** `VIMMA_FROM`, read and cleared once per process, at init or the first window's first tab. */
 let envRead = false;
+/** The cold start's app, until the first window has routed its first tab or finished starting. */
+/** @type {string | null} */
+let startupApp = null;
+
+/**
+ * Reads `VIMMA_FROM` once and clears it, whether or not anything uses it: it must never reach
+ * the processes Vimma starts or a later window.
+ */
+function readStartupEnv() {
+  if (envRead) return;
+  envRead = true;
+  const raw = Services.env.get(ENV);
+  if (!raw) return;
+  Services.env.set(ENV, "");
+  const token = raw.toLowerCase();
+  startupApp = isAppToken(token) ? token : null;
+}
+
+/**
+ * The startup app is for the first window's first tab only: dropped once a window has started
+ * (a private first window, or containers off, never asks for it).
+ */
+function armStartupDrop() {
+  const done = () => {
+    startupApp = null;
+    Services.obs.removeObserver(done, "browser-delayed-startup-finished");
+  };
+  Services.obs.addObserver(done, "browser-delayed-startup-finished");
+}
 let registered = false;
 
 /** @returns {Route[]} */
@@ -128,8 +151,10 @@ const factory = {
 export const WorkspaceRouter = {
   /** Once per process (vimma.js): the `-vimma-from` command-line handler. */
   init() {
+    readStartupEnv();
     if (registered) return;
     registered = true;
+    armStartupDrop();
     const registrar = Components.manager.QueryInterface(Ci.nsIComponentRegistrar);
     if (registrar.isContractIDRegistered(CONTRACT)) return;
     registrar.registerFactory(
@@ -189,12 +214,13 @@ export const WorkspaceRouter = {
 
   /**
    * URILoadingHelper.openLinkIn, before it fills in a new window's container: sets
-   * `params.userContextId` when a rule routes the load. Only for a load the user started
-   * (system principal, no container chosen) or a link a page opens in a new tab or window in
-   * its own container; never a same-tab link, never a private or popup window. A `current`
-   * load routed elsewhere becomes a new tab (openLinkIn's own rule); an untouched new tab it
-   * leaves behind is closed. A page's link that changes container loses its referrer, as
-   * Firefox's "Open Link in New Container Tab" does.
+   * `params.userContextId` when a rule routes the load. Only a load the user or chrome started
+   * (system principal, no container chosen): the URL bar, `:open`, bookmarks. Never one a page
+   * triggered (a link click, middle- or ctrl-click, `target=_blank`, `window.open`): a page can
+   * fake those with a synthetic click, and routing them would let a page in one workspace open
+   * a URL of its choosing with another workspace's cookies (spec workspace-routing, decision
+   * 3). Never a private or popup window. A `current` load routed elsewhere becomes a new tab
+   * (openLinkIn's own rule); an untouched new tab it leaves behind is closed.
    * @param {any} win  the window the load starts from
    * @param {string} url  as given, maybe not yet fixed up (`example.com`)
    * @param {string} where
@@ -218,20 +244,9 @@ export const WorkspaceRouter = {
     try {
       if (!routes.length || params.private || unroutable(win)) return;
       if (target && unroutable(target)) return;
-      const principal = params.triggeringPrincipal;
-      const fromPage = !!principal?.isContentPrincipal;
-      if (fromPage) {
-        if (where === "current") return;
-        if ((params.userContextId ?? 0) !== principal.originAttributes.userContextId) return;
-      } else if (!principal?.isSystemPrincipal || params.userContextId != null) {
-        return;
-      }
+      if (!params.triggeringPrincipal?.isSystemPrincipal || params.userContextId != null) return;
       const ucid = this.userContextIdFor(fixup(url));
       if (ucid === null) return;
-      if (fromPage && ucid !== (params.userContextId ?? 0) && params.referrerInfo) {
-        const old = params.referrerInfo;
-        params.referrerInfo = new ReferrerInfo(old.referrerPolicy, false, old.originalReferrer);
-      }
       if (where === "current" && target) {
         const browser = params.targetBrowser ?? target.gBrowser.selectedBrowser;
         if (browser.browsingContext?.originAttributes.userContextId === ucid) return;
@@ -276,7 +291,8 @@ export const WorkspaceRouter = {
    */
   firstTab(win) {
     try {
-      const app = this.takeStartupApp();
+      // A cold start's app; else an external link opened as a window during its command line.
+      const app = this.takeStartupApp() ?? pendingApp;
       if (!routes.length || unroutable(win)) return null;
       const url = singleUrl(win.arguments?.[0]);
       if (!url) return null;
@@ -288,21 +304,20 @@ export const WorkspaceRouter = {
     }
   },
 
-  /** `VIMMA_FROM` once per process: vimma-open's app at a cold start. */
+  /** vimma-open's app at a cold start (`VIMMA_FROM`), once: null after the first call. */
   takeStartupApp() {
-    if (envRead) return null;
-    envRead = true;
-    const raw = Services.env.get(ENV);
-    if (!raw) return null;
-    // Not for later windows, nor for processes Vimma starts.
-    Services.env.set(ENV, "");
-    const token = raw.toLowerCase();
-    return isAppToken(token) ? token : null;
+    readStartupEnv();
+    const app = startupApp;
+    startupApp = null;
+    return app;
   },
 
-  /** Tests: read `VIMMA_FROM` again at the next new window. */
+  /** Tests: read and clear `VIMMA_FROM` again, as init does, for the next new window. */
   resetStartupAppForTesting() {
     envRead = false;
+    startupApp = null;
+    readStartupEnv();
+    armStartupDrop();
   },
 };
 

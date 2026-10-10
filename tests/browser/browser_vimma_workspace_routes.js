@@ -149,31 +149,17 @@ add_task(async function no_loop_when_the_rule_names_the_shown_workspace() {
   tidy();
 });
 
-add_task(async function a_link_opened_in_the_background_goes_there_and_says_so() {
+add_task(async function a_background_open_by_the_user_goes_there_and_says_so() {
   const page = await inHome();
-  const principal = page.linkedBrowser.contentPrincipal;
   const opened = nextTab();
-  // What a middle-click does (ClickHandlerParent): the page's principal and container.
-  window.openLinkIn(`${WORK}?background`, "tab", {
-    inBackground: true,
-    triggeringPrincipal: principal,
-    userContextId: page.userContextId,
-  });
+  // A bookmark opened in the background (chrome: the system principal, no container chosen).
+  window.openTrustedLinkIn(`${WORK}?background`, "tab", { inBackground: true });
   const routed = await opened;
-  Assert.equal(routed.userContextId, work.userContextId, "the link is in rt-work's container");
+  Assert.equal(routed.userContextId, work.userContextId, "the URL is in rt-work's container");
   await until(() => routed.hidden, "hidden: it is not in the workspace shown");
   Assert.equal(activeName(), "rt-home", "a background open never switches");
   Assert.equal(gBrowser.selectedTab, page, "the page stays selected");
   await until(() => noticeText() === 'opened in "rt-work"', "the notice says where it went");
-
-  // A link to a site no rule names keeps the page's container.
-  const plain = nextTab();
-  window.openLinkIn(`${ELSEWHERE}?plain`, "tab", {
-    inBackground: true,
-    triggeringPrincipal: principal,
-    userContextId: page.userContextId,
-  });
-  Assert.equal((await plain).userContextId, home.userContextId, "an unrouted link stays");
 
   // A container chosen on purpose ("Open in New Container Tab") is the user's choice.
   const chosen = nextTab();
@@ -182,6 +168,107 @@ add_task(async function a_link_opened_in_the_background_goes_there_and_says_so()
     userContextId: home.userContextId,
   });
   Assert.equal((await chosen).userContextId, home.userContextId, "an explicit container stays");
+  tidy();
+});
+
+/**
+ * A link on the selected page (in rt-home) to `href`, with `target` if given, clicked by the
+ * page's own script after a user gesture, as a hostile page can: `mods` as on a MouseEvent.
+ * @param {string} href
+ * @param {{ target?: string, ctrlKey?: boolean, button?: number }} how
+ */
+function pageClicks(href, { target = "", ctrlKey = false, button = 0 } = {}) {
+  return SpecialPowers.spawn(
+    gBrowser.selectedBrowser,
+    [href, target, ctrlKey, button],
+    (url, tgt, ctrl, btn) => {
+      const a = content.document.createElement("a");
+      a.href = url;
+      if (tgt) a.target = tgt;
+      a.textContent = "link";
+      content.document.body.append(a);
+      content.document.notifyUserGestureActivation();
+      const type = btn === 1 ? "auxclick" : "click";
+      a.dispatchEvent(
+        new content.MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          ctrlKey: ctrl,
+          button: btn,
+        }),
+      );
+    },
+  );
+}
+
+add_task(async function a_page_can_never_route_the_links_it_opens() {
+  // Decision 3: a page in rt-home must not open a URL of its choosing in rt-work's container
+  // (with rt-work's cookies). Every open a page triggers stays in the page's container.
+  const page = await inHome();
+
+  // A synthetic ctrl-click from the page's script: ClickHandlerChild → ClickHandlerParent →
+  // openLinkIn, a background tab with the page's principal.
+  let opened = nextTab();
+  await pageClicks(`${WORK}?ctrl`, { ctrlKey: true });
+  let tab = await opened;
+  Assert.equal(tab.userContextId, home.userContextId, "a scripted ctrl-click stays in rt-home");
+  Assert.equal(activeName(), "rt-home", "and opens nothing in rt-work");
+  Assert.equal(gBrowser.selectedTab, page, "in the background");
+  BrowserTestUtils.removeTab(tab);
+
+  // A scripted middle-click.
+  opened = nextTab();
+  await pageClicks(`${WORK}?middle`, { button: 1 });
+  tab = await opened;
+  Assert.equal(tab.userContextId, home.userContextId, "a scripted middle-click stays in rt-home");
+  BrowserTestUtils.removeTab(tab);
+
+  // What ClickHandlerParent passes on (the page's principal and container), directly.
+  opened = nextTab();
+  window.openLinkIn(`${WORK}?direct`, "tab", {
+    inBackground: true,
+    triggeringPrincipal: page.linkedBrowser.contentPrincipal,
+    userContextId: page.userContextId,
+  });
+  tab = await opened;
+  Assert.equal(tab.userContextId, home.userContextId, "openLinkIn from a page stays in rt-home");
+  BrowserTestUtils.removeTab(tab);
+
+  // target=_blank: a foreground tab tied to its opener, with the hint once it is shown.
+  clearNotice();
+  opened = nextTab();
+  await pageClicks(`${WORK}?blank`, { target: "_blank" });
+  tab = await opened;
+  Assert.equal(tab.userContextId, home.userContextId, "target=_blank stays in rt-home");
+  await BrowserTestUtils.browserLoaded(tab.linkedBrowser, false, `${WORK}?blank`);
+  await until(
+    () => noticeText() === 'example.com goes to "rt-work" (route 1): :route move',
+    "and is hinted, so the user can move it",
+  );
+  BrowserTestUtils.removeTab(tab);
+
+  // A page in no container (a foreign tab): ClickHandlerParent passes no container at all, so
+  // only the page's principal tells the open apart from one the user started.
+  const bare = BrowserTestUtils.addTab(gBrowser, `${ELSEWHERE}?bare`, { userContextId: 0 });
+  gBrowser.selectedTab = bare;
+  await BrowserTestUtils.browserLoaded(bare.linkedBrowser);
+  Assert.equal(bare.userContextId, 0, "a page in no container");
+  opened = nextTab();
+  await pageClicks(`${WORK}?bare-ctrl`, { ctrlKey: true });
+  tab = await opened;
+  Assert.equal(tab.userContextId, 0, "its scripted ctrl-click stays in no container");
+  BrowserTestUtils.removeTab(tab);
+
+  // window.open.
+  gBrowser.selectedTab = page;
+  opened = nextTab();
+  await SpecialPowers.spawn(page.linkedBrowser, [`${WORK}?open`], (url) => {
+    content.document.notifyUserGestureActivation();
+    content.window.open(url);
+  });
+  tab = await opened;
+  Assert.equal(tab.userContextId, home.userContextId, "window.open stays in rt-home");
+  BrowserTestUtils.removeTab(tab);
   tidy();
 });
 
@@ -206,6 +293,21 @@ add_task(async function same_tab_navigation_is_never_moved_but_hinted() {
   const copy = await moved;
   Assert.equal(copy.userContextId, work.userContextId, ":route move reopens it in rt-work");
   await until(() => !page.isConnected, "and closes the original");
+  tidy();
+});
+
+add_task(async function a_redirect_inside_a_tab_is_never_moved() {
+  const page = await inHome();
+  const count = gBrowser.tabs.length;
+  const loaded = BrowserTestUtils.browserLoaded(page.linkedBrowser, false, `${WORK}?redirect`);
+  await SpecialPowers.spawn(page.linkedBrowser, [`${WORK}?redirect`], (url) => {
+    content.location.replace(url);
+  });
+  await loaded;
+  Assert.equal(gBrowser.tabs.length, count, "no tab opens");
+  Assert.equal(page.userContextId, home.userContextId, "the tab stays in rt-home's container");
+  Assert.equal(gBrowser.selectedTab, page, "and stays selected");
+  Assert.equal(activeName(), "rt-home", "the workspace stays");
   tidy();
 });
 
@@ -254,10 +356,12 @@ add_task(async function an_external_link_routes_by_the_app_that_opened_it() {
   const { tab: plain } = await remote([`${WORK}?noapp`]);
   Assert.equal(plain.userContextId, work.userContextId, "the domain rule: rt-work");
 
-  // A hint that is not a simple name is ignored: no app rule, and no domain rule for .org.
+  // A hint that is not a simple name is ignored, even by a rule naming exactly that string
+  // (config.toml would refuse such a rule; set here past the check).
+  route([{ app: "../../testapp", workspace: "rt-home" }]);
   ww().switchTo({ id: def("main").id });
   const { tab: bad } = await remote(["-vimma-from", "../../testapp", `${ELSEWHERE}?bad`]);
-  Assert.equal(bad.userContextId, def("main").userContextId, "the workspace default");
+  Assert.equal(bad.userContextId, def("main").userContextId, "not routed: the workspace default");
 
   route([{ domain: "example.com", workspace: "rt-work" }]);
   tidy();
@@ -286,6 +390,28 @@ add_task(async function a_new_windows_first_tab_is_routed_with_the_startup_app()
   Assert.equal(cold.gBrowser.tabs.length, 1, "in the first tab, no second one");
   Assert.equal(Services.env.get("VIMMA_FROM"), "", "the variable is read once and cleared");
   await BrowserTestUtils.closeWindow(cold);
+
+  const later = await openWindow(`${ELSEWHERE}?later`);
+  Assert.notEqual(
+    later.gBrowser.selectedTab.userContextId,
+    home.userContextId,
+    "a later window does not get the startup app",
+  );
+  await BrowserTestUtils.closeWindow(later);
+
+  // Read and cleared at once, even when the first window never asks (a private one).
+  Services.env.set("VIMMA_FROM", "coldapp");
+  WorkspaceRouter.resetStartupAppForTesting();
+  Assert.equal(Services.env.get("VIMMA_FROM"), "", "cleared before any window asks");
+  const priv = await BrowserTestUtils.openNewBrowserWindow({ private: true });
+  await BrowserTestUtils.closeWindow(priv);
+  const afterPrivate = await openWindow(`${ELSEWHERE}?after-private`);
+  Assert.notEqual(
+    afterPrivate.gBrowser.selectedTab.userContextId,
+    home.userContextId,
+    "the startup app is gone once a first window has started",
+  );
+  await BrowserTestUtils.closeWindow(afterPrivate);
 
   const byDomain = await openWindow(`${WORK}?window`);
   Assert.equal(
