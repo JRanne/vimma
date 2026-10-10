@@ -375,3 +375,49 @@ describe("[modal] insert_editing", () => {
     ]);
   });
 });
+
+// docs/specs/bookmarks.md, decision 2 (user decision, 2026-10-10).
+describe("[bookmarks] root", () => {
+  test('defaults to "toolbar"', () => {
+    expect(ok(v2()).bookmarks).toEqual({ root: "toolbar" });
+    expect(DEFAULT_CONFIG.bookmarks).toEqual({ root: "toolbar" });
+    expect(formatDefaultsToml()).toMatch(/^\[bookmarks\]\n(#.*\n)*root = "toolbar"$/m);
+  });
+
+  test.each([["toolbar"], ["all"]])('root = "%s" is accepted', (root) => {
+    expect(ok(v2("[bookmarks]", `root = "${root}"`)).bookmarks.root).toBe(root);
+  });
+
+  test("an unknown root is an error, with the nearest name when one is close", () => {
+    expect(errors(v2("[bookmarks]", 'root = "menu"'))).toEqual([
+      { line: 3, path: "bookmarks.root", message: 'must be "toolbar" or "all"' },
+    ]);
+    expect(errors(v2("[bookmarks]", 'root = "tolbar"'))).toEqual([
+      {
+        line: 3,
+        path: "bookmarks.root",
+        message: 'must be "toolbar" or "all"',
+        suggestion: "toolbar",
+      },
+    ]);
+    expect(errors(v2("[bookmarks]", "root = true"))).toEqual([
+      { line: 3, path: "bookmarks.root", message: "expected a string, got a boolean" },
+    ]);
+  });
+
+  test("an unknown key suggests root; the section is a table, new in schema 2", () => {
+    expect(errors(v2("[bookmarks]", 'roots = "all"'))).toEqual([
+      { line: 3, path: "bookmarks.roots", message: 'unknown key "roots"', suggestion: "root" },
+    ]);
+    expect(errors(v2("bookmarks = 1"))).toEqual([
+      { line: 2, path: "bookmarks", message: "expected a table, got an integer" },
+    ]);
+    expect(errors(toml("schema = 1", "[bookmarks]", 'root = "all"'))).toEqual([
+      {
+        line: 2,
+        path: "bookmarks",
+        message: "is new in schema 2: put schema = 2 at the top of the file",
+      },
+    ]);
+  });
+});

@@ -15,12 +15,21 @@ As a Vimma user I open my bookmarks the way I open the side panel, with a keybin
 1. **Storage: Firefox's Places** (`PlacesUtils.bookmarks`, `PlacesUtils.promiseBookmarksTree`,
    `PlacesUtils.observers`; grepped in `toolkit/components/places/`). Existing bookmarks,
    import/export, the Library and Sync keep working; Vimma keeps no bookmark store of its own.
-2. **One tree, rooted at the Bookmarks Menu.** Its top level lists, in this order, the folders
-   `toolbar` (Bookmarks Toolbar), `other` (Other Bookmarks), `mobile` (only when it has
-   something), then the Menu's own children. A path is relative to the Menu, and its first
-   segment may name `toolbar`, `other` or `mobile` (an alias wins over a Menu folder of that
-   name). The four roots cannot be renamed, moved or deleted. Separators are not listed. Tags
-   are not shown.
+2. **One tree, rooted at the Bookmarks Toolbar** (`[bookmarks] root = "toolbar"`, the default;
+   user decision, 2026-10-10). Its top level is the toolbar folder's own children, at depth 0
+   (`aria-level` 1); no row stands for the toolbar itself, and the header says "Bookmarks
+   Toolbar". Paths (quick add, `a`, `A`, `m`, Tab completion) are relative to the toolbar. The
+   Menu, Other Bookmarks and mobile are not listed; a bookmark there that quick add finds is
+   named by its path from the Menu and offered at the toolbar's top by its title. An empty
+   toolbar shows an empty state (not a row) saying the panel shows the Bookmarks Toolbar, that
+   `a` adds the current page, and how to set `root = "all"`.
+   `root = "all"` (schema 2; anything else is a config error) is the earlier tree, **rooted at
+   the Bookmarks Menu**: its top level lists, in this order, the folders `toolbar` (Bookmarks
+   Toolbar), `other` (Other Bookmarks), `mobile` (only when it has something), then the Menu's
+   own children. A path is relative to the Menu, and its first segment may name `toolbar`,
+   `other` or `mobile` (an alias wins over a Menu folder of that name). The four roots cannot
+   be renamed, moved or deleted. Changing `root` re-reads an open panel. Either way,
+   separators are not listed and tags are not shown.
 3. **Same slot as the side panel, the same modal mode.** The bookmarks panel is its own box
    (`#vimma-bookmarks`) built by the side panel's helpers, styled by `side-panel.css` and the
    theme tokens, first child of `#browser`. Opening one panel closes the other. Both run in
@@ -87,7 +96,7 @@ As a Vimma user I open my bookmarks the way I open the side panel, with a keybin
 | `Esc`, the toggle keys        | close (`Esc` clears a filter first)                          |
 
 "Here" is the highlighted folder, or the highlighted bookmark's folder; at the top level, the
-Menu. Digits (`panel.select`) do nothing in the bookmarks panel.
+toolbar (the Menu with `root = "all"`). Digits (`panel.select`) do nothing in the bookmarks panel.
 
 ## Edge cases
 
@@ -134,3 +143,16 @@ tries` and `ctrl+b a opens the prompt - timed out`.
   so `toggle_bookmarks` is `ctrl+b shift+b` only and `space b` does nothing by default. The leader
   option and `<leader>` bindings in `[keys]` stay for users to add. The bookmarks tests press
   `ctrl+b shift+b` where they pressed `space b`; the assertions are unchanged.
+- **Toolbar root** (user decision, 2026-10-10): "bookmarks button should show only contents of
+  bookmarks toolbar". The panel, quick add and paths are rooted at the Bookmarks Toolbar folder
+  (decision 2), with no wrapper row; `[bookmarks] root = "all"` keeps the Menu tree. Red: Vitest
+  12 failures (`rootLabel is not a function`, `expected 'menu________' to be 'toolbar_____'`,
+  `[bookmarks] root` unknown key); the mochitest 21 (`only the Bookmarks Toolbar's contents, at
+the top - ["toolbar","other","In the menu"]`, `Tab completes the folder name - "work/doQuick"`).
+  Green: Vitest 2,441; the bookmarks mochitest 154/154 with `browser_vimma_a11y.js`. The fixture
+  moved from the Menu to the toolbar, the menu and Other Bookmarks hold one bookmark each, and
+  the assertions that named the old root (the top-level titles, `menu/…` and `other/…` paths, the
+  `toolbar/` completion, root folders refusing) now assert the toolbar view, the old ones under
+  `root = "all"`. `browser_vimma_a11y.js` gives the empty test toolbar a folder to show.
+  Mutation check: with core `fromPlaces` ignoring `"toolbar"`, 5 Vitest tests fail; reverted.
+  The `defaults.toml` snapshot gains the `[bookmarks]` section only.

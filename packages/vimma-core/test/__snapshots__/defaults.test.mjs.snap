@@ -246,6 +246,11 @@ layout = "dwindle"
 # The main pane's size in the main-vertical and main-horizontal layouts, 20 to 80 percent.
 main_size = 60
 
+# The bookmarks panel (ctrl+b shift+b): "toolbar" lists the Bookmarks Toolbar's contents,
+# where ctrl+b a files new bookmarks; "all" lists every bookmark from the Bookmarks Menu.
+[bookmarks]
+root = "toolbar"
+
 # Per-site insert mode: auto (detect text fields), never (keys stay vimma's), always.
 # A host also covers its subdomains. None by default.
 # [sites."docs.google.com"]

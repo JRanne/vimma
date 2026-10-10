@@ -20,6 +20,7 @@ import { resolveRoutes, validateRoutes } from "./routes.mjs";
 import { formatPath, locateKeys, parsePath, parseToml } from "./toml.mjs";
 import { OVERLAP_CHORDS, canonicalChord, isShortcutChord } from "./firefox-keys.mjs";
 import { KeyNotationError, parseKey } from "./keys.mjs";
+import { BOOKMARKS_ROOTS } from "./bookmarks.mjs";
 
 /** @import { Keymap } from "./keymap.mjs" */
 /** @import { UserConfig } from "./defaults.mjs" */
@@ -27,6 +28,7 @@ import { KeyNotationError, parseKey } from "./keys.mjs";
 /** @import { ThemeConfig } from "./theme.mjs" */
 /** @import { InsertSiteMode, InsertSiteRule } from "./editable.mjs" */
 /** @import { Route } from "./routes.mjs" */
+/** @import { BookmarksRoot } from "./bookmarks.mjs" */
 
 /**
  * @typedef {object} ConfigError
@@ -61,6 +63,7 @@ import { KeyNotationError, parseKey } from "./keys.mjs";
  * @property {Route[]} routes                            `[[routes]]` in file order (schema 2)
  * @property {FirefoxKeySetting} firefox                 `[firefox]`, chords canonical (schema 2)
  * @property {boolean} insertEditing                     `[modal] insert_editing` (schema 2)
+ * @property {{ root: BookmarksRoot }} bookmarks          `[bookmarks]` (schema 2)
  */
 
 /**
@@ -147,6 +150,7 @@ const TOP_KEYS = [
   "sites",
   "routes",
   "firefox",
+  "bookmarks",
 ];
 const KEYMAP_SECTIONS = new Set(["keys", "modal", "unbind"]);
 const WORKSPACE_KEYS = ["color", "icon", "home", "autofill"];
@@ -170,7 +174,10 @@ const SCHEMA_2_KEYS = [
   "routes",
   "firefox",
   "modal.insert_editing",
+  "bookmarks",
 ];
+/** `[bookmarks]` (docs/specs/bookmarks.md, decision 2). */
+const BOOKMARKS_KEYS = ["root"];
 const NEEDS_SCHEMA_2 = "is new in schema 2: put schema = 2 at the top of the file";
 const LABEL = "[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?";
 const DOMAIN = new RegExp(`^(?=.{1,253}$)${LABEL}(?:\\.${LABEL})*\\.?$`, "i");
@@ -428,6 +435,17 @@ function validate(raw, declared) {
     }
   }
 
+  if (declared >= 2 && isTable(raw.bookmarks)) {
+    for (const [key, v] of Object.entries(raw.bookmarks)) {
+      const path = ["bookmarks", key];
+      if (key !== "root") unknownKey(path, key, BOOKMARKS_KEYS);
+      else if (typeof v !== "string") typeError(path, v, "a string");
+      else if (!BOOKMARKS_ROOTS.includes(/** @type {BookmarksRoot} */ (v))) {
+        fail(path, 'must be "toolbar" or "all"', closest(v, BOOKMARKS_ROOTS));
+      }
+    }
+  }
+
   if (declared >= 2 && isTable(raw.sites)) {
     /** @type {Map<string, string>} */
     const seen = new Map();
@@ -569,6 +587,7 @@ export function mergeWithDefaults(user, workspaceOrder, siteOrder) {
     routes: resolveRoutes(/** @type {Record<string, string>[]} */ (user.routes ?? [])),
     firefox: resolveFirefox(user.firefox),
     insertEditing: /** @type {boolean | undefined} */ (user.modal?.insert_editing) ?? true,
+    bookmarks: { root: user.bookmarks?.root ?? "toolbar" },
   };
 }
 

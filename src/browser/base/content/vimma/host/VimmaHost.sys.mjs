@@ -31,7 +31,7 @@ import { RenamePrompt } from "../ui/rename-prompt.mjs";
 import { SidePanel } from "../ui/side-panel.mjs";
 import { BookmarksPanel } from "../ui/bookmarks-panel.mjs";
 import { quickAdd, runBookmarkEffect } from "./bookmark-actions.mjs";
-import { loadTree, observeBookmarks } from "./bookmark-ops.mjs";
+import { bookmarksRoot, loadTree, observeBookmarks, setBookmarksRoot } from "./bookmark-ops.mjs";
 import { gotoItems, pickerWorkspaces, tabById } from "./goto.mjs";
 import { getTabLabel, setTabLabel } from "./tab-labels.mjs";
 import {
@@ -99,6 +99,7 @@ import {
 /** @import { HintTarget } from "../actors/VimmaActors.sys.mjs" */
 /** @import { AddonOp } from "../core/picker.mjs" */
 /** @import { FirefoxKeySetting } from "../core/config.mjs" */
+/** @import { BookmarksRoot } from "../core/bookmarks.mjs" */
 
 /**
  * Hint mode in one window (m1-hints): from `f` until a label is chosen or Esc. While the
@@ -1030,9 +1031,13 @@ export const VimmaHost = {
    * and closes the bindings overlay, which is rebuilt from it.
    * @param {{ keymap?: Keymap, hintChars?: string, sites?: readonly InsertSiteRule[],
    *   configErrors?: readonly ConfigError[], configFile?: string,
-   *   firefox?: FirefoxKeySetting, insertEditing?: boolean }} next
+   *   firefox?: FirefoxKeySetting, insertEditing?: boolean,
+   *   bookmarksRoot?: BookmarksRoot }} next
    */
   configure(next) {
+    // `[bookmarks] root` (docs/specs/bookmarks.md): an open panel re-reads at the new root.
+    const rootChanged = !!next.bookmarksRoot && next.bookmarksRoot !== bookmarksRoot();
+    if (next.bookmarksRoot) setBookmarksRoot(next.bookmarksRoot);
     if (next.hintChars !== undefined) settings.hintChars = next.hintChars;
     if (next.insertEditing !== undefined) settings.insertEditing = next.insertEditing;
     if (next.firefox) {
@@ -1053,6 +1058,7 @@ export const VimmaHost = {
         state.dispatcher = createDispatcher(keymap);
         state.help.setKeymap(keymap);
       }
+      if (rootChanged) state.bookmarks.scheduleReload();
       this._emit(state);
     }
   },

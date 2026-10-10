@@ -134,14 +134,28 @@ function folderOf(item, extra = {}, before = []) {
 }
 
 /**
- * Our tree from Places' (promiseBookmarksTree of the places root): the Menu, with the toolbar,
- * Other Bookmarks and (when not empty) mobile roots as its first folders (spec decision 2).
+ * What the panel is rooted at (config `[bookmarks] root`, spec decision 2): the Bookmarks
+ * Toolbar's contents, or every bookmark under the Menu.
+ * @typedef {"toolbar" | "all"} BookmarksRoot
+ */
+export const BOOKMARKS_ROOTS = Object.freeze(/** @type {const} */ (["toolbar", "all"]));
+
+/**
+ * Our tree from Places' (promiseBookmarksTree of the places root), spec decision 2.
+ * `"toolbar"`: the Bookmarks Toolbar folder, its bookmarks and subfolders at the top, with no
+ * root folder around them. `"all"`: the Menu, with the toolbar, Other Bookmarks and (when not
+ * empty) mobile roots as its first folders.
  * @param {PlacesItem} places
+ * @param {BookmarksRoot} [root]
  * @returns {Folder}
  */
-export function fromPlaces(places) {
+export function fromPlaces(places, root = "all") {
   const kids = places.children ?? [];
   const find = (/** @type {string} */ guid) => kids.find((k) => k.guid === guid);
+  if (root === "toolbar") {
+    const bar = find(PLACES_ROOTS.toolbar) ?? { guid: PLACES_ROOTS.toolbar, typeCode: TYPE_FOLDER };
+    return folderOf(bar, { title: "", root: "toolbar" });
+  }
   /** @type {Folder[]} */
   const roots = [];
   for (const [guid, name] of /** @type {const} */ ([
@@ -188,7 +202,24 @@ function index(tree) {
 }
 
 /**
- * A folder's names from the top (the Menu itself: []).
+ * The tree's top folder as prompts name it ("add in bookmarks toolbar/").
+ * @param {Folder} tree
+ */
+export function rootLabel(tree) {
+  return tree.root === "toolbar" ? "bookmarks toolbar" : "bookmarks menu";
+}
+
+/**
+ * Whether `guid` is the tree's top folder or anything under it.
+ * @param {Folder} tree
+ * @param {string} guid
+ */
+export function inTree(tree, guid) {
+  return index(tree).has(guid);
+}
+
+/**
+ * A folder's names from the top (the top folder itself: []).
  * @param {Folder} tree
  * @param {string} guid
  * @returns {string[]}

@@ -9,7 +9,9 @@ import {
   folderPath,
   formatBookmarkPath,
   fromPlaces,
+  inTree,
   isOpenable,
+  rootLabel,
   openBookmarks,
   parseBookmarkPath,
   refreshBookmarks,
@@ -110,7 +112,76 @@ describe("fromPlaces", () => {
     const work = /** @type {Folder} */ (root.children[2]);
     expect(work.children.map((c) => c.guid)).toEqual(["docs", "jira"]);
   });
+  test('"all" is the whole tree, rooted at the menu', () => {
+    expect(fromPlaces(places, "all")).toEqual(root);
+    expect(rootLabel(root)).toBe("bookmarks menu");
+  });
 });
+
+// User decision, 2026-10-10: the panel shows only the Bookmarks Toolbar.
+describe('fromPlaces(places, "toolbar")', () => {
+  const nested = structuredClone(places);
+  nested.children[1].children.push(
+    folder("tools", "tools", [bm("vitest", "Vitest", "https://vitest.dev/")]),
+  );
+  const bar = fromPlaces(nested, "toolbar");
+
+  test("the toolbar's own children at the top, no root folders around them", () => {
+    expect(bar.guid).toBe(PLACES_ROOTS.toolbar);
+    expect(bar.root).toBe("toolbar");
+    expect(bar.children.map((c) => c.title)).toEqual(["GitHub", "tools"]);
+    const rows = flattenTree(bar, new Set());
+    expect(rows.map((r) => [r.title, r.depth, r.parent, r.root])).toEqual([
+      ["GitHub", 0, PLACES_ROOTS.toolbar, false],
+      ["tools", 0, PLACES_ROOTS.toolbar, false],
+    ]);
+    expect(rows.some((r) => r.guid === PLACES_ROOTS.toolbar)).toBe(false);
+    expect(rootLabel(bar)).toBe("bookmarks toolbar");
+  });
+  test("menu and other bookmarks are outside it", () => {
+    expect(inTree(bar, "jira")).toBe(false);
+    expect(inTree(bar, "vitest")).toBe(true);
+    expect(filterBookmarks(bar, "jira")).toEqual([]);
+  });
+  test("paths are from the toolbar: no toolbar/other alias", () => {
+    expect(folderPath(bar, "tools")).toEqual(["tools"]);
+    expect(folderPath(bar, PLACES_ROOTS.toolbar)).toEqual([]);
+    expect(resolveFolders(bar, bar.guid, ["work", "docs"])).toEqual({
+      guid: PLACES_ROOTS.toolbar,
+      missing: ["work", "docs"],
+    });
+    expect(resolveFolders(bar, bar.guid, ["toolbar"])).toEqual({
+      guid: PLACES_ROOTS.toolbar,
+      missing: ["toolbar"],
+    });
+    expect(completeFolder(bar, bar.guid, "to")).toEqual(["tools/"]);
+    expect(completeFolder(bar, bar.guid, "wo")).toEqual([]);
+  });
+  test("a and A at the top add to the toolbar, also when it is empty", () => {
+    const s = openBookmarks(bar);
+    expect(sel(s)?.guid).toBe("gh");
+    expect(press(s, [{ id: "bookmarks.add" }]).effect).toEqual({
+      type: "add",
+      folder: PLACES_ROOTS.toolbar,
+    });
+    const empty = openBookmarks(fromPlaces(emptyBar(), "toolbar"));
+    expect(empty.rows).toEqual([]);
+    expect(press(empty, [{ id: "bookmarks.add_folder" }]).effect).toEqual({
+      type: "add_folder",
+      folder: PLACES_ROOTS.toolbar,
+    });
+  });
+  test("without a toolbar in Places, an empty toolbar root", () => {
+    const none = fromPlaces({ guid: "root________", typeCode: 2, children: [] }, "toolbar");
+    expect(none).toMatchObject({ guid: PLACES_ROOTS.toolbar, root: "toolbar", children: [] });
+  });
+});
+
+function emptyBar() {
+  const p = structuredClone(places);
+  p.children[1].children = [];
+  return p;
+}
 
 describe("flattenTree", () => {
   test("collapsed: the top level only", () => {

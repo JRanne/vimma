@@ -783,19 +783,37 @@ Vimma keeps no list of its own; it gives you keys to reach them.
 the window with the page's title and the cursor before it. Type folders in front of the title,
 separated by `/`: `work/docs/My page` files the page in folder `work`, then `docs`, and makes the
 folders that are not there yet. `Tab` completes a folder name (again: the next match). `Enter`
-saves, `Esc` cancels. A path is counted from the Bookmarks Menu; start it with `toolbar/` or
-`other/` for the Bookmarks Toolbar or Other Bookmarks. A path ending in `/` files the page in
-that folder under its title. `:bookmark work/docs/My page` saves at once, without the prompt.
+saves, `Esc` cancels. A path is counted from the Bookmarks Toolbar: `work/docs/My page` lands in
+the toolbar's `work` folder. A path ending in `/` files the page in that folder under its title.
+`:bookmark work/docs/My page` saves at once, without the prompt. (With `[bookmarks] root = "all"`,
+below, a path is counted from the Bookmarks Menu instead; start it with `toolbar/` or `other/`
+for the Bookmarks Toolbar or Other Bookmarks.)
 
 If the page is bookmarked already, Vimma says where (`already bookmarked: work/docs/My page`)
 and the prompt changes to `move/rename:` with that path: edit it and press `Enter` to move or
-rename the bookmark, or `Esc` to leave it. Only `http`, `https`, `file` and `about:` pages can
-be bookmarked this way.
+rename the bookmark, or `Esc` to leave it. A bookmark outside the toolbar (in the Menu or Other
+Bookmarks) is named by its path from the Menu, and the prompt offers its title alone: `Enter`
+moves it to the toolbar. Only `http`, `https`, `file` and `about:` pages can be bookmarked this
+way.
 
 **The bookmarks panel:** `ctrl+b shift+b` or `:bookmarks` opens your
 bookmarks on the left, where the side panel opens; one of the two shows at a time. It works
-like neo-tree: the Bookmarks Menu's folders and bookmarks, with `toolbar` and `other` (and
-`mobile`, when you have some) as the first folders.
+like neo-tree over the **Bookmarks Toolbar**: the toolbar's own bookmarks and folders are the
+top level, with no folder around them, and its header says "Bookmarks Toolbar". The Menu, Other
+Bookmarks and mobile bookmarks are not listed. An empty toolbar shows a note saying so, that `a`
+adds the current page, and how to list everything.
+
+To see every bookmark as before, set this in [config.toml](#configtoml):
+
+```toml
+schema = 2
+
+[bookmarks]
+root = "all"    # default "toolbar"
+```
+
+Then the panel is the Bookmarks Menu's folders and bookmarks, with `toolbar` and `other` (and
+`mobile`, when you have some) as the first folders, and paths count from the Menu.
 
 | Key                     | What it does                                                                              |
 | ----------------------- | ----------------------------------------------------------------------------------------- |
@@ -818,8 +836,8 @@ like neo-tree: the Bookmarks Menu's folders and bookmarks, with `toolbar` and `o
 A bookmark opens in your current workspace's container, and in a private window it stays
 private. `javascript:` and `data:` bookmarks (bookmarklets) are listed but do not open from
 Vimma: it says so instead, since they would run code in the page. Changes made elsewhere (the
-Library, Sync, another window) show in the panel at once. The four top folders cannot be
-renamed, moved or deleted. The panel remembers which folders you opened until Vimma quits.
+Library, Sync, another window) show in the panel at once. With `root = "all"`, the four top
+folders cannot be renamed, moved or deleted. The panel remembers which folders you opened until Vimma quits.
 
 ## Goto picker and tab rename
 
@@ -1045,9 +1063,10 @@ accent = "#ff9e64"
   `[workspaces]` (a new one gets its container at once; one removed from the file stays, as a
   workspace you can close yourself); `[firefox] disable` and `enable` (which of Firefox's own
   shortcuts are off, [above](#firefoxs-own-shortcuts)); `[modal] insert_editing` (`ctrl+w`,
-  `ctrl+u`, `ctrl+h` in text fields, default `true`).
-- **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]`, `[firefox]`, `hint_chars`
-  and `insert_editing`; every key,
+  `ctrl+u`, `ctrl+h` in text fields, default `true`); `[bookmarks] root` (`"toolbar"`, the
+  default, or `"all"`: what the [bookmarks panel](#bookmarks) lists and where paths start).
+- **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]`, `[firefox]`, `[bookmarks]`,
+  `hint_chars` and `insert_editing`; every key,
   its type and default are in [m5-core-config-and-theme](specs/m5-core-config-and-theme.md#schema-v1)
   and [m3-m4-core-prep](specs/m3-m4-core-prep.md#config-schema-2), and
   `packages/vimma-core/defaults.toml` lists them with their defaults.

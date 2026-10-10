@@ -40,6 +40,39 @@ const RELOAD_DELAY_MS = 30;
  */
 
 /**
+ * The empty Bookmarks Toolbar (docs/specs/bookmarks.md, decision 2): what the panel shows,
+ * how to add to it, and how to list every bookmark instead. Not a row: the tree describes
+ * itself with it, as with "no bookmarks".
+ * @param {Document} doc
+ * @param {HTMLElement} list
+ */
+function toolbarEmptyState(doc, list) {
+  const li = emptyRow(
+    doc,
+    list,
+    `${BOOKMARKS_ID}-empty`,
+    "",
+    "vimma-panel-empty vimma-bookmarks-empty",
+  );
+  /**
+   * @param {string} tag
+   * @param {string} text
+   */
+  const el = (tag, text) => panelElement(doc, tag, "", text);
+  const add = el("p", "Press ");
+  add.append(el("kbd", "a"), " to add the current page here.");
+  const all = el("p", "To list every bookmark, set ");
+  all.append(el("code", 'root = "all"'), " under ", el("code", "[bookmarks]"), " in config.toml.");
+  li.append(
+    panelElement(doc, "p", "vimma-bookmarks-empty-title", "The Bookmarks Toolbar is empty"),
+    el("p", "This panel shows the Bookmarks Toolbar."),
+    add,
+    all,
+  );
+  return li;
+}
+
+/**
  * What a row shows under its title: a bookmark's site (its folder path in the filter's flat
  * list), nothing for a folder.
  * @param {Row} row
@@ -70,6 +103,8 @@ export class BookmarksPanel {
     this.list = null;
     /** @type {HTMLInputElement | null} */
     this.filter = null;
+    /** @type {HTMLElement | null} the header's title */
+    this.name = null;
     /** @type {BookmarksState | null} null until the tree has loaded */
     this.state = null;
     this.opened = false;
@@ -251,7 +286,7 @@ export class BookmarksPanel {
   destroy() {
     this.close();
     this.box?.remove();
-    this.box = this.list = this.filter = null;
+    this.box = this.list = this.filter = this.name = null;
   }
 
   /** @private */
@@ -268,6 +303,9 @@ export class BookmarksPanel {
     list.removeAttribute("aria-busy");
     const { rows, selected } = state;
     const filtering = !!state.query.trim();
+    const toolbar = state.tree.root === "toolbar";
+    const name = toolbar ? "Bookmarks Toolbar" : "Bookmarks";
+    if (this.name && this.name.textContent !== name) this.name.textContent = name;
     const start = renderStart(rows.length, selected, this.start);
     if (rows === this.rendered && start === this.start) {
       // Only the highlight moved, within the rendered window.
@@ -313,7 +351,8 @@ export class BookmarksPanel {
         items.push(row);
       }
       if (end < rows.length) items.push(more(`… ${rows.length - end} more`));
-      if (!rows.length) {
+      if (!rows.length && toolbar && !filtering) items.push(toolbarEmptyState(doc, list));
+      else if (!rows.length) {
         const text = filtering ? "no match" : "no bookmarks";
         items.push(emptyRow(doc, list, `${BOOKMARKS_ID}-empty`, text));
       }
@@ -356,7 +395,9 @@ export class BookmarksPanel {
     filter.hidden = true;
     filter.addEventListener("input", () => this.onFilterInput());
     filter.addEventListener("keydown", (e) => this.onFilterKey(e));
-    header.append(panelElement(doc, "span", "vimma-panel-name", "Bookmarks"), filter);
+    const name = panelElement(doc, "span", "vimma-panel-name", "Bookmarks");
+    header.append(name, filter);
+    this.name = name;
     this.box = box;
     this.list = list;
     this.filter = filter;

@@ -6,12 +6,7 @@
 // bookmarks panel's effects (open, add, rename, move, delete, copy), over the rename prompt,
 // the notice, the split code and bookmark-ops.mjs (Places).
 
-import {
-  PLACES_ROOTS,
-  completeFolder,
-  folderPath,
-  formatBookmarkPath,
-} from "../core/bookmarks.mjs";
+import { completeFolder, folderPath, formatBookmarkPath, rootLabel } from "../core/bookmarks.mjs";
 import {
   addBookmark,
   addFolder,
@@ -54,9 +49,10 @@ function apply(ctx, change) {
 }
 
 /**
- * `ctrl+b a` and `:bookmark [path]`: files the selected page under a typed path from the Menu
- * (a trailing `/`: under its own title). Already bookmarked, it says where and offers to move
- * or rename that bookmark instead (spec decision 7).
+ * `ctrl+b a` and `:bookmark [path]`: files the selected page under a typed path from the
+ * tree's top, the Bookmarks Toolbar by default (a trailing `/`: under its own title). Already
+ * bookmarked, it says where and offers to move or rename that bookmark instead (spec
+ * decision 7); one outside the tree is offered at the top under its title.
  * @param {BookmarkContext} ctx
  * @param {string} [text]
  */
@@ -67,13 +63,16 @@ export async function quickAdd(ctx, text) {
     return;
   }
   const [existing, tree] = await Promise.all([findBookmark(page.url), loadTree()]);
-  const complete = (/** @type {string} */ before) =>
-    completeFolder(tree, PLACES_ROOTS.menu, before);
+  const complete = (/** @type {string} */ before) => completeFolder(tree, tree.guid, before);
   if (existing) {
-    ctx.say(`already bookmarked: ${existing.path}`);
+    ctx.say(
+      existing.outside
+        ? `already bookmarked outside the ${rootLabel(tree)}: ${existing.path}`
+        : `already bookmarked: ${existing.path}`,
+    );
     ctx.prompt.prompt({
       label: "move/rename: ",
-      value: text || existing.path,
+      value: text || (existing.outside ? existing.title : existing.path),
       complete,
       submit: (t) => apply(ctx, () => placeBookmark(existing.guid, t)),
     });
@@ -94,7 +93,7 @@ export async function quickAdd(ctx, text) {
 }
 
 /**
- * A folder's path for a prompt's label: `work/docs/`, or "" for the Menu.
+ * A folder's path for a prompt's label: `work/docs/`, or "" for the tree's top.
  * @param {Folder} tree
  * @param {string} guid
  */
@@ -158,7 +157,7 @@ export function runBookmarkEffect(ctx, effect) {
       }
       const base = effect.folder;
       ctx.prompt.prompt({
-        label: `add in ${where(tree, base) || "bookmarks menu/"}: `,
+        label: `add in ${where(tree, base) || `${rootLabel(tree)}/`}: `,
         value: page.title,
         caret: 0,
         placeholder: "folder/title, or folder/ for a folder",
@@ -170,7 +169,7 @@ export function runBookmarkEffect(ctx, effect) {
     case "add_folder": {
       const base = effect.folder;
       ctx.prompt.prompt({
-        label: `new folder in ${where(tree, base) || "bookmarks menu/"}: `,
+        label: `new folder in ${where(tree, base) || `${rootLabel(tree)}/`}: `,
         complete: (before) => completeFolder(tree, base, before),
         submit: (t) => apply(ctx, () => addFolder(t, base)),
       });
@@ -188,7 +187,7 @@ export function runBookmarkEffect(ctx, effect) {
         label: "move to: ",
         value: where(tree, effect.from),
         placeholder: "folder/folder/",
-        complete: (before) => completeFolder(tree, PLACES_ROOTS.menu, before),
+        complete: (before) => completeFolder(tree, tree.guid, before),
         submit: (t) => apply(ctx, () => moveItem(effect.guid, t)),
       });
       return;

@@ -347,6 +347,13 @@ add_task(async function side_panel_returns_focus_to_the_url_bar_it_was_opened_fr
 });
 
 add_task(async function bookmarks_panel_is_a_tree_with_levels_and_expanded_states() {
+  // The panel lists the Bookmarks Toolbar's contents (docs/specs/bookmarks.md): give it a folder.
+  const folder0 = await PlacesUtils.bookmarks.insert({
+    parentGuid: PlacesUtils.bookmarks.toolbarGuid,
+    type: PlacesUtils.bookmarks.TYPE_FOLDER,
+    title: "a11y folder",
+  });
+  registerCleanupFunction(() => PlacesUtils.bookmarks.remove(folder0.guid).catch(() => {}));
   const tab = await openPage();
   prefix("B", { shiftKey: true });
   const panel = await until(() => {

@@ -7,16 +7,33 @@
 // are core bookmarks.mjs; this only talks to PlacesUtils.
 
 import {
-  PLACES_ROOTS,
   folderPath,
   formatBookmarkPath,
   fromPlaces,
+  inTree,
   isOpenable,
   parseBookmarkPath,
   resolveFolders,
 } from "../core/bookmarks.mjs";
 
-/** @import { Folder } from "../core/bookmarks.mjs" */
+/** @import { BookmarksRoot, Folder } from "../core/bookmarks.mjs" */
+
+/** `[bookmarks] root` (spec decision 2), for every window: VimmaHost.configure sets it. */
+/** @type {BookmarksRoot} */
+let root = "toolbar";
+
+/**
+ * Roots the tree at the toolbar or the Menu; paths and quick add follow.
+ * @param {BookmarksRoot} next
+ */
+export function setBookmarksRoot(next) {
+  root = next;
+}
+
+/** The root in force. */
+export function bookmarksRoot() {
+  return root;
+}
 
 /** @returns {any} PlacesUtils */
 function places() {
@@ -33,11 +50,11 @@ export const BOOKMARK_EVENTS = Object.freeze([
 ]);
 
 /**
- * The whole tree, rooted at the Menu (core fromPlaces).
+ * The tree at the configured root: the toolbar's contents, or the Menu (core fromPlaces).
  * @returns {Promise<Folder>}
  */
 export async function loadTree() {
-  return fromPlaces(await places().promiseBookmarksTree(""));
+  return fromPlaces(await places().promiseBookmarksTree(""), root);
 }
 
 /**
@@ -83,22 +100,28 @@ export function currentPage(win) {
 }
 
 /**
- * The most recently changed bookmark of `url`, with its path from the Menu, or null.
+ * The most recently changed bookmark of `url`, with its path from the tree's top, or null.
+ * `outside`: it is not under the root in force (a Menu bookmark with the toolbar as root);
+ * its path is then from the Menu, and `title` alone files it at the top.
  * @param {string} url
- * @returns {Promise<{ guid: string, path: string } | null>}
+ * @returns {Promise<{ guid: string, path: string, title: string, outside: boolean } | null>}
  */
 export async function findBookmark(url) {
   const bm = await places().bookmarks.fetch({ url });
   if (!bm) return null;
-  const tree = await loadTree();
+  let tree = await loadTree();
+  const outside = !inTree(tree, bm.parentGuid);
+  if (outside) tree = fromPlaces(await places().promiseBookmarksTree(""), "all");
   return {
     guid: bm.guid,
     path: formatBookmarkPath([...folderPath(tree, bm.parentGuid), bm.title]),
+    title: formatBookmarkPath([bm.title]),
+    outside,
   };
 }
 
 /**
- * Files `page` under `text` from folder `base` (spec decision 5). `folderOnly`: a trailing
+ * Files `page` under `text` from folder `base`, by default the tree's top (spec decision 5). `folderOnly`: a trailing
  * `/` makes the folders and no bookmark (the panel's `a`, neo-tree); else the page goes into
  * them under its own title.
  * @param {string} text
@@ -106,15 +129,11 @@ export async function findBookmark(url) {
  * @param {{ base?: string, folderOnly?: boolean }} [options]
  * @returns {Promise<string>} what to tell the user
  */
-export async function addBookmark(
-  text,
-  page,
-  { base = PLACES_ROOTS.menu, folderOnly = false } = {},
-) {
+export async function addBookmark(text, page, { base, folderOnly = false } = {}) {
   const { folders, leaf } = parseBookmarkPath(text);
   if (!leaf && !folders.length) return "bookmark: empty name";
   const tree = await loadTree();
-  const parentGuid = await ensureFolders(tree, base, folders);
+  const parentGuid = await ensureFolders(tree, base ?? tree.guid, folders);
   if (!leaf && folderOnly) return `made ${formatBookmarkPath(folders)}/`;
   const title = leaf ?? page.title;
   await places().bookmarks.insert({ parentGuid, url: page.url, title });
@@ -135,7 +154,7 @@ export async function addFolder(text, base) {
 }
 
 /**
- * Moves and renames bookmark `guid` to `text` from the Menu (the already-bookmarked prompt):
+ * Moves and renames bookmark `guid` to `text` from the tree's top (the already-bookmarked prompt):
  * a trailing `/` keeps its title.
  * @param {string} guid
  * @param {string} text
@@ -144,7 +163,8 @@ export async function placeBookmark(guid, text) {
   const { folders, leaf } = parseBookmarkPath(text);
   if (!leaf && !folders.length) return "bookmark: empty name";
   const PU = places();
-  const parentGuid = await ensureFolders(await loadTree(), PLACES_ROOTS.menu, folders);
+  const tree = await loadTree();
+  const parentGuid = await ensureFolders(tree, tree.guid, folders);
   const bm = await PU.bookmarks.fetch(guid);
   if (!bm) return "bookmark: it is gone";
   const title = leaf ?? bm.title;
@@ -170,7 +190,7 @@ export async function renameItem(guid, title) {
 }
 
 /**
- * Moves `guid` into the folder `text` names from the Menu, made where missing; never into
+ * Moves `guid` into the folder `text` names from the tree's top, made where missing; never into
  * itself or below itself.
  * @param {string} guid
  * @param {string} text
@@ -181,11 +201,11 @@ export async function moveItem(guid, text) {
   const tree = await loadTree();
   // The existing part of the path must not pass through the item itself.
   for (let i = 0; i <= names.length; i++) {
-    const at = resolveFolders(tree, PLACES_ROOTS.menu, names.slice(0, i));
+    const at = resolveFolders(tree, tree.guid, names.slice(0, i));
     if (at.missing.length === 0 && at.guid === guid) return "move: not into itself";
   }
   const PU = places();
-  const parentGuid = await ensureFolders(tree, PLACES_ROOTS.menu, names);
+  const parentGuid = await ensureFolders(tree, tree.guid, names);
   await PU.bookmarks.update({ guid, parentGuid, index: PU.bookmarks.DEFAULT_INDEX });
   return null;
 }
