@@ -140,7 +140,11 @@ add_task(async function rows_show_the_keys_to_press_under_a_legend() {
     const legend = overlay().querySelector(".vimma-help-key-legend");
     Assert.ok(legend && BrowserTestUtils.isVisible(legend), "a legend heads the overlay");
     Assert.equal(legend.textContent, keyLegend(compileKeymap()), "the legend of the live keymap");
-    Assert.ok(legend.textContent.startsWith("prefix = ctrl+b"), "it names the prefix");
+    Assert.equal(
+      legend.textContent,
+      "prefix = ctrl+b",
+      "the prefix; no default binding uses the leader",
+    );
     Assert.equal(
       overlay().querySelector("header").nextElementSibling,
       legend,

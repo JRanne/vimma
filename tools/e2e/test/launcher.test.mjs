@@ -116,6 +116,8 @@ describe("profile", () => {
     expect(prefs["browser.sessionstore.resume_from_crash"]).toBe(false);
     // ctrl+q quits without a dialog, so teardown can quit cleanly (spec m0-control-server)
     expect(prefs["browser.warnOnQuitShortcut"]).toBe(false);
+    // no first-run config.toml, and so no "created …" notice in the first screenshot
+    expect(prefs["vimma.config.firstRunDone"]).toBe(true);
   });
 
   it("writes user.js lines that Firefox's pref parser reads", () => {

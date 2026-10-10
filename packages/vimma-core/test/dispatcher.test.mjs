@@ -144,9 +144,19 @@ describe("dispatcher (spec acceptance criteria)", () => {
   });
 
   test("space n toggles the side panel in normal mode", () => {
-    expect(last(feed(make(), "normal", "space n"))).toEqual({
+    const d = make({ keys: { toggle_sidebar: ["prefix+b", "<leader>n"] } });
+    expect(last(feed(d, "normal", "space n"))).toEqual({
       kind: "action",
       action: { id: "sidebar.toggle" },
+    });
+  });
+
+  test("by default no leader binding exists: space n does not open the side panel", () => {
+    const results = feed(make(), "normal", "space n");
+    expect(results[0]).toEqual({ kind: "pass" });
+    expect(results.some((r) => r.action?.id === "sidebar.toggle")).toBe(false);
+    expect(last(feed(make(), "normal", "space b"))).not.toMatchObject({
+      action: { id: "bookmarks.toggle" },
     });
   });
 

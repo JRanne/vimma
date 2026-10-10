@@ -55,7 +55,7 @@ Workspaces
 
 Navigation
   goto_picker          ctrl+b g, b                                       Goto picker: every tab in every workspace
-  toggle_sidebar       ctrl+b b, space n                                 Open / close the side panel
+  toggle_sidebar       ctrl+b b                                          Open / close the side panel
   scroll_down          j                                                 Scroll down
   scroll_up            k                                                 Scroll up
   scroll_left          h                                                 Scroll left
@@ -145,7 +145,7 @@ Side panel
   panel_close          esc [panel]                                       Close the side panel
 
 Bookmarks
-  toggle_bookmarks     ctrl+b shift+b, space b                           Open / close the bookmarks panel
+  toggle_bookmarks     ctrl+b shift+b                                    Open / close the bookmarks panel
   add_bookmark         ctrl+b a                                          Bookmark this page (folders/title files it in folders)
   bookmarks_collapse   h [panel]                                         Bookmarks: close the folder, or go to its parent
   bookmarks_expand     l [panel]                                         Bookmarks: open the folder or the bookmark

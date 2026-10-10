@@ -19,10 +19,10 @@ const lines = [
   "",
   "Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm run gen-docs`; do not edit.",
   "",
-  `Keys as you press them, with the default prefix and leader (\`${keyLegend(keymap)}\`).`,
+  `Keys as you press them, with the default keys filled in (\`${keyLegend(keymap)}\`).`,
   "A `[mode]` after a key means it works only in that mode. In `config.toml` the same bindings",
-  "are written in notation: `ctrl+b b` is `prefix+b`, `space n` is `<leader>n`",
-  "([guide](guide.md#configtoml)).",
+  "are written in notation: `ctrl+b b` is `prefix+b`; a leader binding you add, `<leader>n`,",
+  "shows as `space n` ([guide](guide.md#configtoml)).",
 ];
 let group = "";
 for (const r of rows) {
