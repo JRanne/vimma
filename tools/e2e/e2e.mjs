@@ -12,6 +12,9 @@
  *   npm run e2e -- --update-baselines            # rewrite baselines: needs a changelog line
  *   npm run e2e -- --run-pending                 # also run scenarios marked pending
  *
+ * A scenario's `restart` step quits with ctrl+q and relaunches on the same profile; its
+ * `prefs` override the profile's (null: the build's default).
+ *
  * Exit 0 when nothing failed (pending scenarios are reported, not passed), 1 on failures,
  * 2 on usage errors.
  */
@@ -121,7 +124,7 @@ async function main() {
      * @param {import("./scenario.mjs").Scenario} _scenario
      * @param {{ signal: AbortSignal }} options the scenario's timeout
      */
-    const startSession = async (_scenario, { signal }) => {
+    const startSession = async (scenario, { signal }) => {
       /** @type {() => Promise<void>} */
       let registered = async () => {};
       const teardown = async () => {
@@ -133,6 +136,7 @@ async function main() {
         build: /** @type {import("./launcher.mjs").Build} */ (build),
         xvfb,
         keep: values.keep,
+        prefs: scenario.prefs,
         discoveryTimeoutMs,
         signal,
         // registered before the browser starts, so SIGINT during the launch cleans it up
@@ -195,7 +199,19 @@ async function main() {
         sendKeys: (/** @type {string} */ keys) => ctl.sendKeys(keys),
         open: (/** @type {string} */ url) => ctl.open(fixtureUrl(url, pages?.base ?? null)),
       };
-      return { ctl: stepCtl, screenshot, teardown: quitThenTeardown };
+      // A `restart` step: quit the way a user does (ctrl+q, so SessionStore writes the session
+      // and the quit observers remove the discovery file), then start again on the profile.
+      const restart = async () => {
+        if (!(await quitBrowser({ ctl, child: session.child }))) {
+          throw new Error("ctrl+q did not quit the browser");
+        }
+        if (existsSync(join(session.profile, DISCOVERY_FILE))) {
+          throw new Error(`the browser quit with ctrl+q but left ${DISCOVERY_FILE} behind`);
+        }
+        await session.relaunch();
+        await ctl.ready();
+      };
+      return { ctl: stepCtl, screenshot, restart, teardown: quitThenTeardown };
     };
 
     const results = await runScenarios(scenarios, {

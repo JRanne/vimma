@@ -120,12 +120,20 @@ export function userJs(prefs) {
 /**
  * A new private profile directory under `tmpRoot` with our user.js.
  * @param {string} [tmpRoot]
+ * @param {Record<string, boolean | number | string | null>} [overrides] a scenario's `prefs`:
+ *   a value replaces ours; null leaves the pref out, so the build's own default applies (e.g.
+ *   Vimma's `browser.startup.page = 3`, which a restart scenario needs)
  */
-export function createProfile(tmpRoot = tmpdir()) {
+export function createProfile(tmpRoot = tmpdir(), overrides = {}) {
   const dir = mkdtempSync(join(tmpRoot, "vimma-e2e-profile-"));
   // plus npm start's dev prefs: content processes may read the repo's src/, where a local
   // objdir's chrome files lead (tools/start.mjs); harmless for a packaged build
-  writeFileSync(join(dir, "user.js"), userJs([...PROFILE_PREFS, ...devPrefs(REPO)]));
+  const prefs = new Map([...PROFILE_PREFS, ...devPrefs(REPO)]);
+  for (const [name, value] of Object.entries(overrides)) {
+    if (value === null) prefs.delete(name);
+    else prefs.set(name, value);
+  }
+  writeFileSync(join(dir, "user.js"), userJs([...prefs]));
   return dir;
 }
 
@@ -191,8 +199,10 @@ export function unpackTarball(tarball, dir) {
 /**
  * @param {string} profile
  * @param {{ width: number, height: number }} window
+ * @param {{ url?: string | null }} [options] the page to open; null on a restart, where a URL
+ *   would open beside the restored session, which a user's plain restart never does
  */
-export function browserArgs(profile, { width, height }) {
+export function browserArgs(profile, { width, height }, { url = "about:blank" } = {}) {
   return [
     "-no-remote",
     "-profile",
@@ -206,7 +216,7 @@ export function browserArgs(profile, { width, height }) {
     "0",
     "-top",
     "0",
-    "about:blank",
+    ...(url === null ? [] : [url]),
   ];
 }
 
@@ -509,6 +519,7 @@ export async function quitBrowser({ ctl, child, timeoutMs = 10_000, pollMs = 50 
  *   discovery: { protocol: number, port: number, token: string, pid: number },
  *   stderrTail: () => string,
  *   loadFailure: () => string | null,
+ *   relaunch: () => Promise<void>,
  *   teardown: () => Promise<void>,
  * }} Session
  */
@@ -518,6 +529,9 @@ export async function quitBrowser({ ctl, child, timeoutMs = 10_000, pollMs = 50 
  * torn down before the error is thrown. `teardown` is handed out (onTeardown) before anything
  * slow starts and is idempotent; calling it, or aborting `signal`, at any point (Xvfb still
  * starting, the discovery wait) stops the Xvfb, kills the browser and removes the profile.
+ * `relaunch` starts the browser again on the same profile and display once it has exited (a
+ * restart: the caller quits it first and checks the discovery file is gone); `child` and
+ * `discovery` then describe the new one.
  * @param {{
  *   build: Build,
  *   xvfb?: boolean,
@@ -525,6 +539,7 @@ export async function quitBrowser({ ctl, child, timeoutMs = 10_000, pollMs = 50 
  *   xvfbEnv?: Record<string, string | undefined>,
  *   window?: { width: number, height: number },
  *   tmpRoot?: string,
+ *   prefs?: Record<string, boolean | number | string | null>,
  *   keep?: boolean,
  *   discoveryTimeoutMs?: number,
  *   graceMs?: number,
@@ -543,6 +558,7 @@ export async function launch({
   xvfbEnv = process.env,
   window = WINDOW,
   tmpRoot = tmpdir(),
+  prefs = {},
   keep = false,
   discoveryTimeoutMs = DEFAULT_DISCOVERY_TIMEOUT_MS,
   graceMs = 5000,
@@ -559,7 +575,7 @@ export async function launch({
   /** @type {import("node:child_process").ChildProcess | null} */
   let child = null;
   const cancel = new AbortController();
-  const profile = createProfile(tmpRoot);
+  const profile = createProfile(tmpRoot, prefs);
   const home = join(profile, ".e2e-home");
   const tmp = join(profile, ".e2e-tmp");
   mkdirSync(home);
@@ -581,20 +597,14 @@ export async function launch({
       else rmSync(profile, { recursive: true, force: true });
     })());
   onTeardown(teardown);
-  const onAbort = () => void teardown();
-  if (signal?.aborted) onAbort();
-  signal?.addEventListener("abort", onAbort, { once: true });
   const cancelled = () =>
     tearingDown ? new Error("launch aborted (cancelled or timed out)") : null;
-  try {
-    if (xvfb && !tearingDown) {
-      displayStarting = startXvfb({ ...window, bin: xvfbBin, signal: cancel.signal, env: xvfbEnv });
-      display = await displayStarting;
-    }
-    const stop = cancelled();
-    if (stop) throw stop;
+  const stderrTail = () => stderr.split("\n").slice(-15).join("\n");
+
+  /** Spawn the browser on the profile (with `url` on the command line) and wait for its socket. */
+  const start = async (/** @type {string | null} */ url) => {
     const env = browserEnv(baseEnv, { display: display?.display, home, tmp, extra: build.env });
-    const spawned = spawn(build.binary, browserArgs(profile, window), {
+    const spawned = spawn(build.binary, browserArgs(profile, window, { url }), {
       env,
       detached: true,
       stdio: ["ignore", "ignore", "pipe"],
@@ -611,7 +621,6 @@ export async function launch({
       stderr = (stderr + d).slice(-8000);
       loadFailure ??= VIMMA_LOAD_FAILURE.exec(stderr)?.[0] ?? null;
     });
-    const stderrTail = () => stderr.split("\n").slice(-15).join("\n");
     const discovery = await waitForDiscovery(profile, {
       timeoutMs: discoveryTimeoutMs,
       exited: () => {
@@ -625,16 +634,43 @@ export async function launch({
       },
       stderrTail,
     });
+    return { spawned, discovery };
+  };
+
+  const onAbort = () => void teardown();
+  if (signal?.aborted) onAbort();
+  signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    if (xvfb && !tearingDown) {
+      displayStarting = startXvfb({ ...window, bin: xvfbBin, signal: cancel.signal, env: xvfbEnv });
+      display = await displayStarting;
+    }
+    const stop = cancelled();
+    if (stop) throw stop;
+    const first = await start("about:blank");
     signal?.removeEventListener("abort", onAbort);
-    return {
+    /** @type {Session} */
+    const session = {
       profile,
-      child: spawned,
+      child: first.spawned,
       display,
-      discovery,
+      discovery: first.discovery,
       stderrTail,
       loadFailure: () => loadFailure,
+      async relaunch() {
+        const running = session.child;
+        if (running.exitCode === null && running.signalCode === null) {
+          throw new Error("relaunch: the browser is still running; quit it first");
+        }
+        const stopped = cancelled();
+        if (stopped) throw stopped;
+        const next = await start(null);
+        session.child = next.spawned;
+        session.discovery = next.discovery;
+      },
       teardown,
     };
+    return session;
   } catch (e) {
     signal?.removeEventListener("abort", onAbort);
     const aborted = cancelled(); // before teardown(), which sets it

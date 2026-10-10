@@ -20,6 +20,15 @@ describe("validateScenario", () => {
   it("accepts a milestone happy path and a regression test with its issue number", () => {
     expect(validateScenario(scenario({}), "m0-sample.json")).toEqual([]);
     expect(
+      validateScenario(
+        scenario({
+          prefs: { "browser.startup.page": null, "a.b": true, c: 3, d: "x" },
+          steps: [{ restart: "quit" }],
+        }),
+        undefined,
+      ),
+    ).toEqual([]);
+    expect(
       validateScenario(scenario({ name: "issue-42-esc-closes-help", issue: 42 }), undefined),
     ).toEqual([]);
   });
@@ -40,6 +49,11 @@ describe("validateScenario", () => {
     [{ pending: "" }, /pending/],
     [{ timeoutSeconds: 0 }, /timeoutSeconds/],
     [{ extra: 1 }, /unknown field "extra"/],
+    [{ steps: [{ restart: "crash" }] }, /step 1: restart/],
+    [{ steps: [{ restart: true }] }, /step 1: restart/],
+    [{ prefs: [] }, /prefs must be an object/],
+    [{ prefs: { "a b": 1 } }, /prefs: "a b"/],
+    [{ prefs: { a: [1] } }, /prefs: "a"/],
   ])("rejects %o", (over, message) => {
     expect(validateScenario(scenario(over), undefined).join("\n")).toMatch(message);
   });
@@ -90,6 +104,24 @@ describe("the m0-content-actor scenario (VimmaChild loads in the default content
     expect(steps).toContain('"open":"fixture:focus-later.html"');
     expect(steps.indexOf('"mode":"normal"')).toBeGreaterThan(steps.indexOf('"open"'));
     expect(steps.lastIndexOf('"mode":"insert"')).toBeGreaterThan(steps.indexOf('"mode":"normal"'));
+  });
+});
+
+describe("the m3-restart-restore scenario (m3-workspaces sub-spec 7)", () => {
+  const restart = loadScenarios(SCENARIOS, { filter: "m3-restart-restore" })[0];
+  const steps = JSON.stringify(restart?.steps);
+  it("runs on Vimma's own startup.page (resume the session), not the harness's 0", () => {
+    expect(restart?.pending).toBeUndefined();
+    expect(restart?.prefs).toEqual({ "browser.startup.page": null });
+  });
+  it("quits and relaunches once, between building workspaces and asserting them", () => {
+    expect(restart?.steps.filter((s) => s.restart === "quit")).toHaveLength(1);
+    const at = steps.indexOf('"restart"');
+    expect(steps.indexOf('"keys":"ctrl+b v"')).toBeGreaterThan(-1);
+    expect(steps.indexOf('"keys":"ctrl+b v"')).toBeLessThan(at);
+    expect(steps.lastIndexOf('"axis":"x"')).toBeGreaterThan(at);
+    expect(steps.lastIndexOf("cookie ws=work")).toBeGreaterThan(at);
+    expect(steps.lastIndexOf("cookie ws=personal")).toBeGreaterThan(at);
   });
 });
 
@@ -199,6 +231,26 @@ describe("runSteps", () => {
     ).rejects.toThrow(
       /step 2 \(wait-for-state\): not reached in 0\.2 s: state\.mode: expected "help", got "insert"/,
     );
+  });
+
+  it("restart quits and relaunches through the session, then goes on", async () => {
+    const { ctl, calls } = fakeCtl([{ mode: "normal" }]);
+    await runSteps(
+      scenario({ steps: [{ keys: "esc" }, { restart: "quit" }, { "assert-state": {} }] }),
+      {
+        ctl,
+        screenshot: async () => {},
+        restart: async (/** @type {string} */ how) => void calls.push(`restart ${how}`),
+      },
+    );
+    expect(calls).toEqual(["keys esc", "restart quit", "state"]);
+  });
+
+  it("restart fails with the step when the session cannot restart", async () => {
+    const { ctl } = fakeCtl([{ mode: "normal" }]);
+    await expect(
+      runSteps(scenario({ steps: [{ restart: "quit" }] }), { ctl, screenshot: async () => {} }),
+    ).rejects.toThrow(/step 1 \(restart\): this session cannot restart/);
   });
 
   it("stops when the signal aborts (scenario timeout)", async () => {

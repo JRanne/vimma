@@ -169,11 +169,18 @@ are sent.
 
 - `mode`: one of vimma-core's `MODES`.
 - `pending`: the pending key sequence as the status bar shows it (`formatBinding`), or `null`.
-- `workspace`: the active workspace's name, `null` until workspaces exist (M2).
+- `workspace`: the active workspace's name, `null` until workspaces exist (filled since M3) or in a
+  window without them (a private window).
 - `tabs`: the window's visible tabs in strip order. `id` is an opaque string, stable for the tab's
   lifetime (the server uses `browser.browserId`); exactly one tab is `selected` when there are any.
 - `panes`: the pane tree once split view exists (M3), `null` before. Its shape is that spec's to
   define; it is added without a version bump because clients ignore what they do not know.
+  Since m3-workspaces sub-spec 7: `null` while the window shows one pane, else
+  `{ "focus": "<tab id>", "zoomed": false, "root": <node> }`, where a node is a split
+  `{ "axis": "x" | "y", "ratios": [0.5, 0.5], "children": [<node>, …] }` (`x` left to right,
+  `y` top to bottom, one ratio per child) or a leaf `{ "tab": "<tab id>", "index": 1 }`: the
+  tab's id as in `tabs` and its place there (`-1` if it is not visible). Read-only, like the
+  rest of `state`.
 
 **`open`.** `url` is an absolute URL whose scheme is `http`, `https`, `file` or `about`; anything
 else (notably `javascript:` and `data:`) is `invalid-args`. At most 65536 characters. `where`

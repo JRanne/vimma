@@ -587,7 +587,7 @@ is **off by default**. Spec: [m0-control-server](specs/m0-control-server.md), pr
 3. Use it:
 
    ```sh
-   vimma-ctl state                    # mode, pending keys, tabs
+   vimma-ctl state                    # mode, pending keys, workspace, tabs
    vimma-ctl state --json             # the same, as JSON
    vimma-ctl send-keys "ctrl+b ?"     # typed as if on the keyboard: opens the help overlay
    vimma-ctl send-keys esc

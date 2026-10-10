@@ -176,7 +176,12 @@ npm run e2e -- --artifact                        # engine/obj-artifact, as CI do
 npm run e2e -- --build path/to/dist/bin | --tarball vimma-0.1.0-linux-x86_64.tar.xz
 npm run e2e -- --xvfb --keep                     # own Xvfb on a desktop; keep the profiles
 npm run e2e -- --run-pending --filter m0         # run a pending scenario anyway (to watch it fail)
+MOZ_HEADLESS=1 npm run e2e -- --artifact --filter m3   # no Xvfb at hand: headless, no screenshots
 ```
+
+A `restart` step (`m3-restart-restore`) quits with `ctrl+q` and starts the build again on the
+same profile; a scenario's `prefs` override the harness's `user.js` (`null`: the build's
+default). Without Xvfb, `MOZ_HEADLESS=1` runs every scenario that takes no screenshot.
 
 Without `DISPLAY` (CI) the harness starts its own Xvfb at 1280×800×24; with a desktop, pass
 `--xvfb` for screenshots and to keep the window off your screen. The browser never inherits

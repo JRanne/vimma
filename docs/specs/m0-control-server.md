@@ -48,7 +48,8 @@ running browser, and with it off nothing listens and no token file exists.
   open, else the focused page's mode (`normal` on a page with Vimma's actor, `insert` in a text
   field, a page without the actor, or chrome; m1-actor-insert-scroll). Each tab also
   has `index` (strip order among visible tabs) and `pinned`; clients ignore fields they do not
-  know. `workspace` and `panes` are `null` until M3/M4.
+  know. `workspace` is the active workspace's name and `panes` the window's pane tree, `null`
+  with one pane (shape in the protocol spec; m3-workspaces sub-spec 7).
 - **`open`**: the URL is re-parsed with `Services.io.newURI` and its scheme checked again
   (http, https, file, about). Loaded with the **system principal**, as `BrowserContentHandler`
   does for `vimma <url>`: the token holder is the user, and with `javascript:`/`data:` refused
@@ -104,7 +105,8 @@ running browser, and with it off nothing listens and no token file exists.
   `not-implemented`, unknown args → `invalid-args`, connection still usable.
 - `send-keys ctrl+b` → `state.pending` `"prefix"`; `?` → overlay opens, host saw real keydowns,
   `state.mode` `help`; `esc` closes it, back to `normal`; a bad chord → `invalid-args` and nothing
-  sent. `state` fields: tabs, ids (`browserId`), url, index, pinned, null workspace/panes.
+  sent. `state` fields: tabs, ids (`browserId`), url, index, pinned, the workspace's name; `panes`
+  null with one pane, after a split the tree (`test_state_panes`).
 - `send-keys "j shift+k"` with the page focused, in normal mode: Vimma takes `j` (as with a real
   `j`), the page records `Shift`, `K`.
 - `open https://example.com/` → new selected tab, result id, content principal; `where: current`
