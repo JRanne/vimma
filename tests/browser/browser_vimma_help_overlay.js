@@ -334,6 +334,9 @@ add_task(async function rows_mark_what_the_host_can_run() {
       "zoom",
       "close_pane",
       "next_workspace",
+      "new_workspace",
+      "rename_workspace",
+      "close_workspace",
       "scroll_down",
       "scroll_top",
       "normal_mode",
@@ -341,7 +344,7 @@ add_task(async function rows_mark_what_the_host_can_run() {
     ]) {
       Assert.equal(row(name).dataset.runnable, "true", `${name} is marked implemented`);
     }
-    for (const name of ["rename_workspace", "workspace_picker", "new_workspace"]) {
+    for (const name of ["workspace_picker", "toggle_sidebar"]) {
       Assert.equal(row(name).dataset.runnable, "false", `${name} is marked not yet`);
     }
     const opacity = (name) => Number(getComputedStyle(row(name)).opacity);

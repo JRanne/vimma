@@ -98,6 +98,11 @@ group("Workspaces", [
   ["new_workspace", "workspace.new", "New workspace"],
   ["rename_workspace", "workspace.rename", "Rename workspace"],
   ["close_workspace", "workspace.close", "Close workspace"],
+  [
+    "move_to_workspace",
+    "workspace.move_tab",
+    "Move the tab to another workspace (reopens it there)",
+  ],
 ]);
 
 group("Navigation", [

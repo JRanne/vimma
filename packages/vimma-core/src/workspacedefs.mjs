@@ -354,3 +354,59 @@ export function removeWorkspaceDefinition(defs, id) {
       : defs.lastActive;
   return { definitions: { ...defs, lastActive, workspaces }, removed };
 }
+
+/**
+ * Renames a runtime workspace (`prefix+shift+w`, `:wsrename`; sub-spec 4a). A config workspace
+ * is named by its `[workspaces]` key, and a reconcile matches by that name, so it is renamed in
+ * `config.toml`. The same name returns `defs` itself. The host renames the container too.
+ * @param {Definitions} defs
+ * @param {string} id
+ * @param {string} name
+ * @returns {Definitions}
+ */
+export function renameWorkspaceDefinition(defs, id, name) {
+  const i = mustIndex(defs, id);
+  const w = /** @type {WorkspaceDefinition} */ (defs.workspaces[i]);
+  if (w.name === name) return defs;
+  if (w.source === "config") {
+    throw new DefinitionsError("config-workspace", "", `"${w.name}" is named in config.toml`);
+  }
+  if (!validName(name)) {
+    throw new DefinitionsError("bad-name", "name", `1 to ${MAX_WORKSPACE_NAME} characters`);
+  }
+  if (defs.workspaces.some((x) => x.name === name)) {
+    throw new DefinitionsError("duplicate-name", "name", `"${name}" exists`);
+  }
+  const workspaces = defs.workspaces.map((x, k) => (k === i ? { ...x, name } : x));
+  return { ...defs, workspaces };
+}
+
+/**
+ * The y/N question before closing a workspace (decision 7): a runtime workspace goes with its
+ * container and so its site data; a config one only loses its tabs.
+ * @param {WorkspaceDefinition} w
+ * @param {number} tabs  its open tabs, in every window
+ */
+export function closeWorkspaceQuestion(w, tabs) {
+  const count = `${tabs} tab${tabs === 1 ? "" : "s"}`;
+  return w.source === "config"
+    ? `Close the ${count} of "${w.name}"? It stays, as it is in config.toml. y/N`
+    : `Close "${w.name}" (${count}) and delete its cookies and site data? y/N`;
+}
+
+/** The order new workspaces take colours in: distinct ones first, gray never. */
+const NEW_COLORS = ["blue", "green", "orange", "purple", "red", "yellow", "pink", "cyan", "violet"];
+
+/**
+ * A runtime workspace's colour and icon: the first colour no workspace uses (all used: by
+ * count), so neighbours in `ctrl+i` order look different; the icon is a circle.
+ * @param {Definitions} defs
+ * @returns {{ color: string, icon: string }}
+ */
+export function newWorkspaceLooks(defs) {
+  const used = new Set(defs.workspaces.map((w) => w.color));
+  const color =
+    NEW_COLORS.find((c) => !used.has(c)) ??
+    /** @type {string} */ (NEW_COLORS[defs.workspaces.length % NEW_COLORS.length]);
+  return { color, icon: "circle" };
+}

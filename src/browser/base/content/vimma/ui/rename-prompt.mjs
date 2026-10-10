@@ -5,6 +5,8 @@
 // The tab rename prompt (spec: docs/specs/m2-picker-rename.md): one line at the window's foot,
 // styled as the `:` command line (cmdline.css). Its input is a chrome text field, so the host is
 // in insert and keys type; the input's own keydown takes Enter (apply) and Esc (cancel).
+// The same line asks y/N questions (`ask`, m3-workspaces 4a: closing a workspace): `y` says
+// yes, any other key no.
 
 import { loadCmdlineSheet } from "./cmdline.mjs";
 
@@ -12,6 +14,8 @@ export const RENAME_ID = "vimma-rename";
 export const RENAME_INPUT_ID = "vimma-rename-input";
 const STATUSBAR_ID = "vimma-statusbar";
 const HTML_NS = "http://www.w3.org/1999/xhtml";
+const RENAME_LABEL = "rename tab: ";
+const RENAME_PLACEHOLDER = "empty: back to the page title";
 
 /**
  * @typedef {object} RenameCallbacks
@@ -36,6 +40,10 @@ export class RenamePrompt {
     this.tab = null;
     /** @type {Element | null} focused before open */
     this.opener = null;
+    /** @type {HTMLElement | null} the prompt text before the input */
+    this.label = null;
+    /** @type {(() => void) | null} a y/N question's yes, while one is open */
+    this.yes = null;
   }
 
   get isOpen() {
@@ -47,15 +55,44 @@ export class RenamePrompt {
    * @param {string} current  its label now, to edit ("" for none)
    */
   open(tab, current) {
-    if (this.win.document.documentElement.hasAttribute("inDOMFullscreen")) return;
-    const input = this.input ?? this.build();
-    if (!this.isOpen) this.opener = Services.focus.focusedElement;
+    if (!this.show(RENAME_LABEL, RENAME_PLACEHOLDER, "Rename tab")) return;
+    const input = /** @type {HTMLInputElement} */ (this.input);
     this.tab = tab;
     input.value = current;
+    input.select();
+  }
+
+  /**
+   * A y/N question: `y` runs `yes`; any other key, Enter (the default, N) or Esc says no.
+   * @param {string} question  ends with "y/N"
+   * @param {() => void} yes  after the prompt has closed
+   */
+  ask(question, yes) {
+    if (!this.show(`${question} `, "", question)) return;
+    this.yes = yes;
+  }
+
+  /**
+   * @private
+   * @param {string} label
+   * @param {string} placeholder
+   * @param {string} ariaLabel
+   * @returns {boolean} whether it opened (not over a page in DOM fullscreen)
+   */
+  show(label, placeholder, ariaLabel) {
+    if (this.win.document.documentElement.hasAttribute("inDOMFullscreen")) return false;
+    const input = this.input ?? this.build();
+    if (!this.isOpen) this.opener = Services.focus.focusedElement;
+    this.tab = null;
+    this.yes = null;
+    /** @type {HTMLElement} */ (this.label).textContent = label;
+    input.placeholder = placeholder;
+    input.setAttribute("aria-label", ariaLabel);
+    input.value = "";
     /** @type {HTMLElement} */ (this.el).hidden = false;
     input.focus();
-    input.select();
     this.changed();
+    return true;
   }
 
   /**
@@ -68,6 +105,7 @@ export class RenamePrompt {
     const opener = this.opener;
     this.opener = null;
     this.tab = null;
+    this.yes = null;
     if (tabChanged || (restoreFocus && !opener?.isConnected)) {
       /** @type {{ gBrowser?: { selectedBrowser: HTMLElement } }} */ (
         /** @type {unknown} */ (this.win)
@@ -92,7 +130,13 @@ export class RenamePrompt {
    */
   onKeyDown(e) {
     if (e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
-    if (e.key === "Enter") {
+    const yes = this.yes;
+    if (yes) {
+      // Modifier keys alone (shift for `Y`) are not an answer.
+      if (["Shift", "CapsLock"].includes(e.key)) return;
+      this.close();
+      if (e.key === "y" || e.key === "Y") yes();
+    } else if (e.key === "Enter") {
       const tab = this.tab;
       const text = /** @type {HTMLInputElement} */ (this.input).value;
       this.close();
@@ -141,15 +185,16 @@ export class RenamePrompt {
     const panel = el("div", "vimma-cmdline-panel");
     const row = el("div", "vimma-cmdline-row");
     const prompt = el("span", "vimma-cmdline-prompt");
-    prompt.textContent = "rename tab: ";
+    prompt.textContent = RENAME_LABEL;
     prompt.setAttribute("aria-hidden", "true");
     const input = /** @type {HTMLInputElement} */ (el("input"));
     input.id = RENAME_INPUT_ID;
     input.type = "text";
     input.spellcheck = false;
     input.autocomplete = "off";
-    input.placeholder = "empty: back to the page title";
+    input.placeholder = RENAME_PLACEHOLDER;
     input.setAttribute("aria-label", "Rename tab");
+    this.label = prompt;
     input.addEventListener("keydown", (e) => this.onKeyDown(e));
     input.addEventListener("focusout", () => this.onFocusOut());
     row.append(prompt, input);

@@ -35,6 +35,7 @@ describe("actions", () => {
       "new_workspace",
       "rename_workspace",
       "close_workspace",
+      "move_to_workspace",
       "goto_picker",
       "toggle_sidebar",
     ]) {

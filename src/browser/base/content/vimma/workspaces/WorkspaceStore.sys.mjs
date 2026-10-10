@@ -14,10 +14,12 @@ import {
   addRuntimeWorkspace,
   canWriteDefinitions,
   emptyDefinitions,
+  newWorkspaceLooks,
   planContainers,
   readDefinitions,
   reconcileDefinitions,
   removeWorkspaceDefinition,
+  renameWorkspaceDefinition,
   setLastActive,
   withContainer,
 } from "../core/workspacedefs.mjs";
@@ -257,6 +259,61 @@ export class WorkspaceStoreImpl {
       CIS.remove(ucid);
     }
     this.#notify([id]);
+  }
+
+  /**
+   * `prefix+shift+n` / `:wsnew name` (sub-spec 4a): a runtime workspace in the first colour no
+   * workspace uses.
+   * @param {string} name
+   * @returns {WorkspaceDefinition}
+   */
+  newWorkspace(name) {
+    return this.addWorkspace({ name, ...newWorkspaceLooks(this.definitions) });
+  }
+
+  /**
+   * Renames a runtime workspace and its container (whose name must stay the workspace's: the
+   * startup check adopts a container by id and name). Throws `config-workspace` for a config
+   * one, `bad-name`, `duplicate-name`.
+   * @param {string} id
+   * @param {string} name
+   */
+  renameWorkspace(id, name) {
+    this.#writable();
+    const before = this.definitions;
+    this.definitions = renameWorkspaceDefinition(before, id, name);
+    if (this.definitions === before) return;
+    const w = this.#def(id);
+    const CIS = lazy.ContextualIdentityService;
+    const old = before.workspaces.find((d) => d.id === id);
+    const ucid = w.userContextId;
+    if (ucid !== null && CIS.getPublicIdentityFromId(ucid)?.name === old?.name) {
+      CIS.update(ucid, w.name, w.icon, w.color);
+    }
+    this.#save();
+    this.#notify([id]);
+  }
+
+  /**
+   * Closes a workspace after the user said yes (decision 7): a runtime one is deleted with its
+   * container and site data (deleteWorkspace); a config one only loses its tabs, in every
+   * window, and stays with its container. The last workspace stays (`last-workspace`).
+   * @param {string} id
+   * @param {{ confirmed?: boolean }} [options]
+   */
+  async closeWorkspace(id, { confirmed = false } = {}) {
+    const w = this.definitions.workspaces.find((d) => d.id === id);
+    if (w?.source !== "config") return this.deleteWorkspace(id, { confirmed });
+    if (confirmed !== true) {
+      throw storeError("not-confirmed", "closing a workspace needs the user's confirmation");
+    }
+    if (this.definitions.workspaces.length === 1) {
+      throw storeError("last-workspace", "cannot close the last workspace");
+    }
+    if (w.userContextId !== null) {
+      await lazy.ContextualIdentityService.closeContainerTabs(w.userContextId);
+    }
+    return undefined;
   }
 
   /**
