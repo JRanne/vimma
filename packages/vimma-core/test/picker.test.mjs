@@ -10,6 +10,7 @@ import {
   pickerSelection,
   scoreField,
   setPickerItems,
+  workspaceItems,
 } from "../src/picker.mjs";
 
 /** @import { PickerState, PickerItem } from "../src/picker.mjs" */
@@ -158,7 +159,7 @@ describe("scoring", () => {
 
 describe("picker state machine", () => {
   test("opens in browse mode on the active tab; j/k/arrows/ctrl-n/p move and clamp", () => {
-    const s = openPicker(items, { activeTabId: "t2" });
+    const s = openPicker(items, { activeId: "t2" });
     expect(s.mode).toBe("browse");
     expect(s.query).toBe("");
     expect(selectedTab(s)).toBe("t2");
@@ -172,7 +173,7 @@ describe("picker state machine", () => {
   });
 
   test("left/right jump between workspace sections", () => {
-    const s = openPicker(items, { activeTabId: "t1" });
+    const s = openPicker(items, { activeId: "t1" });
     const r = press(s, ["right"]).state;
     expect(selectedTab(r)).toBe("t3");
     expect(pickerKey(r, "right").state).toBe(r);
@@ -184,7 +185,7 @@ describe("picker state machine", () => {
   });
 
   test("/ searches; typing filters; editing keys; esc backs out then closes", () => {
-    const s = openPicker(items, { activeTabId: "t1" });
+    const s = openPicker(items, { activeId: "t1" });
     let r = press(s, ["/", "g", "i", "t"]).state;
     expect(r.mode).toBe("search");
     expect(r.query).toBe("git");
@@ -215,11 +216,11 @@ describe("picker state machine", () => {
   });
 
   test("enter selects; nothing to select is a no-op; unknown keys are ignored", () => {
-    const s = openPicker(items, { activeTabId: "t1" });
-    expect(press(s, ["j", "enter"]).effect).toEqual({ type: "select", tabId: "t2" });
+    const s = openPicker(items, { activeId: "t1" });
+    expect(press(s, ["j", "enter"]).effect).toEqual({ type: "select", id: "t2" });
     expect(press(s, ["/", "c", "o", "o", "k", "enter"]).effect).toEqual({
       type: "select",
-      tabId: "t3",
+      id: "t3",
     });
     const none = press(s, ["/", "z", "z", "z"]).state;
     expect(none.matches).toEqual([]);
@@ -235,13 +236,13 @@ describe("picker state machine", () => {
   });
 
   test("setPickerItems keeps the selected tab, or clamps", () => {
-    const s = openPicker(items, { activeTabId: "t3" });
+    const s = openPicker(items, { activeId: "t3" });
     const without1 = setPickerItems(
       s,
       items.filter((i) => i.tabId !== "t1"),
     );
     expect(selectedTab(without1)).toBe("t3");
-    const last = openPicker(items, { activeTabId: "t4" });
+    const last = openPicker(items, { activeId: "t4" });
     expect(selectedTab(setPickerItems(last, items.slice(0, 2)))).toBe("t2");
     expect(setPickerItems(last, []).selected).toBe(0);
   });
@@ -352,5 +353,69 @@ describe("properties", () => {
         },
       ),
     );
+  });
+});
+
+describe("workspace picker (m3-workspaces 5)", () => {
+  const model = {
+    active: "w2",
+    workspaces: [
+      { id: "w1", name: "work", tabs: ["t1", "t2"], activeTab: "t2" },
+      { id: "w2", name: "personal", tabs: ["t3"], activeTab: "t3" },
+      { id: "w3", name: "admin", tabs: [], activeTab: null },
+    ],
+  };
+  const ws = workspaceItems(model, (id) => id === "t1");
+  /** @param {PickerState} s */
+  const selectedWs = (s) => /** @type {any} */ (pickerSelection(s)?.item)?.workspaceId;
+
+  test("one item per workspace in order, with its tab and foreign counts; the active marked", () => {
+    expect(ws).toEqual([
+      {
+        kind: "workspace",
+        workspaceId: "w1",
+        workspaceName: "work",
+        workspaceIndex: 1,
+        tabCount: 2,
+        foreignCount: 1,
+        display: "work",
+        active: false,
+      },
+      expect.objectContaining({ workspaceId: "w2", tabCount: 1, foreignCount: 0, active: true }),
+      expect.objectContaining({ workspaceId: "w3", workspaceIndex: 3, tabCount: 0 }),
+    ]);
+    expect(Object.isFrozen(ws[0])).toBe(true);
+    expect(workspaceItems(model)[0]?.foreignCount).toBe(0);
+  });
+
+  test("filters by name only, with highlights", () => {
+    const m = filterItems(ws, "ad");
+    expect(m.map((x) => /** @type {any} */ (x.item).workspaceId)).toEqual(["w3"]);
+    expect(m[0]?.highlights).toEqual({ display: [[0, 2]] });
+    expect(filterItems(ws, "github")).toEqual([]);
+  });
+
+  test("opens on the active workspace; enter switches; m moves; m types in search", () => {
+    const s = openPicker(ws, { activeId: "w2" });
+    expect(selectedWs(s)).toBe("w2");
+    expect(press(s, ["k", "enter"]).effect).toEqual({ type: "select", id: "w1" });
+    expect(press(s, ["j", "m"]).effect).toEqual({ type: "move", id: "w3" });
+    const typed = press(s, ["/", "m"]);
+    expect(typed.effect).toBeNull();
+    expect(typed.state.query).toBe("m");
+    expect(press(s, ["/", "w", "o", "enter"]).effect).toEqual({ type: "select", id: "w1" });
+    expect(press(s, ["esc"]).effect).toEqual({ type: "close" });
+  });
+
+  test("m in the goto picker does nothing", () => {
+    const s = openPicker(items, { activeId: "t1" });
+    expect(pickerKey(s, "m")).toEqual({ state: s, effect: null });
+  });
+
+  test("setPickerItems keeps the selected workspace", () => {
+    const s = openPicker(ws, { activeId: "w3" });
+    const [a, b, c] = model.workspaces;
+    const reordered = workspaceItems({ ...model, workspaces: [c, a, b].map((w) => ({ ...w })) });
+    expect(selectedWs(setPickerItems(s, reordered))).toBe("w3");
   });
 });

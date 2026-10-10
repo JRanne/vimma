@@ -2,27 +2,61 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// The `prefix+g` goto picker (spec: docs/specs/m2-picker-rename.md). A modal <dialog> in the
-// chrome document, as the help overlay. Keys reach it only through VimmaHost (`key`), which
-// consumes every one while it is open; the logic is core picker.mjs, this only renders it.
+// The `prefix+g` goto picker (spec: docs/specs/m2-picker-rename.md) and the `prefix+w`
+// workspace picker (docs/specs/m3-workspaces.md, sub-spec 5). A modal <dialog> in the chrome
+// document, as the help overlay. Keys reach it only through VimmaHost (`key`), which consumes
+// every one while it is open; the logic is core picker.mjs, this only renders it.
 
-import { openPicker, pickerKey } from "../core/picker.mjs";
+import { itemId, openPicker, pickerKey } from "../core/picker.mjs";
 
-/** @import { PickerItem, PickerState } from "../core/picker.mjs" */
+/** @import { AnyItem, PickerItem, PickerState, WorkspaceItem } from "../core/picker.mjs" */
 
 export const PICKER_ID = "vimma-picker";
+export const WORKSPACE_PICKER_ID = "vimma-workspace-picker";
 const STYLESHEET = "chrome://browser/skin/vimma/picker.css";
 const HTML_NS = "http://www.w3.org/1999/xhtml";
-const HINT = "j/k move · / search · Enter go · Esc close";
 /** @type {WeakSet<Window>} windows our stylesheet is loaded into */
 const styled = new WeakSet();
 
 /**
  * @typedef {object} PickerHost
- * @property {() => PickerItem[]} items  the tabs to list, in order
- * @property {() => string | null} activeTabId  selected when the picker opens
- * @property {(tabId: string) => void} select  Enter on a row; the picker has closed already
+ * @property {() => AnyItem[]} items  what to list, in order
+ * @property {() => string | null} activeId  selected when the picker opens
+ * @property {(id: string) => void} select  Enter on a row; the picker has closed already
+ * @property {(id: string) => void} [move]  `m` on a workspace row; the picker has closed already
  */
+
+/**
+ * What one kind of picker shows: its dialog id, heading, hint, and a row's cells after the index.
+ * @typedef {object} PickerLook
+ * @property {string} id
+ * @property {string} title
+ * @property {string} listLabel
+ * @property {string} hint
+ * @property {(item: any) => [index: string, right: string]} cells
+ */
+
+/** @type {PickerLook} */
+const GOTO = {
+  id: PICKER_ID,
+  title: "Go to tab",
+  listLabel: "Tabs",
+  hint: "j/k move · / search · Enter go · Esc close",
+  cells: (/** @type {PickerItem} */ item) => [String(item.tabIndex), hostOf(item.url)],
+};
+
+/** @type {PickerLook} */
+const WORKSPACES = {
+  id: WORKSPACE_PICKER_ID,
+  title: "Workspaces",
+  listLabel: "Workspaces",
+  hint: "j/k move · / search · Enter switch · m move tab here · Esc close",
+  cells: (/** @type {WorkspaceItem} */ item) => {
+    const tabs = `${item.tabCount} ${item.tabCount === 1 ? "tab" : "tabs"}`;
+    const foreign = item.foreignCount ? `, ${item.foreignCount} foreign` : "";
+    return [String(item.workspaceIndex), `${tabs}${foreign}${item.active ? " · current" : ""}`];
+  },
+};
 
 /**
  * The host of a URL, or the URL itself when it has none (about:, data:).
@@ -40,10 +74,12 @@ export class GotoPicker {
   /**
    * @param {Window} win  a browser window
    * @param {PickerHost} host
+   * @param {PickerLook} [look]
    */
-  constructor(win, host) {
+  constructor(win, host, look = GOTO) {
     this.win = win;
     this.host = host;
+    this.look = look;
     /** @type {HTMLDialogElement | null} */
     this.dialog = null;
     /** @type {HTMLElement | null} */
@@ -64,7 +100,7 @@ export class GotoPicker {
     if (this.isOpen) return;
     this.opener = Services.focus.focusedElement;
     const dialog = this.dialog ?? this.build();
-    this.state = openPicker(this.host.items(), { activeTabId: this.host.activeTabId() });
+    this.state = openPicker(this.host.items(), { activeId: this.host.activeId() });
     this.render();
     dialog.showModal();
     dialog.focus();
@@ -84,7 +120,11 @@ export class GotoPicker {
     if (effect?.type === "close") this.close();
     if (effect?.type === "select") {
       this.close();
-      this.host.select(effect.tabId);
+      this.host.select(effect.id);
+    }
+    if (effect?.type === "move") {
+      this.close();
+      this.host.move?.(effect.id);
     }
   }
 
@@ -138,10 +178,12 @@ export class GotoPicker {
     list.replaceChildren(
       ...state.matches.map((m, i) => {
         const row = el("li", "vimma-picker-row");
-        row.id = `${PICKER_ID}-${i}`;
+        row.id = `${this.look.id}-${i}`;
         row.setAttribute("role", "option");
         row.setAttribute("aria-selected", String(i === state.selected));
-        row.dataset.tabId = m.item.tabId;
+        row.dataset.id = itemId(m.item);
+        if ("tabId" in m.item) row.dataset.tabId = m.item.tabId;
+        if (m.item.active) row.classList.add("vimma-picker-active");
         const title = el("span", "vimma-picker-title");
         let at = 0;
         for (const [start, end] of m.highlights.display ?? []) {
@@ -150,10 +192,11 @@ export class GotoPicker {
           at = end;
         }
         title.append(m.item.display.slice(at));
+        const [index, right] = this.look.cells(m.item);
         row.append(
-          el("span", "vimma-picker-index", String(m.item.tabIndex)),
+          el("span", "vimma-picker-index", index),
           title,
-          el("span", "vimma-picker-host", hostOf(m.item.url)),
+          el("span", "vimma-picker-host", right),
         );
         return row;
       }),
@@ -181,26 +224,38 @@ export class GotoPicker {
     const el = (tag) => /** @type {HTMLElement} */ (doc.createElementNS(HTML_NS, tag));
 
     const dialog = /** @type {HTMLDialogElement} */ (el("dialog"));
-    dialog.id = PICKER_ID;
+    dialog.id = this.look.id;
+    dialog.className = "vimma-picker";
     dialog.tabIndex = -1;
-    dialog.setAttribute("aria-label", "Go to tab");
+    dialog.setAttribute("aria-label", this.look.title);
     const header = el("header");
     const h1 = el("h1");
-    h1.textContent = "Go to tab";
+    h1.textContent = this.look.title;
     const query = el("span");
     query.className = "vimma-picker-query";
     const hint = el("span");
     hint.className = "vimma-picker-hint";
-    hint.textContent = HINT;
+    hint.textContent = this.look.hint;
     header.append(h1, query, hint);
     const list = el("ul");
     list.setAttribute("role", "listbox");
-    list.setAttribute("aria-label", "Tabs");
+    list.setAttribute("aria-label", this.look.listLabel);
     dialog.append(header, list);
     doc.body.append(dialog);
     this.dialog = dialog;
     this.query = query;
     this.list = list;
     return dialog;
+  }
+}
+
+/** `prefix+w`: the workspaces, Enter switches, `m` moves the current tab (m3-workspaces 5). */
+export class WorkspacePicker extends GotoPicker {
+  /**
+   * @param {Window} win  a browser window
+   * @param {PickerHost} host
+   */
+  constructor(win, host) {
+    super(win, host, WORKSPACES);
   }
 }

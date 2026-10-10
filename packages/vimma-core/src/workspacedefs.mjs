@@ -409,6 +409,18 @@ export function closeWorkspaceQuestion(w, tabs) {
     : `Close "${w.name}" (${count}) and delete its cookies and site data? y/N`;
 }
 
+/**
+ * The y/N question before the workspace picker's `m` moves the current tab (decision 6: the tab
+ * is reopened by URL in the target's container).
+ * @param {string} name  the target workspace
+ */
+export function moveTabQuestion(name) {
+  return (
+    `Move this tab to "${name}"? It is reopened there; its back/forward history and form data ` +
+    "are lost. y/N"
+  );
+}
+
 /** The order new workspaces take colours in: distinct ones first, gray never. */
 const NEW_COLORS = ["blue", "green", "orange", "purple", "red", "yellow", "pink", "cyan", "violet"];
 

@@ -210,9 +210,13 @@ add_task(async function tab_keys_work_from_about_preferences() {
 add_task(async function unimplemented_prefix_action_shows_a_notice_that_hides() {
   const tabs = await openTabs(1);
   const count = gBrowser.tabs.length;
-  prefix("w"); // workspace_picker: not built yet (split_vertical was the example until M4)
-  Assert.ok(noticeShown(), "ctrl+b w shows a notice");
-  Assert.equal(notice().textContent, "Workspace picker: not implemented yet", "naming the action");
+  prefix("b"); // toggle_sidebar: not built yet (workspace_picker was the example until M3)
+  Assert.ok(noticeShown(), "ctrl+b b shows a notice");
+  Assert.equal(
+    notice().textContent,
+    "Open / close the side panel: not implemented yet",
+    "naming the action",
+  );
   Assert.equal(notice().getAttribute("role"), "status", "announced politely");
   Assert.equal(document.activeElement, tabs[0].linkedBrowser, "the notice takes no focus");
   Assert.equal(gBrowser.tabs.length, count, "and nothing else happens");
@@ -253,12 +257,12 @@ add_task(async function no_notice_over_dom_fullscreen() {
   const root = document.documentElement;
   root.setAttribute("inDOMFullscreen", "true"); // as browser-fullScreenAndPointerLock.js does
   try {
-    prefix("w");
+    prefix("b");
     Assert.ok(!noticeShown(), "no notice over a fullscreen video");
   } finally {
     root.removeAttribute("inDOMFullscreen");
   }
-  Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "ctrl+b w is still consumed");
+  Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "ctrl+b b is still consumed");
   closeTabs(tabs);
 });
 
