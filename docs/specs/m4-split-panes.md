@@ -592,7 +592,8 @@ Sub-specs 3 and 5 can run in parallel after 2. Sub-spec 6 waits for M3's workspa
 
 Mouse-drag dividers (resize is keyboard-only in M4); drag and drop of tabs or links onto panes
 (Zen's drop zones); per-pane tab bars; moving a pane to another workspace or window; more than
-one split per workspace; layout presets (Zen's grid/hsep/vsep); Firefox's `about:opentabs`
+one split per workspace; layout presets (Zen's grid/hsep/vsep; since done in
+[tiling-layouts](tiling-layouts.md): tmux's presets and dwindle); Firefox's `about:opentabs`
 picker for a new pane (ours opens the new-tab page).
 
 ## Settled

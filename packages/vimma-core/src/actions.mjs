@@ -84,6 +84,16 @@ group("Panes", [
   ["resize_wider", "pane.resize_wider", "Make pane wider"],
   ["resize_taller", "pane.resize_taller", "Make pane taller"],
   ["resize_shorter", "pane.resize_shorter", "Make pane shorter"],
+  // docs/specs/tiling-layouts.md
+  ["new_pane", "pane.new", "New pane, along the longer side"],
+  ["next_layout", "pane.next_layout", "Next layout"],
+  ["select_layout", "pane.select_layout", "Apply a layout preset by name (:layout name)"],
+  ["layout_even_horizontal", "pane.layout_even_horizontal", "Layout: all side by side"],
+  ["layout_even_vertical", "pane.layout_even_vertical", "Layout: all stacked"],
+  ["layout_main_vertical", "pane.layout_main_vertical", "Layout: main pane left, rest stacked"],
+  ["layout_main_horizontal", "pane.layout_main_horizontal", "Layout: main pane on top, rest below"],
+  ["layout_tiled", "pane.layout_tiled", "Layout: a grid"],
+  ["layout_dwindle", "pane.layout_dwindle", "Layout: a spiral (dwindle)"],
 ]);
 
 group("Workspaces", [
