@@ -76,8 +76,10 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
 - No studies, experiments, sponsored content or telemetry uploads. Safe Browsing stays on.
 - Scriptable: an optional, token-protected control socket and the `vimma-ctl` CLI.
 
-The [user guide](docs/guide.md) covers every key and option, and
-[docs/limits.md](docs/limits.md) lists what does not work yet.
+The [user guide](docs/guide.md) covers every key and option,
+[docs/limits.md](docs/limits.md) lists what does not work yet, and
+[docs/security.md](docs/security.md) is the security model (report issues as
+[SECURITY.md](SECURITY.md) says).
 
 ## Status
 

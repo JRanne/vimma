@@ -85,9 +85,12 @@ exit 1
   chmodSync(path, 0o755);
 }
 
-/** @param {Record<string, string>} [env] */
-function runHook(env = {}) {
-  return spawnSync("/bin/bash", [HOOK, "tokyo-night"], {
+/**
+ * @param {Record<string, string>} [env]
+ * @param {string[]} [args]  what omarchy-hook passes: the theme name
+ */
+function runHook(env = {}, args = ["tokyo-night"]) {
+  return spawnSync("/bin/bash", [HOOK, ...args], {
     env: { HOME: dir, PATH: `${bin}:/usr/bin:/bin`, ...env },
     encoding: "utf8",
     timeout: 10000,
@@ -193,6 +196,24 @@ describe("vimma-theme-reload.sh", () => {
     expect(r.status).toBe(0);
     expect(r.stdout + r.stderr).toBe("");
     expect(calls("vimma-ctl")).toEqual([["--timeout", "2", "reload-theme"]]);
+  });
+
+  // docs/security.md: the theme name comes from a theme directory anyone can publish. It must
+  // never reach Vimma or vimma-ctl as an argument (a flag, a path, a URL).
+  it("never passes its arguments on: a hostile theme name changes nothing", () => {
+    const hostile = ["-profile /tmp/x", "--remote-debugging-port", "9222", "$(touch pwned)"];
+    fakeBusctl(BUS_NAMES);
+    let r = runHook({}, hostile);
+    expect(r.status).toBe(0);
+    for (const c of calls("busctl").filter((c) => c.includes("call"))) {
+      expect(decode(payload(c)).argv).toEqual(["vimma", "-vimma-reload-theme"]);
+    }
+    fakeBusctl([]);
+    fake("vimma-ctl", 0);
+    r = runHook({}, hostile);
+    expect(r.status).toBe(0);
+    expect(calls("vimma-ctl")).toEqual([["--timeout", "2", "reload-theme"]]);
+    expect(existsSync(join(dir, "pwned")) || existsSync("pwned")).toBe(false);
   });
 
   it("does nothing without either", () => {
