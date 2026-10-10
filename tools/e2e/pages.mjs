@@ -6,6 +6,8 @@ import { createServer } from "node:http";
 import { extname, join } from "node:path";
 
 const NAME = /^[\w-][\w.-]*$/;
+/** A fragment the page may read (`fixture:cookie.html#work`); the server never sees it. */
+const FRAGMENT = /^#[\w.=-]*$/;
 const TYPES = /** @type {Record<string, string>} */ ({
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -13,18 +15,21 @@ const TYPES = /** @type {Record<string, string>} */ ({
 });
 
 /**
- * @param {string} url a scenario's `open` value
+ * @param {string} url a scenario's `open` value: `fixture:<name>[#fragment]` or a URL
  * @param {string | null} base the page server's base URL (with a trailing slash)
  * @returns {string}
  */
 export function fixtureUrl(url, base) {
   if (!url.startsWith("fixture:")) return url;
-  const name = url.slice("fixture:".length);
-  if (!NAME.test(name) || name.includes("..")) {
+  const rest = url.slice("fixture:".length);
+  const hash = rest.indexOf("#");
+  const name = hash < 0 ? rest : rest.slice(0, hash);
+  const fragment = hash < 0 ? "" : rest.slice(hash);
+  if (!NAME.test(name) || name.includes("..") || (fragment && !FRAGMENT.test(fragment))) {
     throw new Error(`bad fixture name in ${JSON.stringify(url)}: one file in tests/e2e/fixtures/`);
   }
   if (!base) throw new Error(`${url} needs the fixture page server, which is not running`);
-  return `${base}${name}`;
+  return `${base}${name}${fragment}`;
 }
 
 /**

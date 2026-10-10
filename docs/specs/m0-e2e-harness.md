@@ -124,7 +124,15 @@ One JSON file per scenario in `tests/e2e/scenarios/`, file name = `name`:
   which must also carry `"issue": N` (the same number). Anything else is rejected at load time.
 - **Steps**: exactly one of `open` (URL), `keys` (Herdr chords, as `vimma-ctl send-keys`),
   `wait-for-state` (poll `state` every 100 ms until it matches; `timeoutSeconds`, default 10),
-  `assert-state` (one `state`, must match now), `screenshot` (baseline name, `[a-z0-9-]+`).
+  `assert-state` (one `state`, must match now), `screenshot` (baseline name, `[a-z0-9-]+`),
+  `restart` (`"quit"`: `ctrl+q`, the discovery file must be gone, then the same build starts
+  again on the same profile and display, without the `about:blank` argument, which would open
+  beside the restored session; m3-workspaces sub-spec 7).
+- **Prefs**: an optional `"prefs": { "name": value }` overrides the profile's `user.js`;
+  `null` leaves the pref out so the build's default applies (`m3-restart-restore` drops
+  `browser.startup.page = 0` to run on Vimma's 3, resume the session).
+- **Fixtures**: `open "fixture:<name>#<fragment>"` keeps the fragment for the page to read
+  (`cookie.html#work` sets the cookie `ws=work`); the server never sees it.
 - **Matching** is a subset match: every key in the expected object must match (recursively);
   extra keys in `state` are ignored (protocol v1 lets the server add fields). Arrays must have
   the same length and match element by element. `null` matches only `null`.
