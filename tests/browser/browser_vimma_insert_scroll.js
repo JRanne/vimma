@@ -281,6 +281,19 @@ add_task(async function the_actor_reaches_settings_and_the_pdf_viewer_but_not_da
 });
 
 /**
+ * Resolves after the page's next refresh tick, whose early runners (a pending scroll of the
+ * selection into view) run before its animation frame callbacks.
+ * @param {XULBrowserElement | BrowsingContext} target
+ */
+function afterRefreshTick(target) {
+  return SpecialPowers.spawn(
+    target,
+    [],
+    () => new Promise((resolve) => content.requestAnimationFrame(() => resolve())),
+  );
+}
+
+/**
  * @param {XULBrowserElement | BrowsingContext} target
  * @param {string} selector
  */
@@ -303,6 +316,11 @@ add_task(async function a_design_mode_page_enters_insert_on_click() {
       async () => (await textOf(browser, "#p")).includes("j"),
       "j is typed into the designMode page",
     );
+    // Issue #46: typing asks the editor to scroll the caret into view at the next refresh tick
+    // (Selection's async ScrollSelectionIntoView, a refresh-driver early runner). On a loaded
+    // runner that tick could come after the normal-mode j below and scroll back to the caret
+    // (y = 16, measured with the refresh driver paused). Let it run first.
+    await afterRefreshTick(browser);
     Assert.equal(await pageScrollY(browser), 0, "and does not scroll");
 
     EventUtils.synthesizeKey("KEY_Escape");
@@ -323,6 +341,8 @@ add_task(async function a_cross_origin_design_mode_iframe_enters_insert_on_click
       async () => (await textOf(frame, "#p")).includes("j"),
       "j is typed into the framed designMode document",
     );
+    // The editor's caret scroll waits for the frame's next refresh tick (issue #46, above).
+    await afterRefreshTick(frame);
     Assert.equal(await pageScrollY(browser), 0, "the page does not scroll");
     Assert.equal(
       await SpecialPowers.spawn(frame, [], () => content.scrollY),
