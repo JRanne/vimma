@@ -293,6 +293,14 @@ shows (the picker, `ctrl+tab`, `alt+1..9`, `ctrl+t`, a link opened in a new fore
 shows it in the focused pane: the split stays, and the tab that pane showed stays open in the
 workspace. A pinned tab shows alone; selecting a pane's tab brings the split back.
 
+A split made outside Vimma (Firefox's own split-view command, an extension, or a restored
+Firefox session) becomes the workspace's panes: its tabs side by side in its order, at the
+widths Firefox gave them, with the selected tab's pane focused. The pane keys then work on it,
+and the workspace keeps it like any other split. If such a split's tabs are in different
+workspaces, or the workspace already has a split, Vimma separates its tabs again and the
+status bar says why; the tabs stay in their workspaces. Separating a split outside Vimma closes
+its panes.
+
 While the overlay is open it takes every key, so `ctrl+w` cannot close the tab behind it. Rows
 for bindings that do not run yet are dimmed, under a legend that says so; actions your
 `config.toml` rebinds are marked `*`. In normal mode bare

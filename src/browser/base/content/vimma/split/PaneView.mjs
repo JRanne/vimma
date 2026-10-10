@@ -10,12 +10,15 @@
 // parks it under the workspace left and brings back the target's (`swap`, m3-workspaces 2b; M4
 // sub-spec 6), and a restore hands every workspace's tree back (`restore`). The pane keys
 // (host/pane-ops.mjs, sub-specs 3 and 5) call split / focus / close / zoom / swapPane / resize;
-// nothing here binds a key.
+// nothing here binds a key. A split made outside Vimma (Firefox's own split-view commands, an
+// extension, a restored Firefox session) is adopted (`adopt`, sub-spec 6): DOM wins for those,
+// core wins for everything Vimma does.
 
 import { mergeWithDefaults } from "../core/config.mjs";
 import {
   closePane,
   createPanes,
+  createRow,
   focus as focusToward,
   focusPane,
   layout,
@@ -46,15 +49,35 @@ import {
 
 /**
  * @typedef {Element & { linkedPanel: string, label: string, pinned: boolean, closing?: boolean,
- *   selected: boolean, splitview: Wrapper | null,
+ *   selected: boolean, splitview: Wrapper | null, hidden: boolean,
  *   linkedBrowser: { docShellIsActive: boolean } }} Tab
  * @typedef {Element & { tabs: Tab[], addTabs: (tabs: Tab[]) => void,
  *   unsplitTabs: () => void }} Wrapper
- * @typedef {{ tabs: Tab[], selectedTab: Tab, tabContainer: Element,
+ * @typedef {{ tabs: Tab[], selectedTab: Tab, tabContainer: Element, splitViews: Wrapper[],
  *   addTabSplitView: (tabs: Tab[], options?: object) => Wrapper,
  *   addTrustedTab: (url: string, options?: object) => Tab, unpinTab: (tab: Tab) => void }} TabBrowser
  * @typedef {{ ok: true } | { ok: false, reason: string }} PaneResult
+ * @typedef {object} Adoption  how splits made outside Vimma map onto workspaces (WindowWorkspaces)
+ * @property {(tab: Tab) => string | undefined} workspaceOf  the tab's workspace id; undefined:
+ *   not known yet (a tab the workspaces have not taken in), so the split waits
+ * @property {() => string} active  the shown workspace's id
+ * @property {() => boolean} busy  a switch or restore is under way: adopt nothing until after it
+ * @property {(text: string) => void} notify  the status-bar notice
  */
+
+/** The notices for splits made outside Vimma that Vimma undoes (m3-workspaces decision 14). */
+export const SPANS_WORKSPACES = "split undone: its tabs are in different workspaces";
+export const SECOND_SPLIT = "split undone: one split per workspace";
+
+/** Firefox's split-view events that may mean a split made or changed outside Vimma. */
+const SPLIT_EVENTS = ["SplitViewCreated", "SplitViewTabChange", "SplitViewRemoved"];
+/** Every window event a PaneView listens to (the split contract test turns them off). */
+export const PANE_VIEW_EVENTS = Object.freeze([
+  "TabClose",
+  "TabSplitViewActivate",
+  "TabSelect",
+  ...SPLIT_EVENTS,
+]);
 
 /** Tabs labelled for a11y by us (the third pane on; Firefox labels the first two). */
 const LABEL_ATTR = "vimma-pane-label";
@@ -90,6 +113,12 @@ export class PaneView {
    * @type {((tab: Tab) => boolean) | null}
    */
   accepts = null;
+  /**
+   * Set by WindowWorkspaces: workspaces for adopting splits made outside Vimma. Unset: the window
+   * is one workspace, and a split is adopted when nothing else is split.
+   * @type {Adoption | null}
+   */
+  adoption = null;
 
   /**
    * @param {Window} win
@@ -107,12 +136,14 @@ export class PaneView {
     // A click or focus in a panel (MozTabpanels), the picker, ctrl+tab, alt+N, an extension:
     // whatever selects a pane's tab moves core's focus there (sub-spec 4).
     win.addEventListener("TabSelect", this);
+    // Splits made or changed outside Vimma (sub-spec 6): Firefox's addTabSplitView fires
+    // SplitViewCreated; its wrapper fires SplitViewTabChange on any membership change (session
+    // restore builds wrappers without SplitViewCreated) and SplitViewRemoved once dissolved.
+    for (const type of SPLIT_EVENTS) win.addEventListener(type, this);
   }
 
   destroy() {
-    this.#win.removeEventListener("TabClose", this);
-    this.#win.removeEventListener("TabSplitViewActivate", this);
-    this.#win.removeEventListener("TabSelect", this);
+    for (const type of PANE_VIEW_EVENTS) this.#win.removeEventListener(type, this);
     this.#resize?.disconnect();
     this.#resize = null;
   }
@@ -124,6 +155,9 @@ export class PaneView {
     // TabSplitViewDeactivate is not listened to: the old wrapper's arrives late after a rebuild
     // and lists the kept members too (sub-spec 1), so it carries nothing to act on.
     else if (e.type === "TabSplitViewActivate" && !this.#reconciling) this.#schedule();
+    // Our own reconcile's come late too (the wrapper's MutationObserver): adopt compares the DOM
+    // with the trees, so those find nothing to do.
+    else if (SPLIT_EVENTS.includes(e.type) && !this.#reconciling) this.#schedule();
   }
 
   /** The window's pane tree, null with a single pane (for tests and sub-spec 3). */
@@ -192,6 +226,120 @@ export class PaneView {
     for (const [id, panes] of trees) {
       if (id !== active) this.#parked.set(id, { panes, wrapper: null, laidOut: new Set() });
     }
+  }
+
+  /**
+   * Closes the pane showing `tab`, wherever focus is; its tab stays open (not shown). For a tab
+   * leaving the workspace (WindowWorkspaces' moveTab). No pane of `tab`: nothing.
+   * @param {Tab} tab
+   */
+  release(tab) {
+    const pane = this.#panes && paneOfTab(this.#panes, tab.linkedPanel);
+    if (this.#panes && pane) this.#set(closePane(this.#panes, pane));
+  }
+
+  /**
+   * Brings splits made outside Vimma into line (sub-spec 6; DOM wins for those). For the shown
+   * tree's wrapper: dissolved, the panes close; a tab that left it closes its pane; a tab added
+   * to it joins as a pane on the right (core's split, so within `[panes] max`; past it, or of
+   * another workspace, reconcile drops it again). Any other wrapper (no tab in a tree): across
+   * workspaces, or a second split in a workspace that has one, it is unsplit with a notice
+   * (m3-workspaces decision 14; its tabs stay where they are). The shown workspace's split of the
+   * selected tab becomes its tree: a row in the wrapper's order, with the share Firefox's splitter
+   * left on the first panel, focus on the selected tab. A split of background tabs waits for its
+   * selection (TabSplitViewActivate); one of another workspace for that workspace's turn (the
+   * switch calls this). Then call reconcile. Idempotent.
+   */
+  adopt() {
+    if (this.#reconciling || this.adoption?.busy()) return;
+    this.#reconciling = true;
+    try {
+      this.#adoptOwn();
+      this.#adoptOthers();
+    } finally {
+      this.#reconciling = false;
+    }
+  }
+
+  /** Wrapper membership changed outside Vimma for the shown tree. */
+  #adoptOwn() {
+    let panes = this.#panes;
+    if (!panes) return;
+    const live = leaves(panes).filter((l) => this.#tab(l.tab));
+    const wrapper = this.#currentWrapper();
+    if (!wrapper) {
+      // Every pane's tab is out of any split: dissolved outside Vimma (Vimma's own leaves
+      // rebuild in one task). The focused tab stays selected.
+      if (live.length >= 2) this.#panes = null;
+      return;
+    }
+    const inWrapper = new Set(wrapper.tabs.filter((t) => !t.closing).map((t) => t.linkedPanel));
+    for (const leaf of live) {
+      if (panes && !inWrapper.has(leaf.tab)) {
+        panes = leaves(panes).length > 2 ? closePane(panes, leaf.pane) : null;
+      }
+    }
+    const active = this.adoption?.active();
+    for (const t of this.#members()) {
+      if (!panes || paneOfTab(panes, t.linkedPanel)) continue;
+      if (this.adoption && this.adoption.workspaceOf(t) !== active) continue;
+      const last = leaves(panes).at(-1);
+      if (last) panes = split(panes, last.pane, "vertical", t.linkedPanel, { max: this.#max });
+    }
+    this.#panes = panes;
+  }
+
+  /** Wrappers with no tab in any tree: unsplit, adopt, or leave for later. */
+  #adoptOthers() {
+    const gBrowser = gBrowserOf(this.#win);
+    const ours = new Set(
+      [this.#panes, ...[...this.#parked.values()].map((p) => p.panes)].flatMap((p) =>
+        p ? leaves(p).map((l) => l.tab) : [],
+      ),
+    );
+    const notify = (/** @type {string} */ text) => this.adoption?.notify(text);
+    for (const wrapper of [...(gBrowser.splitViews ?? [])]) {
+      const tabs = wrapper.tabs.filter((t) => !t.closing);
+      if (!wrapper.isConnected || !tabs.length) continue;
+      if (tabs.some((t) => t.linkedPanel && ours.has(t.linkedPanel))) continue;
+      const ids = tabs.map((t) => this.adoption?.workspaceOf(t) ?? (this.adoption ? "" : "-"));
+      if (ids.includes("")) continue;
+      if (new Set(ids).size > 1) {
+        wrapper.unsplitTabs();
+        notify(SPANS_WORKSPACES);
+        continue;
+      }
+      const ws = /** @type {string} */ (ids[0]);
+      const shownHere = !this.adoption || ws === this.adoption.active();
+      const hasTree = shownHere ? !!this.#panes : this.#parked.has(ws);
+      if (hasTree) {
+        wrapper.unsplitTabs();
+        notify(SECOND_SPLIT);
+        continue;
+      }
+      const selected = gBrowser.selectedTab;
+      if (!shownHere || !tabs.includes(selected) || tabs.some((t) => !t.linkedPanel)) continue;
+      this.#panes = createRow(
+        tabs.map((t) => t.linkedPanel),
+        { ratios: this.#shares(tabs), focus: selected.linkedPanel },
+      );
+      this.#wrapper = wrapper;
+    }
+  }
+
+  /**
+   * The shares a Firefox split shows: its splitter sizes the first panel (a `width` attribute)
+   * and the second takes the rest; it lays out two columns only. Unknown: undefined (equal).
+   * @param {Tab[]} tabs
+   * @returns {number[] | undefined}
+   */
+  #shares(tabs) {
+    if (tabs.length !== 2) return undefined;
+    const doc = this.#win.document;
+    const first = Number(doc.getElementById(tabs[0]?.linkedPanel ?? "")?.getAttribute("width"));
+    const total = doc.getElementById("tabbrowser-tabpanels")?.getBoundingClientRect().width ?? 0;
+    if (!(first > 0) || !(total > first)) return undefined;
+    return [first, total - first];
   }
 
   /**
@@ -340,6 +488,7 @@ export class PaneView {
     this.#scheduled = true;
     this.#win.setTimeout(() => {
       this.#scheduled = false;
+      this.adopt();
       this.reconcile();
     }, 0);
   }
