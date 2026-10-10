@@ -110,6 +110,12 @@ npm run import && npx surfer build
 npm start
 ```
 
+Google Safe Browsing (phishing and malware protection) needs an API key, which is not in this
+repository. A build without one works but shows the protection as off. To turn it on, get a free
+key from Google and save it as `~/.config/vimma/keys/safebrowsing` before building
+([docs/runbook.md](docs/runbook.md#google-safe-browsing-key-spec-m0-safebrowsing-key)). Release
+packages are built with a key.
+
 `npm start` opens Vimma with a profile of its own, so your Firefox profile is never touched.
 Press `ctrl+b ?` to see every binding. [CONTRIBUTING.md](CONTRIBUTING.md) has the rest:
 requirements, faster front-end-only rebuilds, tests, the project layout and how changes are made.
