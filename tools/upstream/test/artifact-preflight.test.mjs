@@ -35,6 +35,20 @@ describe("artifact preflight", () => {
     expect(r.note).toMatch(/expired/);
   });
 
+  it("a revision that is not 40 hex is never put in a request", async () => {
+    for (const bad of ["../../secrets", "b".repeat(39), `${rev}/x`, `${rev}?q`, "B".repeat(40)]) {
+      /** @type {string[]} */
+      const asked = [];
+      const fetchJson = async (/** @type {string} */ url) => {
+        asked.push(url);
+        return { status: 200, json: async () => ({}) };
+      };
+      const r = await preflight(bad, fetchJson, now);
+      expect(asked).toEqual([]);
+      expect(r).toEqual({ artifacts: "unknown", note: "the source revision is not 40 hex" });
+    }
+  });
+
   it("unknown when there is no revision or Taskcluster does not answer", async () => {
     expect((await preflight(null, answer(200, {}), now)).artifacts).toBe("unknown");
     const down = async () => {

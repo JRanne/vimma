@@ -34,6 +34,10 @@ const INDEX_URL = "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/
  */
 export async function preflight(revision, fetchJson, now) {
   if (!revision) return { artifacts: "unknown", note: "no revision in the source tarball" };
+  // The report is a file another step wrote: only a commit hash goes into the index URL.
+  if (!/^[0-9a-f]{40}$/.test(revision)) {
+    return { artifacts: "unknown", note: "the source revision is not 40 hex" };
+  }
   let res;
   let body;
   try {
