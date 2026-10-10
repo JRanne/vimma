@@ -1,14 +1,19 @@
 # Vimma user guide
 
-Vimma is pre-alpha. This guide says what works **today** on `main` and marks everything else as
-**planned**, with the milestone that brings it ([plan.md](../plan.md) §6). Known gaps are listed
-in [limits.md](limits.md).
+Vimma brings the habits of Vim and tmux to the browser, so you can move through the web the way
+you move through your code. This guide walks you through it in the order you will meet it: your
+first launch, the two key layers, then tabs, panes, workspaces and the settings that make it
+yours.
+
+Vimma is pre-alpha, so the guide is precise about what works **today** on `main` and marks
+everything else as **planned**, with the milestone that brings it ([plan.md](../plan.md) §6).
+Known gaps are listed in [limits.md](limits.md).
 
 ## Every key is yours
 
-The keys below are defaults, not decisions: every binding, the `ctrl+b` prefix and the `space`
-leader can be remapped in `~/.config/vimma/config.toml`. The leader has no default bindings; it
-is there for your own. These three lines remap one key, move the prefix to `ctrl+a` and the
+The keys in this guide are defaults, not decisions. Every binding, the `ctrl+b` prefix and the
+`space` leader can be remapped in `~/.config/vimma/config.toml`. The leader has no default
+bindings; it is there for your own. These three lines move the prefix to `ctrl+a`, move the
 leader to `,`, and add a leader binding (`, n`) for the side panel:
 
 ```toml
@@ -17,7 +22,7 @@ modal.leader = ","                               # the leader, space by default 
 keys.toggle_sidebar = ["prefix+b", "<leader>n"]  # side panel: prefix b, and now also leader n
 ```
 
-Save the file and it applies within 2 seconds, without a restart. [config.toml](#configtoml) has the
+Save the file and the change applies within 2 seconds, without a restart. [config.toml](#configtoml) has the
 details, and [bindings.md](bindings.md) lists every action's config name with its default keys.
 
 ## Getting started
@@ -25,7 +30,7 @@ details, and [bindings.md](bindings.md) lists every action's config name with it
 ### Install
 
 There are no packages or binaries yet. Tarballs, an AppImage, a `.deb` and AUR `vimma-bin` are
-planned for M6. Until then, build from source as the [README](../README.md#build-and-run)
+planned for M6. Until then, build from source as the [README](../README.md#getting-started)
 describes: `npm ci`, `npx surfer download`, `npx surfer bootstrap`, `npm run import`,
 `npx surfer build`. The first build takes about 40 minutes on a 16-thread machine and needs
 about 35 GB of disk space (`engine/` 27 GB, the sccache compiler cache 6.8 GB, `~/.mozbuild`
@@ -53,7 +58,7 @@ downloading the next AppImage or tarball. Next to the files are `SHA256SUMS`, a 
 ### First launch, with its own profile
 
 Start Vimma from the checkout with `npm start`. It runs your build with a profile of its own,
-`~/.cache/vimma-dev-profile`, so it never touches your Firefox profile:
+`~/.cache/vimma-dev-profile`, so your Firefox profile is never touched:
 
 ```sh
 npm start                   # the full build, or the artifact build if that is all there is
@@ -61,7 +66,7 @@ npm start -- --fresh        # a throwaway profile, deleted when Vimma quits
 npm start -- --profile DIR  # another persistent profile
 ```
 
-It refuses to start a second Vimma on a profile that is already open; switch to that window
+It will not start a second Vimma on a profile that is already open; switch to that window
 instead. The profile's `user.js` gets one line Vimma needs when run from a source checkout
 (read access for web pages' sandbox to the checkout's `src/`); your own lines there are kept.
 
@@ -79,14 +84,14 @@ empty one, and the rest of `~/.config/vimma/` (key files, the `vimma/` profiles 
 alone. A file you delete later stays deleted. The packaged builds do the same on their first
 launch. Nothing is created when `vimma.config.path` points Vimma at another file.
 
-On first launch you see Firefox's interface without the tab strip: the window starts with the
-navigation bar and URL bar at the top, and Vimma's status bar at the bottom. Press `ctrl+b`, then
-`?`, to see the bindings.
+On first launch you see a calm window: no tab strip, the navigation bar and URL bar at the top,
+and Vimma's status bar at the bottom, telling you where you are. Press `ctrl+b`, then `?`, to see
+every binding.
 
 ### The start page
 
-New windows and new tabs open Vimma's start page: the logo, and under it the keys to start from
-(`ctrl+b ?` keys, `:` commands, `f` hints). The URL bar is empty and focused, so you can type an
+New windows and new tabs open Vimma's start page: the logo, and under it the three keys to start
+from (`ctrl+b ?` keys, `:` commands, `f` hints). The URL bar is empty and focused, so you can type an
 address straight away; click the page to use `:` and the other keys there. It is a local page
 (`chrome://browser/content/vimma/start/start.html`); nothing loads from the network.
 
@@ -101,8 +106,10 @@ To change it back:
 
 ## The two layers
 
-Vimma has two key layers and one dispatcher, which sees every key before Firefox does, including
-in the URL bar, `about:` pages and the PDF viewer.
+Vimma splits the keyboard into two layers, as your editor and terminal already do: Vim's modes
+for the page, tmux's prefix for the window. One dispatcher sees every key before Firefox does,
+in the URL bar, on `about:` pages and in the PDF viewer too, so the keys behave the same
+everywhere.
 
 - **The prefix layer (tmux).** `ctrl+b` is the prefix, like tmux's default prefix. The next key
   is a command: `ctrl+b ?`
@@ -117,7 +124,7 @@ in the URL bar, `about:` pages and the PDF viewer.
 ### Normal and insert mode
 
 Every tab starts in **normal** mode: Vimma's bare keys (the table below) act on the page, and
-the page never sees them. Keys Vimma has no binding for, such as `z` or a site's own `s` or `m`,
+the page never sees them. This is where you read, scroll and jump. Keys Vimma has no binding for, such as `z` or a site's own `s` or `m`,
 still reach the page.
 
 Focusing a text field puts the tab in **insert** mode, so typing works as in Firefox: inputs,
@@ -157,7 +164,8 @@ the page or Firefox, with no message; and the `ctrl+b ?` overlay dims it.
 
 ### Link hints
 
-`f` puts a yellow label on everything you could click on screen: links, buttons, form fields,
+Link hints let you click without the mouse. `f` puts a short label on everything you could click
+on screen: links, buttons, form fields,
 and elements the page made clickable (ARIA buttons and tabs, elements with a click handler),
 also inside web components and in frames from other sites. Things off screen, hidden or covered
 by something else (a fixed header, a cookie banner) get no label. Type a label to pick its
@@ -175,7 +183,8 @@ maps, games) have nothing to label.
 
 ### Find
 
-`/` opens Firefox's find bar at the foot of the page, empty, and searches as you type, in frames
+Find works as it does in Vim. `/` opens Firefox's find bar at the foot of the page, empty, and
+searches as you type, in frames
 from other sites, inside web components and in the PDF viewer too. Matches are highlighted and
 counted as in Firefox. The search starts at the top of what you see (or at the selection, if it
 is on screen), as Vim's starts at the cursor.
@@ -235,8 +244,9 @@ the field and use its own selection.
 
 ## Status bar
 
-The status bar is the window's last line, always there (it hides only while a page is in
-fullscreen, such as a video; browser fullscreen with `F11` keeps it). From the left:
+The status bar is the window's last line, and it is always there, so you never lose track of
+where you are. It hides only while a page is in fullscreen, such as a video; browser fullscreen
+with `F11` keeps it. From the left:
 
 - the **mode** badge in the mode's colour: `NORMAL` on a page, `INSERT` while a text field has
   focus (or after `i`), `COMMAND` while you type a `:` command or a `/` search, `HELP` while
@@ -297,7 +307,7 @@ The 2-second check keeps working in every case.
 ## Keys
 
 [bindings.md](bindings.md) lists the full default keymap. It is generated from the same table
-the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
+the dispatcher and the `ctrl+b ?` overlay use, so the three always agree.
 
 **What works today:**
 
@@ -384,8 +394,9 @@ normal mode (`3 ctrl+w >` by three), as in Vim. A config can rebind the mode's k
 
 ## Workspaces
 
-Every tab lives in a workspace, and every workspace is a Firefox container of its own: a site
-you are signed in to in one workspace sees none of its cookies or storage in another. A new
+Workspaces keep the different parts of your day apart. Every tab lives in a workspace, and every
+workspace is a Firefox container of its own: a site you are signed in to in one workspace sees
+none of its cookies or storage in another. A new
 profile has one workspace, `main`; you make more as you need them (see
 [Managing workspaces](#managing-workspaces)).
 
@@ -478,8 +489,8 @@ rename or close a workspace, use `ctrl+b shift+n`, `shift+w` and `shift+d`.
 
 ### Side panel
 
-`ctrl+b b` or `:sidebar` opens a panel on the left of the window. It is closed when
-Vimma starts and stays out of the way until you ask for it. Its head shows the workspace you are
+`ctrl+b b` or `:sidebar` opens a panel on the left of the window. It is closed when Vimma
+starts and stays out of your way until you ask for it. Its head shows the workspace you are
 in (`● 2:work`, in the workspace's colour) and the ones `ctrl+u` and `ctrl+i` go to; below are
 the workspace's tabs, numbered, each with its name (or title) and its site. The tab you are on is
 highlighted and its number coloured; a tab playing sound shows `♪`, one from another container
@@ -576,7 +587,7 @@ that has errors, and a file without `schema = 2`. It only ever appends to the fi
 ## Bookmarks
 
 Vimma's bookmarks are Firefox's: what you imported, what Sync brings and what the Library shows.
-Vimma keeps no list of its own.
+Vimma keeps no list of its own; it gives you keys to reach them.
 
 **Bookmark a page from anywhere:** `ctrl+b a` (or `:bookmark`). A prompt opens at the foot of
 the window with the page's title and the cursor before it. Type folders in front of the title,
@@ -648,7 +659,8 @@ is cut at 100 characters.
 
 ## The command line
 
-`:` in normal mode opens a Vim-style command line just above the status bar. Type a command
+`:` in normal mode opens a Vim-style command line just above the status bar, for everything
+that is quicker to type than to bind. Type a command
 and press `Enter`; `Esc` closes it and puts focus back on the page. While it is open nothing you
 type reaches the page, and `ctrl+b` sequences still work.
 
@@ -694,7 +706,7 @@ A command that is not built yet says so for a moment, as its keys do.
 
 ## about:vimma
 
-`about:vimma` (or `:about`) shows what Vimma is doing, read when the page opens: press `r` or
+`about:vimma` (or `:about`) shows what Vimma is doing, as of when the page opened: press `r` or
 Refresh for the current state. It is an ordinary page, so `j` / `k` scroll it.
 
 - **Version:** Vimma's version, the Firefox release it is built on, the build ID and the update
@@ -787,7 +799,8 @@ accent = "#ff9e64"
 ## Scripting with vimma-ctl
 
 `vimma-ctl` drives a running Vimma from a shell, a window-manager binding or a test: it sends
-keys, reads the state and opens URLs. It talks to the browser over a local control socket, which
+keys, reads the state and opens URLs. It is for when you want your browser to be part of your
+scripts. It talks to the browser over a local control socket, which
 is **off by default**. Spec: [m0-control-server](specs/m0-control-server.md), protocol:
 [m0-control-protocol-and-vimma-ctl](specs/m0-control-protocol-and-vimma-ctl.md).
 
@@ -851,8 +864,9 @@ send `esc` first (`vimma-ctl send-keys "esc ctrl+q"`).
 
 ## Privacy defaults
 
-Vimma changes Firefox's defaults, without locking them: each one can be changed back in
-`about:config` (search for the name, then toggle or edit it). Spec:
+Vimma starts quieter than Firefox: no studies, no sponsored content and no telemetry uploads.
+None of this is locked; each default can be changed back in `about:config` (search for the
+name, then toggle or edit it). Spec:
 [m0-mozilla-services](specs/m0-mozilla-services.md).
 
 | Off in Vimma                             | Turn it back on                                                                                                                                                                                       |
@@ -867,9 +881,10 @@ Vimma changes Firefox's defaults, without locking them: each one can be changed 
 | Telemetry upload                         | Not built in (no official telemetry). The data-collection switches in Settings are off to match.                                                                                                      |
 
 Kept as in Firefox: Remote Settings (CRLite certificate revocation, intermediate certificates),
-the add-on blocklist, Firefox Sync, add-ons from addons.mozilla.org and Google Safe Browsing
-(see below). Firefox's app updater and system add-on updates still contact Mozilla's update
-server; see [limits.md](limits.md).
+the add-on blocklist, Firefox Sync, add-ons from addons.mozilla.org and their updates, and
+Google Safe Browsing (see below). Firefox's app updater is not built into Vimma, and system add-on
+updates are off, so neither asks Mozilla's update server. The one remaining request there is for
+the OpenH264 and Widevine plugins, which video calls and DRM video need.
 
 Sites see Firefox 157's user agent, with no Vimma token, and add-ons see Firefox's version
 (`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. `vimma --version` and the About
@@ -927,8 +942,9 @@ malware lists; Settings then shows "Block dangerous and deceptive content" untic
 it does not help. Mozilla's tracking-protection lists update either way.
 
 **Does Vimma update itself?** No. There are no releases yet, so build a newer `main` yourself.
-Firefox's updater is still built in and asks Mozilla's update server (`aus5.mozilla.org`), which
-has no Vimma builds and offers nothing. Removing it is in review ([limits.md](limits.md)).
+Firefox's updater is not built into Vimma, so it never asks Mozilla's update server
+(`aus5.mozilla.org`) for a Firefox build. An updater of Vimma's own is planned for M6
+([limits.md](limits.md)).
 
 **I want the tab strip back.** Set `vimma.ui.tabstrip.hidden` to `false` in `about:config`.
 
@@ -943,8 +959,8 @@ Firefox. On GNOME or KDE with client-side decorations they move to the navigatio
 opens Vimma's [bookmarks panel](#bookmarks), and `ctrl+b a` bookmarks the page.
 Firefox's Library (`ctrl+shift+o`) still works for the rest.
 
-**A binding says "not implemented yet".** Every default binding runs now; the message is for
-a binding whose command is not built yet, which the overlay also dims.
+**A binding says "not implemented yet".** Every default binding runs now. The message is for a
+binding whose command is not built yet, and the overlay dims such a binding too.
 
 **Where are crash reports?** Nothing is sent anywhere. Use `coredumpctl list vimma`, then
 `coredumpctl info` on the entry.

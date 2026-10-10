@@ -4,29 +4,33 @@
 
 # Vimma
 
-**A keyboard-first browser, inspired by Vim and Tmux.** Browse the way you edit text and juggle
-terminal sessions: modal keys for the page, a `ctrl+b` prefix for tabs, panes and workspaces, and
-your hands never leave the keyboard.
+**A keyboard-first browser for people who live in Vim and tmux.** You already have the muscle
+memory; Vimma puts it to work on the web. Bare keys drive the page, `ctrl+b` drives tabs, panes
+and workspaces, and your hands never leave the keyboard.
 
-- **Vim** brings the modal layer: `j`/`k` to scroll, `f` for link hints, `/` to find, `:` for
-  commands, and `Esc` to get back to normal mode.
-- **Tmux** brings the prefix layer: `ctrl+b`, like tmux's default prefix, then `c` for a new tab,
-  `v` to split, `w` to switch workspace: the same muscle memory as in your terminal.
+- **Vim on the page:** `j`/`k` to scroll, `f` for link hints, `/` to find, `:` for commands, and
+  `Esc` to get back to normal mode.
+- **tmux for the window:** `ctrl+b`, tmux's default prefix, then `c` for a new tab, `v` to split,
+  `w` to switch workspace. If your fingers know tmux, they already know Vimma.
 - **Every key is yours:** every binding, the prefix and the leader can be remapped in
   `config.toml`.
 
 ### The name
 
-_Vimma_ is a Finnish word for a burst of eager, focused energy: the state of being on a roll. You
-hear it in _työvimma_, a spell of working when everything flows. It also happens to start with
-_Vim_. That is how browsing should feel: fast, fluent and absorbed.
+_Vimma_ is Finnish for a burst of eager, focused energy. You hear it in _työvimma_: a spell of
+work where everything flows and the hours slip by. It also happens to start with _Vim_. That is
+how browsing should feel: fast, fluent and absorbed.
 
 ### What it is
 
-Vimma is a Firefox fork for people who live in Vim and a terminal multiplexer. Pages get
-Vim's modes, tabs and splits get tmux's `ctrl+b` prefix, workspaces keep their cookies and
-logins apart, and the whole window takes its colours from your [Omarchy](https://omarchy.org/)
-theme. Underneath it is Firefox (currently 157), so sites and add-ons work as they do there.
+Vimma is for people who spend their day in Vim and a terminal multiplexer and want the browser to
+work the same way. Pages get Vim's modes. Tabs and splits answer to tmux's `ctrl+b` prefix.
+Each workspace is a container of its own, so the session you are signed in to at work stays out
+of your personal one. The whole window takes its colours from your [Omarchy](https://omarchy.org/) theme and changes with
+it.
+
+Underneath is Firefox (currently 157), a foundation you can trust: sites and add-ons work as they
+do in Firefox, and Vimma starts with quieter defaults for your privacy.
 
 ## Features
 
@@ -42,7 +46,7 @@ theme. Underneath it is Firefox (currently 157), so sites and add-ons work as th
 - Command line: `:open`, `:tabnew`, `:q`, `:map`, `:source` and any action by name, with
   completion and history.
 
-**Tmux-style tabs, panes and workspaces** (prefix `ctrl+b`)
+**tmux-style tabs, panes and workspaces** (prefix `ctrl+b`)
 
 - Tabs: `ctrl+b c` new, `ctrl+b n`/`p` next and previous, `ctrl+b 1..9` jump, `ctrl+b g` a
   fuzzy picker. Tabs can be renamed. Firefox's tab strip is hidden; the status bar shows where
@@ -67,22 +71,23 @@ theme. Underneath it is Firefox (currently 157), so sites and add-ons work as th
 
 **Firefox underneath, with quieter defaults**
 
-- Same user agent and add-on compatibility as Firefox, so sites and extensions just work.
+- Same user agent and add-on compatibility as Firefox, so sites and extensions work as you
+  expect.
 - No studies, experiments, sponsored content or telemetry uploads. Safe Browsing stays on.
 - Scriptable: an optional, token-protected control socket and the `vimma-ctl` CLI.
 
-See the [user guide](docs/guide.md) for every key and option, and
-[docs/limits.md](docs/limits.md) for what is known not to work.
+The [user guide](docs/guide.md) covers every key and option, and
+[docs/limits.md](docs/limits.md) lists what does not work yet.
 
 ## Status
 
-**Pre-alpha.** The features above work and are being daily-driven before any release. There
-are no packages or binaries yet: Vimma is built from source, on Linux x86_64 only. Version
-`0.1.0`, on Firefox 157.0.1.
+**Pre-alpha.** Everything above works today, and Vimma is being used as a daily browser ahead of
+its first release. There are no packages or binaries yet: you build it from source, on Linux
+x86_64 only. Version `0.1.0`, on Firefox 157.0.1.
 
 ## Getting started
 
-Building needs about 35 GB of disk and, the first time, under an hour:
+The first build takes under an hour and about 35 GB of disk:
 
 ```sh
 npm ci && npx surfer download && npx surfer bootstrap
@@ -90,8 +95,9 @@ npm run import && npx surfer build
 npm start
 ```
 
-[CONTRIBUTING.md](CONTRIBUTING.md) has the details: requirements, faster front-end-only
-rebuilds, tests, the project layout and how changes are made.
+`npm start` opens Vimma with a profile of its own, so your Firefox profile is never touched.
+Press `ctrl+b ?` to see every binding. [CONTRIBUTING.md](CONTRIBUTING.md) has the rest:
+requirements, faster front-end-only rebuilds, tests, the project layout and how changes are made.
 
 ## Licence
 
