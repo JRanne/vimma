@@ -1,8 +1,9 @@
 # Known limits
 
-Every known limit or gap of Vimma on `main`, one line each, with the spec, ADR or issue that
-records it. Plan §9's open questions resolve to an ADR or a line here. When a limit is fixed,
-delete its line in the same PR.
+This page lists every known limit or gap in Vimma on `main`, one line each, with the spec, ADR
+or issue that records it, so you know what to expect before you run into it. Each of plan §9's
+open questions ends as an ADR or as a line here. When a limit is fixed, its line is deleted in
+the same PR.
 
 ## Features
 
@@ -28,9 +29,8 @@ delete its line in the same PR.
   ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled).
 - After `Esc` in a `designMode` page, it stays in normal until the next click into it
   ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled).
-- Command line: history is kept in memory only, until Vimma quits; arguments are not
-  completed (URLs, workspace names); no
-  `:set`, ranges or counts ([m1-cmdline](specs/m1-cmdline.md), Settled).
+- Command line: history is kept in memory only, until Vimma quits; arguments (URLs, workspace
+  names) are not completed; there is no `:set`, and no ranges or counts ([m1-cmdline](specs/m1-cmdline.md), Settled).
 - Link hints label only what the page has as elements: canvas and WebGL apps (Google Docs,
   Figma, maps, games) have nothing to label, and delegated click handlers with no role or
   listener of their own, image-map `<area>` links and pinch-zoomed pages are missed or
@@ -117,7 +117,7 @@ delete its line in the same PR.
 
 ## Workspaces (M3, by design)
 
-These are the limits the workspaces' design accepts
+These are the trade-offs the workspaces' design accepts on purpose
 ([m3-workspaces](specs/m3-workspaces.md)).
 
 - Containers do not isolate history, bookmarks, form history, the downloads list, HSTS or site
@@ -147,7 +147,7 @@ These are the limits the workspaces' design accepts
 - A window saved by a newer Vimma keeps its saved workspaces untouched: this version starts it
   with its tabs sorted into workspaces by container, without its panes, and does not save over
   it.
-- Tabs of hidden workspaces keep playing audio and are never unloaded automatically.
+- Tabs in hidden workspaces keep playing audio, and they are never unloaded automatically.
 - Closing the last tab opens a new tab instead of closing the window
   (`browser.tabs.closeWindowWithLastTab` is `false`); setting it to `true` lets the window close
   with every hidden workspace in it.
@@ -163,7 +163,7 @@ These are the limits the workspaces' design accepts
 - Firefox Sync no longer syncs `browser.startup.page` or `privacy.userContext.enabled` to Vimma.
 - After 3 minutes without input, the session is saved hourly, so a crash can lose an hour of
   changes made by pages (tabs they opened), as in Firefox.
-- Private windows and popups have no workspaces.
+- Private windows and pop-ups have no workspaces.
 - Firefox's sidebar keys (`ctrl+h`, `ctrl+alt+x`, `ctrl+alt+u`, `ctrl+alt+z`) still open its own
   sidebar beside Vimma's side panel; Firefox's four default containers stay in Settings.
 - Extensions that hide or show tabs (`tabs.hide`) conflict with workspace visibility.
@@ -218,7 +218,7 @@ These are the limits the workspaces' design accepts
   "at most N panes". Every visible pane's page stays live, so each one costs memory and CPU;
   a zoomed-away pane is paused (its docshell inactive) until unzoom
   ([m4-split-panes](specs/m4-split-panes.md), sub-spec 2).
-- A tab whose pane is closed stays open in its workspace rather than hidden.
+- A tab whose pane is closed stays open in its workspace; it is not hidden.
 - One split per workspace: a split made outside Vimma (Firefox's split-view command, an
   extension, a restored Firefox session) is adopted as a row of panes; a second one in the same
   workspace, or one whose tabs are in different workspaces, is separated with a notice. Firefox's
