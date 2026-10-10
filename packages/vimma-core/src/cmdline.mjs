@@ -76,6 +76,8 @@ export const COMMANDS = Object.freeze([
   cmd("wsrename", "optional", "workspace.rename", "Rename this workspace"),
   cmd("wsdelete", "optional", "workspace.close", "Close this (or the named) workspace; asks"),
   cmd("wsmove", "optional", "workspace.move_tab", "Move the tab to a workspace (name or number)"),
+  // workspace-routing: without text, the rules (about:vimma); `add [workspace]`, `move`.
+  cmd("route", "optional", "workspace.route", "Routing rules (add [workspace] | move)"),
   cmd("ls", "none", "goto.picker", "Goto picker: every tab in every workspace"),
   cmd("sidebar", "none", "sidebar.toggle", "Open / close the side panel"),
   cmd("map", "none", "help.show", "Show all bindings"),

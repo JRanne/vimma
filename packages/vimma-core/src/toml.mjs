@@ -265,6 +265,9 @@ export function locateKeys(text) {
 
   /** @type {Path} */
   let table = [];
+  /** `[[name]]` headers seen so far, by name: the next one is element `count` of the array. */
+  /** @type {Map<string, number>} */
+  const arrays = new Map();
   for (;;) {
     wsNl();
     if (i >= text.length) break;
@@ -275,6 +278,12 @@ export function locateKeys(text) {
       i += array ? 2 : 1;
       table = key();
       i += array ? 2 : 1;
+      if (array) {
+        const name = JSON.stringify(table);
+        const index = arrays.get(name) ?? 0;
+        arrays.set(name, index + 1);
+        table = [...table, index];
+      }
       // implicit parent tables (`[sites."a.com"]` alone) are located at their first header
       for (let n = 1; n <= table.length; n++) record(table.slice(0, n), at);
     } else {
