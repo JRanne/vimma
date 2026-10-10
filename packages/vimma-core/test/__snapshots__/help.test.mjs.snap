@@ -164,5 +164,9 @@ Bookmarks
 Config
   reload_config        (unbound)                                         Reload config
   edit_config          (unbound)                                         Open config.toml in a tab
+
+Add-ons
+  addon_picker         ctrl+b e                                          Add-on picker: popup, options, on/off, remove, update
+  addon_popup          (unbound)                                         Open an add-on's popup by name (:addon name)
 "
 `;

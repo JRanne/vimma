@@ -7,6 +7,7 @@
  * § Command line.
  */
 import { ACTIONS, closest, resolveActionName } from "./actions.mjs";
+import { scoreField } from "./picker.mjs";
 
 /** @import { Action } from "./dispatcher.mjs" */
 
@@ -26,7 +27,12 @@ import { ACTIONS, closest, resolveActionName } from "./actions.mjs";
  *   | { kind: "empty" }
  *   | { kind: "error", error: CommandError }} CommandResult
  */
-/** @typedef {{ value: string, kind: "command" | "action", description: string }} Candidate */
+/**
+ * `value` replaces the whole line; `label`, if any, is what the list shows (an argument's text
+ * without its command).
+ * @typedef {{ value: string, kind: "command" | "action" | "argument", description: string,
+ *   label?: string }} Candidate
+ */
 /**
  * @typedef {object} History
  * @property {readonly string[]} entries oldest first
@@ -96,6 +102,9 @@ export const COMMANDS = Object.freeze([
   cmd("bug", "none", "tab.new", "Copy a redacted about:vimma report", {
     text: "about:vimma#bug",
   }),
+  // docs/specs/addon-manager.md. Without a name, :addon asks on the command line.
+  cmd("addons", "none", "addons.picker", "Add-on picker"),
+  cmd("addon", "optional", "addons.popup", "Open an add-on's popup (Tab completes names)"),
 ]);
 
 /**
@@ -255,17 +264,57 @@ const CANDIDATES = [
   })),
 ].map((c) => Object.freeze(c));
 
+/** What an argument candidate says it is, per command that completes its argument. */
+/** @type {Readonly<Record<string, string>>} */
+const ARGUMENT_KINDS = Object.freeze({ addon: "add-on" });
+
 /**
- * Completion candidates for the command word.
+ * Candidates for a command's argument (`:addon bit` → `addon Bitwarden`): `names` matched
+ * fuzzily (the pickers' scoring), best first; a blank argument lists them all in order.
+ * @param {string} command
+ * @param {string} text  the argument typed so far
+ * @param {readonly string[]} names
+ * @returns {Candidate[]}
+ */
+function argumentCandidates(command, text, names) {
+  const t = text.trim();
+  const ranked = t
+    ? names
+        .flatMap((name, i) => {
+          const m = scoreField(name, t);
+          return m ? [{ name, i, score: m.score }] : [];
+        })
+        .sort((a, b) => b.score - a.score || a.i - b.i)
+        .map((r) => r.name)
+    : [...names];
+  return ranked.map((name) =>
+    Object.freeze({
+      value: `${command} ${name}`,
+      kind: /** @type {const} */ ("argument"),
+      description: ARGUMENT_KINDS[command] ?? "",
+      label: name,
+    }),
+  );
+}
+
+/**
+ * Completion candidates for the command word, or for the argument of a command in `args`
+ * (its names, from the host: `{ addon: [...] }`).
  * @param {string} line
- * @param {{ limit?: number }} [options]
+ * @param {{ limit?: number, args?: Readonly<Record<string, readonly string[]>> }} [options]
  * @returns {{ word: string, candidates: Candidate[] }}
  */
-export function completeCommandLine(line, { limit = 20 } = {}) {
+export function completeCommandLine(line, { limit = 20, args = {} } = {}) {
   const rest = line.replace(/^[\s:]*/, "");
   const m = /^(\S*)(\s?)/.exec(rest);
   const word = (m?.[1] ?? "").toLowerCase();
-  if (m?.[2]) return { word, candidates: [] };
+  if (m?.[2]) {
+    const command = byWord.get(word)?.name;
+    const names = command && Object.hasOwn(args, command) ? args[command] : undefined;
+    if (!command || !names || !(command in ARGUMENT_KINDS)) return { word, candidates: [] };
+    const text = rest.slice(/** @type {string} */ (m[1]).length + 1);
+    return { word, candidates: argumentCandidates(command, text, names).slice(0, limit) };
+  }
   /** @type {Candidate[]} */
   const exact = [];
   /** @type {Candidate[]} */

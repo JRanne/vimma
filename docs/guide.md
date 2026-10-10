@@ -353,6 +353,7 @@ keys. A `[panel]` after a key means it works only in that mode.
 | `ctrl+b shift+t`               | Renames the tab ([below](#goto-picker-and-tab-rename)); an empty name restores the page title.                                                                                                                                                                                                                                                                                           |
 | `ctrl+b a`                     | Bookmarks the page; type folders before its title: `work/docs/title` ([below](#bookmarks)).                                                                                                                                                                                                                                                                                              |
 | `ctrl+b shift+b`               | Opens or closes the bookmarks panel ([below](#bookmarks)).                                                                                                                                                                                                                                                                                                                               |
+| `ctrl+b e`                     | Opens the add-on picker: popups, options, enable/disable, remove, updates ([below](#add-ons)).                                                                                                                                                                                                                                                                                           |
 | `ctrl+b v` / `ctrl+b -`        | Splits the pane right / down. The new pane opens a new tab (the start page, URL bar focused). At most 4 panes (`[panes] max`); a refused split says why.                                                                                                                                                                                                                                 |
 | `ctrl+b h j k l`               | Focuses the pane left / below / above / right; when several touch, the one used last. `ctrl+w h j k l` in normal mode. The page of that pane gets focus.                                                                                                                                                                                                                                 |
 | `ctrl+b z`, `ctrl+w o`         | Zooms the pane to the whole window, or back. The other panes' pages pause. A pane focus key unzooms when it moves.                                                                                                                                                                                                                                                                       |
@@ -676,6 +677,58 @@ it survives a restart (with Firefox's "Open previous windows and tabs") and undo
 Invisible and direction-changing characters are removed, runs of spaces become one, and a name
 is cut at 100 characters.
 
+## Add-ons
+
+Add-ons work as in Firefox. Install them from [addons.mozilla.org](https://addons.mozilla.org)
+as usual: the add-on's page, its Add button, Firefox's permission prompt. Vimma never installs
+anything by itself. What Vimma adds is keyboard control.
+
+`ctrl+b e` (or `:addons`) opens the add-on picker over the page: every extension you installed,
+with its version, whether it is enabled, `private ok` when it may run in private windows, and
+`update` when an update is waiting. Firefox's own built-in and hidden add-ons are never listed,
+and themes and dictionaries are not either. Like the goto picker, it takes every key while open.
+
+| Key            | What it does                                                                                                                  |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `j` / `k`, `/` | Move; filter by name (`Esc` back to the list).                                                                                |
+| `Enter`        | Opens the add-on's popup (a password manager's vault, uBlock Origin's panel), as clicking its toolbar button would.           |
+| `o`            | Opens its options page in a tab; an add-on without one opens its details in about:addons.                                     |
+| `x`            | Enables or disables it. The picker stays open.                                                                                |
+| `d`            | Removes it, after a `y/N` question. Nothing is removed if the add-on changed (updated, renamed, removed) before your `y`.     |
+| `u`            | Checks for an update and says what it found. Vimma does not install it: Firefox does, in the background or from about:addons. |
+| `P`            | Allows or stops it in private windows (Firefox's "Run in Private Windows").                                                   |
+| `Esc` / `q`    | Closes the picker.                                                                                                            |
+
+**Popups.** The popup opens where Firefox opens it: under the add-on's toolbar button, or, for
+an add-on in the extensions menu (the puzzle piece), in that menu. Keyboard focus goes into the
+popup, so you can type at once (a password manager's search field). Keys there are the popup's,
+except Vimma's `ctrl+b` chords; `Esc` closes it and focus returns to the page. An add-on whose
+button has no popup runs the button's action instead; one without a button says so.
+
+**`:addon name`** opens one add-on's popup by name: a few letters are enough (`:addon bw` finds
+Bitwarden), and `Tab` completes the name. To put an add-on on a key:
+
+- bind `addon_popup` in `config.toml` (`[keys] addon_popup = ["prefix+shift+e"]`): it opens
+  `:addon ` on the command line, ready for a name;
+- or give the add-on its own shortcut: about:addons → the gear menu → Manage Extension
+  Shortcuts, "Activate the extension". Vimma lets every chord it does not use through, so that
+  shortcut opens the popup directly. Keys cannot carry a name in `config.toml`.
+
+**Add-ons that clash with Vimma.**
+
+- **Vimium, Tridactyl, Surfingkeys** and other keyboard add-ons fight Vimma over the same keys
+  and are not needed: Vimma has hints, scrolling, find and the command line built in. Disable
+  them with `x`.
+- **Container add-ons** (Multi-Account Containers, Temporary Containers) overlap with
+  [workspaces](#workspaces), which are containers already. They work, but a tab they open in a
+  container of their own belongs to no workspace: it joins the workspace you are in as a
+  `foreign` tab, without that workspace's cookies and logins.
+- **An extension shortcut on a Vimma key**: Vimma sees the key first, so Vimma's binding wins
+  and the add-on never gets it. Remap one side: the add-on's in about:addons → Manage Extension
+  Shortcuts, or Vimma's in `config.toml`.
+- **Sidebar add-ons** (a `sidebar_action`) open in Firefox's own sidebar, through the add-on's
+  button or the View menu, not in Vimma's side panel.
+
 ## The command line
 
 `:` in normal mode opens a Vim-style command line just above the status bar, for everything
@@ -719,6 +772,8 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:source path`                        | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                                 |
 | `:config`                             | Opens `config.toml` in a new tab (read-only view); creates it from a commented template when it is missing.                     |
 | `:about`, `:vimma`                    | Opens [about:vimma](#aboutvimma) in a new tab.                                                                                  |
+| `:addons`                             | Opens the [add-on picker](#add-ons), as `ctrl+b e`.                                                                             |
+| `:addon name`                         | Opens that add-on's popup; `Tab` completes the name ([Add-ons](#add-ons)).                                                      |
 | `:bug`                                | Opens about:vimma and copies its redacted report to the clipboard, for a bug report.                                            |
 
 A command that is not built yet says so for a moment, as its keys do.
