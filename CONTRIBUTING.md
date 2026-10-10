@@ -105,5 +105,9 @@ Before pushing, run `npm test`, `npm run typecheck`, `npm run lint`, `npm run te
 - [docs/runbook.md](docs/runbook.md): builds, CI, e2e tests, parallel browser lanes and releases.
 - [docs/rebase.md](docs/rebase.md): moving to a new Firefox release.
 - [docs/review-checklist.md](docs/review-checklist.md): what a PR needs before merge.
+- [docs/security.md](docs/security.md): the security model, a rule per risky component with the
+  tests that enforce it. A change that touches one of those components keeps its rules true
+  and its test links valid (CI checks them); vulnerabilities are reported as
+  [SECURITY.md](SECURITY.md) says.
 - [docs/adr/](docs/adr/) and [docs/specs/](docs/specs/): decisions and feature specs.
 - [plan.md](plan.md): the roadmap.

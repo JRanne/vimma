@@ -153,6 +153,23 @@ describe("readDefinitions", () => {
     expect(defsError(() => readDefinitions(doc)).path).toBe(path);
   });
 
+  // docs/security.md: container 0 is the default container, shared by every page outside a
+  // workspace. A file that names it must never make a workspace delete or close it.
+  test("container 0 is never a workspace's: a stored id of 0 or below is refused", () => {
+    for (const userContextId of [0, -1, 1.5, "3"]) {
+      const doc = {
+        schema: 1,
+        lastActive: null,
+        workspaces: [
+          { id: "x", name: "a", userContextId, color: "gray", icon: "circle", source: "runtime" },
+        ],
+      };
+      expect(defsError(() => readDefinitions(doc)).path, String(userContextId)).toBe(
+        "workspaces[0].userContextId",
+      );
+    }
+  });
+
   test("text that is not JSON is a syntax error", () => {
     expect(defsError(() => readDefinitions("{")).code).toBe("syntax");
   });
