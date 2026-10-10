@@ -197,6 +197,24 @@ add_task(async function toggles_in_the_side_panels_slot_one_panel_at_a_time() {
   BrowserTestUtils.removeTab(gBrowser.selectedTab);
 });
 
+// docs/specs/key-handling-batch.md § 4: x is the tabs panel's; here it does nothing (d deletes).
+add_task(async function x_does_nothing_in_the_bookmarks_panel() {
+  const tab = await openPage("x-bookmarks");
+  const tabs = gBrowser.tabs.length;
+  await openPanel();
+  const before = titles();
+  EventUtils.synthesizeKey("x");
+  EventUtils.synthesizeKey("j");
+  await until(() => rows().indexOf(selected()) === 1, "the key after x still moves");
+  Assert.ok(isOpen(), "the bookmarks panel stays open");
+  Assert.ok(tab.isConnected, "no tab closed");
+  Assert.equal(gBrowser.tabs.length, tabs, "the tabs are as they were");
+  Assert.deepEqual(titles(), before, "no bookmark changed");
+  Assert.ok(!promptOpen(), "and nothing asks y/N");
+  await closePanel();
+  BrowserTestUtils.removeTab(tab);
+});
+
 add_task(async function quick_add_files_under_typed_folders_with_completion() {
   const url = `${PAGE}?Quick`;
   const tab = await openPage("Quick");

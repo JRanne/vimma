@@ -10,13 +10,25 @@ the same PR.
 - Tab keys count Firefox's visible tabs: the current workspace's and any pinned tab.
 - The first key of a sequence with nothing runnable under it passes through to the page or
   Firefox ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled). `ctrl+w`'s pane keys run
-  only with two panes or more, so with one pane `ctrl+w` closes the tab; with a split, in normal
-  mode, it is Vim's window prefix and does not close the tab
-  ([m4-split-panes](specs/m4-split-panes.md), sub-spec 3).
-- In normal mode `ctrl+d`, `ctrl+u`, `ctrl+e`, `ctrl+y`, `ctrl+o` and `ctrl+i` are Vim's scroll
-  and jump keys, so Firefox's bookmark-this-page, view-source, Open File and Page Info need the
-  menus, insert mode, `ctrl+b a`, `gf` or `:open` there
-  ([m3-workspaces](specs/m3-workspaces.md), Settled 2026-10-10).
+  only with two panes or more, so with one pane `ctrl+w` reaches the page; with a split, in
+  normal mode, it is Vim's window prefix ([m4-split-panes](specs/m4-split-panes.md), sub-spec 3).
+- Firefox's shortcuts on Vimma's keys (`ctrl+w` close tab, `ctrl+u` view source, `ctrl+h`
+  history sidebar, `ctrl+d` bookmark, `ctrl+o` Open File, `ctrl+i` Page Info, `ctrl+k` web
+  search, `ctrl+b` bookmarks sidebar) are off in every mode, so they need `x`, `gf`,
+  `ctrl+shift+h`, `ctrl+b a`, `:open`, the menus or `[firefox] enable`. `[firefox]` reaches only
+  the window's `#mainKeyset`: tab switching (`ctrl+tab`, `ctrl+pagedown`) and the developer
+  tools' keys cannot be turned off there ([key-handling-batch](specs/key-handling-batch.md)).
+- The text-field keys (`ctrl+w`, `ctrl+u`, `ctrl+h`) wait for the page: one that takes the key
+  keeps it, and the edit runs a moment after the key, so a key typed in that moment can land
+  before it. A text field with focus in normal mode (a page's autofocus) gets no edit. On macOS
+  `ctrl+h` is Cocoa's own backspace, and only `ctrl+…` (not `cmd`) shortcuts are matched; it is
+  untested there ([key-handling-batch](specs/key-handling-batch.md)).
+- AltGr and Option characters are told from real `alt` chords by what the physical key types
+  on a US layout: on a layout where a key's plain character differs from the US one, a
+  `ctrl+alt` chord on it that types another character counts as AltGr (Windows'
+  `ctrl+alt` stand-in) ([key-handling-batch](specs/key-handling-batch.md), § 3).
+- The side panel takes no count: `3x` selects row 3 and closes the panel, and the `x` then
+  closes that tab in normal mode ([key-handling-batch](specs/key-handling-batch.md), § 4).
 - Pages that take keys outside a text field (games, Google Docs' canvas, Figma) lose their bare
   keys to normal mode; press `i` to let every key through until `Esc`. Text editors are
   detected ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Limits).
@@ -169,7 +181,7 @@ These are the trade-offs the workspaces' design accepts on purpose
 - After 3 minutes without input, the session is saved hourly, so a crash can lose an hour of
   changes made by pages (tabs they opened), as in Firefox.
 - Private windows and pop-ups have no workspaces.
-- Firefox's sidebar keys (`ctrl+h`, `ctrl+alt+x`, `ctrl+alt+u`, `ctrl+alt+z`) still open its own
+- Firefox's sidebar keys (`ctrl+alt+x`, `ctrl+alt+u`, `ctrl+alt+z`; `ctrl+h` is off) still open its own
   sidebar beside Vimma's side panel; Firefox's four default containers stay in Settings.
 - Extensions that hide or show tabs (`tabs.hide`) conflict with workspace visibility.
 

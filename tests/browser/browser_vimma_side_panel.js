@@ -198,7 +198,7 @@ add_task(async function esc_and_prefix_b_close_and_keys_never_reach_the_page() {
   const count = gBrowser.tabs.length;
   await recordPageKeys(browser);
   await openPanel();
-  EventUtils.synthesizeKey("x"); // unbound in panel mode: the panel's, not the page's
+  EventUtils.synthesizeKey("q"); // unbound in panel mode: the panel's, not the page's
   EventUtils.synthesizeKey("KEY_Escape");
   await until(() => !isOpen(), "Esc closes the panel");
   await focusPage();
@@ -210,7 +210,7 @@ add_task(async function esc_and_prefix_b_close_and_keys_never_reach_the_page() {
   EventUtils.synthesizeKey("z");
   await until(async () => (await pageKeys(browser)).includes("z"), "z reaches the page");
   Assert.deepEqual(await pageKeys(browser), ["z"], "the page saw none of the panel's keys");
-  Assert.equal(gBrowser.tabs.length, count, "x closed no tab");
+  Assert.equal(gBrowser.tabs.length, count, "q closed no tab");
 });
 
 add_task(async function next_workspace_re_renders_the_panel_for_the_next_workspace() {
@@ -249,6 +249,81 @@ add_task(async function it_stays_leftmost_when_firefox_moves_its_sidebar_right()
   EventUtils.synthesizeKey("KEY_Escape");
   await until(() => !isOpen(), "closed");
   await SpecialPowers.popPrefEnv();
+});
+
+// docs/specs/key-handling-batch.md § 4
+add_task(async function x_closes_the_selected_tab_and_the_panel_stays_open_on_the_next_row() {
+  const opened = [];
+  for (const q of ["x-one", "x-two", "x-three", "x-four"]) opened.push(await openPage(q));
+  await openPanel();
+  const at = (/** @type {string} */ t) => titles().indexOf(t);
+  // From the active row (x-four, the last), up to x-two.
+  EventUtils.synthesizeKey("k");
+  EventUtils.synthesizeKey("k");
+  await until(() => text(selected(), "title") === "x-two", "x-two is highlighted");
+  const n = rows().length;
+  EventUtils.synthesizeKey("x");
+  await until(() => !opened[1].isConnected, "x closed x-two's tab");
+  await until(() => rows().length === n - 1, "its row is gone");
+  Assert.ok(isOpen(), "the panel stays open");
+  Assert.equal(at("x-two"), -1, "x-two is not listed");
+  Assert.equal(text(selected(), "title"), "x-three", "the highlight is on the next row");
+  Assert.ok(panel().contains(document.activeElement), "the panel keeps focus");
+
+  EventUtils.synthesizeKey("x");
+  await until(() => !opened[2].isConnected, "a second x closes x-three");
+  await until(() => text(selected(), "title") === "x-four", "the highlight moves on to x-four");
+  EventUtils.synthesizeKey("x");
+  await until(() => !opened[3].isConnected, "a third x closes the last row's tab, x-four");
+  await until(() => text(selected(), "title") === "x-one", "the highlight goes back a row");
+  Assert.ok(isOpen(), "still open");
+
+  // ctrl+shift+t: Firefox's reopen, which panel mode would otherwise consume.
+  // SessionStore's event once the page is back: a busy runner takes seconds to get there.
+  const restored = BrowserTestUtils.waitForEvent(gBrowser.tabContainer, "SSTabRestored");
+  EventUtils.synthesizeKey("t", { ctrlKey: true, shiftKey: true });
+  const { target: back } = await restored;
+  Assert.stringContains(back.linkedBrowser.currentURI.spec, "x-four", "x-four reopens");
+  // Its title was set by the test's script before; the reloaded page has its own.
+  await until(
+    () => rows().some((r) => r.dataset.tabId === back.linkedPanel),
+    "and gets its row back",
+  );
+  Assert.ok(isOpen(), "the panel is still open");
+
+  EventUtils.synthesizeKey("KEY_Escape");
+  await until(() => !isOpen(), "closed");
+  BrowserTestUtils.removeTab(back);
+  BrowserTestUtils.removeTab(opened[0]);
+});
+
+add_task(async function x_never_closes_a_pinned_tab() {
+  // Pinned tabs belong to no workspace (limits.md), so the panel never lists them.
+  const pinned = await openPage("x-pinned");
+  gBrowser.pinTab(pinned);
+  const other = await openPage("x-unpinned");
+  await openPanel();
+  Assert.ok(!titles().includes("x-pinned"), "the pinned tab has no row");
+  await until(() => text(selected(), "title") === "x-unpinned", "the active row is highlighted");
+  EventUtils.synthesizeKey("x");
+  await until(() => !other.isConnected, "x closes the highlighted tab");
+  Assert.ok(pinned.isConnected, "the pinned tab stays");
+
+  // A row whose tab was pinned since the last render: refused with a notice, nothing closed.
+  const sidePanel = VimmaHost._state(window).panel;
+  sidePanel.state = {
+    ...sidePanel.state,
+    rows: sidePanel.state.rows.map((r) => ({ ...r, pinned: true })),
+  };
+  const n = gBrowser.tabs.length;
+  EventUtils.synthesizeKey("x");
+  await until(() => noticeText() === "pinned tab: unpin it to close it", "a notice says why");
+  Assert.equal(gBrowser.tabs.length, n, "no tab closed");
+  Assert.ok(isOpen(), "the panel stays open");
+  EventUtils.synthesizeKey("KEY_Escape");
+  await until(() => !isOpen(), "closed");
+  gBrowser.unpinTab(pinned);
+  BrowserTestUtils.removeTab(pinned);
 });
 
 add_task(async function sidebar_command_opens_it() {

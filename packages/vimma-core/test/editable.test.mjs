@@ -10,6 +10,8 @@ import {
   INSERT_SITE_MODES,
   parseDescriptor,
   DESCRIPTOR_MAX_STRING,
+  INSERT_EDIT_COMMANDS,
+  insertEditCommand,
   DESCRIPTOR_MAX_CLASSES,
 } from "../src/editable.mjs";
 import { resolveEscape } from "../src/escape.mjs";
@@ -490,5 +492,30 @@ describe("parseDescriptor: untrusted reports from a content process", () => {
       },
     };
     expect(parseDescriptor(hostile)).toBeNull();
+  });
+});
+
+// docs/specs/key-handling-batch.md § 2
+describe("insertEditCommand", () => {
+  test.each([
+    ["ctrl+w", "cmd_deleteWordBackward"],
+    ["ctrl+u", "cmd_deleteToBeginningOfLine"],
+    ["ctrl+h", "cmd_deleteCharBackward"],
+  ])("%s runs %s", (chord, command) => {
+    expect(insertEditCommand(chord)).toBe(command);
+    expect(INSERT_EDIT_COMMANDS).toContain(command);
+  });
+
+  test.each(["ctrl+shift+w", "ctrl+alt+u", "alt+h", "w", "ctrl+meta+h", "ctrl+d"])(
+    "%s is no edit key",
+    (chord) => {
+      expect(insertEditCommand(chord)).toBeNull();
+    },
+  );
+
+  test("on macOS ctrl+h is left to Cocoa's own binding; ctrl+w and ctrl+u stay", () => {
+    expect(insertEditCommand("ctrl+h", { mac: true })).toBeNull();
+    expect(insertEditCommand("ctrl+w", { mac: true })).toBe("cmd_deleteWordBackward");
+    expect(insertEditCommand("ctrl+u", { mac: true })).toBe("cmd_deleteToBeginningOfLine");
   });
 });

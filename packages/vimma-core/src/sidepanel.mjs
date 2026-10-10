@@ -14,12 +14,12 @@ import { displayLabel } from "./tablabels.mjs";
 /**
  * What the host knows of a tab; undefined for one it no longer has.
  * @typedef {{ title?: string, url?: string, label?: string | null, foreign?: boolean,
- *   playing?: boolean }} PanelTabInfo
+ *   playing?: boolean, pinned?: boolean }} PanelTabInfo
  */
 /**
  * @typedef {{ readonly tabId: string, readonly number: number, readonly display: string,
  *   readonly host: string, readonly active: boolean, readonly foreign: boolean,
- *   readonly playing: boolean }} PanelRow
+ *   readonly playing: boolean, readonly pinned: boolean }} PanelRow
  */
 /**
  * `previous` / `next`: the workspaces ctrl+b ( / ctrl+b ) go to, null with one workspace.
@@ -28,9 +28,13 @@ import { displayLabel } from "./tablabels.mjs";
  *   readonly rows: readonly PanelRow[], readonly selected: number }} PanelState
  */
 /**
+ * `closeTab`: close that tab and keep the panel open (`x`, docs/specs/key-handling-batch.md).
  * @typedef {{ type: "select", id: string } | { type: "close" }
- *   | { type: "refuse", text: string }} PanelEffect
+ *   | { type: "refuse", text: string } | { type: "closeTab", id: string }} PanelEffect
  */
+
+/** What `x` says on a pinned tab. */
+export const PINNED_TEXT = "pinned tab: unpin it to close it";
 
 /**
  * The host of a URL, or the URL itself when it has none (about:, data:).
@@ -68,6 +72,7 @@ export function openPanel(model, info, { color, selectedId = null } = {}) {
       active: tabId === w.activeTab,
       foreign: !!t.foreign,
       playing: !!t.playing,
+      pinned: !!t.pinned,
     });
   });
   const find = (/** @type {string | null} */ id) => rows.findIndex((r) => r.tabId === id);
@@ -132,6 +137,18 @@ export function panelKey(state, action) {
     }
     case "panel.close":
       return { state, effect: { type: "close" } };
+    case "panel.close_tab": {
+      // The highlight goes to the next row (the one before, at the end), so the refresh after
+      // the tab closes keeps it there and the next `x` closes that one.
+      const row = state.rows[state.selected];
+      if (!row) return { state, effect: null };
+      if (row.pinned) return { state, effect: { type: "refuse", text: PINNED_TEXT } };
+      const next = state.selected < last ? state.selected + 1 : Math.max(0, state.selected - 1);
+      return {
+        state: Object.freeze({ ...state, selected: next }),
+        effect: { type: "closeTab", id: row.tabId },
+      };
+    }
     default:
       return { state, effect: null };
   }
