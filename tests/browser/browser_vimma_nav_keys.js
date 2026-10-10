@@ -2,7 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Page navigation keys in normal mode: H back, L forward (with counts), r reload (plan §2, M1).
+// Page navigation keys in normal mode: H / ctrl+o back, L / ctrl+i forward (with counts), r
+// reload (plan §2, M1).
 // They act on the focused page's <browser>: in a split, the focused pane's. In insert mode the
 // keys are the page's.
 
@@ -80,13 +81,16 @@ async function tabWithHistory(/** @type {string[]} */ names) {
  * Presses `keys` in `browser`'s page and resolves with the location it lands on, or null if it
  * does not change within 5 s (a key that does nothing fails an assertion instead of timing out
  * the file).
- * @param {string[]} keys
+ * @param {(string | [string, object])[]} keys a key, or [key, modifiers]
  * @param {XULBrowserElement} [browser]
  */
 async function navigateWith(keys, browser = gBrowser.selectedBrowser) {
   await focusContent(browser);
   const before = browser.currentURI.spec;
-  for (const key of keys) EventUtils.synthesizeKey(key);
+  for (const key of keys) {
+    if (Array.isArray(key)) EventUtils.synthesizeKey(...key);
+    else EventUtils.synthesizeKey(key);
+  }
   try {
     await TestUtils.waitForCondition(() => browser.currentURI.spec !== before, "location changed");
   } catch {
@@ -134,6 +138,28 @@ add_task(async function h_and_l_walk_history_with_counts() {
   Assert.equal(await navigateWith(["2", "H"]), url("a"), "2H from the last page skips one");
 
   Assert.deepEqual(await recordedKeys(tab.linkedBrowser), [], "no page saw H, L or a count");
+  BrowserTestUtils.removeTab(tab);
+});
+
+// Vim's jump list keys (user decision 2026-10-10): ctrl+o back, ctrl+i forward, in normal mode.
+// ctrl+o is Firefox's Open File; in normal mode it is ours, so no file picker opens.
+add_task(async function ctrl_o_and_ctrl_i_walk_history_as_in_vim() {
+  const MockFilePicker = SpecialPowers.MockFilePicker;
+  MockFilePicker.init(window.browsingContext);
+  MockFilePicker.returnValue = MockFilePicker.returnCancel;
+  const tab = await tabWithHistory(["a", "b", "c"]);
+  /** @returns {[string, object]} */
+  const ctrl = (/** @type {string} */ key) => [key, { ctrlKey: true }];
+
+  Assert.equal(await navigateWith([ctrl("o")]), url("b"), "ctrl+o goes back one page");
+  Assert.equal(await navigateWith(["2", ctrl("o")]), url("a"), "2 ctrl+o goes back two");
+  Assert.equal(await navigateWith([ctrl("i")]), url("b"), "ctrl+i goes forward one page");
+  Assert.equal(await navigateWith(["H"]), url("a"), "H still goes back");
+  Assert.equal(await navigateWith(["L"]), url("b"), "and L forward");
+
+  Assert.ok(!MockFilePicker.shown, "ctrl+o opened no file picker");
+  Assert.deepEqual(await recordedKeys(tab.linkedBrowser), [], "no page saw ctrl+o or ctrl+i");
+  MockFilePicker.cleanup();
   BrowserTestUtils.removeTab(tab);
 });
 

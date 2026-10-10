@@ -30,7 +30,7 @@ Sources: the engine tree (Firefox 157.0.1, read-only); zen-browser/desktop at `1
 - As a user, a video that goes fullscreen in one pane fills the screen. When it leaves
   fullscreen, my layout is back exactly as it was.
 - As a user, clicking into a pane focuses it, the same as `ctrl+b h/j/k/l`.
-- As a user, each workspace keeps its own layout. Switching workspaces with `ctrl+i`/`ctrl+u`
+- As a user, each workspace keeps its own layout. Switching workspaces with `prefix+)`/`prefix+(`
   shows that workspace's panes, and a restart restores them.
 - As a user, a link I open in a new foreground tab from a pane shows in that pane, and the split
   stays (core: activating a tab shows it in the focused pane).
@@ -266,7 +266,7 @@ narrows the split view to two fails on the Firefox-update PR.
   (rects unchanged after the next flush).
 - fullscreen: `requestFullscreen` in pane 2 fills the window with pane 2; exiting restores the
   rects exactly; the core state is unchanged.
-- workspaces: two workspaces with different layouts; `ctrl+i` shows each one's panes, and the
+- workspaces: two workspaces with different layouts; `prefix+)` shows each one's panes, and the
   other wrapper is hidden.
 - restore: restarting (SessionStore plus the state file) restores rects, focus and zoom.
 - foreign split: a wrapper created by `Browser:AddTabSplitView` is adopted into the tree.
@@ -552,7 +552,7 @@ step, protocol field or product code was needed.
   (`x[c, y[b, a]]`); `prefix+r`, `l l`, `Esc` gives 767/511; the screenshot; Enter in `b`'s
   input requests DOM fullscreen (`b 1280x800 fs`) and Enter again leaves it with every width and
   the tree unchanged; `prefix+x` closes `b`'s pane and keeps its tab; a second workspace with a
-  vertical split keeps it across `ctrl+u`/`ctrl+i`; a zoomed layout survives `ctrl+q` and a
+  vertical split keeps it across `prefix+(`/`prefix+)`; a zoomed layout survives `ctrl+q` and a
   start on the same profile (zoom, focus, tree, ratios, then both workspaces again).
 - **Prefs:** `browser.startup.page` is Vimma's own (resume), as in `m3-restart-restore`, and
   `full-screen-api.ignore-widgets = true`: Xvfb has no window manager to make the window
@@ -566,7 +566,7 @@ step, protocol field or product code was needed.
   every screenshot step to have a committed baseline and fails the e2e job before it would
   write CI's actual image.
 - **Not covered here:** click focus (the harness only sends keys; `browser_vimma_pane_focus.js`
-  covers it); key-to-paint timing for `prefix+l` (and m3's 200-tab `ctrl+i` measurement) need a
+  covers it); key-to-paint timing for `prefix+l` (and m3's 200-tab `prefix+)` measurement) need a
   paint timestamp the control socket does not report; it belongs with the perf gate.
 
 What is left of M4: nothing. The key-to-paint measurement needs the perf gate (issue #17) and
@@ -583,7 +583,7 @@ Each sub-spec is one session, ordered by dependencies. "Core" means PR #10 merge
 | 3   | `m4-split-keys`               | Host wiring: `split_vertical`, `split_horizontal`, `close_pane`, `focus_pane_*`, `zoom` through `withPanes`/`splitPane`; refusal message; explicit browser focus after a move.                                                                                                                                                                                                                | 2, M2 status bar (else console)        |
 | 4   | `m4-split-focus-sync`         | `TabSelect`/`TabOpen`/`TabClose` → core → `reconcile`; click focus; the replace order for a tab shown in the focused pane; per-pane mode from the M1 actor; URL bar, find bar and zoom tests.                                                                                                                                                                                                 | 3, M1 actor for mode                   |
 | 5   | `m4-split-swap-resize`        | `swap_pane_*`; the `resize` dispatcher mode (an ADR, since it changes the dispatcher contract) with h/j/k/l and `<>+-` at 0.05; which-key and help for resize mode.                                                                                                                                                                                                                           | 3                                      |
-| 6   | `m4-split-workspaces-restore` | One wrapper per workspace across `ctrl+i`/`ctrl+u`; restore reconciliation with SessionStore; adopting foreign splits (`SplitViewCreated`, extensions).                                                                                                                                                                                                                                       | 4, M3 workspaces host                  |
+| 6   | `m4-split-workspaces-restore` | One wrapper per workspace across `prefix+)`/`prefix+(`; restore reconciliation with SessionStore; adopting foreign splits (`SplitViewCreated`, extensions).                                                                                                                                                                                                                                   | 4, M3 workspaces host                  |
 | 7   | `m4-split-gate`               | e2e happy path with two real sites, screenshot baseline, fullscreen in a pane, key-to-paint timing; update plan.md §1/§3/§6 to ADR-013 if not done already.                                                                                                                                                                                                                                   | 1 to 6, control socket and `tools/e2e` |
 
 Sub-specs 3 and 5 can run in parallel after 2. Sub-spec 6 waits for M3's workspace host.

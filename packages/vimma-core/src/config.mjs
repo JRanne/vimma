@@ -49,7 +49,7 @@ import { formatPath, locateKeys, parsePath, parseToml } from "./toml.mjs";
  * @property {Record<string, string | string[]>} keys     as written; compileKeymap merges
  * @property {Record<string, unknown>} modal              as written; compileKeymap merges
  * @property {Record<string, string[]>} unbind
- * @property {Workspace[]} workspaces                     file order = ctrl+i order
+ * @property {Workspace[]} workspaces                     file order = workspace order
  * @property {ThemeConfig} theme
  * @property {{ max: number }} panes                     `[panes]` (schema 2)
  * @property {string} hintChars                          `[modal] hint_chars` (schema 2)

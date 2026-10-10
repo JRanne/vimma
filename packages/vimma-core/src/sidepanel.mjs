@@ -22,7 +22,7 @@ import { displayLabel } from "./tablabels.mjs";
  *   readonly playing: boolean }} PanelRow
  */
 /**
- * `previous` / `next`: the workspaces ctrl+u / ctrl+i go to, null with one workspace.
+ * `previous` / `next`: the workspaces ctrl+b ( / ctrl+b ) go to, null with one workspace.
  * @typedef {{ readonly workspace: { id: string, name: string, index: number, color?: string },
  *   readonly previous: string | null, readonly next: string | null,
  *   readonly rows: readonly PanelRow[], readonly selected: number }} PanelState
@@ -87,7 +87,7 @@ export function openPanel(model, info, { color, selectedId = null } = {}) {
 }
 
 /**
- * The panel again after the model changed (a tab opened or closed, ctrl+i): the highlight stays
+ * The panel again after the model changed (a tab opened or closed, ctrl+b )): the highlight stays
  * on its tab while that is listed in the same workspace.
  * @param {PanelState} state
  * @param {Workspaces} model

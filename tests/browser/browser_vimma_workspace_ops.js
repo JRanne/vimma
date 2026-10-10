@@ -177,10 +177,12 @@ add_task(async function new_workspace_appears_in_cycling_the_bar_and_the_snapsho
   );
   Assert.equal(gBrowser.selectedTab.userContextId, shop.userContextId, "its home tab is in it");
 
-  EventUtils.synthesizeKey("i", { ctrlKey: true });
-  await until(() => active() === main().id, "ctrl+i wraps to main");
-  EventUtils.synthesizeKey("i", { ctrlKey: true });
-  await until(() => active() === shop.id, "and ctrl+i comes back to shop");
+  EventUtils.synthesizeKey("b", { ctrlKey: true });
+  EventUtils.synthesizeKey(")", { shiftKey: true });
+  await until(() => active() === main().id, "ctrl+b ) wraps to main");
+  EventUtils.synthesizeKey("b", { ctrlKey: true });
+  EventUtils.synthesizeKey(")", { shiftKey: true });
+  await until(() => active() === shop.id, "and ctrl+b ) comes back to shop");
 
   await runCommand("wsnew shop");
   await until(() => /exists/.test(noticeText()), "a taken name is refused");

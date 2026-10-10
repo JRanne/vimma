@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Panes per workspace and restore (docs/specs/m4-split-panes.md, sub-spec 6): each workspace keeps
-// its own pane layout and focused pane across ctrl+i / ctrl+u, and a switch leaves the other
+// its own pane layout and focused pane across ctrl+b ) / ctrl+b (, and a switch leaves the other
 // workspace's layout alone; a session restore brings back every workspace's layout (the shown
 // one and the parked ones) and focus; a tab selected from outside the split while split shows in
 // the focused pane (core's setPaneTab), and the split stays.
@@ -61,10 +61,12 @@ async function openWindow() {
   return win;
 }
 
-/** Switches `win` to workspace `to` with ctrl+i or ctrl+u, and waits for it. */
+/** Switches `win` to workspace `to` with ctrl+b ) or ctrl+b (, and waits for it. */
 async function press(win, key, to) {
-  EventUtils.synthesizeKey(key, { ctrlKey: true }, win);
-  await until(() => WindowWorkspaces.get(win).model.active === to.id, `${key} shows ${to.name}`);
+  EventUtils.synthesizeKey("b", { ctrlKey: true }, win);
+  EventUtils.synthesizeKey(key, { shiftKey: true }, win);
+  const shown = () => WindowWorkspaces.get(win).model.active === to.id;
+  await until(shown, `ctrl+b ${key} shows ${to.name}`);
 }
 
 /** A loaded background tab of the active workspace. */
@@ -166,7 +168,7 @@ add_task(async function each_workspace_keeps_its_panes_and_focus_across_switches
   await until(() => b.every((t) => rect(win, t).width > 100), "B is laid out");
   const bRects = rects(win, b);
 
-  await press(win, "u", A);
+  await press(win, "(", A);
   Assert.deepEqual(names(shown(win).tabs), names(a), "A's three panes come back, in order");
   Assert.equal(shown(win).focus, a0, "with A's focused pane");
   Assert.equal(win.gBrowser.selectedTab, a0, "whose tab is selected");
@@ -180,7 +182,7 @@ add_task(async function each_workspace_keeps_its_panes_and_focus_across_switches
     "A is an L shape: the start page full height, a1 over a2",
   );
 
-  await press(win, "i", B);
+  await press(win, ")", B);
   Assert.deepEqual(names(shown(win).tabs), names(b), "B's two panes are unaffected");
   Assert.equal(shown(win).focus, b1, "and keep their focus");
   Assert.equal(win.gBrowser.selectedTab, b1, "B's focused tab is selected");
@@ -192,7 +194,7 @@ add_task(async function each_workspace_keeps_its_panes_and_focus_across_switches
   );
   await until(() => near(rects(win, b), bRects), "B's rectangles are back (±1 px)");
 
-  await press(win, "u", A);
+  await press(win, "(", A);
   await until(() => near(rects(win, a), aRects), "A's rectangles are back too (±1 px)");
   Assert.equal(win.gBrowser.selectedTab, a0, "and A's focus");
 
@@ -242,7 +244,7 @@ add_task(async function a_session_restore_brings_back_every_workspaces_layout_an
   await assertLive(w2, ra, "restored A");
   await until(() => near(rects(w2, ra), aRects), "A's rectangles (±1 px)");
 
-  await press(w2, "i", B);
+  await press(w2, ")", B);
   Assert.deepEqual(names(shown(w2).tabs), names(rb), "B's parked layout is adopted too");
   Assert.equal(shown(w2).focus, rb[1], "with its lower pane focused");
   Assert.equal(w2.gBrowser.selectedTab, rb[1], "and selected");
@@ -294,7 +296,7 @@ add_task(async function a_tab_selected_from_outside_the_split_shows_in_the_focus
   await until(() => WindowWorkspaces.get(win).model.active === B.id, "selecting b0 switches to B");
   Assert.equal(view.panes, null, "B shows one pane");
   Assert.ok(!b0.splitview, "b0 joined no split");
-  await press(win, "u", A);
+  await press(win, "(", A);
   Assert.deepEqual(names(shown(win).tabs), names([a0, a1]), "A's panes are untouched");
 
   // A pinned tab is in every workspace and cannot join a split: the tree stays.
