@@ -26,7 +26,7 @@ import { copyModeRunners } from "./copy-mode.mjs";
 import { pageRunners } from "./page-ops.mjs";
 import { Notice } from "../ui/notice.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
-import { GotoPicker, WorkspacePicker } from "../ui/picker.mjs";
+import { AddonPicker, GotoPicker, WorkspacePicker } from "../ui/picker.mjs";
 import { RenamePrompt } from "../ui/rename-prompt.mjs";
 import { SidePanel } from "../ui/side-panel.mjs";
 import { BookmarksPanel } from "../ui/bookmarks-panel.mjs";
@@ -61,6 +61,17 @@ import {
   workspaceRef,
 } from "./workspace-ops.mjs";
 import { KeyLog } from "../about/key-log.mjs";
+import {
+  addonNames,
+  addonPickerItems,
+  checkAddonUpdate,
+  openAddonById,
+  openAddonByName,
+  openAddonOptions,
+  removeAddon,
+  toggleAddon,
+  togglePrivateAccess,
+} from "./addon-ops.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
 /** @import { ConfigError } from "../core/config.mjs" */
@@ -73,6 +84,7 @@ import { KeyLog } from "../about/key-log.mjs";
 /** @import { CommandResult } from "../core/cmdline.mjs" */
 /** @import { HintAction, HintState } from "../core/hints.mjs" */
 /** @import { HintTarget } from "../actors/VimmaActors.sys.mjs" */
+/** @import { AddonOp } from "../core/picker.mjs" */
 
 /**
  * Hint mode in one window (m1-hints): from `f` until a label is chosen or Esc. While the
@@ -107,6 +119,7 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {StatusBar | null} statusBar  m2-statusbar-whichkey (the bar; no which-key strip)
  * @property {GotoPicker} picker  the prefix+g overlay (m2-picker-rename)
  * @property {WorkspacePicker} wsPicker  the prefix+w overlay (m3-workspaces 5)
+ * @property {AddonPicker} addonPicker  the prefix+e overlay (docs/specs/addon-manager.md)
  * @property {RenamePrompt} rename  the prefix+shift+t prompt (m2-picker-rename)
  * @property {SidePanel} panel  prefix+b, `panel` mode while open (m3-workspaces 6)
  * @property {BookmarksPanel} bookmarks  prefix+shift+b, in the side panel's slot
@@ -238,6 +251,61 @@ function focusUrlbar(s) {
     setBrowserMode(browser, "normal");
   }
   /** @type {any} */ (s.win.document.getElementById("Browser:OpenLocation"))?.doCommand();
+}
+
+/**
+ * Shows an add-on op's answer, if any, as the notice; a failure too.
+ * @param {WindowState} s
+ * @param {Promise<string | null>} op
+ * @returns {Promise<void>}
+ */
+function sayAddon(s, op) {
+  return op.then(
+    (text) => {
+      if (text) s.notice.show(text);
+    },
+    (e) => {
+      console.error("vimma: add-on", e);
+      s.notice.show(`add-on: ${e?.message ?? e}`);
+    },
+  );
+}
+
+/**
+ * A key in the add-on picker (docs/specs/addon-manager.md): `o` and `d` close it first (a tab,
+ * the y/N prompt); `x`, `shift+p` and `u` keep it open and refresh its rows.
+ * @param {WindowState} s
+ * @param {AddonOp} op
+ * @param {string} id
+ */
+function addonOp(s, op, id) {
+  const refresh = () => s.addonPicker.refresh().catch((e) => console.error("vimma: add-ons", e));
+  switch (op) {
+    case "options":
+      s.addonPicker.close();
+      sayAddon(s, openAddonOptions(s.win, id));
+      return;
+    case "remove":
+      s.addonPicker.close();
+      sayAddon(
+        s,
+        removeAddon(
+          id,
+          (question, yes) => s.rename.ask(question, yes),
+          (said) => s.notice.show(said),
+        ),
+      );
+      return;
+    case "toggle":
+      sayAddon(s, toggleAddon(id)).then(refresh);
+      return;
+    case "private":
+      sayAddon(s, togglePrivateAccess(id)).then(refresh);
+      return;
+    case "update":
+      s.notice.show("checking for updates…");
+      sayAddon(s, checkAddonUpdate(id)).then(refresh);
+  }
 }
 
 /**
@@ -413,6 +481,15 @@ export const RUNNERS = Object.freeze({
   "bookmarks.delete": bookmarksAction,
   "bookmarks.yank": bookmarksAction,
   "bookmarks.filter": bookmarksAction,
+  // docs/specs/addon-manager.md: prefix+e / :addons, and :addon <name> (without one it asks).
+  "addons.picker": (/** @type {WindowState} */ s) => {
+    s.notice.hide();
+    s.addonPicker.open();
+  },
+  "addons.popup": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) => {
+    if (!text) s.cmdline.open("addon ");
+    else sayAddon(s, openAddonByName(s.win, text));
+  },
   // `:source` (m5-config-load): ConfigHost reads config.toml now instead of at the next poll;
   // `:source <path>` passes the path as typed, which ConfigHost expands.
   "config.reload": (_s, _a, /** @type {string | undefined} */ text) =>
@@ -641,6 +718,7 @@ export const VimmaHost = {
         state.cmdline.close({ tabChanged: true });
         state.picker.close({ tabChanged: true });
         state.wsPicker.close({ tabChanged: true });
+        state.addonPicker.close({ tabChanged: true });
         state.rename.close({ tabChanged: true });
       },
       dispatcher: createDispatcher(keymap),
@@ -649,6 +727,7 @@ export const VimmaHost = {
       cmdline: new CommandLine(win, {
         run: (result) => this._runCommand(state, result),
         changed: () => this._emit(state),
+        args: () => ({ addon: addonNames() }),
       }),
       tabStrip: null,
       timer: null,
@@ -688,6 +767,11 @@ export const VimmaHost = {
           );
           if (refused) state.notice.show(refused);
         },
+      }),
+      addonPicker: new AddonPicker(win, {
+        load: addonPickerItems,
+        select: (id) => void sayAddon(state, openAddonById(win, id)),
+        addon: (op, id) => addonOp(state, op, id),
       }),
       rename: new RenamePrompt(win, {
         apply: (tab, text) => {
@@ -753,6 +837,13 @@ export const VimmaHost = {
     } catch (e) {
       console.error("vimma: no status bar", e);
     }
+    // `:addon` completes from a list kept by an AddonManager listener: start it now, so the
+    // names are in before the first Tab (docs/specs/addon-manager.md).
+    try {
+      addonNames();
+    } catch (e) {
+      console.error("vimma: no add-on names", e);
+    }
     // After the keys too: a failure costs the workspaces, not ctrl+b (m3-workspaces 2b).
     try {
       WindowWorkspaces.init(win, {
@@ -782,6 +873,7 @@ export const VimmaHost = {
     state.cmdline.destroy();
     state.picker.destroy();
     state.wsPicker.destroy();
+    state.addonPicker.destroy();
     state.rename.destroy();
     state.panel.destroy();
     state.bookmarks.destroy();
@@ -953,6 +1045,7 @@ export const VimmaHost = {
    */
   _mode(state) {
     if (state.help.isOpen || state.picker.isOpen || state.wsPicker.isOpen) return "help";
+    if (state.addonPicker.isOpen) return "help";
     if (state.cmdline.isOpen) return "command";
     // A prompt over a panel (the bookmarks' add, rename, a y/N) types: keys are its input's.
     if (state.rename.isOpen) return "insert";
@@ -1019,7 +1112,7 @@ export const VimmaHost = {
     }
     // A picker takes every key, bare ones too, before any binding: nothing reaches the page or
     // Firefox underneath (ctrl+w would close a tab), and its j / q are not keymap keys.
-    const picker = [state.picker, state.wsPicker].find((p) => p.isOpen);
+    const picker = [state.picker, state.wsPicker, state.addonPicker].find((p) => p.isOpen);
     if (picker) {
       consume(e);
       picker.key(key);

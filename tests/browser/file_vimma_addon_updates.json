@@ -1,0 +1,13 @@
+{
+  "addons": {
+    "popup@vimma.test": {
+      "updates": [
+        {
+          "version": "9.0",
+          "update_link": "https://example.com/browser/browser/base/zen-components/tests/browser/file_vimma_missing.xpi"
+        }
+      ]
+    },
+    "options@vimma.test": { "updates": [] }
+  }
+}

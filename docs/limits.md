@@ -34,7 +34,8 @@ the same PR.
 - After `Esc` in a `designMode` page, it stays in normal until the next click into it
   ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled).
 - Command line: history is kept in memory only, until Vimma quits; arguments (URLs, workspace
-  names) are not completed; there is no `:set`, and no ranges or counts ([m1-cmdline](specs/m1-cmdline.md), Settled).
+  names) are not completed, except `:addon`'s add-on names; there is no `:set`, and no ranges or
+  counts ([m1-cmdline](specs/m1-cmdline.md), Settled; [addon-manager](specs/addon-manager.md)).
 - Link hints label only what the page has as elements: canvas and WebGL apps (Google Docs,
   Figma, maps, games) have nothing to label, and delegated click handlers with no role or
   listener of their own, image-map `<area>` links and pinch-zoomed pages are missed or
@@ -205,6 +206,25 @@ These are the trade-offs the workspaces' design accepts on purpose
 - The panel's `a` adds the page even when it is bookmarked already (Firefox allows several);
   only `ctrl+b a` and `:bookmark` offer to move the existing one. The filter lists bookmarks,
   not folders ([bookmarks](specs/bookmarks.md), decisions 7 and 10).
+
+## Add-ons
+
+- Installing stays Firefox's: an add-on's page on addons.mozilla.org and the permission prompt.
+  The picker's `u` only checks for an update; Firefox installs it (in the background, or from
+  about:addons), so an update asking for new permissions still gets Firefox's prompt
+  ([addon-manager](specs/addon-manager.md), decision 9).
+- A key cannot open one particular add-on's popup from `config.toml`: keymap actions carry no
+  argument. Bind `addon_popup` (it opens `:addon `) or set the add-on's own shortcut in
+  about:addons → Manage Extension Shortcuts ([addon-manager](specs/addon-manager.md),
+  decision 12).
+- An extension's own shortcut on a key Vimma binds never reaches the add-on: Vimma's wins.
+- Keys inside an add-on's popup are the popup's (no Vim keys there), as on other extension
+  pages; `Esc` closes it.
+- Only browser-action (toolbar button) popups open from Vimma; page actions (the address bar's
+  buttons), sidebar actions and an add-on's context-menu entries need Firefox's own UI
+  ([addon-manager](specs/addon-manager.md), Out of scope).
+- An inline options page (`open_in_tab: false`) opens in a tab of its own, not inside
+  about:addons ([addon-manager](specs/addon-manager.md), decision 6).
 
 ## Panes
 

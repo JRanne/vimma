@@ -248,6 +248,12 @@ group("Config", [
   ["edit_config", "config.edit", "Open config.toml in a tab"],
 ]);
 
+// docs/specs/addon-manager.md
+group("Add-ons", [
+  ["addon_picker", "addons.picker", "Add-on picker: popup, options, on/off, remove, update"],
+  ["addon_popup", "addons.popup", "Open an add-on's popup by name (:addon name)"],
+]);
+
 /** @type {readonly ActionDef[]} */
 export const ACTIONS = Object.freeze(defs);
 

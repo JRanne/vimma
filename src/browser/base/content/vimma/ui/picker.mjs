@@ -7,12 +7,15 @@
 // document, as the help overlay. Keys reach it only through VimmaHost (`key`), which consumes
 // every one while it is open; the logic is core picker.mjs, this only renders it.
 
-import { itemId, openPicker, pickerKey } from "../core/picker.mjs";
+import { addonRowText } from "../core/addons.mjs";
+import { itemId, openPicker, pickerKey, setPickerItems } from "../core/picker.mjs";
 
-/** @import { AnyItem, PickerItem, PickerState, WorkspaceItem } from "../core/picker.mjs" */
+/** @import { AnyItem, AddonOp, PickerItem, PickerState, WorkspaceItem } from "../core/picker.mjs" */
+/** @import { AddonItem } from "../core/addons.mjs" */
 
 export const PICKER_ID = "vimma-picker";
 export const WORKSPACE_PICKER_ID = "vimma-workspace-picker";
+export const ADDON_PICKER_ID = "vimma-addon-picker";
 const STYLESHEET = "chrome://browser/skin/vimma/picker.css";
 const HTML_NS = "http://www.w3.org/1999/xhtml";
 /** @type {WeakSet<Window>} windows our stylesheet is loaded into */
@@ -24,6 +27,7 @@ const styled = new WeakSet();
  * @property {() => string | null} activeId  selected when the picker opens
  * @property {(id: string) => void} select  Enter on a row; the picker has closed already
  * @property {(id: string) => void} [move]  `m` on a workspace row; the picker has closed already
+ * @property {(op: AddonOp, id: string) => void} [addon]  an add-on key; the picker stays open
  */
 
 /**
@@ -34,6 +38,7 @@ const styled = new WeakSet();
  * @property {string} listLabel
  * @property {string} hint
  * @property {(item: any) => [index: string, right: string]} cells
+ * @property {string} [empty]  the list's one row when there are no items
  */
 
 /** @type {PickerLook} */
@@ -56,6 +61,16 @@ const WORKSPACES = {
     const foreign = item.foreignCount ? `, ${item.foreignCount} foreign` : "";
     return [String(item.workspaceIndex), `${tabs}${foreign}${item.active ? " · current" : ""}`];
   },
+};
+
+/** @type {PickerLook} docs/specs/addon-manager.md */
+const ADDONS = {
+  id: ADDON_PICKER_ID,
+  title: "Add-ons",
+  listLabel: "Add-ons",
+  hint: "Enter popup · o options · x on/off · d remove · u update · P private · / search",
+  cells: (/** @type {AddonItem} */ item) => [item.enabled ? "●" : "○", addonRowText(item)],
+  empty: "No add-ons installed. Get them at addons.mozilla.org.",
 };
 
 /**
@@ -126,6 +141,17 @@ export class GotoPicker {
       this.close();
       this.host.move?.(effect.id);
     }
+    if (effect?.type === "addon") this.host.addon?.(effect.op, effect.id);
+  }
+
+  /**
+   * New rows while open (an add-on toggled); the selected row stays selected if it survives.
+   * @param {AnyItem[]} items
+   */
+  setItems(items) {
+    if (!this.state) return;
+    this.state = setPickerItems(this.state, items);
+    this.render();
   }
 
   /**
@@ -184,6 +210,7 @@ export class GotoPicker {
         row.dataset.id = itemId(m.item);
         if ("tabId" in m.item) row.dataset.tabId = m.item.tabId;
         if (m.item.active) row.classList.add("vimma-picker-active");
+        if ("enabled" in m.item && !m.item.enabled) row.classList.add("vimma-picker-disabled");
         const title = el("span", "vimma-picker-title");
         let at = 0;
         for (const [start, end] of m.highlights.display ?? []) {
@@ -201,7 +228,10 @@ export class GotoPicker {
         return row;
       }),
     );
-    const current = list.children[state.selected];
+    if (!state.items.length && this.look.empty) {
+      list.append(el("li", "vimma-picker-empty", this.look.empty));
+    }
+    const current = state.matches.length ? list.children[state.selected] : undefined;
     if (current) {
       list.setAttribute("aria-activedescendant", current.id);
       current.scrollIntoView({ block: "nearest" });
@@ -257,5 +287,59 @@ export class WorkspacePicker extends GotoPicker {
    */
   constructor(win, host) {
     super(win, host, WORKSPACES);
+  }
+}
+
+/**
+ * `prefix+e` / `:addons` (docs/specs/addon-manager.md): the installed extensions. AddonManager
+ * answers asynchronously, so `load` fetches the rows first and `items` hands them over.
+ */
+export class AddonPicker extends GotoPicker {
+  /**
+   * @param {Window} win  a browser window
+   * @param {Omit<PickerHost, "items" | "activeId"> & { load: () => Promise<AnyItem[]> }} host
+   */
+  constructor(win, host) {
+    /** @type {AnyItem[]} */
+    let rows = [];
+    super(win, { ...host, items: () => rows, activeId: () => null }, ADDONS);
+    this.load = host.load;
+    /** @param {AnyItem[]} next */
+    this.setRows = (next) => {
+      rows = next;
+    };
+    /** @type {Promise<void> | null} while the rows load for open() */
+    this.opening = null;
+  }
+
+  /**
+   * Opens once the rows are in. Resolves when it is open (or did not open).
+   * @returns {Promise<void>}
+   */
+  openAsync() {
+    if (this.isOpen) return Promise.resolve();
+    this.opening ??= this.load()
+      .then((rows) => {
+        this.setRows(rows);
+        super.open();
+      })
+      .finally(() => {
+        this.opening = null;
+      });
+    return this.opening;
+  }
+
+  open() {
+    this.openAsync().catch((e) => console.error("vimma: add-on picker", e));
+  }
+
+  /**
+   * Reloads the rows while open (after `x`, `shift+p`, `u`).
+   * @returns {Promise<void>}
+   */
+  async refresh() {
+    const rows = await this.load();
+    this.setRows(rows);
+    if (this.isOpen) this.setItems(rows);
   }
 }

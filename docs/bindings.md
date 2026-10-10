@@ -209,3 +209,10 @@ shows as `space n` ([guide](guide.md#configtoml)).
 | ------------------------- | --------------- | -------- |
 | Reload config             | `reload_config` | —        |
 | Open config.toml in a tab | `edit_config`   | —        |
+
+## Add-ons
+
+| Action                                                | Config name    | Bindings   |
+| ----------------------------------------------------- | -------------- | ---------- |
+| Add-on picker: popup, options, on/off, remove, update | `addon_picker` | `ctrl+b e` |
+| Open an add-on's popup by name (:addon name)          | `addon_popup`  | —          |

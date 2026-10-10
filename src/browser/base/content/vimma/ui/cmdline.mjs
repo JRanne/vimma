@@ -65,6 +65,8 @@ function isPrivate(win) {
  * @typedef {object} Callbacks
  * @property {(result: Extract<CommandResult, { kind: "run" }>) => void} run
  * @property {() => void} [changed]  after it opens or closes (the status bar's mode)
+ * @property {() => Readonly<Record<string, readonly string[]>>} [args]  what commands' arguments
+ *   complete to (`{ addon: names }`)
  */
 
 export class CommandLine {
@@ -72,10 +74,11 @@ export class CommandLine {
    * @param {Window} win  a browser window
    * @param {Callbacks} callbacks  `run` gets a parsed line once the command line has closed
    */
-  constructor(win, { run, changed = () => {} }) {
+  constructor(win, { run, changed = () => {}, args = () => ({}) }) {
     this.win = win;
     this.run = run;
     this.changed = changed;
+    this.args = args;
     /** @type {HTMLElement | null} */
     this.el = null;
     /** @type {HTMLInputElement | null} */
@@ -245,7 +248,7 @@ export class CommandLine {
   complete(direction) {
     const input = /** @type {HTMLInputElement} */ (this.input);
     if (!this.cycle) {
-      const { candidates } = completeCommandLine(input.value);
+      const { candidates } = completeCommandLine(input.value, { args: this.args() });
       if (!candidates.length) return;
       this.cycle = { candidates, index: direction > 0 ? 0 : candidates.length - 1 };
       this.renderList(candidates);
@@ -265,7 +268,7 @@ export class CommandLine {
   refreshList() {
     const value = /** @type {HTMLInputElement} */ (this.input).value;
     const word = value.replace(/^[\s:]*/, "");
-    this.renderList(word ? completeCommandLine(value).candidates : []);
+    this.renderList(word ? completeCommandLine(value, { args: this.args() }).candidates : []);
   }
 
   /**
@@ -285,7 +288,7 @@ export class CommandLine {
         row.dataset.kind = c.kind;
         const name = doc.createElementNS(HTML_NS, "span");
         name.className = "vimma-cmdline-name";
-        name.textContent = c.value;
+        name.textContent = c.label ?? c.value;
         const description = doc.createElementNS(HTML_NS, "span");
         description.className = "vimma-cmdline-description";
         description.textContent = c.description;
