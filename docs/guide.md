@@ -428,6 +428,10 @@ chord on a key that types its own character (`ctrl+w`, `ctrl+alt+]` on a US layo
 modifiers. Windows' `ctrl+alt` stand-in for AltGr counts as AltGr when it types another
 character.
 
+A dead key (`^`, `¨`, `´` on a Finnish layout) types nothing by itself, so it matches no
+binding: GTK reports it as `Dead`. Bindings that use one have a second key for those layouts,
+such as `ctrl+6` for `ctrl+^` ([Workspaces as Vim buffers](#workspaces-as-vim-buffers)).
+
 ## Firefox's own shortcuts
 
 Firefox binds some of the keys Vimma and Vim use. So that the two never overlap, those Firefox
@@ -484,13 +488,15 @@ none of its cookies or storage in another. A new
 profile has one workspace, `main`; you make more as you need them (see
 [Managing workspaces](#managing-workspaces)).
 
-- `ctrl+b )` / `ctrl+b (` (or `:wsnext` / `:wsprev`) go to the next / previous workspace in
+- `ctrl+b )` / `ctrl+b (` (or `]w` / `[w`, `:wsnext` / `:wsprev`) go to the next / previous workspace in
   workspace order (`[workspaces]` in `config.toml`, then the ones you made), wrapping around, as
   tmux's session keys do, from every mode; `:workspace work` or `:workspace 2` goes to one by
   name or number. The status bar shows where you are (`● 2:work`). `(` and `)` are matched by
   the character they type, not the key: `shift+9` / `shift+0` on a US keyboard, `shift+8` /
   `shift+9` on a Finnish one. (`ctrl+i` / `ctrl+u` were these keys before; they are vim's
   jump-forward and half-page-up keys in normal mode now.)
+- `ctrl+^` (or `ctrl+6`, `ctrl+b ^`) goes back to the workspace you were in before, and again
+  toggles back ([Workspaces as Vim buffers](#workspaces-as-vim-buffers)).
 - `ctrl+b w` (or `:workspace` with no name) opens the [workspace picker](#workspace-picker).
 - `ctrl+b b` or `:sidebar` opens the [side panel](#side-panel):
   the current workspace's tabs down the left of the window.
@@ -518,14 +524,48 @@ profile has one workspace, `main`; you make more as you need them (see
 - Each window has its own current workspace; the workspaces themselves are shared by all
   windows.
 
+### Workspaces as Vim buffers
+
+If you think of a workspace as a Vim buffer, the keys are the ones your fingers already know:
+
+| Vim                      | Vimma                          | What it does                                            |
+| ------------------------ | ------------------------------ | ------------------------------------------------------- |
+| `ctrl+^`                 | `ctrl+^`, `ctrl+6`, `ctrl+b ^` | Back to the workspace you were in before; toggles.      |
+| `]b` / `[b` (unimpaired) | `]w` / `[w`                    | Next / previous workspace, as `ctrl+b )` / `(`.         |
+| `:b name`, `:b 2`, `:b#` | `:ws name`, `:ws 2`, `:ws #`   | Go to a workspace by name, number, or the previous one. |
+| `:bn` / `:bp`            | `:wn` / `:wp`                  | Next / previous workspace.                              |
+| `:bd [name]`             | `:wd [name]`                   | Close this (or the named) workspace; asks `y/N`.        |
+| `:badd name`             | `:wa name`                     | New workspace; you switch to it.                        |
+| `:ls`                    | `:workspaces`, `ctrl+b w`      | The workspace picker.                                   |
+
+- **The previous workspace** is the one this window showed before the current one, however you
+  left it (a key, a command, the picker, or selecting one of its tabs). Pressing `ctrl+^` again
+  goes back, so two presses toggle between two workspaces, as Vim's alternate buffer does; tmux
+  users can think of it as `prefix+L`, the last session. Each window has its own, it is saved
+  with the window's session (a restart or "Restore previous session" brings it back), and a
+  window that has shown only one workspace says `no previous workspace in this window`. Closing
+  the previous workspace forgets it.
+- `ctrl+^` and `ctrl+6` work in normal mode; in a text field they are the page's. `ctrl+b ^`
+  and `ctrl+b ctrl+6` work in every mode, insert mode too.
+- **`^` as a dead key.** On Finnish, German, French and other layouts `^` is a dead key: it
+  waits for the next key to put an accent on. GTK then reports the key as `Dead`, not `^`
+  (with or without `ctrl`), so `ctrl+^` and `ctrl+b ^` never arrive. Use `ctrl+6` and
+  `ctrl+b ctrl+6` there, as Vim users on those layouts already do. `]` and `[` are `AltGr+9` /
+  `AltGr+8` on a Finnish keyboard; `]w` and `[w` match them ([Keyboard layouts](#keyboard-layouts)).
+- `]w` and `[w` are normal-mode keys; `]` then waits for the next key, as `g` does.
+- `Tab` after `:ws `, `:wd ` or `:wsmove ` completes workspace names.
+- Every one of these keys can be changed in `config.toml`: `last_workspace`, `next_workspace`
+  and `previous_workspace` under `[keys]`, and `"<C-^>"`, `"<C-6>"`, `"]w"`, `"[w"` under
+  `[modal.normal]`. The `ctrl+b ?` overlay shows the keys you have.
+
 ### Managing workspaces
 
-| Keys             | Command                        | What it does                                                        |
-| ---------------- | ------------------------------ | ------------------------------------------------------------------- |
-| `ctrl+b shift+n` | `:wsnew shop`                  | New workspace, with a container of its own; you switch to it.       |
-| `ctrl+b shift+w` | `:wsrename market`             | Rename the current workspace (and its container).                   |
-| `ctrl+b shift+d` | `:wsdelete` / `:wsdelete shop` | Close the current (or the named) workspace, after a `y/N` question. |
-|                  | `:wsmove work` / `:wsmove 2`   | Move the current tab to another workspace, by name or number.       |
+| Keys             | Command                          | What it does                                                        |
+| ---------------- | -------------------------------- | ------------------------------------------------------------------- |
+| `ctrl+b shift+n` | `:wsnew shop`, `:wa shop`        | New workspace, with a container of its own; you switch to it.       |
+| `ctrl+b shift+w` | `:wsrename market`               | Rename the current workspace (and its container).                   |
+| `ctrl+b shift+d` | `:wsdelete [shop]`, `:wd [shop]` | Close the current (or the named) workspace, after a `y/N` question. |
+|                  | `:wsmove work` / `:wsmove 2`     | Move the current tab to another workspace, by name or number.       |
 
 - The keys open the command line with the command typed for you (`ctrl+b shift+w` with the
   current name to edit).
@@ -824,35 +864,38 @@ type reaches the page, and `ctrl+b` sequences still work.
   message, as `p` does. The line does not open over a fullscreen page.
 - **Errors** show under the line, which stays open so you can fix it: `:tabnwe` says
   `not a command: "tabnwe"; did you mean :tabnew?`.
-- A command name can be shortened while it stays unique (`:tabr`, `:wsn`), and leading colons
-  are fine (`::q`).
+- A command name can be shortened while it stays unique (`:tabr`, `:wsp`), and leading colons
+  are fine (`::q`). When the shortened name starts several commands and one of them begins all
+  the others, that one wins, as in Vim: `:wor` is `:workspace` (not `:workspaces`), `:bo`
+  `:bookmark`. `:wsn` is `:wsnext`, as Vim's `:wsn[ext]`.
 - An argument is the rest of the line, as typed. Quotes are removed only when one pair wraps all
   of it: `:tabrename "my  tab"`.
 
-| Command                               | What it does                                                                                                                    |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `:open text`                          | Opens `text` in this tab as the URL bar would: `example.com` becomes a web address, other words a web search.                   |
-| `:tabnew`, `:tabnew text`             | Opens a new tab; with text, opens it there (as `:open`).                                                                        |
-| `:q`, `:quit`                         | Closes the pane, as `ctrl+b x`; with one pane the tab, as `x`: a pinned tab is kept and the next one selected.                  |
-| `:map`, `:help`, `:h`                 | Shows every binding (the `ctrl+b ?` overlay).                                                                                   |
-| `:scroll_down`, `:tab.next`…          | Any action by its name in [bindings.md](bindings.md), or by its dotted id. Actions take no argument.                            |
-| `:tabrename [name]`                   | Renames the tab; without a name, opens the rename prompt.                                                                       |
-| `:ls`, `:b`                           | Opens the goto picker.                                                                                                          |
-| `:vsplit`/`:vs`, `:split`/`:sp`       | Splits the pane right / down, as `ctrl+b v` / `ctrl+b -`.                                                                       |
-| `:wsnext`, `:wsprev`                  | Next / previous workspace, as `ctrl+b )` / `ctrl+b (`.                                                                          |
-| `:workspace name`, `:workspace 2`     | Switches to the workspace with that name, or that number in workspace order.                                                    |
-| `:workspace`                          | Opens the workspace picker.                                                                                                     |
-| `:sidebar`                            | Opens or closes the side panel, as `ctrl+b b`.                                                                                  |
-| `:route`, `:route add`, `:route move` | Workspace routing rules: list them, add one for this site, move this tab ([Routing](#routing-which-workspace-a-link-opens-in)). |
-| `:bookmarks`                          | Opens or closes the [bookmarks panel](#bookmarks), as `ctrl+b shift+b`.                                                         |
-| `:bookmark [path]`                    | Bookmarks the page under `path` (`work/docs/title`); without one, opens the prompt, as `ctrl+b a`.                              |
-| `:source`                             | Reads `config.toml` now instead of within 2 seconds (see [config.toml](#configtoml)).                                           |
-| `:source path`                        | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                                 |
-| `:config`                             | Opens `config.toml` in a new tab (read-only view); creates it from a commented template when it is missing.                     |
-| `:about`, `:vimma`                    | Opens [about:vimma](#aboutvimma) in a new tab.                                                                                  |
-| `:addons`                             | Opens the [add-on picker](#add-ons), as `ctrl+b e`.                                                                             |
-| `:addon name`                         | Opens that add-on's popup; `Tab` completes the name ([Add-ons](#add-ons)).                                                      |
-| `:bug`                                | Opens about:vimma and copies its redacted report to the clipboard, for a bug report.                                            |
+| Command                               | What it does                                                                                                                     |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `:open text`                          | Opens `text` in this tab as the URL bar would: `example.com` becomes a web address, other words a web search.                    |
+| `:tabnew`, `:tabnew text`             | Opens a new tab; with text, opens it there (as `:open`).                                                                         |
+| `:q`, `:quit`                         | Closes the pane, as `ctrl+b x`; with one pane the tab, as `x`: a pinned tab is kept and the next one selected.                   |
+| `:map`, `:help`, `:h`                 | Shows every binding (the `ctrl+b ?` overlay).                                                                                    |
+| `:scroll_down`, `:tab.next`…          | Any action by its name in [bindings.md](bindings.md), or by its dotted id. Actions take no argument.                             |
+| `:tabrename [name]`                   | Renames the tab; without a name, opens the rename prompt.                                                                        |
+| `:ls`, `:b`                           | Opens the goto picker.                                                                                                           |
+| `:vsplit`/`:vs`, `:split`/`:sp`       | Splits the pane right / down, as `ctrl+b v` / `ctrl+b -`.                                                                        |
+| `:wsnext`/`:wn`, `:wsprev`/`:wp`      | Next / previous workspace, as `ctrl+b )` / `ctrl+b (`.                                                                           |
+| `:workspace name`, `:ws 2`, `:ws #`   | Switches to the workspace with that name, that number in workspace order, or the previous one (`ctrl+^`). `Tab` completes names. |
+| `:workspace`, `:ws`, `:workspaces`    | Opens the workspace picker.                                                                                                      |
+| `:wa name`, `:wd [name]`              | `:wsnew`, `:wsdelete` ([Workspaces as Vim buffers](#workspaces-as-vim-buffers)).                                                 |
+| `:sidebar`                            | Opens or closes the side panel, as `ctrl+b b`.                                                                                   |
+| `:route`, `:route add`, `:route move` | Workspace routing rules: list them, add one for this site, move this tab ([Routing](#routing-which-workspace-a-link-opens-in)).  |
+| `:bookmarks`                          | Opens or closes the [bookmarks panel](#bookmarks), as `ctrl+b shift+b`.                                                          |
+| `:bookmark [path]`                    | Bookmarks the page under `path` (`work/docs/title`); without one, opens the prompt, as `ctrl+b a`.                               |
+| `:source`                             | Reads `config.toml` now instead of within 2 seconds (see [config.toml](#configtoml)).                                            |
+| `:source path`                        | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                                  |
+| `:config`                             | Opens `config.toml` in a new tab (read-only view); creates it from a commented template when it is missing.                      |
+| `:about`, `:vimma`                    | Opens [about:vimma](#aboutvimma) in a new tab.                                                                                   |
+| `:addons`                             | Opens the [add-on picker](#add-ons), as `ctrl+b e`.                                                                              |
+| `:addon name`                         | Opens that add-on's popup; `Tab` completes the name ([Add-ons](#add-ons)).                                                       |
+| `:bug`                                | Opens about:vimma and copies its redacted report to the clipboard, for a bug report.                                             |
 
 A command that is not built yet says so for a moment, as its keys do.
 

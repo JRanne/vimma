@@ -133,10 +133,12 @@ describe("parseCommandLine: actions, abbreviations, errors", () => {
     expect(parseCommandLine(text)).toEqual(expected);
   });
 
-  test(":ws is ambiguous and lists the candidates", () => {
-    const r = parseCommandLine(":ws");
+  test(":w is ambiguous and lists the candidates", () => {
+    const r = parseCommandLine(":w");
     expect(r.error.code).toBe("ambiguous-command");
     expect([...r.error.suggestions].sort()).toEqual([
+      "workspace",
+      "workspaces",
       "wsdelete",
       "wsmove",
       "wsnew",
@@ -321,5 +323,67 @@ describe("history", () => {
   test("a bad limit throws", () => {
     expect(() => createHistory({ limit: 0 })).toThrow(RangeError);
     expect(() => createHistory({ limit: 1.5 })).toThrow(RangeError);
+  });
+});
+
+describe("workspace commands like Vim's buffer commands", () => {
+  test.each([
+    [":ws", run("workspace", "workspace.picker")],
+    [":ws work", run("workspace", "workspace.switch", { text: "work" })],
+    [":ws 2", run("workspace", "workspace.switch", { text: "2" })],
+    [":ws #", run("workspace", "workspace.switch", { text: "#" })],
+    [":wn", run("wsnext", "workspace.next")],
+    [":wsn", run("wsnext", "workspace.next")],
+    [":wp", run("wsprev", "workspace.previous")],
+    [":wd", run("wsdelete", "workspace.close")],
+    [":wd shop", run("wsdelete", "workspace.close", { text: "shop" })],
+    [":wa shop", run("wsnew", "workspace.new", { text: "shop" })],
+    [":workspaces", run("workspaces", "workspace.picker")],
+    [":last_workspace", run("last_workspace", "workspace.last")],
+  ])("%j", (text, expected) => {
+    expect(parseCommandLine(text)).toEqual(expected);
+  });
+
+  test.each([":wn x", ":wp x", ":workspaces x"])("%j takes no argument", (text) => {
+    expect(parseCommandLine(text).error.code).toBe("unexpected-argument");
+  });
+
+  test("no command word is two commands' (aliases included)", () => {
+    const words = COMMANDS.flatMap((c) => [c.name, ...c.aliases]);
+    expect(new Set(words).size).toBe(words.length);
+  });
+
+  test("a command whose name begins every other match wins a shared prefix", () => {
+    // :wor could be :workspace or :workspaces; Vim takes the shorter, so do we.
+    expect(parseCommandLine(":wor")).toEqual(run("workspace", "workspace.picker"));
+    expect(parseCommandLine(":workspac 2")).toEqual(
+      run("workspace", "workspace.switch", { text: "2" }),
+    );
+    expect(parseCommandLine(":bookm")).toEqual(run("bookmark", "bookmark.add"));
+    expect(parseCommandLine(":addo")).toEqual(run("addon", "addons.popup"));
+    expect(parseCommandLine(":wsr")).toEqual(run("wsrename", "workspace.rename"));
+    // still ambiguous when no candidate begins all the others
+    expect(parseCommandLine(":s").error.code).toBe("ambiguous-command");
+  });
+
+  test("Tab completes workspace names after :ws, :workspace, :wd, :wsdelete and :wsmove", () => {
+    const names = ["work", "personal", "my ws"];
+    const complete = (/** @type {string} */ line) =>
+      completeCommandLine(line, { args: { workspace: names } }).candidates;
+    expect(complete(":ws ").map((c) => c.value)).toEqual(["ws work", "ws personal", "ws my ws"]);
+    expect(complete(":ws per").map((c) => c.value)).toEqual(["ws personal"]);
+    expect(complete(":ws per")[0]).toMatchObject({
+      kind: "argument",
+      label: "personal",
+      description: "workspace",
+    });
+    expect(complete(":workspace wo").map((c) => c.value)).toEqual(["workspace work"]);
+    expect(complete(":wd my").map((c) => c.value)).toEqual(["wd my ws"]);
+    expect(complete(":wsdelete wo").map((c) => c.value)).toEqual(["wsdelete work"]);
+    expect(complete(":wsmove wo").map((c) => c.value)).toEqual(["wsmove work"]);
+    // :wa names a new workspace: nothing to complete
+    expect(complete(":wa wo")).toEqual([]);
+    // workspace names never complete :addon
+    expect(completeCommandLine(":addon wo", { args: { workspace: names } }).candidates).toEqual([]);
   });
 });

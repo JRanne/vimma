@@ -21,6 +21,9 @@ import {
   MAX_WORKSPACE_ID,
   setWorkspaceContainer,
   workspaceRefFor,
+  lastWorkspace,
+  alternateWorkspace,
+  setAlternate,
 } from "../src/workspaces.mjs";
 import { closePane, focus, leaves, resize, setPaneTab, swap, toggleZoom } from "../src/panes.mjs";
 import { toSnapshot, fromSnapshot } from "../src/snapshot.mjs";
@@ -519,6 +522,10 @@ describe("workspace properties", () => {
         const containers = s.workspaces.map((w) => w.container);
         expect(new Set(names).size).toBe(names.length);
         expect(new Set(containers).size).toBe(containers.length);
+        if (s.alternate !== undefined) {
+          expect(s.workspaces.map((w) => w.id)).toContain(s.alternate);
+          expect(s.alternate).not.toBe(s.active);
+        }
         for (const w of s.workspaces) {
           if (w.tabs.length === 0) {
             expect(w.activeTab).toBeNull();
@@ -576,5 +583,83 @@ describe("container and typed references (m3 leftovers)", () => {
     expect(workspaceRefFor(s, "9")).toEqual({ index: 9 });
     expect(workspaceRefFor(null, "2")).toEqual({ index: 2 });
     expect(workspaceRefFor(s, "nowhere")).toEqual({ name: "nowhere" });
+  });
+});
+
+describe("the alternate workspace (Vim's ctrl+^)", () => {
+  const three = () =>
+    addWorkspace(two(), { name: "admin", container: "c-admin" }, { activate: false });
+
+  test("a fresh model has none, and lastWorkspace leaves it as it is", () => {
+    const s = three();
+    expect(s.alternate).toBeUndefined();
+    expect(alternateWorkspace(s)).toBeUndefined();
+    expect(lastWorkspace(s)).toBe(s);
+  });
+
+  test("every switch remembers the workspace it left; lastWorkspace toggles between two", () => {
+    let s = switchWorkspace(three(), { name: "admin" });
+    expect(alternateWorkspace(s)?.name).toBe("work");
+    s = lastWorkspace(s);
+    expect(ws(s).name).toBe("work");
+    expect(alternateWorkspace(s)?.name).toBe("admin");
+    s = lastWorkspace(s);
+    expect(ws(s).name).toBe("admin");
+    expect(alternateWorkspace(s)?.name).toBe("work");
+  });
+
+  test("a switch to the active workspace changes nothing", () => {
+    const s = switchWorkspace(three(), { name: "admin" });
+    expect(switchWorkspace(s, { name: "admin" })).toBe(s);
+  });
+
+  test("next, previous, selectTab and a new active workspace set it too", () => {
+    expect(alternateWorkspace(nextWorkspace(three()))?.name).toBe("work");
+    expect(alternateWorkspace(previousWorkspace(three()))?.name).toBe("work");
+    let s = openTab(three(), "x", { workspace: { name: "personal" } });
+    s = selectTab(s, "x");
+    expect(ws(s).name).toBe("personal");
+    expect(alternateWorkspace(s)?.name).toBe("work");
+    expect(selectTab(s, "x")).toBe(s);
+    const t = addWorkspace(three(), { name: "shop", container: "c-shop" });
+    expect(alternateWorkspace(t)?.name).toBe("work");
+  });
+
+  test("deleting the alternate forgets it; deleting the active one keeps a different one", () => {
+    let s = switchWorkspace(three(), { name: "admin" });
+    expect(deleteWorkspace(s, { name: "work" }).state.alternate).toBeUndefined();
+    s = switchWorkspace(s, { name: "personal" }); // alternate admin
+    const r = deleteWorkspace(s, { name: "personal" }); // work becomes active
+    expect(ws(r.state).name).toBe("work");
+    expect(alternateWorkspace(r.state)?.name).toBe("admin");
+    s = switchWorkspace(switchWorkspace(three(), { name: "personal" }), { name: "admin" });
+    // admin goes; personal (its previous) becomes active and was the alternate: none left
+    const q = deleteWorkspace(s, { name: "admin" });
+    expect(ws(q.state).name).toBe("personal");
+    expect(q.state.alternate).toBeUndefined();
+  });
+
+  test("setAlternate takes a known workspace other than the active one, else clears it", () => {
+    const s = three();
+    expect(alternateWorkspace(setAlternate(s, "w3"))?.name).toBe("admin");
+    expect(setAlternate(s, "w1").alternate).toBeUndefined();
+    expect(setAlternate(s, "nope").alternate).toBeUndefined();
+    expect(setAlternate(setAlternate(s, "w3"), undefined).alternate).toBeUndefined();
+    expect(setAlternate(s, undefined)).toBe(s);
+    const t = setAlternate(s, "w2");
+    expect(setAlternate(t, "w2")).toBe(t);
+    expect(Object.isFrozen(t)).toBe(true);
+  });
+
+  test("the alternate round-trips through a snapshot; an unusable one is dropped", () => {
+    const s = switchWorkspace(three(), { name: "admin" });
+    const snap = toSnapshot(s);
+    expect(snap.alternate).toBe("w1");
+    expect(fromSnapshot(JSON.stringify(snap))).toEqual(s);
+    expect("alternate" in toSnapshot(three())).toBe(false);
+    for (const bad of ["w3", "nope", 7, null]) {
+      const back = fromSnapshot({ ...snap, alternate: bad });
+      expect(back.alternate).toBeUndefined();
+    }
   });
 });

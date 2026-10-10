@@ -59,17 +59,18 @@ shows as `space n` ([guide](guide.md#configtoml)).
 
 ## Workspaces
 
-| Action                                                        | Config name          | Bindings         |
-| ------------------------------------------------------------- | -------------------- | ---------------- |
-| Next workspace                                                | `next_workspace`     | `ctrl+b )`       |
-| Previous workspace                                            | `previous_workspace` | `ctrl+b (`       |
-| Switch to a workspace by name or number                       | `switch_workspace`   | —                |
-| Workspace picker                                              | `workspace_picker`   | `ctrl+b w`       |
-| New workspace                                                 | `new_workspace`      | `ctrl+b shift+n` |
-| Rename workspace                                              | `rename_workspace`   | `ctrl+b shift+w` |
-| Close workspace                                               | `close_workspace`    | `ctrl+b shift+d` |
-| Move the tab to another workspace (reopens it there)          | `move_to_workspace`  | —                |
-| Routing rules: list them; :route add [workspace], :route move | `route_rules`        | —                |
+| Action                                                            | Config name          | Bindings                                        |
+| ----------------------------------------------------------------- | -------------------- | ----------------------------------------------- |
+| Next workspace                                                    | `next_workspace`     | `ctrl+b )`, `]w`                                |
+| Previous workspace                                                | `previous_workspace` | `ctrl+b (`, `[w`                                |
+| Previous workspace you were in; again toggles back (Vim's ctrl+^) | `last_workspace`     | `ctrl+b ^`, `ctrl+b ctrl+6`, `ctrl+^`, `ctrl+6` |
+| Switch to a workspace by name or number                           | `switch_workspace`   | —                                               |
+| Workspace picker                                                  | `workspace_picker`   | `ctrl+b w`                                      |
+| New workspace                                                     | `new_workspace`      | `ctrl+b shift+n`                                |
+| Rename workspace                                                  | `rename_workspace`   | `ctrl+b shift+w`                                |
+| Close workspace                                                   | `close_workspace`    | `ctrl+b shift+d`                                |
+| Move the tab to another workspace (reopens it there)              | `move_to_workspace`  | —                                               |
+| Routing rules: list them; :route add [workspace], :route move     | `route_rules`        | —                                               |
 
 ## Navigation
 
