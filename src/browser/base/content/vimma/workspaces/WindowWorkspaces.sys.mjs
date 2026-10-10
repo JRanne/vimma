@@ -24,11 +24,13 @@ import {
   createWorkspaces,
   deleteWorkspace,
   findWorkspace,
+  lastWorkspace,
   moveTab,
   nextWorkspace,
   openTab,
   previousWorkspace,
   renameWorkspace,
+  setAlternate,
   setWorkspaceContainer,
   selectTab,
   switchWorkspace,
@@ -358,6 +360,19 @@ export class WindowWorkspacesImpl {
     return null;
   }
 
+  /**
+   * ctrl+^ / ctrl+b ^: back to the workspace shown before this one (Vim's alternate buffer);
+   * a second press toggles back.
+   */
+  last() {
+    const model = this.#model;
+    if (!model) return "no workspaces in this window";
+    const next = lastWorkspace(model);
+    if (next === model) return "no previous workspace in this window";
+    this.#show(model, next);
+    return null;
+  }
+
   /** @param {Event} e */
   handleEvent(e) {
     if (this.#win.closed) return;
@@ -599,6 +614,8 @@ export class WindowWorkspacesImpl {
     const selectedId = selected.pinned ? undefined : this.#ids.get(selected);
     if (selectedId && workspaceOfTab(model, selectedId)) model = selectTab(model, selectedId);
     else model = switchWorkspace(model, { id: fallback });
+    // The rebuild's own switches are not the user's: the previous workspace is the saved one.
+    model = setAlternate(model, known(base?.alternate));
 
     let from = prev ?? model;
     if (snapshot) {

@@ -68,6 +68,8 @@ const keys = {
   resize_mode: ["prefix+r"],
   next_workspace: ["prefix+)"],
   previous_workspace: ["prefix+("],
+  // tmux's last session; prefix+ctrl+6 for layouts where ^ is a dead key (Finnish, German).
+  last_workspace: ["prefix+^", "prefix+ctrl+6"],
   workspace_picker: ["prefix+w"],
   new_workspace: ["prefix+shift+n"],
   rename_workspace: ["prefix+shift+w"],
@@ -119,6 +121,11 @@ const modal = {
     gt: "tab.next",
     gT: "tab.previous",
     b: "goto.picker",
+    // Workspaces as Vim buffers: the alternate (ctrl+6 where ^ is a dead key), unimpaired's ]w.
+    "<C-^>": "workspace.last",
+    "<C-6>": "workspace.last",
+    "]w": "workspace.next",
+    "[w": "workspace.previous",
     yy: "page.yank_url",
     p: "page.open_clipboard",
     P: "page.open_clipboard_new_tab",
