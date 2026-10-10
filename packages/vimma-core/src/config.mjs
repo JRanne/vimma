@@ -374,7 +374,7 @@ function validate(raw, declared) {
         const at = [...path, key];
         if (key === "color") {
           if (typeof v !== "string") typeError(at, v, "a string");
-          else if (!CONTAINER_COLORS.includes(v) && !(v in COLOR_ALIASES)) {
+          else if (!CONTAINER_COLORS.includes(v) && !Object.hasOwn(COLOR_ALIASES, v)) {
             fail(
               at,
               `unknown colour "${v}"`,
@@ -526,7 +526,7 @@ export function mergeWithDefaults(user, workspaceOrder, siteOrder) {
       const color = w.color ?? WORKSPACE_DEFAULTS.color;
       return {
         name,
-        color: COLOR_ALIASES[color] ?? color,
+        color: (Object.hasOwn(COLOR_ALIASES, color) && COLOR_ALIASES[color]) || color,
         icon: w.icon ?? WORKSPACE_DEFAULTS.icon,
         ...(w.home === undefined ? {} : { home: w.home }),
         autofill: w.autofill ?? WORKSPACE_DEFAULTS.autofill,
