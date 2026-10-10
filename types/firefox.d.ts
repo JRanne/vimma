@@ -38,6 +38,11 @@ declare const Services: {
     getSystemPrincipal(): unknown;
     checkLoadURIWithPrincipal(principal: unknown, uri: unknown, flags?: number): void;
   };
+  // engine/widget/nsIClipboard.idl
+  clipboard: {
+    readonly kGlobalClipboard: number;
+    getData(transferable: unknown, whichClipboard: number): void;
+  };
   // engine/dom/events/nsIEventListenerService.idl
   els: {
     hasListenersFor(target: EventTarget, type: string): boolean;

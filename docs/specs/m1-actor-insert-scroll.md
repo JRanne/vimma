@@ -179,6 +179,37 @@ through the test-only `VimmaHost._withhold(id)` (`head.js` `bindUnbuiltPrefixKey
 `history.back`); `_run` refuses an id outside `RUNNABLE`. Tests:
 `browser_vimma_nav_keys.js` (counts, clamping, reload, a split, insert mode).
 
+## Follow-up: normal-mode extras
+
+The keys Vimium and Tridactyl users expect, normal mode only, as CONTENT_RUNNERS
+(`host/page-ops.mjs`) on the focused `<browser>`, so in a split the focused pane's. The pure
+parts are in `core/pageurl.mjs`.
+
+- `yy` copies `currentURI.spec` and the notice says `yanked <url>`. `y` alone is a prefix in
+  normal mode; copy mode's `y` / `Y` are the visual table's and do not change.
+- `p` / `P` read the global clipboard in the parent and pass it through `classifyClipboard`:
+  control characters dropped, whitespace trimmed and collapsed, over 8192 characters refused
+  (not truncated), and refused if the URL parser would read it as `javascript:` or `data:`
+  (tabs and newlines removed anywhere, any case, also behind `view-source:`). One word with a
+  scheme, a dot in the host or a port is a URL; anything else is searched by prefixing `? `,
+  which makes URIFixup use the default engine. Both then go through `openUrl`, `:open` /
+  `:tabnew`'s path, so `P`'s tab is routed like `:tabnew`'s.
+- `gi` asks the frame for the Nth visible text field (`inputIndex`: no count is the first, a
+  count past the last is the last) and enters insert only once one took focus; with none the
+  notice says so. `i` keeps its pass-through insert.
+- `gu` / `gU`: `urlUp` drops the query and hash, then N path segments (a trailing slash is not
+  a segment); `urlRoot` keeps only the origin's `/`. Ports, credentials and IDN hosts (as
+  punycode) survive; `file:` stops at `/` or a drive (`/C:/`); `about:` pages only lose their
+  hash; `javascript:`, `data:`, `blob:` and `view-source:` are never walked. Nothing changes:
+  "already at the top". The load is triggered by the page's own principal, as a link would.
+- `gf` is Firefox's `ctrl+u` (`BrowserCommands.viewSource`) on the focused pane's browser.
+
+Skipped: `zi` / `zo` / `z0` (page zoom). Binding them makes `z` a prefix, and `z` is the
+unbound key eight mochitests and `dispatcher.test.mjs` press to prove a key reaches the page;
+moving all of them is churn across files other work touches. `ctrl+plus` / `ctrl+minus` /
+`ctrl+0` already zoom. Tests: `pageurl.test.mjs`, `keymap.test.mjs` (bindings, `y` prefix, `z`
+unbound) and `browser_vimma_normal_extras.js` (each key, refusals, a split, insert mode).
+
 ## Limits
 
 - Pages that capture keys outside an editable element (games, Google Docs' canvas, Figma) see
