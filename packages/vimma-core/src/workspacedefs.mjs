@@ -311,9 +311,7 @@ export function addRuntimeWorkspace(defs, w) {
   if (defs.workspaces.some((x) => x.id === w.id)) {
     throw new DefinitionsError("duplicate-id", "id", `"${w.id}" exists`);
   }
-  if (!validName(w.name)) {
-    throw new DefinitionsError("bad-name", "name", `1 to ${MAX_WORKSPACE_NAME} characters`);
-  }
+  checkNewName(w.name);
   if (defs.workspaces.some((x) => x.name === w.name)) {
     throw new DefinitionsError("duplicate-name", "name", `"${w.name}" exists`);
   }
@@ -356,6 +354,25 @@ export function removeWorkspaceDefinition(defs, id) {
 }
 
 /**
+ * A name a user gives a workspace (new or rename). Besides the file's rules (validName), not
+ * digits only: `:wsmove 2` / `:workspace 2` read those as a place, so a workspace named "2"
+ * could never be named and would take another's tab. A file's existing names are not checked.
+ * @param {string} name
+ */
+function checkNewName(name) {
+  if (!validName(name)) {
+    throw new DefinitionsError("bad-name", "name", `1 to ${MAX_WORKSPACE_NAME} characters`);
+  }
+  if (/^\d+$/.test(name)) {
+    throw new DefinitionsError(
+      "bad-name",
+      "name",
+      `"${name}" is only digits, which name a workspace by its place`,
+    );
+  }
+}
+
+/**
  * Renames a runtime workspace (`prefix+shift+w`, `:wsrename`; sub-spec 4a). A config workspace
  * is named by its `[workspaces]` key, and a reconcile matches by that name, so it is renamed in
  * `config.toml`. The same name returns `defs` itself. The host renames the container too.
@@ -371,9 +388,7 @@ export function renameWorkspaceDefinition(defs, id, name) {
   if (w.source === "config") {
     throw new DefinitionsError("config-workspace", "", `"${w.name}" is named in config.toml`);
   }
-  if (!validName(name)) {
-    throw new DefinitionsError("bad-name", "name", `1 to ${MAX_WORKSPACE_NAME} characters`);
-  }
+  checkNewName(name);
   if (defs.workspaces.some((x) => x.name === name)) {
     throw new DefinitionsError("duplicate-name", "name", `"${name}" exists`);
   }

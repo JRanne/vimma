@@ -251,7 +251,9 @@ export class WorkspaceStoreImpl {
     const { definitions, removed } = removeWorkspaceDefinition(this.definitions, id);
     const CIS = lazy.ContextualIdentityService;
     const ucid = removed.userContextId;
-    const ours = ucid !== null && CIS.getPublicIdentityFromId(ucid)?.name === removed.name;
+    // Never 0: closeContainerTabs(0) closes every container tab in every window.
+    const ours =
+      ucid !== null && ucid > 0 && CIS.getPublicIdentityFromId(ucid)?.name === removed.name;
     this.definitions = definitions;
     this.#save();
     if (ours) {
@@ -259,6 +261,9 @@ export class WorkspaceStoreImpl {
       CIS.remove(ucid);
     }
     this.#notify([id]);
+    // `cleared: false`: the container was not recognisably ours (renamed in Settings, or reused
+    // after a reset), so its tabs and site data were kept; the caller says so.
+    return { cleared: ours };
   }
 
   /**
@@ -298,22 +303,40 @@ export class WorkspaceStoreImpl {
    * Closes a workspace after the user said yes (decision 7): a runtime one is deleted with its
    * container and site data (deleteWorkspace); a config one only loses its tabs, in every
    * window, and stays with its container. The last workspace stays (`last-workspace`).
+   * `asked` is the workspace as the question described it: the answer stands only for that,
+   * so a config reload in between (which can make a config workspace runtime, and its close a
+   * data deletion) or a rename refuses with `changed` and closes nothing.
    * @param {string} id
-   * @param {{ confirmed?: boolean }} [options]
+   * @param {{ confirmed?: boolean,
+   *   asked?: Pick<WorkspaceDefinition, "source" | "name" | "userContextId"> }} [options]
+   * @returns {Promise<{ cleared: boolean }>} whether its site data was deleted
    */
-  async closeWorkspace(id, { confirmed = false } = {}) {
-    const w = this.definitions.workspaces.find((d) => d.id === id);
-    if (w?.source !== "config") return this.deleteWorkspace(id, { confirmed });
+  async closeWorkspace(id, { confirmed = false, asked } = {}) {
     if (confirmed !== true) {
       throw storeError("not-confirmed", "closing a workspace needs the user's confirmation");
     }
+    const w = this.definitions.workspaces.find((d) => d.id === id);
+    if (
+      asked &&
+      (!w ||
+        w.source !== asked.source ||
+        w.name !== asked.name ||
+        w.userContextId !== asked.userContextId)
+    ) {
+      throw storeError(
+        "changed",
+        `"${asked.name}" changed since you were asked (config.toml reloaded?); nothing was closed`,
+      );
+    }
+    if (w?.source !== "config") return this.deleteWorkspace(id, { confirmed });
     if (this.definitions.workspaces.length === 1) {
       throw storeError("last-workspace", "cannot close the last workspace");
     }
-    if (w.userContextId !== null) {
+    // Never 0: that would close every container tab in every window.
+    if (w.userContextId !== null && w.userContextId > 0) {
       await lazy.ContextualIdentityService.closeContainerTabs(w.userContextId);
     }
-    return undefined;
+    return { cleared: false };
   }
 
   /**

@@ -376,6 +376,19 @@ describe("workspace lifecycle", () => {
     expect(defsError(() => renameWorkspaceDefinition(d, "zz", "a")).code).toBe("unknown-workspace");
   });
 
+  test("a name of digits only is refused: `:wsmove 2` reads it as a place", () => {
+    const d = twoKinds();
+    for (const name of ["2", "10", "007"]) {
+      const added = defsError(() =>
+        addRuntimeWorkspace(d, { id: "n", name, color: "gray", icon: "circle" }),
+      );
+      expect(added.code).toBe("bad-name");
+      expect(added.message).toMatch(/digits/);
+      expect(defsError(() => renameWorkspaceDefinition(d, "r", name)).code).toBe("bad-name");
+    }
+    expect(renameWorkspaceDefinition(d, "r", "2nd").workspaces[1]?.name).toBe("2nd");
+  });
+
   test("rename: a config workspace is renamed in config.toml, not here", () => {
     const e = defsError(() => renameWorkspaceDefinition(twoKinds(), "ws-1", "job"));
     expect(e.code).toBe("config-workspace");

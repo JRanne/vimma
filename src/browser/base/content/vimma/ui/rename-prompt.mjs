@@ -134,6 +134,12 @@ export class RenamePrompt {
     if (yes) {
       // Modifier keys alone (shift for `Y`) are not an answer.
       if (["Shift", "CapsLock"].includes(e.key)) return;
+      // Nor is a key held down from before the question (the D of ctrl+b shift+d repeating).
+      if (e.repeat) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       this.close();
       if (e.key === "y" || e.key === "Y") yes();
     } else if (e.key === "Enter") {

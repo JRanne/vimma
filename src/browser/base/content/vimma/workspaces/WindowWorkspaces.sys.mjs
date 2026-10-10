@@ -242,13 +242,14 @@ export class WindowWorkspacesImpl {
     if (!from) return "this tab is in no workspace";
     if (from.id === target.id && !this.#foreign.has(id)) return `already in "${target.name}"`;
     const gBrowser = this.#gBrowser;
+    // Every refusal before anything changes: a refused move leaves the split as it was.
+    const userContextId = Number(target.container);
+    const principal = this.#principalFor(tab, userContextId);
+    if (!principal) return "this tab's page cannot be reopened";
     const view = PaneViews.get(this.#win);
     // Out of the split first: closing the focused pane keeps its tab (pane.close).
     if (tab.splitview && tab.selected && view?.panes) view.close();
     if (tab.splitview) tab.splitview.unsplitTabs();
-    const userContextId = Number(target.container);
-    const principal = this.#principalFor(tab, userContextId);
-    if (!principal) return "this tab's page cannot be reopened";
     if (from.id === model.active && from.tabs.length === 1) {
       this.#openHome(from.id, Number(from.container));
     }

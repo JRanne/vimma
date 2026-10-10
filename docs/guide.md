@@ -344,6 +344,11 @@ profile has one workspace, `main`; you make more as you need them (see
   cookies, logins and site data**; the question says so. A workspace from `[workspaces]` in
   `config.toml` cannot go while it is there: closing it closes its tabs only, and it keeps its
   logins. Renaming one is done in `config.toml` too. The last workspace cannot be closed.
+  If the workspace changes between the question and your `y` (say `config.toml` was reloaded),
+  nothing is closed. If you renamed its container in Firefox's Settings, its tabs and site data
+  are kept, and the status bar says so.
+- A workspace name cannot be only digits: in `:wsmove 2` and `:workspace 2` a number means the
+  workspace's place in `ctrl+i` order.
 - **Moving a tab reopens it** in the other workspace's container, as Firefox's "Reopen in
   Container" does: its address, name and mute come along, but not its back/forward history,
   what you typed into forms, its scroll position, or a form submission (the page is loaded

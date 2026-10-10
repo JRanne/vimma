@@ -104,11 +104,30 @@ export function closeWorkspace(win, text, ask, say) {
   if (def.source === "config" && tabs === 0) {
     return `"${def.name}" has no tabs, and stays: it is in config.toml`;
   }
+  // The yes stands for the workspace as asked about, not as it may be by the time of the `y`.
+  const asked = { source: def.source, name: def.name, userContextId: def.userContextId };
   ask(closeWorkspaceQuestion(def, tabs), () => {
+    const now = WorkspaceStore.definitions.workspaces.find((d) => d.id === def.id);
+    if (
+      now?.source !== asked.source ||
+      now.name !== asked.name ||
+      now.userContextId !== asked.userContextId
+    ) {
+      say(`close workspace: "${asked.name}" changed since you were asked; nothing was closed`);
+      return;
+    }
     const ww = WindowWorkspaces.get(win);
     if (ww?.model?.active === def.id) ww.previous();
-    WorkspaceStore.closeWorkspace(def.id, { confirmed: true }).catch((e) =>
-      say(`close workspace: ${reason(e)}`),
+    WorkspaceStore.closeWorkspace(def.id, { confirmed: true, asked }).then(
+      ({ cleared }) => {
+        if (asked.source === "runtime" && !cleared) {
+          say(
+            `closed "${asked.name}"; its container is no longer vimma's (renamed in Settings?), ` +
+              "so its tabs and site data were kept",
+          );
+        }
+      },
+      (e) => say(`close workspace: ${reason(e)}`),
     );
   });
   return null;

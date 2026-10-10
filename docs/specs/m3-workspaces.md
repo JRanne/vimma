@@ -896,6 +896,19 @@ dependency for 4b, 5 and parts of 4a.
   included. `browser_vimma_help_overlay.js`: new/rename/close workspace rows are runnable now
   (the not-yet examples are the picker and the side panel). Mutation check: not copying the label
   fails "the label is kept".
+- **Review round 1 (PR #64):** the `y` stands for the workspace as asked about: its `source`,
+  name and container go to `closeWorkspace` (`asked`) and are checked again at the answer, so
+  a `config.toml` reload that made a config workspace runtime meanwhile refuses with `changed`
+  instead of deleting its data. `deleteWorkspace` returns `{ cleared }`; a container no longer
+  recognisably ours (renamed in Settings) keeps its tabs and data, and the notice says so.
+  New names of digits only are refused (`:wsmove 2` reads digits as a place; a file's existing
+  names and `[workspaces]` keys are not checked: config keeps accepting number-like names, which
+  `:wsmove 2` still reads as a place). Container 0 is never passed to `closeContainerTabs`. A
+  move's refusals all come before the tab leaves its split. A held key (`e.repeat`) is no answer.
+  Tests added: the default container's cookie survives a delete, only the deleted container's
+  `clear-origin-attributes-data` fires, Esc and Enter answer no, a config workspace with no tabs
+  is refused, moving a workspace's last tab opens its home tab, plus fixes 1-3 and 5 (red: 8
+  unexpected; green). Mutation check: reporting `cleared: true` always fails the kept-data test.
 - **Not done here:** a lazy background tab is moved by its saved URL in code but only the
   selected tab can be moved (picker `m` is sub-spec 5, with the warning before the move; `:wsmove`
   says afterwards that the history stayed behind). `contextual-identity-deleted` (a container

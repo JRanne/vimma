@@ -24,6 +24,7 @@ const { PaneViews } = ChromeUtils.importESModule(
 const { getTabLabel, setTabLabel } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/host/tab-labels.mjs",
 );
+const { sinon } = ChromeUtils.importESModule("resource://testing-common/Sinon.sys.mjs");
 const { SessionStore } = ChromeUtils.importESModule(
   "moz-src:///browser/components/sessionstore/SessionStore.sys.mjs",
 );
@@ -167,6 +168,14 @@ add_task(async function new_workspace_appears_in_cycling_the_bar_and_the_snapsho
     1,
     "no second shop",
   );
+
+  // A number is a place (`:wsmove 2`), so a name cannot be one.
+  await runCommand("wsnew 2");
+  await until(() => /digits/.test(noticeText()), "a name of digits only is refused");
+  Assert.ok(!def("2"), "no workspace named 2");
+  await runCommand("wsrename 7");
+  await until(() => /digits/.test(noticeText()), "and so is a rename to one");
+  Assert.ok(def("shop"), "shop keeps its name");
 });
 
 add_task(async function rename_shows_in_the_bar_and_renames_the_container() {
@@ -194,6 +203,7 @@ add_task(async function closing_asks_n_keeps_y_deletes_the_container_and_its_coo
   await BrowserTestUtils.openNewForegroundTab(gBrowser, `${PAGE}?market`);
   setCookie(market.userContextId);
   setCookie(main().userContextId);
+  setCookie(0);
   Assert.equal(cookieCount(market.userContextId), 1, "market has a cookie");
 
   await focusContent(gBrowser.selectedBrowser);
@@ -208,15 +218,35 @@ add_task(async function closing_asks_n_keeps_y_deletes_the_container_and_its_coo
   await until(() => !promptOpen(), "n closes the prompt");
   Assert.ok(def("market"), "n keeps the workspace");
   Assert.equal(tabsOf(market.userContextId).length, 2, "and its tabs");
+  for (const key of ["KEY_Escape", "KEY_Enter"]) {
+    await runCommand("wsdelete");
+    await until(promptOpen, `asked again, to answer ${key}`);
+    EventUtils.synthesizeKey(key);
+    await until(() => !promptOpen(), `${key} closes the prompt`);
+    Assert.ok(def("market"), `${key} answers no`);
+    Assert.equal(tabsOf(market.userContextId).length, 2, `${key} closes no tab`);
+  }
 
   await runCommand("wsdelete");
   await until(promptOpen, ":wsdelete asks too");
+  /** @type {string[]} every origin-attributes clear while deleting */
+  const clears = [];
+  const record = (_s, _t, data) => clears.push(data);
+  Services.obs.addObserver(record, "clear-origin-attributes-data");
   const cleared = TestUtils.topicObserved(
     "clear-origin-attributes-data",
     (_s, data) => JSON.parse(data).userContextId === market.userContextId,
   );
   EventUtils.synthesizeKey("y");
   await cleared;
+  await TestUtils.waitForTick();
+  Services.obs.removeObserver(record, "clear-origin-attributes-data");
+  Assert.deepEqual(
+    clears.map((d) => JSON.parse(d).userContextId),
+    [market.userContextId],
+    "only market's container is cleared",
+  );
+  Assert.equal(cookieCount(0), 1, "the default container's cookie stays");
   await until(() => !def("market"), "y deletes the workspace");
   await until(() => cookieCount(market.userContextId) === 0, "its cookie is gone");
   Assert.ok(!identity(market.userContextId), "and its container");
@@ -252,6 +282,49 @@ add_task(async function closing_a_config_workspace_closes_its_tabs_only() {
   Assert.ok(def("job"), "the workspace stays");
   Assert.ok(identity(job.userContextId), "and its container");
   Assert.equal(active(), main().id, "the window shows main");
+
+  await runCommand("wsdelete job");
+  await until(() => /no tabs/.test(noticeText()), "with no tabs there is nothing to close");
+  Assert.ok(!promptOpen(), "and nothing to ask");
+
+  // The answer acts on what was asked: a config reload in between makes job a runtime
+  // workspace, whose close would delete its container; the y is refused instead.
+  const tab = BrowserTestUtils.addTab(gBrowser, `${PAGE}?job2`, {
+    userContextId: job.userContextId,
+  });
+  await until(() => tabsOf(job.userContextId).length === 1, "job has a tab again");
+  setCookie(job.userContextId);
+  await runCommand("wsdelete job");
+  await until(promptOpen, "asked to close job's tab");
+  Assert.stringContains(promptText(), "config.toml", "a config workspace's question");
+  await WorkspaceStore.setConfig([]);
+  await until(() => def("job")?.source === "runtime", "job left config.toml meanwhile");
+  EventUtils.synthesizeKey("y");
+  await until(() => /changed/.test(noticeText()), "the answer is refused: job changed");
+  Assert.ok(def("job"), "job stays");
+  Assert.ok(identity(job.userContextId), "with its container");
+  Assert.equal(cookieCount(job.userContextId), 1, "and its cookie");
+  Assert.ok(tab.isConnected, "and its tab");
+  BrowserTestUtils.removeTab(tab);
+  Services.cookies.removeAll();
+});
+
+add_task(async function a_container_no_longer_ours_is_kept_and_the_notice_says_so() {
+  const odd = await create("odd");
+  const tab = gBrowser.selectedTab;
+  setCookie(odd.userContextId);
+  // Renamed in Firefox's Settings: the container is no longer recognisably the workspace's.
+  ContextualIdentityService.update(odd.userContextId, "someone else", "circle", "blue");
+  await runCommand("wsdelete");
+  await until(promptOpen, "it asks");
+  EventUtils.synthesizeKey("y");
+  await until(() => !def("odd"), "the workspace goes");
+  await until(() => /kept/.test(noticeText()), "the notice says the data was kept");
+  Assert.ok(identity(odd.userContextId), "the container stays");
+  Assert.equal(cookieCount(odd.userContextId), 1, "with its cookie");
+  if (tab.isConnected) BrowserTestUtils.removeTab(tab);
+  ContextualIdentityService.remove(odd.userContextId);
+  Services.cookies.removeAll();
 });
 
 add_task(async function moving_a_tab_reopens_it_in_the_target_container() {
@@ -285,6 +358,25 @@ add_task(async function moving_a_tab_reopens_it_in_the_target_container() {
   await until(() => /no workspace "nowhere"/.test(noticeText()), "an unknown target is refused");
 });
 
+add_task(async function moving_a_workspaces_last_tab_opens_its_home_tab() {
+  const b = def("beta");
+  const g = await create("gamma");
+  Assert.equal(ww().model.workspaces.find((w) => w.id === g.id).tabs.length, 1, "one tab");
+  const only = gBrowser.selectedTab;
+  BrowserTestUtils.startLoadingURIString(only.linkedBrowser, `${PAGE}?last`);
+  await BrowserTestUtils.browserLoaded(only.linkedBrowser);
+
+  await runCommand("wsmove beta");
+  await until(() => !only.isConnected, "the tab moves");
+  await reopened(b.userContextId, `${PAGE}?last`);
+  Assert.equal(active(), g.id, "the window stays in gamma");
+  const left = ww().model.workspaces.find((w) => w.id === g.id).tabs;
+  Assert.equal(left.length, 1, "gamma has a tab again");
+  const home = ww().tabOf(left[0]);
+  Assert.equal(home.userContextId, g.userContextId, "in gamma's container");
+  Assert.ok(home.selected && !home.hidden, "selected and shown");
+});
+
 add_task(async function a_split_member_leaves_its_split_before_it_moves() {
   const a = def("alpha");
   const b = def("beta");
@@ -296,8 +388,25 @@ add_task(async function a_split_member_leaves_its_split_before_it_moves() {
   await until(() => right.splitview && left.splitview, "laid out on Firefox's split view");
   BrowserTestUtils.startLoadingURIString(right.linkedBrowser, `${PAGE}?right`);
   await BrowserTestUtils.browserLoaded(right.linkedBrowser);
-
   const number = WorkspaceStore.definitions.workspaces.findIndex((w) => w.id === b.id) + 1;
+
+  // A move refused for want of a principal (a lazy tab whose saved state does not read) leaves
+  // the split as it was.
+  Object.defineProperty(right, "linkedPanel", { value: "", configurable: true });
+  const stub = sinon.stub(SessionStore, "getTabState").throws(new Error("unreadable"));
+  try {
+    Assert.equal(
+      ww().moveTab(right, { index: number }),
+      "this tab's page cannot be reopened",
+      "the move is refused",
+    );
+  } finally {
+    stub.restore();
+    delete right.linkedPanel;
+  }
+  Assert.ok(view.panes, "the split stays");
+  Assert.ok(right.splitview && right.isConnected, "with the tab in it");
+
   await runCommand(`wsmove ${number}`);
   await until(() => !right.isConnected, "the split member moves");
   Assert.equal(view.panes, null, "the split is gone: one pane left");
