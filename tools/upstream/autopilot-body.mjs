@@ -14,8 +14,9 @@
  *      --issue N --branch NAME --repo OWNER/NAME --run-url URL --owner LOGIN --error FILE]
  *
  * Writes Markdown to stdout (`pr --draft-only` prints "true" or "false"). Node built-ins only.
- * Every string from outside (a hunk, an advisory) is either constrained by a regexp in
- * releases.mjs or inside a code fence that patch-check.py sized for it.
+ * Every string from outside (a hunk, an advisory, an error) is constrained by a regexp in
+ * releases.mjs, inside a code fence that patch-check.py sized for it, or escaped for where it
+ * goes: oneLine for Markdown text, codeLine for a code span.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -116,9 +117,7 @@ export function conflictLines(report) {
     for (const m of p.missing) out.push(`  - \`${m}\` is gone upstream`);
     for (const h of p.hunks.filter((x) => x.status === "fuzz" || x.status === "failed")) {
       const what = h.status === "fuzz" ? `applies only with fuzz ${h.fuzz}` : "fails";
-      out.push(
-        `  - hunk ${h.index}/${h.of} of \`${h.file}\` \`${oneLine(h.header).replace(/`/g, "'")}\` ${what}`,
-      );
+      out.push(`  - hunk ${h.index}/${h.of} of \`${h.file}\` \`${codeLine(h.header)}\` ${what}`);
     }
   }
   out.push(
@@ -186,7 +185,7 @@ export function prBody(c) {
     "| --- | --- |",
     "| Source tarball | SHA-512 matches Mozilla's `SHA512SUMS` |",
     `| Patches (\`surfer import\`) | ${patchLine(c.patchReport, c.patchResult)} |`,
-    `| Patch register (ADR-003) | ${oneLine(c.audit) || "not run"} |`,
+    `| Patch register (ADR-003) | ${c.audit || "not run"} |`,
     `| Artifact build | ${artifactsLine(c)} |`,
     `| Mochitests + e2e on the artifact build | ${testsLine(c.tests, c)} |`,
     "",
@@ -252,7 +251,7 @@ export function fallbackBody(c) {
     "",
     `**Open it yourself:** [compare main...${c.branch}](${compare}) (title and \`Closes\` line ` +
       "filled in), then mark it ready.",
-    c.error ? `\nGitHub said: \`${oneLine(c.error).slice(0, 300)}\`` : "",
+    c.error ? `\nGitHub said: \`${codeLine(c.error).slice(0, 300)}\`` : "",
     "",
     "---",
     "",
@@ -321,12 +320,32 @@ export function auditLine(text) {
   const total = lines.find((l) => l.startsWith("Total:"))?.replace(/^Total:\s*/, "");
   if (!total) return "";
   const ok = lines.some((l) => l.startsWith("Register matches"));
-  return `${total}; ${ok ? "register matches" : "**register does not match** (patch-audit.py)"}`;
+  // A table cell (prBody): the totals are escaped, the verdict is ours.
+  const verdict = ok ? "register matches" : "**register does not match** (patch-audit.py)";
+  return `${oneLine(total)}; ${verdict}`;
 }
 
-/** @param {string} s */
+/**
+ * Outside text as one line of plain Markdown, safe in a table cell: every character that could
+ * start a link, an HTML tag, emphasis or a code span, or end the cell, is backslash-escaped,
+ * the backslash itself first (CodeQL js/incomplete-sanitization: escaping only `|` let `\|`
+ * through as an escaped backslash and a live pipe).
+ * @param {string} s
+ */
 function oneLine(s) {
-  return s.replace(/\s+/g, " ").replace(/\|/g, "\\|").trim();
+  return s
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[\\`*_~[\]<>|]/g, "\\$&");
+}
+
+/**
+ * Outside text as one line for inside a code span, where Markdown is not read: only a backtick
+ * could end the span, so it becomes `'`.
+ * @param {string} s
+ */
+function codeLine(s) {
+  return s.replace(/\s+/g, " ").trim().replace(/`/g, "'");
 }
 
 /** @param {string | undefined} path */
