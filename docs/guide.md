@@ -295,9 +295,6 @@ normal mode (`3 ctrl+w >` by three), as in Vim. A config can rebind the mode's k
 
 - **Back, forward and reload** (`H`/`L`, `r`): bound, not built yet. Until then these keys
   reach the page as before.
-- **M3, the side panel:** `ctrl+b b` or `<leader>n`. `ctrl+i` / `ctrl+u`, the `ctrl+b w`
-  picker, new/rename/close workspace, moving a tab and restoring workspaces after a restart work
-  now (see [Workspaces](#workspaces)).
 
 ## Workspaces
 
@@ -310,6 +307,8 @@ profile has one workspace, `main`; you make more as you need them (see
   around; `:workspace work` or `:workspace 2` goes to one by name or number. The status bar
   shows where you are (`● 2:work`).
 - `ctrl+b w` (or `:workspace` with no name) opens the [workspace picker](#workspace-picker).
+- `<leader>n` (space, then `n`), `ctrl+b b` or `:sidebar` opens the [side panel](#side-panel):
+  the current workspace's tabs down the left of the window.
 - A window shows **one workspace at a time**: the other workspaces' tabs are hidden, not closed.
   Coming back selects the tab you left, and a split comes back with its panes laid out as
   before, the same pane focused and its page ready for keys. Each workspace keeps its own split:
@@ -381,6 +380,29 @@ the workspace changes before your `y` (another tab selected, the workspace renam
 nothing is moved. `m` on the workspace the tab is already in says so and asks nothing. To create,
 rename or close a workspace, use `ctrl+b shift+n`, `shift+w` and `shift+d`.
 
+### Side panel
+
+`<leader>n`, `ctrl+b b` or `:sidebar` opens a panel on the left of the window. It is closed when
+Vimma starts and stays out of the way until you ask for it. Its head shows the workspace you are
+in (`● 2:work`, in the workspace's colour) and the ones `ctrl+u` and `ctrl+i` go to; below are
+the workspace's tabs, numbered, each with its name (or title) and its site. The tab you are on is
+highlighted and its number coloured; a tab playing sound shows `♪`, one from another container
+`foreign`.
+
+| Key                            | What it does                                               |
+| ------------------------------ | ---------------------------------------------------------- |
+| `j` / `k`                      | Move the highlight down / up.                              |
+| `Enter`                        | Go to the highlighted tab and close the panel.             |
+| `1` … `9`                      | Go to that row's tab and close the panel.                  |
+| `ctrl+i` / `ctrl+u`            | Switch workspace; the panel stays open and lists that one. |
+| `Esc`, `<leader>n`, `ctrl+b b` | Close the panel; the page has the keys again.              |
+
+While it is open, every other plain key is the panel's and never reaches the page; `ctrl+b`
+keys and `:` commands still work, and a tab you open meanwhile shows up in the list. The panel
+follows your Omarchy theme as the status bar does. Change its keys under `[modal.panel]` in
+`config.toml`; `[keys] toggle_sidebar` changes the keys that open it, and a `<leader>` binding
+there closes it too.
+
 ## Goto picker and tab rename
 
 `ctrl+b g` (or `b` in normal mode, or `:ls`) opens a list of the window's tabs over the page: the tab number (the
@@ -441,7 +463,8 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:vsplit`/`:vs`, `:split`/`:sp`   | Splits the pane right / down, as `ctrl+b v` / `ctrl+b -`.                                                      |
 | `:wsnext`, `:wsprev`              | Next / previous workspace, as `ctrl+i` / `ctrl+u`.                                                             |
 | `:workspace name`, `:workspace 2` | Switches to the workspace with that name, or that number in `ctrl+i` order.                                    |
-| `:workspace`, `:sidebar`          | Not built yet (M3: the workspace picker and the side panel).                                                   |
+| `:workspace`                      | Opens the workspace picker.                                                                                    |
+| `:sidebar`                        | Opens or closes the side panel, as `<leader>n`.                                                                |
 | `:source`                         | Reads `config.toml` now instead of within 2 seconds (see [config.toml](#configtoml)).                          |
 | `:source path`                    | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                |
 | `:config`                         | Opens `config.toml` in a new tab (read-only view); creates it from a commented template when it is missing.    |

@@ -4,9 +4,12 @@
 
 // Spec: docs/specs/m2-statusbar-whichkey.md
 
-/* global focusContent -- from head.js */
+/* global focusContent, bindUnbuiltPrefixKey -- from head.js */
 
 "use strict";
+
+// ctrl+b o: a key under the prefix the host has not built (head.js).
+bindUnbuiltPrefixKey();
 
 const { VimmaHost } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
@@ -199,8 +202,8 @@ add_task(async function notice_sits_above_the_bar() {
   await BrowserTestUtils.withNewTab(TITLE_PAGE, async (browser) => {
     await focusContent(browser);
     EventUtils.synthesizeKey("b", { ctrlKey: true });
-    EventUtils.synthesizeKey("b"); // toggle_sidebar: not implemented yet
-    await until(noticeShown, "ctrl+b b shows the notice");
+    EventUtils.synthesizeKey("o"); // history_back: not implemented yet (head.js)
+    await until(noticeShown, "ctrl+b o shows the notice");
     Assert.lessOrEqual(
       $("vimma-notice").getBoundingClientRect().bottom,
       bar().getBoundingClientRect().top,
@@ -228,8 +231,8 @@ add_task(async function prefix_question_shows_exactly_one_list() {
     await focusContent(browser);
     // A toast from an earlier key must not linger over the overlay.
     EventUtils.synthesizeKey("b", { ctrlKey: true });
-    EventUtils.synthesizeKey("b");
-    await until(noticeShown, "ctrl+b b shows the notice");
+    EventUtils.synthesizeKey("o");
+    await until(noticeShown, "ctrl+b o shows the notice");
     EventUtils.synthesizeKey("b", { ctrlKey: true });
     EventUtils.synthesizeKey("?", { shiftKey: true });
     await until(() => $("vimma-help")?.open, "ctrl+b ? opens the help overlay");
