@@ -93,6 +93,11 @@ beat the listener. Do not rely on `browser.focus()` either: it moves chrome focu
 process takes focus later. On a 2-CPU runner both race the key. Neither matters for keys that
 only chrome handles (Vimma's chords, the help overlay, the URL bar).
 
+Typing into an editable page makes the editor scroll the caret into view at the page's next
+refresh tick, not at once (Selection's async ScrollSelectionIntoView). A test that types and
+then scrolls must first wait for that tick (`afterRefreshTick` in
+`browser_vimma_insert_scroll.js`, issue #46), or a late tick scrolls back to the caret.
+
 To shake out a race, run a test repeatedly on two busy CPUs (what the hosted runner has):
 
 ```sh

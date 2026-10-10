@@ -466,6 +466,8 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:workspace`                      | Opens the workspace picker.                                                                                    |
 | `:sidebar`                        | Opens or closes the side panel, as `<leader>n`.                                                                |
 | `:source`                         | Reads `config.toml` now instead of within 2 seconds (see [config.toml](#configtoml)).                          |
+| `:source path`                    | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                |
+| `:config`                         | Opens `config.toml` in a new tab (read-only view); creates it from a commented template when it is missing.    |
 | `:about`, `:vimma`                | Opens [about:vimma](#aboutvimma) in a new tab.                                                                 |
 | `:bug`                            | Opens about:vimma and copies its redacted report to the clipboard, for a bug report.                           |
 
@@ -513,8 +515,9 @@ Vimma's own preferences today:
 ## config.toml
 
 Vimma reads `~/.config/vimma/config.toml` (`$XDG_CONFIG_HOME/vimma/config.toml` when that is
-set), and nothing else in that folder. No file means the defaults; Vimma never creates or writes
-it. A small example:
+set), and nothing else in that folder. No file means the defaults. Vimma writes it only when you
+type `:config` and it does not exist yet: it then creates it (and its folder) with every default
+commented out, and opens it in a tab. An existing file is never written. A small example:
 
 ```toml
 schema = 2
@@ -536,6 +539,12 @@ accent = "#ff9e64"
 
 - **Reload:** save the file and Vimma picks it up within 2 seconds, in every window, without a
   restart. `:source` reads it at once.
+- **Another file:** `:source work.toml` loads that file instead, the same way: whole, over the
+  defaults, not merged into `config.toml` (a file is checked as a whole, so two half-configs
+  could not be). A relative path is next to `config.toml`; `~`, `$HOME` and `$XDG_CONFIG_HOME`
+  expand at its start. It stays in force until `config.toml` changes or you type a plain
+  `:source`. A missing or broken file changes nothing and shows its error in the status bar
+  under its own name (`work.toml: no such file`, `work.toml:3: …`).
 - **Errors:** a file with a mistake is not applied at all: the config you had keeps working,
   and the status bar shows the first mistake in red on the right, with its line, e.g.
   `config.toml:3: keys.new_tabb: unknown action "new_tabb" (did you mean "new_tab"?)` (or

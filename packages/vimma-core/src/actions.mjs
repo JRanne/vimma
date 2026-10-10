@@ -166,7 +166,10 @@ group("Side panel", [
   ["panel_close", "panel.close", "Close the side panel"],
 ]);
 
-group("Config", [["reload_config", "config.reload", "Reload config"]]);
+group("Config", [
+  ["reload_config", "config.reload", "Reload config"],
+  ["edit_config", "config.edit", "Open config.toml in a tab"],
+]);
 
 /** @type {readonly ActionDef[]} */
 export const ACTIONS = Object.freeze(defs);

@@ -251,3 +251,29 @@ export function formatDefaultsToml() {
   );
   return lines.join("\n");
 }
+
+/** The lines of defaults.toml's header, which the template replaces. */
+const DEFAULTS_HEADER = 3;
+
+/**
+ * What `:config` writes when config.toml does not exist yet (spec m5-config-load): defaults.toml
+ * with every setting commented out, so the file means exactly the defaults until a line is
+ * uncommented. Table headers stay, so an uncommented line lands in its table.
+ * @returns {string}
+ */
+export function formatConfigTemplate() {
+  const body = formatDefaultsToml()
+    .split("\n")
+    .slice(DEFAULTS_HEADER)
+    .map((line) =>
+      line === "" || line.startsWith("#") || line.startsWith("[") || line.startsWith("schema =")
+        ? line
+        : `# ${line}`,
+    );
+  return [
+    "# Vimma config. Every line below is a default, commented out: uncomment one and change it.",
+    "# Vimma reads this file within 2 seconds of a save; :source reads it at once.",
+    "# Reference: docs/guide.md, section config.toml.",
+    ...body,
+  ].join("\n");
+}

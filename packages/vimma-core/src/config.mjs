@@ -572,3 +572,32 @@ export function formatConfigError(e, file) {
   const hint = e.suggestion ? ` (did you mean "${e.suggestion}"?)` : "";
   return `${file}${where}: ${path}${e.message}${hint}`;
 }
+
+/** `$HOME`, `$XDG_CONFIG_HOME`, `${HOME}`, `${XDG_CONFIG_HOME}` at the start of a path. */
+const LEADING_VAR = /^\$(?:\{(HOME|XDG_CONFIG_HOME)\}|(HOME|XDG_CONFIG_HOME)(?![A-Za-z0-9_]))/;
+
+/**
+ * `:source <path>` (spec m5-config-load): the file a typed path names. `~`, `~/…`, `$HOME` and
+ * `$XDG_CONFIG_HOME` (also as `${…}`) expand at the start; other variables and `~user` stay as
+ * typed. A relative path is taken from the folder config.toml is in. `.` and `..` are resolved.
+ * @param {string} arg
+ * @param {{ home: string, xdgConfigHome?: string, configDir: string }} env
+ *   `xdgConfigHome` unset, empty or relative means `~/.config`, as the XDG spec says
+ * @returns {string | null} null for an empty argument (plain `:source`)
+ */
+export function resolveSourcePath(arg, { home, xdgConfigHome = "", configDir }) {
+  let p = arg.trim();
+  if (!p) return null;
+  const xdg = xdgConfigHome.startsWith("/") ? xdgConfigHome : `${home}/.config`;
+  if (p === "~" || p.startsWith("~/")) p = home + p.slice(1);
+  p = p.replace(LEADING_VAR, (_m, braced, bare) => ((braced ?? bare) === "HOME" ? home : xdg));
+  if (!p.startsWith("/")) p = `${configDir}/${p}`;
+  /** @type {string[]} */
+  const out = [];
+  for (const seg of p.split("/")) {
+    if (seg === "" || seg === ".") continue;
+    if (seg === "..") out.pop();
+    else out.push(seg);
+  }
+  return `/${out.join("/")}`;
+}
