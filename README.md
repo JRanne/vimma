@@ -31,10 +31,10 @@ release channel.
 
 ## Status
 
-**Pre-alpha, not yet daily-driven.** M0 (fork, pipeline, control socket, e2e) and M2 (tabs,
-status bar, picker) are done; M1's modal page layer is done except back, forward and reload
-(`H`/`L`/`r`, in review). Split panes (M4) work from the keyboard; workspaces (M3) and
-`config.toml` (M5) are in progress, and the browser already follows your Omarchy theme.
+**Pre-alpha, not yet daily-driven.** M0 (fork, pipeline, control socket, e2e), M2 (tabs,
+status bar, picker), M3 (workspaces), M4 (split panes) and M5 (`config.toml`, Omarchy theme)
+are done; M1's modal page layer is done except back, forward and reload (`H`/`L`/`r`, in
+review). M6 (packaging, updates) has its tooling but waits on release accounts.
 There are no binaries yet: you build from source. Version `0.1.0`, on Firefox 157.0.1.
 
 What works today:
@@ -71,11 +71,23 @@ What works today:
   status bar and the picker and survives a restart.
   `ctrl+b ?` is the one place that lists the bindings.
 - **Split panes.** `ctrl+b v` / `ctrl+b -` (or `:vsplit` / `:split`) split right and down,
-  `ctrl+b h/j/k/l` (or `ctrl+w h/j/k/l`) move between panes, `ctrl+b z` zooms and `ctrl+b x`
-  or `:q` closes a pane; up to 4 panes, shown as `pane n/m` in the status bar.
+  `ctrl+b h/j/k/l` (or `ctrl+w h/j/k/l`) or a click move between panes, `ctrl+b z` zooms,
+  swap and resize mode rearrange them and `ctrl+b x` or `:q` closes a pane; up to 4 panes,
+  shown as `pane n/m` in the status bar. Splits made with Firefox's own split view become panes.
+- **Workspaces.** Each workspace is its own container, with separate cookies and logins.
+  `ctrl+i` / `ctrl+u` switch, `ctrl+b w` picks one by name (with tab counts), and
+  `ctrl+b shift+n/w/d` (or `:wsnew`, `:wsrename`, `:wsdelete`) create, rename and delete
+  them; delete asks first. `:wsmove` or `m` in the picker moves a tab to another workspace.
+  Each workspace keeps its tabs and its split, across switches and restarts.
+- **Side panel.** `<leader>n`, `ctrl+b b` or `:sidebar` toggles a panel listing the current
+  workspace's tabs; `j`/`k`, `Enter` or `1..9` pick one.
+- **`config.toml`.** `$XDG_CONFIG_HOME/vimma/config.toml` sets options, key bindings and
+  workspaces, and is re-read within 2 seconds of a save; `:source` reads it at once,
+  `:source <path>` loads another file and `:config` opens it. Errors show in the status bar,
+  and `about:vimma` shows the version, patches and state.
 - **Omarchy theme.** The status bar, pickers, command line, hints and start page take their
-  colours from your current Omarchy theme and follow `omarchy-theme-set` within 2 seconds;
-  without Omarchy, Tokyo Night.
+  colours from your current Omarchy theme and follow `omarchy-theme-set` within 2 seconds, or
+  at once with the optional theme-set hook; without Omarchy, Tokyo Night.
 - **Hidden tab strip.** Firefox's tab strip is hidden. Firefox's own tab keys (`ctrl+t`,
   `ctrl+w`, `ctrl+tab`, `alt+1..9`, …) still work. Set `vimma.ui.tabstrip.hidden` to `false` in
   `about:config` to bring the strip back.
@@ -94,11 +106,8 @@ What works today:
 
 What does not work yet: the dimmed bindings in the overlay. The overlay lists the full planned
 keymap; a `ctrl+b` sequence that does not run yet shows "… not implemented yet" for a moment.
-`H`/`L`/`r` reach the page until they are built. Workspaces route new tabs into per-workspace
-containers already, but switching, restore and the workspace picker are still being built;
-swap and resize for panes, `config.toml` loading and `about:vimma` come next. The parser and
-validator for `config.toml` exist in `vimma-core`, but the browser does not read the file yet. See [docs/guide.md](docs/guide.md) and
-[docs/limits.md](docs/limits.md).
+`H`/`L`/`r` reach the page until they are built. There are no packages or updates yet. See
+[docs/guide.md](docs/guide.md) and [docs/limits.md](docs/limits.md).
 
 ## Requirements
 
