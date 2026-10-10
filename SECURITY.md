@@ -10,10 +10,8 @@ release branches or backports.
 Please report privately, not in a public issue or pull request: use GitHub's private
 vulnerability reporting, under the repository's **Security** tab, **Report a vulnerability**.
 
-> Owner: this button only appears once private vulnerability reporting is enabled in the
-> repository's **Settings → Security** (Code security → Private vulnerability reporting). Until
-> then, open a public issue that says only "I have a security report, please contact me", with
-> no details.
+If that button is missing, open a public issue that says only "I have a security report,
+please contact me", with no details.
 
 Include what you can: the Vimma commit, the Firefox version (`about:vimma`), steps to
 reproduce, and what an attacker gains.

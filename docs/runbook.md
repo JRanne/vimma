@@ -2,7 +2,8 @@
 
 ## Machine
 
-- Dev box: 16 cores, 58 GiB RAM, 475 GB disk (230 GB free on 2026-10-09), Linux (Omarchy), Node 22.21, Python 3.
+- Reference machine for the timings below: 16 threads (Ryzen AI 7 PRO 350), 58 GiB RAM, Linux
+  (Omarchy), Node 22, Python 3.
 
 ## First Firefox build (plan §10 step 3)
 
@@ -232,7 +233,7 @@ artifact build, so several agents can run browser specs at once without sharing 
 worktree:
 
 ```sh
-ln -s /home/juuso/repositories/VimHerdr/node_modules node_modules   # or npm ci
+ln -s <main checkout>/node_modules node_modules   # or npm ci
 npm run lane:setup          # copy, reset, import, artifact build, verify
 npm run mochitest -- --artifact tests/browser/
 npm run lane:teardown       # when done: removes this worktree's engine/
@@ -280,7 +281,7 @@ Limits:
 - **One lane per worktree** (its `engine/`). After changing `src/` or `tests/` paths, rerun
   `npm run import` there; after a Firefox bump, `npm run lane:setup -- --force` from a source
   checkout on the new release.
-- **CPU:** an artifact build is CPU-bound (the front-end build). On this 16-thread box run at
+- **CPU:** an artifact build is CPU-bound (the front-end build). On a 16-thread machine run at
   most about 3 artifact builds at once, and none while the main checkout runs a full build;
   mochitests are light, a few in parallel are fine.
 - **Don't set up a lane while the source checkout is mid-import** (or mid-`git` in its
@@ -484,8 +485,8 @@ saying why):
 ### Nightly build runner (`nightly.yml`)
 
 A full build does not fit a GitHub-hosted runner (22 GB `engine/`, 39 min on 16 threads), so it
-runs on a self-hosted runner, e.g. this dev box or a dedicated machine. Only for this private
-repo: never attach a self-hosted runner to a public repo that takes fork PRs.
+runs on a self-hosted runner, e.g. a developer's machine or a dedicated one. Only while the repo
+is private: never attach a self-hosted runner to a public repo that takes fork PRs.
 
 **Keep the runner stopped outside the nightly window.** Any branch of this repo can add a
 workflow with `runs-on: vimma-build` and run code on the machine while the runner is online.
@@ -831,8 +832,8 @@ only the crate itself (MPL-2.0).
 ## vimma-ctl (control socket client)
 
 Spec m0-control-protocol-and-vimma-ctl, ADR-007, ADR-011. A std-only Rust binary in
-`tools/vimma-ctl/`; the toolchain is pinned in its `rust-toolchain.toml` (rustup honours it;
-Arch's system Rust 1.98.1 matches).
+`tools/vimma-ctl/`; the toolchain is pinned in its `rust-toolchain.toml` (rustup honours it; a
+system Rust of the same version works too).
 
 ```sh
 cd tools/vimma-ctl

@@ -1,6 +1,6 @@
 # Vimma
 
-Keyboard-first Firefox fork (Surfer). Neovim modal layer + Herdr prefix keymap (ctrl+b),
+Keyboard-first Firefox fork (Surfer). Neovim modal layer + tmux-style prefix keymap (ctrl+b),
 workspaces as containers, on-demand side panel, always-visible status bar, Omarchy theming.
 Read plan.md once per milestone; read docs/specs/<current>.md every session.
 
@@ -24,7 +24,7 @@ Read plan.md once per milestone; read docs/specs/<current>.md every session.
 - Never edit screenshot baselines or snapshots without a changelog line explaining the change.
 - Conventional Commits with a body; the subject is the changelog line; the body explains why.
 - User-visible change → update docs/guide.md (and the README feature list or status if it changes what works).
-- User-visible change → a line in CHANGELOG.md [Unreleased] (the coordinator adds it at merge time, so
+- User-visible change → a line in CHANGELOG.md [Unreleased] (the maintainer adds it at merge time, so
   parallel PRs do not conflict).
 - No new dependency without a licence check and a PR line. No #[allow]-style suppressions
   (eslint-disable) without a reason comment.
