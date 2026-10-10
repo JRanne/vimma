@@ -367,7 +367,7 @@ browser (5.5 min wall, ADR-010); upstream 4 × 1 min a day (≈ 120 min a month)
 when triggered. `nightly.yml` uses the self-hosted runner, which costs no hosted minutes. Check usage in Settings → Billing → Usage. Once the repo is public,
 standard hosted runners are free and unlimited; the e2e paths filter can then go.
 
-Semgrep costs one job of about SEMGREP_MIN min per PR push, push to `main` and Monday. CodeQL is
+Semgrep: one job, 51 s measured (1 billed min) per PR push, push to `main` and Monday. CodeQL is
 skipped while the repo is private and costs nothing until then.
 
 The bench step adds about half a minute to each CI run. `mutation.yml` is the largest scheduled
