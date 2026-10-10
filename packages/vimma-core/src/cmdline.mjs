@@ -80,7 +80,9 @@ export const COMMANDS = Object.freeze([
   cmd("sidebar", "none", "sidebar.toggle", "Open / close the side panel"),
   cmd("map", "none", "help.show", "Show all bindings"),
   cmd("help", "none", "help.show", "Show all bindings", { aliases: ["h"] }),
-  cmd("source", "none", "config.reload", "Reload config"),
+  // m5-config-load: with a path, that file replaces the config in force (all or nothing).
+  cmd("source", "optional", "config.reload", "Reload config (or load the given file)"),
+  cmd("config", "none", "config.edit", "Open config.toml in a tab (created if missing)"),
   // about:vimma (m5-about-vimma): a fixed URL for tab.new, so no new action or host runner.
   cmd("about", "none", "tab.new", "Open about:vimma (diagnostics)", {
     aliases: ["vimma"],

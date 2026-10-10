@@ -47,8 +47,14 @@ declare const Services: {
   appinfo: { readonly processID: number; readonly version: string; readonly appBuildID: string };
   // engine/xpcom/ds/nsIObserverService.idl
   obs: {
-    addObserver(observer: (subject: unknown, topic: string) => void, topic: string): void;
-    removeObserver(observer: (subject: unknown, topic: string) => void, topic: string): void;
+    addObserver(
+      observer: (subject: unknown, topic: string, data: string | null) => void,
+      topic: string,
+    ): void;
+    removeObserver(
+      observer: (subject: unknown, topic: string, data: string | null) => void,
+      topic: string,
+    ): void;
     notifyObservers(subject: unknown, topic: string, data?: string): void;
   };
   // engine/xpcom/base/nsIUUIDGenerator.idl
@@ -71,12 +77,22 @@ declare const PathUtils: {
   readonly profileDir: string;
   join(...components: string[]): string;
   parent(path: string, depth?: number): string | null;
+  filename(path: string): string;
+  toFileURI(path: string): string;
 };
 
 // engine/dom/chrome-webidl/IOUtils.webidl
 declare const IOUtils: {
   createUniqueFile(parent: string, prefix: string, permissions?: number): Promise<string>;
-  writeUTF8(path: string, data: string): Promise<number>;
+  writeUTF8(
+    path: string,
+    data: string,
+    options?: { mode?: "overwrite" | "append" | "appendOrCreate" | "create" },
+  ): Promise<number>;
+  makeDirectory(
+    path: string,
+    options?: { createAncestors?: boolean; ignoreExisting?: boolean; permissions?: number },
+  ): Promise<void>;
   readUTF8(path: string): Promise<string>;
   stat(path: string): Promise<{
     size: number;
