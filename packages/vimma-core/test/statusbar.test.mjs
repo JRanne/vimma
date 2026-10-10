@@ -111,6 +111,19 @@ describe("status bar segments", () => {
     expect(seg?.fg).toBe("--vimma-error");
   });
 
+  test("alerts (workspaces off) show as a persistent error, after config errors", () => {
+    const text = "workspaces off: containers are disabled";
+    const seg = statusSegments({ mode: "normal", alerts: [text] }).find((s) => s.id === "alert");
+    expect(seg).toMatchObject({ text, fg: "--vimma-error", side: "right" });
+    const both = statusSegments({
+      mode: "normal",
+      alerts: [text],
+      configErrors: [{ line: 1, path: "x", message: "bad" }],
+    }).map((s) => s.id);
+    expect(both.indexOf("error")).toBeLessThan(both.indexOf("alert"));
+    expect(texts(statusSegments({ mode: "normal", alerts: [] })).alert).toBeUndefined();
+  });
+
   test("a workspace without a known colour uses the accent", () => {
     const s = statusSegments({ mode: "normal", workspace: { name: "x", index: 2 } });
     expect(s[1]).toMatchObject({ text: "● 2:x", fg: "--vimma-accent" });

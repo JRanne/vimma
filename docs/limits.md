@@ -123,6 +123,9 @@ accepts
   closed tabs cannot be reopened.
 - Setting `privacy.userContext.enabled` to `false` closes every workspace tab and deletes all
   containers and their data (Firefox's behaviour).
+- Deleting a workspace's container outside Vimma (Settings → Containers, an extension) deletes
+  its cookies and site data; the workspace gets a new, empty container, and tabs an extension
+  left open in the deleted one stay there, marked `foreign`.
 - A corrupt `containers.json` makes Firefox reset containers; workspace logins can be lost and
   tabs come back marked `foreign`.
 - Pinned tabs belong to no workspace: they show in every workspace, and a tab opened pinned

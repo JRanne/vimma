@@ -41,6 +41,7 @@ export { textWidth };
  * @property {number | null} [progress]          0..1
  * @property {readonly ConfigError[]} [configErrors]
  * @property {string} [configFile]
+ * @property {readonly string[]} [alerts]  persistent errors (containers off: no workspaces)
  * @property {FindStatus | null} [find]          the current `/` or `?` find (spec m1-find)
  */
 
@@ -144,6 +145,7 @@ export function statusSegments(input) {
     progress = null,
     configErrors = [],
     configFile = "config.toml",
+    alerts = [],
     find = null,
   } = input;
   /** @type {Segment[]} */
@@ -225,6 +227,19 @@ export function statusSegments(input) {
       seg({
         id: "error",
         text: n > 1 ? `${n} errors: ${first}` : first,
+        fg: "--vimma-error",
+        side: "right",
+        priority: 2,
+        min: 16,
+        cut: "end",
+      }),
+    );
+  }
+  if (alerts.length) {
+    right.push(
+      seg({
+        id: "alert",
+        text: alerts.join(" · "),
         fg: "--vimma-error",
         side: "right",
         priority: 2,

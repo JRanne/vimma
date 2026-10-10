@@ -9,21 +9,24 @@
 
 import { workspaceItems } from "../core/picker.mjs";
 import { closeWorkspaceQuestion, moveTabQuestion } from "../core/workspacedefs.mjs";
+import { findWorkspace, workspaceRefFor } from "../core/workspaces.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
 
 /** @import { WorkspaceItem } from "../core/picker.mjs" */
-/** @import { WorkspaceRef } from "../core/workspaces.mjs" */
+/** @import { WorkspaceRef, Workspaces } from "../core/workspaces.mjs" */
 
 export const NO_WORKSPACES = "no workspaces in this window";
 
 /**
- * What the user typed as a workspace: a number is its place in `ctrl+i` order, else a name.
+ * What the user typed as a workspace: a workspace of exactly that name first (config.toml
+ * accepts names of digits), else a number is its place in `ctrl+i` order, else a name.
  * @param {string} text
+ * @param {Workspaces | null | undefined} model  the window's
  * @returns {WorkspaceRef}
  */
-export function workspaceRef(text) {
-  return /^\d+$/.test(text) ? { index: Number(text) } : { name: text };
+export function workspaceRef(text, model) {
+  return workspaceRefFor(model, text);
 }
 
 /** @param {unknown} e */
@@ -37,11 +40,7 @@ const reason = (e) => /** @type {Error} */ (e).message;
 function definitionOf(win, text) {
   const model = WindowWorkspaces.get(win)?.model;
   if (!model) return { refused: NO_WORKSPACES };
-  const id = !text
-    ? model.active
-    : /^\d+$/.test(text)
-      ? model.workspaces[Number(text) - 1]?.id
-      : model.workspaces.find((w) => w.name === text)?.id;
+  const id = !text ? model.active : findWorkspace(model, workspaceRefFor(model, text))?.id;
   const def = WorkspaceStore.definitions.workspaces.find((d) => d.id === id);
   return def ? { def } : { refused: `no workspace "${text}"` };
 }
@@ -160,11 +159,11 @@ function countTabs(userContextId) {
 export function moveTabToWorkspace(win, text) {
   const ww = WindowWorkspaces.get(win);
   if (!ww?.model) return NO_WORKSPACES;
-  const ref = workspaceRef(text);
+  const ref = workspaceRef(text, ww.model);
+  const to = findWorkspace(ww.model, ref)?.name;
   const tab = /** @type {any} */ (win).gBrowser.selectedTab;
   const refused = ww.moveTab(tab, ref);
   if (refused) return refused;
-  const to = "index" in ref ? ww.model.workspaces[ref.index - 1]?.name : text;
   return `moved to "${to}": reopened there, without its back/forward history`;
 }
 

@@ -274,6 +274,40 @@ export function renameWorkspace(s, ref, name) {
 }
 
 /**
+ * Gives a workspace another container (its own was deleted outside Vimma and replaced); its
+ * tabs, selection and panes stay. `duplicate-container`, `empty-container`.
+ * @param {Workspaces} s
+ * @param {WorkspaceRef} ref
+ * @param {string} container
+ * @returns {Workspaces}
+ */
+export function setWorkspaceContainer(s, ref, container) {
+  const i = mustIndex(s, ref);
+  const w = /** @type {WorkspaceState} */ (s.workspaces[i]);
+  if (typeof container !== "string" || !container) {
+    throw new WorkspaceError("empty-container", `workspace "${w.name}" needs a container`);
+  }
+  if (container === w.container) return s;
+  if (s.workspaces.some((o) => o.container === container)) {
+    throw new WorkspaceError("duplicate-container", `container "${container}" is in use`);
+  }
+  return replaceWs(s, i, updateWs(w, { container }));
+}
+
+/**
+ * What the user typed as a workspace (`:workspace 2`, `:wsmove 2`): a workspace of exactly that
+ * name first (config.toml accepts names of digits), else digits are a place in ctrl+i order,
+ * else a name. Without a model, digits are a place.
+ * @param {Workspaces | null | undefined} s
+ * @param {string} text
+ * @returns {WorkspaceRef}
+ */
+export function workspaceRefFor(s, text) {
+  if (s?.workspaces.some((w) => w.name === text)) return { name: text };
+  return /^\d+$/.test(text) ? { index: Number(text) } : { name: text };
+}
+
+/**
  * Deletes a workspace; its tabs are returned for the host to close (Herdr `close_workspace`).
  * The previous workspace (the next, if it was first) becomes active if this one was.
  * @param {Workspaces} s
