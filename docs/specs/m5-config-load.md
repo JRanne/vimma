@@ -84,8 +84,9 @@ not passing `[panes] max` to the pane view fails `panes_max_refuses_a_third_spli
   removed from the file becomes runtime), creates containers, saves and notifies the windows.
 - Only the first error is shown in the bar; `about:vimma` lists all of them and the theme's
   warnings ([m5-about-vimma](m5-about-vimma.md)).
-- User overrides are not marked in `ctrl+b ?` (plan §2); `:source <path>` and `:config` (open the
-  file in a tab) are not built.
+- User overrides are marked `*` in `ctrl+b ?` (core's `bindingTable`; browser test
+  `the_help_overlay_marks_and_lists_an_override`, added 2026-10-10). `:source <path>` and
+  `:config` (open the file in a tab) are not built.
 - Not covered by a browser test: `[modal] hint_chars` and `[sites]` (core tests cover their
   logic; the host only passes them through).
 

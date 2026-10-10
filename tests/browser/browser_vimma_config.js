@@ -132,6 +132,27 @@ add_task(async function a_remapped_key_applies_after_the_poll() {
   await resetConfig();
 });
 
+add_task(async function the_help_overlay_marks_and_lists_an_override() {
+  const tab = await openPage("help");
+  await writeConfig(`[keys]\nnew_tab = "prefix+t"`);
+  await until(() => ConfigHost.config?.keys.new_tab === "prefix+t", "the poll loads the file");
+  await focusContent(tab.linkedBrowser);
+  EventUtils.synthesizeKey("b", { ctrlKey: true });
+  EventUtils.synthesizeKey("?", { shiftKey: true });
+  const help = () => document.getElementById("vimma-help");
+  await until(() => !!help()?.open, "ctrl+b ? opens the overlay");
+  const row = (name) => help().querySelector(`[data-action="${name}"]`);
+  const part = (name, cls) => row(name).querySelector(`.vimma-help-${cls}`).textContent;
+  Assert.equal(part("new_tab", "override"), "*", "the overridden action is marked *");
+  Assert.stringContains(part("new_tab", "keys"), "prefix+t", "with the file's binding");
+  Assert.ok(!part("new_tab", "keys").includes("prefix+c"), "not the default one it replaced");
+  Assert.equal(part("close_tab", "override"), "", "a default binding is not marked");
+  EventUtils.synthesizeKey("KEY_Escape");
+  await until(() => !help()?.open, "Esc closes it");
+  BrowserTestUtils.removeTab(tab);
+  await resetConfig();
+});
+
 add_task(async function a_broken_line_keeps_the_old_config_and_shows_file_and_line() {
   const tab = await openPage("broken");
   await writeConfig(`[keys]\nnew_tab = "prefix+t"`);
