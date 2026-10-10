@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* The prefix+g goto and prefix+w workspace pickers (ui/picker.mjs): the help overlay's look
+/* The prefix+g goto, prefix+w workspace and prefix+e add-on pickers (ui/picker.mjs): the help overlay's look
    (help-overlay.css), theme tokens when the status bar has loaded them, legible system colours
    otherwise. */
 
@@ -83,6 +83,16 @@
   & .vimma-picker-active .vimma-picker-index {
     color: var(--vimma-accent, AccentColor);
     opacity: 1;
+  }
+
+  /* The add-on picker's disabled add-ons, and its "no add-ons" row. */
+  & .vimma-picker-disabled .vimma-picker-title {
+    opacity: 0.6;
+  }
+
+  & .vimma-picker-empty {
+    padding: 0.15rem 1.25rem;
+    opacity: 0.7;
   }
 
   & .vimma-picker-title,

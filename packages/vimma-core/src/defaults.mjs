@@ -74,6 +74,7 @@ const keys = {
   toggle_bookmarks: ["prefix+shift+b"],
   add_bookmark: ["prefix+a"],
   copy_mode: ["prefix+["],
+  addon_picker: ["prefix+e"],
 };
 
 const modal = {

@@ -36,7 +36,8 @@ import { graphemes } from "./textwidth.mjs";
  * @property {string} display        the name
  * @property {boolean} active        the window's active workspace
  */
-/** @typedef {PickerItem | WorkspaceItem} AnyItem */
+/** @import { AddonItem } from "./addons.mjs" */
+/** @typedef {PickerItem | WorkspaceItem | AddonItem} AnyItem */
 /** @typedef {"display" | "title" | "url" | "workspace"} Field */
 /** @typedef {[start: number, end: number]} Range */
 /** @typedef {{ tier: number, score: number, ranges: Range[] }} FieldMatch */
@@ -55,10 +56,24 @@ import { graphemes } from "./textwidth.mjs";
  * @property {number} selected  index into matches
  */
 /**
- * `select`: Enter on an item (a tab id or a workspace id); `move`: `m` on a workspace, the
- * current tab to go there.
- * @typedef {null | { type: "select" | "move", id: string } | { type: "close" }} PickerEffect
+ * `select`: Enter on an item (a tab, workspace or add-on id); `move`: `m` on a workspace, the
+ * current tab to go there; `addon`: one of an add-on's keys (docs/specs/addon-manager.md).
+ * @typedef {null | { type: "select" | "move", id: string } | { type: "close" }
+ *   | { type: "addon", op: AddonOp, id: string }} PickerEffect
  */
+/** @typedef {"options" | "toggle" | "remove" | "update" | "private"} AddonOp */
+
+/**
+ * The add-on picker's own keys in browse mode.
+ * @type {Readonly<Record<string, AddonOp>>}
+ */
+const ADDON_KEYS = Object.freeze({
+  o: "options",
+  x: "toggle",
+  d: "remove",
+  u: "update",
+  "shift+p": "private",
+});
 
 /**
  * Match tiers; each owns a score band [tier·1000, tier·1000 + 999]. `folded` (diacritics
@@ -267,16 +282,17 @@ function mergeRanges(a, b) {
 }
 
 /**
- * The id an item is selected by: a tab's, or a workspace's.
+ * The id an item is selected by: a tab's, a workspace's or an add-on's.
  * @param {AnyItem} item
  */
 export function itemId(item) {
-  return "kind" in item ? item.workspaceId : item.tabId;
+  if (!("kind" in item)) return item.tabId;
+  return item.kind === "addon" ? item.addonId : item.workspaceId;
 }
 
 /**
  * Every whitespace-separated term must match some field; per term the best field counts. A
- * workspace matches by its name only.
+ * workspace or an add-on matches by its name only.
  * @param {AnyItem} item
  * @param {string} query
  * @returns {Match | null}
@@ -443,7 +459,10 @@ function setQuery(s, query) {
  */
 function jumpSection(s, dir) {
   if (s.query.trim()) return s;
-  const ws = (/** @type {number} */ i) => s.matches[i]?.item.workspaceId;
+  const ws = (/** @type {number} */ i) => {
+    const item = s.matches[i]?.item;
+    return item && "workspaceId" in item ? item.workspaceId : undefined;
+  };
   const startOf = (/** @type {number} */ i) => {
     while (i > 0 && ws(i - 1) === ws(i)) i--;
     return i;
@@ -507,13 +526,20 @@ export function pickerKey(state, key) {
         return done(update(state, { mode: "search" }));
       case "m": {
         const m = pickerSelection(state);
-        return done(state, m && "kind" in m.item ? { type: "move", id: m.item.workspaceId } : null);
+        const ws = m && "kind" in m.item && m.item.kind === "workspace" ? m.item : null;
+        return done(state, ws ? { type: "move", id: ws.workspaceId } : null);
       }
       case "esc":
       case "q":
         return done(state, { type: "close" });
-      default:
+      default: {
+        const op = Object.hasOwn(ADDON_KEYS, key) ? ADDON_KEYS[key] : undefined;
+        const m = pickerSelection(state);
+        if (op && m && "kind" in m.item && m.item.kind === "addon") {
+          return done(state, { type: "addon", op, id: m.item.addonId });
+        }
         return done(state);
+      }
     }
   }
   switch (key) {
