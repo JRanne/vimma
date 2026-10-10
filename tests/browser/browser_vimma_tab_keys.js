@@ -216,7 +216,10 @@ add_task(async function unimplemented_prefix_action_shows_a_notice_that_hides() 
   prefix("o"); // history_back: withheld (head.js; toggle_sidebar was the example until M3 6)
   Assert.ok(noticeShown(), "ctrl+b o shows a notice");
   Assert.equal(notice().textContent, UNBUILT, "naming the action");
-  Assert.equal(notice().getAttribute("role"), "status", "announced politely");
+  // Through the notice's polite live region; the toast itself is aria-hidden (spec m7-a11y).
+  const live = document.getElementById("vimma-notice-live");
+  Assert.equal(live?.getAttribute("role"), "status", "announced politely");
+  await TestUtils.waitForCondition(() => live.textContent === UNBUILT, "the region says it");
   Assert.equal(document.activeElement, tabs[0].linkedBrowser, "the notice takes no focus");
   Assert.equal(gBrowser.tabs.length, count, "and nothing else happens");
   const shownAt = Date.now();

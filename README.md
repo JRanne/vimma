@@ -71,6 +71,9 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
   `about:vimma` shows the version and what is in force.
 - Omarchy theming: the bars, pickers, hints and start page follow your current theme, and
   switch at once when you change it (Tokyo Night without Omarchy).
+- Accessible: Vimma's own UI works with a screen reader, keeps focus where you left it, and its
+  text meets WCAG AA contrast in dark and light themes
+  ([guide](docs/guide.md#accessibility)).
 
 **Firefox underneath, with quieter defaults**
 

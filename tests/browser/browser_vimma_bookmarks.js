@@ -35,11 +35,11 @@ const isOpen = (win = window) =>
   !!panel(win) && !panel(win).hidden && BrowserTestUtils.isVisible(panel(win));
 const sidePanel = () => document.getElementById("vimma-panel");
 const sideOpen = () => !!sidePanel() && !sidePanel().hidden;
-const rows = (win = window) => [...(panel(win)?.querySelectorAll("[role=option]") ?? [])];
+const rows = (win = window) => [...(panel(win)?.querySelectorAll("[role=treeitem]") ?? [])];
 const title = (row) => row?.querySelector(".vimma-panel-title")?.textContent ?? "";
 const titles = (win = window) => rows(win).map(title);
 const selected = (win = window) =>
-  panel(win)?.querySelector("[role=option][aria-selected=true]") ?? null;
+  panel(win)?.querySelector("[role=treeitem][aria-selected=true]") ?? null;
 const noticeText = () => document.getElementById("vimma-notice")?.textContent ?? "";
 const promptEl = () => document.getElementById("vimma-rename");
 const promptInput = () => document.getElementById("vimma-rename-input");

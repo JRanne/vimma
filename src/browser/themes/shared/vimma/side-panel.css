@@ -41,7 +41,7 @@
   & .vimma-panel-neighbours,
   & .vimma-panel-hint {
     font-size: 0.85em;
-    opacity: 0.7;
+    color: var(--vimma-fg-dim, GrayText);
   }
 
   & .vimma-panel-neighbours {
@@ -71,12 +71,11 @@
   & .vimma-panel-number {
     font-family: var(--vimma-font, monospace);
     text-align: end;
-    opacity: 0.7;
+    color: var(--vimma-fg-dim, GrayText);
   }
 
   & .vimma-panel-active .vimma-panel-number {
-    color: var(--vimma-accent, AccentColor);
-    opacity: 1;
+    color: var(--vimma-text-accent, AccentColor);
   }
 
   & .vimma-panel-title,
@@ -89,19 +88,19 @@
   & .vimma-panel-host {
     grid-column: 2;
     font-size: 0.85em;
-    opacity: 0.7;
+    color: var(--vimma-fg-dim, GrayText);
   }
 
   & .vimma-panel-marks {
     grid-column: 3;
     grid-row: 1;
     font-size: 0.85em;
-    color: var(--vimma-yellow, inherit);
+    color: var(--vimma-text-yellow, inherit);
   }
 
   & .vimma-panel-empty {
     padding: 0.15rem 0.75rem;
-    opacity: 0.7;
+    color: var(--vimma-fg-dim, GrayText);
   }
 
   & .vimma-panel-hint {
@@ -117,7 +116,7 @@
   }
 
   & .vimma-bookmarks-twisty {
-    color: var(--vimma-accent, AccentColor);
+    color: var(--vimma-text-accent, AccentColor);
   }
 
   & .vimma-bookmarks-folder .vimma-panel-title {
@@ -127,7 +126,7 @@
   & .vimma-bookmarks-more {
     padding: 0.15rem 0.75rem;
     font-size: 0.85em;
-    opacity: 0.7;
+    color: var(--vimma-fg-dim, GrayText);
   }
 
   & .vimma-bookmarks-filter {

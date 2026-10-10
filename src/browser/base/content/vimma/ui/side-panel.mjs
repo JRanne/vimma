@@ -45,13 +45,15 @@ export class SidePanel {
     this.list = null;
     /** @type {PanelState | null} */
     this.state = null;
+    /** @type {Opener | null} focus before open, for close */
+    this.opener = null;
     this.onTabEvent = () => this.refresh();
     // Firefox moves focus to the page at the end of every tab switch (Tabbrowser.sys.mjs
     // _adjustFocusBeforeTabSwitch blurs chrome, AsyncTabSwitcher then focuses the browser), so a
     // switch made from the panel (ctrl+b ), prefix+c) would leave it without focus.
     this.onSwitchDone = () => {
       const el = this.win.document.activeElement;
-      if (this.isOpen && el?.localName === "browser") this.box?.focus();
+      if (this.isOpen && el?.localName === "browser") this.list?.focus();
     };
   }
 
@@ -65,13 +67,15 @@ export class SidePanel {
     const model = this.host.model();
     if (!model) return false;
     const box = this.box ?? this.build();
+    this.opener = rememberFocus(this.win);
     this.state = openPanel(model, this.host.info, { color: this.host.color() });
     this.render();
     box.hidden = false;
     const tabs = this.#tabContainer();
     for (const type of TAB_EVENTS) tabs?.addEventListener(type, this.onTabEvent);
     this.win.addEventListener("TabSwitchDone", this.onSwitchDone);
-    box.focus();
+    // The list, which carries aria-activedescendant (m7-a11y).
+    /** @type {HTMLElement} */ (this.list).focus();
     return true;
   }
 
@@ -91,15 +95,10 @@ export class SidePanel {
     for (const type of TAB_EVENTS) tabs?.removeEventListener(type, this.onTabEvent);
     this.win.removeEventListener("TabSwitchDone", this.onSwitchDone);
     const box = /** @type {HTMLElement} */ (this.box);
-    const doc = this.win.document;
-    const el = doc.activeElement;
-    const hadFocus = !el || el === doc.body || box.contains(el);
+    // Focus first, then hide: hiding the focused list would drop focus to the body.
+    giveFocusBack(this.win, box, this.opener);
+    this.opener = null;
     box.hidden = true;
-    if (hadFocus) {
-      /** @type {{ gBrowser?: { selectedBrowser: HTMLElement } }} */ (
-        /** @type {unknown} */ (this.win)
-      ).gBrowser?.selectedBrowser.focus();
-    }
   }
 
   /**
@@ -170,6 +169,7 @@ export class SidePanel {
     const { workspace: w } = state;
     const tokens = /** @type {Record<string, string>} */ (WORKSPACE_COLOR_TOKENS);
     const dot = el("span", "vimma-panel-dot", "●");
+    dot.setAttribute("aria-hidden", "true"); // the workspace's colour, nothing to read
     dot.style.color = `var(${(w.color && tokens[w.color]) || "--vimma-accent"})`;
     const neighbours =
       state.previous === null
@@ -201,7 +201,8 @@ export class SidePanel {
         return row;
       }),
     );
-    if (!state.rows.length) list.append(el("li", "vimma-panel-empty", "no tabs"));
+    if (!state.rows.length) list.append(emptyRow(doc, list, `${PANEL_ID}-empty`, "no tabs"));
+    else list.removeAttribute("aria-describedby");
     const current = list.children[state.selected];
     if (current && state.rows.length) {
       list.setAttribute("aria-activedescendant", current.id);
@@ -225,6 +226,63 @@ export class SidePanel {
     this.list = list;
     return box;
   }
+}
+
+/**
+ * @typedef {{ el: Element | null, tab: Element | null }} Opener  focus when a panel opened
+ * @typedef {{ selectedTab: Element, selectedBrowser: HTMLElement }} PanelTabs
+ */
+
+/** @param {Window} win */
+function tabsOf(win) {
+  return /** @type {{ gBrowser?: PanelTabs }} */ (/** @type {unknown} */ (win)).gBrowser;
+}
+
+/**
+ * Where focus is as a panel opens, to give it back when it closes (spec m7-a11y).
+ * @param {Window} win
+ * @returns {Opener}
+ */
+export function rememberFocus(win) {
+  return { el: Services.focus.focusedElement, tab: tabsOf(win)?.selectedTab ?? null };
+}
+
+/**
+ * Before a panel hides: when focus is in it, or nowhere, it goes back where it was when the
+ * panel opened; to the selected page instead after a tab switch (a row picked, ctrl+b c) or
+ * when that element is gone. Focus elsewhere (a click into the page) stays put.
+ * @param {Window} win
+ * @param {Element} box  the panel
+ * @param {Opener | null} opener
+ */
+export function giveFocusBack(win, box, opener) {
+  const doc = win.document;
+  const el = doc.activeElement;
+  if (el && el !== doc.body && !box.contains(el)) return;
+  const tabs = tabsOf(win);
+  const back = opener?.el;
+  if (back?.isConnected && !box.contains(back) && opener?.tab === tabs?.selectedTab) {
+    /** @type {HTMLElement} */ (back).focus();
+  } else {
+    tabs?.selectedBrowser.focus();
+  }
+}
+
+/**
+ * A line in a list that is not a row ("no tabs", "loading…"): no option or treeitem, so the list
+ * counts no row for it, and the list describes itself with it (m7-a11y).
+ * @param {Document} doc
+ * @param {HTMLElement} list
+ * @param {string} id
+ * @param {string} text
+ * @param {string} [className]
+ */
+export function emptyRow(doc, list, id, text, className = "vimma-panel-empty") {
+  const row = panelElement(doc, "li", className, text);
+  row.id = id;
+  row.setAttribute("role", "none");
+  list.setAttribute("aria-describedby", id);
+  return row;
 }
 
 /**
@@ -269,6 +327,8 @@ export function buildPanelBox(win, { id, label, hint }) {
   const header = panelElement(doc, "header", "vimma-panel-header");
   const list = panelElement(doc, "ul", "");
   list.setAttribute("role", "listbox");
+  // Focusable by script only: it carries aria-activedescendant; keys come through VimmaHost.
+  list.tabIndex = -1;
   const footer = panelElement(doc, "footer", "vimma-panel-hint", hint);
   box.append(header, list, footer);
   /** @type {Element} */ (doc.getElementById("browser")).prepend(box);

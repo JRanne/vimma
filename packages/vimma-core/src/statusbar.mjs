@@ -45,18 +45,18 @@ export { textWidth };
  * @property {FindStatus | null} [find]          the current `/` or `?` find (spec m1-find)
  */
 
-/** `[workspaces.<name>] color` (Firefox container colours) → theme token. */
+/** `[workspaces.<name>] color` (Firefox container colours) → its readable text token. */
 export const WORKSPACE_COLOR_TOKENS = Object.freeze({
   gray: "--vimma-fg-dim",
-  yellow: "--vimma-yellow",
-  orange: "--vimma-orange",
-  red: "--vimma-red",
-  pink: "--vimma-bright-magenta",
-  purple: "--vimma-magenta",
-  violet: "--vimma-bright-blue",
-  blue: "--vimma-blue",
-  cyan: "--vimma-cyan",
-  green: "--vimma-green",
+  yellow: "--vimma-text-yellow",
+  orange: "--vimma-text-orange",
+  red: "--vimma-text-red",
+  pink: "--vimma-text-bright-magenta",
+  purple: "--vimma-text-magenta",
+  violet: "--vimma-text-bright-blue",
+  blue: "--vimma-text-blue",
+  cyan: "--vimma-text-cyan",
+  green: "--vimma-text-green",
 });
 
 const ELLIPSIS = "…";
@@ -181,7 +181,7 @@ export function statusSegments(input) {
       seg({
         id: "workspace",
         text: `● ${workspace.index}:${workspace.name}`,
-        fg: (workspace.color && tokens[workspace.color]) || "--vimma-accent",
+        fg: (workspace.color && tokens[workspace.color]) || "--vimma-text-accent",
         priority: 3,
         min: 6,
         cut: "end",
@@ -227,7 +227,7 @@ export function statusSegments(input) {
       seg({
         id: "error",
         text: n > 1 ? `${n} errors: ${first}` : first,
-        fg: "--vimma-error",
+        fg: "--vimma-text-error",
         side: "right",
         priority: 2,
         min: 16,
@@ -240,7 +240,7 @@ export function statusSegments(input) {
       seg({
         id: "alert",
         text: alerts.join(" · "),
-        fg: "--vimma-error",
+        fg: "--vimma-text-error",
         side: "right",
         priority: 2,
         min: 16,
@@ -253,7 +253,7 @@ export function statusSegments(input) {
       seg({
         id: "find",
         text: findStatusText(find),
-        fg: find.notFound ? "--vimma-error" : "--vimma-fg-bright",
+        fg: find.notFound ? "--vimma-text-error" : "--vimma-fg-bright",
         side: "right",
         priority: 3,
         min: 8,
@@ -327,4 +327,43 @@ export function fitStatus(segments, width) {
  */
 export function renderStatusBar(input, width) {
   return fitStatus(statusSegments(input), width);
+}
+
+/**
+ * Modes whose own focused UI tells a screen reader where it is (the help dialog, the command
+ * line's combobox, a panel's list): the status bar does not say them again.
+ * @type {ReadonlySet<Mode>}
+ */
+const SELF_ANNOUNCING = new Set(["help", "command", "panel"]);
+
+/**
+ * What the status bar last said: the mode, and the failed search (page and query).
+ * @typedef {{ mode: Mode | null, notFound: string | null }} Announced
+ */
+
+/**
+ * What the status bar's polite live region says for `input` (spec m7-a11y), or null for
+ * nothing new. A mode is said once when it changes, except the modes in SELF_ANNOUNCING, which
+ * are skipped as if they never happened (so the way back from them is silent too). A search
+ * that found nothing is said once, when the line has closed. Titles and URLs are never said: a
+ * screen reader reads the bar on demand (role=status).
+ * @param {Announced} last
+ * @param {{ mode: Mode, find?: FindStatus | null, url?: string | null }} input
+ * @returns {{ text: string | null, last: Announced }}
+ */
+export function statusAnnouncement(last, { mode, find = null, url = null }) {
+  const parts = [];
+  let { mode: lastMode, notFound } = last;
+  if (!SELF_ANNOUNCING.has(mode) && mode !== lastMode) {
+    parts.push(`${mode} mode`);
+    lastMode = mode;
+  }
+  if (find?.notFound && mode !== "command") {
+    const key = `${url ?? ""}\n${find.query}`;
+    if (key !== notFound) parts.push(`Pattern not found: ${find.query}`);
+    notFound = key;
+  } else if (!find?.notFound) {
+    notFound = null;
+  }
+  return { text: parts.length ? parts.join(". ") : null, last: { mode: lastMode, notFound } };
 }

@@ -150,6 +150,8 @@ export class HelpOverlay {
     dialog.id = HELP_OVERLAY_ID;
     dialog.tabIndex = -1;
     dialog.setAttribute("aria-label", "Key bindings");
+    // showModal() makes it modal already; said out loud for older assistive tech (m7-a11y).
+    dialog.setAttribute("aria-modal", "true");
 
     const header = el("header");
     header.append(el("h1", "", "Key bindings"));

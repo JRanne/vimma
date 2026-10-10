@@ -387,6 +387,9 @@ before the repo goes public, narrow `mutate` in `stryker.config.mjs` or drop the
 on a failure. To halve it, run it on fewer nights (its `cron`) or lower `VIMMA_FUZZ_TIME_MS`.
 The seeded fuzz properties add a few seconds to each CI run, and compiling proptest about 10 s.
 
+`patch-audit.yml` (the quarterly patch audit, docs/rebase.md "Patch-size audit") runs two
+one-minute jobs four times a year: no npm or toolchain install, only the runner's `python3`.
+
 ### Mutation testing (`mutation.yml`)
 
 Plan §5: Stryker mutates `packages/vimma-core/src` (not `vendor/`) every Sunday and runs the core's

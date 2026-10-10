@@ -41,11 +41,11 @@ img {
 
 .hint {
   margin: 0;
-  color: var(--vimma-muted, #414868);
+  color: var(--vimma-fg-dim, #9197b2);
   font-size: 0.9rem;
 }
 
-/* the keys themselves in the text colour: --vimma-muted alone is too faint to read them by */
+/* the keys themselves in the text colour, a step brighter than the hint around them */
 kbd {
   font: inherit;
   color: var(--vimma-fg, #a9b1d6);

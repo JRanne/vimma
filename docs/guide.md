@@ -1185,6 +1185,38 @@ For workspaces ([m3-workspaces](specs/m3-workspaces.md)); each is a default you 
 - **Firefox Sync leaves two settings alone**: `browser.startup.page` and
   `privacy.userContext.enabled` (turning containers off deletes every workspace's data).
 
+## Accessibility
+
+Vimma's own parts (the status bar, the `ctrl+b ?` overlay, the pickers, the side and bookmarks
+panels, the command line, prompts and notices, the start page and about:vimma) work with a
+screen reader on top of Firefox's own accessibility support. On Linux that is Orca.
+
+- **What each part says.** The overlay and the pickers are dialogs, their lists listboxes, and
+  the bookmarks a tree with levels and open or closed folders; `j`/`k` move the focused row, so
+  the screen reader reads each one as you move. The command line is a combobox with its
+  completions, and an error in it is read at once. A y/N question is an alert dialog that reads
+  the question; a rename prompt reads what it asks for.
+- **Focus.** Each overlay, picker, panel and prompt takes focus when it opens and gives it back
+  where it was when it closes (to the page you switched to, if you picked a tab).
+- **What it announces, and what not.** The status bar is a status bar: your screen reader's
+  "read status bar" command reads the mode, tab, title and URL, or move to it as a status
+  element. It never announces titles or URLs as they change. It says the mode when it
+  changes into normal, insert, visual, hint or resize mode; help, command and panel mode are
+  said by the dialog, line or list that takes focus. "Pattern not found" is said once after a
+  search. Notices are read politely; errors (a blocked URL, an add-on or bookmark that failed)
+  are read at once. The same notice twice in a row is read once.
+- **Link hints** are labels drawn over the page, hidden from screen readers; hint mode is
+  announced. On a page with a screen reader, its own link navigation may serve better.
+- **Contrast.** All text Vimma draws reaches WCAG AA (4.5:1) in the built-in Tokyo Night and in
+  light themes: secondary and coloured text is darkened or lightened just enough on the
+  theme's backgrounds, so a theme keeps its colours where they already read. A `[theme.colors]`
+  foreground you set yourself is used as is, with a warning in about:vimma when it falls short.
+- **Motion.** Nothing in Vimma's own UI animates, so there is nothing for
+  `prefers-reduced-motion` to turn off.
+- **Every key is remappable** for motor needs: the prefix, the leader and any binding, including
+  one-key bindings that avoid chords and the `ctrl+b` prefix altogether. See
+  [Every key is yours](#every-key-is-yours) and [config.toml](#configtoml).
+
 ## FAQ and troubleshooting
 
 **Vimma says the profile was used by a newer version and refuses to start.** Profiles remember

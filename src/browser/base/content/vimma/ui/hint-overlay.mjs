@@ -40,6 +40,9 @@ export class HintOverlay {
     }
     const layer = /** @type {HTMLElement} */ (doc.createElementNS(HTML_NS, "div"));
     layer.id = HINT_OVERLAY_ID;
+    // Labels drawn over a page are a picture of where to type, thousands of them: out of the
+    // accessible tree. The status bar says "hint mode" (m7-a11y).
+    layer.setAttribute("aria-hidden", "true");
     // Content CSS pixels to chrome CSS pixels: the page's full zoom, from the parent, not
     // from content.
     const zoom = Number(browser.fullZoom) || 1;
