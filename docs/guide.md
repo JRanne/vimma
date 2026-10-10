@@ -125,11 +125,11 @@ more, so in a window with one pane `ctrl+w` still closes the tab. With a split, 
 normal mode waits for the pane key (`Esc` cancels); close the tab with `x` or `ctrl+b shift+x`. `g` starts `gg`, which works, so `g` is Vimma's: the page does not see it, and `Esc`
 cancels it.
 
-**A binding that does not work yet is never silent once it is Vimma's.** A `ctrl+b` sequence, or
-a count followed by a key (`3H`), whose command is not built yet shows "… not implemented yet"
-in the bottom-right corner for 1.5 s (not while a video or page is fullscreen). A single key
-that is not built yet (`r`, `ctrl+i`, …) is not Vimma's yet: it reaches the page or
-Firefox, with no message. The `ctrl+b ?` overlay dims the bindings that do not work yet.
+**Every default binding runs.** Should a future binding land before its command, it is never
+silent once it is Vimma's: a `ctrl+b` sequence, or a count followed by a key (`3H`), whose
+command is not built yet shows "… not implemented yet" in the bottom-right corner for 1.5 s
+(not while a video or page is fullscreen); a single key whose command is not built yet reaches
+the page or Firefox, with no message; and the `ctrl+b ?` overlay dims it.
 
 ### Link hints
 
@@ -263,6 +263,8 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `j` / `k`, `h` / `l`        | Normal mode: scroll down / up, left / right by a step. A count repeats: `3j`.                                                                                 |
 | `d` / `u`                   | Normal mode: scroll half a page down / up (`ctrl+u` is reserved for workspaces).                                                                              |
 | `gg` / `G`                  | Normal mode: go to the top / bottom of the page.                                                                                                              |
+| `H` / `L`                   | Normal mode: back / forward in the page's history (in a split, the focused pane's). A count moves that many pages, stopping at the first or last: `3H`.       |
+| `r`                         | Normal mode: reloads the page (in a split, the focused pane's). In insert mode `H`, `L` and `r` are typed into the field.                                     |
 | `i`                         | Normal mode: focus the first text field and enter insert mode.                                                                                                |
 | `f` / `F`                   | Normal mode: link hints. Type a label to follow it, or, with `F`, to open the link in a background tab. `Backspace` undoes a key, `Esc` cancels.              |
 | `/` / `?`                   | Normal mode: find in the page (below). `Enter` stays on the match, `Esc` goes back to where you were.                                                         |
@@ -323,11 +325,6 @@ nothing. `ctrl+b` keys still work in it. With one pane, `ctrl+b r` says so and d
 Without the mode, `ctrl+w >`, `ctrl+w <`, `ctrl+w +` and `ctrl+w -` resize by one step in
 normal mode (`3 ctrl+w >` by three), as in Vim. A config can rebind the mode's keys in
 `[modal.resize]`.
-
-**Planned:**
-
-- **Back, forward and reload** (`H`/`L`, `r`): bound, not built yet. Until then these keys
-  reach the page as before.
 
 ## Workspaces
 
@@ -813,8 +810,8 @@ Firefox. On GNOME or KDE with client-side decorations they move to the navigatio
 `space b`) opens Vimma's [bookmarks panel](#bookmarks), and `ctrl+b a` bookmarks the page.
 Firefox's Library (`ctrl+shift+o`) still works for the rest.
 
-**A binding says "not implemented yet".** Only the keys under [Keys](#keys) run today; the
-overlay dims the rest. See [Keys](#keys) for when each binding arrives.
+**A binding says "not implemented yet".** Every default binding runs now; the message is for
+a binding whose command is not built yet, which the overlay also dims.
 
 **Where are crash reports?** Nothing is sent anywhere. Use `coredumpctl list vimma`, then
 `coredumpctl info` on the entry.
