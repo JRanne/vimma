@@ -291,16 +291,22 @@ add_task(async function the_previous_workspace_survives_a_restore() {
   await ww(w2).ready;
   await until(() => !!ww(w2).model, "the second window has its workspaces");
   const restored = BrowserTestUtils.waitForEvent(w2, "SSWindowRestored");
+  // The restored page loads in a new content process, and the browser has the page's URI while
+  // it still holds the about:blank that load replaces: a spawn into that document fails with
+  // "Actor 'SpecialPowers' destroyed". Focus the page once SessionStore says the restore is done.
+  const pageBack = BrowserTestUtils.waitForEvent(
+    w2.gBrowser.tabContainer,
+    "SSTabRestored",
+    false,
+    (e) => e.target.linkedBrowser.currentURI.spec === `${PAGE}?prev-b`,
+  );
   SessionStore.setWindowState(w2, JSON.stringify({ windows: [winState] }), true);
   await restored;
   await TestUtils.waitForTick();
   await until(() => active(w2) === B.id, "B is active after the restore");
   Assert.equal(alternate(w2), M.id, "and main is still the previous workspace");
-  // The restored page loads in a new content process: focus it only once it has.
-  await until(
-    () => w2.gBrowser.selectedBrowser.currentURI.spec === `${PAGE}?prev-b`,
-    "the selected tab has its page back",
-  );
+  const { target: back } = await pageBack;
+  await until(() => w2.gBrowser.selectedTab === back, "the selected tab has its page back");
   await focusPage(w2);
   EventUtils.synthesizeKey("6", { ctrlKey: true, code: "Digit6" }, w2);
   await until(() => active(w2) === M.id, "ctrl+6 goes back to main in the restored window");
