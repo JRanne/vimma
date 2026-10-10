@@ -742,8 +742,8 @@ type reaches the page, and `ctrl+b` sequences still work.
 - **History.** `Up` / `Down` walk the lines you ran before, newest first. With text typed, `Up`
   recalls only lines that start with it, as in Vim. History lasts until Vimma quits; a private
   window keeps its own, forgotten when it closes.
-- `:open` and `:tabnew` refuse `javascript:` URLs, with a message. The line does not open over
-  a fullscreen page.
+- `:open` and `:tabnew` refuse `javascript:` and `data:` URLs (also behind `view-source:`), with a
+  message, as `p` does. The line does not open over a fullscreen page.
 - **Errors** show under the line, which stays open so you can fix it: `:tabnwe` says
   `not a command: "tabnwe"; did you mean :tabnew?`.
 - A command name can be shortened while it stays unique (`:tabr`, `:wsn`), and leading colons

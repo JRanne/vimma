@@ -6,6 +6,7 @@
 // tabs are hidden (m3-workspaces 2b), so `selectableTabs`, Firefox's visible tabs, is the
 // current workspace's (and pinned tabs, which every workspace shows).
 
+import { refusedScheme } from "../core/pageurl.mjs";
 import { tabTarget } from "../core/tabs.mjs";
 
 /** @import { Action } from "../core/dispatcher.mjs" */
@@ -84,28 +85,21 @@ export function selectTab(win, action) {
 /**
  * page.open (`:open text`) and `:tabnew text`: load what was typed as the URL bar would, through
  * URIFixup with keyword lookup (`allowThirdPartyFixup`: `example.com` gets a scheme, words go to
- * the default search engine; spec m1-cmdline, Settled).
+ * the default search engine; spec m1-cmdline, Settled). Every Vimma open that loads with the
+ * system principal comes through here, so `refusedScheme` (`p`'s check) refuses `javascript:`
+ * and `data:` first: Gecko lets a system-principal load put a `data:` page top-level (issue #98).
  * @param {Window} win
  * @param {string} text
  * @param {"current" | "tab"} where
- * @returns {boolean} false when refused (a `javascript:` URL)
+ * @returns {boolean} false when refused (a `javascript:` or `data:` URL); nothing is loaded
  */
 export function openUrl(win, text, where) {
-  if (isJavascriptUrl(text)) return false;
+  if (refusedScheme(text)) return false;
   /** @type {{ openTrustedLinkIn: (url: string, where: string, params: object) => void }} */ (
     /** @type {unknown} */ (win)
   ).openTrustedLinkIn(text, where, { allowThirdPartyFixup: true, inBackground: false });
   return true;
 }
 
-export const BLOCKED_URL_TEXT = "blocked: javascript: URLs can't be opened from the command line";
-
-/**
- * Whether `text` would load as a `javascript:` URL. The load would fail silently (and `"tab"`
- * would leave a blank tab), so the runners refuse it up front, with a notice. URL parsing drops
- * tabs and newlines and ignores case, so the check does too.
- * @param {string} text
- */
-export function isJavascriptUrl(text) {
-  return /^javascript:/i.test(text.replace(/[\t\n\r]/g, "").trim());
-}
+export const BLOCKED_URL_TEXT =
+  "blocked: javascript: and data: URLs can't be opened from the command line";

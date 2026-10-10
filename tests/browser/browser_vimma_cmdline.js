@@ -17,8 +17,13 @@ const { VimmaHost } = ChromeUtils.importESModule(
 const { completeCommandLine } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/core/cmdline.mjs",
 );
+const { SearchTestUtils } = ChromeUtils.importESModule(
+  "resource://testing-common/SearchTestUtils.sys.mjs",
+);
+SearchTestUtils.init(this);
 
 const PAGE = "https://example.org/";
+const BLOCKED = "blocked: javascript: and data: URLs can't be opened from the command line";
 const CMDLINE_ID = "vimma-cmdline";
 const INPUT_ID = "vimma-cmdline-input";
 const NOTICE_ID = "vimma-notice";
@@ -472,7 +477,7 @@ add_task(async function no_command_line_in_dom_fullscreen() {
 add_task(async function javascript_urls_are_blocked_with_a_notice() {
   const tabs = await openTabs(1);
   const count = gBrowser.tabs.length;
-  const blocked = "blocked: javascript: URLs can't be opened from the command line";
+  const blocked = BLOCKED;
   runCommand("tabnew javascript:void(0)");
   Assert.equal(document.getElementById(NOTICE_ID)?.textContent, blocked, ":tabnew says so");
   Assert.equal(gBrowser.tabs.length, count, "and leaves no blank tab");
@@ -482,5 +487,66 @@ add_task(async function javascript_urls_are_blocked_with_a_notice() {
   Assert.equal(document.getElementById(NOTICE_ID).textContent, blocked, ":open says so");
   Assert.equal(tabs[0].linkedBrowser.currentURI.spec, url, "and loads nothing");
   document.getElementById(NOTICE_ID).hidePopover();
+  closeTabs(tabs);
+});
+
+// Issue #98: :open and :tabnew load with the system principal, which Gecko lets navigate a
+// top-level tab to data:, so a pasted data:text/html page could pose as a login page.
+add_task(async function data_urls_are_blocked_with_a_notice() {
+  const tabs = await openTabs(1);
+  const browser = tabs[0].linkedBrowser;
+  const count = gBrowser.tabs.length;
+  const notice = () => document.getElementById(NOTICE_ID);
+  // An earlier task's notice keeps its text when hidden: only a shown one counts.
+  const says = () => noticeShown() && notice().textContent;
+  if (noticeShown()) notice().hidePopover();
+  runCommand("tabnew data:text/html,<h1>sign in</h1>");
+  Assert.equal(says(), BLOCKED, ":tabnew data: says so");
+  Assert.equal(gBrowser.tabs.length, count, "and opens no tab");
+  notice().hidePopover();
+
+  await focusContent(browser);
+  const url = browser.currentURI.spec;
+  for (const text of [
+    "data:text/html;base64,PGgxPnNpZ24gaW48L2gxPg==",
+    "  DaTa:text/plain,x",
+    "view-source:data:text/html,x",
+  ]) {
+    runCommand(`open ${text}`);
+    Assert.equal(says(), BLOCKED, `:open ${text} says so`);
+    notice().hidePopover();
+    await focusContent(browser);
+  }
+  Assert.equal(browser.currentURI.spec, url, "and :open loads nothing");
+  // A data: load in flight would commit before (or be cut off by) the next load, so one more
+  // :open and the history show whether any of them got in: one entry more, and not data:.
+  const history = browser.browsingContext.sessionHistory;
+  const entries = history.count;
+  const next = `${PAGE}?after`;
+  const loaded = BrowserTestUtils.browserLoaded(browser, false, next);
+  runCommand(`open ${next}`);
+  await loaded;
+  Assert.equal(history.count, entries + 1, "only the next :open added a history entry");
+  Assert.equal(history.getEntryAtIndex(history.count - 2).URI.spec, url, "after the page");
+  Assert.equal(gBrowser.tabs.length, count, "and no tab was opened");
+  closeTabs(tabs);
+});
+
+add_task(async function search_words_still_open_with_the_default_engine() {
+  await SearchTestUtils.installSearchExtension(
+    {
+      name: "VimmaCmdlineTest",
+      search_url: "https://example.com/search",
+      search_url_get_params: "q={searchTerms}",
+    },
+    { setAsDefault: true },
+  );
+  const tabs = await openTabs(1);
+  const browser = tabs[0].linkedBrowser;
+  const want = "https://example.com/search?q=learn+data%3A+urls";
+  const loaded = BrowserTestUtils.browserLoaded(browser, false, want);
+  runCommand("open learn data: urls");
+  await loaded;
+  Assert.equal(browser.currentURI.spec, want, "words that mention data: are a search");
   closeTabs(tabs);
 });

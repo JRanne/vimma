@@ -3,6 +3,7 @@ import {
   MAX_CLIPBOARD_CHARS,
   classifyClipboard,
   inputIndex,
+  refusedScheme,
   urlRoot,
   urlUp,
 } from "../src/pageurl.mjs";
@@ -203,6 +204,33 @@ describe("classifyClipboard (p, P)", () => {
   test("the cap applies after trimming", () => {
     const padded = `${" ".repeat(MAX_CLIPBOARD_CHARS)}example.com`;
     expect(classifyClipboard(padded)).toEqual({ kind: "url", text: "example.com" });
+  });
+});
+
+describe("refusedScheme (every Vimma open: p, :open, :tabnew)", () => {
+  test.each([
+    ["javascript:alert(1)", "javascript"],
+    [" JAVA\nSCRIPT:void(0)", "javascript"],
+    ["data:text/html,<h1>x</h1>", "data"],
+    ["DATA:text/html;base64,PHNjcmlwdD4=", "data"],
+    ["\u0001\u0000 data:text/plain,x", "data"],
+    ["da\tta:text/plain,x", "data"],
+    ["view-source:data:text/html,x", "data"],
+    ["VIEW-SOURCE:\u0001 view-source:javascript:1", "javascript"],
+  ])("refuses %j as %s", (text, scheme) => {
+    expect(refusedScheme(text)).toBe(scheme);
+  });
+
+  test.each([
+    "example.com",
+    "https://example.com/?q=data:x",
+    "view-source:https://example.com/",
+    "view-source:file:///home/u/.config/vimma/config.toml",
+    "about:vimma?tab=1#routes",
+    "? learn data: urls",
+    "learn data: urls",
+  ])("lets %j through", (text) => {
+    expect(refusedScheme(text)).toBeNull();
   });
 });
 

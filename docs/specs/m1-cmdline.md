@@ -126,7 +126,9 @@ completion list.
 - **`javascript:` URLs (review round 1)** are refused by `:open` and `:tabnew` before loading,
   with the notice "blocked: javascript: URLs can't be opened from the command line": the load
   failed silently and `:tabnew` left a blank tab. The check ignores case, surrounding space,
-  tabs and newlines, as URL parsing does.
+  tabs and newlines, as URL parsing does. Since issue #98 it is `p`'s check (`refusedScheme`)
+  and refuses `data:` too, also behind `view-source:`; the notice reads "blocked: javascript:
+  and data: URLs can't be opened from the command line".
 - **Verified:** core red 4 failed (`:help`, `:h`, `PENDING_ACTIONS`, `open_url`), green 1044/0
   (the `prefix+?` snapshot gains the `open_url` row). Browser red, host without the line: 20/26
   passed (": opens the command line - false == true", the page saw `[":", "z"]`, `:q` timed
