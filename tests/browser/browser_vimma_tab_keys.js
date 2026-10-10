@@ -213,7 +213,7 @@ add_task(async function tab_keys_work_from_about_preferences() {
 add_task(async function unimplemented_prefix_action_shows_a_notice_that_hides() {
   const tabs = await openTabs(1);
   const count = gBrowser.tabs.length;
-  prefix("o"); // history_back: not built yet (toggle_sidebar was the example until M3 6)
+  prefix("o"); // history_back: withheld (head.js; toggle_sidebar was the example until M3 6)
   Assert.ok(noticeShown(), "ctrl+b o shows a notice");
   Assert.equal(notice().textContent, UNBUILT, "naming the action");
   Assert.equal(notice().getAttribute("role"), "status", "announced politely");
@@ -229,12 +229,12 @@ add_task(async function unimplemented_prefix_action_shows_a_notice_that_hides() 
 
 add_task(async function passed_through_single_key_shows_no_notice() {
   const tabs = await openTabs(1);
-  EventUtils.synthesizeKey("r"); // reload: not built yet, so left to the page
+  EventUtils.synthesizeKey("H", { shiftKey: true }); // history.back: withheld (head.js), so the page's
   EventUtils.synthesizeKey("KEY_Escape"); // unbound in normal mode
   Assert.deepEqual(
     await pageKeysThenZ(tabs[0]),
-    ["r", "Escape", "z"],
-    "r and Esc reach the page, not default-prevented",
+    ["H", "Escape", "z"],
+    "H and Esc reach the page, not default-prevented",
   );
   Assert.ok(!noticeShown(), "and show no notice");
   closeTabs(tabs);
@@ -243,7 +243,7 @@ add_task(async function passed_through_single_key_shows_no_notice() {
 add_task(async function a_count_before_an_unbuilt_key_shows_the_notice() {
   const tabs = await openTabs(1);
   EventUtils.synthesizeKey("3");
-  EventUtils.synthesizeKey("H", { shiftKey: true }); // history.back: not built yet
+  EventUtils.synthesizeKey("H", { shiftKey: true }); // history.back: withheld (head.js)
   Assert.ok(noticeShown(), "3H shows a notice instead of vanishing");
   Assert.equal(notice().textContent, "Go back: not implemented yet", "naming the action");
   Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "the page saw neither 3 nor H");
