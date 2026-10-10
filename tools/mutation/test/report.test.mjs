@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -113,7 +113,7 @@ describe("report.mjs on the command line", () => {
     });
     expect(p.status).toBe(0);
     expect(p.stdout.toString()).toContain("### `packages/vimma-core/src/b.mjs` (2)");
-    expect(spawnSync("cat", [out]).stdout.toString()).toBe("score=57.14\nsurvivors=3\n");
+    expect(readFileSync(out, "utf8")).toBe("score=57.14\nsurvivors=3\n");
   });
 
   it("exits 2 when the report is missing", () => {
