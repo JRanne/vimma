@@ -31,6 +31,7 @@ import {
   swap as swapToward,
   toggleZoom,
 } from "../core/panes.mjs";
+import { arrange, dwindleDirection, layoutRefusal, nextLayout } from "../core/layouts.mjs";
 import { planSplit } from "../core/splitplan.mjs";
 import {
   applyLayout,
@@ -46,6 +47,7 @@ import {
  *   from "../core/panes.mjs"
  */
 /** @import { SplitPlan } from "../core/splitplan.mjs" */
+/** @import { LayoutName } from "../core/layouts.mjs" */
 
 /**
  * @typedef {Element & { linkedPanel: string, label: string, pinned: boolean, closing?: boolean,
@@ -79,6 +81,9 @@ export const PANE_VIEW_EVENTS = Object.freeze([
   ...SPLIT_EVENTS,
 ]);
 
+/** Dwindle's area while the content area has no size yet: wide, as most windows are. */
+const WIDE = Object.freeze({ x: 0, y: 0, width: 16, height: 9 });
+
 /** Tabs labelled for a11y by us (the third pane on; Firefox labels the first two). */
 const LABEL_ATTR = "vimma-pane-label";
 
@@ -94,6 +99,14 @@ export class PaneView {
   #panes = null;
   /** @type {number} config `[panes] max`, passed to core */
   #max;
+  /**
+   * config `[panes] layout`: where `newPane` (a pane without a direction) goes
+   * (docs/specs/tiling-layouts.md)
+   * @type {"dwindle" | "manual"}
+   */
+  mode;
+  /** @type {number} config `[panes] main_size` as a share: the main-* presets' main pane */
+  mainSize;
   /** @type {Wrapper | null} the split view this window's panes live in */
   #wrapper = null;
   /** @type {ResizeObserver | null} */
@@ -125,8 +138,11 @@ export class PaneView {
    * @param {{ max?: number }} [options]  `max`: config `[panes] max` (default: the config default)
    */
   constructor(win, { max = mergeWithDefaults({}).panes.max } = {}) {
+    const defaults = mergeWithDefaults({}).panes;
     this.#win = win;
     this.#max = max;
+    this.mode = defaults.layout;
+    this.mainSize = defaults.mainSize;
     loadSheet(win);
     // On the window: this runs before gBrowser exists (vimma.js), and tab events bubble to it.
     win.addEventListener("TabClose", this);
@@ -364,6 +380,52 @@ export class PaneView {
       });
     this.#set(split(current, current.focus, direction, fresh.linkedPanel, { max: this.#max }));
     return { ok: true };
+  }
+
+  /**
+   * A pane opened without a direction (`ctrl+b enter`, docs/specs/tiling-layouts.md): with
+   * `[panes] layout = "dwindle"` it splits the focused pane along its longer side on screen
+   * (side by side when at least as wide as tall), with `"manual"` to the right; then exactly as
+   * `split`.
+   * @param {{ tab?: Tab }} [options]
+   * @returns {PaneResult}
+   */
+  newPane(options = {}) {
+    const current = this.#panes ?? createPanes(gBrowserOf(this.#win).selectedTab.linkedPanel);
+    const direction =
+      this.mode === "manual" ? "vertical" : dwindleDirection(current, this.#area() ?? WIDE);
+    return this.split(direction, options);
+  }
+
+  /**
+   * Rearranges the panes into preset `name` (core's `arrange`): the same pages in a new tree,
+   * moved, never reloaded; focus stays, a zoom ends. One pane, or no space: refused with why.
+   * @param {LayoutName} name
+   * @returns {PaneResult}
+   */
+  arrange(name) {
+    if (!this.#panes) return { ok: false, reason: "only one pane" };
+    const options = { area: this.#area(), mainSize: this.mainSize };
+    const refusal = layoutRefusal(this.#panes, name, options);
+    if (refusal) return { ok: false, reason: refusal.message };
+    this.#set(arrange(this.#panes, name, options));
+    return { ok: true };
+  }
+
+  /**
+   * The preset after the last one applied (tmux's next-layout); the first without one.
+   * @returns {PaneResult & { layout?: LayoutName }}
+   */
+  nextLayout() {
+    if (!this.#panes) return { ok: false, reason: "only one pane" };
+    const name = nextLayout(this.#panes.layout);
+    return { ...this.arrange(name), layout: name };
+  }
+
+  /** The content area in px, or undefined while it has no size (dwindle then assumes wide). */
+  #area() {
+    const area = contentArea(this.#win);
+    return area.width > 0 && area.height > 0 ? area : undefined;
   }
 
   /**

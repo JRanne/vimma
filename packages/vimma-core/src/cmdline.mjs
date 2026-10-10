@@ -8,6 +8,7 @@
  */
 import { ACTIONS, closest, resolveActionName } from "./actions.mjs";
 import { scoreField } from "./picker.mjs";
+import { LAYOUTS } from "./layouts.mjs";
 
 /** @import { Action } from "./dispatcher.mjs" */
 
@@ -71,6 +72,10 @@ export const COMMANDS = Object.freeze([
   }),
   cmd("vsplit", "none", "pane.split_vertical", "Split right", { aliases: ["vs"] }),
   cmd("split", "none", "pane.split_horizontal", "Split down", { aliases: ["sp"] }),
+  // docs/specs/tiling-layouts.md: without a name the next preset, as ctrl+b space.
+  cmd("layout", "optional", "pane.next_layout", "Next layout, or the named one (Tab completes)", {
+    textAction: "pane.select_layout",
+  }),
   // `wsn`, as Vim's `:wsn[ext]`: the prefix was unique before `wsnew` came. The short aliases
   // follow Vim's buffer commands (`:b`, `:bn`, `:bp`, `:bd`, `:badd`, `:ls`; m3-workspaces).
   cmd("wsnext", "none", "workspace.next", "Next workspace", { aliases: ["wsn", "wn"] }),
@@ -286,11 +291,12 @@ const CANDIDATES = [
 
 /**
  * Commands that complete their argument: the list of names the host passes (its key in
- * `args`), and what a candidate says it is.
- * @type {Readonly<Record<string, { names: string, kind: string }>>}
+ * `args`), or a fixed list core knows (`fixed`), and what a candidate says it is.
+ * @type {Readonly<Record<string, { names: string, kind: string, fixed?: readonly string[] }>>}
  */
 const ARGUMENT_KINDS = Object.freeze({
   addon: { names: "addon", kind: "add-on" },
+  layout: { names: "layout", kind: "layout", fixed: LAYOUTS },
   workspace: { names: "workspace", kind: "workspace" },
   wsdelete: { names: "workspace", kind: "workspace" },
   wsmove: { names: "workspace", kind: "workspace" },
@@ -340,7 +346,8 @@ export function completeCommandLine(line, { limit = 20, args = {} } = {}) {
   if (m?.[2]) {
     const command = byWord.get(word)?.name;
     const spec = command && Object.hasOwn(ARGUMENT_KINDS, command) ? ARGUMENT_KINDS[command] : null;
-    const names = spec && Object.hasOwn(args, spec.names) ? args[spec.names] : undefined;
+    const names =
+      spec && Object.hasOwn(args, spec.names) ? args[spec.names] : (spec?.fixed ?? undefined);
     if (!spec || !names) return { word, candidates: [] };
     const text = rest.slice(/** @type {string} */ (m[1]).length + 1);
     return {
