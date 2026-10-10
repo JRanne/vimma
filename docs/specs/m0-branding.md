@@ -19,7 +19,9 @@ local or CI build picks this brand without anyone remembering a flag.
 - **Placeholder logo**: a plain "V" monogram on a dark rounded square, drawn as SVG paths
   (no font, no Mozilla artwork). Source `configs/branding/vimma/logo.svg` and
   `wordmark.svg`; `tools/branding/render.sh` renders every PNG/ICO with `rsvg-convert` and
-  ImageMagick. Replace when real artwork exists.
+  ImageMagick. Replace when real artwork exists. **Replaced 2026-10-10** by the owner's
+  window+V mark (`docs/assets/vimma-mark.png`, keyed transparent from the square logo);
+  `render.sh` now renders every icon from it, and `logo.svg`/`about-logo.svg` embed it as a PNG.
 - **Brand config** in `surfer.json`: `brands.vimma` with short/shorter/full name "Vimma",
   background colour and `release.displayVersion` (`0.1.0`, plan §7: `0.x` until M6).
 - **Brand selection by default**: `npm run import` runs `surfer config brand vimma` before
@@ -44,8 +46,8 @@ local or CI build picks this brand without anyone remembering a flag.
     `Vimma`.
   - Given a browser window, when reading `document.title`, then it ends with `Vimma`, not
     `Nightly` or `Firefox`.
-  - Given `chrome://branding/content/about-logo.svg`, when fetched, then it is our placeholder
-    (contains `vimma-placeholder`).
+  - Given `chrome://branding/content/about-logo.svg`, when fetched, then it is our mark
+    (contains `vimma-mark`; `vimma-placeholder` until the real logo, 2026-10-10).
   - Given an emptied bookmarks tree and `browser.bookmarks.restore_default_bookmarks`, when
     Places init is re-run, then `bookmarks-restore-success` fires, not `bookmarks-restore-failed`.
 - Given the default branch, then every pref the stock brands' `firefox-branding.js` define has a
