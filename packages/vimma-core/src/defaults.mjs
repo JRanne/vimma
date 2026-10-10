@@ -99,6 +99,7 @@ const modal = {
     n: "find.next",
     N: "find.previous",
     i: "mode.insert",
+    I: "urlbar.focus",
     v: "mode.visual",
     ":": "command.open",
     t: "tab.new",
@@ -161,6 +162,7 @@ const modal = {
     aw: "selection.a_word",
     y: "selection.yank",
     Y: "selection.yank_lines",
+    I: "urlbar.focus",
   },
   command: { "<Esc>": "command.cancel" },
   hint: { "<Esc>": "hint.cancel" },
@@ -173,6 +175,8 @@ const modal = {
     k: "panel.up",
     "<CR>": "panel.open",
     "<Esc>": "panel.close",
+    // Closes the panel, then focuses the address bar (as I does in normal mode).
+    I: "urlbar.focus",
     // The bookmarks panel (docs/specs/bookmarks.md), neo-tree's keys; nothing in the tabs panel.
     h: "bookmarks.collapse",
     l: "bookmarks.expand",

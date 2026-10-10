@@ -138,3 +138,32 @@ describe("normal-mode extras (yy, p, P, gi, gu, gU, gf)", () => {
     expect(compileKeymap().trie("normal").children.get("z")).toBeUndefined();
   });
 });
+
+describe("I focuses the address bar", () => {
+  /**
+   * The action one key reaches in `mode`, or undefined.
+   * @param {string} mode
+   * @param {string} key
+   */
+  const at = (mode, key) =>
+    compileKeymap()
+      .trie(/** @type {any} */ (mode))
+      .children.get(key)?.action?.id;
+
+  test.each(["normal", "visual", "panel"])("%s mode: I runs urlbar.focus", (mode) => {
+    expect(at(mode, "shift+i")).toBe("urlbar.focus");
+  });
+
+  test("insert mode leaves I to the text field", () => {
+    expect(at("insert", "shift+i")).toBeUndefined();
+  });
+
+  test("lower-case i keeps its own meaning", () => {
+    expect(at("normal", "i")).toBe("mode.insert");
+    expect(compileKeymap().trie("visual").children.get("i")?.children.has("w")).toBe(true);
+  });
+
+  test("the action is named focus_urlbar", () => {
+    expect(compileKeymap().bindingsFor("focus_urlbar")).toContain("I");
+  });
+});

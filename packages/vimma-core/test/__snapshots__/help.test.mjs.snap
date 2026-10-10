@@ -70,6 +70,7 @@ Navigation
   open_url             (unbound)                                         Open a URL or search in this tab
   url_up               gu                                                Go up a level in the URL path
   url_root             gU                                                Go to the site's root
+  focus_urlbar         I, I [visual], I [panel]                          Focus the address bar (as ctrl+l)
 
 Page
   yank_url             yy                                                Copy the page's URL
