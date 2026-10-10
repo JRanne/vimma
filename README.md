@@ -52,7 +52,7 @@ theme. Underneath it is Firefox (currently 157), so sites and add-ons work as th
 - Workspaces: each one is its own container, so logins and cookies stay apart. `ctrl+i` /
   `ctrl+u` switch, `ctrl+b w` picks one by name, and tabs move between them. Every workspace
   keeps its tabs and split layout across restarts.
-- Side panel: `ctrl+b b` (or `space n`) lists the workspace's tabs; pick one with `j`/`k`.
+- Side panel: `ctrl+b b` lists the workspace's tabs; pick one with `j`/`k`.
 - `ctrl+b ?` lists every binding, searchable.
 
 **Yours to configure**

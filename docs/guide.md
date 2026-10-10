@@ -7,13 +7,14 @@ in [limits.md](limits.md).
 ## Every key is yours
 
 The keys below are defaults, not decisions: every binding, the `ctrl+b` prefix and the `space`
-leader can be remapped in `~/.config/vimma/config.toml`. These three lines remap one key, move the
-prefix to `ctrl+a` and the leader to `,`:
+leader can be remapped in `~/.config/vimma/config.toml`. The leader has no default bindings; it
+is there for your own. These three lines remap one key, move the prefix to `ctrl+a` and the
+leader to `,`, and add a leader binding (`, n`) for the side panel:
 
 ```toml
-keys.new_tab = ["prefix+t"]   # new tab: prefix t instead of prefix c
-keys.prefix = "ctrl+a"        # the prefix, ctrl+b by default as in tmux
-modal.leader = ","            # the leader, space by default as in many Vim setups
+keys.prefix = "ctrl+a"                           # the prefix, ctrl+b by default as in tmux
+modal.leader = ","                               # the leader, space by default as in many Vim setups
+keys.toggle_sidebar = ["prefix+b", "<leader>n"]  # side panel: prefix b, and now also leader n
 ```
 
 Save the file and it applies within 2 seconds, without a restart. [config.toml](#configtoml) has the
@@ -111,7 +112,7 @@ in the URL bar, `about:` pages and the PDF viewer.
   in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page.
   `visual` is copy mode (caret and selection), `hint` is link hints, `help` the bindings overlay
   and `command` the `:` line, `resize` is resize mode for panes (`ctrl+b r`) and `panel` the side
-  panel (`<leader>n`).
+  panel (`ctrl+b b`).
 
 ### Normal and insert mode
 
@@ -328,7 +329,7 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `ctrl+b g`, `b`             | Opens the goto picker over the page (`b` in normal mode): every tab of the window ([below](#goto-picker-and-tab-rename)).                                     |
 | `ctrl+b shift+t`            | Renames the tab ([below](#goto-picker-and-tab-rename)); an empty name restores the page title.                                                                |
 | `ctrl+b a`                  | Bookmarks the page; type folders before its title: `work/docs/title` ([below](#bookmarks)).                                                                   |
-| `ctrl+b shift+b`, `space b` | Opens or closes the bookmarks panel ([below](#bookmarks)).                                                                                                    |
+| `ctrl+b shift+b`            | Opens or closes the bookmarks panel ([below](#bookmarks)).                                                                                                    |
 | `ctrl+b v` / `ctrl+b -`     | Splits the pane right / down. The new pane opens a new tab (the start page, URL bar focused). At most 4 panes (`[panes] max`); a refused split says why.      |
 | `ctrl+b h j k l`            | Focuses the pane left / below / above / right; when several touch, the one used last. `ctrl+w h j k l` in normal mode. The page of that pane gets focus.      |
 | `ctrl+b z`, `ctrl+w o`      | Zooms the pane to the whole window, or back. The other panes' pages pause. A pane focus key unzooms when it moves.                                            |
@@ -392,7 +393,7 @@ profile has one workspace, `main`; you make more as you need them (see
   around; `:workspace work` or `:workspace 2` goes to one by name or number. The status bar
   shows where you are (`● 2:work`).
 - `ctrl+b w` (or `:workspace` with no name) opens the [workspace picker](#workspace-picker).
-- `<leader>n` (space, then `n`), `ctrl+b b` or `:sidebar` opens the [side panel](#side-panel):
+- `ctrl+b b` or `:sidebar` opens the [side panel](#side-panel):
   the current workspace's tabs down the left of the window.
 - A window shows **one workspace at a time**: the other workspaces' tabs are hidden, not closed.
   Coming back selects the tab you left, and a split comes back with its panes laid out as
@@ -477,26 +478,26 @@ rename or close a workspace, use `ctrl+b shift+n`, `shift+w` and `shift+d`.
 
 ### Side panel
 
-`<leader>n`, `ctrl+b b` or `:sidebar` opens a panel on the left of the window. It is closed when
+`ctrl+b b` or `:sidebar` opens a panel on the left of the window. It is closed when
 Vimma starts and stays out of the way until you ask for it. Its head shows the workspace you are
 in (`● 2:work`, in the workspace's colour) and the ones `ctrl+u` and `ctrl+i` go to; below are
 the workspace's tabs, numbered, each with its name (or title) and its site. The tab you are on is
 highlighted and its number coloured; a tab playing sound shows `♪`, one from another container
 `foreign`.
 
-| Key                            | What it does                                               |
-| ------------------------------ | ---------------------------------------------------------- |
-| `j` / `k`                      | Move the highlight down / up.                              |
-| `Enter`                        | Go to the highlighted tab and close the panel.             |
-| `1` … `9`                      | Go to that row's tab and close the panel.                  |
-| `ctrl+i` / `ctrl+u`            | Switch workspace; the panel stays open and lists that one. |
-| `Esc`, `<leader>n`, `ctrl+b b` | Close the panel; the page has the keys again.              |
+| Key                 | What it does                                               |
+| ------------------- | ---------------------------------------------------------- |
+| `j` / `k`           | Move the highlight down / up.                              |
+| `Enter`             | Go to the highlighted tab and close the panel.             |
+| `1` … `9`           | Go to that row's tab and close the panel.                  |
+| `ctrl+i` / `ctrl+u` | Switch workspace; the panel stays open and lists that one. |
+| `Esc`, `ctrl+b b`   | Close the panel; the page has the keys again.              |
 
 While it is open, every other plain key is the panel's and never reaches the page; `ctrl+b`
 keys and `:` commands still work, and a tab you open meanwhile shows up in the list. The panel
 follows your Omarchy theme as the status bar does. Change its keys under `[modal.panel]` in
 `config.toml`; `[keys] toggle_sidebar` changes the keys that open it, and a `<leader>` binding
-there closes it too.
+you add there (`toggle_sidebar = ["prefix+b", "<leader>n"]`) closes it too.
 
 ### Routing: which workspace a link opens in
 
@@ -590,27 +591,27 @@ and the prompt changes to `move/rename:` with that path: edit it and press `Ente
 rename the bookmark, or `Esc` to leave it. Only `http`, `https`, `file` and `about:` pages can
 be bookmarked this way.
 
-**The bookmarks panel:** `ctrl+b shift+b`, `<leader>b` (`space b`) or `:bookmarks` opens your
+**The bookmarks panel:** `ctrl+b shift+b` or `:bookmarks` opens your
 bookmarks on the left, where the side panel opens; one of the two shows at a time. It works
 like neo-tree: the Bookmarks Menu's folders and bookmarks, with `toolbar` and `other` (and
 `mobile`, when you have some) as the first folders.
 
-| Key                                  | What it does                                                                              |
-| ------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `j` / `k`                            | Move down / up.                                                                           |
-| `l`                                  | Open the folder (again: go into it). On a bookmark: open it in this tab.                  |
-| `h`                                  | Close the folder; inside one, go to its folder and close that.                            |
-| `Enter`                              | Open the bookmark in this tab and close the panel; on a folder, open or close it.         |
-| `t`                                  | Open the bookmark in a new tab behind this one; the panel stays open for more.            |
-| `s` / `S`                            | Open it in a new pane right / below (as `ctrl+b v` / `-`, at most 4 panes).               |
-| `a`                                  | Add this page in the highlighted folder, as a path. As in neo-tree, `a/b/` makes folders. |
-| `A`                                  | Add a folder there.                                                                       |
-| `r`                                  | Rename.                                                                                   |
-| `m`                                  | Move to a folder: type its path (`Tab` completes); missing folders are made.              |
-| `d`                                  | Delete, after `y/N`. A folder says how many items go with it.                             |
-| `y`                                  | Copy the bookmark's address.                                                              |
-| `/`                                  | Filter every bookmark by title, address or folder, letters in order. `Enter` keeps it.    |
-| `Esc`, `ctrl+b shift+b`, `<leader>b` | Close the panel. With a filter, `Esc` clears it first.                                    |
+| Key                     | What it does                                                                              |
+| ----------------------- | ----------------------------------------------------------------------------------------- |
+| `j` / `k`               | Move down / up.                                                                           |
+| `l`                     | Open the folder (again: go into it). On a bookmark: open it in this tab.                  |
+| `h`                     | Close the folder; inside one, go to its folder and close that.                            |
+| `Enter`                 | Open the bookmark in this tab and close the panel; on a folder, open or close it.         |
+| `t`                     | Open the bookmark in a new tab behind this one; the panel stays open for more.            |
+| `s` / `S`               | Open it in a new pane right / below (as `ctrl+b v` / `-`, at most 4 panes).               |
+| `a`                     | Add this page in the highlighted folder, as a path. As in neo-tree, `a/b/` makes folders. |
+| `A`                     | Add a folder there.                                                                       |
+| `r`                     | Rename.                                                                                   |
+| `m`                     | Move to a folder: type its path (`Tab` completes); missing folders are made.              |
+| `d`                     | Delete, after `y/N`. A folder says how many items go with it.                             |
+| `y`                     | Copy the bookmark's address.                                                              |
+| `/`                     | Filter every bookmark by title, address or folder, letters in order. `Enter` keeps it.    |
+| `Esc`, `ctrl+b shift+b` | Close the panel. With a filter, `Esc` clears it first.                                    |
 
 A bookmark opens in your current workspace's container, and in a private window it stays
 private. `javascript:` and `data:` bookmarks (bookmarklets) are listed but do not open from
@@ -679,9 +680,9 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:wsnext`, `:wsprev`                  | Next / previous workspace, as `ctrl+i` / `ctrl+u`.                                                                              |
 | `:workspace name`, `:workspace 2`     | Switches to the workspace with that name, or that number in `ctrl+i` order.                                                     |
 | `:workspace`                          | Opens the workspace picker.                                                                                                     |
-| `:sidebar`                            | Opens or closes the side panel, as `<leader>n`.                                                                                 |
+| `:sidebar`                            | Opens or closes the side panel, as `ctrl+b b`.                                                                                  |
 | `:route`, `:route add`, `:route move` | Workspace routing rules: list them, add one for this site, move this tab ([Routing](#routing-which-workspace-a-link-opens-in)). |
-| `:bookmarks`                          | Opens or closes the [bookmarks panel](#bookmarks), as `<leader>b`.                                                              |
+| `:bookmarks`                          | Opens or closes the [bookmarks panel](#bookmarks), as `ctrl+b shift+b`.                                                         |
 | `:bookmark [path]`                    | Bookmarks the page under `path` (`work/docs/title`); without one, opens the prompt, as `ctrl+b a`.                              |
 | `:source`                             | Reads `config.toml` now instead of within 2 seconds (see [config.toml](#configtoml)).                                           |
 | `:source path`                        | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                                 |
@@ -938,8 +939,8 @@ strip, or move the "List all tabs" button to the toolbar in customize mode, or u
 **I don't see window controls.** On tiling window managers such as Hyprland there are none, as in
 Firefox. On GNOME or KDE with client-side decorations they move to the navigation bar.
 
-**Did `ctrl+b` stop opening bookmarks?** Yes, it is Vimma's prefix. `ctrl+b shift+b` (or
-`space b`) opens Vimma's [bookmarks panel](#bookmarks), and `ctrl+b a` bookmarks the page.
+**Did `ctrl+b` stop opening bookmarks?** Yes, it is Vimma's prefix. `ctrl+b shift+b`
+opens Vimma's [bookmarks panel](#bookmarks), and `ctrl+b a` bookmarks the page.
 Firefox's Library (`ctrl+shift+o`) still works for the rest.
 
 **A binding says "not implemented yet".** Every default binding runs now; the message is for

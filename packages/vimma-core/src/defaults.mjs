@@ -70,8 +70,8 @@ const keys = {
   rename_workspace: ["prefix+shift+w"],
   close_workspace: ["prefix+shift+d"],
   goto_picker: ["prefix+g"],
-  toggle_sidebar: ["prefix+b", "<leader>n"],
-  toggle_bookmarks: ["prefix+shift+b", "<leader>b"],
+  toggle_sidebar: ["prefix+b"],
+  toggle_bookmarks: ["prefix+shift+b"],
   add_bookmark: ["prefix+a"],
   copy_mode: ["prefix+["],
 };
