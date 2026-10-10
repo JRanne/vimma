@@ -45,6 +45,16 @@ describe("parseCommandLine: plan §2 commands", () => {
     [":wsprev", run("wsprev", "workspace.previous")],
     [":workspace", run("workspace", "workspace.picker")],
     [":workspace work", run("workspace", "workspace.switch", { text: "work" })],
+    // Sub-specs 4a/4b (m3-workspace-lifecycle, m3-workspace-move).
+    [":wsnew shop", run("wsnew", "workspace.new", { text: "shop" })],
+    [":wsnew", run("wsnew", "workspace.new")],
+    [":wsrename market", run("wsrename", "workspace.rename", { text: "market" })],
+    [":wsrename", run("wsrename", "workspace.rename")],
+    [":wsdelete", run("wsdelete", "workspace.close")],
+    [":wsdelete shop", run("wsdelete", "workspace.close", { text: "shop" })],
+    [":wsmove 2", run("wsmove", "workspace.move_tab", { text: "2" })],
+    [":wsmove", run("wsmove", "workspace.move_tab")],
+    [":move_to_workspace", run("move_to_workspace", "workspace.move_tab")],
     [":ls", run("ls", "goto.picker")],
     [":sidebar", run("sidebar", "sidebar.toggle")],
     [":map", run("map", "help.show")],
@@ -116,7 +126,14 @@ describe("parseCommandLine: actions, abbreviations, errors", () => {
   test(":ws is ambiguous and lists the candidates", () => {
     const r = parseCommandLine(":ws");
     expect(r.error.code).toBe("ambiguous-command");
-    expect([...r.error.suggestions].sort()).toEqual(["wsnext", "wsprev"]);
+    expect([...r.error.suggestions].sort()).toEqual([
+      "wsdelete",
+      "wsmove",
+      "wsnew",
+      "wsnext",
+      "wsprev",
+      "wsrename",
+    ]);
   });
 
   test(":tabnwe is unknown and suggests tabnew", () => {

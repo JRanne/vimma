@@ -50,6 +50,7 @@ Workspaces
   new_workspace        prefix+shift+n                                      New workspace
   rename_workspace     prefix+shift+w                                      Rename workspace
   close_workspace      prefix+shift+d                                      Close workspace
+  move_to_workspace    (unbound)                                           Move the tab to another workspace (reopens it there)
 
 Navigation
   goto_picker          prefix+g, b                                         Goto picker: every tab in every workspace

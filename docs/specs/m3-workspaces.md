@@ -1,8 +1,9 @@
 # Spec: m3-workspaces
 
 Status: research and plan; split into sub-specs (see Breakdown). Sub-specs 1 (store), 2a
-(routing) and 2b (switching) merged; sub-spec 3 (persistence) implemented, awaiting review (see
-Settled) ·
+(routing) and 2b (switching) merged; sub-spec 3 (persistence) implemented, awaiting review;
+4a (lifecycle) and 4b (move) implemented together, awaiting review, with the open items in their
+Settled section ·
 Milestone: M3 · Area: host
 (`src/browser/base/content/vimma/workspaces/`, `ui/`), four upstream patch files (five hunks)
 
@@ -855,6 +856,64 @@ dependency for 4b, 5 and parts of 4a.
   overwrite) is covered only by the gate's path through the same bracket; side effects waiting
   for `promiseAllWindowsRestored` and unpinning (decision 11) are still open. Parked pane trees
   are saved and restored but only the active workspace's layout is asserted.
+
+## Settled: sub-specs 4a and 4b, m3-workspace-lifecycle and m3-workspace-move (2026-10-10)
+
+- **Keys and commands.** `prefix+shift+n` / `:wsnew name`, `prefix+shift+w` / `:wsrename name`,
+  `prefix+shift+d` / `:wsdelete [name|number]`, and `:wsmove name|number` (action
+  `move_to_workspace`, `workspace.move_tab`, unbound: plan §2 binds no key). A key opens the
+  command line with its command typed (`wsrename <current name>`), as `switch_workspace` does;
+  no new text UI. `:wsn` stays `:wsnext` through an alias (Vim's `:wsn[ext]`), since `wsnew`
+  made the prefix ambiguous. The host side is `host/workspace-ops.mjs`.
+- **Core** (`workspacedefs.mjs`): `renameWorkspaceDefinition` (refuses a config workspace, whose
+  name is its `[workspaces]` key and what a reconcile matches by: rename it in `config.toml`),
+  `closeWorkspaceQuestion` (decision 7's texts) and `newWorkspaceLooks` (the first colour no
+  workspace uses, a circle).
+- **Store:** `newWorkspace(name)`, `renameWorkspace(id, name)` (updates the container's name too,
+  only while it is still ours: the startup check adopts by id and name), and
+  `closeWorkspace(id, { confirmed })`: a runtime workspace goes through `deleteWorkspace`
+  (container and site data), a config one only has `closeContainerTabs` (every window); the last
+  workspace stays. Every change notifies the windows, whose `#sync` (2b) applies it, so creating,
+  renaming and closing reach every window.
+- **The y/N question** reuses the rename prompt's line (`RenamePrompt.ask`): `y` (or `Y`) is yes,
+  any other key no. On yes, a window showing the workspace switches to the previous one first;
+  the store then closes it. A config workspace with no tabs is not asked about (notice).
+- **Move** (`WindowWorkspaces.moveTab`): out of the split first (`PaneView.close()` on the
+  focused pane keeps its tab; a wrapper not ours is `unsplitTabs()`), then `addTab` of the URL
+  in the target's container with `reopenInContainer`'s principal rules (a lazy tab's from
+  SessionStore), right after the original; `TabOpen` of that copy applies core's
+  `moveTab(s, old, target, { newTabId })` and hides it; the label (`setTabLabel`) and mute
+  (`toggleMuteAudio(muteReason)`) carry over; the original is removed. A workspace left empty
+  gets its home tab first, so the window stays where it was. Persistence needs nothing new: the
+  model change is saved by 3's `#save`, and the copy's `vimma-workspace` value is the target.
+- **Tests:** `browser_vimma_workspace_ops.js` (7 tasks): the last workspace refused; create by
+  key (cycling, bar, snapshot, home tab in the container, a taken name refused); rename by
+  command (bar, container, snapshot); close asks, `n` keeps, `y` deletes container and cookie
+  (after `clear-origin-attributes-data`), main's cookie stays; a config workspace keeps its
+  container and loses its tabs, and refuses a rename; move keeps label and mute, alpha loses it,
+  beta has it, the window stays; a split member leaves the split and moves by number. Red before
+  (8 failures), green after; whole `tests/browser/` suite green, `browser_vimma_workspace_restore.js`
+  included. `browser_vimma_help_overlay.js`: new/rename/close workspace rows are runnable now
+  (the not-yet examples are the picker and the side panel). Mutation check: not copying the label
+  fails "the label is kept".
+- **Review round 1 (PR #64):** the `y` stands for the workspace as asked about: its `source`,
+  name and container go to `closeWorkspace` (`asked`) and are checked again at the answer, so
+  a `config.toml` reload that made a config workspace runtime meanwhile refuses with `changed`
+  instead of deleting its data. `deleteWorkspace` returns `{ cleared }`; a container no longer
+  recognisably ours (renamed in Settings) keeps its tabs and data, and the notice says so.
+  New names of digits only are refused (`:wsmove 2` reads digits as a place; a file's existing
+  names and `[workspaces]` keys are not checked: config keeps accepting number-like names, which
+  `:wsmove 2` still reads as a place). Container 0 is never passed to `closeContainerTabs`. A
+  move's refusals all come before the tab leaves its split. A held key (`e.repeat`) is no answer.
+  Tests added: the default container's cookie survives a delete, only the deleted container's
+  `clear-origin-attributes-data` fires, Esc and Enter answer no, a config workspace with no tabs
+  is refused, moving a workspace's last tab opens its home tab, plus fixes 1-3 and 5 (red: 8
+  unexpected; green). Mutation check: reporting `cleared: true` always fails the kept-data test.
+- **Not done here:** a lazy background tab is moved by its saved URL in code but only the
+  selected tab can be moved (picker `m` is sub-spec 5, with the warning before the move; `:wsmove`
+  says afterwards that the history stayed behind). `contextual-identity-deleted` (a container
+  removed in Settings gets a new one) and the startup `privacy.userContext.enabled` status-bar
+  error from 4a's scope are still open.
 
 ## Out of scope
 

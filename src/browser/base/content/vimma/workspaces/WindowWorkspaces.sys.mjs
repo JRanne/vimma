@@ -24,6 +24,7 @@ import {
   createWorkspaces,
   deleteWorkspace,
   findWorkspace,
+  moveTab,
   nextWorkspace,
   openTab,
   previousWorkspace,
@@ -32,7 +33,7 @@ import {
   switchWorkspace,
   workspaceOfTab,
 } from "../core/workspaces.mjs";
-import { LABEL_EVENT, TAB_LABEL_KEY } from "../host/tab-labels.mjs";
+import { getTabLabel, LABEL_EVENT, setTabLabel, TAB_LABEL_KEY } from "../host/tab-labels.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { CHANGED_TOPIC, WorkspaceStore } from "./WorkspaceStore.sys.mjs";
 
@@ -43,6 +44,7 @@ import { CHANGED_TOPIC, WorkspaceStore } from "./WorkspaceStore.sys.mjs";
 
 const lazy = /** @type {any} */ ({});
 ChromeUtils.defineESModuleGetters(lazy, {
+  E10SUtils: "resource://gre/modules/E10SUtils.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
   SessionStore: "moz-src:///browser/components/sessionstore/SessionStore.sys.mjs",
 });
@@ -57,7 +59,8 @@ export const TAB_WORKSPACE_KEY = "vimma-workspace";
 /**
  * @typedef {Element & { linkedPanel: string | null, userContextId: number, pinned: boolean,
  *   hidden: boolean, closing?: boolean, selected: boolean,
- *   splitview: (Element & { splitViewId: number }) | null }} Tab
+ *   splitview: (Element & { splitViewId: number, unsplitTabs: () => void }) | null,
+ *   linkedBrowser: any }} Tab
  * @typedef {{ tabs: Tab[], visibleTabs: Tab[], selectedTab: Tab, hideTab: (t: Tab) => void,
  *   showTab: (t: Tab) => void, addTrustedTab: (url: string, options?: object) => Tab,
  *   insertBrowser: (t: Tab) => void }} TabBrowser
@@ -93,6 +96,15 @@ function mapTree(panes, fn) {
   return leaves(tree).length >= 2 ? { ...tree, root: walk(tree.root) } : null;
 }
 
+/**
+ * The refusal for a workspace the model does not have.
+ * @param {WorkspaceRef} ref
+ */
+function unknown(ref) {
+  const name = "name" in ref ? ref.name : "index" in ref ? String(ref.index) : ref.id;
+  return `no workspace "${name}"`;
+}
+
 export class WindowWorkspacesImpl {
   /** @type {Window & { gBrowser: TabBrowser, delayedStartupPromise?: Promise<void> }} */
   #win;
@@ -107,6 +119,9 @@ export class WindowWorkspacesImpl {
   /** @type {Map<string, Tab>} */
   #byId = new Map();
   #switching = false;
+  /** While moveTab opens the copy: the tab it replaces and the target workspace. */
+  /** @type {{ from: string, to: string } | null} */
+  #moving = null;
   /** Between SSWindowStateBusy and SSWindowStateReady: a restore is under way. */
   #pending = false;
   /** #start got as far as building (a Ready before that builds nothing). */
@@ -202,12 +217,89 @@ export class WindowWorkspacesImpl {
   switchTo(ref) {
     const model = this.#model;
     if (!model) return "no workspaces in this window";
-    if (!findWorkspace(model, ref)) {
-      const name = "name" in ref ? ref.name : "index" in ref ? String(ref.index) : ref.id;
-      return `no workspace "${name}"`;
-    }
+    if (!findWorkspace(model, ref)) return unknown(ref);
     this.#show(model, switchWorkspace(model, ref));
     return null;
+  }
+
+  /**
+   * Moves `tab` to workspace `ref` (decision 6, sub-spec 4b): reopens its URL in the target's
+   * container, as Firefox's "Reopen in Container" does (history, form data, scroll and POST
+   * data stay behind; the label and mute come along), then closes it. A tab in a split leaves
+   * the split first. The window stays in its workspace; one left empty gets its home tab.
+   * Returns why not, or null.
+   * @param {Tab} tab  the selected tab, or one outside any split
+   * @param {WorkspaceRef} ref
+   * @returns {string | null}
+   */
+  moveTab(tab, ref) {
+    const model = this.#model;
+    if (!model) return "no workspaces in this window";
+    const target = findWorkspace(model, ref);
+    if (!target) return unknown(ref);
+    const id = this.#idOf(tab);
+    const from = workspaceOfTab(model, id);
+    if (!from) return "this tab is in no workspace";
+    if (from.id === target.id && !this.#foreign.has(id)) return `already in "${target.name}"`;
+    const gBrowser = this.#gBrowser;
+    // Every refusal before anything changes: a refused move leaves the split as it was.
+    const userContextId = Number(target.container);
+    const principal = this.#principalFor(tab, userContextId);
+    if (!principal) return "this tab's page cannot be reopened";
+    const view = PaneViews.get(this.#win);
+    // Out of the split first: closing the focused pane keeps its tab (pane.close).
+    if (tab.splitview && tab.selected && view?.panes) view.close();
+    if (tab.splitview) tab.splitview.unsplitTabs();
+    if (from.id === model.active && from.tabs.length === 1) {
+      this.#openHome(from.id, Number(from.container));
+    }
+    const label = getTabLabel(tab);
+    /** @type {any} */
+    let fresh;
+    this.#moving = { from: id, to: target.id };
+    try {
+      fresh = /** @type {any} */ (gBrowser).addTab(tab.linkedBrowser.currentURI.spec, {
+        userContextId,
+        tabIndex: /** @type {any} */ (tab)._tPos + 1,
+        triggeringPrincipal: principal,
+        skipAnimation: true,
+      });
+    } finally {
+      this.#moving = null;
+    }
+    if (label) setTabLabel(fresh, label);
+    if (/** @type {any} */ (tab).muted && !fresh.muted) {
+      fresh.toggleMuteAudio(/** @type {any} */ (tab).muteReason);
+    }
+    /** @type {any} */ (gBrowser).removeTab(tab, { animate: false });
+    return null;
+  }
+
+  /**
+   * The principal that loads `tab`'s page in container `userContextId`: its content principal
+   * (a lazy tab's, from SessionStore) with the new container, a null principal for an opaque
+   * one, the system principal as is (about: and chrome: pages). From tab-context-menu.js's
+   * reopenInContainer.
+   * @param {Tab} tab
+   * @param {number} userContextId
+   */
+  #principalFor(tab, userContextId) {
+    const ssm = /** @type {any} */ (Services.scriptSecurityManager);
+    /** @type {any} */
+    let principal;
+    if (tab.linkedPanel) {
+      principal = tab.linkedBrowser.contentPrincipal;
+    } else {
+      try {
+        const state = JSON.parse(lazy.SessionStore.getTabState(tab));
+        principal = lazy.E10SUtils.deserializePrincipal(state.triggeringPrincipal_base64);
+      } catch {
+        return null;
+      }
+    }
+    if (!principal || principal.isNullPrincipal) return ssm.createNullPrincipal({ userContextId });
+    if (principal.isContentPrincipal) return ssm.principalWithOA(principal, { userContextId });
+    return principal;
   }
 
   /** ctrl+i; wraps. */
@@ -490,7 +582,21 @@ export class WindowWorkspacesImpl {
   /** @param {Tab} tab */
   #onOpen(tab) {
     if (tab.pinned) return;
-    this.#adopt(tab);
+    const moving = this.#moving;
+    const model = /** @type {Workspaces} */ (this.#model);
+    if (
+      moving &&
+      this.#owner(tab.userContextId)?.id === moving.to &&
+      workspaceOfTab(model, moving.from)?.id !== moving.to
+    ) {
+      // moveTab's copy: core's moveTab swaps the old id for the new one in the target. (A
+      // foreign tab reopened in its own workspace's container is simply adopted.)
+      this.#foreign.delete(moving.from);
+      this.#model = moveTab(model, moving.from, { id: moving.to }, { newTabId: this.#idOf(tab) });
+      if (moving.to !== model.active) this.#gBrowser.hideTab(tab);
+    } else {
+      this.#adopt(tab);
+    }
     this.#changed();
   }
 

@@ -7,11 +7,14 @@ import {
   DefinitionsError,
   addRuntimeWorkspace,
   canWriteDefinitions,
+  closeWorkspaceQuestion,
   emptyDefinitions,
+  newWorkspaceLooks,
   planContainers,
   readDefinitions,
   reconcileDefinitions,
   removeWorkspaceDefinition,
+  renameWorkspaceDefinition,
   setLastActive,
   withContainer,
 } from "../src/workspacedefs.mjs";
@@ -345,5 +348,71 @@ describe("runtime workspaces", () => {
     const { definitions, removed } = removeWorkspaceDefinition(d, "r");
     expect(removed.userContextId).toBe(12);
     expect(definitions.workspaces.map((w) => w.id)).toEqual(["ws-1"]);
+  });
+});
+
+// Sub-spec 4a (m3-workspace-lifecycle): rename, the close question, a new workspace's looks.
+describe("workspace lifecycle", () => {
+  const twoKinds = () => {
+    const d = reconcileDefinitions(emptyDefinitions(), [cfg("work")], minter()).definitions;
+    return withContainer(
+      addRuntimeWorkspace(d, { id: "r", name: "shop", color: "gray", icon: "circle" }),
+      "r",
+      12,
+    );
+  };
+
+  test("rename: a runtime workspace takes a valid, unused name", () => {
+    const d = twoKinds();
+    const renamed = renameWorkspaceDefinition(d, "r", "market");
+    expect(renamed.workspaces.map((w) => w.name)).toEqual(["work", "market"]);
+    expect(renamed.workspaces[1]?.userContextId).toBe(12);
+    expect(renameWorkspaceDefinition(d, "r", "shop")).toBe(d);
+    expect(defsError(() => renameWorkspaceDefinition(d, "r", "work")).code).toBe("duplicate-name");
+    expect(defsError(() => renameWorkspaceDefinition(d, "r", "")).code).toBe("bad-name");
+    expect(defsError(() => renameWorkspaceDefinition(d, "r", "x".repeat(33))).code).toBe(
+      "bad-name",
+    );
+    expect(defsError(() => renameWorkspaceDefinition(d, "zz", "a")).code).toBe("unknown-workspace");
+  });
+
+  test("a name of digits only is refused: `:wsmove 2` reads it as a place", () => {
+    const d = twoKinds();
+    for (const name of ["2", "10", "007"]) {
+      const added = defsError(() =>
+        addRuntimeWorkspace(d, { id: "n", name, color: "gray", icon: "circle" }),
+      );
+      expect(added.code).toBe("bad-name");
+      expect(added.message).toMatch(/digits/);
+      expect(defsError(() => renameWorkspaceDefinition(d, "r", name)).code).toBe("bad-name");
+    }
+    expect(renameWorkspaceDefinition(d, "r", "2nd").workspaces[1]?.name).toBe("2nd");
+  });
+
+  test("rename: a config workspace is renamed in config.toml, not here", () => {
+    const e = defsError(() => renameWorkspaceDefinition(twoKinds(), "ws-1", "job"));
+    expect(e.code).toBe("config-workspace");
+    expect(e.message).toContain("config.toml");
+  });
+
+  test("the close question says what goes: data for runtime ones, tabs only for config", () => {
+    const [work, shop] = twoKinds().workspaces;
+    expect(closeWorkspaceQuestion(/** @type {any} */ (shop), 4)).toBe(
+      'Close "shop" (4 tabs) and delete its cookies and site data? y/N',
+    );
+    expect(closeWorkspaceQuestion(/** @type {any} */ (shop), 1)).toBe(
+      'Close "shop" (1 tab) and delete its cookies and site data? y/N',
+    );
+    expect(closeWorkspaceQuestion(/** @type {any} */ (work), 2)).toBe(
+      'Close the 2 tabs of "work"? It stays, as it is in config.toml. y/N',
+    );
+  });
+
+  test("a new workspace takes the first colour no workspace uses, and a circle", () => {
+    const d = twoKinds(); // both gray
+    expect(newWorkspaceLooks(d)).toEqual({ color: "blue", icon: "circle" });
+    const blue = addRuntimeWorkspace(d, { id: "b", name: "b", color: "blue", icon: "circle" });
+    expect(newWorkspaceLooks(blue).color).toBe("green");
+    expect(newWorkspaceLooks(emptyDefinitions()).color).toBe("blue");
   });
 });

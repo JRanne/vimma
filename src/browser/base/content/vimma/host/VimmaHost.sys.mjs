@@ -42,6 +42,15 @@ import {
 import { PaneViews } from "../split/PaneView.mjs";
 import { leaves } from "../core/panes.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
+import {
+  NO_WORKSPACES,
+  activeWorkspaceName,
+  closeWorkspace,
+  moveTabToWorkspace,
+  newWorkspace,
+  renameWorkspace,
+  workspaceRef,
+} from "./workspace-ops.mjs";
 import { KeyLog } from "../about/key-log.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
@@ -132,8 +141,6 @@ function paneRunner(op) {
   };
 }
 
-const NO_WORKSPACES = "no workspaces in this window";
-
 /**
  * `workspace.switch`: by number (`:workspace 2`) or name (`:workspace work`); a key bound to
  * switch_workspace asks on the command line.
@@ -145,9 +152,27 @@ function switchWorkspace(s, text) {
     s.cmdline.open("workspace ");
     return;
   }
-  const ref = /^\d+$/.test(text) ? { index: Number(text) } : { name: text };
-  const refused = WindowWorkspaces.get(s.win)?.switchTo(ref) ?? NO_WORKSPACES;
+  const refused = WindowWorkspaces.get(s.win)?.switchTo(workspaceRef(text)) ?? NO_WORKSPACES;
   if (refused) s.notice.show(refused);
+}
+
+/**
+ * A workspace operation (workspace-ops.mjs) that takes the rest of a command line; without one
+ * (its key) it asks on the command line, starting with `prompt`.
+ * @param {(win: Window, text: string) => string | null} op
+ * @param {(win: Window) => string} prompt
+ * @returns {(state: WindowState, action: Action, text?: string) => void}
+ */
+function workspaceRunner(op, prompt) {
+  return (s, _a, text) => {
+    if (!text) {
+      s.cmdline.open(prompt(s.win));
+      return;
+    }
+    const said = op(s.win, text);
+    if (said) s.notice.show(said);
+    VimmaHost._emit(s);
+  };
 }
 
 /**
@@ -251,6 +276,23 @@ export const RUNNERS = Object.freeze({
   "workspace.previous": workspaceStep("previous"),
   "workspace.switch": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
     switchWorkspace(s, text),
+  // m3-workspaces 4a/4b: new, rename, close (asks y/N), move the tab (workspace-ops.mjs).
+  "workspace.new": workspaceRunner(newWorkspace, () => "wsnew "),
+  "workspace.rename": workspaceRunner(
+    renameWorkspace,
+    (win) => `wsrename ${activeWorkspaceName(win) ?? ""}`,
+  ),
+  "workspace.move_tab": workspaceRunner(moveTabToWorkspace, () => "wsmove "),
+  "workspace.close": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) => {
+    s.notice.hide();
+    const refused = closeWorkspace(
+      s.win,
+      text,
+      (question, yes) => s.rename.ask(question, yes),
+      (said) => s.notice.show(said),
+    );
+    if (refused) s.notice.show(refused);
+  },
   // `:source` (m5-config-load): ConfigHost reads config.toml now instead of at the next poll.
   "config.reload": () => Services.obs.notifyObservers(null, CONFIG_RELOAD_TOPIC),
 });
