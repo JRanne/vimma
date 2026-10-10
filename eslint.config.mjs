@@ -102,6 +102,11 @@ export default [
     languageOptions: { globals: { Components: "readonly", Cu: "readonly" } },
   },
   {
+    // The first run creates config.toml, but never under a test harness: Cu.isInAutomation.
+    files: ["src/**/vimma/config/ConfigHost.sys.mjs"],
+    languageOptions: { globals: { Cu: "readonly" } },
+  },
+  {
     // The -vimma-from command-line handler: the component registrar (workspace-routing).
     files: ["src/**/vimma/workspaces/WorkspaceRouter.sys.mjs"],
     languageOptions: { globals: { Components: "readonly" } },

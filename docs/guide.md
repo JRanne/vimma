@@ -71,6 +71,13 @@ Where Vimma keeps its files on Linux:
 | `~/.config/vimma/config.toml` | Your config (see [config.toml](#configtoml)). Vimma reads only this file there and never scans the folder. |
 | `~/.config/vimma/vimma/`      | Profiles and `profiles.ini`. If `~/.vimma/vimma/` already exists, Firefox's legacy rule uses that instead. |
 
+On a profile's first launch, if `~/.config/vimma/config.toml` does not exist, Vimma creates it
+from the same commented template `:config` writes, so it changes nothing until you uncomment a
+line, and the status bar says `created ~/.config/vimma/config.toml` once. An existing file, even an
+empty one, and the rest of `~/.config/vimma/` (key files, the `vimma/` profiles folder) are left
+alone. A file you delete later stays deleted. The packaged builds do the same on their first
+launch. Nothing is created when `vimma.config.path` points Vimma at another file.
+
 On first launch you see Firefox's interface without the tab strip: the window starts with the
 navigation bar and URL bar at the top, and Vimma's status bar at the bottom. Press `ctrl+b`, then
 `?`, to see the bindings.
@@ -727,9 +734,11 @@ Vimma's own preferences today:
 ## config.toml
 
 Vimma reads `~/.config/vimma/config.toml` (`$XDG_CONFIG_HOME/vimma/config.toml` when that is
-set), and nothing else in that folder. No file means the defaults. Vimma writes it only when you
-type `:config` and it does not exist yet: it then creates it (and its folder) with every default
-commented out, and opens it in a tab. An existing file is never written. A small example:
+set), and nothing else in that folder. No file means the defaults. Vimma creates it, with every
+default commented out under a short header on how to edit it, in two cases: on a profile's first
+run, and when you type `:config` (which then opens it in a tab). The folder is created mode 0700
+if it is missing, and the file mode 0600, since it can name intranet hosts. An existing file,
+even an empty one, is never written; `:route add` only appends to it. A small example:
 
 ```toml
 schema = 2
