@@ -36,6 +36,13 @@ const APP = "vimma";
 const DESCRIPTION =
   "Keyboard-first web browser built on Firefox, with Neovim-style modes and a tmux-style prefix keymap";
 
+/**
+ * vimma-open, the desktop entry's launcher: it names the app that opened a link for `[[routes]]`
+ * rules (spec workspace-routing). Installed as `vimma-open` next to the `vimma` binary.
+ */
+export const LAUNCHER = fileURLToPath(new URL("vimma-open.sh", import.meta.url));
+const LAUNCHER_NAME = `${APP}-open`;
+
 /** GNU LGPL 2.1 text (gnu.org/licenses/old-licenses/lgpl-2.1.txt), for the AppImage runtime. */
 const LGPL_TEXT = fileURLToPath(new URL("notices/LGPL-2.1.txt", import.meta.url));
 
@@ -257,7 +264,8 @@ export function desktopEntry({ wmClass }) {
     "Name=Vimma",
     "GenericName=Web Browser",
     "Comment=Browse the web from the keyboard",
-    `Exec=${APP} %u`,
+    // vimma-open walks /proc to the app that opened the link (spec workspace-routing).
+    `Exec=${LAUNCHER_NAME} %u`,
     `Icon=${APP}`,
     "Terminal=false",
     "StartupNotify=true",
@@ -329,7 +337,8 @@ export function appRun() {
     '# "Make default browser" and remoting record the .AppImage, not the temporary mount.',
     "# Set only when the AppImage runtime started us ($APPIMAGE), never to an empty value.",
     'if [ -n "${APPIMAGE:-}" ]; then export MOZ_APP_LAUNCHER="$APPIMAGE"; fi',
-    `exec "$HERE/usr/lib/${APP}/${APP}" "$@"`,
+    "# Through vimma-open, which names the app that opened a link (spec workspace-routing).",
+    `exec "$HERE/usr/lib/${APP}/${LAUNCHER_NAME}" "$@"`,
     "",
   ].join("\n");
 }
@@ -401,7 +410,7 @@ License: MPL-2.0
 
 /**
  * @typedef {{ version: string, maintainer: string, repo: string, tarballSha256: string,
- *   desktopSha256: string, desktopId: string }} AurInput
+ *   desktopSha256: string, desktopId: string, launcherSha256: string }} AurInput
  */
 
 const AUR_DEPENDS = [
@@ -450,14 +459,18 @@ provides=('${APP}')
 conflicts=('${APP}')
 options=('!strip' '!debug')
 source=("${APP}-\${pkgver}-linux-x86_64.tar.xz::https://github.com/${input.repo}/releases/download/v\${pkgver}/${APP}-\${pkgver}-linux-x86_64.tar.xz"
-        '${input.desktopId}.desktop')
+        '${input.desktopId}.desktop'
+        '${LAUNCHER_NAME}')
 sha256sums=('${input.tarballSha256}'
-            '${input.desktopSha256}')
+            '${input.desktopSha256}'
+            '${input.launcherSha256}')
 
 package() {
   install -d "$pkgdir/opt" "$pkgdir/usr/bin"
   cp -a "$srcdir/${APP}" "$pkgdir/opt/${APP}"
   ln -s /opt/${APP}/${APP} "$pkgdir/usr/bin/${APP}"
+  install -Dm755 "$srcdir/${LAUNCHER_NAME}" "$pkgdir/opt/${APP}/${LAUNCHER_NAME}"
+  ln -s /opt/${APP}/${LAUNCHER_NAME} "$pkgdir/usr/bin/${LAUNCHER_NAME}"
   install -Dm644 "$srcdir/${input.desktopId}.desktop" \\
     "$pkgdir/usr/share/applications/${input.desktopId}.desktop"
   local size
@@ -491,8 +504,10 @@ export function srcinfo(input) {
     ["options", "!debug"],
     ["source", `${file}::${url}`],
     ["source", `${input.desktopId}.desktop`],
+    ["source", LAUNCHER_NAME],
     ["sha256sums", input.tarballSha256],
     ["sha256sums", input.desktopSha256],
+    ["sha256sums", input.launcherSha256],
   ];
   const body = fields.map(([key, value]) => `\t${key} = ${value}`).join("\n");
   return `pkgbase = ${APP}-bin\n${body}\n\npkgname = ${APP}-bin\n`;
@@ -531,6 +546,12 @@ function installFile(from, to) {
   mkdirSync(dirname(to), { recursive: true, mode: 0o755 });
   copyFileSync(from, to);
   chmodSync(to, 0o644);
+}
+
+/** @param {string} to  where vimma-open goes, executable */
+function installLauncher(to) {
+  installFile(LAUNCHER, to);
+  chmodSync(to, 0o755);
 }
 
 /**
@@ -632,6 +653,7 @@ export function packageRelease(options) {
   rmSync(appDir, { recursive: true, force: true });
   mkdirSync(appDir, { recursive: true, mode: 0o755 });
   copyApp(app, join(appDir, `usr/lib/${APP}`));
+  installLauncher(join(appDir, `usr/lib/${APP}/${LAUNCHER_NAME}`));
   installShare(appDir, options.brandDir, desktop, desktopId);
   writeFile(join(appDir, "AppRun"), appRun(), 0o755);
   writeFile(join(appDir, `${desktopId}.desktop`), desktop);
@@ -658,6 +680,8 @@ export function packageRelease(options) {
   installShare(debRoot, options.brandDir, desktop, desktopId);
   mkdirSync(join(debRoot, "usr/bin"), { recursive: true, mode: 0o755 });
   symlinkSync(`../lib/${APP}/${APP}`, join(debRoot, `usr/bin/${APP}`));
+  installLauncher(join(debRoot, `usr/lib/${APP}/${LAUNCHER_NAME}`));
+  symlinkSync(`../lib/${APP}/${LAUNCHER_NAME}`, join(debRoot, `usr/bin/${LAUNCHER_NAME}`));
   writeFile(join(debRoot, `usr/share/doc/${APP}/copyright`), COPYRIGHT);
   const size = installedKiB(debRoot);
   mkdirSync(join(debRoot, "DEBIAN"), { mode: 0o755 });
@@ -687,6 +711,7 @@ export function packageRelease(options) {
   rmSync(aurDir, { recursive: true, force: true });
   if (!version.includes("-")) {
     writeFile(join(aurDir, `${desktopId}.desktop`), desktop);
+    installLauncher(join(aurDir, LAUNCHER_NAME));
     const aur = {
       version,
       maintainer: options.maintainer,
@@ -694,6 +719,7 @@ export function packageRelease(options) {
       tarballSha256: sha256File(tarball),
       desktopSha256: sha256File(join(aurDir, `${desktopId}.desktop`)),
       desktopId,
+      launcherSha256: sha256File(join(aurDir, LAUNCHER_NAME)),
     };
     writeFile(join(aurDir, "PKGBUILD"), pkgbuild(aur));
     writeFile(join(aurDir, ".SRCINFO"), srcinfo(aur));

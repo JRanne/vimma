@@ -3,6 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -24,6 +25,7 @@ import {
   debVersion,
   desktopEntry,
   ICON_SIZES,
+  LAUNCHER,
   packageRelease,
   parseIni,
   pkgbuild,
@@ -169,7 +171,8 @@ describe("desktop entry", () => {
     expect(text.startsWith("[Desktop Entry]\n")).toBe(true);
     expect(text).toMatch(/^Type=Application$/m);
     expect(text).toMatch(/^Name=Vimma$/m);
-    expect(text).toMatch(/^Exec=vimma %u$/m);
+    // vimma-open names the app that opened a link (spec workspace-routing).
+    expect(text).toMatch(/^Exec=vimma-open %u$/m);
     expect(text).toMatch(/^Icon=vimma$/m);
     expect(text).toMatch(/^StartupWMClass=vimma-vimma$/m);
     expect(text).toMatch(/^Categories=Network;WebBrowser;$/m);
@@ -195,7 +198,7 @@ describe("desktop entry", () => {
 
   it("flags a missing key, an unterminated list and an action without a group", () => {
     const broken = text
-      .replace(/^Exec=vimma %u\n/m, "")
+      .replace(/^Exec=vimma-open %u\n/m, "")
       .replace("Categories=Network;WebBrowser;", "Categories=Network;WebBrowser")
       .replace(/\[Desktop Action new-window\][^[]*/, "");
     const errors = checkDesktopEntry(broken).join("\n");
@@ -226,6 +229,8 @@ describe("AppRun", () => {
     const dir = mkdtempSync(join(tmpdir(), "vimma-apprun-"));
     mkdirSync(join(dir, "usr/lib/vimma"), { recursive: true });
     writeFileSync(join(dir, "AppRun"), script);
+    copyFileSync(LAUNCHER, join(dir, "usr/lib/vimma/vimma-open"));
+    chmodSync(join(dir, "usr/lib/vimma/vimma-open"), 0o755);
     writeFileSync(
       join(dir, "usr/lib/vimma/vimma"),
       '#!/bin/sh\necho "launcher=${MOZ_APP_LAUNCHER-unset} legacy=$MOZ_LEGACY_PROFILES"\n',
@@ -242,7 +247,7 @@ describe("AppRun", () => {
         encoding: "utf8",
       }),
     ).toBe("launcher=/x/v.AppImage legacy=1\n");
-    expect(script).toMatch(/exec "\$HERE\/usr\/lib\/vimma\/vimma" "\$@"/);
+    expect(script).toMatch(/exec "\$HERE\/usr\/lib\/vimma\/vimma-open" "\$@"/);
   });
   it("is valid sh", () => {
     expect(spawnSync("sh", ["-n"], { input: script }).status).toBe(0);
@@ -282,6 +287,7 @@ describe("PKGBUILD and .SRCINFO", () => {
     tarballSha256: "a".repeat(64),
     desktopSha256: "b".repeat(64),
     desktopId: "vimma-vimma",
+    launcherSha256: "c".repeat(64),
   };
   const build = pkgbuild(input);
   const info = srcinfo(input);
@@ -295,7 +301,9 @@ describe("PKGBUILD and .SRCINFO", () => {
     expect(build).toContain(
       "https://github.com/JRanne/vimma/releases/download/v${pkgver}/vimma-${pkgver}-linux-x86_64.tar.xz",
     );
-    expect(build).toContain(`sha256sums=('${"a".repeat(64)}'\n            '${"b".repeat(64)}')`);
+    expect(build).toContain(
+      `sha256sums=('${"a".repeat(64)}'\n            '${"b".repeat(64)}'\n            '${"c".repeat(64)}')`,
+    );
   });
 
   it("is valid bash", () => {
@@ -306,6 +314,12 @@ describe("PKGBUILD and .SRCINFO", () => {
     expect(build).toContain("'vimma-vimma.desktop'");
     expect(build).toContain('"$pkgdir/usr/share/applications/vimma-vimma.desktop"');
     expect(info).toContain("\tsource = vimma-vimma.desktop\n");
+  });
+
+  it("installs vimma-open next to vimma and on PATH", () => {
+    expect(build).toContain('install -Dm755 "$srcdir/vimma-open" "$pkgdir/opt/vimma/vimma-open"');
+    expect(build).toContain('ln -s /opt/vimma/vimma-open "$pkgdir/usr/bin/vimma-open"');
+    expect(info).toContain("\tsource = vimma-open\n");
   });
 
   it("refuses a pre-release: the AUR gets releases only", () => {
@@ -321,7 +335,9 @@ describe("PKGBUILD and .SRCINFO", () => {
     expect(info).toContain(
       "\tsource = vimma-0.1.0-linux-x86_64.tar.xz::https://github.com/JRanne/vimma/releases/download/v0.1.0/vimma-0.1.0-linux-x86_64.tar.xz\n",
     );
-    expect(info).toContain(`\tsha256sums = ${"a".repeat(64)}\n\tsha256sums = ${"b".repeat(64)}\n`);
+    expect(info).toContain(
+      `\tsha256sums = ${"a".repeat(64)}\n\tsha256sums = ${"b".repeat(64)}\n\tsha256sums = ${"c".repeat(64)}\n`,
+    );
     expect(info).toMatch(/\npkgname = vimma-bin\n$/);
   });
 
@@ -391,6 +407,8 @@ describe("packageRelease on a fake ./mach package tarball", () => {
       readFileSync(join(BRAND_DIR, "logo256.png")),
     );
     expect(mode(join(app, "usr/lib/vimma/vimma"))).toBe(0o755);
+    expect(mode(join(app, "usr/lib/vimma/vimma-open"))).toBe(0o755);
+    expect(readFileSync(join(app, "usr/lib/vimma/vimma-open"))).toEqual(readFileSync(LAUNCHER));
     expect(mode(join(app, "usr/lib/vimma/libxul.so"))).toBe(0o755);
     expect(mode(join(app, "usr/lib/vimma/omni.ja"))).toBe(0o644);
     expect(existsSync(join(app, "usr/share/applications/vimma-vimma.desktop"))).toBe(true);
@@ -446,6 +464,8 @@ describe("packageRelease on a fake ./mach package tarball", () => {
     expect(lstatSync(join(root, "usr/bin/vimma")).isSymbolicLink()).toBe(true);
     expect(readlinkSync(join(root, "usr/bin/vimma"))).toBe("../lib/vimma/vimma");
     expect(mode(join(root, "usr/lib/vimma/vimma"))).toBe(0o755);
+    expect(readlinkSync(join(root, "usr/bin/vimma-open"))).toBe("../lib/vimma/vimma-open");
+    expect(mode(join(root, "usr/lib/vimma/vimma-open"))).toBe(0o755);
     expect(existsSync(join(root, "usr/share/applications/vimma-vimma.desktop"))).toBe(true);
     expect(existsSync(join(root, "usr/share/icons/hicolor/512x512/apps/vimma.png"))).toBe(true);
     expect(readFileSync(join(root, "usr/share/doc/vimma/copyright"), "utf8")).toMatch(/MPL-2\.0/);
@@ -470,8 +490,12 @@ describe("packageRelease on a fake ./mach package tarball", () => {
     const aur = result.aurDir;
     const tarSum = sha256(readFileSync(join(out, "vimma-0.1.0-linux-x86_64.tar.xz")));
     const desktopSum = sha256(readFileSync(join(aur, "vimma-vimma.desktop")));
+    const launcherSum = sha256(readFileSync(LAUNCHER));
     const build = readFileSync(join(aur, "PKGBUILD"), "utf8");
-    expect(build).toContain(`sha256sums=('${tarSum}'\n            '${desktopSum}')`);
+    expect(build).toContain(
+      `sha256sums=('${tarSum}'\n            '${desktopSum}'\n            '${launcherSum}')`,
+    );
+    expect(mode(join(aur, "vimma-open"))).toBe(0o755);
     expect(readFileSync(join(aur, ".SRCINFO"), "utf8")).toContain(`\tsha256sums = ${tarSum}\n`);
     expect(build).toMatch(/^# Maintainer: Test Maintainer/m);
   });
