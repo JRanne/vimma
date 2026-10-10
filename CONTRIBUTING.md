@@ -1,0 +1,109 @@
+# Developing Vimma
+
+How to build, run and test Vimma, and how changes get in. For what Vimma is and does, see the
+[README](README.md); for using it, the [user guide](docs/guide.md).
+
+## Requirements
+
+- Linux x86_64 (the only platform built and tested so far).
+- About 35 GB of free disk space, as measured on the dev box: `engine/` 27 GB (source and the
+  full build), the sccache compiler cache 6.8 GB, toolchains in `~/.mozbuild` 3.1 GB and the
+  Firefox source download in `.surfer/` 0.8 GB.
+- Node.js 20 or later, Python 3, git.
+- Time: the first full build took 39 min on a 16-thread Ryzen with 58 GB RAM. The Firefox source
+  download took 12.5 min. See [docs/runbook.md](docs/runbook.md).
+
+## Build and run
+
+```sh
+npm ci                  # dev tools, including Surfer
+npx surfer download     # Firefox source for the version in surfer.json, into engine/
+npx surfer bootstrap    # Mozilla's toolchains into ~/.mozbuild (once)
+npm run import          # apply Vimma's files and patches, select the vimma brand
+npx surfer build        # full build
+```
+
+Run it:
+
+```sh
+npm start               # full build if present, else the artifact build; ~/.cache/vimma-dev-profile
+npm start -- --fresh    # a throwaway profile instead
+npm start -- --import   # run `npm run import` first
+npm start -- --profile DIR -- --jsconsole   # another profile; after the second -- browser flags
+```
+
+`npm start` (`tools/start.mjs`) passes its own profile, so it never touches your Firefox profile
+(remoting is keyed by app name and profile: a `vimma` command line never reaches Firefox), and refuses to start a second instance on the same profile. It adds
+one line to the profile's `user.js` (other lines are kept):
+`security.sandbox.content.read_path_whitelist` set to this checkout's `src/`. A local build's
+front-end files are symlinks into `src/`, outside the Firefox tree, and without that pref the
+content sandbox refuses them, so Vimma's page actor never loads (packaged builds copy the files
+and do not need it). `npx surfer run` uses a scratch profile without it.
+
+After editing JavaScript or CSS under `src/`, run `npm run import && npx surfer build --ui`. That
+rebuilds only the front end. Changes to branding, `configs/` or `moz.configure` need a full
+`npx surfer build`.
+
+## Testing
+
+```sh
+npm test                 # Vitest: vimma-core and tools (fast, no browser)
+npm run typecheck        # tsc --checkJs
+npm run lint             # eslint + prettier --check
+npm run mochitest -- tests/browser/                       # browser tests on your full build
+npm run mochitest -- tests/browser/browser_vimma_tabstrip.js
+```
+
+You can also test the front end without a full build. An artifact build puts our front end on
+top of Mozilla's compiled binaries for the same release, and is what PR CI uses
+([ADR-010](docs/adr/010-pr-artifact-builds.md)):
+
+```sh
+npm run import
+node tools/artifact-build/artifact-build.mjs    # ~25 s warm; first run downloads 163 MB
+npm run mochitest -- --artifact tests/browser/
+```
+
+An artifact build cannot check compiled-in settings (the `--version` string, the crash reporter
+flag). A PR that touches patches, `configs/`, `moz.configure` or branding must report a
+mochitest run on a full build.
+
+## Project layout
+
+| Path                              | What                                                                                                                          |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `packages/vimma-core/`            | Pure ES modules with no Firefox imports: key notation, actions, keymap, dispatcher, config and theme. Tested with Vitest.     |
+| `src/browser/base/content/vimma/` | Our browser code: the key host, UI (help overlay, tab strip) and services. `core/` is copied in by `npm run sync-core`.       |
+| `src/**/*.patch`                  | The small upstream patches, each listed in [ADR-003](docs/adr/003-own-files-minimal-patches.md).                              |
+| `configs/`                        | mozconfigs and branding inputs.                                                                                               |
+| `tests/browser/`                  | Mochitests (`browser_vimma_*.js`).                                                                                            |
+| `tools/`                          | Build, upstream-bump, licence and commitlint helpers.                                                                         |
+| `docs/`                           | [User guide](docs/guide.md), [bindings](docs/bindings.md), [limits](docs/limits.md), specs, ADRs, [runbook](docs/runbook.md). |
+
+## Workflow
+
+Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
+
+- **Specs.** Every feature starts as `docs/specs/<milestone>-<feature>.md`, with acceptance
+  criteria written as Given/When/Then. Boundary changes and new upstream patches need an ADR in
+  `docs/adr/`.
+- **TDD.** Write the failing test and run it, then implement until it passes. Never loosen a test.
+- **Commits.** Use Conventional Commits with a body: the subject is the changelog line; the body
+  explains why.
+  `npx commitlint --from origin/main` checks this, and CI rejects `feat` and `fix` commits
+  without a body.
+- **Docs.** A user-visible change updates [docs/guide.md](docs/guide.md), and the README's
+  status if it changes what works. See [docs/review-checklist.md](docs/review-checklist.md).
+- **Agents.** [CLAUDE.md](CLAUDE.md) sets the rules for AI coding agents. They apply to human
+  contributors too.
+
+Before pushing, run `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:py`,
+`npm run license-check` and `npx surfer license-check`.
+
+## More
+
+- [docs/runbook.md](docs/runbook.md): builds, CI, e2e tests, parallel browser lanes and releases.
+- [docs/rebase.md](docs/rebase.md): moving to a new Firefox release.
+- [docs/review-checklist.md](docs/review-checklist.md): what a PR needs before merge.
+- [docs/adr/](docs/adr/) and [docs/specs/](docs/specs/): decisions and feature specs.
+- [plan.md](plan.md): the roadmap.
