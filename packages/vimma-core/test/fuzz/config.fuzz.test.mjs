@@ -288,8 +288,13 @@ describe("config.toml fuzzing", () => {
         "deep arrays": `a = ${"[".repeat(5000)}${"]".repeat(5000)}`,
         "deep arrays at the parser's limit": `a = ${"[".repeat(999)}${"]".repeat(999)}`,
         "deep inline tables": `a = ${"{ b = ".repeat(2000)}1${" }".repeat(2000)}`,
-        "deep dotted key": `${"a.".repeat(5000)}b = 1`,
-        "deep table header": `[${"a.".repeat(5000)}b]`,
+        // Regression: smol-toml's maxDepth bounds inline values only, so dotted keys and table
+        // headers nested without limit; toNumbers overflowed the stack at 20,000 levels and
+        // locateKeys took quadratic time and memory (out of memory at 100,000).
+        "deep dotted key": `${"a.".repeat(20_000)}b = 1`,
+        "deep table header": `[${"a.".repeat(20_000)}b]`,
+        "deep table array header": `[[${"a.".repeat(20_000)}b]]`,
+        "deep mixed nesting": `[${"a.".repeat(20)}b]\nc.d.e = ${"[{x = ".repeat(10)}1${"}]".repeat(10)}`,
         "a 4 MiB string": `font = "${"x".repeat(4 * 1024 * 1024)}"`,
         "20,000 keys": Array.from({ length: 20_000 }, (_, i) => `k${i} = ${i}`).join("\n"),
         "5,000 routes": `schema = 2\n${'[[routes]]\ndomain = "a.com"\nworkspace = "w"\n'.repeat(5000)}`,
