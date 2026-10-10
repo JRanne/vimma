@@ -121,7 +121,16 @@ async function stat(dir) {
   }
 }
 
+/**
+ * Bumped by recheck(): a check started under older settings is stale once it resumes and must
+ * not record or apply what it read (issue #66: it marked the old path's theme loaded, so the new
+ * path's missing theme never brought Tokyo Night back).
+ */
+let generation = 0;
+
 async function check() {
+  const gen = generation;
+  const stale = () => gen !== generation;
   // The pref (tests, about:config) and config.toml's source = "file" both mean "no Omarchy".
   if (
     Services.prefs.getStringPref(SOURCE_PREF, "omarchy") === "builtin" ||
@@ -133,6 +142,7 @@ async function check() {
   }
   const dir = themeDir();
   const now = await stat(dir);
+  if (stale()) return;
   if (now === null) {
     // Omarchy absent: Tokyo Night. Once a theme is showing, a missing file is far more likely
     // omarchy-theme-set between its rm and mv: keep the theme until the next one appears.
@@ -146,10 +156,12 @@ async function check() {
   try {
     text = await IOUtils.readUTF8(PathUtils.join(dir, "colors.toml"));
   } catch (e) {
+    if (stale()) return;
     if (notFound(e)) signature = "";
     else throw e;
     return;
   }
+  if (stale()) return;
   const lightMode = now.endsWith("|true");
   const r = cssFor(text, lightMode);
   if (r.errors.length) {
@@ -192,6 +204,7 @@ function stopTimer() {
 
 /** Reads the theme again from scratch once the running check (with the old settings) is done. */
 function recheck() {
+  generation++;
   signature = "";
   loaded = false;
   (running ?? Promise.resolve()).then(poll);

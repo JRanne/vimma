@@ -269,6 +269,28 @@ add_task(async function no_omarchy_dir_means_tokyo_night() {
   await waitForBar("#e6e9ef", "the Omarchy theme again");
 });
 
+// Issue #66: a check that was reading the old path when the path changed went on to apply that
+// theme (and mark it loaded), so the new path's missing theme never brought Tokyo Night back.
+add_task(async function a_path_change_during_a_check_is_not_undone_by_it() {
+  await waitForBar("#e6e9ef", "sanity: the light Omarchy theme");
+  // No timer tick in flight: only the pref changes below start checks.
+  await SpecialPowers.pushPrefEnv({
+    set: [
+      ["vimma.theme.pollMs", 600000],
+      ["vimma.theme.omarchyPath", currentTheme],
+    ],
+  });
+  await TestUtils.waitForTick();
+  // The same theme by another path: a check starts and awaits the file's stat...
+  Services.prefs.setStringPref("vimma.theme.omarchyPath", dir("light"));
+  for (let i = 0; i < 3; i++) await Promise.resolve();
+  // ...when the path moves to a missing theme.
+  Services.prefs.setStringPref("vimma.theme.omarchyPath", PathUtils.join(root, "nowhere"));
+  await waitForBar(TOKYO_STATUSBAR, "the last path wins: no Omarchy theme, Tokyo Night");
+  await SpecialPowers.popPrefEnv();
+  await waitForBar("#e6e9ef", "the Omarchy theme again");
+});
+
 add_task(async function builtin_source_ignores_omarchy() {
   await SpecialPowers.pushPrefEnv({ set: [["vimma.theme.source", "builtin"]] });
   await waitForBar(TOKYO_STATUSBAR, "vimma.theme.source=builtin forces Tokyo Night");
