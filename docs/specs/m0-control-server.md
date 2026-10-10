@@ -25,8 +25,8 @@ running browser, and with it off nothing listens and no token file exists.
   then `busy`, at most 2 waiting for a hello (a new one evicts the oldest), constant-time token
   check (`tokensEqual`), a challenge proving the token before the client sends it, every message
   checked with `validateMessage`.
-- Commands `send-keys`, `state`, `open`; `list-tabs`, `screenshot`, `reload-config` answer
-  `not-implemented`.
+- Commands `send-keys`, `state`, `open`, `reload-theme` (since m5-omarchy-theme:
+  `ThemeHost.reload()`); `list-tabs`, `screenshot`, `reload-config` answer `not-implemented`.
 - Host seam: none of our own. `state` reads `VimmaHost.status(win)` (`{ mode, pending }`, added
   for the status bar by m2-statusbar-whichkey), so the socket and the status bar cannot disagree.
   An earlier `controlState(win)` doing the same was dropped when that landed.

@@ -8,7 +8,7 @@
 
 "use strict";
 
-const { validateMessage, MAX_LINE_LENGTH } = ChromeUtils.importESModule(
+const { validateMessage, MAX_LINE_LENGTH, TOKYO_NIGHT } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/core/index.mjs",
 );
 const { VimmaControl } = ChromeUtils.importESModule(
@@ -620,6 +620,9 @@ add_task(async function test_vimma_ctl_end_to_end() {
   const state = JSON.parse(out);
   Assert.equal(state.mode, "normal", "vimma-ctl reads the live state");
   Assert.equal(state.tabs.length, gBrowser.visibleTabs.length, "with every tab");
+  // What the Omarchy hook runs (tools/omarchy); browser.toml pins the built-in theme here.
+  const reload = await runVimmaCtl(bin, ["reload-theme"]);
+  Assert.deepEqual(reload, { exitCode: 0, out: "unchanged\n" }, "vimma-ctl reload-theme");
 
   // A flood of connections that never say hello does not lock vimma-ctl out.
   const { port } = await readDiscovery();
@@ -695,6 +698,88 @@ add_task(async function test_vimma_ctl_end_to_end() {
     !received.join("").includes("send-keys") && !received.join("").includes(stale.token),
     `neither the token nor a command reached the squatter: ${received.join("")}`,
   );
+});
+
+/** An Omarchy colors.toml: Tokyo Night with the status bar's colour (dark_background) set. */
+function colorsToml(/** @type {string} */ darkBackground) {
+  const palette = { ...TOKYO_NIGHT, dark_background: darkBackground };
+  return Object.entries(palette)
+    .map(([key, value]) => `${key} = "${value}"`)
+    .join("\n");
+}
+
+/** "#rrggbb" → "rgb(r, g, b)", as getComputedStyle reports it. */
+function rgb(/** @type {string} */ hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgb(${n >> 16}, ${(n >> 8) & 255}, ${n & 255})`;
+}
+
+const barBackground = () =>
+  getComputedStyle(document.getElementById("vimma-statusbar")).backgroundColor;
+
+add_task(async function test_reload_theme() {
+  // Spec m5-omarchy-theme, "Instant reload": Omarchy's theme-set hook runs
+  // `vimma-ctl reload-theme`; the browser reads the theme at once, not at the next poll.
+  const dir = await IOUtils.createUniqueDirectory(PathUtils.tempDir, "vimma-theme-reload");
+  const colors = PathUtils.join(dir, "colors.toml");
+  await IOUtils.writeUTF8(colors, colorsToml("#101820"));
+  await SpecialPowers.pushPrefEnv({
+    set: [
+      // An hour: within this test only reload-theme reads the file again.
+      ["vimma.theme.pollMs", 3600000],
+      ["vimma.theme.omarchyPath", dir],
+      ["vimma.theme.source", "omarchy"],
+    ],
+  });
+  await TestUtils.waitForCondition(
+    () => barBackground() === rgb("#101820"),
+    "the first theme applies (a pref change re-reads at once)",
+  );
+  // The next theme. Same size, and the mtime may well match: reload-theme reads regardless.
+  await IOUtils.writeUTF8(colors, colorsToml("#301030"));
+
+  const { port, token } = await enable();
+  const before = barBackground();
+
+  const noHello = new Client(port);
+  await noHello.send({ type: "request", id: 1, command: "reload-theme", args: {} });
+  Assert.equal((await noHello.read())?.error?.code, "bad-request", "no request before hello");
+  Assert.equal(await noHello.closed, 0, "and closed");
+
+  const noAuth = new Client(port);
+  await noAuth.send({ type: "hello", protocol: 1, nonce: randomHex() });
+  Assert.equal((await noAuth.read())?.type, "challenge", "a hello is challenged");
+  await noAuth.send({ type: "request", id: 1, command: "reload-theme", args: {} });
+  Assert.equal((await noAuth.read())?.error?.code, "bad-request", "no request before auth");
+  Assert.equal(await noAuth.closed, 0, "and closed");
+
+  const wrong = new Client(port);
+  const refused = await wrong.hello(
+    token.replace(/^./, (c) => (c === "0" ? "1" : "0")),
+    { checkProof: false },
+  );
+  Assert.equal(refused?.error?.code, "unauthorized", "a wrong token is refused");
+  Assert.equal(await wrong.closed, 0, "and closed before any request");
+  Assert.equal(barBackground(), before, "no unauthenticated client reloaded the theme");
+
+  const client = await session();
+  const reloaded = await client.request(1, "reload-theme");
+  Assert.deepEqual(reloaded.result, { changed: true }, "the new theme was read");
+  // No waiting: the reply comes after the new sheet is in every window.
+  Assert.equal(barBackground(), rgb("#301030"), "the bar shows it when the reply arrives");
+
+  const again = await client.request(2, "reload-theme");
+  Assert.deepEqual(again.result, { changed: false }, "an unchanged file changes nothing");
+  const typo = await client.request(3, "reload-theme", { path: colors });
+  Assert.equal(typo.error.code, "invalid-args", "reload-theme takes no path");
+  client.close();
+  await disable();
+  await SpecialPowers.popPrefEnv();
+  await TestUtils.waitForCondition(
+    () => barBackground() === rgb(TOKYO_NIGHT.dark_background),
+    "back to the built-in theme",
+  );
+  await IOUtils.remove(dir, { recursive: true });
 });
 
 add_task(async function test_server_checks_the_scheme_itself() {

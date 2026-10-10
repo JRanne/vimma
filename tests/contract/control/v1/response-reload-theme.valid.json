@@ -1,0 +1,13 @@
+{
+  "description": "The theme was read again and the colours changed",
+  "kind": "response",
+  "command": "reload-theme",
+  "message": {
+    "type": "response",
+    "id": 3,
+    "ok": true,
+    "result": {
+      "changed": true
+    }
+  }
+}
