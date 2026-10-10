@@ -212,33 +212,61 @@ export class SidePanel {
    * @returns {HTMLElement}
    */
   build() {
-    const doc = this.win.document;
-    if (!styled.has(this.win)) {
-      this.win.windowUtils.loadSheetUsingURIString(STYLESHEET, this.win.windowUtils.AUTHOR_SHEET);
-      styled.add(this.win);
-    }
-    // A XUL vbox, as Firefox's own children of the #browser hbox (browser-box.inc.xhtml).
-    const box = /** @type {HTMLElement} */ (
-      /** @type {{ createXULElement: (tag: string) => Element }} */ (
-        /** @type {unknown} */ (doc)
-      ).createXULElement("vbox")
-    );
-    box.id = PANEL_ID;
-    box.hidden = true;
-    box.setAttribute("role", "region");
-    box.setAttribute("aria-label", "Side panel");
-    box.tabIndex = -1;
-    const header = /** @type {HTMLElement} */ (doc.createElementNS(HTML_NS, "header"));
-    header.className = "vimma-panel-header";
-    const list = /** @type {HTMLElement} */ (doc.createElementNS(HTML_NS, "ul"));
-    list.setAttribute("role", "listbox");
-    const hint = /** @type {HTMLElement} */ (doc.createElementNS(HTML_NS, "footer"));
-    hint.className = "vimma-panel-hint";
-    hint.textContent = "j/k move · 1-9 or Enter go · Esc close";
-    box.append(header, list, hint);
-    /** @type {Element} */ (doc.getElementById("browser")).prepend(box);
+    const { box, list } = buildPanelBox(this.win, {
+      id: PANEL_ID,
+      label: "Side panel",
+      hint: "j/k move · 1-9 or Enter go · Esc close",
+    });
     this.box = box;
     this.list = list;
     return box;
   }
+}
+
+/**
+ * An element in the XHTML namespace with a class and text (never HTML).
+ * @param {Document} doc
+ * @param {string} tag
+ * @param {string} className
+ * @param {string} [text]
+ */
+export function panelElement(doc, tag, className, text = "") {
+  const node = /** @type {HTMLElement} */ (doc.createElementNS(HTML_NS, tag));
+  node.className = className;
+  node.textContent = text;
+  return node;
+}
+
+/**
+ * A hidden panel box in the left slot (the first child of #browser), styled by side-panel.css:
+ * a header, a listbox and a key hint. The side panel and the bookmarks panel
+ * (docs/specs/bookmarks.md) are each one.
+ * @param {Window} win
+ * @param {{ id: string, label: string, hint: string }} options
+ */
+export function buildPanelBox(win, { id, label, hint }) {
+  const doc = win.document;
+  if (!styled.has(win)) {
+    win.windowUtils.loadSheetUsingURIString(STYLESHEET, win.windowUtils.AUTHOR_SHEET);
+    styled.add(win);
+  }
+  // A XUL vbox, as Firefox's own children of the #browser hbox (browser-box.inc.xhtml).
+  const box = /** @type {HTMLElement} */ (
+    /** @type {{ createXULElement: (tag: string) => Element }} */ (
+      /** @type {unknown} */ (doc)
+    ).createXULElement("vbox")
+  );
+  box.id = id;
+  box.className = "vimma-side-panel";
+  box.hidden = true;
+  box.setAttribute("role", "region");
+  box.setAttribute("aria-label", label);
+  box.tabIndex = -1;
+  const header = panelElement(doc, "header", "vimma-panel-header");
+  const list = panelElement(doc, "ul", "");
+  list.setAttribute("role", "listbox");
+  const footer = panelElement(doc, "footer", "vimma-panel-hint", hint);
+  box.append(header, list, footer);
+  /** @type {Element} */ (doc.getElementById("browser")).prepend(box);
+  return { box, header, list };
 }

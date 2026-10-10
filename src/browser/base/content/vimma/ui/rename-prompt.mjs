@@ -6,7 +6,8 @@
 // styled as the `:` command line (cmdline.css). Its input is a chrome text field, so the host is
 // in insert and keys type; the input's own keydown takes Enter (apply) and Esc (cancel).
 // The same line asks y/N questions (`ask`, m3-workspaces 4a: closing a workspace): `y` says
-// yes, any other key no.
+// yes, any other key no. And it asks for free text (`prompt`, docs/specs/bookmarks.md: add,
+// rename, move a bookmark), with Tab completion of the text before the caret.
 
 import { loadCmdlineSheet } from "./cmdline.mjs";
 
@@ -44,6 +45,12 @@ export class RenamePrompt {
     this.label = null;
     /** @type {(() => void) | null} a y/N question's yes, while one is open */
     this.yes = null;
+    /** @type {((text: string) => void) | null} a `prompt`'s Enter, while one is open */
+    this.submit = null;
+    /** @type {((before: string) => string[]) | null} a `prompt`'s Tab candidates */
+    this.completer = null;
+    /** @type {{ candidates: string[], index: number, after: string } | null} while Tab cycles */
+    this.cycle = null;
   }
 
   get isOpen() {
@@ -73,6 +80,24 @@ export class RenamePrompt {
   }
 
   /**
+   * A line of free text: Enter calls `submit` with it once the prompt has closed, Esc cancels.
+   * Tab (shift+Tab back) cycles `complete`'s candidates for the text before the caret, keeping
+   * the text after it.
+   * @param {{ label: string, value?: string, caret?: number, placeholder?: string,
+   *   complete?: (before: string) => string[], submit: (text: string) => void }} options
+   * @returns {boolean} whether it opened
+   */
+  prompt({ label, value = "", caret = value.length, placeholder = "", complete, submit }) {
+    if (!this.show(label, placeholder, label.trim())) return false;
+    const input = /** @type {HTMLInputElement} */ (this.input);
+    input.value = value;
+    input.setSelectionRange(caret, caret);
+    this.submit = submit;
+    this.completer = complete ?? null;
+    return true;
+  }
+
+  /**
    * @private
    * @param {string} label
    * @param {string} placeholder
@@ -85,6 +110,7 @@ export class RenamePrompt {
     if (!this.isOpen) this.opener = Services.focus.focusedElement;
     this.tab = null;
     this.yes = null;
+    this.submit = this.completer = this.cycle = null;
     /** @type {HTMLElement} */ (this.label).textContent = label;
     input.placeholder = placeholder;
     input.setAttribute("aria-label", ariaLabel);
@@ -106,6 +132,7 @@ export class RenamePrompt {
     this.opener = null;
     this.tab = null;
     this.yes = null;
+    this.submit = this.completer = this.cycle = null;
     if (tabChanged || (restoreFocus && !opener?.isConnected)) {
       /** @type {{ gBrowser?: { selectedBrowser: HTMLElement } }} */ (
         /** @type {unknown} */ (this.win)
@@ -142,6 +169,13 @@ export class RenamePrompt {
       }
       this.close();
       if (e.key === "y" || e.key === "Y") yes();
+    } else if (this.submit && e.key === "Tab") {
+      this.complete(e.shiftKey ? -1 : 1);
+    } else if (this.submit && e.key === "Enter") {
+      const submit = this.submit;
+      const text = /** @type {HTMLInputElement} */ (this.input).value;
+      this.close();
+      submit(text);
     } else if (e.key === "Enter") {
       const tab = this.tab;
       const text = /** @type {HTMLInputElement} */ (this.input).value;
@@ -154,6 +188,29 @@ export class RenamePrompt {
     }
     e.preventDefault();
     e.stopPropagation();
+  }
+
+  /**
+   * Tab in a `prompt`: the next candidate for the text before the caret (-1: the previous).
+   * @private
+   * @param {1 | -1} direction
+   */
+  complete(direction) {
+    const input = /** @type {HTMLInputElement} */ (this.input);
+    if (!this.completer) return;
+    if (!this.cycle) {
+      const before = input.value.slice(0, input.selectionStart ?? input.value.length);
+      const after = input.value.slice(input.selectionEnd ?? input.value.length);
+      const candidates = this.completer(before);
+      if (!candidates.length) return;
+      this.cycle = { candidates, index: direction > 0 ? 0 : candidates.length - 1, after };
+    } else {
+      const n = this.cycle.candidates.length;
+      this.cycle.index = (this.cycle.index + direction + n) % n;
+    }
+    const pick = /** @type {string} */ (this.cycle.candidates[this.cycle.index]);
+    input.value = pick + this.cycle.after;
+    input.setSelectionRange(pick.length, pick.length);
   }
 
   /**
@@ -202,6 +259,7 @@ export class RenamePrompt {
     input.setAttribute("aria-label", "Rename tab");
     this.label = prompt;
     input.addEventListener("keydown", (e) => this.onKeyDown(e));
+    input.addEventListener("input", () => (this.cycle = null));
     input.addEventListener("focusout", () => this.onFocusOut());
     row.append(prompt, input);
     panel.append(row);

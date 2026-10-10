@@ -44,6 +44,8 @@ rename_workspace = ["prefix+shift+w"]
 close_workspace = ["prefix+shift+d"]
 goto_picker = ["prefix+g"]
 toggle_sidebar = ["prefix+b", "<leader>n"]
+toggle_bookmarks = ["prefix+shift+b", "<leader>b"]
+add_bookmark = ["prefix+a"]
 copy_mode = ["prefix+["]
 
 [modal]
@@ -161,6 +163,18 @@ hint_chars = "asdfghjkl"
 "k" = "panel.up"
 "<CR>" = "panel.open"
 "<Esc>" = "panel.close"
+"h" = "bookmarks.collapse"
+"l" = "bookmarks.expand"
+"t" = "bookmarks.open_tab"
+"s" = "bookmarks.open_vsplit"
+"S" = "bookmarks.open_hsplit"
+"a" = "bookmarks.add"
+"A" = "bookmarks.add_folder"
+"r" = "bookmarks.rename"
+"m" = "bookmarks.move"
+"d" = "bookmarks.delete"
+"y" = "bookmarks.yank"
+"/" = "bookmarks.filter"
 
 [modal.resize]
 "h" = "pane.resize_narrower"
