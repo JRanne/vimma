@@ -35,6 +35,7 @@ import { loadTree, observeBookmarks } from "./bookmark-ops.mjs";
 import { gotoItems, pickerWorkspaces, tabById } from "./goto.mjs";
 import { getTabLabel, setTabLabel } from "./tab-labels.mjs";
 import { BLOCKED_URL_TEXT, closeTab, newTab, openUrl, selectTab } from "./tab-ops.mjs";
+import { runRoute } from "./route-ops.mjs";
 import {
   closePane,
   focusPane,
@@ -336,6 +337,12 @@ export const RUNNERS = Object.freeze({
     (win) => `wsrename ${activeWorkspaceName(win) ?? ""}`,
   ),
   "workspace.move_tab": workspaceRunner(moveTabToWorkspace, () => "wsmove "),
+  // workspace-routing: `:route` lists the rules (about:vimma); `add [workspace]`, `move`.
+  "workspace.route": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) => {
+    s.notice.hide();
+    const said = runRoute(s.win, text ?? "", (t) => s.notice.show(t));
+    if (said) s.notice.show(said);
+  },
   "workspace.close": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) => {
     s.notice.hide();
     const refused = closeWorkspace(

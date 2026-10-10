@@ -82,7 +82,8 @@ describe("locateKeys", () => {
     [["workspaces", "my space", "color"], 18],
     [["theme", "font"], 21],
     [["theme", "source"], 24],
-    [["arr", "n"], 26],
+    [["arr", 0], 25],
+    [["arr", 0, "n"], 26],
   ])("%j is on line %i", (path, line) => {
     expect(lineOf(path)).toBe(line);
   });

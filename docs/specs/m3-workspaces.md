@@ -1078,6 +1078,8 @@ dependency for 4b, 5 and parts of 4a.
 ## Out of scope
 
 Per-workspace autofill stance (`autofill`, M6); syncing workspaces between devices; a web page in
-the side panel; unloading hidden tabs; URL-to-workspace routing rules; isolating permissions
+the side panel; unloading hidden tabs; URL-to-workspace routing rules (since built in their own
+spec, [workspace-routing](workspace-routing.md): `[[routes]]` by domain, URL or the app that opened
+the link, through the same three patch hunks as decision 3); isolating permissions
 (`permissions.isolateBy.userContext` is a possible later opt-in, untested by us); pinned tabs;
 config reload of `[workspaces]` while running (M5 host: it reuses the definitions reconcile).

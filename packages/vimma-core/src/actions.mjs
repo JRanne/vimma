@@ -104,6 +104,11 @@ group("Workspaces", [
     "workspace.move_tab",
     "Move the tab to another workspace (reopens it there)",
   ],
+  [
+    "route_rules",
+    "workspace.route",
+    "Routing rules: list them; :route add [workspace], :route move",
+  ],
 ]);
 
 group("Navigation", [

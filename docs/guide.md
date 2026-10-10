@@ -475,6 +475,80 @@ follows your Omarchy theme as the status bar does. Change its keys under `[modal
 `config.toml`; `[keys] toggle_sidebar` changes the keys that open it, and a `<leader>` binding
 there closes it too.
 
+### Routing: which workspace a link opens in
+
+`[[routes]]` rules in `config.toml` send a site, or every link an app opens, to a workspace
+(and its container), as Zen's Space Routing does. Each rule names a `workspace` and what it
+matches; the first rule that matches, top to bottom, wins.
+
+```toml
+schema = 2
+
+[[routes]]
+domain = "github.com"         # github.com and its subdomains (gist.github.com), any port
+workspace = "work"
+
+[[routes]]
+domain = "*.corp.example"     # only subdomains: jira.corp.example, not corp.example
+workspace = "work"
+
+[[routes]]
+app = "slack"                 # every link Slack opens
+workspace = "work"
+
+[[routes]]
+app = "discord"
+domain = "youtube.com"        # both must match: YouTube links from Discord
+workspace = "personal"
+
+[[routes]]
+url = "file:///home/me/notes/"  # a URL prefix: the way to route file:, about: and the like
+workspace = "notes"
+```
+
+- **`domain`** matches `http` and `https` pages only, on whole labels (`github.com` is not
+  `notgithub.com`), whatever the port; Unicode names work written either way
+  (`bücher.example` or `xn--bcher-kva.example`), and an IP address matches only itself.
+- **`app`** is the name of the program that opened the link, as `vimma-open` sees it (below).
+- **Order is the precedence.** Put the rule that matters most first: with `app = "slack"` above
+  `domain = "youtube.com"`, a YouTube link from Slack goes to `work`.
+- A rule naming a workspace that does not exist is skipped (`:route` says so).
+
+**Where rules apply:** an address you type in the URL bar or with `:open` / `:tabnew`, a
+bookmark, a link from another app and a new window opened on a URL: what you or Vimma open. A
+link a page opens (a click, middle-click, `F` hints, `target=_blank`, a pop-up) stays in that
+page's workspace, because a page could otherwise open any site with another workspace's logins;
+when you look at such a tab, the status bar names the workspace its rule would choose and
+`:route move` moves it. Opened in front, the tab takes you to its
+workspace; opened in the background, it waits there and the status bar says
+`opened in "work"`. If you typed the address on an empty new tab, that tab is closed.
+
+**Where they do not:** a page that navigates in its own tab (a click, a redirect, a sign-in
+bounce) is never moved, because moving reopens the page and would break the load. The status bar
+says `github.com goes to "work" (route 1): :route move` instead; `:route move` moves the tab
+there (it loses its back/forward history, as any move does). A container you chose yourself
+("Open Link in New Container Tab") is kept. Private windows are never routed.
+
+**By application.** Vimma's packages install `vimma-open` and make it the desktop entry's
+command, so when Slack, Discord, a terminal or Neovim opens a link, `vimma-open` looks up which
+program asked (through `/proc`, skipping `xdg-open`, `gio` and shells) and tells Vimma. A link
+you open from a shell counts as the terminal's. Apps in Flatpak (they go through the desktop
+portal), apps started through systemd (`uwsm app`) and links opened while the asking program
+has already exited have no app: only `domain` and `url` rules apply to them. To see what an app
+is called, run `vimma-open https://example.com` from it, or look at its process name
+(`ps -o comm`), lower-cased.
+
+**Commands.**
+
+| Command                         | What it does                                                                                                               |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `:route`                        | Opens about:vimma's Routing section: every rule in force, and which one matches the tab you were on.                       |
+| `:route add`, `:route add work` | Adds a `domain` rule for this site (its host without `www.`) to the end of `config.toml`, for this or the named workspace. |
+| `:route move`                   | Moves this tab to the workspace its rule names.                                                                            |
+
+`:route add` refuses a site an earlier rule already routes (it names the rule), a `config.toml`
+that has errors, and a file without `schema = 2`. It only ever appends to the file.
+
 ## Bookmarks
 
 Vimma's bookmarks are Firefox's: what you imported, what Sync brings and what the Library shows.
@@ -569,27 +643,28 @@ type reaches the page, and `ctrl+b` sequences still work.
 - An argument is the rest of the line, as typed. Quotes are removed only when one pair wraps all
   of it: `:tabrename "my  tab"`.
 
-| Command                           | What it does                                                                                                   |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `:open text`                      | Opens `text` in this tab as the URL bar would: `example.com` becomes a web address, other words a web search.  |
-| `:tabnew`, `:tabnew text`         | Opens a new tab; with text, opens it there (as `:open`).                                                       |
-| `:q`, `:quit`                     | Closes the pane, as `ctrl+b x`; with one pane the tab, as `x`: a pinned tab is kept and the next one selected. |
-| `:map`, `:help`, `:h`             | Shows every binding (the `ctrl+b ?` overlay).                                                                  |
-| `:scroll_down`, `:tab.next`…      | Any action by its name in [bindings.md](bindings.md), or by its dotted id. Actions take no argument.           |
-| `:tabrename [name]`               | Renames the tab; without a name, opens the rename prompt.                                                      |
-| `:ls`, `:b`                       | Opens the goto picker.                                                                                         |
-| `:vsplit`/`:vs`, `:split`/`:sp`   | Splits the pane right / down, as `ctrl+b v` / `ctrl+b -`.                                                      |
-| `:wsnext`, `:wsprev`              | Next / previous workspace, as `ctrl+i` / `ctrl+u`.                                                             |
-| `:workspace name`, `:workspace 2` | Switches to the workspace with that name, or that number in `ctrl+i` order.                                    |
-| `:workspace`                      | Opens the workspace picker.                                                                                    |
-| `:sidebar`                        | Opens or closes the side panel, as `<leader>n`.                                                                |
-| `:bookmarks`                      | Opens or closes the [bookmarks panel](#bookmarks), as `<leader>b`.                                             |
-| `:bookmark [path]`                | Bookmarks the page under `path` (`work/docs/title`); without one, opens the prompt, as `ctrl+b a`.             |
-| `:source`                         | Reads `config.toml` now instead of within 2 seconds (see [config.toml](#configtoml)).                          |
-| `:source path`                    | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                |
-| `:config`                         | Opens `config.toml` in a new tab (read-only view); creates it from a commented template when it is missing.    |
-| `:about`, `:vimma`                | Opens [about:vimma](#aboutvimma) in a new tab.                                                                 |
-| `:bug`                            | Opens about:vimma and copies its redacted report to the clipboard, for a bug report.                           |
+| Command                               | What it does                                                                                                                    |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `:open text`                          | Opens `text` in this tab as the URL bar would: `example.com` becomes a web address, other words a web search.                   |
+| `:tabnew`, `:tabnew text`             | Opens a new tab; with text, opens it there (as `:open`).                                                                        |
+| `:q`, `:quit`                         | Closes the pane, as `ctrl+b x`; with one pane the tab, as `x`: a pinned tab is kept and the next one selected.                  |
+| `:map`, `:help`, `:h`                 | Shows every binding (the `ctrl+b ?` overlay).                                                                                   |
+| `:scroll_down`, `:tab.next`…          | Any action by its name in [bindings.md](bindings.md), or by its dotted id. Actions take no argument.                            |
+| `:tabrename [name]`                   | Renames the tab; without a name, opens the rename prompt.                                                                       |
+| `:ls`, `:b`                           | Opens the goto picker.                                                                                                          |
+| `:vsplit`/`:vs`, `:split`/`:sp`       | Splits the pane right / down, as `ctrl+b v` / `ctrl+b -`.                                                                       |
+| `:wsnext`, `:wsprev`                  | Next / previous workspace, as `ctrl+i` / `ctrl+u`.                                                                              |
+| `:workspace name`, `:workspace 2`     | Switches to the workspace with that name, or that number in `ctrl+i` order.                                                     |
+| `:workspace`                          | Opens the workspace picker.                                                                                                     |
+| `:sidebar`                            | Opens or closes the side panel, as `<leader>n`.                                                                                 |
+| `:route`, `:route add`, `:route move` | Workspace routing rules: list them, add one for this site, move this tab ([Routing](#routing-which-workspace-a-link-opens-in)). |
+| `:bookmarks`                          | Opens or closes the [bookmarks panel](#bookmarks), as `<leader>b`.                                                              |
+| `:bookmark [path]`                    | Bookmarks the page under `path` (`work/docs/title`); without one, opens the prompt, as `ctrl+b a`.                              |
+| `:source`                             | Reads `config.toml` now instead of within 2 seconds (see [config.toml](#configtoml)).                                           |
+| `:source path`                        | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                                 |
+| `:config`                             | Opens `config.toml` in a new tab (read-only view); creates it from a commented template when it is missing.                     |
+| `:about`, `:vimma`                    | Opens [about:vimma](#aboutvimma) in a new tab.                                                                                  |
+| `:bug`                                | Opens about:vimma and copies its redacted report to the clipboard, for a bug report.                                            |
 
 A command that is not built yet says so for a moment, as its keys do.
 

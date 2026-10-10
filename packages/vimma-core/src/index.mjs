@@ -32,4 +32,5 @@ export * from "./sidepanel.mjs";
 export * from "./bookmarks.mjs";
 export * from "./control.mjs";
 export * from "./report.mjs";
+export * from "./routes.mjs";
 export * from "./pageurl.mjs";

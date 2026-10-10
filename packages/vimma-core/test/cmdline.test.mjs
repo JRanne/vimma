@@ -55,6 +55,11 @@ describe("parseCommandLine: plan §2 commands", () => {
     [":wsmove 2", run("wsmove", "workspace.move_tab", { text: "2" })],
     [":wsmove", run("wsmove", "workspace.move_tab")],
     [":move_to_workspace", run("move_to_workspace", "workspace.move_tab")],
+    // workspace-routing: list the rules, add one for this site, move the tab where its rule says.
+    [":route", run("route", "workspace.route")],
+    [":route add work", run("route", "workspace.route", { text: "add work" })],
+    [":route move", run("route", "workspace.route", { text: "move" })],
+    [":route_rules", run("route_rules", "workspace.route")],
     [":ls", run("ls", "goto.picker")],
     [":sidebar", run("sidebar", "sidebar.toggle")],
     [":map", run("map", "help.show")],

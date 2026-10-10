@@ -8,15 +8,22 @@
 // watcher), and reads it at once on `:source`. vimma-core parses and validates (reloadConfig:
 // a file is applied whole or not at all, else the last good config stays); this module does
 // the I/O and hands each part to the module that uses it. `:source <path>` puts another file in
-// force the same way, until config.toml changes or a plain `:source`. The one write: `:config`
-// creates a missing config.toml from the commented template, never touching an existing one.
+// force the same way, until config.toml changes or a plain `:source`. Two writes: `:config`
+// creates a missing config.toml from the commented template, never touching an existing one;
+// `:route add` appends one `[[routes]]` table (spec workspace-routing), checked to parse first.
 
-import { formatConfigError, reloadConfig, resolveSourcePath } from "../core/config.mjs";
+import {
+  appendRouteText,
+  formatConfigError,
+  reloadConfig,
+  resolveSourcePath,
+} from "../core/config.mjs";
 import { formatConfigTemplate } from "../core/defaults.mjs";
 import { CONFIG_EDIT_TOPIC, CONFIG_RELOAD_TOPIC, VimmaHost } from "../host/VimmaHost.sys.mjs";
 import { openUrl } from "../host/tab-ops.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
+import { WorkspaceRouter } from "../workspaces/WorkspaceRouter.sys.mjs";
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
 
 /** @import { ActiveConfig, ConfigError, ResolvedConfig } from "../core/config.mjs" */
@@ -93,6 +100,7 @@ function apply(next) {
   VimmaHost.configure({ keymap, hintChars: config.hintChars, sites: config.sites });
   for (const win of windows) applyToWindow(win, config);
   ThemeHost.setConfig(config.theme);
+  WorkspaceRouter.setRoutes(config.routes);
   WorkspaceStore.setConfig(config.workspaces).catch((e) =>
     console.error("vimma: [workspaces] not applied", e),
   );
@@ -330,6 +338,40 @@ export const ConfigHost = {
     await poll(true);
     // A read was running: ours was queued behind it.
     while (running) await running;
+  },
+
+  /**
+   * `:route add`: appends a `domain` rule to config.toml (created from the template when
+   * missing) and reads the file at once. Appending follows a symlinked file and never truncates
+   * it. Refused, with nothing written, when the file would not parse with the rule.
+   * @param {{ domain: string, workspace: string }} rule
+   * @returns {Promise<string | null>} why not, or null once written and read
+   */
+  async addRoute(rule) {
+    const path = configPath();
+    /** @type {string | null} */
+    let text = null;
+    try {
+      text = await IOUtils.readUTF8(path);
+    } catch (e) {
+      if (!notFound(e)) return `cannot read ${path}`;
+    }
+    const r = appendRouteText(text, rule);
+    if ("error" in r) return r.error;
+    try {
+      if ("create" in r) {
+        const parent = PathUtils.parent(path);
+        if (parent) await IOUtils.makeDirectory(parent, { createAncestors: true });
+        await IOUtils.writeUTF8(path, r.create, { mode: "create" });
+      } else {
+        await IOUtils.writeUTF8(path, r.append, { mode: "append" });
+      }
+    } catch (e) {
+      console.error(`vimma: cannot write ${path}`, e);
+      return `cannot write ${path}`;
+    }
+    await this.reload();
+    return null;
   },
 
   /** The resolved config in force (core's ResolvedConfig), null before the first read. */
