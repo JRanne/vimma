@@ -6,7 +6,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
-- The browser builds as Vimma: `vimma --version` prints `Vimma Vimma 0.1.0`, and the window title, brand strings, app name and vendor say Vimma. The app icon is still a placeholder "V"; the start page shows the Vimma logo.
+- The browser builds as Vimma: `vimma --version` prints `Vimma Vimma 0.1.0`, and the window title, brand strings, app name and vendor say Vimma. The app icon is the window-and-V mark from the Vimma logo, on a dark window that reads on light and dark desktops; the start page shows the full logo, transparent, with a dark tile under light themes.
 - `ctrl+b ?` opens a bindings overlay over any page, including `about:preferences` and the PDF viewer. `/` filters it, `Esc` or `q` closes it and focus returns to where it was. A bare `ctrl+b` waits for the next key without a timeout.
 - Firefox's tab strip is hidden by default. Set `vimma.ui.tabstrip.hidden` to `false` in `about:config` to show it again, without a restart. Firefox's tab keys and the window controls keep working.
 - Key capture across the whole window, including `about:` pages, the URL bar and the PDF viewer. Set `vimma.debug.keys` to log each key to the console.
@@ -24,6 +24,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - A Vim-style command line on `:`, with completion, history (a private window keeps its own), errors with "did you mean" and commands such as `:open`, `:tabnew`, `:q`, `:ls`, `:tabrename` and any action by name.
 - `ctrl+b g` (or `b`) opens a fuzzy goto picker of the window's tabs, and `ctrl+b shift+t` names a tab; the name shows in the status bar and picker and survives a restart.
 - Workspaces, each a Firefox container of its own, so a login in one is invisible in another: `ctrl+b (`/`ctrl+b )` switch (tmux's session keys, from every mode), `ctrl+b shift+n`/`shift+w`/`shift+d` (or `:wsnew`, `:wsrename`, `:wsdelete`) create, rename and delete, `:wsmove` moves a tab, and the `ctrl+b w` picker shows tab counts and moves tabs. New tabs and windows open in the current workspace, and a restart restores every workspace, its tabs, panes and tab names.
+- `I` (shift+i) jumps to the address bar with the address selected, from normal and copy mode or with a panel open, for the focused pane; in a text field it still types `I`.
 - An on-demand side panel (`ctrl+b b` or `:sidebar`) lists the current workspace's tabs; `j`/`k`, `Enter` or `1`-`9` pick one.
 - Routing: `[[routes]]` in `config.toml` sends a domain, URL prefix or the app that opened a link (via `vimma-open`) to a workspace; `:route` lists, adds and moves.
 - Split panes on Firefox's split view, up to 4 per workspace (`[panes] max`): `ctrl+b v`/`-` split, `ctrl+b h/j/k/l` (or `ctrl+w h/j/k/l`) move focus, `ctrl+b z` zooms, `ctrl+b x` closes a pane, `ctrl+b shift+h/j/k/l` swap and `ctrl+b r` enters a resize mode. Each workspace keeps its own split, and a split made outside Vimma becomes panes.
@@ -37,6 +38,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Changed
 
+- `ctrl+b ?`, `:map` and `about:vimma` list the keys you press (`ctrl+b b`, `ctrl+b shift+x`, `ctrl+w h`) instead of config notation (`prefix+b`), following a remapped prefix or leader; the legend names the leader only when a binding uses it. The help-text snapshot changed to match.
 - Workspaces switch with `ctrl+b (` / `ctrl+b )` instead of `ctrl+u` / `ctrl+i`, which are Vim's half-page-up and jump-forward keys in normal mode now; `ctrl+o` there goes back instead of opening a file (the File menu and `:open` still do). The help-text and `defaults.toml` snapshots changed with the defaults: the workspace, scroll and history rows list the new keys.
 - Project renamed from vimux to Vimma: `packages/vimma-core`, `src/browser/base/content/vimma/`, `~/.config/vimma/config.toml`. The `defaults.toml` snapshot changed only in its generator-path comment.
 - `ctrl+b` no longer opens Firefox's bookmarks sidebar. It is Vimma's tmux-style prefix key; `ctrl+b shift+b` opens Vimma's bookmarks panel.
@@ -44,7 +46,6 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - `defaults.toml` snapshot changed: it gains the commented `[workspaces]`, `[theme]` and `[theme.colors]` sections of schema v1; bindings unchanged.
 - Help-text and `defaults.toml` snapshots changed: they gain the bookmark bindings (`ctrl+b a`, `ctrl+b shift+b`, `<leader>b` and the panel's neo-tree keys); no other row moved ([bookmarks](docs/specs/bookmarks.md)).
 - The leader has no default bindings: `space n` and `space b` no longer open the side panel and the bookmarks panel (`ctrl+b b` and `ctrl+b shift+b` do). Help-text and `defaults.toml` snapshots changed: `toggle_sidebar` and `toggle_bookmarks` lose `<leader>n` and `<leader>b`; no other row moved. The leader itself stays, for bindings you add in `config.toml`.
-- `ctrl+i` and `ctrl+u` switch workspaces instead of opening Firefox's Page Info and page source (`gf` shows the source).
 - Closing the last tab keeps the window open with a new tab, startup restores the previous session, and the new-tab page is no longer preloaded. Each can be changed back in `about:config`.
 - Config schema 2 adds `[panes] max`, `[modal] hint_chars`, `[sites."host"] insert` and `[[routes]]`; a schema 1 file migrates as is.
 
