@@ -68,24 +68,24 @@ Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm 
 
 ## Navigation
 
-| Action                                    | Config name        | Bindings                |
-| ----------------------------------------- | ------------------ | ----------------------- |
-| Goto picker: every tab in every workspace | `goto_picker`      | `prefix+g`, `b`         |
-| Open / close the side panel               | `toggle_sidebar`   | `prefix+b`, `<leader>n` |
-| Scroll down                               | `scroll_down`      | `j`                     |
-| Scroll up                                 | `scroll_up`        | `k`                     |
-| Scroll left                               | `scroll_left`      | `h`                     |
-| Scroll right                              | `scroll_right`     | `l`                     |
-| Scroll half a page down                   | `scroll_half_down` | `d`                     |
-| Scroll half a page up                     | `scroll_half_up`   | `u`                     |
-| Scroll to top                             | `scroll_top`       | `gg`                    |
-| Scroll to bottom                          | `scroll_bottom`    | `G`                     |
-| Go back                                   | `history_back`     | `H`                     |
-| Go forward                                | `history_forward`  | `L`                     |
-| Reload page                               | `reload`           | `r`                     |
-| Open a URL or search in this tab          | `open_url`         | —                       |
-| Go up a level in the URL path             | `url_up`           | `gu`                    |
-| Go to the site's root                     | `url_root`         | `gU`                    |
+| Action                                    | Config name        | Bindings        |
+| ----------------------------------------- | ------------------ | --------------- |
+| Goto picker: every tab in every workspace | `goto_picker`      | `prefix+g`, `b` |
+| Open / close the side panel               | `toggle_sidebar`   | `prefix+b`      |
+| Scroll down                               | `scroll_down`      | `j`             |
+| Scroll up                                 | `scroll_up`        | `k`             |
+| Scroll left                               | `scroll_left`      | `h`             |
+| Scroll right                              | `scroll_right`     | `l`             |
+| Scroll half a page down                   | `scroll_half_down` | `d`             |
+| Scroll half a page up                     | `scroll_half_up`   | `u`             |
+| Scroll to top                             | `scroll_top`       | `gg`            |
+| Scroll to bottom                          | `scroll_bottom`    | `G`             |
+| Go back                                   | `history_back`     | `H`             |
+| Go forward                                | `history_forward`  | `L`             |
+| Reload page                               | `reload`           | `r`             |
+| Open a URL or search in this tab          | `open_url`         | —               |
+| Go up a level in the URL path             | `url_up`           | `gu`            |
+| Go to the site's root                     | `url_root`         | `gU`            |
 
 ## Page
 
@@ -180,22 +180,22 @@ Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm 
 
 ## Bookmarks
 
-| Action                                                 | Config name          | Bindings                      |
-| ------------------------------------------------------ | -------------------- | ----------------------------- |
-| Open / close the bookmarks panel                       | `toggle_bookmarks`   | `prefix+shift+b`, `<leader>b` |
-| Bookmark this page (folders/title files it in folders) | `add_bookmark`       | `prefix+a`                    |
-| Bookmarks: close the folder, or go to its parent       | `bookmarks_collapse` | `h [panel]`                   |
-| Bookmarks: open the folder or the bookmark             | `bookmarks_expand`   | `l [panel]`                   |
-| Bookmarks: open in a new background tab                | `bookmarks_open_tab` | `t [panel]`                   |
-| Bookmarks: open in a split right                       | `bookmarks_vsplit`   | `s [panel]`                   |
-| Bookmarks: open in a split below                       | `bookmarks_hsplit`   | `S [panel]`                   |
-| Bookmarks: add this page here (a/b/ makes folders)     | `bookmarks_add`      | `a [panel]`                   |
-| Bookmarks: add a folder here                           | `bookmarks_folder`   | `A [panel]`                   |
-| Bookmarks: rename                                      | `bookmarks_rename`   | `r [panel]`                   |
-| Bookmarks: move to a folder                            | `bookmarks_move`     | `m [panel]`                   |
-| Bookmarks: delete (asks y/N)                           | `bookmarks_delete`   | `d [panel]`                   |
-| Bookmarks: copy the URL                                | `bookmarks_yank`     | `y [panel]`                   |
-| Bookmarks: filter                                      | `bookmarks_filter`   | `/ [panel]`                   |
+| Action                                                 | Config name          | Bindings         |
+| ------------------------------------------------------ | -------------------- | ---------------- |
+| Open / close the bookmarks panel                       | `toggle_bookmarks`   | `prefix+shift+b` |
+| Bookmark this page (folders/title files it in folders) | `add_bookmark`       | `prefix+a`       |
+| Bookmarks: close the folder, or go to its parent       | `bookmarks_collapse` | `h [panel]`      |
+| Bookmarks: open the folder or the bookmark             | `bookmarks_expand`   | `l [panel]`      |
+| Bookmarks: open in a new background tab                | `bookmarks_open_tab` | `t [panel]`      |
+| Bookmarks: open in a split right                       | `bookmarks_vsplit`   | `s [panel]`      |
+| Bookmarks: open in a split below                       | `bookmarks_hsplit`   | `S [panel]`      |
+| Bookmarks: add this page here (a/b/ makes folders)     | `bookmarks_add`      | `a [panel]`      |
+| Bookmarks: add a folder here                           | `bookmarks_folder`   | `A [panel]`      |
+| Bookmarks: rename                                      | `bookmarks_rename`   | `r [panel]`      |
+| Bookmarks: move to a folder                            | `bookmarks_move`     | `m [panel]`      |
+| Bookmarks: delete (asks y/N)                           | `bookmarks_delete`   | `d [panel]`      |
+| Bookmarks: copy the URL                                | `bookmarks_yank`     | `y [panel]`      |
+| Bookmarks: filter                                      | `bookmarks_filter`   | `/ [panel]`      |
 
 ## Config
 

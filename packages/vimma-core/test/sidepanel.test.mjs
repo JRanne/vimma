@@ -180,8 +180,12 @@ describe("panel keys in the keymap", () => {
     return keys.split(" ").map((k) => d.dispatch(/** @type {any} */ (mode), parseKey(k)));
   };
 
-  test("space n (the leader binding) closes the panel from panel mode", () => {
-    expect(feed("panel", "space n").at(-1)).toEqual({
+  test("space n (a leader binding from config.toml) closes the panel from panel mode", () => {
+    const d = createDispatcher(
+      compileKeymap({ keys: { toggle_sidebar: ["prefix+b", "<leader>n"] } }),
+    );
+    const r = ["space", "n"].map((k) => d.dispatch("panel", parseKey(k)));
+    expect(r.at(-1)).toEqual({
       kind: "action",
       action: { id: "sidebar.toggle" },
     });

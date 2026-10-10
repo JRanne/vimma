@@ -41,6 +41,9 @@ export const PROFILE_PREFS = Object.freeze([
   // Screenshots in Vimma's built-in colours, whatever Omarchy theme the machine has (HOME is
   // already inside the profile; this keeps baselines stable if that ever changes).
   ["vimma.theme.source", "builtin"],
+  // No first-run config.toml under the profile's HOME: its "created …" notice would sit in the
+  // first screenshots. browser_vimma_config_first_run.js covers the first run.
+  ["vimma.config.firstRunDone", true],
   // first run, default browser, welcome and what's-new pages
   ["browser.shell.checkDefaultBrowser", false],
   ["browser.startup.homepage_override.mstone", "ignore"],

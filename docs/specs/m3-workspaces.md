@@ -1003,6 +1003,11 @@ dependency for 4b, 5 and parts of 4a.
   the panel's `order` fails "still the leftmost box".
 - **Left:** a mouse (clicking a row); a configurable width in `config.toml`; a web page in the
   panel stays out of scope.
+- **Later (2026-10-10):** the leader defaults were removed by user decision: `toggle_sidebar` is
+  `prefix+b` only, and `space n` does nothing by default. The leader option and `<leader>`
+  bindings in `[keys]` stay (a user's `toggle_sidebar = ["prefix+b", "<leader>n"]` still opens
+  and closes the panel, in `normal` and `panel` mode). The side-panel mochitest presses
+  `ctrl+b b` where it pressed `space n`, with a task that `space n` leaves it closed.
 
 ## Settled: the 4a/4b/5 leftovers, m3-container-edges (2026-10-10)
 
