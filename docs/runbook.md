@@ -383,6 +383,10 @@ cost: a full run (first Sunday of the month) is estimated at 60–90 min on the 
 week a few minutes plus one for the report job: roughly 100 min a month. If that is too much
 before the repo goes public, narrow `mutate` in `stryker.config.mjs` or drop the monthly full run.
 
+`fuzz.yml` runs one job of about 5 min a night (≈ 150 min a month), plus a one-minute report job
+on a failure. To halve it, run it on fewer nights (its `cron`) or lower `VIMMA_FUZZ_TIME_MS`.
+The seeded fuzz properties add a few seconds to each CI run, and compiling proptest about 10 s.
+
 ### Mutation testing (`mutation.yml`)
 
 Plan §5: Stryker mutates `packages/vimma-core/src` (not `vendor/`) every Sunday and runs the core's
@@ -417,6 +421,49 @@ results; the next week's run downloads them (`actions: read`) and re-tests only 
 changed files. Because that cannot see new tests, the first Sunday of the month (or
 `gh workflow run mutation.yml -f full=true`) re-tests everything. The job running Stryker has no
 write token; the separate report job alone has `issues: write`.
+
+### Fuzzing (`fuzz.yml`, spec m7-fuzzing)
+
+The parsers of outside input (control protocol, `config.toml`, routing rules, key notation, the
+command line, the Omarchy theme reader, vimma-ctl's JSON and decoders) have property-based fuzz
+tests: fast-check in `packages/vimma-core/test/fuzz/`, proptest in
+`tools/vimma-ctl/tests/protocol_props.rs`. Every CI run checks them with a fixed seed and few
+cases. `fuzz.yml` runs them nightly with a random seed and many more cases; on a failure it
+uploads the artifact `fuzz-failures` (`seed.txt`, one JSON file per failing JavaScript property
+with its seed, replay path and counterexample, and proptest's `*.proptest-regressions`) and opens
+or comments on one issue labelled `fuzz-failure`. Close the issue when the fix is merged.
+
+A manual run: `gh workflow run fuzz.yml` (random seed), or `-f seed=123 -f runs=5000`.
+
+#### Fuzzing: reproducing a failing seed
+
+JavaScript. The issue and the failure file give the seed and, per property, the replay path
+(`counterexamplePath`). One property, one case, at once:
+
+```sh
+VIMMA_FUZZ_SEED=<seed> VIMMA_FUZZ_PATH=<path> npx vitest run packages/vimma-core/test/fuzz \
+  -t "<test name>"
+```
+
+Without `VIMMA_FUZZ_PATH`, the same seed and `VIMMA_FUZZ_RUNS` repeat the whole search (the
+nightly used `VIMMA_FUZZ_RUNS=1000000` with a 15 s limit per property, so a late failure can
+take that long). fast-check prints the shrunk counterexample; turn it into a plain regression
+test next to the parser (see the "Regression (found by the fuzzer …)" tests), red first, then
+fix. A hang leaves only `seed.txt`: run the target's file with that seed and a small
+`VIMMA_FUZZ_TIME_MS` budget to find the slow input.
+
+Rust. proptest is deterministic per seed:
+
+```sh
+cd tools/vimma-ctl
+PROPTEST_RNG_SEED=<seed> PROPTEST_CASES=200000 cargo test --release --test protocol_props
+```
+
+or copy the artifact's `protocol_props.proptest-regressions` to `tools/vimma-ctl/tests/`, where
+proptest replays its `cc` lines first in every run; commit it with the fix as the regression.
+
+Locally, a longer search than CI's: `VIMMA_FUZZ_SEED=$RANDOM VIMMA_FUZZ_RUNS=5000 npx vitest run
+packages/vimma-core/test/fuzz` (about a minute).
 
 ### Bench baseline (`ci.yml`)
 
@@ -826,9 +873,11 @@ BSD-2/3-Clause, Apache-2.0, MPL-2.0. Reviewed exceptions live in
 re-reviewed; stale exceptions fail the check too.
 
 `npm run license-check:crates` does the same for the Rust crates (`cargo metadata` on
-`tools/vimma-ctl`, legacy `MIT/Apache-2.0` read as OR); exceptions would go in
-`tools/license-check/cargo-exceptions.json`. vimma-ctl has no dependencies, so today it checks
-only the crate itself (MPL-2.0).
+`tools/vimma-ctl`, legacy `MIT/Apache-2.0` read as OR, dev-dependencies included); reviewed
+exceptions live in `tools/license-check/cargo-exceptions.json`. vimma-ctl's binary has no
+dependencies; its only dev-dependency is proptest (spec m7-fuzzing), whose tree brings the three
+exceptions there (unicode-ident's Unicode-3.0 tables, and two WASI-only crates whose
+`… WITH LLVM-exception OR … OR MIT` the checker cannot parse).
 
 ## vimma-ctl (control socket client)
 

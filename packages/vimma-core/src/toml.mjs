@@ -18,6 +18,33 @@ import { TomlError, parse } from "./vendor/smol-toml/smol-toml.mjs";
  */
 
 /**
+ * Deepest nesting of tables and arrays accepted. Vimma's files need 4 (`keys.new_tab[1]`,
+ * `sites."host".insert`); smol-toml's own maxDepth bounds only inline values, not dotted keys
+ * or table headers (`a.a.a.….b = 1`), whose depth would otherwise be bounded by the file size:
+ * a recursive reader of the result overflows the stack and locateKeys takes quadratic time.
+ */
+export const MAX_DEPTH = 32;
+
+/**
+ * The path to the first value nested deeper than MAX_DEPTH, or null. Iterative, so a deep
+ * value cannot overflow the stack here.
+ * @param {Record<string, unknown>} root
+ * @returns {Path | null}
+ */
+function tooDeep(root) {
+  /** @type {[unknown, Path][]} */
+  const stack = [[root, []]];
+  while (stack.length) {
+    const [v, path] = /** @type {[unknown, Path]} */ (stack.pop());
+    if (typeof v !== "object" || v === null || v instanceof Date) continue;
+    if (path.length >= MAX_DEPTH) return path;
+    const entries = Array.isArray(v) ? v.entries() : Object.entries(v);
+    for (const [k, child] of entries) stack.push([child, [...path, k]]);
+  }
+  return null;
+}
+
+/**
  * @param {string} text
  * @param {{ integersAsBigInt?: boolean }} [options]
  *   integersAsBigInt: integers become BigInt, so `1.0` (a float) can be told from `1`
@@ -25,7 +52,12 @@ import { TomlError, parse } from "./vendor/smol-toml/smol-toml.mjs";
  */
 export function parseToml(text, { integersAsBigInt = false } = {}) {
   try {
-    return { ok: true, value: parse(text, { integersAsBigInt }) };
+    const value = parse(text, { integersAsBigInt, maxDepth: MAX_DEPTH });
+    const deep = tooDeep(value);
+    if (!deep) return { ok: true, value };
+    const line = locateKeys(text)(deep) ?? 1;
+    const message = `tables and arrays nest deeper than ${MAX_DEPTH} levels`;
+    return { ok: false, error: { line, column: 1, message } };
   } catch (e) {
     /* c8 ignore next */
     if (!(e instanceof TomlError)) throw e;
@@ -153,6 +185,12 @@ export function locateKeys(text) {
     const k = JSON.stringify(path);
     if (!lines.has(k)) lines.set(k, lineAt(pos));
   };
+  /**
+   * Paths deeper than MAX_DEPTH + 1 only occur in a file parseToml refuses, which looks up just
+   * that prefix; cutting them keeps the scan linear (each key records every prefix).
+   * @param {Path} path
+   */
+  const cap = (path) => (path.length > MAX_DEPTH + 1 ? path.slice(0, MAX_DEPTH + 1) : path);
 
   let i = text.charCodeAt(0) === 0xfeff ? 1 : 0; // BOM
   const ws = () => {
@@ -256,7 +294,7 @@ export function locateKeys(text) {
   const keyval = (base) => {
     ws();
     const at = i;
-    const full = [...base, ...key()];
+    const full = cap([...base, ...key()]);
     for (let n = base.length + 1; n <= full.length; n++) record(full.slice(0, n), at);
     i++; // "="
     ws();
@@ -284,6 +322,7 @@ export function locateKeys(text) {
         arrays.set(name, index + 1);
         table = [...table, index];
       }
+      table = cap(table);
       // implicit parent tables (`[sites."a.com"]` alone) are located at their first header
       for (let n = 1; n <= table.length; n++) record(table.slice(0, n), at);
     } else {
