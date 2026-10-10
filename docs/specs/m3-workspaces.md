@@ -1031,6 +1031,9 @@ dependency for 4b, 5 and parts of 4a.
   the control socket does not report; a crash-style kill and crash-recovery restore (the
   harness profile turns `resume_from_crash` off, and the 15 s save interval makes it a timing
   test); the scroll position after a real restart (gate 2's mochitest covers it).
+- **Still open after m4-split-panes sub-spec 7** (2026-10-10): the 200-tab measurement was not
+  folded into the M4 e2e gate. It has the same blocker as M4's key-to-paint timing: a paint
+  timestamp from the control socket (a protocol addition, its own spec with the perf gate).
 
 ## Out of scope
 

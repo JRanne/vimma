@@ -1,6 +1,7 @@
 # Spec: m4-split-panes
 
-Status: in progress (sub-specs 1 to 5 done; 6 core done, adoption handed over) · Milestone: M4 · Area: host
+Status: in progress (sub-specs 1 to 5 and 7 done; 6 core done, adoption handed over) ·
+Milestone: M4 · Area: host
 (`src/browser/base/content/vimma/split/`, `host/`), CSS (`browser/themes/shared/vimma/`)
 
 This is the umbrella spec for M4. It records the research, the decision
@@ -496,6 +497,43 @@ tested by `browser_vimma_pane_workspaces.js` (3 tasks).
 - **Per-pane mode:** `VimmaHost` already keys page mode by `<browser>` (`browserModes`) and reads
   the focused browser's, so a pane move takes the new pane's mode; no test pins it yet (insert in
   pane 1's text field, `ctrl+b l` gives normal, `ctrl+b h` insert again).
+
+## Sub-spec 7 results (`m4-split-gate`)
+
+Done: `tests/e2e/scenarios/m4-split-panes.json` with the fixture `tests/e2e/fixtures/pane.html`
+and the baseline `tests/e2e/baselines/m4-split-panes.png` (from CI's Xvfb image). No harness
+step, protocol field or product code was needed.
+
+- **Geometry through titles:** `pane.html#<name>` titles itself `"<name> <innerWidth>"` and
+  keeps it current on resize, so `state.tabs[].title` checks each pane's width without a new
+  protocol field: 639 per half (1280 px, 2 px gap), 1280 zoomed, 767/511 at 60/40.
+- **Covered, all keyboard through `send-keys`, asserted on `state.panes` and titles:**
+  `prefix+v` and `prefix+-` build an L shape `x[a, y[b, c]]`; `prefix+h/j/k/l` move by
+  geometry, and `l` from `a` returns to `c`, not `b` (MRU); each pane keeps its own mode (`b`
+  has a focused input: insert there, normal in `a` and `c`; sub-spec 6's per-pane mode
+  handover, now pinned end to end); `prefix+z` twice; `prefix+shift+h` swaps `c` with `a`
+  (`x[c, y[b, a]]`); `prefix+r`, `l l`, `Esc` gives 767/511; the screenshot; Enter in `b`'s
+  input requests DOM fullscreen (`b 1280x800 fs`) and Enter again leaves it with every width and
+  the tree unchanged; `prefix+x` closes `b`'s pane and keeps its tab; a second workspace with a
+  vertical split keeps it across `ctrl+u`/`ctrl+i`; a zoomed layout survives `ctrl+q` and a
+  start on the same profile (zoom, focus, tree, ratios, then both workspaces again).
+- **Prefs:** `browser.startup.page` is Vimma's own (resume), as in `m3-restart-restore`, and
+  `full-screen-api.ignore-widgets = true`: Xvfb has no window manager to make the window
+  fullscreen, and the window already fills the screen.
+- **Stability:** 8 of 8 local runs green (headless artifact build, 3 of them under
+  `taskset -c 0,1`), about 3.5 s. Mutation check: expecting `zoomed: false` after the restart
+  fails at that step.
+- **Screenshot:** the status bar shows the fixture server's URL, whose port changes between
+  runs (in the URL bar and the status bar); about ten digits, far inside the 0.5 % tolerance. The baseline came from a throwaway branch
+  with a placeholder baseline run through `workflow_dispatch`, since `scenario.test.mjs` requires
+  every screenshot step to have a committed baseline and fails the e2e job before it would
+  write CI's actual image.
+- **Not covered here:** click focus (the harness only sends keys; `browser_vimma_pane_focus.js`
+  covers it); key-to-paint timing for `prefix+l` (and m3's 200-tab `ctrl+i` measurement) need a
+  paint timestamp the control socket does not report; it belongs with the perf gate.
+
+What is left of M4: sub-spec 6's handover (adopting foreign splits; the per-pane mode test is
+now covered end to end here) and the key-to-paint measurement.
 
 ## Breakdown into sub-specs
 
