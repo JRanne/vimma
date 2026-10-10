@@ -15,7 +15,13 @@ import {
   renderStart,
   setBookmarksQuery,
 } from "../core/bookmarks.mjs";
-import { buildPanelBox, panelElement } from "./side-panel.mjs";
+import {
+  buildPanelBox,
+  emptyRow,
+  giveFocusBack,
+  panelElement,
+  rememberFocus,
+} from "./side-panel.mjs";
 
 /** @import { BookmarksEffect, BookmarksState, Folder, Row } from "../core/bookmarks.mjs" */
 
@@ -81,9 +87,11 @@ export class BookmarksPanel {
     /** @type {number | null} */
     this.reloadTimer = null;
     this.generation = 0;
+    /** @type {import("./side-panel.mjs").Opener | null} focus before open, for close */
+    this.opener = null;
     this.onSwitchDone = () => {
       const el = this.win.document.activeElement;
-      if (this.isOpen && el?.localName === "browser") this.box?.focus();
+      if (this.isOpen && el?.localName === "browser") this.list?.focus();
     };
   }
 
@@ -109,6 +117,7 @@ export class BookmarksPanel {
   open() {
     if (this.opened) return;
     const box = this.box ?? this.build();
+    this.opener = rememberFocus(this.win);
     this.opened = true;
     this.state = null;
     this.rendered = null;
@@ -116,7 +125,8 @@ export class BookmarksPanel {
     box.hidden = false;
     this.unobserve = this.host.observe(() => this.scheduleReload());
     this.win.addEventListener("TabSwitchDone", this.onSwitchDone);
-    box.focus();
+    // The tree, which carries aria-activedescendant (m7-a11y).
+    /** @type {HTMLElement} */ (this.list).focus();
     this.reload();
   }
 
@@ -141,21 +151,16 @@ export class BookmarksPanel {
     this.reloadTimer = null;
     this.win.removeEventListener("TabSwitchDone", this.onSwitchDone);
     const box = /** @type {HTMLElement} */ (this.box);
-    const doc = this.win.document;
-    const el = doc.activeElement;
-    const hadFocus = !el || el === doc.body || box.contains(el);
+    // Focus first, then hide (side-panel.mjs giveFocusBack).
+    giveFocusBack(this.win, box, this.opener);
+    this.opener = null;
     /** @type {HTMLInputElement} */ (this.filter).hidden = true;
     box.hidden = true;
-    if (hadFocus) {
-      /** @type {{ gBrowser?: { selectedBrowser: HTMLElement } }} */ (
-        /** @type {unknown} */ (this.win)
-      ).gBrowser?.selectedBrowser.focus();
-    }
   }
 
   /** Focus back on the list (after a prompt, Enter in the filter). */
   focus() {
-    if (this.opened) this.box?.focus();
+    if (this.opened) this.list?.focus();
   }
 
   /**
@@ -218,7 +223,7 @@ export class BookmarksPanel {
     const focused = this.filterFocused;
     filter.hidden = true;
     filter.value = "";
-    if (focused) this.box?.focus();
+    if (focused) this.list?.focus();
   }
 
   /** @private */
@@ -239,7 +244,7 @@ export class BookmarksPanel {
     e.preventDefault();
     e.stopPropagation();
     if (!this.state?.query) this.endFilter();
-    else this.box?.focus();
+    else this.list?.focus();
   }
 
   /** Close and remove the box (VimmaHost.uninit). */
@@ -255,16 +260,18 @@ export class BookmarksPanel {
     const list = /** @type {HTMLElement} */ (this.list);
     const state = this.state;
     if (!state) {
-      list.replaceChildren(panelElement(doc, "li", "vimma-panel-empty", "loading…"));
+      list.replaceChildren(emptyRow(doc, list, `${BOOKMARKS_ID}-empty`, "loading…"));
+      list.setAttribute("aria-busy", "true");
       list.removeAttribute("aria-activedescendant");
       return;
     }
+    list.removeAttribute("aria-busy");
     const { rows, selected } = state;
     const filtering = !!state.query.trim();
     const start = renderStart(rows.length, selected, this.start);
     if (rows === this.rendered && start === this.start) {
       // Only the highlight moved, within the rendered window.
-      for (const li of list.querySelectorAll("[role=option][aria-selected=true]")) {
+      for (const li of list.querySelectorAll("[role=treeitem][aria-selected=true]")) {
         li.setAttribute("aria-selected", "false");
       }
     } else {
@@ -272,12 +279,20 @@ export class BookmarksPanel {
       this.rendered = rows;
       const end = Math.min(rows.length, start + RENDER_CAP);
       const items = [];
-      if (start > 0) items.push(panelElement(doc, "li", "vimma-bookmarks-more", `… ${start} more`));
+      /** A "… n more" line: not a row of the tree. @param {string} text */
+      const more = (text) => {
+        const li = panelElement(doc, "li", "vimma-bookmarks-more", text);
+        li.setAttribute("role", "none");
+        return li;
+      };
+      list.removeAttribute("aria-describedby");
+      if (start > 0) items.push(more(`… ${start} more`));
       for (let i = start; i < end; i++) {
         const r = /** @type {Row} */ (rows[i]);
         const row = panelElement(doc, "li", "vimma-panel-row");
         row.id = `${BOOKMARKS_ID}-${i}`;
-        row.setAttribute("role", "option");
+        row.setAttribute("role", "treeitem");
+        row.setAttribute("aria-level", String(r.depth + 1));
         row.setAttribute("aria-selected", "false");
         row.dataset.guid = r.guid;
         row.style.setProperty("--vimma-depth", String(r.depth));
@@ -285,22 +300,22 @@ export class BookmarksPanel {
           row.classList.add("vimma-bookmarks-folder");
           row.setAttribute("aria-expanded", String(r.open));
         }
-        const twisty = r.kind === "folder" ? (r.open ? "▾" : "▸") : "";
-        row.append(
-          panelElement(doc, "span", "vimma-bookmarks-twisty", twisty),
-          panelElement(doc, "span", "vimma-panel-title", r.title),
+        const twisty = panelElement(
+          doc,
+          "span",
+          "vimma-bookmarks-twisty",
+          r.kind === "folder" ? (r.open ? "▾" : "▸") : "",
         );
+        twisty.setAttribute("aria-hidden", "true"); // aria-expanded says it
+        row.append(twisty, panelElement(doc, "span", "vimma-panel-title", r.title));
         const sub = subtitle(r, filtering);
         if (sub) row.append(panelElement(doc, "span", "vimma-panel-host", sub));
         items.push(row);
       }
-      if (end < rows.length) {
-        items.push(panelElement(doc, "li", "vimma-bookmarks-more", `… ${rows.length - end} more`));
-      }
+      if (end < rows.length) items.push(more(`… ${rows.length - end} more`));
       if (!rows.length) {
-        items.push(
-          panelElement(doc, "li", "vimma-panel-empty", filtering ? "no match" : "no bookmarks"),
-        );
+        const text = filtering ? "no match" : "no bookmarks";
+        items.push(emptyRow(doc, list, `${BOOKMARKS_ID}-empty`, text));
       }
       list.replaceChildren(...items);
     }
@@ -325,7 +340,10 @@ export class BookmarksPanel {
       hint: "j/k move · h/l fold · Enter t s S open · a A r m d y edit · / filter · Esc close",
     });
     const doc = this.win.document;
+    // Folders open and close: a tree of treeitems with levels, not a flat listbox (m7-a11y).
+    list.setAttribute("role", "tree");
     list.setAttribute("aria-label", "Bookmarks");
+    list.id = `${BOOKMARKS_ID}-tree`;
     const filter = /** @type {HTMLInputElement} */ (doc.createElementNS(HTML_NS, "input"));
     filter.id = FILTER_ID;
     filter.className = "vimma-bookmarks-filter";
@@ -334,6 +352,7 @@ export class BookmarksPanel {
     filter.autocomplete = "off";
     filter.placeholder = "filter";
     filter.setAttribute("aria-label", "Filter bookmarks");
+    filter.setAttribute("aria-controls", list.id);
     filter.hidden = true;
     filter.addEventListener("input", () => this.onFilterInput());
     filter.addEventListener("keydown", (e) => this.onFilterKey(e));

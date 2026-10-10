@@ -8,11 +8,11 @@
 // window and the host, renders at most once per frame, and never reads layout on the render
 // path: the bar's width comes from a ResizeObserver.
 
-import { fitStatus, statusSegments } from "../core/statusbar.mjs";
+import { fitStatus, statusAnnouncement, statusSegments } from "../core/statusbar.mjs";
 
 /** @import { Mode } from "../core/modes.mjs" */
 /** @import { FindStatus } from "../core/find.mjs" */
-/** @import { Segment, StatusInput } from "../core/statusbar.mjs" */
+/** @import { Announced, Segment, StatusInput } from "../core/statusbar.mjs" */
 
 export const STATUSBAR_ID = "vimma-statusbar";
 const STYLESHEET = "chrome://browser/skin/vimma/statusbar.css";
@@ -82,8 +82,8 @@ export class StatusBar {
     this.column = 0;
     this.frame = 0;
     this.lastBar = "";
-    /** @type {Mode | null} */
-    this.lastMode = null;
+    /** @type {Announced} what the live region last said */
+    this.announced = { mode: null, notFound: null };
     /** @type {ResizeObserver | null} */
     this.resize = null;
     /** @type {(() => void) | null} */
@@ -156,7 +156,7 @@ export class StatusBar {
     // and announce the mode through its own region.
     bar.setAttribute("role", "status");
     bar.setAttribute("aria-live", "off");
-    bar.setAttribute("aria-label", "Status");
+    bar.setAttribute("aria-label", "Vimma status bar");
     this.left = el("div", "vimma-sb-side vimma-sb-left");
     this.right = el("div", "vimma-sb-side vimma-sb-right");
     this.live = el("span", "vimma-sb-live");
@@ -254,10 +254,14 @@ export class StatusBar {
       /** @type {HTMLElement} */ (this.left).replaceChildren(...side("left"));
       /** @type {HTMLElement} */ (this.right).replaceChildren(...side("right"));
     }
-    if (input.mode !== this.lastMode) {
-      this.lastMode = input.mode;
-      /** @type {HTMLElement} */ (this.live).textContent = `${input.mode} mode`;
-    }
+    // Spoken once, and not where focused UI speaks already (core statusAnnouncement).
+    const { text, last } = statusAnnouncement(this.announced, {
+      mode: input.mode,
+      find: input.find,
+      url: input.tab?.url ?? null,
+    });
+    this.announced = last;
+    if (text !== null) /** @type {HTMLElement} */ (this.live).textContent = text;
   }
 
   /**

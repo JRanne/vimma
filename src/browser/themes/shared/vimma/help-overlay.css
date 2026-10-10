@@ -67,7 +67,7 @@
 
   & h2 {
     margin: 0.9rem 0 0.25rem;
-    color: var(--vimma-accent, inherit);
+    color: var(--vimma-text-accent, inherit);
     font-size: 0.85em;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -80,9 +80,11 @@
     padding: 0.1rem 0;
   }
 
-  /* Bound but not implemented yet (m2-tab-keys); the legend under the header says so. */
-  & .vimma-help-row[data-runnable="false"] {
-    opacity: 0.45;
+  /* Bound but not implemented yet (m2-tab-keys); the legend under the header says so. Dimmed to
+     the secondary text colour, never with opacity, so it still reads (m7-a11y). */
+  & .vimma-help-row[data-runnable="false"],
+  & .vimma-help-row[data-runnable="false"] > * {
+    color: var(--vimma-fg-dim, GrayText);
   }
 
   & .vimma-help-legend,
@@ -93,7 +95,7 @@
   }
 
   & .vimma-help-override {
-    color: var(--vimma-warning, inherit);
+    color: var(--vimma-text-warning, inherit);
   }
 
   & .vimma-help-keys,

@@ -176,7 +176,7 @@ function renameTab(s, text) {
  * @param {"current" | "tab"} where
  */
 function openOrSay(s, text, where) {
-  if (!openUrl(s.win, text, where)) s.notice.show(BLOCKED_URL_TEXT);
+  if (!openUrl(s.win, text, where)) s.notice.show(BLOCKED_URL_TEXT, { error: true });
 }
 
 /**
@@ -308,7 +308,7 @@ function sayAddon(s, op) {
     },
     (e) => {
       console.error("vimma: add-on", e);
-      s.notice.show(`add-on: ${e?.message ?? e}`);
+      s.notice.show(`add-on: ${e?.message ?? e}`, { error: true });
     },
   );
 }
@@ -529,7 +529,7 @@ export const RUNNERS = Object.freeze({
   "bookmark.add": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) => {
     quickAdd(bookmarkContext(s), text).catch((e) => {
       console.error("vimma: bookmark failed", e);
-      s.notice.show(`bookmark: ${e?.message ?? e}`);
+      s.notice.show(`bookmark: ${e?.message ?? e}`, { error: true });
     });
   },
   "bookmarks.collapse": bookmarksAction,

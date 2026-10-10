@@ -34,7 +34,7 @@ describe("status bar segments", () => {
       ["url", "github.com", "right"],
     ]);
     expect(segs[0]).toMatchObject({ fg: "--vimma-mode-normal-fg", bg: "--vimma-mode-normal" });
-    expect(segs[1]?.fg).toBe("--vimma-blue");
+    expect(segs[1]?.fg).toBe("--vimma-text-blue");
   });
 
   test("every token named is a theme token", () => {
@@ -108,13 +108,13 @@ describe("status bar segments", () => {
       (s) => s.id === "error",
     );
     expect(seg?.text.startsWith("2 errors: ~/c.toml:3: keys.new_tabb:")).toBe(true);
-    expect(seg?.fg).toBe("--vimma-error");
+    expect(seg?.fg).toBe("--vimma-text-error");
   });
 
   test("alerts (workspaces off) show as a persistent error, after config errors", () => {
     const text = "workspaces off: containers are disabled";
     const seg = statusSegments({ mode: "normal", alerts: [text] }).find((s) => s.id === "alert");
-    expect(seg).toMatchObject({ text, fg: "--vimma-error", side: "right" });
+    expect(seg).toMatchObject({ text, fg: "--vimma-text-error", side: "right" });
     const both = statusSegments({
       mode: "normal",
       alerts: [text],
@@ -126,7 +126,7 @@ describe("status bar segments", () => {
 
   test("a workspace without a known colour uses the accent", () => {
     const s = statusSegments({ mode: "normal", workspace: { name: "x", index: 2 } });
-    expect(s[1]).toMatchObject({ text: "● 2:x", fg: "--vimma-accent" });
+    expect(s[1]).toMatchObject({ text: "● 2:x", fg: "--vimma-text-accent" });
   });
 
   test("displayUrl drops http(s) and a lone trailing slash", () => {

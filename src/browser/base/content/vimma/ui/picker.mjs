@@ -118,7 +118,9 @@ export class GotoPicker {
     this.state = openPicker(this.host.items(), { activeId: this.host.activeId() });
     this.render();
     dialog.showModal();
-    dialog.focus();
+    // The list, not the dialog: aria-activedescendant names the active row only while the
+    // element carrying it has focus (m7-a11y).
+    /** @type {HTMLElement} */ (this.list).focus();
   }
 
   /**
@@ -229,7 +231,14 @@ export class GotoPicker {
       }),
     );
     if (!state.items.length && this.look.empty) {
-      list.append(el("li", "vimma-picker-empty", this.look.empty));
+      // Not an option: the listbox is empty, and describes itself with this line.
+      const empty = el("li", "vimma-picker-empty", this.look.empty);
+      empty.id = `${this.look.id}-empty`;
+      empty.setAttribute("role", "none");
+      list.append(empty);
+      list.setAttribute("aria-describedby", empty.id);
+    } else {
+      list.removeAttribute("aria-describedby");
     }
     const current = state.matches.length ? list.children[state.selected] : undefined;
     if (current) {
@@ -258,6 +267,7 @@ export class GotoPicker {
     dialog.className = "vimma-picker";
     dialog.tabIndex = -1;
     dialog.setAttribute("aria-label", this.look.title);
+    dialog.setAttribute("aria-modal", "true");
     const header = el("header");
     const h1 = el("h1");
     h1.textContent = this.look.title;
@@ -270,6 +280,8 @@ export class GotoPicker {
     const list = el("ul");
     list.setAttribute("role", "listbox");
     list.setAttribute("aria-label", this.look.listLabel);
+    // Focusable by script only: keys reach the picker through VimmaHost, not Tab.
+    list.tabIndex = -1;
     dialog.append(header, list);
     doc.body.append(dialog);
     this.dialog = dialog;

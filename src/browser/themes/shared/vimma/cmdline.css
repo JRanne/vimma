@@ -80,7 +80,7 @@
 }
 
 .vimma-cmdline-prompt {
-  color: var(--vimma-accent, AccentColor);
+  color: var(--vimma-text-accent, AccentColor);
   padding-inline-end: 0.15rem;
 }
 
@@ -100,5 +100,5 @@
 
 .vimma-cmdline-error {
   padding: 0.15rem 0.5rem 0.25rem;
-  color: var(--vimma-error, #c01c28);
+  color: var(--vimma-text-error, #c01c28);
 }
