@@ -237,9 +237,11 @@ group("Side panel", [
   ...numbered("panel_select", "panel.select", (n) => `Select row ${n}`),
   ["panel_down", "panel.down", "Next row"],
   ["panel_up", "panel.up", "Previous row"],
-  ["panel_open", "panel.open", "Open the selected row"],
-  ["panel_close", "panel.close", "Close the side panel"],
+  ["panel_open", "panel.open", "Open the selected row, or show the marked tabs as panes"],
+  ["panel_close", "panel.close", "End the range, clear the marks, or close the side panel"],
   ["panel_close_tab", "panel.close_tab", "Close the selected tab; the panel stays open"],
+  ["panel_mark", "panel.mark", "Mark or unmark the selected tab and move down"],
+  ["panel_visual", "panel.visual", "Start a range of rows to mark, or mark it"],
   ["restore_tab", "tab.restore", "Reopen the last closed tab (Firefox's ctrl+shift+t)"],
 ]);
 

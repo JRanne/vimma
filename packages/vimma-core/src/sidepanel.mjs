@@ -23,18 +23,26 @@ import { displayLabel } from "./tablabels.mjs";
  */
 /**
  * `previous` / `next`: the workspaces ctrl+b ( / ctrl+b ) go to, null with one workspace.
+ * `marked`: the marked rows' tabs, in row order; `anchor`: the tab an open `V` range started on,
+ * else null (docs/specs/m4-side-panel-multiselect.md).
  * @typedef {{ readonly workspace: { id: string, name: string, index: number, color?: string },
  *   readonly previous: string | null, readonly next: string | null,
- *   readonly rows: readonly PanelRow[], readonly selected: number }} PanelState
+ *   readonly rows: readonly PanelRow[], readonly selected: number,
+ *   readonly marked: readonly string[], readonly anchor: string | null }} PanelState
  */
 /**
  * `closeTab`: close that tab and keep the panel open (`x`, docs/specs/key-handling-batch.md).
+ * `together`: show `ids` (row order) as the workspace's panes, focus on `focus`
+ * (docs/specs/m4-side-panel-multiselect.md).
  * @typedef {{ type: "select", id: string } | { type: "close" }
- *   | { type: "refuse", text: string } | { type: "closeTab", id: string }} PanelEffect
+ *   | { type: "refuse", text: string } | { type: "closeTab", id: string }
+ *   | { type: "together", ids: string[], focus: string }} PanelEffect
  */
 
 /** What `x` says on a pinned tab. */
 export const PINNED_TEXT = "pinned tab: unpin it to close it";
+/** What `space` says on a pinned tab. */
+export const PINNED_MARK_TEXT = "pinned tab: unpin it to show it in a split";
 
 /**
  * The host of a URL, or the URL itself when it has none (about:, data:).
@@ -88,12 +96,15 @@ export function openPanel(model, info, { color, selectedId = null } = {}) {
     next: neighbour(1),
     rows: Object.freeze(rows),
     selected,
+    marked: Object.freeze([]),
+    anchor: null,
   });
 }
 
 /**
  * The panel again after the model changed (a tab opened or closed, ctrl+b )): the highlight stays
- * on its tab while that is listed in the same workspace.
+ * on its tab while that is listed in the same workspace, and so do the marks and an open range
+ * (in the new row order); another workspace starts without them.
  * @param {PanelState} state
  * @param {Workspaces} model
  * @param {(tabId: string) => PanelTabInfo | undefined} info
@@ -103,7 +114,87 @@ export function openPanel(model, info, { color, selectedId = null } = {}) {
 export function refreshPanel(state, model, info, { color } = {}) {
   const same = activeWorkspace(model).id === state.workspace.id;
   const selectedId = same ? (state.rows[state.selected]?.tabId ?? null) : null;
-  return openPanel(model, info, { color, selectedId });
+  const next = openPanel(model, info, { color, selectedId });
+  if (!same) return next;
+  const listed = new Set(next.rows.map((r) => r.tabId));
+  return Object.freeze({
+    ...next,
+    marked: inRowOrder(next, new Set(state.marked)),
+    anchor: state.anchor && listed.has(state.anchor) ? state.anchor : null,
+  });
+}
+
+/**
+ * The listed tabs of `ids`, in row order.
+ * @param {PanelState} state
+ * @param {ReadonlySet<string>} ids
+ * @returns {readonly string[]}
+ */
+function inRowOrder(state, ids) {
+  return Object.freeze(state.rows.filter((r) => ids.has(r.tabId)).map((r) => r.tabId));
+}
+
+/**
+ * Whether row `i` is inside the open `V` range (anchor to highlight, either way).
+ * @param {PanelState} state
+ * @param {number} i
+ */
+export function inRange(state, i) {
+  if (state.anchor === null) return false;
+  const a = state.rows.findIndex((r) => r.tabId === state.anchor);
+  if (a < 0) return false;
+  return i >= Math.min(a, state.selected) && i <= Math.max(a, state.selected);
+}
+
+/**
+ * The marked rows, in row order.
+ * @param {PanelState} state
+ * @returns {PanelRow[]}
+ */
+export function markedRows(state) {
+  const marked = new Set(state.marked);
+  return state.rows.filter((r) => marked.has(r.tabId));
+}
+
+/**
+ * The header's count: "2 marked", "range: 3", "range: 3 · 2 marked", or "" with neither.
+ * @param {PanelState} state
+ */
+export function markSummary(state) {
+  const range = state.rows.filter((_, i) => inRange(state, i)).length;
+  const parts = [
+    ...(range ? [`range: ${range}`] : []),
+    ...(state.marked.length ? [`${state.marked.length} marked`] : []),
+  ];
+  return parts.join(" · ");
+}
+
+/**
+ * Ends an open range, marking its rows (pinned ones skipped) on top of the marks.
+ * @param {PanelState} state
+ * @returns {PanelState}
+ */
+function markRange(state) {
+  const ids = new Set(state.marked);
+  state.rows.forEach((r, i) => {
+    if (inRange(state, i) && !r.pinned) ids.add(r.tabId);
+  });
+  return Object.freeze({ ...state, marked: inRowOrder(state, ids), anchor: null });
+}
+
+/**
+ * Enter with marks (after a range is marked): one goes to its tab; two or more are shown
+ * together, focus on the highlighted row when it is marked, else the first marked.
+ * @param {PanelState} state
+ * @returns {{ state: PanelState, effect: PanelEffect | null }}
+ */
+function openMarked(state) {
+  const ids = [...state.marked];
+  if (ids.length === 1)
+    return { state, effect: { type: "select", id: /** @type {string} */ (ids[0]) } };
+  const here = state.rows[state.selected]?.tabId;
+  const focus = here && ids.includes(here) ? here : /** @type {string} */ (ids[0]);
+  return { state, effect: { type: "together", ids, focus } };
 }
 
 /**
@@ -127,15 +218,47 @@ export function panelKey(state, action) {
       return move(Math.max(0, Math.min(last, state.selected + 1)));
     case "panel.up":
       return move(Math.max(0, state.selected - 1));
-    case "panel.open":
-      return select(state.rows[state.selected]);
+    case "panel.open": {
+      const ready = state.anchor === null ? state : markRange(state);
+      if (ready.marked.length) return openMarked(ready);
+      return { ...select(state.rows[state.selected]), state: ready };
+    }
+    case "panel.mark": {
+      if (state.anchor !== null) return { state: markRange(state), effect: null };
+      const row = state.rows[state.selected];
+      if (!row) return { state, effect: null };
+      if (row.pinned) return { state, effect: { type: "refuse", text: PINNED_MARK_TEXT } };
+      const ids = new Set(state.marked);
+      if (!ids.delete(row.tabId)) ids.add(row.tabId);
+      return {
+        state: Object.freeze({
+          ...state,
+          marked: inRowOrder(state, ids),
+          selected: Math.min(last, state.selected + 1),
+        }),
+        effect: null,
+      };
+    }
+    case "panel.visual": {
+      if (state.anchor !== null) return { state: markRange(state), effect: null };
+      const row = state.rows[state.selected];
+      if (!row) return { state, effect: null };
+      return { state: Object.freeze({ ...state, anchor: row.tabId }), effect: null };
+    }
     case "panel.select": {
       const n = action.arg ?? 0;
       const row = state.rows[n - 1];
       if (row) return select(row);
       return { state, effect: { type: "refuse", text: `no tab ${n} in ${state.workspace.name}` } };
     }
+    // Esc: the range first, then the marks, then the panel (Vim leaves visual mode first).
     case "panel.close":
+      if (state.anchor !== null) {
+        return { state: Object.freeze({ ...state, anchor: null }), effect: null };
+      }
+      if (state.marked.length) {
+        return { state: Object.freeze({ ...state, marked: Object.freeze([]) }), effect: null };
+      }
       return { state, effect: { type: "close" } };
     case "panel.close_tab": {
       // The highlight goes to the next row (the one before, at the end), so the refresh after

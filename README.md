@@ -58,7 +58,8 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
   `ctrl+b (` switch, `ctrl+^` goes back to the last one as Vim's alternate buffer does,
   `ctrl+b w` picks one by name, and tabs move between them. Every workspace keeps its tabs and
   split layout across restarts.
-- Side panel: `ctrl+b b` lists the workspace's tabs; pick one with `j`/`k`.
+- Side panel: `ctrl+b b` lists the workspace's tabs; pick one with `j`/`k`, or mark several
+  with `space` / `V` and `Enter` shows them together as panes in the current layout.
 - `ctrl+b ?` lists every binding, searchable.
 
 **Yours to configure**

@@ -203,6 +203,9 @@ const modal = {
     // The selected tab; the panel stays open on the next row (key-handling-batch). The bookmarks
     // panel shares the mode and ignores it (d deletes there).
     x: "panel.close_tab",
+    // Marks for Enter to show together (m4-side-panel-multiselect), ranger's keys.
+    "<Space>": "panel.mark",
+    V: "panel.visual",
     // The panel takes every key: Firefox's ctrl+shift+t, as an action of its own.
     "<C-S-t>": "tab.restore",
     // Closes the panel, then focuses the address bar (as I does in normal mode).

@@ -31,7 +31,14 @@ import {
   swap as swapToward,
   toggleZoom,
 } from "../core/panes.mjs";
-import { arrange, dwindleDirection, layoutRefusal, nextLayout } from "../core/layouts.mjs";
+import {
+  arrange,
+  dwindleDirection,
+  layoutRefusal,
+  nextLayout,
+  showTogether,
+  togetherRefusal,
+} from "../core/layouts.mjs";
 import { planSplit } from "../core/splitplan.mjs";
 import {
   applyLayout,
@@ -409,6 +416,32 @@ export class PaneView {
     const refusal = layoutRefusal(this.#panes, name, options);
     if (refusal) return { ok: false, reason: refusal.message };
     this.#set(arrange(this.#panes, name, options));
+    return { ok: true };
+  }
+
+  /**
+   * Shows `tabs` (reading order) as the panes, replacing the split
+   * (docs/specs/m4-side-panel-multiselect.md): arranged as the stored preset, else
+   * `[panes] layout`; focus on `focus`. Tabs of the old split that are not listed leave it and
+   * stay open; pages move, never reload. Past `[panes] max`, or with no space: refused, nothing
+   * changes.
+   * @param {Tab[]} tabs  two or more, each with its panel
+   * @param {Tab} focus
+   * @returns {PaneResult}
+   */
+  showTabs(tabs, focus) {
+    const ids = tabs.map((t) => t.linkedPanel);
+    const options = {
+      preset: this.#panes?.layout,
+      mode: this.mode,
+      focus: focus.linkedPanel,
+      area: this.#area(),
+      mainSize: this.mainSize,
+      max: this.#max,
+    };
+    const refusal = togetherRefusal(ids, options);
+    if (refusal) return { ok: false, reason: refusal.message };
+    this.#set(showTogether(ids, options));
     return { ok: true };
   }
 

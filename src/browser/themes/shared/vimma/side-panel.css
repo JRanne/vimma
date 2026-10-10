@@ -108,6 +108,53 @@
   }
 }
 
+/* The tabs panel's marks (docs/specs/m4-side-panel-multiselect.md): a gutter before the number
+   holds ● on a marked row (│ inside an open V range), so the mark does not rest on colour; a
+   marked row also gets a bar on its leading edge. Every row keeps the bar's width, so marking
+   moves nothing. */
+#vimma-panel {
+  & .vimma-panel-row {
+    grid-template-columns: 1.5ch 2ch minmax(0, 1fr) auto;
+    border-inline-start: 3px solid transparent;
+    padding-inline-start: calc(0.75rem - 3px);
+  }
+
+  & .vimma-panel-host {
+    grid-column: 3;
+  }
+
+  & .vimma-panel-marks {
+    grid-column: 4;
+  }
+
+  & .vimma-panel-mark {
+    color: var(--vimma-text-green, AccentColor);
+  }
+
+  & .vimma-panel-marked {
+    border-inline-start-color: var(--vimma-text-green, AccentColor);
+
+    & .vimma-panel-title {
+      font-weight: bold;
+    }
+  }
+
+  & .vimma-panel-in-range .vimma-panel-mark {
+    color: var(--vimma-fg-dim, GrayText);
+  }
+
+  /* Kept in the tree when empty (no display: none): a live region must exist to be announced. */
+  & .vimma-panel-count {
+    padding: 0 0.75rem 0.5rem;
+    font-size: 0.85em;
+    color: var(--vimma-text-green, AccentColor);
+
+    &:empty {
+      padding: 0;
+    }
+  }
+}
+
 /* The bookmarks panel (docs/specs/bookmarks.md): a tree, indented by depth (--vimma-depth). */
 #vimma-bookmarks {
   & .vimma-panel-row {

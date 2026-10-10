@@ -10,6 +10,7 @@ import { closest, describeAction } from "../core/actions.mjs";
 import { LAYOUTS, isLayoutName, layoutOfAction } from "../core/layouts.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { closeTab } from "./tab-ops.mjs";
+import { tabById } from "./goto.mjs";
 
 /** @import { Action } from "../core/dispatcher.mjs" */
 /** @import { Direction, ResizeDirection } from "../core/panes.mjs" */
@@ -17,6 +18,9 @@ import { closeTab } from "./tab-ops.mjs";
 
 /** One resize key's step: a share of the split (m3-m4-core-models, For the host specs). */
 export const RESIZE_STEP = 0.05;
+
+/** The side panel's show-together, as its notices name it (m4-side-panel-multiselect). */
+const TOGETHER = "Show together";
 
 /** @param {Window} win */
 function gBrowserOf(win) {
@@ -106,6 +110,31 @@ export function layoutPanes(win, action, text) {
   if (!result.ok) return /** @type {string} */ (refusal(action, result));
   focusPage(win);
   return `layout: ${view.panes?.layout ?? name}`;
+}
+
+/**
+ * The side panel's `Enter` with marks (docs/specs/m4-side-panel-multiselect.md): those tabs, in
+ * that order, become the panes, focus on `focusId`'s, whose page then has keyboard focus. A tab
+ * never selected (lazy) gets its browser first, as Firefox's split view does for its panels.
+ * @param {Window} win
+ * @param {string[]} tabIds  the panel's row ids (a panel id, or a lazy tab's uuid)
+ * @param {string} focusId
+ * @returns {string | null} the refusal for the notice, or null once shown
+ */
+export function showTabs(win, tabIds, focusId) {
+  const view = PaneViews.get(win);
+  const gBrowser = /** @type {{ insertBrowser(tab: Element): void }} */ (
+    /** @type {unknown} */ (gBrowserOf(win))
+  );
+  const tabs = tabIds.map((id) => tabById(win, id));
+  const focus = tabById(win, focusId);
+  if (!view || !focus || tabs.some((t) => !t)) return `${TOGETHER}: a tab is gone`;
+  const list = /** @type {any[]} */ (tabs);
+  for (const t of list) if (!t.linkedPanel) gBrowser.insertBrowser(t);
+  const result = view.showTabs(list, /** @type {any} */ (focus));
+  if (!result.ok) return `${TOGETHER}: ${result.reason}`;
+  focusPage(win);
+  return null;
 }
 
 /**
