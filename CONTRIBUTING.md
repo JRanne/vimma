@@ -124,6 +124,27 @@ A ruleset protects `main`:
 - **Branches are deleted on merge.** Start new work from a fresh `origin/main`.
 - **Auto-merge is available.** Turn it on for a PR and it squash-merges once the checks pass.
 
+## Dependency updates
+
+Dependabot ([.github/dependabot.yml](.github/dependabot.yml)) keeps npm, the vimma-ctl crate,
+its Rust toolchain and the GitHub Actions current:
+
+- **Weekly, grouped.** On Monday mornings (Helsinki) it opens one PR per ecosystem with every
+  minor and patch update, and one PR per major update. A release must be three days old first.
+  Titles read `build(deps): bump …`, which commitlint accepts.
+- **Security fixes come at once.** A Dependabot alert gets its fix PR as soon as there is one,
+  outside the schedule. When a parent package pins the vulnerable version, add an `overrides`
+  entry to the root `package.json` instead (as for `sharp` and `qs`) and say why in the PR.
+- **Auto-merge when green.** [dependabot-automerge.yml](.github/workflows/dependabot-automerge.yml)
+  turns on auto-merge for security, patch and minor updates. They merge only once every
+  required check above passes, licences included: a new licence or a new version of a package
+  with a licence exception fails `npm run license-check` until a person reviews it.
+- **Majors need review.** Major updates, every GitHub Actions update (workflows hold write
+  tokens) and `@zen-browser/surfer` version updates get a comment and wait for a person to read
+  the changelog, fix what breaks and merge.
+- **By hand.** Node in `.nvmrc` (see the bench baseline in [docs/runbook.md](docs/runbook.md))
+  and the Semgrep image digest in `semgrep.yml` are not covered; bump them in their own PR.
+
 ## More
 
 - [docs/runbook.md](docs/runbook.md): builds, CI, e2e tests, parallel browser lanes and releases.

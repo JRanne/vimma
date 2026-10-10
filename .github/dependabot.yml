@@ -1,0 +1,80 @@
+# Dependency updates (CONTRIBUTING.md, "Dependency updates"). Weekly, minor and patch grouped into
+# one PR per ecosystem, majors one PR each. dependabot-automerge.yml turns on auto-merge for
+# security, patch and minor updates (never GitHub Actions); GitHub merges once every required
+# check is green. Security updates ignore the schedule and the cooldown.
+# Commit and PR titles: `build(deps): bump …` / `build(deps-dev): bump …`, lower-case, which
+# commitlint.config.mjs accepts (build is not a type that needs a body).
+# Not covered: Node in .nvmrc (no Dependabot ecosystem; bump by hand, docs/runbook.md "Bench
+# baseline") and the Semgrep image digest in semgrep.yml (an env value, not a Dockerfile).
+version: 2
+
+updates:
+  # Root package.json and its workspaces (packages/*; vimma-core has no dependencies of its own).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Helsinki
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: build
+      prefix-development: build
+      include: scope
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+
+  # tools/vimma-ctl (ADR-011): proptest is its only, test-only, dependency.
+  - package-ecosystem: cargo
+    directory: /tools/vimma-ctl
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Helsinki
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: build
+      prefix-development: build
+      include: scope
+    groups:
+      cargo-minor-patch:
+        update-types: [minor, patch]
+
+  # tools/vimma-ctl/rust-toolchain.toml: the exact toolchain CI installs. CI's clippy
+  # (-D warnings, pedantic) gates a release that adds lints.
+  - package-ecosystem: rust-toolchain
+    directory: /tools/vimma-ctl
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Helsinki
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: build
+      include: scope
+
+  # Every `uses:` in .github/workflows, kept pinned to a commit SHA with its version comment.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Helsinki
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]
