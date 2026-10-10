@@ -3,9 +3,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // The pane keys (docs/specs/m4-split-panes.md, sub-specs 3 and 5) over the window's PaneView
-// (split/PaneView.mjs). Each returns the refusal text to show, or null.
+// (split/PaneView.mjs), and the tiling layouts (docs/specs/tiling-layouts.md). Each returns the
+// text to show (a refusal, or a layout's name), or null.
 
-import { describeAction } from "../core/actions.mjs";
+import { closest, describeAction } from "../core/actions.mjs";
+import { LAYOUTS, isLayoutName, layoutOfAction } from "../core/layouts.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { closeTab } from "./tab-ops.mjs";
 
@@ -63,6 +65,47 @@ export function splitPane(win, action) {
   const result = view?.split(direction);
   if (result?.ok) /** @type {any} */ (win).gURLBar?.select();
   return refusal(action, result);
+}
+
+/**
+ * pane.new (`prefix+enter`, docs/specs/tiling-layouts.md): a new pane without a direction,
+ * along the focused pane's longer side (`[panes] layout = "dwindle"`) or right ("manual"); as
+ * split_vertical / split_horizontal otherwise.
+ * @param {Window} win
+ * @param {Action} action
+ */
+export function newPane(win, action) {
+  const result = PaneViews.get(win)?.newPane();
+  if (result?.ok) /** @type {any} */ (win).gURLBar?.select();
+  return refusal(action, result);
+}
+
+/**
+ * pane.next_layout (`prefix+space`, `:layout`), pane.select_layout (`:layout <name>`) and
+ * pane.layout_<preset>: rearranges the panes, focuses the focused pane's page as after a move,
+ * and returns what the notice says: `layout: <name>`, or the refusal.
+ * @param {Window} win
+ * @param {Action} action
+ * @param {string} [text]  `:layout`'s name
+ * @returns {string}
+ */
+export function layoutPanes(win, action, text) {
+  const view = PaneViews.get(win);
+  if (!view?.panes) return `${describeAction(action)}: only one pane`;
+  /** @type {import("../core/layouts.mjs").LayoutName | undefined} */
+  let name = layoutOfAction(action.id);
+  if (action.id === "pane.select_layout") {
+    const typed = (text ?? "").trim();
+    if (!isLayoutName(typed)) {
+      const near = closest(typed, LAYOUTS);
+      return `no layout "${typed}"${near ? ` (did you mean "${near}"?)` : ""}`;
+    }
+    name = typed;
+  }
+  const result = name ? view.arrange(name) : view.nextLayout();
+  if (!result.ok) return /** @type {string} */ (refusal(action, result));
+  focusPage(win);
+  return `layout: ${view.panes?.layout ?? name}`;
 }
 
 /**

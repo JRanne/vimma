@@ -17,6 +17,7 @@
 /** @typedef {(raw: any) => any} SnapshotMigration a step from schema n to n + 1 */
 
 import { MIN_RATIO } from "./panes.mjs";
+import { isLayoutName } from "./layouts.mjs";
 import { isWorkspaceId } from "./workspaces.mjs";
 import { pruneTabLabels, readTabLabels, writeTabLabels } from "./tablabels.mjs";
 
@@ -249,6 +250,9 @@ function readPanes(raw, path, tabs) {
     mru: Object.freeze(mru.slice()),
     zoom: raw.zoom,
     next: raw.next,
+    // The last preset (tiling-layouts): optional, read leniently. An unknown name (a newer
+    // vimma's preset) is dropped; cycling then starts from the first preset.
+    ...(isLayoutName(raw.layout) ? { layout: raw.layout } : {}),
   });
 }
 

@@ -99,7 +99,10 @@ async function stat(path) {
 /** @param {Window} win @param {ResolvedConfig} config */
 function applyToWindow(win, config) {
   const view = PaneViews.get(win);
-  if (view) view.max = config.panes.max;
+  if (!view) return;
+  view.max = config.panes.max;
+  view.mode = config.panes.layout;
+  view.mainSize = config.panes.mainSize;
 }
 
 /** @param {ActiveConfig} next */

@@ -53,6 +53,8 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
   you are.
 - Split panes: `ctrl+b v` and `ctrl+b -` split, `ctrl+b h/j/k/l` move, `ctrl+b z` zoom, plus
   swap, resize and close. Up to 4 panes, built on Firefox's own split view.
+- Tiling layouts: `ctrl+b enter` opens a pane along the longer side (Hyprland's dwindle), and
+  `ctrl+b space` cycles tmux's presets (even, main, tiled, a spiral) without reloading a page.
 - Workspaces: each one is its own container, so logins and cookies stay apart. `ctrl+b )` /
   `ctrl+b (` switch, `ctrl+^` goes back to the last one as Vim's alternate buffer does,
   `ctrl+b w` picks one by name, and tabs move between them. Every workspace keeps its tabs and
