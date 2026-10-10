@@ -353,12 +353,22 @@ profile has one workspace, `main`; you make more as you need them (see
   nothing is closed. If you renamed its container in Firefox's Settings, its tabs and site data
   are kept, and the status bar says so.
 - A workspace name cannot be only digits: in `:wsmove 2` and `:workspace 2` a number means the
-  workspace's place in `ctrl+i` order.
+  workspace's place in `ctrl+i` order. `config.toml` can still name one `2` in `[workspaces]`;
+  then `2` means that workspace, by name, and the workspace at place 2 is reached by its name.
 - **Moving a tab reopens it** in the other workspace's container, as Firefox's "Reopen in
   Container" does: its address, name and mute come along, but not its back/forward history,
   what you typed into forms, its scroll position, or a form submission (the page is loaded
   again, signed in as that workspace). A tab in a split leaves the split first. You stay in the
   workspace you were in.
+- **A workspace's container deleted outside Vimma** (Firefox's Settings → Containers, or an
+  extension) is replaced at once by a new, empty one: the workspace stays, its new tabs open in
+  the new container, and the status bar says so. Its cookies and logins went with the old
+  container, so its sites need a new sign-in. Tabs an extension left open in the deleted
+  container stay in the workspace, marked `foreign`.
+- **Containers turned off** (`privacy.userContext.enabled` = `false` in `about:config`) at
+  startup: the status bar shows a lasting error, and Vimma runs without workspaces (tabs open as
+  in Firefox, without containers) until you set it back to `true` and restart. Vimma does not
+  turn it back on for you.
 
 ### Workspace picker
 

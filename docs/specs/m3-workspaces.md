@@ -4,7 +4,8 @@ Status: research and plan; split into sub-specs (see Breakdown). Sub-specs 1 (st
 (routing) and 2b (switching) merged; sub-spec 3 (persistence) implemented, awaiting review;
 4a (lifecycle) and 4b (move) implemented together, awaiting review, with the open items in their
 Settled section; 5 (picker) implemented, awaiting review; 6 (side panel) implemented, awaiting
-review ·
+review; the 4a/4b/5 leftovers (container deleted outside Vimma, containers off at startup, lazy
+move, number-like names) implemented, awaiting review ·
 Milestone: M3 · Area: host
 (`src/browser/base/content/vimma/workspaces/`, `ui/`), four upstream patch files (five hunks)
 
@@ -1001,6 +1002,45 @@ dependency for 4b, 5 and parts of 4a.
   the panel's `order` fails "still the leftmost box".
 - **Left:** a mouse (clicking a row); a configurable width in `config.toml`; a web page in the
   panel stays out of scope.
+
+## Settled: the 4a/4b/5 leftovers, m3-container-edges (2026-10-10)
+
+- **Container deleted outside Vimma.** Grepped, not guessed: `CIS.remove(id)` (CIS:500-526)
+  clears the container's data, drops the identity and fires `contextual-identity-deleted`; it
+  closes no tab. Settings (`containers.mjs:124-126`) runs `closeContainerTabs` first; an
+  extension's `contextualIdentities.remove` (`ext-contextualIdentities.js:327-353`) does not, so
+  its tabs stay open in the deleted container. As the Container lifecycle planned, the app's
+  store (`watch: true`; test stores do not observe) keeps the workspace and creates a new
+  container at once, saves and notifies; Vimma's own delete drops the definition before it
+  removes the container, so it never matches. Each window's `#sync` gives the model the new
+  container (core `setWorkspaceContainer`), marks tabs left in the old one `foreign` (they stay
+  in the workspace) and says `"ext" lost its container (deleted outside Vimma); …`. New tabs
+  route to the new container, never 0; the definitions file and the window snapshot carry it.
+  Not done while `readOnly` (nothing may be created) or with containers off.
+- **Containers off at startup:** `WorkspaceStore.alert` (`CONTAINERS_OFF_ALERT`) while
+  `disabled`; `VimmaHost.status` passes it as `alerts`, which core's status bar shows as a
+  persistent `alert` segment (error colour, right side, after config errors), unlike a notice.
+  Vimma does not set the pref: Firefox's default is already `true` (`firefox.js`), so a branding
+  default would change nothing, and flipping a user's `false` back is what the plan rejects.
+- **Lazy move:** `moveTab` of a tab without `linkedPanel` reopens it with `createLazyBrowser`
+  and `lazyTabTitle` (as `adoptTab` keeps lazy tabs): URL, title and label come along, nothing
+  loads until it is selected, and its SessionStore state has the target container. `:wsmove`
+  and the picker's `m` still act on the selected tab, which is never lazy, so this path is
+  reached only through `moveTab` (a later per-row move, e.g. in the side panel, gets it free).
+- **Number-like names:** core `workspaceRefFor(model, text)`: a workspace of exactly that name
+  first, else digits are a place, else a name; `:workspace`, `:wsmove` and `:wsdelete` use it.
+  New names of digits stay refused (4a), and `config.test.mjs`'s file-order test is unchanged.
+- **Tests:** `browser_vimma_workspace_edges.js` (6 tasks): an extension-style delete (new
+  container named after the workspace, model, notice, old tab kept and foreign, `ctrl+t` into
+  the new one, file and snapshot), a Settings-style delete (empty workspace, home tab in the new
+  container), Vimma's own delete not recreating, the containers-off alert (a store of its own
+  with `enabled: () => false`; the app store marked `disabled` for the bar; persistent past Esc;
+  the pref untouched), a lazy move, and `:workspace 2` / `:wsmove 2` with config names `2` and
+  `x`. Red before (11 unexpected), green after; the whole `tests/browser/` suite passes. Vitest:
+  `setWorkspaceContainer`, `workspaceRefFor`, the `alert` segment (3 red, then green). Mutation
+  check: not marking the old container's tabs foreign fails "marked foreign".
+- **Left:** a key to move a background (possibly lazy) tab from a list; `lostContainers` from
+  the startup check is still not shown in the status bar.
 
 ## Out of scope
 

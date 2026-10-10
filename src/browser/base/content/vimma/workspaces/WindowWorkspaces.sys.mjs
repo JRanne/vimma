@@ -29,6 +29,7 @@ import {
   openTab,
   previousWorkspace,
   renameWorkspace,
+  setWorkspaceContainer,
   selectTab,
   switchWorkspace,
   workspaceOfTab,
@@ -272,6 +273,9 @@ export class WindowWorkspacesImpl {
       this.#openHome(from.id, Number(from.container));
     }
     const label = getTabLabel(tab);
+    // A lazy (never selected) tab stays lazy: its copy loads on first selection, as Firefox's
+    // own adoptTab and session restore keep such tabs.
+    const lazyTab = !tab.linkedPanel;
     /** @type {any} */
     let fresh;
     this.#moving = { from: id, to: target.id };
@@ -281,6 +285,9 @@ export class WindowWorkspacesImpl {
         tabIndex: /** @type {any} */ (tab)._tPos + 1,
         triggeringPrincipal: principal,
         skipAnimation: true,
+        ...(lazyTab
+          ? { createLazyBrowser: true, lazyTabTitle: /** @type {any} */ (tab).label }
+          : {}),
       });
     } finally {
       this.#moving = null;
@@ -669,6 +676,8 @@ export class WindowWorkspacesImpl {
     const defs = this.#defs();
     /** @type {string[]} */
     let orphans = [];
+    /** @type {string[]} */
+    const lost = [];
     for (const w of model.workspaces) {
       if (defs.some((d) => d.id === w.id) || model.workspaces.length === 1) continue;
       const { state, closedTabs } = deleteWorkspace(model, { id: w.id });
@@ -683,11 +692,27 @@ export class WindowWorkspacesImpl {
           { id: d.id, name: d.name, container: String(d.userContextId) },
           { activate: false },
         );
-      } else if (w.name !== d.name) {
-        model = renameWorkspace(model, { id: d.id }, d.name);
+      } else {
+        if (w.name !== d.name) model = renameWorkspace(model, { id: d.id }, d.name);
+        const container = String(d.userContextId);
+        if (w.container !== container) {
+          // Its container was deleted outside Vimma and replaced (WorkspaceStore): its open
+          // tabs stay, in the old container, foreign; new tabs open in the new one.
+          model = setWorkspaceContainer(model, { id: d.id }, container);
+          for (const id of w.tabs) {
+            if (String(this.#tab(id)?.userContextId) !== container) this.#foreign.add(id);
+          }
+          lost.push(d.name);
+        }
       }
     }
     this.#model = model;
+    for (const name of lost) {
+      this.#notify(
+        `"${name}" lost its container (deleted outside Vimma); it has a new, empty one, ` +
+          "so its sites need a new sign-in",
+      );
+    }
     // Never close a live tab because its workspace went (Zen's zombies): the active one takes it.
     for (const id of orphans) {
       const tab = this.#tab(id);
