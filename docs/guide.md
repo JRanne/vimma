@@ -4,6 +4,21 @@ Vimma is pre-alpha. This guide says what works **today** on `main` and marks eve
 **planned**, with the milestone that brings it ([plan.md](../plan.md) §6). Known gaps are listed
 in [limits.md](limits.md).
 
+## Every key is yours
+
+The keys below are defaults, not decisions: every binding, the `ctrl+b` prefix and the `space`
+leader can be remapped in `~/.config/vimma/config.toml`. These three lines remap one key, move the
+prefix to `ctrl+a` and the leader to `,`:
+
+```toml
+keys.new_tab = ["prefix+t"]   # new tab: prefix t instead of prefix c
+keys.prefix = "ctrl+a"        # the prefix, ctrl+b by default as in tmux
+modal.leader = ","            # the leader, space by default as in many Vim setups
+```
+
+Save the file and it applies within 2 seconds, without a restart. [config.toml](#configtoml) has the
+details, and [bindings.md](bindings.md) lists every action's config name with its default keys.
+
 ## Getting started
 
 ### Install
@@ -81,10 +96,11 @@ To change it back:
 Vimma has two key layers and one dispatcher, which sees every key before Firefox does, including
 in the URL bar, `about:` pages and the PDF viewer.
 
-- **The prefix layer (Herdr).** `ctrl+b` is the prefix. The next key is a command: `ctrl+b ?`
+- **The prefix layer (tmux).** `ctrl+b` is the prefix, like tmux's default prefix. The next key
+  is a command: `ctrl+b ?`
   shows the bindings, `ctrl+b c` opens a tab, `ctrl+b v` splits the pane, and so on.
   The prefix works in every mode and waits for the next key with no timeout. `Esc` cancels it.
-- **The modal layer (Neovim).** Bare keys act on the page depending on the mode: `j`/`k` scroll
+- **The modal layer (Vim).** Bare keys act on the page depending on the mode: `j`/`k` scroll
   in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page.
   `visual` is copy mode (caret and selection), `hint` is link hints, `help` the bindings overlay
   and `command` the `:` line, `resize` is resize mode for panes (`ctrl+b r`) and `panel` the side
