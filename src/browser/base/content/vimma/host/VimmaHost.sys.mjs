@@ -179,7 +179,8 @@ function switchWorkspace(s, text) {
     return;
   }
   const ww = WindowWorkspaces.get(s.win);
-  const refused = ww?.switchTo(workspaceRef(text, ww.model)) ?? NO_WORKSPACES;
+  // null is success, not "no model": `?? NO_WORKSPACES` would show it after every switch.
+  const refused = ww ? ww.switchTo(workspaceRef(text, ww.model)) : NO_WORKSPACES;
   if (refused) s.notice.show(refused);
 }
 
@@ -209,7 +210,8 @@ function workspaceRunner(op, prompt) {
  */
 function workspaceStep(step) {
   return (s) => {
-    const refused = WindowWorkspaces.get(s.win)?.[step]() ?? NO_WORKSPACES;
+    const ww = WindowWorkspaces.get(s.win);
+    const refused = ww ? ww[step]() : NO_WORKSPACES;
     if (refused) s.notice.show(refused);
   };
 }
