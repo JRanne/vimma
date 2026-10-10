@@ -52,7 +52,7 @@ const styled = new WeakSet();
  * @property {() => { mode: Mode, pending: readonly string[], find?: FindStatus | null,
  *   pane?: { index: number, count: number } | null,
  *   workspace?: { name: string, index: number, color?: string } | null,
- *   configErrors?: readonly ConfigError[] }} status
+ *   configErrors?: readonly ConfigError[], configFile?: string }} status
  * @property {(fn: () => void) => () => void} subscribe  host state changes; returns unsubscribe
  * @property {(tab: Element) => string | null} [labelFor]  a user's tab rename (tab rename spec)
  */
@@ -223,6 +223,7 @@ export class StatusBar {
       pane,
       workspace,
       configErrors: status.configErrors ?? [],
+      configFile: status.configFile ?? "config.toml",
     };
     return input;
   }

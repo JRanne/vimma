@@ -166,7 +166,7 @@ export const AboutVimma = {
         path: configPath,
         file: ConfigHost.file,
         schema: ConfigHost.config?.schema ?? null,
-        errors: ConfigHost.errors.map((e) => formatConfigError(e, configPath)),
+        errors: ConfigHost.errors.map((e) => formatConfigError(e, ConfigHost.errorsPath)),
       },
       bindings: bindingTable(keymap).map((r) => ({
         name: r.name,

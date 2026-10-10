@@ -7,10 +7,14 @@
 // in that folder, polls its mtime and size every 2 s (plan §3: Firefox has no portable file
 // watcher), and reads it at once on `:source`. vimma-core parses and validates (reloadConfig:
 // a file is applied whole or not at all, else the last good config stays); this module does
-// the I/O and hands each part to the module that uses it. It never writes the file.
+// the I/O and hands each part to the module that uses it. `:source <path>` puts another file in
+// force the same way, until config.toml changes or a plain `:source`. The one write: `:config`
+// creates a missing config.toml from the commented template, never touching an existing one.
 
-import { formatConfigError, reloadConfig } from "../core/config.mjs";
-import { CONFIG_RELOAD_TOPIC, VimmaHost } from "../host/VimmaHost.sys.mjs";
+import { formatConfigError, reloadConfig, resolveSourcePath } from "../core/config.mjs";
+import { formatConfigTemplate } from "../core/defaults.mjs";
+import { CONFIG_EDIT_TOPIC, CONFIG_RELOAD_TOPIC, VimmaHost } from "../host/VimmaHost.sys.mjs";
+import { openUrl } from "../host/tab-ops.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
@@ -48,6 +52,10 @@ function configPath() {
 let active = null;
 /** @type {ConfigError[]} the last read's errors; [] when it was applied */
 let errors = [];
+/** The file `errors` are about: config.toml, or the file `:source <path>` named. */
+let errorsPath = "";
+/** @type {string | null} the file `:source <path>` put in force; null: config.toml */
+let sourced = null;
 /** What the file looked like at the last read; "" forces one. */
 let signature = "";
 /** @type {Promise<void> | null} */
@@ -90,12 +98,49 @@ function apply(next) {
   );
 }
 
+/**
+ * Sets the errors of the last read and hands them to the status bar, which names the file.
+ * @param {string} path
+ * @param {ConfigError[]} list  [] when the file was applied
+ * @param {boolean} kept  a config was in force before (else: the defaults are)
+ */
+function report(path, list, kept) {
+  errors = list;
+  errorsPath = path;
+  if (errors.length) {
+    // Logged once per change of the file (or :source): the signature holds until then.
+    const lines = errors.map((e) => formatConfigError(e, path));
+    console.error(
+      `vimma: ${path} has ${errors.length} error(s); ${
+        kept ? "keeping the previous config" : "using the defaults"
+      }:\n  ${lines.join("\n  ")}`,
+    );
+  }
+  VimmaHost.configure({ configErrors: errors, configFile: PathUtils.filename(path) });
+}
+
+/**
+ * Applies `text` (the contents of `path`) when it is valid, else reports its errors.
+ * @param {string} path
+ * @param {string} text
+ * @returns {boolean} whether it was applied
+ */
+function use(path, text) {
+  const previous = active;
+  const r = reloadConfig(active, text);
+  active = r.active;
+  if (active !== previous) apply(active);
+  report(path, r.errors, previous !== null);
+  return r.errors.length === 0;
+}
+
 /** @param {boolean} force  read even when the stat is unchanged (`:source`) */
 async function check(force) {
   const path = configPath();
   const now = await stat(path);
   if (!force && now === signature) return;
   signature = now;
+  sourced = null; // config.toml changed (or a plain :source): it is the file in force again
   let text = "";
   if (now !== "missing") {
     try {
@@ -105,21 +150,24 @@ async function check(force) {
       signature = "missing"; // removed between stat and read: the defaults, silently
     }
   }
-  const previous = active;
-  const r = reloadConfig(active, text);
-  active = r.active;
-  errors = r.errors;
-  if (errors.length) {
-    // Logged once per change of the file (or :source): the signature holds until then.
-    const list = errors.map((e) => formatConfigError(e, path));
-    console.error(
-      `vimma: ${path} has ${errors.length} error(s); ${
-        previous ? "keeping the previous config" : "using the defaults"
-      }:\n  ${list.join("\n  ")}`,
-    );
+  use(path, text);
+}
+
+/**
+ * `:source <path>`: that file replaces the config in force, all or nothing, as config.toml
+ * does. Unlike config.toml, a missing file is an error: the user named it.
+ * @param {string} path  absolute
+ */
+async function source(path) {
+  let text;
+  try {
+    text = await IOUtils.readUTF8(path);
+  } catch (e) {
+    if (!notFound(e)) console.error(`vimma: cannot read ${path}`, e);
+    report(path, [{ path: "", message: notFound(e) ? "no such file" : "cannot be read" }], true);
+    return;
   }
-  if (active !== previous) apply(active);
-  VimmaHost.configure({ configErrors: errors });
+  if (use(path, text)) sourced = path;
 }
 
 /**
@@ -145,6 +193,57 @@ function poll(force = false) {
   return running;
 }
 
+/**
+ * Runs `task` once no read is running, and holds polls off while it runs.
+ * @param {() => Promise<void>} task
+ */
+async function exclusive(task) {
+  while (running) await running;
+  running = task()
+    .catch((e) => console.error("vimma: config read failed", e))
+    .finally(() => {
+      running = null;
+    });
+  await running;
+}
+
+/**
+ * `:source <path>`: the path as typed, expanded as core's resolveSourcePath says; a relative
+ * one is next to config.toml.
+ * @param {string} arg
+ */
+function sourcePath(arg) {
+  return resolveSourcePath(arg, {
+    home: home(),
+    xdgConfigHome: Services.env.get("XDG_CONFIG_HOME"),
+    configDir: PathUtils.parent(configPath()) ?? "/",
+  });
+}
+
+/**
+ * `:config`: config.toml in a new tab (view-source, read-only), first created from the
+ * commented template, folders too, when it does not exist. An existing file is never written.
+ * @param {Window} win
+ */
+async function edit(win) {
+  const path = configPath();
+  try {
+    if (!(await IOUtils.exists(path))) {
+      const parent = PathUtils.parent(path);
+      if (parent) await IOUtils.makeDirectory(parent, { createAncestors: true });
+      // "create" fails rather than overwrite a file that appeared meanwhile.
+      await IOUtils.writeUTF8(path, formatConfigTemplate(), { mode: "create" });
+    }
+  } catch (e) {
+    if (!(await IOUtils.exists(path))) {
+      console.error(`vimma: cannot create ${path}`, e);
+      VimmaHost.say(win, `:config: cannot create ${path}`);
+      return;
+    }
+  }
+  openUrl(win, `view-source:${PathUtils.toFileURI(path)}`, "tab");
+}
+
 function startTimer() {
   if (timer !== null) lazy.clearInterval(timer);
   const ms = Math.max(50, Services.prefs.getIntPref(POLL_PREF, DEFAULT_POLL_MS));
@@ -161,14 +260,25 @@ function onPref(_subject, _topic, pref) {
   else ConfigHost.reload(); // another path: read it now
 }
 
-const reloadObserver = () => {
-  ConfigHost.reload();
+/**
+ * @param {unknown} _subject
+ * @param {string} _topic
+ * @param {string | null} data  `:source`'s path as typed, "" or null without one
+ */
+const reloadObserver = (_subject, _topic, data) => {
+  ConfigHost.reload(data ?? "");
+};
+
+/** @param {unknown} subject  the window `:config` was typed in */
+const editObserver = (subject) => {
+  edit(/** @type {Window} */ (subject)).catch((e) => console.error("vimma: :config failed", e));
 };
 
 function start() {
   Services.prefs.addObserver(PATH_PREF, onPref);
   Services.prefs.addObserver(POLL_PREF, onPref);
   Services.obs.addObserver(reloadObserver, CONFIG_RELOAD_TOPIC);
+  Services.obs.addObserver(editObserver, CONFIG_EDIT_TOPIC);
   startTimer();
   // Never blocks startup: the windows start on the built-in keymap and swap when read.
   poll(true);
@@ -180,6 +290,7 @@ function stop() {
   Services.prefs.removeObserver(PATH_PREF, onPref);
   Services.prefs.removeObserver(POLL_PREF, onPref);
   Services.obs.removeObserver(reloadObserver, CONFIG_RELOAD_TOPIC);
+  Services.obs.removeObserver(editObserver, CONFIG_EDIT_TOPIC);
 }
 
 export const ConfigHost = {
@@ -205,10 +316,17 @@ export const ConfigHost = {
   },
 
   /**
-   * Reads the file now, changed or not (`:source`, a new path).
+   * Reads config.toml now, changed or not (`:source`, a new path), or with `arg` (`:source
+   * <path>`) that file instead.
+   * @param {string} [arg]  a path as typed
    * @returns {Promise<void>} settled once the read is applied or reported
    */
-  async reload() {
+  async reload(arg = "") {
+    const path = sourcePath(arg);
+    if (path) {
+      await exclusive(() => source(path));
+      return;
+    }
     await poll(true);
     // A read was running: ours was queued behind it.
     while (running) await running;
@@ -224,9 +342,14 @@ export const ConfigHost = {
     return errors;
   },
 
-  /** The file read now. */
+  /** The file whose config is in force: config.toml, or the one `:source <path>` read. */
   get path() {
-    return configPath();
+    return sourced ?? configPath();
+  },
+
+  /** The file `errors` are about (about:vimma). */
+  get errorsPath() {
+    return errorsPath || configPath();
   },
 
   /** The keymap in force (core's Keymap), null before the first read (about:vimma). */
@@ -241,6 +364,7 @@ export const ConfigHost = {
    */
   get file() {
     if (!active) return "pending";
+    if (sourced) return "read";
     return signature === "missing" ? "missing" : "read";
   },
 };

@@ -293,8 +293,13 @@ export const RUNNERS = Object.freeze({
     );
     if (refused) s.notice.show(refused);
   },
-  // `:source` (m5-config-load): ConfigHost reads config.toml now instead of at the next poll.
-  "config.reload": () => Services.obs.notifyObservers(null, CONFIG_RELOAD_TOPIC),
+  // `:source` (m5-config-load): ConfigHost reads config.toml now instead of at the next poll;
+  // `:source <path>` passes the path as typed, which ConfigHost expands.
+  "config.reload": (_s, _a, /** @type {string | undefined} */ text) =>
+    Services.obs.notifyObservers(null, CONFIG_RELOAD_TOPIC, text ?? ""),
+  // `:config`: ConfigHost opens config.toml in a tab of this window (creating it if missing).
+  "config.edit": (/** @type {WindowState} */ s) =>
+    Services.obs.notifyObservers(/** @type {any} */ (s.win), CONFIG_EDIT_TOPIC),
 });
 
 /**
@@ -388,13 +393,22 @@ const windows = new Set();
 /**
  * What config.toml sets for every window (m5-config-load; ConfigHost calls `configure`). Null
  * keymap: the built-in one, compiled per window as before M5.
+ * `configFile` names the file `configErrors` are about (config.toml, or `:source <path>`'s).
  * @type {{ keymap: Keymap | null, hintChars: string | undefined,
- *   sites: readonly InsertSiteRule[], configErrors: readonly ConfigError[] }}
+ *   sites: readonly InsertSiteRule[], configErrors: readonly ConfigError[], configFile: string }}
  */
-const settings = { keymap: null, hintChars: undefined, sites: [], configErrors: [] };
+const settings = {
+  keymap: null,
+  hintChars: undefined,
+  sites: [],
+  configErrors: [],
+  configFile: "config.toml",
+};
 
 /** Told by `:source` (config.reload); ConfigHost observes it, so the host never imports it. */
 export const CONFIG_RELOAD_TOPIC = "vimma-config-reload";
+/** Told by `:config` (config.edit), with the window as the subject; ConfigHost observes it. */
+export const CONFIG_EDIT_TOPIC = "vimma-config-edit";
 
 /**
  * The `[sites."<host>"] insert` rule for the page in `browser`, "auto" without one.
@@ -565,6 +579,7 @@ export const VimmaHost = {
    * @param {Window} win
    * @returns {{ mode: Mode, pending: string[], find?: FindStatus | null,
    *   pane?: { index: number, count: number } | null, configErrors?: readonly ConfigError[],
+   *   configFile?: string,
    *   workspace?: { name: string, index: number, color?: string } | null }}
    */
   status(win) {
@@ -578,7 +593,17 @@ export const VimmaHost = {
       pane: paneStatus(win),
       workspace: WindowWorkspaces.get(win)?.status() ?? null,
       configErrors: settings.configErrors,
+      configFile: settings.configFile,
     };
+  },
+
+  /**
+   * Shows `text` as the window's notice (ConfigHost's `:config` when it cannot create the file).
+   * @param {Window} win
+   * @param {string} text
+   */
+  say(win, text) {
+    states.get(win)?.notice.show(text);
   },
 
   /**
@@ -586,12 +611,13 @@ export const VimmaHost = {
    * field is optional: absent keeps the current value. A new keymap drops a pending sequence
    * and closes the bindings overlay, which is rebuilt from it.
    * @param {{ keymap?: Keymap, hintChars?: string, sites?: readonly InsertSiteRule[],
-   *   configErrors?: readonly ConfigError[] }} next
+   *   configErrors?: readonly ConfigError[], configFile?: string }} next
    */
   configure(next) {
     if (next.hintChars !== undefined) settings.hintChars = next.hintChars;
     if (next.sites) settings.sites = next.sites;
     if (next.configErrors) settings.configErrors = next.configErrors;
+    if (next.configFile) settings.configFile = next.configFile;
     const keymap = next.keymap && next.keymap !== settings.keymap ? next.keymap : null;
     if (keymap) settings.keymap = keymap;
     for (const win of windows) {

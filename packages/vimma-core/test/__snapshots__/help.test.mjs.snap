@@ -117,5 +117,6 @@ Side panel
 
 Config
   reload_config        (unbound)                                           Reload config
+  edit_config          (unbound)                                           Open config.toml in a tab
 "
 `;
