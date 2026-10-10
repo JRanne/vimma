@@ -300,6 +300,8 @@ Limits:
 | `release-please.yml` | push to `main`, manual           | `ubuntu-latest`           | Actions may open PRs; optional token       |
 | `release.yml`        | release published, manual        | `vimma-build` + hosted    | see "Release packages" (gated off)         |
 | `mutation.yml`       | Sundays 04:23 UTC, manual        | `ubuntu-latest`           | nothing (creates its `mutation` label)     |
+| `semgrep.yml`        | push to `main`, PRs, Mon, manual | `ubuntu-latest`           | nothing                                    |
+| `codeql.yml`         | push to `main`, PRs, Mon, manual | `ubuntu-latest`           | nothing; skipped while the repo is private |
 | Renovate             | Mondays before 07:00 Helsinki    | Renovate's own            | install the Renovate app                   |
 
 Locally, before pushing: `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:py`,
@@ -364,6 +366,9 @@ browser (5.5 min wall, ADR-010); upstream 4 × 1 min a day (≈ 120 min a month)
 (patch check + PR job) when a release is found; claude.yml only
 when triggered. `nightly.yml` uses the self-hosted runner, which costs no hosted minutes. Check usage in Settings → Billing → Usage. Once the repo is public,
 standard hosted runners are free and unlimited; the e2e paths filter can then go.
+
+Semgrep costs one job of about SEMGREP_MIN min per PR push, push to `main` and Monday. CodeQL is
+skipped while the repo is private and costs nothing until then.
 
 The bench step adds about half a minute to each CI run. `mutation.yml` is the largest scheduled
 cost: a full run (first Sunday of the month) is estimated at 60–90 min on the 2-CPU runner
@@ -773,6 +778,38 @@ manifest and changelog past it, and the release notes stay valid. If the fix cha
 built, release a patch version instead. To pull a bad release: `gh release edit vX.Y.Z --draft`
 (hides it); the AUR package cannot go back a version without an `epoch`, so ship a fixed
 release instead.
+
+### Security scanning (`semgrep.yml`, `codeql.yml`)
+
+**Semgrep CE** runs on every PR, push to `main` and on Mondays. It scans the repo with the public
+registry rulesets `p/javascript`, `p/typescript`, `p/rust`, `p/secrets` and `p/github-actions`,
+from the `semgrep/semgrep` image pinned by digest (bump the digest and the version comment
+together). It does not log in to semgrep.dev and uploads nothing: `--metrics=off`, no token.
+Skipped paths are in `.semgrepignore`: the engine checkout, build output, vendored code and the
+generated copy of vimma-core. The job fails only on ERROR findings; WARNING and INFO findings are
+listed in the step summary. Fix a finding, or suppress it on its line with
+`// nosemgrep: <rule-id> -- <reason>`. A suppression without a reason is not allowed.
+
+Reading the results: the run's **Summary** lists every finding as `SEVERITY path:line rule`. For
+the details, download the `semgrep-sarif` artifact (kept for 30 days) with
+`gh run download <run-id> -n semgrep-sarif`. Then open `semgrep.sarif` in VS Code's SARIF Viewer,
+or list it with
+`jq -r '.runs[].results[] | "\(.level) \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine) \(.ruleId)"' semgrep.sarif`.
+Locally:
+`docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/src" -w /src <image> semgrep scan --metrics=off --config=p/javascript ... --json-output=semgrep.json`,
+using the image and flags from `semgrep.yml`.
+
+Licences: the engine is LGPL-2.1. It runs as a separate tool and is not linked into or shipped
+with Vimma. The registry rules are under the Semgrep Rules License v1.0, which allows use for
+internal purposes but not redistributing the rules or offering them as a service. We only run
+them in our own CI.
+
+**CodeQL** (`javascript-typescript` and `rust`, `build-mode: none`, `security-extended`, config in
+`.github/codeql/codeql-config.yml`) is gated with `if: github.event.repository.private == false`,
+so the run shows it as skipped. This is for two reasons. Code scanning on a private repo needs a
+paid GitHub Code Security licence. The CodeQL CLI licence also allows CI analysis only of an
+open source codebase, and it names a private repo as not one. The job starts by itself once the
+repo is public. Its alerts then appear under Security → Code scanning.
 
 ### Licences
 
