@@ -84,10 +84,12 @@ describe("selectBuild", () => {
 });
 
 describe("browserCommand", () => {
-  it("runs with --no-remote and the profile, then the extra arguments", () => {
+  it("runs with the profile, then the extra arguments, and keeps remoting on", () => {
+    // Firefox 157 ignores --no-remote (nsAppRunner strips it); without it the dev instance
+    // still answers the Omarchy hook's -vimma-reload-theme (spec m5-omarchy-theme).
     expect(browserCommand({ binary: "/b/vimma" }, "/p", ["about:blank"])).toEqual([
       "/b/vimma",
-      ["--no-remote", "--profile", "/p", "about:blank"],
+      ["--profile", "/p", "about:blank"],
     ]);
   });
 });

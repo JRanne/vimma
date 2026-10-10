@@ -21,6 +21,8 @@ browser.jar:
         content/browser/vimma/workspaces/WorkspaceStore.sys.mjs (workspaces/WorkspaceStore.sys.mjs)
         content/browser/vimma/workspaces/WindowWorkspaces.sys.mjs (workspaces/WindowWorkspaces.sys.mjs)
         content/browser/vimma/core                        (core/**/*.mjs)
+        content/browser/vimma/omarchy/OmarchyHook.sys.mjs (omarchy/OmarchyHook.sys.mjs)
+        content/browser/vimma/omarchy/vimma-theme-reload.sh (omarchy/vimma-theme-reload.sh)
         content/browser/vimma/ui/help-overlay.mjs         (ui/help-overlay.mjs)
         skin/classic/browser/vimma/help-overlay.css       (/browser/themes/shared/vimma/help-overlay.css)
         content/browser/vimma/ui/hint-overlay.mjs         (ui/hint-overlay.mjs)
