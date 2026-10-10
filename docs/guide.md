@@ -267,7 +267,10 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 
 Clicking into a pane focuses it, as `ctrl+b h/j/k/l` would. So does selecting a pane's tab any
 other way (the `ctrl+b g` picker, `ctrl+tab`, `alt+1..9`): the status bar's `pane n/m` and the
-URL bar follow, and a zoom ends, as it does when a pane key moves.
+URL bar follow, and a zoom ends, as it does when a pane key moves. Selecting a tab that no pane
+shows (the picker, `ctrl+tab`, `alt+1..9`, `ctrl+t`, a link opened in a new foreground tab)
+shows it in the focused pane: the split stays, and the tab that pane showed stays open in the
+workspace. A pinned tab shows alone; selecting a pane's tab brings the split back.
 
 While the overlay is open it takes every key, so `ctrl+w` cannot close the tab behind it. Rows
 for bindings that do not run yet are dimmed, under a legend that says so; actions your
@@ -308,7 +311,8 @@ profile has one workspace, `main`; you make more as you need them (see
   shows where you are (`● 2:work`).
 - A window shows **one workspace at a time**: the other workspaces' tabs are hidden, not closed.
   Coming back selects the tab you left, and a split comes back with its panes laid out as
-  before. A workspace with no tabs gets a start-page tab when you switch to it.
+  before, the same pane focused and its page ready for keys. Each workspace keeps its own split:
+  splitting in one leaves the others' layouts alone. A workspace with no tabs gets a start-page tab when you switch to it.
 - `ctrl+b 1..9`, `ctrl+b n` / `p`, `gt`, `ctrl+tab` and closing a tab stay within the
   workspace. The goto picker (`ctrl+b g`) is the exception: it lists every workspace's tabs, and
   picking one from another workspace switches there.
@@ -320,8 +324,8 @@ profile has one workspace, `main`; you make more as you need them (see
   workspace's cookies and logins. (The workspace picker and side panel, still to come, will mark
   it.)
 - **A restart restores them.** Each window comes back with its workspaces, their tabs, the
-  workspace you were in, the tab you had selected in each, its split panes laid out as you left
-  them, your tab names and each page's scroll position. Tabs of other workspaces are not loaded
+  workspace you were in, the tab you had selected in each, every workspace's split panes laid
+  out as you left them with the same pane focused, your tab names and each page's scroll position. Tabs of other workspaces are not loaded
   until you first go to them; their scroll position comes back then. The same happens with
   "Restore previous session" and reopening a closed window.
 - **Pinned tabs** belong to no workspace and show in every one. Vimma has no key to pin; an

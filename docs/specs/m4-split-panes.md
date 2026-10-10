@@ -1,6 +1,6 @@
 # Spec: m4-split-panes
 
-Status: in progress (sub-specs 1 to 5 done) · Milestone: M4 · Area: host
+Status: in progress (sub-specs 1 to 5 done; 6 core done, adoption handed over) · Milestone: M4 · Area: host
 (`src/browser/base/content/vimma/split/`, `host/`), CSS (`browser/themes/shared/vimma/`)
 
 This is the umbrella spec for M4. It records the research, the decision
@@ -439,6 +439,63 @@ Done: `PaneView` listens for `TabSelect` on the window, tested by `browser_vimma
   `focusPage`, now pinned by a test).
 - **Not here:** a non-member tab selected while split (Firefox suspends the split; core's
   `setPaneTab` and the replace order) and per-pane mode from the M1 actor move to sub-spec 6.
+
+## Sub-spec 6 results (`m4-split-workspaces-restore`, core)
+
+Done: each workspace keeps its own pane layout and focus across switches, a restore brings back
+every workspace's layout, and a tab selected from outside the split shows in the focused pane;
+tested by `browser_vimma_pane_workspaces.js` (3 tasks).
+
+- **Per-workspace trees stay in `PaneView`**, not in core's `Workspaces.panes`: `swap(from, to)`
+  parks the shown tree with its wrapper (m3 2b) and `restore(trees, active)` hands back every
+  workspace's tree (m3 3); `WindowWorkspaces` converts to and from uuids only when saving and
+  restoring. Moving them into the live core model would add a second copy to keep in step with
+  no behaviour gained; the snapshot is where core owns them.
+- **Switches:** an L shape in A (left pane focused, not the newest) and a vertical pair in B (lower
+  pane focused) each come back with their panes in reading order, the focused pane selected,
+  every member's docshell active, the other workspace's wrapper hidden, and rectangles within
+  1 px, twice round. New: the focused pane's **page** gets focus after a switch. A split's
+  browsers are already active, so Firefox's tab switch completes at once and
+  `_adjustFocusAfterTabSwitch` sees the old page still focused and keeps away; hiding that page
+  then left focus on the body (keys went nowhere). `WindowWorkspaces.#focusPane` focuses the
+  selected browser only when focus is on the body or another page; the URL bar, a tab-modal
+  dialog and other chrome focus are left alone.
+- **Restore:** both workspaces split, A shown and B parked; after `setWindowState` A's layout and
+  focus are adopted at once and B's on the first switch (parked trees were saved and restored
+  by m3 3 but never asserted). Nothing new was needed in the code.
+- **A non-member selected while split** (sub-spec 4's deferral): `PaneView`'s `TabSelect`
+  listener calls core's `setPaneTab` for the focused pane, then `reconcile` rebuilds the wrapper
+  around the new tab. Firefox has already suspended the split for the selection, but the rebuild
+  runs in the same `TabSelect` dispatch, so no paint sees the suspended state; the test asserts
+  the split synchronously after `selectedTab =`. The replaced tab stays open and visible in the
+  workspace (not `hideTab`: that would drop it from the tab keys and the switch planner shows it
+  again on every switch) and its docshell goes inactive. Not replaced: a pinned tab (cannot
+  join a split, is in every workspace: Firefox shows it alone and the tree waits) and, through
+  `PaneView.accepts`, any tab while `WindowWorkspaces` switches or restores and any tab of
+  another workspace (decision 14: `#onSelect` switches instead, and the tree is parked as is).
+  `ctrl+t` and a link in a new foreground tab therefore open in the focused pane (the user
+  story). Sub-spec 3's "its tab is hidden in sub-spec 6" for a closed pane is settled the
+  same way: the tab stays visible.
+- **Also fixed:** `ui/theme-host.mjs` had a race that failed `browser_vimma_theme.js` in the full
+  suite (2 of 7 runs here, with the new test before it): a check in flight when a pref changed
+  applied the old theme after `recheck` reset `loaded`, so the next check kept it. A generation
+  counter makes such a check apply nothing. Green 10 of 10 under `taskset -c 0,1` load.
+- **Red/green:** red before (8 unexpected: the replace and the page focus), green after;
+  whole `tests/browser/` suite green (2504). Mutation check: not calling `#focusPane` after a
+  switch fails "A's focused page has focus".
+
+**Handover (the rest of sub-spec 6):**
+
+- **Adopting foreign splits:** listen for `SplitViewCreated`, `SplitViewRemoved` and
+  `SplitViewTabChange` on `gBrowser.tabContainer` outside `reconcile`; a new wrapper becomes a
+  vertical split of its tabs in the active workspace's tree, a dissolved one closes those panes.
+  Members of another workspace are unsplit with a status-bar notice (m3 decision 14);
+  `WindowWorkspaces.#show` still only `console.warn`s `plan.unsplit`. A SessionStore-restored
+  wrapper with no tree in the snapshot (a Firefox-made split, or a lost window value) goes the
+  same way. Test: `Browser:AddTabSplitView` and an extension-style `addTabSplitView`.
+- **Per-pane mode:** `VimmaHost` already keys page mode by `<browser>` (`browserModes`) and reads
+  the focused browser's, so a pane move takes the new pane's mode; no test pins it yet (insert in
+  pane 1's text field, `ctrl+b l` gives normal, `ctrl+b h` insert again).
 
 ## Breakdown into sub-specs
 

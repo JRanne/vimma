@@ -75,6 +75,8 @@ const styles = new Set();
 let signature = "";
 /** An Omarchy theme was applied since the source or path last changed. */
 let loaded = false;
+/** Bumped by recheck: a check started before it applies nothing. */
+let generation = 0;
 /** The last rejected colors.toml as one line (about:vimma), null once one applies. */
 /** @type {string | null} */
 let lastError = null;
@@ -121,16 +123,8 @@ async function stat(dir) {
   }
 }
 
-/**
- * Bumped by recheck(): a check started under older settings is stale once it resumes and must
- * not record or apply what it read (issue #66: it marked the old path's theme loaded, so the new
- * path's missing theme never brought Tokyo Night back).
- */
-let generation = 0;
-
 async function check() {
-  const gen = generation;
-  const stale = () => gen !== generation;
+  const started = generation;
   // The pref (tests, about:config) and config.toml's source = "file" both mean "no Omarchy".
   if (
     Services.prefs.getStringPref(SOURCE_PREF, "omarchy") === "builtin" ||
@@ -142,7 +136,7 @@ async function check() {
   }
   const dir = themeDir();
   const now = await stat(dir);
-  if (stale()) return;
+  if (started !== generation) return;
   if (now === null) {
     // Omarchy absent: Tokyo Night. Once a theme is showing, a missing file is far more likely
     // omarchy-theme-set between its rm and mv: keep the theme until the next one appears.
@@ -155,13 +149,12 @@ async function check() {
   let text;
   try {
     text = await IOUtils.readUTF8(PathUtils.join(dir, "colors.toml"));
+    if (started !== generation) return;
   } catch (e) {
-    if (stale()) return;
     if (notFound(e)) signature = "";
     else throw e;
     return;
   }
-  if (stale()) return;
   const lightMode = now.endsWith("|true");
   const r = cssFor(text, lightMode);
   if (r.errors.length) {
@@ -204,6 +197,7 @@ function stopTimer() {
 
 /** Reads the theme again from scratch once the running check (with the old settings) is done. */
 function recheck() {
+  // A check in flight read the old settings: it must not apply them over this reset.
   generation++;
   signature = "";
   loaded = false;
