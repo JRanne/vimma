@@ -8,6 +8,9 @@
 # Spec m0-e2e-harness: the same job builds vimma-ctl and runs the e2e harness's own tests (fake
 # control server, real Xvfb) first, and the socket-driven scenarios on the artifact build last.
 # A scenario marked pending is reported as a notice and passes nothing.
+# Spec m7-upstream-autopilot: upstream.yml calls this workflow (workflow_call) with a newer
+# Firefox version; the job then bumps surfer.json in its own checkout first and runs the same
+# suites on that release. Nothing is pushed from here: the token stays read-only.
 name: e2e
 
 on:
@@ -34,14 +37,25 @@ on:
       - "tools/e2e/**"
       - "tools/vimma-ctl/**"
       - "tests/e2e/**"
+      - "tools/upstream/upstream-prefs.mjs"
+      - "tools/upstream/verify-sha512.py"
       - ".github/workflows/e2e.yml"
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      firefox-version:
+        description: Firefox release to test instead of surfer.json's (the upstream autopilot)
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
 
 concurrency:
-  group: e2e-${{ github.ref }}
+  # A call from upstream.yml runs on main's ref: keyed on the version so it never cancels, or
+  # is cancelled by, a manual run on main.
+  group: e2e-${{ inputs.firefox-version || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -53,6 +67,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Bump surfer.json to the release under test (upstream autopilot only)
+        if: inputs.firefox-version != ''
+        env:
+          VERSION: ${{ inputs.firefox-version }}
+        run: python3 tools/upstream/bump-surfer-json.py "$VERSION"
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -92,6 +112,15 @@ jobs:
           CI_SKIP_INIT: "1" # Surfer's own switch: skips `git init` + commit of 4.7 GB
         run: |
           npx surfer download
+          # Surfer does not check the tarball: compare it with Mozilla's SHA512SUMS (as upstream.yml
+          # does) before anything is built from it. A mismatch fails here.
+          version=$(node -p 'require("./surfer.json").version.version')
+          base="https://archive.mozilla.org/pub/firefox/releases/$version"
+          name="source/firefox-$version.source.tar.xz"
+          sha512sum ".surfer/engine/firefox-$version.source.tar.xz" > "$RUNNER_TEMP/tarball.sha512"
+          curl -fsSL --retry 3 "$base/SHA512SUMS" -o "$RUNNER_TEMP/SHA512SUMS"
+          python3 tools/upstream/verify-sha512.py --sums "$RUNNER_TEMP/SHA512SUMS" --name "$name" \
+            --actual "$RUNNER_TEMP/tarball.sha512"
           # An empty repo, so `git apply` in `surfer import` resolves paths inside engine/
           # rather than against this checkout.
           git init -q engine
@@ -105,6 +134,11 @@ jobs:
       # Needs engine/ (upstream's unofficial brand), so it runs here; the CI job skips it.
       - name: Branding prefs keep upstream's (tools/branding/test)
         run: npx vitest run tools/branding/
+
+      # The cfr provider and Safe Browsing lists we copy from upstream (docs/rebase.md, step 6):
+      # a stale copy shadows upstream's. Fails with the line to paste.
+      - name: Upstream pref copies are current (tools/upstream/upstream-prefs.mjs)
+        run: node tools/upstream/upstream-prefs.mjs
 
       - name: Disk guard (artifact build and tests need ~1.2 GB)
         run: |
