@@ -1,6 +1,6 @@
 # Spec: m0-help-overlay
 
-Status: implemented, awaiting review · Milestone: M0 · Area: UI (`src/browser/base/content/vimma/ui/`)
+Status: implemented · Milestone: M0 · Area: UI (`src/browser/base/content/vimma/ui/`)
 
 ## User story
 

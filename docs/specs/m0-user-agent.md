@@ -1,6 +1,6 @@
 # Spec: m0-user-agent
 
-Status: implemented, awaiting review · Milestone: M0 · Area: build config (`src/browser/moz-configure.patch`)
+Status: implemented · Milestone: M0 · Area: build config (`src/browser/moz-configure.patch`)
 Prerequisite: m0-branding merged (brand, basename and vendor are Vimma; `displayVersion` 0.1.0).
 
 ## User story

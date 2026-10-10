@@ -1,6 +1,6 @@
 # Spec: m1-core-logic
 
-Status: implemented (core), awaiting review; host wiring pending · Milestone: M1 · Area: `packages/vimma-core`
+Status: implemented (core); the host wiring followed in the milestone's host specs · Milestone: M1 · Area: `packages/vimma-core`
 
 ## User stories
 

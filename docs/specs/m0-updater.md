@@ -1,6 +1,6 @@
 # Spec: m0-updater
 
-Status: implemented, awaiting review · Milestone: M0 · Area: build config (`configs/*/mozconfig`), default prefs
+Status: implemented · Milestone: M0 · Area: build config (`configs/*/mozconfig`), default prefs
 (`src/browser/branding/vimma/pref/`), `tools/artifact-build`
 Prerequisite: m0-mozilla-services and m0-app-version merged.
 

@@ -1,6 +1,6 @@
 # Spec: key-handling-batch
 
-Status: implemented, awaiting review · Area: core (`keys.mjs`, `firefox-keys.mjs`, `config.mjs`,
+Status: implemented · Area: core (`keys.mjs`, `firefox-keys.mjs`, `config.mjs`,
 `defaults.mjs`, `actions.mjs`, `sidepanel.mjs`, `editable.mjs`), host (`VimmaHost`,
 `host/firefox-keys.mjs`, `host/edit-keys.mjs`, `host/tab-ops.mjs`), actors (`VimmaChild`,
 `VimmaActors`), UI (`ui/side-panel.mjs`), about:vimma

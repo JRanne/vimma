@@ -1,6 +1,6 @@
 # Vimma — implementation plan
 
-Vimma is a keyboard-first browser built as a Firefox fork: Neovim-style modal control of the page, Herdr's prefix keymap (`ctrl+b`) for tabs, panes and workspaces, `prefix+?` discoverability from the first build, workspaces as isolated containers, an on-demand side panel, an always-visible status bar, and an Omarchy-native look. Built by one person with Claude Code, no deadline, with a pipeline that tests, rebases on upstream and releases without anyone watching.
+Vimma is a keyboard-first browser built as a Firefox fork: Neovim-style modal control of the page, a tmux-style prefix keymap (`ctrl+b`) for tabs, panes and workspaces, `prefix+?` discoverability from the first build, workspaces as isolated containers, an on-demand side panel, an always-visible status bar, and an Omarchy-native look. Built by one person with Claude Code, no deadline, with a pipeline that tests, rebases on upstream and releases without anyone watching.
 
 This file is the contract between you and Claude Code. Specs, ADRs, tests and the changelog in the repo refine it; nothing in a chat transcript overrides it.
 
@@ -8,7 +8,7 @@ This file is the contract between you and Claude Code. Specs, ADRs, tests and th
 
 ## 1. Decisions (ADR-001 … ADR-008)
 
-Each is a file in `docs/adr/`. Summaries here; the ADR holds the reasoning and the alternatives rejected.
+Each is a file in `docs/adr/`. Summaries here; the ADR holds the reasoning and the alternatives rejected. Later decisions (ADR-009 onwards) are only in `docs/adr/`.
 
 | ADR | Decision | One-line reason |
 | --- | --- | --- |
@@ -18,8 +18,8 @@ Each is a file in `docs/adr/`. Summaries here; the ADR holds the reasoning and t
 | 004 | **Language: JavaScript ES modules (`.sys.mjs` / `.mjs`) with JSDoc types, type-checked by `tsc --checkJs`.** No TypeScript compile step inside the Firefox tree. | The fork's UI runs inside Firefox's chrome; a transpile step complicates patching and debugging. Type safety comes from JSDoc + tsc in CI. The engine underneath is already C++ and Rust. |
 | 005 | **`vimma-core` is a pure ES module package** (dispatcher, key notation, keymap merge, state tree) with zero Firefox imports, tested with Vitest in Node in milliseconds. | 80 % of behaviour becomes testable without a browser; the same module could run in an extension or another host. |
 | 006 | ~~**Split view is vendored from Zen**~~ Superseded by **ADR-013: split panes build on Firefox's own split view**; our CSS places its panels at the core pane tree's rectangles. | Firefox 157 ships, tests and maintains split view in the tree we rebase onto; Zen's needs split-related hunks in 20 upstream patch files. The sub-spec 1 spike proved 3 and 4 panes at exact rectangles. |
-| 007 | **Control socket**: a local TCP server (localhost, random port, token in a file under the profile) speaking JSON lines: `send-keys`, `state`, `list-tabs`, `screenshot`, `reload-config`, `open <url>`. | Herdr-style scripting API for users and the backbone of end-to-end tests, so tests never depend on window-manager key injection. |
-| 008 | **Config: one `config.toml`**, Herdr `[keys]` syntax for the multiplexing layer, per-mode tables for the modal layer, `[workspaces]`, `[theme]`; schema versioned with migrations; TOML parser vendored (small MIT JS lib). | Matches Herdr muscle memory; Firefox ships no TOML parser. |
+| 007 | **Control socket**: a local TCP server (localhost, random port, token in a file under the profile) speaking JSON lines: `send-keys`, `state`, `list-tabs`, `screenshot`, `reload-config`, `open <url>`. | A scripting API for users and the backbone of end-to-end tests, so tests never depend on window-manager key injection. |
+| 008 | **Config: one `config.toml`**, a `[keys]` table (`action = [chords]`) for the prefix layer, per-mode tables for the modal layer, `[workspaces]`, `[theme]`; schema versioned with migrations; TOML parser vendored (smol-toml, BSD-3-Clause: ADR-012). | One file to read and diff; Firefox ships no TOML parser. |
 
 Explicitly rejected: Chromium fork (C++ UI, multi-hour builds, monthly rebases of a 30 M-line tree); CEF + Rust (no extensions); WebExtension only (no keys in URL bar / about: pages / PDF viewer, no real panes, no real status bar). Forking Zen itself was considered: rejected for v1 because tracking two fast-moving upstreams doubles rebase work; revisit if we end up re-implementing most of Zen.
 
@@ -27,7 +27,7 @@ Explicitly rejected: Chromium fork (C++ UI, multi-hour builds, monthly rebases o
 
 ## 2. Interaction model
 
-Two layers, one dispatcher. The **modal layer** (Neovim) decides what a bare key means in the page; the **prefix layer** (Herdr) handles anything after `ctrl+b`, in every mode. A single capturing `keydown` listener on the chrome window feeds `vimma-core`:
+Two layers, one dispatcher. The **modal layer** (Neovim) decides what a bare key means in the page; the **prefix layer** (tmux-style) handles anything after `ctrl+b`, in every mode. A single capturing `keydown` listener on the chrome window feeds `vimma-core`:
 
 ```js
 /** @returns {{kind:'action', action:Action} | {kind:'pending'} | {kind:'pass'}} */
@@ -38,9 +38,9 @@ dispatch(mode, keyEvent)
 
 **Modes:** `normal` (default), `insert` (focus in an editable element, reported by the content actor; `Esc` leaves), `visual` / `copy` (caret browsing + selection), `command` (`:` line), `hint` (link hints), `prefix` (transient after `ctrl+b`, exits after one command or `Esc`), `help` (`prefix+?` overlay, `/` filters, `Esc` closes), `panel` (side panel open: `1-9`, `j/k`, Enter, `Esc`).
 
-**Default bindings.** Prefix column is Herdr's documented default keymap verbatim (https://herdr.dev/docs/keyboard/). All overridable.
+**Default bindings.** The prefix layer is tmux-style: `ctrl+b`, tmux's default prefix, then a key. Every key, the prefix and the leader can be remapped; `docs/bindings.md` is the current list.
 
-| Action | Herdr-style (prefix = `ctrl+b`) | Neovim-style |
+| Action | Prefix layer (prefix = `ctrl+b`) | Neovim-style |
 | --- | --- | --- |
 | Show all bindings (filter with `/`) | `prefix+?` | `:map` |
 | New tab | `prefix+c` | `:tabnew`, `t` |
@@ -54,11 +54,11 @@ dispatch(mode, keyEvent)
 | Zoom pane | `prefix+z` | `Ctrl-w o` |
 | Close pane | `prefix+x` | `:q` in a pane |
 | Resize mode | `prefix+r` | `Ctrl-w <>+-` |
-| Next / previous workspace | `prefix+)` / `prefix+(` (tmux; was `ctrl+i` / `ctrl+u` until 2026-10-10) | `:wsnext` / `:wsprev` |
+| Next / previous workspace | `prefix+)` / `prefix+(` | `:wsnext` / `:wsprev` |
 | Workspace picker | `prefix+w` | `:workspace name` |
 | New / rename / close workspace | `prefix+shift+n` / `shift+w` / `shift+d` | — |
 | Goto picker (every tab, all workspaces, `/` search) | `prefix+g` | `:ls`, `b` |
-| Open / close side panel | `prefix+b` | `<leader>n`, `:sidebar` |
+| Open / close side panel | `prefix+b` | `:sidebar` |
 | Copy mode | `prefix+[` | `v` |
 | Scroll | — | `j k h l gg G`, half page `d` / `u` |
 | Follow link / in new tab | — | `f` / `F` |
@@ -66,9 +66,9 @@ dispatch(mode, keyEvent)
 | Command line | — | `:` |
 | Reload config | — | `:source` |
 
-Half-page scroll is `d`/`u` (Vimium) and, since the user moved workspaces to `prefix+(`/`prefix+)` (2026-10-10), Vim's `ctrl+d`/`ctrl+u` too; `ctrl+o`/`ctrl+i` walk history; close-tab is `x`. The fork owns the window, so `ctrl+t`, `ctrl+w`, `ctrl+l` are free to rebind or unbind; defaults keep Firefox's meaning for them until the user says otherwise.
+Half-page scroll is `d`/`u` (Vimium) and Vim's `ctrl+d`/`ctrl+u`; `ctrl+o`/`ctrl+i` walk history; close-tab is `x`. The leader (`space`) has no default bindings; it is there for the user's own. Firefox's shortcuts on Vimma's keys (`ctrl+w`, `ctrl+u`, `ctrl+d`, `ctrl+b`, …) are off; the rest keep Firefox's meaning (`docs/guide.md`, "Firefox's own shortcuts").
 
-**Side panel:** closed by default. `<leader>n` opens a panel on the left headed by the current workspace (name, colour, neighbour hints `prefix+(` / `prefix+)`) listing that workspace's tabs as numbered rows. `1-9`, `j/k`, Enter select; `<leader>n` / `Esc` close. Workspaces are never a permanent list on screen.
+**Side panel:** closed by default. `prefix+b` opens a panel on the left headed by the current workspace (name, colour, neighbour hints `prefix+(` / `prefix+)`) listing that workspace's tabs as numbered rows. `1-9`, `j/k`, Enter select; `prefix+b` / `Esc` close. Workspaces are never a permanent list on screen.
 
 **Status bar:** one line at the window foot, always visible: mode badge, pending prefix, workspace dot + name, `tab 2/5`, `pane 1/2`, config error indicator, blocklist/update hints.
 
@@ -77,15 +77,17 @@ Half-page scroll is `d`/`u` (Vimium) and, since the user moved workspaces to `pr
 **Config file:**
 
 ```toml
-# ~/.config/vimma/config.toml   (schema = 1)
-[keys]                                  # Herdr syntax: action = [chords]
+# ~/.config/vimma/config.toml
+schema = 2
+
+[keys]                                  # action = [chords]
 prefix = "ctrl+b"
 new_tab = ["prefix+c", "ctrl+alt+c"]
 split_vertical = ["prefix+v"]
 show_keybinds = ["prefix+?"]
 next_workspace = ["prefix+)"]
-prev_workspace = ["prefix+("]
-toggle_sidebar = ["prefix+b", "<leader>n"]
+previous_workspace = ["prefix+("]
+toggle_sidebar = ["prefix+b", "<leader>n"]   # the leader has no defaults; this adds one
 
 [workspaces]                            # order = prefix+) order; each is a Firefox container
 work     = { color = "blue",  home = "https://intranet.example" }
@@ -156,20 +158,18 @@ Repository layout (Surfer convention: `src/` mirrors the Firefox tree; `.patch` 
 ```
 vimma/
   surfer.json                     # upstream Firefox version, branding, build options
-  CLAUDE.md                       # rules Claude Code reads every session (appendix A)
+  CLAUDE.md                       # rules Claude Code reads every session
   CHANGELOG.md
   package.json                    # surfer, vitest, tsc, eslint, prettier, commitlint
   tsconfig.json                   # checkJs over src/**/vimma/** and packages/**
   packages/
     vimma-core/                   # ESM package, Vitest tests, published into src/ by `npm run sync-core`
   src/
-    browser/base/content/browser.xhtml.patch       # inject vimma UI roots + script
-    browser/base/content/browser.js.patch          # tiny hook, if unavoidable
-    browser/components/moz.build.patch             # register actors / about:vimma
+    browser/**/*.patch                             # the small upstream patches (register: ADR-003)
     browser/base/content/vimma/                    # all our code (see tree above)
     browser/themes/shared/vimma/                   # CSS: layout, tokyo-night.css, tokens
-    browser/branding/vimma/                        # name, icons
-  configs/                        # mozconfigs: linux, macos, ci-artifact
+    browser/branding/vimma/                        # name, icons, default prefs
+  configs/                        # mozconfigs (common, linux, macos, windows) and branding inputs
   tools/
     vimma-ctl/                    # Rust CLI client for the control socket (ADR-011)
     e2e/                          # harness: launch build with temp profile, drive via socket
@@ -178,9 +178,10 @@ vimma/
     browser/                      # mochitest browser-chrome: browser_vimma_*.js
     e2e/                          # socket-driven scenarios + screenshot baselines (LFS)
   docs/
-    adr/  specs/  limits.md  review-checklist.md  release.md  rebase.md  runbook.md
-  .github/workflows/              # ci.yml, e2e.yml, nightly.yml, upstream.yml,
-                                  # release.yml, claude.yml, maintenance.yml
+    guide.md  bindings.md  limits.md  security.md  review-checklist.md  rebase.md  runbook.md
+    adr/  specs/  notes/
+  .github/workflows/              # ci, e2e, nightly, upstream, claude, release-please, release,
+                                  # mutation, semgrep, codeql
 ```
 
 ---
@@ -189,15 +190,15 @@ vimma/
 
 Loop: spec → failing tests → implement → review → changelog → merge → dogfood. You decide and review; machines do the rest.
 
-1. **Discovery (M0).** Read Surfer docs and Zen's `desktop` repo structure, `tabbrowser.js`, `browser.js`, Zen's split view and workspaces components, Tridactyl's hint algorithm, Herdr's keymap. Output: ADR-001…008, `docs/limits.md`, `actions.mjs`.
+1. **Discovery (M0).** Read Surfer docs and Zen's `desktop` repo structure, `tabbrowser.js`, `browser.js`, Zen's split view and workspaces components, Tridactyl's hint algorithm, tmux's keymap. Output: ADR-001…008, `docs/limits.md`, `actions.mjs`.
 2. **Specification (per feature).** `docs/specs/<feature>.md`: user story, default bindings, config keys, socket commands, acceptance criteria as Given/When/Then, out of scope. One Claude Code session in size. Mirrored to a GitHub issue with label `spec`.
 3. **Design (boundary changes).** ADR for anything touching the dispatcher contract, config schema, socket protocol, state file, or a new upstream patch. Numbered, never edited after acceptance.
 4. **Implementation (TDD, §5).** Branch `feat/<slug>`, Conventional Commits with a body. Claude Code may open the PR itself when the issue carries `claude:go` (a label only you add).
-5. **Review.** Branch protection on `main`: CI + e2e green, signed commits, one approval (you). Claude Code reviews first in a fresh session with the spec open and posts the checklist from `docs/review-checklist.md`: tests prove the behaviour, no test weakened, no new action without a docs line, config change has a migration, no new upstream `.patch` without an ADR line, no new dependency without licence check.
+5. **Review.** CI + e2e green and one approval (you) before merging; `main` has no branch protection while the repo is on GitHub's free private plan (`docs/runbook.md`). Claude Code reviews first in a fresh session with the spec open and posts the checklist from `docs/review-checklist.md`: tests prove the behaviour, no test weakened, no new action without a docs line, config change has a migration, no new upstream `.patch` without an ADR line, no new dependency without licence check.
 6. **Release.** release-plz-style automation (JS equivalent: `release-please`) keeps a release PR with version + changelog; merging tags; the release workflow builds, signs, publishes.
 7. **Operate.** `about:vimma` shows mode, last 20 key events, active overrides, config errors, upstream Firefox version and patch count; `:bug` writes a redacted report. Weekly maintenance run below.
 
-**What runs without you:**
+**What runs without you** (the target; `docs/limits.md` "Build and CI" lists what is not built or not switched on yet, such as the nightly, `maintenance.yml` and auto-merged bumps):
 
 | Trigger | Job | Green | Red |
 | --- | --- | --- | --- |
@@ -223,7 +224,7 @@ Tests first; implementation only to make them pass. Claude Code writes the faili
 | Unit | Dispatcher, key notation (`ctrl+b`, `<leader>ff`, `prefix+shift+t`), keymap merge, config validation + migrations, pane tree ops, workspace model | Vitest in Node; table-driven `test.each`; `fast-check` property tests (parse/format round-trip; no two bindings share a prefix unless `timeout_ms` resolves it); snapshot tests for `prefix+?` output and `defaults.toml` | 90 % lines on `packages/vimma-core`, hard gate; Stryker mutation testing weekly, survivors become issues |
 | Contract | Socket protocol, config schema versions, state file | JSON fixtures, one valid + one invalid per version | New version = new fixture pair + migration test |
 | Browser-chrome | Host wiring: key capture reaches dispatcher, actions hit `gBrowser`, side panel focus, status bar text, actor messages, container routing, split layout | Firefox mochitest `browser_vimma_*.js` (same framework Zen uses) | One per spec acceptance criterion |
-| End-to-end | Real build + temp profile: open tabs in two workspaces, `prefix+2`, rename, `ctrl+i`, `<leader>n`, split, reload config, restart and restore | `tools/e2e`: launch under Xvfb, drive via control socket, assert on `state` JSON + screenshots | One happy path per milestone + regression test per bug (issue number in test name); suite < 5 min |
+| End-to-end | Real build + temp profile: open tabs in two workspaces, `prefix+2`, rename, `prefix+)`, `prefix+b`, split, reload config, restart and restore | `tools/e2e`: launch under Xvfb, drive via control socket, assert on `state` JSON + screenshots | One happy path per milestone + regression test per bug (issue number in test name); suite < 5 min |
 | Performance | Key-to-action latency in core (< 50 µs), key-to-paint in the window (< 5 ms), startup to first paint | Vitest bench for core; e2e timers | Regression > 10 % fails CI |
 | Rebase | Patch set applies to the new upstream; UI smoke after rebase | `surfer import` in `upstream.yml` + the e2e happy paths | Any failure blocks the upstream PR |
 
@@ -233,18 +234,19 @@ Rules: test names are sentences from the spec; `vimma-core` imports nothing from
 
 ## 6. Roadmap
 
-Weeks are evenings-and-weekends ordering estimates, not dates. Each milestone ends with a nightly you use daily.
+Weeks are evenings-and-weekends ordering estimates, not dates. Each milestone ends with a nightly you use daily. Order from here: M7's security work first, then M6 once Vimma has been daily-driven; macOS and Windows come later.
 
-| | Milestone | Scope | Gate |
-| --- | --- | --- | --- |
-| M0 | **Fork boots + pipeline** (3 wks) | `surfer setup-project` on current Firefox release; branding; CI with Vitest, tsc, eslint, mochitest skeleton; e2e harness launching the build under Xvfb; nightly build; `upstream.yml`; Claude Code workflows; `vimma-core` dispatcher + key notation with tests; `VimmaHost` capturing keys; `prefix+?` overlay from the binding table; native tab strip hidden by CSS | Your build runs; `ctrl+b ?` shows the bindings over any page **including `about:preferences` and the PDF viewer**; CI green on a trivial PR |
-| M1 | **Modal page layer** (4 wks) | JSWindowActor pair; insert-mode detection; scrolling; `hints.js` + hint mode; find via `gBrowser.finder`; `:` command line with completion from `actions.mjs`; copy mode (caret browsing + selection); `Esc` semantics | A day of browsing without the mouse on ordinary sites |
-| M2 | **Tabs, status bar** (3 wks) | Herdr tab keys over `gBrowser`; tab rename (label override persisted); status bar; ~~which-key strip while prefix pending~~ (dropped by user decision, 2026-10-09: only `prefix+?` lists bindings); `prefix+g` basic picker | Herdr's "learn these five first" all work (minus panes); screenshot baselines recorded |
-| M3 | **Workspaces + side panel** (4 wks) | Container-backed workspaces; hidden tabs; `ctrl+i`/`ctrl+u`; `prefix+w` picker; `<leader>n` side panel with `panel` mode; SessionStore persistence + restore; `[workspaces]` config | Login in `work` invisible in `personal`; restart restores workspaces, tabs, scroll positions |
-| M4 | **Split panes** (5 wks) | Firefox's split view with our layout (ADR-013); pane tree in core; `prefix+v`/`-`/`x`/`z`/`h j k l`; swap; resize mode; URL bar follows active pane; fullscreen requests zoom the pane | Two panes of real sites side by side, keyboard only; mochitests for every pane op |
-| M5 | **Config + theme** (3 wks) | `config.toml` load/validate/migrate; polling reload; `:source`; errors in status bar + `about:vimma`; theme tokens; Tokyo Night default; Omarchy adapter; `about:vimma` | `omarchy-theme-set` changes vimma colours live; a broken config line shows file:line in the status bar and the old config stays active |
-| M6 | **Daily driver + release** (4 wks) | Quickmarks + history in `prefix+g`; per-workspace autofill stance; download/permission UX reviewed for keyboard use; tarball/AppImage/`.deb`; cosign + SBOM; AUR `vimma-bin`; in-app updater pointed at our update manifest; opt-in crash reporting | Firefox (stock) uninstalled for a week; a stranger installs from AUR and updates |
-| M7 | **Hardening** (ongoing) | macOS build + notarisation; Windows when cheap; accessibility pass on chrome UI; patch-set audit each quarter; security release SLA proven twice | Two consecutive Firefox releases rebased and shipped with zero manual steps |
+| | Milestone | Status | Scope | Gate |
+| --- | --- | --- | --- | --- |
+| M0 | **Fork boots + pipeline** (3 wks) | Done | `surfer setup-project` on current Firefox release; branding; CI with Vitest, tsc, eslint, mochitest skeleton; e2e harness launching the build under Xvfb; nightly build; `upstream.yml`; Claude Code workflows; `vimma-core` dispatcher + key notation with tests; `VimmaHost` capturing keys; `prefix+?` overlay from the binding table; native tab strip hidden by CSS | Your build runs; `ctrl+b ?` shows the bindings over any page **including `about:preferences` and the PDF viewer**; CI green on a trivial PR |
+| M1 | **Modal page layer** (4 wks) | Done | JSWindowActor pair; insert-mode detection; scrolling; `hints.js` + hint mode; find via `gBrowser.finder`; `:` command line with completion from `actions.mjs`; copy mode (caret browsing + selection); `Esc` semantics | A day of browsing without the mouse on ordinary sites |
+| M2 | **Tabs, status bar** (3 wks) | Done | Prefix tab keys over `gBrowser`; tab rename (label override persisted); status bar; ~~which-key strip while prefix pending~~ (dropped, 2026-10-09: only `prefix+?` lists bindings); `prefix+g` basic picker | The keys to learn first (`prefix+c`, `prefix+v`/`-`, `prefix+h/j/k/l`, `prefix+w`) all work (minus panes); screenshot baselines recorded |
+| M3 | **Workspaces + side panel** (4 wks) | Done | Container-backed workspaces; hidden tabs; `prefix+)`/`prefix+(`; `prefix+w` picker; `prefix+b` side panel with `panel` mode; SessionStore persistence + restore; `[workspaces]` config | Login in `work` invisible in `personal`; restart restores workspaces, tabs, scroll positions |
+| M4 | **Split panes** (5 wks) | Done | Firefox's split view with our layout (ADR-013); pane tree in core; `prefix+v`/`-`/`x`/`z`/`h j k l`; swap; resize mode; URL bar follows active pane; fullscreen requests zoom the pane | Two panes of real sites side by side, keyboard only; mochitests for every pane op |
+| M5 | **Config + theme** (3 wks) | Done | `config.toml` load/validate/migrate; polling reload; `:source`; errors in status bar + `about:vimma`; theme tokens; Tokyo Night default; Omarchy adapter; `about:vimma` | `omarchy-theme-set` changes vimma colours live; a broken config line shows file:line in the status bar and the old config stays active |
+| M7 | **Security hardening** (ongoing) | Next | Automatic Firefox security updates (detect a release, rebase, test, open a PR with no manual steps); fuzzing of the control protocol, `config.toml` and routing parsers; accessibility pass on Vimma's own UI; a scheduled quarterly patch audit; security release SLA proven twice | Two consecutive Firefox releases rebased and shipped with zero manual steps |
+| M6 | **Daily driver + release** (4 wks) | After M7 | Quickmarks + history in `prefix+g`; per-workspace autofill stance; download/permission UX reviewed for keyboard use; tarball/AppImage/`.deb`; cosign + SBOM; AUR `vimma-bin`; in-app updater pointed at our update manifest; opt-in crash reporting. The packaging tooling exists and is switched off (`docs/specs/m6-packaging.md`) | Firefox (stock) uninstalled for a week; a stranger installs from AUR and updates |
+| Later | **More platforms** | Later | macOS build + notarisation; Windows when cheap; aarch64 | Same gates as Linux |
 
 Recurring every 4 weeks from M0: the upstream rebase. Budget half a day for the first three, then it should be automatic.
 
@@ -271,7 +273,7 @@ Release checklist (`release.yml`, automated; `docs/release.md` is the human fall
 
 ## 8. Working with Claude Code
 
-The repo holds the memory. `CLAUDE.md` (appendix A), specs, ADRs, tests and the changelog are what every fresh session reads, local or headless.
+The repo holds the memory. `CLAUDE.md`, specs, ADRs, tests and the changelog are what every fresh session reads, local or headless.
 
 **Plan-first, one spec per session.** Plan mode → plan saved to `docs/specs/<feature>.md` listing tests to write, files to touch, upstream patches needed (ideally none), ADR check → approve → run. Drift past the spec means stop and split.
 
@@ -329,60 +331,6 @@ Open questions to settle in M0 (each becomes an ADR or a line in `docs/limits.md
 
 ---
 
-## 10. Session 1 — what to do first
+## 10. Where the rest went
 
-1. Create the repo, add this file as `plan.md`, `CLAUDE.md` from appendix A, empty `docs/adr/`, `docs/specs/`.
-2. Install prerequisites: Node 20+, Python 3, `npm i -D @zen-browser/surfer vitest fast-check typescript eslint prettier @commitlint/cli`. Verify current Surfer commands against its docs before relying on names below.
-3. `npx surfer setup-project` (name vimma, pick the current Firefox release), `npx surfer download`, `npx surfer bootstrap`, `npx surfer build`, `npx surfer run`. Record the real build time and machine in `docs/runbook.md`.
-4. Write ADR-001…008 from §1 (short; the reasoning is above).
-5. Spec `docs/specs/m0-key-capture.md`: a `VimmaHost.sys.mjs` that installs a capturing `keydown` listener and logs `{key, mods, mode}` to the console; a one-hunk patch to `browser.xhtml` that loads it. Tests: a mochitest proving the listener fires on `about:preferences`.
-6. Spec `docs/specs/m0-core-dispatcher.md`: `packages/vimma-core` with `parseKey`, `formatKey`, `dispatch`, the actions enum and `defaults.toml`; Vitest + fast-check; 90 % coverage gate.
-7. Spec `docs/specs/m0-help-overlay.md`: `prefix+?` overlay rendered from the binding table, `/` filter, `Esc` closes; mochitest asserting it opens over the PDF viewer.
-8. Spec `docs/specs/m0-pipeline.md`: `ci.yml`, `e2e.yml` skeleton, `nightly.yml`, `upstream.yml`, `claude.yml`, branch protection, Renovate config.
-9. Run them one spec per session, clearing between.
-
----
-
-## Appendix A — starter `CLAUDE.md`
-
-```markdown
-# vimma
-
-Keyboard-first Firefox fork (Surfer). Neovim modal layer + Herdr prefix keymap (ctrl+b),
-workspaces as containers, on-demand side panel, always-visible status bar, Omarchy theming.
-Read plan.md once per milestone; read docs/specs/<current>.md every session.
-
-## Commands
-- npm test                    # Vitest for packages/vimma-core (fast, run constantly)
-- npm run typecheck           # tsc --checkJs over src/**/vimma/** and packages/**
-- npm run lint                # eslint + prettier check
-- npm run gen-docs            # regenerate docs/bindings.md from actions.mjs
-- npx surfer build --ui && npx surfer run   # rebuild our UI only, launch
-- npm run mochitest -- tests/browser/browser_vimma_<name>.js
-- npm run e2e -- --filter <name>            # socket-driven e2e under Xvfb
-
-## Rules
-- TDD: write the failing test, run it, paste red output; implement; paste green. Never loosen a test.
-- packages/vimma-core imports nothing from Firefox. Enforced by eslint; do not disable the rule.
-- Our code lives in src/browser/base/content/vimma/. Touch upstream files only to inject ours,
-  in the smallest hunk possible. A new .patch needs a line in the ADR for it.
-- Never edit screenshot baselines or snapshots without a changelog line explaining the change.
-- Conventional Commits with a body; the subject is the changelog line; the body explains why.
-- No new dependency without a licence check and a PR line. No #[allow]-style suppressions
-  (eslint-disable) without a reason comment.
-- Never disable a workflow, pin, or lint rule to get green. Stop and report instead.
-- When unsure how Firefox's front end does something: grep the engine tree and Zen's
-  components; do not guess from memory.
-
-## Layout
-- packages/vimma-core: dispatcher, key notation, actions.mjs, keymap, state tree (pure)
-- src/.../vimma/host:   VimmaHost.sys.mjs (key capture, applies actions to gBrowser)
-- src/.../vimma/actors: JSWindowActor parent/child (focus, scroll, hints, caret)
-- src/.../vimma/ui:     status bar, which-key, help overlay, command line, side panel, pickers
-- src/.../vimma/workspaces, split, config, ctl
-- tests/browser: mochitests; tests/e2e: socket scenarios + baselines
-
-## Context hygiene
-- One spec per session. Clear after merge, before review, after 3 failed attempts, when switching area.
-- Before clearing mid-task: commit or stash, and write a handover paragraph into the spec.
-```
+The first-session checklist that was here is done (M0), and the starter `CLAUDE.md` that was appendix A grew into the repository's [`CLAUDE.md`](CLAUDE.md), which is the version to read.

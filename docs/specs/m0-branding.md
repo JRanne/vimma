@@ -1,6 +1,6 @@
 # Spec: m0-branding
 
-Status: implemented, awaiting review · Milestone: M0 · Area: branding (`configs/branding/vimma/`, `src/browser/branding/vimma/`)
+Status: implemented · Milestone: M0 · Area: branding (`configs/branding/vimma/`, `src/browser/branding/vimma/`)
 Prerequisite: Surfer project set up and `npx surfer build` succeeded once (plan §10 step 3).
 
 ## User story

@@ -1,6 +1,6 @@
 # Spec: m0-rebase-playbook
 
-Status: implemented, awaiting review · Milestone: M0 · Area: upstream (`tools/upstream/`,
+Status: implemented · Milestone: M0 · Area: upstream (`tools/upstream/`,
 `.github/workflows/upstream.yml`, `docs/rebase.md`)
 
 ## User story

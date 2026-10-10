@@ -1,6 +1,6 @@
 # Spec: m2-tab-keys
 
-Status: implemented, awaiting review · Milestone: M2 (prototype slice) · Area: host
+Status: implemented · Milestone: M2 (prototype slice) · Area: host
 (`src/browser/base/content/vimma/host/`), UI (`ui/notice.mjs`, `ui/help-overlay.mjs`), core
 (`tabs.mjs`, `actions.mjs`)
 

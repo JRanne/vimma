@@ -1,6 +1,6 @@
 # Spec: m0-key-capture
 
-Status: implemented, awaiting review · Milestone: M0 · Area: host (`src/browser/base/content/vimma/host/`)
+Status: implemented · Milestone: M0 · Area: host (`src/browser/base/content/vimma/host/`)
 Prerequisite: Surfer project set up and `npx surfer build` succeeded once (plan §10 step 3).
 
 ## User story

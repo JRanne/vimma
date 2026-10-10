@@ -1,6 +1,6 @@
 # Spec: m6-packaging
 
-Status: implemented (tooling), awaiting review; gated until user setup · Milestone: M6 · Area:
+Status: implemented (tooling); gated off until the owner sets up the runner, secrets and variables · Milestone: M6 · Area:
 `tools/package/`, `.github/workflows/release.yml`
 Prerequisite: release-please (`release-please.yml`) and the self-hosted `vimma-build` runner
 (`nightly.yml`), both merged. The updater spec (m0-updater, PR #15) compiles the app updater

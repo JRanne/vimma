@@ -1,6 +1,6 @@
 # Spec: m1-hints
 
-Status: implemented, awaiting review · Milestone: M1 · Area: actors
+Status: implemented · Milestone: M1 · Area: actors
 (`src/browser/base/content/vimma/actors/`), host (`host/VimmaHost.sys.mjs`), ui
 (`ui/hint-overlay.mjs`). Builds on [m1-actor-insert-scroll](m1-actor-insert-scroll.md) (the
 actor pair) and [m1-core-logic](m1-core-logic.md) § Hints (labels, order, keys).

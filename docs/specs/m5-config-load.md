@@ -1,6 +1,6 @@
 # Spec: m5-config-load
 
-Status: implemented, awaiting review · Milestone: M5 · Area: `src/browser/base/content/vimma/config/`
+Status: implemented · Milestone: M5 · Area: `src/browser/base/content/vimma/config/`
 (new), `host/VimmaHost.sys.mjs`, `ui/theme-host.mjs`, `ui/help-overlay.mjs`, `ui/statusbar.mjs`,
 `vimma.js`
 
@@ -92,7 +92,7 @@ not passing `[panes] max` to the pane view fails `panes_max_refuses_a_third_spli
 
 ## `:source <path>` and `:config`
 
-Status: implemented, awaiting review (2026-10-10). The plan says only "`:source`" and this
+Status: implemented (2026-10-10). The plan says only "`:source`" and this
 spec's Limits "`:config` (open the file in a tab)"; the choices below are ours.
 
 - **`:source <path>` replaces, it does not merge.** The file is read and applied as
@@ -134,8 +134,3 @@ then the poll timer was left running). Fixed with a generation counter: a check 
 before `recheck()` drops what it read. New test
 `a_path_change_during_a_check_is_not_undone_by_it` reproduces it deterministically (red with
 the same three failures as CI, green after).
-
-## Handover
-
-Next: `about:vimma` with
-`ConfigHost.errors` and theme warnings.

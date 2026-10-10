@@ -1,6 +1,6 @@
 # Spec: m0-safebrowsing-key
 
-Status: implemented, awaiting review · Milestone: M0 · Area: build config
+Status: implemented · Milestone: M0 · Area: build config
 (`configs/common/mozconfig`), default prefs (`src/browser/branding/vimma/pref/`), CI
 (`.github/workflows/{nightly,release}.yml`), `MozillaServices.sys.mjs`, `tools/mochitest.mjs`,
 `tools/safebrowsing-smoke`

@@ -1,6 +1,6 @@
 # Spec: m0-pipeline
 
-Status: implemented, awaiting review · Milestone: M0 · Area: CI (`.github/workflows/`)
+Status: implemented · Milestone: M0 · Area: CI (`.github/workflows/`)
 
 ## User story
 
@@ -33,7 +33,7 @@ new Firefox releases arrive as PRs.
 
 ## Settled (2026-10-09)
 
-- **No branch protection for now** (user decision). GitHub refuses it on this free private repo
+- **No branch protection for now** (maintainer decision). GitHub refuses it on this free private repo
   (`gh api …/branches/main/protection` → 403 "Upgrade to GitHub Pro"). `docs/runbook.md` says it
   is deliberately off. PRs merge after review and green checks; no required approvals.
 - **nightly.yml runs on a self-hosted runner** labelled `vimma-build` (22 GB `engine/`, 39 min

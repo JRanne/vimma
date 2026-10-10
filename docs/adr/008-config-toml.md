@@ -1,6 +1,6 @@
 # ADR-008: Config: one `config.toml`
 
-- Status: Accepted
+- Status: Accepted; amended by [ADR-012](012-toml-parser-smol-toml.md) (the parser is smol-toml, BSD-3-Clause)
 - Date: 2026-10-09
 
 ## Context

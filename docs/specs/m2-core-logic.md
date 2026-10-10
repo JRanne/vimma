@@ -1,6 +1,6 @@
 # Spec: m2-core-logic
 
-Status: implemented (core), awaiting review; host wiring pending · Milestone: M2 · Area: `packages/vimma-core`
+Status: implemented (core); the host wiring followed in the milestone's host specs · Milestone: M2 · Area: `packages/vimma-core`
 
 ## User stories
 
@@ -366,7 +366,7 @@ UI, timers and the state file. For the host:
 
 ## Settled (2026-10-09)
 
-- **Which-key dropped (user decision, 2026-10-09: "which-key is not needed").** Only `prefix+?`
+- **Which-key dropped (maintainer decision, 2026-10-09: "which-key is not needed").** Only `prefix+?`
   shows the bindings; `whichkey.mjs` and its tests are removed. `isRunnable` stays in
   `actions.mjs` for the help overlay. The which-key notes in this spec are history.
 

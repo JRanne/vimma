@@ -1,6 +1,6 @@
 # Spec: m2-statusbar-whichkey
 
-Status: implemented, awaiting review · Milestone: M2 · Area: UI (`src/browser/base/content/vimma/ui/`,
+Status: implemented · Milestone: M2 · Area: UI (`src/browser/base/content/vimma/ui/`,
 `src/browser/themes/shared/vimma/`)
 
 ## User story
@@ -72,7 +72,7 @@ screenshot baselines (the e2e harness).
 
 ## Settled (2026-10-09, from the engine tree)
 
-- **Which-key strip dropped (user decision, 2026-10-09: "which-key is not needed").** Only
+- **Which-key strip dropped (maintainer decision, 2026-10-09: "which-key is not needed").** Only
   `prefix+?` shows the bindings; `ctrl+b` alone shows just the pending keys in the bar. The strip,
   its CSS, `vimma-whichkey-open`, `VimmaHost.runnable()` and core's `whichkey.mjs` are removed;
   the notice hides when the overlay opens. The strip notes below are history.
