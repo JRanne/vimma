@@ -10,7 +10,7 @@
 //
 //   node tools/security/check-doc-links.mjs [file.md ...]   (default: docs/security.md)
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { closeSync, fstatSync, openSync, readFileSync, statSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -57,15 +57,72 @@ export function markdownLinks(md) {
       continue;
     }
     if (fenced) continue;
-    for (const m of line.matchAll(/\[((?:`[^`]*`|[^\]])*)\]\(([^)\s]+)\)/g)) {
-      links.push({
-        text: /** @type {string} */ (m[1]),
-        target: /** @type {string} */ (m[2]),
-        line: i + 1,
-      });
+    for (const link of linksInLine(line)) links.push({ ...link, line: i + 1 });
+  }
+  return links;
+}
+
+/**
+ * The `[text](target)` links of one line, in one left-to-right pass rather than with a regular
+ * expression: the expression this replaced backtracked exponentially on runs of backtick pairs
+ * (CodeQL js/redos). Code spans are skipped wherever they are, so a `]` or `[` inside one
+ * (`` [`a[0]`](x.js) ``) is text; a backtick with no partner is plain text. A `[` outside a code
+ * span starts the link over, as in Markdown. The target has no whitespace or `)`.
+ * @param {string} line
+ * @returns {{ text: string, target: string }[]}
+ */
+function linksInLine(line) {
+  const links = [];
+  // The first `)` or whitespace at or after a position, found once for the whole line: each
+  // `](` would otherwise rescan the same characters.
+  let stop = -1;
+  const targetEnd = (/** @type {number} */ from) => {
+    if (stop < from) {
+      stop = from;
+      while (stop < line.length && line[stop] !== ")" && !/\s/.test(String(line[stop]))) stop++;
+    }
+    return stop;
+  };
+  let open = -1; // the `[` of the link being read, or -1
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === "`") {
+      const partner = line.indexOf("`", i + 1);
+      if (partner !== -1) i = partner;
+    } else if (c === "[") {
+      open = i;
+    } else if (c === "]" && open !== -1) {
+      if (line[i + 1] === "(") {
+        const end = targetEnd(i + 2);
+        if (end > i + 2 && line[end] === ")") {
+          links.push({ text: line.slice(open + 1, i), target: line.slice(i + 2, end) });
+          i = end;
+        }
+      }
+      open = -1;
     }
   }
   return links;
+}
+
+/**
+ * The text of `path`: undefined when nothing is there, null when it is not a regular file.
+ * @param {string} path
+ * @returns {string | null | undefined}
+ */
+function readIfFile(path) {
+  let fd;
+  try {
+    fd = openSync(path, "r");
+  } catch (e) {
+    if (/** @type {NodeJS.ErrnoException} */ (e).code === "ENOENT") return undefined;
+    throw e;
+  }
+  try {
+    return fstatSync(fd).isFile() ? readFileSync(fd, "utf8") : null;
+  } finally {
+    closeSync(fd);
+  }
 }
 
 /**
@@ -82,19 +139,26 @@ export function checkFile(mdPath) {
   for (const { text, target, line } of markdownLinks(md)) {
     if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#")) continue; // URL, anchor
     const file = resolve(dirname(mdPath), target.replace(/#.*$/, ""));
-    if (!existsSync(file)) {
+    const code = /^`([^`]+)`$/.exec(text);
+    // A test link's file is opened once and asked, through that descriptor, whether it is a
+    // file: no window between the check and the read (CodeQL js/file-system-race).
+    const source = code
+      ? readIfFile(file)
+      : statSync(file, { throwIfNoEntry: false })
+        ? "" // a plain link only has to resolve
+        : undefined;
+    if (source === undefined) {
       problems.push(`${where(line)}: ${target} does not exist`);
       continue;
     }
-    const code = /^`([^`]+)`$/.exec(text);
     if (!code) continue;
     tests++;
-    if (!statSync(file).isFile()) {
+    if (source === null) {
       problems.push(`${where(line)}: ${target} is not a file, so it has no test ${text}`);
       continue;
     }
     const name = /** @type {string} */ (code[1]);
-    if (!testNames(readFileSync(file, "utf8"), file).has(name)) {
+    if (!testNames(source, file).has(name)) {
       problems.push(`${where(line)}: ${target} has no test named "${name}"`);
     }
   }
