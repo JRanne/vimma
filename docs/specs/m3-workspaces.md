@@ -1120,6 +1120,11 @@ dependency for 4b, 5 and parts of 4a.
   A load counter in localStorage was tried first and fails after a SIGKILL (its last write is
   lost), hence the navigation type. Red check: the fixture forcing `scrollTo(0, 0)` on a
   restored load fails it ("long top back_forward").
+- **Watch:** after merging main's Vim-buffer workspace keys, `m3-crash-restore` failed once in
+  21 local runs (the first run after a fresh artifact build): the second `prefix+)` after the
+  restart left the window in `work` (with its split) for 10 s, as if the key was lost. It did
+  not recur in 20 more runs, 6 of them on two busy CPUs, and CI passed. If it recurs, quarantine
+  it with an issue (plan §5) and look at keys sent while a restored split's tabs load.
 
 ## Settled: workspaces as Vim buffers (maintainer request, 2026-10-10)
 
