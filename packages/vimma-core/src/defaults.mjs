@@ -70,8 +70,8 @@ const keys = {
   rename_workspace: ["prefix+shift+w"],
   close_workspace: ["prefix+shift+d"],
   goto_picker: ["prefix+g"],
-  toggle_sidebar: ["prefix+b", "<leader>n"],
-  toggle_bookmarks: ["prefix+shift+b", "<leader>b"],
+  toggle_sidebar: ["prefix+b"],
+  toggle_bookmarks: ["prefix+shift+b"],
   add_bookmark: ["prefix+a"],
   copy_mode: ["prefix+["],
 };
@@ -323,9 +323,12 @@ export function formatConfigTemplate() {
         : `# ${line}`,
     );
   return [
-    "# Vimma config. Every line below is a default, commented out: uncomment one and change it.",
-    "# Vimma reads this file within 2 seconds of a save; :source reads it at once.",
-    "# Reference: docs/guide.md, section config.toml.",
+    "# Vimma config. Every line below is a default, commented out, so this file changes nothing.",
+    "# To change a setting, uncomment its line (remove the `# `) and edit the value; the table",
+    "# header above it ([keys], [modal], ...) stays as it is. Delete lines you do not need.",
+    "# Vimma reloads this file within 2 seconds of a save, in every window; :source reads it at",
+    "# once. In Vimma, :config opens this file, and ctrl+b ? lists every key with its name here.",
+    "# Reference: the user guide's config.toml section (docs/guide.md).",
     ...body,
   ].join("\n");
 }

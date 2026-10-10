@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Spec: docs/specs/bookmarks.md. `ctrl+b shift+b` / `<leader>b` toggle a bookmarks panel in the
+// Spec: docs/specs/bookmarks.md. `ctrl+b shift+b` toggles a bookmarks panel in the
 // side panel's slot, over Firefox's Places bookmarks, with neo-tree's keys; `ctrl+b a` and
 // `:bookmark` file the page under typed folders.
 
@@ -58,11 +58,6 @@ function until(cond, msg) {
 function prefix(key, mods = {}, win = window) {
   EventUtils.synthesizeKey("b", { ctrlKey: true }, win);
   EventUtils.synthesizeKey(key, mods, win);
-}
-
-function leader(key, win = window) {
-  EventUtils.synthesizeKey(" ", {}, win);
-  EventUtils.synthesizeKey(key, {}, win);
 }
 
 /** Opens `${PAGE}?<query>`, titled `query`, focused in normal mode. */
@@ -182,11 +177,11 @@ add_task(async function toggles_in_the_side_panels_slot_one_panel_at_a_time() {
     "rooted at the Menu, toolbar and other first",
   );
   Assert.equal(panel().querySelector("img"), null, "a title is text, never HTML");
-  leader("b");
-  await until(() => !isOpen(), "<leader>b closes it");
+  prefix("B", { shiftKey: true });
+  await until(() => !isOpen(), "ctrl+b shift+b closes it");
   await focusPage();
-  leader("b");
-  await until(isOpen, "<leader>b opens it");
+  prefix("B", { shiftKey: true });
+  await until(isOpen, "ctrl+b shift+b opens it");
   prefix("b");
   await until(() => sideOpen() && !isOpen(), "ctrl+b b swaps to the side panel");
   prefix("B", { shiftKey: true });

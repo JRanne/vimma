@@ -2,10 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Spec: docs/specs/m3-workspaces.md, sub-spec 6 (m3-side-panel): `<leader>n` / `prefix+b` /
+// Spec: docs/specs/m3-workspaces.md, sub-spec 6 (m3-side-panel): `prefix+b` /
 // `:sidebar` open a panel on the left headed by the current workspace and its ctrl+u / ctrl+i
 // neighbours, listing its tabs as numbered rows. In `panel` mode j/k move, Enter or a digit
-// selects a tab and closes, Esc / `<leader>n` / `prefix+b` close; ctrl+i re-renders it.
+// selects a tab and closes, Esc / `prefix+b` close; ctrl+i re-renders it.
 
 "use strict";
 
@@ -61,10 +61,9 @@ function prefix(key, mods = {}) {
   EventUtils.synthesizeKey(key, mods);
 }
 
-/** `<leader>n`: space, n. */
-function leaderN() {
-  EventUtils.synthesizeKey(" ");
-  EventUtils.synthesizeKey("n");
+/** `prefix+b`: ctrl+b, b. */
+function toggleKey() {
+  prefix("b");
 }
 
 /** Focuses the selected page, once it has loaded, so keys reach it in normal mode. */
@@ -74,11 +73,11 @@ async function focusPage() {
   await focusContent(browser);
 }
 
-/** `<leader>n` from the selected page, waiting for the panel. */
+/** `ctrl+b b` from the selected page, waiting for the panel. */
 async function openPanel() {
   await focusPage();
-  leaderN();
-  await until(isOpen, "<leader>n opens the side panel");
+  toggleKey();
+  await until(isOpen, "ctrl+b b opens the side panel");
 }
 
 /** Opens `${PAGE}?<query>` in the shown workspace, selected, titled `query`. */
@@ -110,7 +109,7 @@ add_task(async function setup_two_workspaces() {
   await openPage("main-three");
 });
 
-add_task(async function hidden_by_default_and_leader_n_opens_it_on_the_left() {
+add_task(async function hidden_by_default_and_prefix_b_opens_it_on_the_left() {
   Assert.ok(!isOpen(), "the panel is closed at start");
   await openPanel();
   Assert.equal(browserBoxOrder()[0], panel(), "it is the leftmost box of the window");
@@ -147,9 +146,22 @@ add_task(async function hidden_by_default_and_leader_n_opens_it_on_the_left() {
   document.documentElement.style.removeProperty("--vimma-bg-dark");
   await until(() => getComputedStyle(panel()).backgroundColor === bg, "and back");
 
-  leaderN();
-  await until(() => !isOpen(), "<leader>n closes it again");
+  toggleKey();
+  await until(() => !isOpen(), "ctrl+b b closes it again");
   Assert.equal(document.activeElement, gBrowser.selectedBrowser, "focus returns to the page");
+});
+
+add_task(async function space_n_does_not_open_it_by_default() {
+  // The leader has no default bindings (user decision, 2026-10-10); config.toml can add one.
+  await focusPage();
+  EventUtils.synthesizeKey(" ");
+  EventUtils.synthesizeKey("n");
+  // Then a key that does open it: had space n opened the panel, it would close it again.
+  toggleKey();
+  await until(isOpen, "ctrl+b b opens the side panel");
+  Assert.equal(VimmaHost.status(window).mode, "panel", "space n left it closed");
+  toggleKey();
+  await until(() => !isOpen(), "ctrl+b b closes it");
 });
 
 add_task(async function j_k_and_enter_select_a_tab_and_close() {
