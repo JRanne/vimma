@@ -7,17 +7,17 @@
 // the notice, the split code and bookmark-ops.mjs (Places).
 
 import {
-  PLACES_ROOTS,
-  completeFolder,
+  completeWorkspacePath,
   folderPath,
   formatBookmarkPath,
+  rootLabel,
 } from "../core/bookmarks.mjs";
 import {
   addBookmark,
   addFolder,
   currentPage,
   findBookmark,
-  loadTree,
+  loadScope,
   moveItem,
   placeBookmark,
   removeItem,
@@ -26,6 +26,7 @@ import {
 import { splitPane } from "./pane-ops.mjs";
 
 /** @import { BookmarksEffect, Folder } from "../core/bookmarks.mjs" */
+/** @import { Scope } from "./bookmark-ops.mjs" */
 /** @import { RenamePrompt } from "../ui/rename-prompt.mjs" */
 /** @import { BookmarksPanel } from "../ui/bookmarks-panel.mjs" */
 
@@ -54,9 +55,26 @@ function apply(ctx, change) {
 }
 
 /**
- * `ctrl+b a` and `:bookmark [path]`: files the selected page under a typed path from the Menu
- * (a trailing `/`: under its own title). Already bookmarked, it says where and offers to move
- * or rename that bookmark instead (spec decision 7).
+ * Tab completion of a path from folder `base` of the scope's tree; `@` completes workspace
+ * names, then their folders (spec decision 11).
+ * @param {Scope} scope
+ * @param {string} base
+ */
+const completer = (scope, base) => (/** @type {string} */ before) =>
+  completeWorkspacePath({ current: scope.tree, workspaces: scope.workspaces }, base, before);
+
+/**
+ * How the notice names the top of the tree: "@work", "the bookmarks toolbar".
+ * @param {Folder} tree
+ */
+const topName = (tree) => (tree.root === "workspace" ? rootLabel(tree) : `the ${rootLabel(tree)}`);
+
+/**
+ * `ctrl+b a` and `:bookmark [path]`: files the selected page under a typed path from the
+ * tree's top, the current workspace's folder by default (a trailing `/`: under its own title;
+ * `@name/…`: another workspace's). Already bookmarked, it says where and offers to move or
+ * rename that bookmark instead (spec decision 7); one outside every workspace folder is
+ * offered at the top under its title.
  * @param {BookmarkContext} ctx
  * @param {string} [text]
  */
@@ -66,35 +84,54 @@ export async function quickAdd(ctx, text) {
     ctx.say(NOT_BOOKMARKABLE);
     return;
   }
-  const [existing, tree] = await Promise.all([findBookmark(page.url), loadTree()]);
-  const complete = (/** @type {string} */ before) =>
-    completeFolder(tree, PLACES_ROOTS.menu, before);
+  const [existing, scope] = await Promise.all([
+    findBookmark(ctx.win, page.url),
+    loadScope(ctx.win),
+  ]);
+  const complete = completer(scope, scope.tree.guid);
   if (existing) {
-    ctx.say(`already bookmarked: ${existing.path}`);
+    ctx.say(
+      existing.outside
+        ? `already bookmarked outside ${topName(scope.tree)}: ${existing.path}`
+        : `already bookmarked: ${existing.path}`,
+    );
     ctx.prompt.prompt({
       label: "move/rename: ",
-      value: text || existing.path,
+      value: text || existing.value,
       complete,
-      submit: (t) => apply(ctx, () => placeBookmark(existing.guid, t)),
+      submit: (t) => apply(ctx, () => placeBookmark(ctx.win, existing.guid, t)),
     });
     return;
   }
   if (text) {
-    apply(ctx, () => addBookmark(text, page));
+    apply(ctx, () => addBookmark(ctx.win, text, page));
     return;
   }
   ctx.prompt.prompt({
-    label: "bookmark: ",
+    label: scope.current ? `bookmark in ${rootLabel(scope.tree)}: ` : "bookmark: ",
     value: page.title,
     caret: 0,
     placeholder: "folder/folder/title",
     complete,
-    submit: (t) => apply(ctx, () => addBookmark(t, page)),
+    submit: (t) => apply(ctx, () => addBookmark(ctx.win, t, page)),
   });
 }
 
 /**
- * A folder's path for a prompt's label: `work/docs/`, or "" for the Menu.
+ * Opens a prompt over the window's scope, read fresh (the `@name/` folders included).
+ * @param {BookmarkContext} ctx
+ * @param {(scope: Scope) => void} fn
+ */
+function withScope(ctx, fn) {
+  loadScope(ctx.win)
+    .then((scope) => {
+      if (ctx.panel.isOpen) fn(scope);
+    })
+    .catch((e) => console.error("vimma: bookmarks could not be read", e));
+}
+
+/**
+ * A folder's path for a prompt's label: `work/docs/`, or "" for the tree's top.
  * @param {Folder} tree
  * @param {string} guid
  */
@@ -157,23 +194,28 @@ export function runBookmarkEffect(ctx, effect) {
         return;
       }
       const base = effect.folder;
-      ctx.prompt.prompt({
-        label: `add in ${where(tree, base) || "bookmarks menu/"}: `,
-        value: page.title,
-        caret: 0,
-        placeholder: "folder/title, or folder/ for a folder",
-        complete: (before) => completeFolder(tree, base, before),
-        submit: (t) => apply(ctx, () => addBookmark(t, page, { base, folderOnly: true })),
-      });
+      withScope(ctx, (scope) =>
+        ctx.prompt.prompt({
+          label: `add in ${where(scope.tree, base) || `${rootLabel(scope.tree)}/`}: `,
+          value: page.title,
+          caret: 0,
+          placeholder: "folder/title, or folder/ for a folder",
+          complete: completer(scope, base),
+          submit: (t) =>
+            apply(ctx, () => addBookmark(ctx.win, t, page, { base, folderOnly: true })),
+        }),
+      );
       return;
     }
     case "add_folder": {
       const base = effect.folder;
-      ctx.prompt.prompt({
-        label: `new folder in ${where(tree, base) || "bookmarks menu/"}: `,
-        complete: (before) => completeFolder(tree, base, before),
-        submit: (t) => apply(ctx, () => addFolder(t, base)),
-      });
+      withScope(ctx, (scope) =>
+        ctx.prompt.prompt({
+          label: `new folder in ${where(scope.tree, base) || `${rootLabel(scope.tree)}/`}: `,
+          complete: completer(scope, base),
+          submit: (t) => apply(ctx, () => addFolder(ctx.win, t, base)),
+        }),
+      );
       return;
     }
     case "rename":
@@ -184,13 +226,15 @@ export function runBookmarkEffect(ctx, effect) {
       });
       return;
     case "move":
-      ctx.prompt.prompt({
-        label: "move to: ",
-        value: where(tree, effect.from),
-        placeholder: "folder/folder/",
-        complete: (before) => completeFolder(tree, PLACES_ROOTS.menu, before),
-        submit: (t) => apply(ctx, () => moveItem(effect.guid, t)),
-      });
+      withScope(ctx, (scope) =>
+        ctx.prompt.prompt({
+          label: "move to: ",
+          value: where(scope.tree, effect.from),
+          placeholder: scope.current ? "folder/folder/, or @workspace/folder/" : "folder/folder/",
+          complete: completer(scope, scope.tree.guid),
+          submit: (t) => apply(ctx, () => moveItem(ctx.win, effect.guid, t)),
+        }),
+      );
       return;
     case "delete": {
       const what =

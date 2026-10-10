@@ -17,7 +17,9 @@ import {
   removeWorkspaceDefinition,
   renameWorkspaceDefinition,
   setLastActive,
+  withBookmarksFolder,
   withContainer,
+  deleteBookmarksQuestion,
 } from "../src/workspacedefs.mjs";
 
 const fixture = (/** @type {string} */ name) =>
@@ -439,5 +441,66 @@ describe("workspace lifecycle", () => {
     const blue = addRuntimeWorkspace(d, { id: "b", name: "b", color: "blue", icon: "circle" });
     expect(newWorkspaceLooks(blue).color).toBe("green");
     expect(newWorkspaceLooks(emptyDefinitions()).color).toBe("blue");
+  });
+});
+
+// docs/specs/bookmarks.md, decision 11 (user decision, 2026-10-10): a workspace's bookmarks
+// folder is linked by its Places guid, kept in the definitions file.
+describe("bookmarksFolder", () => {
+  const base = () => reconcileDefinitions(emptyDefinitions(), [cfg("work")], minter()).definitions;
+
+  test("withBookmarksFolder links a folder; the same guid returns the input", () => {
+    const d = base();
+    const linked = withBookmarksFolder(d, "ws-1", "abcdefghijkl");
+    expect(linked.workspaces[0]?.bookmarksFolder).toBe("abcdefghijkl");
+    expect(withBookmarksFolder(linked, "ws-1", "abcdefghijkl")).toBe(linked);
+    expect(d.workspaces[0]?.bookmarksFolder).toBeUndefined();
+    expect(withBookmarksFolder(linked, "ws-1", null).workspaces[0]).not.toHaveProperty(
+      "bookmarksFolder",
+    );
+    expect(defsError(() => withBookmarksFolder(d, "ws-1", "not a guid")).code).toBe("invalid");
+  });
+
+  test("it is read back from the file, and checked", () => {
+    const linked = withBookmarksFolder(base(), "ws-1", "abcdefghijkl");
+    expect(readDefinitions(JSON.stringify(linked))).toEqual(linked);
+    const bad = structuredClone(linked);
+    /** @type {any} */ (bad.workspaces[0]).bookmarksFolder = 12;
+    expect(defsError(() => readDefinitions(bad)).path).toBe("workspaces[0].bookmarksFolder");
+  });
+
+  test("a reconcile keeps it, for config and runtime workspaces, and a rename too", () => {
+    const linked = withBookmarksFolder(base(), "ws-1", "abcdefghijkl");
+    const again = reconcileDefinitions(linked, [cfg("work", { color: "blue" })], minter());
+    expect(again.definitions.workspaces[0]?.bookmarksFolder).toBe("abcdefghijkl");
+    const runtime = reconcileDefinitions(linked, [], minter()).definitions;
+    expect(runtime.workspaces[0]).toMatchObject({
+      source: "runtime",
+      bookmarksFolder: "abcdefghijkl",
+    });
+    const renamed = renameWorkspaceDefinition(runtime, "ws-1", "job");
+    expect(renamed.workspaces[0]).toMatchObject({ name: "job", bookmarksFolder: "abcdefghijkl" });
+  });
+
+  test("keeping it is no change; relinking is a new object", () => {
+    const linked = withBookmarksFolder(base(), "ws-1", "abcdefghijkl");
+    const again = reconcileDefinitions(linked, [cfg("work")], minter());
+    expect(again.changed).toBe(false);
+    expect(again.definitions).toBe(linked);
+    const moved = withBookmarksFolder(linked, "ws-1", "mnopqrstuvwx");
+    expect(moved).not.toBe(linked);
+    expect(moved.workspaces[0]?.bookmarksFolder).toBe("mnopqrstuvwx");
+  });
+});
+
+describe("deleteBookmarksQuestion", () => {
+  test("names the count and the three choices, keep first", () => {
+    expect(deleteBookmarksQuestion("work", 3, "main")).toBe(
+      'The 3 bookmarks of "work": k keep the folder (default), m move them to "main", ' +
+        "d delete them? K/m/d",
+    );
+    expect(deleteBookmarksQuestion("work", 1, null)).toBe(
+      'The 1 bookmark of "work": k keep the folder (default), d delete it? K/d',
+    );
   });
 });

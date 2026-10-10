@@ -243,6 +243,11 @@ layout = "dwindle"
 # The main pane's size in the main-vertical and main-horizontal layouts, 20 to 80 percent.
 main_size = 60
 
+# The bookmarks panel (ctrl+b shift+b) and ctrl+b a: "workspace" is the current workspace's
+# folder in the Bookmarks Toolbar; "toolbar" the whole toolbar; "all" every bookmark.
+[bookmarks]
+root = "workspace"
+
 # Per-site insert mode: auto (detect text fields), never (keys stay vimma's), always.
 # A host also covers its subdomains. None by default.
 # [sites."docs.google.com"]

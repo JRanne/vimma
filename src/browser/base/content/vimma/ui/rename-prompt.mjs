@@ -45,6 +45,8 @@ export class RenamePrompt {
     this.label = null;
     /** @type {(() => void) | null} a y/N question's yes, while one is open */
     this.yes = null;
+    /** @type {Record<string, () => void> | null} a `choose` question's answers, by key */
+    this.choices = null;
     /** @type {((text: string) => void) | null} a `prompt`'s Enter, while one is open */
     this.submit = null;
     /** @type {((before: string) => string[]) | null} a `prompt`'s Tab candidates */
@@ -80,6 +82,18 @@ export class RenamePrompt {
   }
 
   /**
+   * A question with several answers (docs/specs/bookmarks.md: a deleted workspace's bookmarks):
+   * a key of `choices` (lower case; `Enter` for the default) runs its answer; any other key or
+   * Esc answers nothing.
+   * @param {string} question
+   * @param {Record<string, () => void>} choices
+   */
+  choose(question, choices) {
+    if (!this.show(`${question} `, "", question, "alertdialog")) return;
+    this.choices = choices;
+  }
+
+  /**
    * A line of free text: Enter calls `submit` with it once the prompt has closed, Esc cancels.
    * Tab (shift+Tab back) cycles `complete`'s candidates for the text before the caret, keeping
    * the text after it.
@@ -111,6 +125,7 @@ export class RenamePrompt {
     if (!this.isOpen) this.opener = Services.focus.focusedElement;
     this.tab = null;
     this.yes = null;
+    this.choices = null;
     this.submit = this.completer = this.cycle = null;
     /** @type {HTMLElement} */ (this.label).textContent = label;
     input.placeholder = placeholder;
@@ -138,6 +153,7 @@ export class RenamePrompt {
     this.opener = null;
     this.tab = null;
     this.yes = null;
+    this.choices = null;
     this.submit = this.completer = this.cycle = null;
     if (tabChanged || (restoreFocus && !opener?.isConnected)) {
       /** @type {{ gBrowser?: { selectedBrowser: HTMLElement } }} */ (
@@ -164,7 +180,18 @@ export class RenamePrompt {
   onKeyDown(e) {
     if (e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
     const yes = this.yes;
-    if (yes) {
+    const choices = this.choices;
+    if (choices) {
+      if (["Shift", "CapsLock"].includes(e.key)) return;
+      if (e.repeat) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      this.close();
+      const key = e.key === "Enter" ? "Enter" : e.key.toLowerCase();
+      if (Object.hasOwn(choices, key)) choices[key]?.();
+    } else if (yes) {
       // Modifier keys alone (shift for `Y`) are not an answer.
       if (["Shift", "CapsLock"].includes(e.key)) return;
       // Nor is a key held down from before the question (the D of ctrl+b shift+d repeating).

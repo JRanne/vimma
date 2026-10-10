@@ -8,13 +8,24 @@
 // returns the text to show in the notice, or null.
 
 import { workspaceItems } from "../core/picker.mjs";
-import { closeWorkspaceQuestion, moveTabQuestion } from "../core/workspacedefs.mjs";
+import {
+  closeWorkspaceQuestion,
+  deleteBookmarksQuestion,
+  moveTabQuestion,
+} from "../core/workspacedefs.mjs";
 import { findWorkspace, workspaceRefFor } from "../core/workspaces.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
+import {
+  moveWorkspaceBookmarks,
+  removeItem,
+  renameWorkspaceFolder,
+  workspaceFolder,
+} from "./bookmark-ops.mjs";
 
 /** @import { WorkspaceItem } from "../core/picker.mjs" */
 /** @import { WorkspaceRef, Workspaces } from "../core/workspaces.mjs" */
+/** @import { WorkspaceDefinition } from "../core/workspacedefs.mjs" */
 
 export const NO_WORKSPACES = "no workspaces in this window";
 
@@ -82,23 +93,31 @@ export function renameWorkspace(win, name) {
   if (!def) return refused ?? NO_WORKSPACES;
   try {
     WorkspaceStore.renameWorkspace(def.id, name);
-    return null;
   } catch (e) {
     return `rename workspace: ${reason(e)}`;
   }
+  // Its bookmarks folder takes the new name; the link is by guid (docs/specs/bookmarks.md).
+  renameWorkspaceFolder(def, name).catch((e) =>
+    console.error("vimma: the workspace's bookmarks folder kept its name", e),
+  );
+  return null;
 }
 
 /**
  * `prefix+shift+d` / `:wsdelete [name]`: asks first (decision 7), through `ask(question, yes)`.
  * On yes, the window leaves the workspace if it shows it, then the store closes it: a runtime
- * one with its container and site data, a config one only its tabs (in every window).
+ * one with its container and site data, a config one only its tabs (in every window). A
+ * runtime one whose bookmarks folder has items asks next, through `choose`, what becomes of
+ * them (docs/specs/bookmarks.md, decision 12): keep the folder (Enter), move them to another
+ * workspace, or delete them; Esc or another key closes nothing.
  * @param {Window} win
  * @param {string | undefined} text
  * @param {(question: string, yes: () => void) => void} ask
  * @param {(text: string) => void} say  the notice, for a refusal after the answer
+ * @param {(question: string, choices: Record<string, () => void>) => void} [choose]
  * @returns {string | null}
  */
-export function closeWorkspace(win, text, ask, say) {
+export function closeWorkspace(win, text, ask, say, choose) {
   const { def, refused } = definitionOf(win, text);
   if (!def) return refused ?? NO_WORKSPACES;
   if (WorkspaceStore.definitions.workspaces.length === 1) return "cannot close the last workspace";
@@ -108,7 +127,8 @@ export function closeWorkspace(win, text, ask, say) {
   }
   // The yes stands for the workspace as asked about, not as it may be by the time of the `y`.
   const asked = { source: def.source, name: def.name, userContextId: def.userContextId };
-  ask(closeWorkspaceQuestion(def, tabs), () => {
+  /** The yes stands for the workspace as asked about: refuses (and says so) once it changed. */
+  const unchanged = () => {
     const now = WorkspaceStore.definitions.workspaces.find((d) => d.id === def.id);
     if (
       now?.source !== asked.source ||
@@ -116,11 +136,14 @@ export function closeWorkspace(win, text, ask, say) {
       now.userContextId !== asked.userContextId
     ) {
       say(`close workspace: "${asked.name}" changed since you were asked; nothing was closed`);
-      return;
+      return null;
     }
+    return now;
+  };
+  const close = () => {
     const ww = WindowWorkspaces.get(win);
     if (ww?.model?.active === def.id) ww.previous();
-    WorkspaceStore.closeWorkspace(def.id, { confirmed: true, asked }).then(
+    return WorkspaceStore.closeWorkspace(def.id, { confirmed: true, asked }).then(
       ({ cleared }) => {
         if (asked.source === "runtime" && !cleared) {
           say(
@@ -128,11 +151,89 @@ export function closeWorkspace(win, text, ask, say) {
               "so its tabs and site data were kept",
           );
         }
+        return true;
+      },
+      (e) => {
+        say(`close workspace: ${reason(e)}`);
+        return false;
+      },
+    );
+  };
+  ask(closeWorkspaceQuestion(def, tabs), () => {
+    const now = unchanged();
+    if (!now) return;
+    if (asked.source !== "runtime" || !choose) {
+      close();
+      return;
+    }
+    workspaceFolder(now).then(
+      (folder) => {
+        if (!folder?.count) {
+          if (unchanged()) close();
+          return;
+        }
+        askBookmarks(now, folder, { unchanged, close, say, choose });
       },
       (e) => say(`close workspace: ${reason(e)}`),
     );
   });
   return null;
+}
+
+/**
+ * The second question of a runtime workspace's delete: its bookmarks folder (decision 12).
+ * Each answer stands for the workspace, its folder and the move's target as asked about.
+ * @param {WorkspaceDefinition} def
+ * @param {{ guid: string, count: number }} folder
+ * @param {{ unchanged: () => WorkspaceDefinition | null, close: () => Promise<boolean>,
+ *   say: (text: string) => void,
+ *   choose: (question: string, choices: Record<string, () => void>) => void }} flow
+ */
+function askBookmarks(def, folder, { unchanged, close, say, choose }) {
+  const count = (/** @type {number} */ n) => `${n} bookmark${n === 1 ? "" : "s"}`;
+  const to = WorkspaceStore.definitions.workspaces.find((d) => d.id !== def.id) ?? null;
+  /** @param {(guid: string) => Promise<string>} act  what is done with the folder, said after */
+  const answer = (act) => () => {
+    if (!unchanged()) return;
+    workspaceFolder(def)
+      .then(async (now) => {
+        if (now?.guid !== folder.guid) {
+          say(`close workspace: the bookmarks of "${def.name}" changed; nothing was closed`);
+          return;
+        }
+        // The workspace first: its bookmarks change only once it is closed.
+        if (!(await close())) return;
+        say(await act(folder.guid));
+      })
+      .catch((e) => say(`close workspace: ${reason(e)}`));
+  };
+  const keep = answer(
+    async () => `closed "${def.name}"; its bookmarks folder stays in the toolbar`,
+  );
+  /** @type {Record<string, () => void>} */
+  const choices = {
+    k: keep,
+    Enter: keep,
+    d: answer(async (guid) => {
+      await removeItem(guid);
+      return `closed "${def.name}" and deleted its ${count(folder.count)}`;
+    }),
+  };
+  if (to) {
+    const name = to.name;
+    const move = answer(async (guid) => {
+      const moved = await moveWorkspaceBookmarks(guid, to.id);
+      return `closed "${def.name}"; moved its ${count(moved)} to "${name}"`;
+    });
+    choices.m = () => {
+      if (!WorkspaceStore.definitions.workspaces.some((d) => d.id === to.id && d.name === name)) {
+        say(`close workspace: "${name}" changed since you were asked; nothing was closed`);
+        return;
+      }
+      move();
+    };
+  }
+  choose(deleteBookmarksQuestion(def.name, folder.count, to?.name ?? null), choices);
 }
 
 /**
