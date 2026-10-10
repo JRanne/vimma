@@ -226,7 +226,19 @@ MOZ_HEADLESS=1 npm run e2e -- --artifact --filter m3   # no Xvfb at hand: headle
 
 A `restart` step (`m3-restart-restore`) quits with `ctrl+q` and starts the build again on the
 same profile; a scenario's `prefs` override the harness's `user.js` (`null`: the build's
-default). Without Xvfb, `MOZ_HEADLESS=1` runs every scenario that takes no screenshot.
+default). `"restart": "kill"` (`m3-crash-restore`) is a crash instead: it waits until
+SessionStore's `sessionstore-backups/recovery.jsonlz4` exists and has not changed for 3 s (set
+`browser.sessionstore.interval` low in the scenario's `prefs`, or that wait takes 15 s+), sends
+SIGKILL to the browser pid the harness started (its content processes follow; any left in its
+process group are killed after 5 s; never `pkill -f`), and starts again. The dead browser's
+`vimma-control.json` stays, as after a real crash; the relaunch skips the file whose `pid` is
+the killed one until the new browser rewrites it. The harness profile turns
+`resume_from_crash` off; a crash scenario sets it to `null` (the build's default, on).
+
+Scroll positions are read from the page, not from the control socket: `fixture:long.html`
+titles itself `long <top|middle|bottom> <navigation type>`, so after a restart the reloaded
+page says `back_forward` (SessionStore restores it from its history entry) where the stale
+saved label still says `navigate` (`m3-restart-scroll`). Without Xvfb, `MOZ_HEADLESS=1` runs every scenario that takes no screenshot.
 
 Without `DISPLAY` (CI) the harness starts its own Xvfb at 1280×800×24; with a desktop, pass
 `--xvfb` for screenshots and to keep the window off your screen. The browser never inherits

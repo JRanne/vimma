@@ -381,11 +381,13 @@ export async function startXvfb({
 }
 
 /**
- * Wait for the control server's discovery file: present, valid protocol v1, mode 0600.
+ * Wait for the control server's discovery file: present, valid protocol v1, mode 0600. After a
+ * crash-style kill the dead browser's file is still there: `stalePid` (its pid) makes the wait
+ * skip it until the new browser replaces it.
  * @param {string} profile
  * @param {{ timeoutMs?: number, intervalMs?: number,
  *   exited?: () => { code: number | null, signal: string | null } | null,
- *   stderrTail?: () => string }} [options]
+ *   stderrTail?: () => string, stalePid?: number | null }} [options]
  * @returns {Promise<{ protocol: number, port: number, token: string, pid: number }>}
  */
 export async function waitForDiscovery(
@@ -395,6 +397,7 @@ export async function waitForDiscovery(
     intervalMs = 50,
     exited = () => null,
     stderrTail = () => "",
+    stalePid = null,
   } = {},
 ) {
   const path = join(profile, DISCOVERY_FILE);
@@ -417,7 +420,9 @@ export async function waitForDiscovery(
         const { valid, errors } = validateMessage(body, { kind: "discovery" });
         if (mode & 0o077) problem = `it has mode ${mode.toString(8)}, not 600`;
         else if (!valid) problem = `it is invalid: ${errors.join("; ")}`;
-        else return body;
+        else if (stalePid !== null && body.pid === stalePid) {
+          problem = `it is the one left by the killed browser (pid ${stalePid})`;
+        } else return body;
       } catch (e) {
         problem = `it cannot be read yet: ${/** @type {Error} */ (e).message}`; // mid-rename
       }
@@ -473,6 +478,76 @@ export async function killTree(child, { graceMs = 5000 } = {}) {
 }
 
 /**
+ * Crash the browser the harness started: SIGKILL to its pid alone, as a crash or the OOM killer
+ * would, so no quit observer runs and SessionStore writes nothing more. Its content processes
+ * notice the dead parent and exit; any still in the harness's process group after `reapMs` are
+ * SIGKILLed so the relaunch starts clean. Never a name-based kill (pkill -f): only this pid
+ * and its group.
+ * @param {import("node:child_process").ChildProcess} child
+ * @param {{ reapMs?: number }} [options]
+ * @returns {Promise<number>} the killed pid (the stale discovery file names it)
+ */
+export async function crashBrowser(child, { reapMs = 5000 } = {}) {
+  const pid = child.pid;
+  if (!pid) throw new Error("crashBrowser: the browser has no pid");
+  if (child.exitCode !== null || child.signalCode !== null) {
+    throw new Error("crashBrowser: the browser already exited");
+  }
+  const exited = new Promise((resolve) => child.once("exit", () => resolve(undefined)));
+  process.kill(pid, "SIGKILL");
+  await exited;
+  const deadline = Date.now() + reapMs;
+  while (groupAlive(pid) && Date.now() < deadline) await sleep(25);
+  if (groupAlive(pid)) {
+    try {
+      process.kill(-pid, "SIGKILL");
+    } catch {
+      // gone meanwhile
+    }
+    const reapDeadline = Date.now() + 5000;
+    while (groupAlive(pid) && Date.now() < reapDeadline) await sleep(25);
+  }
+  return pid;
+}
+
+/** SessionStore's periodic save, written every `browser.sessionstore.interval` ms when dirty. */
+export const RECOVERY_FILE = join("sessionstore-backups", "recovery.jsonlz4");
+
+/**
+ * Before a crash-style kill: wait until SessionStore's recovery file exists and has not changed
+ * for `quietMs`, counted from this call at the earliest. SessionStore writes it at most every
+ * `browser.sessionstore.interval` ms while the session is dirty, so a quiet period of a few
+ * intervals means everything the scenario did before is on disk, which is what a crash keeps.
+ * @param {string} profile
+ * @param {{ quietMs?: number, timeoutMs?: number, pollMs?: number }} [options]
+ */
+export async function waitForSessionSaved(
+  profile,
+  { quietMs = 3000, timeoutMs = 30_000, pollMs = 100 } = {},
+) {
+  const path = join(profile, RECOVERY_FILE);
+  const started = Date.now();
+  const deadline = started + timeoutMs;
+  /** @type {number | null} */
+  let mtime = null;
+  let since = started;
+  for (;;) {
+    const now = existsSync(path) ? statSync(path).mtimeMs : null;
+    if (now !== mtime) {
+      mtime = now;
+      since = Math.max(started, Date.now());
+    }
+    if (mtime !== null && Date.now() - since >= quietMs) return;
+    if (Date.now() >= deadline) {
+      const what =
+        mtime === null ? "was never written" : `did not stay unchanged for ${quietMs} ms`;
+      throw new Error(`${path} ${what} within ${timeoutMs} ms`);
+    }
+    await sleep(pollMs);
+  }
+}
+
+/**
  * Quit the browser the way a user would, `send-keys ctrl+q`, so quit observers run and remove
  * the discovery file; a signal skips them (spec m0-control-server). The help overlay swallows
  * ctrl+q, so it is closed with `esc` first. Never throws: on any trouble, or when the browser has
@@ -522,7 +597,7 @@ export async function quitBrowser({ ctl, child, timeoutMs = 10_000, pollMs = 50 
  *   discovery: { protocol: number, port: number, token: string, pid: number },
  *   stderrTail: () => string,
  *   loadFailure: () => string | null,
- *   relaunch: () => Promise<void>,
+ *   relaunch: (options?: { stalePid?: number }) => Promise<void>,
  *   teardown: () => Promise<void>,
  * }} Session
  */
@@ -533,7 +608,8 @@ export async function quitBrowser({ ctl, child, timeoutMs = 10_000, pollMs = 50 
  * slow starts and is idempotent; calling it, or aborting `signal`, at any point (Xvfb still
  * starting, the discovery wait) stops the Xvfb, kills the browser and removes the profile.
  * `relaunch` starts the browser again on the same profile and display once it has exited (a
- * restart: the caller quits it first and checks the discovery file is gone); `child` and
+ * restart: the caller quits it first and checks the discovery file is gone, or after
+ * crashBrowser passes the killed pid as `stalePid`, whose discovery file stays); `child` and
  * `discovery` then describe the new one.
  * @param {{
  *   build: Build,
@@ -605,7 +681,7 @@ export async function launch({
   const stderrTail = () => stderr.split("\n").slice(-15).join("\n");
 
   /** Spawn the browser on the profile (with `url` on the command line) and wait for its socket. */
-  const start = async (/** @type {string | null} */ url) => {
+  const start = async (/** @type {string | null} */ url, stalePid = null) => {
     const env = browserEnv(baseEnv, { display: display?.display, home, tmp, extra: build.env });
     const spawned = spawn(build.binary, browserArgs(profile, window, { url }), {
       env,
@@ -636,6 +712,7 @@ export async function launch({
         return exit;
       },
       stderrTail,
+      stalePid,
     });
     return { spawned, discovery };
   };
@@ -660,14 +737,14 @@ export async function launch({
       discovery: first.discovery,
       stderrTail,
       loadFailure: () => loadFailure,
-      async relaunch() {
+      async relaunch({ stalePid } = {}) {
         const running = session.child;
         if (running.exitCode === null && running.signalCode === null) {
           throw new Error("relaunch: the browser is still running; quit it first");
         }
         const stopped = cancelled();
         if (stopped) throw stopped;
-        const next = await start(null);
+        const next = await start(null, stalePid ?? null);
         session.child = next.spawned;
         session.discovery = next.discovery;
       },

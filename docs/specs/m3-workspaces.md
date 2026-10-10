@@ -1102,6 +1102,24 @@ dependency for 4b, 5 and parts of 4a.
   the e2e scenarios (m3-restart-restore, m4-split-panes) press the new keys; no assertion changed.
   Mutation check: binding `<C-d>` to `scroll.down` fails two dispatcher tests.
 
+## Settled: crash restore and scroll after a real restart (e2e leftovers, 2026-10-10)
+
+- **`m3-crash-restore`**: `main` with a long page scrolled to the bottom (`G`), `work` with a
+  split, `personal` empty, `main` active; `"restart": "kill"` (harness, spec m0-e2e-harness)
+  waits for `recovery.jsonlz4` to settle (`browser.sessionstore.interval` 500 ms in the
+  scenario), SIGKILLs the browser pid and starts again. Asserted: `main` active with the page
+  reloaded at the bottom, then `prefix+)` through `work` (three tabs, the split) and `personal`
+  back to `main`. Crash recovery (`resume_from_crash`, the build default) and Vimma's
+  `browser.startup.page = 3` each restore it alone (checked); with both off it fails at the
+  first check after the start (one tab). 3/3 locally (Xvfb, artifact build), about 7 s.
+- **`m3-restart-scroll`**: two long pages, one at the bottom and one part-way down (`j j j`),
+  `ctrl+q`, start: the selected one reloads part-way down, the other keeps its saved label until
+  selected. The page reports where it is in its title (`tests/e2e/fixtures/long.html`); the
+  navigation type (`navigate` vs `back_forward`) tells the reloaded page from the stale label.
+  A load counter in localStorage was tried first and fails after a SIGKILL (its last write is
+  lost), hence the navigation type. Red check: the fixture forcing `scrollTo(0, 0)` on a
+  restored load fails it ("long top back_forward").
+
 ## Out of scope
 
 Per-workspace autofill stance (`autofill`, M6); syncing workspaces between devices; a web page in

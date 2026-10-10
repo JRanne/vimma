@@ -23,7 +23,7 @@ describe("validateScenario", () => {
       validateScenario(
         scenario({
           prefs: { "browser.startup.page": null, "a.b": true, c: 3, d: "x" },
-          steps: [{ restart: "quit" }],
+          steps: [{ restart: "quit" }, { restart: "kill" }],
         }),
         undefined,
       ),
@@ -244,6 +244,16 @@ describe("runSteps", () => {
       },
     );
     expect(calls).toEqual(["keys esc", "restart quit", "state"]);
+  });
+
+  it("restart kill hands the crash-style restart to the session", async () => {
+    const { ctl, calls } = fakeCtl([{ mode: "normal" }]);
+    await runSteps(scenario({ steps: [{ restart: "kill" }] }), {
+      ctl,
+      screenshot: async () => {},
+      restart: async (/** @type {string} */ how) => void calls.push(`restart ${how}`),
+    });
+    expect(calls).toEqual(["restart kill"]);
   });
 
   it("restart fails with the step when the session cannot restart", async () => {

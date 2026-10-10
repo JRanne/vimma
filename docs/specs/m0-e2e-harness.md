@@ -127,7 +127,10 @@ One JSON file per scenario in `tests/e2e/scenarios/`, file name = `name`:
   `assert-state` (one `state`, must match now), `screenshot` (baseline name, `[a-z0-9-]+`),
   `restart` (`"quit"`: `ctrl+q`, the discovery file must be gone, then the same build starts
   again on the same profile and display, without the `about:blank` argument, which would open
-  beside the restored session; m3-workspaces sub-spec 7).
+  beside the restored session; m3-workspaces sub-spec 7), or `"kill"`: once SessionStore's
+  recovery file has been unchanged for 3 s, SIGKILL to the browser pid the harness started (any
+  of its process group left after 5 s too), then the same start; the stale discovery file is
+  skipped by its `pid` (`m3-crash-restore`, 2026-10-10).
 - **Prefs**: an optional `"prefs": { "name": value }` overrides the profile's `user.js`;
   `null` leaves the pref out so the build's default applies (`m3-restart-restore` drops
   `browser.startup.page = 0` to run on Vimma's 3, resume the session).
