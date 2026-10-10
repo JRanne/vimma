@@ -677,16 +677,19 @@ the workspace's tabs, numbered, each with its name (or title) and its site. The 
 highlighted and its number coloured; a tab playing sound shows `♪`, one from another container
 `foreign`.
 
-| Key                     | What it does                                                                                                      |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `j` / `k`               | Move the highlight down / up.                                                                                     |
-| `Enter`                 | Go to the highlighted tab and close the panel.                                                                    |
-| `1` … `9`               | Go to that row's tab and close the panel.                                                                         |
-| `x`                     | Close the highlighted tab; the highlight moves to the next row and the panel stays open, so `x x x` closes three. |
-| `ctrl+shift+t`          | Reopen the last closed tab, as in Firefox.                                                                        |
-| `ctrl+b )` / `ctrl+b (` | Switch workspace; the panel stays open and lists that one.                                                        |
-| `I`                     | Close the panel and focus the address bar.                                                                        |
-| `Esc`, `ctrl+b b`       | Close the panel; the page has the keys again.                                                                     |
+| Key                     | What it does                                                                                                                |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `j` / `k`               | Move the highlight down / up.                                                                                               |
+| `Enter`                 | Go to the highlighted tab and close the panel. With marks, show the marked tabs together ([below](#showing-tabs-together)). |
+| `1` … `9`               | Go to that row's tab and close the panel.                                                                                   |
+| `space`                 | Mark the highlighted tab (or unmark it) and move down.                                                                      |
+| `V`                     | Start a range: `j` / `k` stretch it, and `V` or `space` marks every row in it.                                              |
+| `x`                     | Close the highlighted tab; the highlight moves to the next row and the panel stays open, so `x x x` closes three.           |
+| `ctrl+shift+t`          | Reopen the last closed tab, as in Firefox.                                                                                  |
+| `ctrl+b )` / `ctrl+b (` | Switch workspace; the panel stays open and lists that one (its marks are dropped).                                          |
+| `I`                     | Close the panel and focus the address bar.                                                                                  |
+| `Esc`                   | End a range; else clear the marks; else close the panel, and the page has the keys again.                                   |
+| `ctrl+b b`              | Close the panel.                                                                                                            |
 
 Pinned tabs belong to no workspace, so the panel never lists them and `x` never closes one (a
 row pinned since it was drawn says "pinned tab: unpin it to close it"). The panel takes no
@@ -699,6 +702,34 @@ keys and `:` commands still work, and a tab you open meanwhile shows up in the l
 follows your Omarchy theme as the status bar does. Change its keys under `[modal.panel]` in
 `config.toml`; `[keys] toggle_sidebar` changes the keys that open it, and a `<leader>` binding
 you add there (`toggle_sidebar = ["prefix+b", "<leader>n"]`) closes it too.
+
+#### Showing tabs together
+
+Mark the tabs you want side by side, then press `Enter`: they become the panes of this
+workspace, replacing its split, and the panel closes. Say you want your editor, the docs and a
+preview at once: `ctrl+b b`, `space` on each of the three, `Enter`.
+
+- **Marking.** `space` marks the highlighted row and moves down, like ranger; `space` on a
+  marked row unmarks it. `V` starts a range as in Vim's line-wise visual mode; `j` / `k` stretch
+  it, and `V` or `space` marks the rows in it (`Enter` marks them and goes on). A marked row has
+  a `●` before its number and a green bar on its edge; a row in an open range shows `│`. Below
+  the head the panel says `3 marked` (or `range: 2 · 3 marked`).
+- **Order and focus.** The panes take the panel's order (the tab order), whatever order you
+  marked them in. The highlighted row has focus if it is marked, otherwise the first marked one.
+  Firefox keeps a split's tabs next to each other in the tab order, so after a split the rows
+  you used may sit together.
+- **Layout.** The panes are arranged with this workspace's layout: the preset you last picked
+  with `ctrl+b space` or `:layout` when its split has one, otherwise `[panes] layout`: with
+  `"dwindle"` (the default) two tabs sit side by side, three make `a | b / c`, four the spiral;
+  with `"manual"` they sit in a row. A main-* preset makes the focused tab the big pane.
+- **What changes.** Tabs that were in the old split and are not marked leave it and stay open as
+  ordinary tabs. No page reloads: each keeps its scroll, what you typed and its history.
+- **Limits.** One mark is just `Enter` on that row. More marks than `[panes] max` (4 by default)
+  says `Show together: at most 4 panes` and changes nothing; the panel stays open with your
+  marks so you can drop some. A pinned row cannot be marked.
+- **Keys.** Rebind them under `[modal.panel]` with the actions `panel_mark` and
+  `panel_visual`, e.g. `m = "panel_mark"`. If you give the leader (`space`) a binding, `space`
+  in the panel waits `timeout_ms` for the rest of it before it marks.
 
 ### Routing: which workspace a link opens in
 
@@ -1233,9 +1264,10 @@ screen reader on top of Firefox's own accessibility support. On Linux that is Or
 
 - **What each part says.** The overlay and the pickers are dialogs, their lists listboxes, and
   the bookmarks a tree with levels and open or closed folders; `j`/`k` move the focused row, so
-  the screen reader reads each one as you move. The command line is a combobox with its
-  completions, and an error in it is read at once. A y/N question is an alert dialog that reads
-  the question; a rename prompt reads what it asks for.
+  the screen reader reads each one as you move. Once you mark a tab in the side panel, its rows
+  read as checked or not checked, and the count (`2 marked`) is said as it changes. The command
+  line is a combobox with its completions, and an error in it is read at once. A y/N question
+  is an alert dialog that reads the question; a rename prompt reads what it asks for.
 - **Focus.** Each overlay, picker, panel and prompt takes focus when it opens and gives it back
   where it was when it closes (to the page you switched to, if you picked a tab).
 - **What it announces, and what not.** The status bar is a status bar: your screen reader's

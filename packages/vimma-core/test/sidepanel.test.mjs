@@ -1,5 +1,13 @@
 import { describe, test, expect } from "vitest";
-import { openPanel, panelKey, refreshPanel } from "../src/sidepanel.mjs";
+import {
+  PINNED_MARK_TEXT,
+  inRange,
+  markSummary,
+  markedRows,
+  openPanel,
+  panelKey,
+  refreshPanel,
+} from "../src/sidepanel.mjs";
 import { compileKeymap } from "../src/keymap.mjs";
 import { createDispatcher } from "../src/dispatcher.mjs";
 import { parseKey } from "../src/keys.mjs";
@@ -257,5 +265,213 @@ describe("panel keys in the keymap", () => {
 
   test("leader bindings still do not fire in insert mode", () => {
     expect(feed("insert", "space")[0]).toEqual({ kind: "pass" });
+  });
+});
+
+// docs/specs/m4-side-panel-multiselect.md: marks, a line-wise range, and Enter showing the
+// marked tabs together as panes.
+describe("marks", () => {
+  const five = {
+    ...model,
+    workspaces: model.workspaces.map((w) =>
+      w.id === "w2" ? { ...w, tabs: ["t2", "t3", "t4", "t5", "t6"], activeTab: "t2" } : w,
+    ),
+  };
+  /** @type {Record<string, PanelTabInfo>} */
+  const more = { ...tabs, t5: { title: "Docs" }, t6: { title: "Pinned", pinned: true } };
+  const info5 = (/** @type {string} */ id) => more[id];
+  const open = () => openPanel(five, info5);
+  /**
+   * @param {string[]} list
+   * @returns {typeof five}
+   */
+  const withTabs = (list) => ({
+    ...five,
+    workspaces: five.workspaces.map((w) => (w.id === "w2" ? { ...w, tabs: list } : w)),
+  });
+  const SPACE = { id: "panel.mark" };
+  const V = { id: "panel.visual" };
+  const J = { id: "panel.down" };
+  const K = { id: "panel.up" };
+  const ENTER = { id: "panel.open" };
+  const ESC = { id: "panel.close" };
+
+  test("a new panel has no marks and no range", () => {
+    const s = open();
+    expect(s.marked).toEqual([]);
+    expect(s.anchor).toBeNull();
+    expect(markSummary(s)).toBe("");
+  });
+
+  test("space marks the highlighted row and moves down; space again on it unmarks", () => {
+    let { state } = press(open(), [SPACE, SPACE]);
+    expect(state.marked).toEqual(["t2", "t3"]);
+    expect(state.selected).toBe(2);
+    expect(markSummary(state)).toBe("2 marked");
+    ({ state } = press(state, [K, SPACE]));
+    expect(state.marked).toEqual(["t2"]);
+    expect(markSummary(state)).toBe("1 marked");
+  });
+
+  test("space on the last row marks it and stays there", () => {
+    const once = press(openPanel(model, info), [J, SPACE]).state;
+    expect(once.marked).toEqual(["t4"]);
+    expect(once.selected).toBe(2);
+    expect(press(once, [SPACE]).state.marked).toEqual([]);
+  });
+
+  test("space on a pinned row refuses and marks nothing", () => {
+    const { state, effect } = press(open(), [J, J, J, J, SPACE]);
+    expect(state.marked).toEqual([]);
+    expect(effect).toEqual({ type: "refuse", text: PINNED_MARK_TEXT });
+  });
+
+  test("V starts a range that j / k stretch; V again marks every row in it", () => {
+    let { state } = press(open(), [J, V, J, J]);
+    expect(state.anchor).toBe("t3");
+    expect(inRange(state, 0)).toBe(false);
+    expect([1, 2, 3].map((i) => inRange(state, i))).toEqual([true, true, true]);
+    expect(inRange(state, 4)).toBe(false);
+    expect(markSummary(state)).toBe("range: 3");
+    ({ state } = press(state, [V]));
+    expect(state.anchor).toBeNull();
+    expect(state.marked).toEqual(["t3", "t4", "t5"]);
+    expect(markSummary(state)).toBe("3 marked");
+  });
+
+  test("a range upward, ended by space, adds to the marks already there", () => {
+    const { state } = press(open(), [SPACE, J, V, K, SPACE]);
+    expect(state.marked).toEqual(["t2", "t3", "t4"]);
+    expect(state.anchor).toBeNull();
+    expect(state.selected).toBe(1);
+  });
+
+  test("a range skips a pinned row", () => {
+    const { state, effect } = press(open(), [J, J, J, V, J, V]);
+    expect(state.marked).toEqual(["t5"]);
+    expect(effect).toBeNull();
+  });
+
+  test("the summary counts the range and the marks while both exist", () => {
+    const { state } = press(open(), [SPACE, V, J]);
+    expect(markSummary(state)).toBe("range: 2 · 1 marked");
+  });
+
+  test("Esc ends the range first, then clears the marks, then closes", () => {
+    let r = press(open(), [SPACE, V, J, ESC]);
+    expect(r.state.anchor).toBeNull();
+    expect(r.state.marked).toEqual(["t2"]);
+    expect(r.effect).toBeNull();
+    r = press(r.state, [ESC]);
+    expect(r.state.marked).toEqual([]);
+    expect(r.effect).toBeNull();
+    r = press(r.state, [ESC]);
+    expect(r.effect).toEqual({ type: "close" });
+  });
+
+  test("Enter with two marks or more shows them together, in row order", () => {
+    const { effect } = press(open(), [J, J, SPACE, K, K, K, SPACE, ENTER]);
+    expect(effect).toEqual({ type: "together", ids: ["t2", "t4"], focus: "t2" });
+  });
+
+  test("Enter focuses the highlighted row when it is marked, else the first marked", () => {
+    const on = press(open(), [SPACE, SPACE, SPACE, K, K, ENTER]).effect;
+    expect(on).toEqual({ type: "together", ids: ["t2", "t3", "t4"], focus: "t3" });
+    const off = press(open(), [J, SPACE, SPACE, ENTER]).effect;
+    expect(off).toEqual({ type: "together", ids: ["t3", "t4"], focus: "t3" });
+  });
+
+  test("Enter with one mark goes to that tab, as Enter on its row", () => {
+    const { effect } = press(open(), [J, SPACE, J, ENTER]);
+    expect(effect).toEqual({ type: "select", id: "t3" });
+  });
+
+  test("Enter in a range marks it, then shows the marks together", () => {
+    const { effect } = press(open(), [V, J, J, ENTER]);
+    expect(effect).toEqual({ type: "together", ids: ["t2", "t3", "t4"], focus: "t4" });
+  });
+
+  test("Enter without marks still goes to the highlighted tab; a digit ignores the marks", () => {
+    expect(press(open(), [J, ENTER]).effect).toEqual({ type: "select", id: "t3" });
+    expect(press(open(), [SPACE, SPACE, { id: "panel.select", arg: 4 }]).effect).toEqual({
+      type: "select",
+      id: "t5",
+    });
+  });
+
+  test("x keeps the marks of the other rows; the refresh drops a closed tab's mark", () => {
+    let { state } = press(open(), [SPACE, SPACE, K]);
+    expect(state.marked).toEqual(["t2", "t3"]);
+    ({ state } = press(state, [{ id: "panel.close_tab" }]));
+    state = refreshPanel(state, withTabs(["t2", "t4", "t5", "t6"]), info5);
+    expect(state.marked).toEqual(["t2"]);
+  });
+
+  test("a refresh in the same workspace keeps marks and the range on listed tabs", () => {
+    const s = press(open(), [SPACE, V]).state;
+    const next = refreshPanel(s, five, info5);
+    expect(next.marked).toEqual(["t2"]);
+    expect(next.anchor).toBe("t3");
+  });
+
+  test("a refresh whose range anchor closed ends the range", () => {
+    const s = press(open(), [J, V, J]).state;
+    expect(refreshPanel(s, withTabs(["t2", "t4", "t5", "t6"]), info5).anchor).toBeNull();
+  });
+
+  test("marks follow their tabs when the order changes, and stay in row order", () => {
+    const s = press(open(), [SPACE, J, SPACE]).state;
+    expect(s.marked).toEqual(["t2", "t4"]);
+    expect(refreshPanel(s, withTabs(["t4", "t3", "t2", "t5", "t6"]), info5).marked).toEqual([
+      "t4",
+      "t2",
+    ]);
+  });
+
+  test("another workspace (ctrl+b )) clears the marks and the range", () => {
+    const s = press(open(), [SPACE, V]).state;
+    const next = refreshPanel(s, { ...five, active: "w1" }, info5);
+    expect(next.marked).toEqual([]);
+    expect(next.anchor).toBeNull();
+  });
+
+  test("markedRows lists the marked rows in row order", () => {
+    const s = press(open(), [J, J, SPACE, K, K, K, SPACE]).state;
+    expect(markedRows(s).map((r) => r.tabId)).toEqual(["t2", "t4"]);
+  });
+
+  test("the default keys: space marks, V starts a range, in panel mode", () => {
+    const d = createDispatcher(compileKeymap());
+    expect(d.dispatch("panel", parseKey("space"))).toEqual({
+      kind: "action",
+      action: { id: "panel.mark" },
+    });
+    expect(d.dispatch("panel", parseKey("V"))).toEqual({
+      kind: "action",
+      action: { id: "panel.visual" },
+    });
+  });
+
+  test("they are rebindable under [modal.panel]", () => {
+    const d = createDispatcher(
+      compileKeymap({ modal: { panel: { m: "panel_mark", v: "panel_visual" } } }),
+    );
+    expect(d.dispatch("panel", parseKey("m"))).toEqual({
+      kind: "action",
+      action: { id: "panel.mark" },
+    });
+    expect(d.dispatch("panel", parseKey("v"))).toEqual({
+      kind: "action",
+      action: { id: "panel.visual" },
+    });
+  });
+
+  test("with a leader binding added, space waits for the next key and then marks", () => {
+    const d = createDispatcher(
+      compileKeymap({ keys: { toggle_sidebar: ["prefix+b", "<leader>n"] } }),
+    );
+    expect(d.dispatch("panel", parseKey("space"))).toEqual({ kind: "pending" });
+    expect(d.ambiguous()).toBe(true);
+    expect(d.flush()).toEqual({ kind: "action", action: { id: "panel.mark" } });
   });
 });

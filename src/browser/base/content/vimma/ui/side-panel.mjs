@@ -8,7 +8,7 @@
 // is core sidepanel.mjs, this only renders it.
 
 import { WORKSPACE_COLOR_TOKENS } from "../core/statusbar.mjs";
-import { openPanel, panelKey, refreshPanel } from "../core/sidepanel.mjs";
+import { inRange, markSummary, openPanel, panelKey, refreshPanel } from "../core/sidepanel.mjs";
 
 /** @import { PanelState, PanelTabInfo } from "../core/sidepanel.mjs" */
 /** @import { Workspaces } from "../core/workspaces.mjs" */
@@ -29,6 +29,9 @@ const TAB_EVENTS = ["TabOpen", "TabClose", "TabSelect", "TabAttrModified", "TabM
  * @property {(tabId: string) => void} select  a row was picked; the panel closes right after
  * @property {(text: string) => void} say  a refusal for the notice
  * @property {(tabId: string) => void} closeTab  `x`: close that tab; the panel stays open
+ * @property {(tabIds: string[], focus: string) => string | null} together  `Enter` with marks:
+ *   show those tabs as the workspace's panes (docs/specs/m4-side-panel-multiselect.md); a
+ *   refusal's text, or null once done (the panel then closes)
  */
 
 export class SidePanel {
@@ -43,6 +46,8 @@ export class SidePanel {
     this.box = null;
     /** @type {HTMLElement | null} */
     this.list = null;
+    /** @type {HTMLElement | null} the marks' count, a status (m4-side-panel-multiselect) */
+    this.count = null;
     /** @type {PanelState | null} */
     this.state = null;
     /** @type {Opener | null} focus before open, for close */
@@ -103,7 +108,7 @@ export class SidePanel {
 
   /**
    * One `[modal.panel]` action (panel.down, panel.up, panel.open, panel.select, panel.close,
-   * panel.close_tab).
+   * panel.close_tab, panel.mark, panel.visual).
    * @param {{ id: string, arg?: number }} action
    */
   action(action) {
@@ -121,6 +126,12 @@ export class SidePanel {
     if (effect?.type === "select") {
       this.host.select(effect.id);
       this.close();
+    }
+    // Refused (past [panes] max): nothing changed, so the panel stays open with its marks.
+    if (effect?.type === "together") {
+      const refused = this.host.together(effect.ids, effect.focus);
+      if (refused) this.host.say(refused);
+      else this.close();
     }
   }
 
@@ -140,7 +151,7 @@ export class SidePanel {
   destroy() {
     this.close();
     this.box?.remove();
-    this.box = this.list = null;
+    this.box = this.list = this.count = null;
   }
 
   #tabContainer() {
@@ -181,8 +192,17 @@ export class SidePanel {
       el("span", "vimma-panel-neighbours", neighbours),
     );
 
+    // m4-side-panel-multiselect decision 14: a persistent status, so a change is announced.
+    const summary = markSummary(state);
+    const count = /** @type {HTMLElement} */ (this.count);
+    if (count.textContent !== summary) count.textContent = summary;
+
     const list = /** @type {HTMLElement} */ (this.list);
     list.setAttribute("aria-label", `Tabs in ${w.name}`);
+    // aria-selected stays the highlight (m7-a11y); marks are the options' checked state, given
+    // only while there is something marked or a range, so a plain list reads as before.
+    const checkable = state.marked.length > 0 || state.anchor !== null;
+    const marked = new Set(state.marked);
     list.replaceChildren(
       ...state.rows.map((r, i) => {
         const row = el("li", "vimma-panel-row");
@@ -191,8 +211,16 @@ export class SidePanel {
         row.setAttribute("aria-selected", String(i === state.selected));
         row.dataset.tabId = r.tabId;
         if (r.active) row.classList.add("vimma-panel-active");
+        const isMarked = marked.has(r.tabId);
+        const ranged = inRange(state, i);
+        if (checkable) row.setAttribute("aria-checked", String(isMarked));
+        if (isMarked) row.classList.add("vimma-panel-marked");
+        if (ranged) row.classList.add("vimma-panel-in-range");
+        const gutter = el("span", "vimma-panel-mark", isMarked ? "●" : ranged ? "│" : "");
+        gutter.setAttribute("aria-hidden", "true"); // aria-checked says it
         const marks = [r.playing ? "♪" : "", r.foreign ? "foreign" : ""].filter(Boolean);
         row.append(
+          gutter,
           el("span", "vimma-panel-number", String(r.number)),
           el("span", "vimma-panel-title", r.display),
           el("span", "vimma-panel-host", r.host),
@@ -217,13 +245,17 @@ export class SidePanel {
    * @returns {HTMLElement}
    */
   build() {
-    const { box, list } = buildPanelBox(this.win, {
+    const { box, header, list } = buildPanelBox(this.win, {
       id: PANEL_ID,
       label: "Side panel",
-      hint: "j/k move · 1-9 or Enter go · x close tab · Esc close",
+      hint: "j/k move · 1-9 or Enter go · space V mark, Enter splits · x close tab · Esc close",
     });
+    const count = panelElement(this.win.document, "div", "vimma-panel-count");
+    count.setAttribute("role", "status");
+    header.after(count);
     this.box = box;
     this.list = list;
+    this.count = count;
     return box;
   }
 }

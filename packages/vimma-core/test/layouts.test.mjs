@@ -24,6 +24,8 @@ import {
   layoutOfAction,
   layoutRefusal,
   nextLayout,
+  showTogether,
+  togetherRefusal,
 } from "../src/layouts.mjs";
 import { getAction } from "../src/actions.mjs";
 import { completeCommandLine, parseCommandLine } from "../src/cmdline.mjs";
@@ -498,5 +500,128 @@ describe("actions, keys and :layout", () => {
       label: "dwindle",
       description: "layout",
     });
+  });
+});
+
+// docs/specs/m4-side-panel-multiselect.md: the side panel's marked tabs shown together.
+describe("showTogether", () => {
+  /** @param {any} node @returns {string} the tree with each leaf's tab */
+  const tabsOf = (node) =>
+    node.type === "leaf" ? node.tab : `${node.axis}[${node.children.map(tabsOf).join(",")}]`;
+  const focusTab = (/** @type {any} */ s) => leaves(s).find((l) => l.pane === s.focus)?.tab;
+
+  test.each([
+    [["a", "b"], "x[a,b]"],
+    [["a", "b", "c"], "x[a,y[b,c]]"],
+    [["a", "b", "c", "d"], "x[a,y[b,x[c,d]]]"],
+  ])("dwindle on a wide window: %j → %s", (ids, want) => {
+    const s = showTogether(ids, { mode: "dwindle", area: WIDE });
+    expect(tabsOf(s.root)).toBe(want);
+    expect(s.zoom).toBeNull();
+    expect(s.layout).toBeUndefined();
+  });
+
+  test("dwindle on a tall window stacks first", () => {
+    expect(tabsOf(showTogether(["a", "b", "c"], { mode: "dwindle", area: TALL }).root)).toBe(
+      "y[a,x[b,c]]",
+    );
+  });
+
+  test("the default mode is dwindle and the default area wide", () => {
+    expect(tabsOf(showTogether(["a", "b", "c"]).root)).toBe("x[a,y[b,c]]");
+  });
+
+  test("manual: a row, side by side, even", () => {
+    const s = showTogether(["a", "b", "c"], { mode: "manual" });
+    expect(tabsOf(s.root)).toBe("x[a,b,c]");
+    close(ratios(s.root), [[1 / 3, 1 / 3, 1 / 3]]);
+    expect(s.layout).toBeUndefined();
+  });
+
+  test("a stored preset wins over the mode and stays stored", () => {
+    const s = showTogether(["a", "b", "c", "d"], { preset: "tiled", mode: "manual", area: WIDE });
+    expect(tabsOf(s.root)).toBe("y[x[a,b],x[c,d]]");
+    expect(s.layout).toBe("tiled");
+  });
+
+  test("main-vertical makes the focused tab the main pane, the rest in order", () => {
+    const s = showTogether(["a", "b", "c"], {
+      preset: "main-vertical",
+      focus: "b",
+      mainSize: 0.7,
+    });
+    expect(tabsOf(s.root)).toBe("x[b,y[a,c]]");
+    close(ratios(s.root), [
+      [0.7, 0.3],
+      [0.5, 0.5],
+    ]);
+  });
+
+  test("an unknown stored preset is ignored", () => {
+    const s = showTogether(["a", "b"], { preset: "spiral", mode: "manual" });
+    expect(tabsOf(s.root)).toBe("x[a,b]");
+    expect(s.layout).toBeUndefined();
+  });
+
+  test("focus: the given tab, else the first; mru starts with it and lists every pane", () => {
+    const s = showTogether(["a", "b", "c"], { focus: "c" });
+    expect(focusTab(s)).toBe("c");
+    expect(s.mru[0]).toBe(s.focus);
+    expect([...s.mru].sort()).toEqual(
+      leaves(s)
+        .map((l) => l.pane)
+        .sort(),
+    );
+    expect(focusTab(showTogether(["a", "b"]))).toBe("a");
+    expect(focusTab(showTogether(["a", "b"], { focus: "z" }))).toBe("a");
+  });
+
+  test("the result is a frozen tree with distinct pane ids and a snapshot round trip", () => {
+    const s = showTogether(["a", "b", "c", "d"], { preset: "main-horizontal" });
+    expect(Object.isFrozen(s)).toBe(true);
+    expect(new Set(leaves(s).map((l) => l.pane)).size).toBe(4);
+    expect(s.next).toBeGreaterThan(4);
+    let ws = createWorkspaces([{ name: "w", container: "1" }]);
+    const w = /** @type {any} */ (ws.workspaces[0]);
+    ws = {
+      ...ws,
+      workspaces: [{ ...w, tabs: ["a", "b", "c", "d"], activeTab: "a", panes: s }],
+    };
+    const back = /** @type {any} */ (fromSnapshot(toSnapshot(ws)).workspaces[0]).panes;
+    expect(back.layout).toBe("main-horizontal");
+    expect(tabsOf(back.root)).toBe(tabsOf(s.root));
+  });
+
+  test("fewer than two tabs, or a tab twice, is a programming error", () => {
+    expect(() => showTogether(["a"])).toThrow();
+    expect(() => showTogether([])).toThrow();
+    expect(() => showTogether(["a", "a"])).toThrow();
+  });
+});
+
+describe("togetherRefusal", () => {
+  test("more tabs than max: at most N panes", () => {
+    expect(togetherRefusal(["a", "b", "c", "d", "e"], { max: 4 })).toEqual({
+      code: "max-panes",
+      message: "at most 4 panes",
+    });
+    expect(togetherRefusal(["a", "b", "c", "d"], { max: 4 })).toBeNull();
+  });
+
+  test("no space in the preset or the row: core's reason", () => {
+    const ids = Array.from({ length: 11 }, (_, i) => `t${i}`);
+    expect(togetherRefusal(ids, { max: 16, preset: "even-horizontal" })).toEqual({
+      code: "no-space",
+      message: "no space for 11 panes in even-horizontal",
+    });
+    expect(togetherRefusal(ids, { max: 16, mode: "manual" })).toEqual({
+      code: "no-space",
+      message: "no space for 11 panes in even-horizontal",
+    });
+    expect(togetherRefusal(ids, { max: 16 })).toBeNull();
+  });
+
+  test("max defaults to unbounded", () => {
+    expect(togetherRefusal(["a", "b", "c", "d", "e"])).toBeNull();
   });
 });

@@ -53,6 +53,7 @@ import {
   layoutPanes,
   newPane,
   resizePane,
+  showTabs,
   splitPane,
   swapPane,
   zoomPane,
@@ -517,6 +518,13 @@ export const RUNNERS = Object.freeze({
   "panel.close_tab": (/** @type {WindowState} */ s, /** @type {Action} */ a) => {
     if (!s.bookmarks.isOpen) s.panel.action(a);
   },
+  // m4-side-panel-multiselect: marks in the side panel; nothing in the bookmarks panel.
+  "panel.mark": (/** @type {WindowState} */ s, /** @type {Action} */ a) => {
+    if (!s.bookmarks.isOpen) s.panel.action(a);
+  },
+  "panel.visual": (/** @type {WindowState} */ s, /** @type {Action} */ a) => {
+    if (!s.bookmarks.isOpen) s.panel.action(a);
+  },
   // Firefox's ctrl+shift+t, which panel mode would otherwise consume.
   "tab.restore": (/** @type {WindowState} */ s) => restoreTab(s.win),
   // docs/specs/bookmarks.md: the bookmarks panel, in the side panel's slot and mode.
@@ -885,6 +893,7 @@ export const VimmaHost = {
           ).gBrowser.selectedTab = tab;
         },
         say: (text) => state.notice.show(text),
+        together: (tabIds, focus) => showTabs(win, tabIds, focus),
       }),
       bookmarks: new BookmarksPanel(win, {
         load: () => loadTree(win),

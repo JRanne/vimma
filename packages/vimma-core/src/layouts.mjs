@@ -9,7 +9,7 @@
  * recreates a page.
  */
 
-import { MIN_RATIO, PaneError, layout, leaves, makeSplit } from "./panes.mjs";
+import { MIN_RATIO, PaneError, createRow, layout, leaves, makeSplit } from "./panes.mjs";
 
 /** @import { Leaf, LayoutRect, PaneNode, Panes, SplitDirection, SplitRefusal } from "./panes.mjs" */
 /**
@@ -232,4 +232,61 @@ export function arrange(s, name, { area = WIDE, mainSize = MAIN_SIZE_DEFAULT } =
   const root = build(name, list, main, area);
   if (!roomy(root)) return s;
   return Object.freeze({ ...s, root, zoom: null, layout: name });
+}
+
+/**
+ * How tabs shown together are arranged (docs/specs/m4-side-panel-multiselect.md decision 8).
+ * `preset`: the workspace's stored preset (`Panes.layout`), used when it is one of LAYOUTS.
+ * `mode`: config `[panes] layout`, used without one: dwindle, or a row for "manual".
+ * `focus`: the tab whose pane gets focus (default, or not listed: the first).
+ * `max`: config `[panes] max` (default unbounded).
+ * @typedef {ArrangeOptions & { preset?: string, mode?: "dwindle" | "manual", focus?: string,
+ *   max?: number }} TogetherOptions
+ */
+
+/**
+ * The preset tabs shown together take: the stored one, else dwindle, else ("manual") a row,
+ * which is even-horizontal's tree.
+ * @param {TogetherOptions} options
+ * @returns {LayoutName}
+ */
+function togetherName({ preset, mode = "dwindle" }) {
+  if (isLayoutName(preset)) return preset;
+  return mode === "manual" ? "even-horizontal" : "dwindle";
+}
+
+/**
+ * Why `ids` cannot be shown together, or null: `max-panes` past `max`, or `no-space` when the
+ * layout would give a pane less than MIN_RATIO.
+ * @param {readonly string[]} ids  two tabs or more
+ * @param {TogetherOptions} [options]
+ * @returns {SplitRefusal | null}
+ */
+export function togetherRefusal(ids, options = {}) {
+  const { max = Infinity } = options;
+  if (ids.length > max) {
+    return { code: "max-panes", message: `at most ${max} pane${max === 1 ? "" : "s"}` };
+  }
+  return layoutRefusal(createRow(ids), togetherName(options), options);
+}
+
+/**
+ * `ids` (two tabs or more, in reading order) as a new pane tree arranged as the workspace's
+ * layout: the stored preset, else `[panes] layout`. Built by `arrange` over a row of the tabs,
+ * so the trees are exactly the presets'. Focus on `focus`, the MRU in reading order after it, no
+ * zoom. The stored preset stays stored; without one none is set. A refusal
+ * (`togetherRefusal`, without `max`) throws: check it first.
+ * @param {readonly string[]} ids
+ * @param {TogetherOptions} [options]
+ * @returns {Panes}
+ */
+export function showTogether(ids, options = {}) {
+  if (ids.length < 2) throw new PaneError("bad-tabs", "showing tabs together needs two");
+  const refusal = togetherRefusal(ids, { ...options, max: Infinity });
+  if (refusal) throw new PaneError("bad-amount", refusal.message);
+  // createRow's shares are replaced by arrange's tree: only its leaves, focus and MRU count.
+  const row = createRow(ids, { focus: options.focus });
+  const { root, focus, mru, zoom, next } = arrange(row, togetherName(options), options);
+  const tree = { root, focus, mru, zoom, next };
+  return Object.freeze(isLayoutName(options.preset) ? { ...tree, layout: options.preset } : tree);
 }

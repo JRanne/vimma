@@ -127,6 +127,8 @@ support-files = ["file_vimma_cookie.html"]
 
 ["browser_vimma_side_panel.js"]
 
+["browser_vimma_side_panel_marks.js"]
+
 ["browser_vimma_firefox_keys.js"]
 support-files = ["file_vimma_plain.html"]
 
