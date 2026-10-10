@@ -11,6 +11,7 @@
   overflow: hidden;
   background: var(--vimma-bg, #1a1b26);
   color: var(--vimma-fg, #a9b1d6);
+  color-scheme: var(--vimma-color-scheme, dark);
   font-family: var(--vimma-font, monospace);
 }
 
@@ -32,7 +33,9 @@ img {
   width: 40vmin;
   height: 40vmin;
   object-fit: contain;
-  /* the logo brings its own near-black square; rounded, it reads as a tile on --vimma-bg */
+  /* the logo is transparent, so it sits on the theme's background; its white wordmark needs a
+     dark tile under a light theme (light-dark() follows color-scheme, set from the theme) */
+  background: light-dark(#080c10, transparent);
   border-radius: 8%;
 }
 
