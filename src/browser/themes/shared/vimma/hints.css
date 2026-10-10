@@ -29,7 +29,11 @@
     }
   }
 
+  /* The letters typed so far: underlined, never faded, so the label keeps its contrast
+     (spec m7-a11y). */
   & .vimma-hint-typed {
-    opacity: 0.45;
+    font-weight: normal;
+    text-decoration: underline 1px;
+    text-underline-offset: 1px;
   }
 }

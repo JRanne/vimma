@@ -432,9 +432,12 @@ add_task(async function rows_mark_what_the_host_can_run() {
     for (const name of ["history_back"]) {
       Assert.equal(row(name).dataset.runnable, "false", `${name} is marked not yet`);
     }
+    // Dimmed by colour, never by opacity, so the text keeps its contrast (spec m7-a11y).
+    const keys = (name) => getComputedStyle(row(name).querySelector(".vimma-help-keys")).color;
     const opacity = (name) => Number(getComputedStyle(row(name)).opacity);
     Assert.equal(opacity("new_tab"), 1, "an implemented row is not dimmed");
-    Assert.less(opacity("history_back"), 1, "a not-yet row is dimmed");
+    Assert.equal(opacity("history_back"), 1, "a not-yet row keeps full opacity");
+    Assert.notEqual(keys("history_back"), keys("new_tab"), "a not-yet row is dimmed");
     const legend = overlay().querySelector(".vimma-help-legend");
     Assert.ok(legend && BrowserTestUtils.isVisible(legend), "a legend explains the dimming");
     Assert.stringContains(legend.textContent, "not implemented yet");

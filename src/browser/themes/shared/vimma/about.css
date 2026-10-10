@@ -34,12 +34,12 @@ h1 {
 h2 {
   margin: 1.75rem 0 0.5rem;
   font-size: 1rem;
-  color: var(--vimma-accent, #7aa2f7);
+  color: var(--vimma-text-accent, #7aa2f7);
 }
 
 .hint,
 .muted {
-  color: var(--vimma-muted, #565f89);
+  color: var(--vimma-fg-dim, #9197b2);
 }
 
 button {
@@ -56,7 +56,7 @@ button:focus-visible {
 }
 
 #status {
-  color: var(--vimma-accent, #7aa2f7);
+  color: var(--vimma-text-accent, #7aa2f7);
 }
 
 dl {
@@ -67,7 +67,7 @@ dl {
 }
 
 dt {
-  color: var(--vimma-fg-dim, #787c99);
+  color: var(--vimma-fg-dim, #9197b2);
 }
 
 dd {
@@ -88,7 +88,7 @@ td {
 }
 
 th {
-  color: var(--vimma-fg-dim, #787c99);
+  color: var(--vimma-fg-dim, #9197b2);
   font-weight: normal;
 }
 
@@ -98,11 +98,11 @@ tr.overridden td {
 
 tr.overridden td:first-child::before {
   content: "* ";
-  color: var(--vimma-accent, #7aa2f7);
+  color: var(--vimma-text-accent, #7aa2f7);
 }
 
 .error {
-  color: var(--vimma-error, #f7768e);
+  color: var(--vimma-text-error, #f7768e);
 }
 
 ol,

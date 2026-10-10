@@ -24,6 +24,8 @@ import { formatPath, locateKeys, parseToml } from "./toml.mjs";
  * @property {string} name          CSS custom property
  * @property {string} [from]        palette key the value comes from
  * @property {string} [textOn]      token this one is text on: the value is picked for contrast
+ * @property {boolean} [readable]   text on every SURFACE_TOKENS: `from`, moved toward black or
+ *   white just far enough to reach MIN_CONTRAST on each (spec m7-a11y)
  * @property {string} description
  */
 
@@ -119,7 +121,12 @@ export const THEME_TOKENS = Object.freeze([
   { name: "--vimma-bg-darker", from: "darker_background", description: "darkest surface" },
   { name: "--vimma-bg-light", from: "lighter_background", description: "raised surface" },
   { name: "--vimma-fg", from: "foreground", description: "text" },
-  { name: "--vimma-fg-dim", from: "dark_foreground", description: "secondary text" },
+  {
+    name: "--vimma-fg-dim",
+    from: "dark_foreground",
+    readable: true,
+    description: "secondary text, readable on every surface",
+  },
   { name: "--vimma-fg-light", from: "light_foreground", description: "light text" },
   { name: "--vimma-fg-bright", from: "bright_foreground", description: "emphasised text" },
   { name: "--vimma-accent", from: "accent", description: "accent, focus" },
@@ -146,12 +153,61 @@ export const THEME_TOKENS = Object.freeze([
       description: `${badge} mode badge text`,
     },
   ]),
+  // Coloured text (spec m7-a11y): the palette colour, made readable on every surface. The colour
+  // tokens above stay as the palette gives them, for dots, borders and a user's own CSS.
+  ...[
+    ["accent", "accent"],
+    ["error", "red"],
+    ["warning", "yellow"],
+    ["success", "green"],
+  ].map(([c, from]) => ({
+    name: `--vimma-text-${c}`,
+    from,
+    readable: true,
+    description: `${c} text, readable on every surface`,
+  })),
+  ...ANSI.map((c) => ({
+    name: `--vimma-text-${c}`,
+    from: c,
+    readable: true,
+    description: `${c} text, readable on every surface`,
+  })),
+  ...BRIGHT.map((c) => ({
+    name: `--vimma-text-bright-${c}`,
+    from: `bright_${c}`,
+    readable: true,
+    description: `bright ${c} text, readable on every surface`,
+  })),
+]);
+
+/**
+ * The backgrounds Vimma's chrome draws text on: windows and pages, panels, pickers, the
+ * command line and the status bar, and a selected row.
+ */
+export const SURFACE_TOKENS = Object.freeze([
+  "--vimma-bg",
+  "--vimma-bg-dark",
+  "--vimma-statusbar-bg",
+  "--vimma-selection",
+]);
+
+/**
+ * Every token Vimma's chrome draws text in, on any of SURFACE_TOKENS (spec m7-a11y). The CSS and
+ * the status bar use no other colour for text (tools/test/chrome-css.test.mjs).
+ */
+export const TEXT_TOKENS = Object.freeze([
+  "--vimma-fg",
+  "--vimma-fg-dim",
+  "--vimma-fg-bright",
+  "--vimma-statusbar-fg",
+  ...THEME_TOKENS.filter((t) => t.name.startsWith("--vimma-text-")).map((t) => t.name),
 ]);
 
 /** Pairs (text, background) checked against WCAG AA. Badge text is picked to pass already. */
 const CONTRAST_PAIRS = [
   ["--vimma-fg", "--vimma-bg"],
   ["--vimma-fg", "--vimma-selection"],
+  ["--vimma-fg-bright", "--vimma-selection"],
   ["--vimma-statusbar-fg", "--vimma-statusbar-bg"],
   ["--vimma-hint-fg", "--vimma-hint-bg"],
   ...BADGES.map((b) => [`--vimma-mode-${b}-fg`, `--vimma-mode-${b}`]),
@@ -320,7 +376,48 @@ function paletteToTokens(palette, font) {
     else if (t.from) tokens[t.name] = /** @type {string} */ (palette[t.from]);
     else tokens[t.name] = cssFontFamily(font);
   }
+  // Once every surface has its value.
+  const surfaces = SURFACE_TOKENS.map((s) => /** @type {string} */ (tokens[s]));
+  for (const t of THEME_TOKENS) {
+    if (t.readable) tokens[t.name] = readable(/** @type {string} */ (tokens[t.name]), surfaces);
+  }
   return tokens;
+}
+
+/**
+ * `color`, or the first step of 5% toward black or white (whichever contrasts more with the
+ * surfaces) that reaches MIN_CONTRAST on every one of them: the hue stays, the text reads.
+ * @param {string} color  #rrggbb
+ * @param {readonly string[]} surfaces  #rrggbb
+ * @returns {string} #rrggbb
+ */
+function readable(color, surfaces) {
+  /** @param {string} c */
+  const worst = (c) => Math.min(...surfaces.map((s) => contrastRatio(c, s)));
+  if (worst(color) >= MIN_CONTRAST) return color;
+  const target = worst("#000000") >= worst("#ffffff") ? "#000000" : "#ffffff";
+  for (let step = 1; step < 20; step++) {
+    const c = mix(color, target, step / 20);
+    if (worst(c) >= MIN_CONTRAST) return c;
+  }
+  return target;
+}
+
+/**
+ * @param {string} a  #rrggbb
+ * @param {string} b  #rrggbb
+ * @param {number} t  0 is `a`, 1 is `b`
+ */
+function mix(a, b, t) {
+  let out = "#";
+  for (const at of [1, 3, 5]) {
+    const x = parseInt(a.slice(at, at + 2), 16);
+    const y = parseInt(b.slice(at, at + 2), 16);
+    out += Math.round(x + (y - x) * t)
+      .toString(16)
+      .padStart(2, "0");
+  }
+  return out;
 }
 
 /**
