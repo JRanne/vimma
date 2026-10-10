@@ -20,6 +20,9 @@ const { WindowWorkspaces } = ChromeUtils.importESModule(
 const { VimmaHost } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
 );
+const { TabStateFlusher } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/sessionstore/TabStateFlusher.sys.mjs",
+);
 
 const PAGE = "https://example.com/";
 const PANEL_ID = "vimma-panel";
@@ -255,6 +258,11 @@ add_task(async function it_stays_leftmost_when_firefox_moves_its_sidebar_right()
 add_task(async function x_closes_the_selected_tab_and_the_panel_stays_open_on_the_next_row() {
   const opened = [];
   for (const q of ["x-one", "x-two", "x-three", "x-four"]) opened.push(await openPage(q));
+  // SessionStore caches a page's history on a 15 s timer. A tab closed before then is put on
+  // the closed list only when its final state arrives from its content process, and those can
+  // arrive out of order: ctrl+shift+t below would reopen x-three. Flushed, each close is listed
+  // at once, in the order of the x presses.
+  await Promise.all(opened.map((t) => TabStateFlusher.flush(t.linkedBrowser)));
   await openPanel();
   const at = (/** @type {string} */ t) => titles().indexOf(t);
   // From the active row (x-four, the last), up to x-two.
