@@ -4,9 +4,12 @@
 
 // Spec: docs/specs/m0-help-overlay.md
 
-/* global focusContent, recordPageKeys, pageKeys, waitForPageKey -- from head.js */
+/* global focusContent, recordPageKeys, pageKeys, waitForPageKey, bindUnbuiltPrefixKey -- from head.js */
 
 "use strict";
+
+// ctrl+b o: a key under the prefix the host has not built (head.js).
+bindUnbuiltPrefixKey();
 
 const { bindingTable, compileKeymap, filterBindings } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/core/index.mjs",
@@ -219,8 +222,8 @@ add_task(async function unrunnable_key_inside_a_prefix_sequence_is_consumed() {
     await focusContent(browser);
     const tabs = gBrowser.tabs.length;
     EventUtils.synthesizeKey("b", { ctrlKey: true });
-    EventUtils.synthesizeKey("b"); // toggle_sidebar: not runnable yet
-    Assert.deepEqual(await pageKeysThenZ(browser), ["z"], "ctrl+b b leaks no b to the page");
+    EventUtils.synthesizeKey("o"); // history_back: not runnable yet (head.js)
+    Assert.deepEqual(await pageKeysThenZ(browser), ["z"], "ctrl+b o leaks no o to the page");
     Assert.equal(gBrowser.tabs.length, tabs, "and does nothing else yet");
   });
 });
@@ -342,15 +345,16 @@ add_task(async function rows_mark_what_the_host_can_run() {
       "normal_mode",
       "insert_mode",
       "workspace_picker",
+      "toggle_sidebar",
     ]) {
       Assert.equal(row(name).dataset.runnable, "true", `${name} is marked implemented`);
     }
-    for (const name of ["toggle_sidebar"]) {
+    for (const name of ["history_back"]) {
       Assert.equal(row(name).dataset.runnable, "false", `${name} is marked not yet`);
     }
     const opacity = (name) => Number(getComputedStyle(row(name)).opacity);
     Assert.equal(opacity("new_tab"), 1, "an implemented row is not dimmed");
-    Assert.less(opacity("toggle_sidebar"), 1, "a not-yet row is dimmed");
+    Assert.less(opacity("history_back"), 1, "a not-yet row is dimmed");
     const legend = overlay().querySelector(".vimma-help-legend");
     Assert.ok(legend && BrowserTestUtils.isVisible(legend), "a legend explains the dimming");
     Assert.stringContains(legend.textContent, "not implemented yet");
