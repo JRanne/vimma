@@ -162,6 +162,11 @@ const runResult = (command, action, text) =>
 
 /** Every word a user can type, for suggestions. */
 const ALL_WORDS = [...byWord.keys(), ...ACTION_NAMES];
+/**
+ * A word more than twice the longest is further from every word than `closest` allows, so it
+ * is not compared: the edit distance is quadratic, and a pasted megabyte froze the window.
+ */
+const MAX_SUGGEST = 2 * Math.max(...ALL_WORDS.map((w) => w.length));
 
 /**
  * Commands whose name or alias starts with `word`, once each.
@@ -202,7 +207,7 @@ export function parseCommandLine(line) {
   }
   if (!command) {
     const prefixed = ALL_WORDS.filter((w) => w.startsWith(word)).slice(0, 3);
-    const near = closest(word, ALL_WORDS);
+    const near = word.length <= MAX_SUGGEST ? closest(word, ALL_WORDS) : undefined;
     const suggestions = prefixed.length ? prefixed : near ? [near] : [];
     return fail("unknown-command", `not a command: "${word}"`, suggestions);
   }
