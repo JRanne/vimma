@@ -2,67 +2,72 @@
 
 Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm run gen-docs`; do not edit.
 
+Keys as you press them, with the default keys filled in (`prefix = ctrl+b`).
+A `[mode]` after a key means it works only in that mode. In `config.toml` the same bindings
+are written in notation: `ctrl+b b` is `prefix+b`; a leader binding you add, `<leader>n`,
+shows as `space n` ([guide](guide.md#configtoml)).
+
 ## Help
 
-| Action                            | Config name     | Bindings                   |
-| --------------------------------- | --------------- | -------------------------- |
-| Show all bindings (filter with /) | `show_keybinds` | `prefix+?`                 |
-| Close the bindings overlay        | `help_close`    | `<Esc> [help]`, `q [help]` |
-| Filter the bindings overlay       | `help_filter`   | `/ [help]`                 |
+| Action                            | Config name     | Bindings                 |
+| --------------------------------- | --------------- | ------------------------ |
+| Show all bindings (filter with /) | `show_keybinds` | `ctrl+b ?`               |
+| Close the bindings overlay        | `help_close`    | `esc [help]`, `q [help]` |
+| Filter the bindings overlay       | `help_filter`   | `/ [help]`               |
 
 ## Tabs
 
 | Action                               | Config name    | Bindings              |
 | ------------------------------------ | -------------- | --------------------- |
-| New tab                              | `new_tab`      | `prefix+c`, `t`       |
-| Next tab (with a count: go to tab N) | `next_tab`     | `prefix+n`, `gt`      |
-| Previous tab                         | `previous_tab` | `prefix+p`, `gT`      |
-| Jump to tab 1 in this workspace      | `select_tab_1` | `prefix+1`            |
-| Jump to tab 2 in this workspace      | `select_tab_2` | `prefix+2`            |
-| Jump to tab 3 in this workspace      | `select_tab_3` | `prefix+3`            |
-| Jump to tab 4 in this workspace      | `select_tab_4` | `prefix+4`            |
-| Jump to tab 5 in this workspace      | `select_tab_5` | `prefix+5`            |
-| Jump to tab 6 in this workspace      | `select_tab_6` | `prefix+6`            |
-| Jump to tab 7 in this workspace      | `select_tab_7` | `prefix+7`            |
-| Jump to tab 8 in this workspace      | `select_tab_8` | `prefix+8`            |
-| Jump to tab 9 in this workspace      | `select_tab_9` | `prefix+9`            |
-| Rename tab                           | `rename_tab`   | `prefix+shift+t`      |
-| Close tab                            | `close_tab`    | `prefix+shift+x`, `x` |
+| New tab                              | `new_tab`      | `ctrl+b c`, `t`       |
+| Next tab (with a count: go to tab N) | `next_tab`     | `ctrl+b n`, `gt`      |
+| Previous tab                         | `previous_tab` | `ctrl+b p`, `gT`      |
+| Jump to tab 1 in this workspace      | `select_tab_1` | `ctrl+b 1`            |
+| Jump to tab 2 in this workspace      | `select_tab_2` | `ctrl+b 2`            |
+| Jump to tab 3 in this workspace      | `select_tab_3` | `ctrl+b 3`            |
+| Jump to tab 4 in this workspace      | `select_tab_4` | `ctrl+b 4`            |
+| Jump to tab 5 in this workspace      | `select_tab_5` | `ctrl+b 5`            |
+| Jump to tab 6 in this workspace      | `select_tab_6` | `ctrl+b 6`            |
+| Jump to tab 7 in this workspace      | `select_tab_7` | `ctrl+b 7`            |
+| Jump to tab 8 in this workspace      | `select_tab_8` | `ctrl+b 8`            |
+| Jump to tab 9 in this workspace      | `select_tab_9` | `ctrl+b 9`            |
+| Rename tab                           | `rename_tab`   | `ctrl+b shift+t`      |
+| Close tab                            | `close_tab`    | `ctrl+b shift+x`, `x` |
 
 ## Panes
 
-| Action                                   | Config name        | Bindings                                                   |
-| ---------------------------------------- | ------------------ | ---------------------------------------------------------- |
-| Split right                              | `split_vertical`   | `prefix+v`                                                 |
-| Split down                               | `split_horizontal` | `prefix+minus`                                             |
-| Focus pane to the left                   | `focus_pane_left`  | `prefix+h`, `<C-w>h`                                       |
-| Focus pane below                         | `focus_pane_down`  | `prefix+j`, `<C-w>j`                                       |
-| Focus pane above                         | `focus_pane_up`    | `prefix+k`, `<C-w>k`                                       |
-| Focus pane to the right                  | `focus_pane_right` | `prefix+l`, `<C-w>l`                                       |
-| Swap with pane to the left               | `swap_pane_left`   | `prefix+shift+h`, `<C-w>H`                                 |
-| Swap with pane below                     | `swap_pane_down`   | `prefix+shift+j`, `<C-w>J`                                 |
-| Swap with pane above                     | `swap_pane_up`     | `prefix+shift+k`, `<C-w>K`                                 |
-| Swap with pane to the right              | `swap_pane_right`  | `prefix+shift+l`, `<C-w>L`                                 |
-| Zoom pane                                | `zoom`             | `prefix+z`, `<C-w>o`                                       |
-| Close pane; the last pane closes the tab | `close_pane`       | `prefix+x`                                                 |
-| Resize mode                              | `resize_mode`      | `prefix+r`                                                 |
-| Leave resize mode                        | `resize_exit`      | `<Esc> [resize]`, `<CR> [resize]`, `q [resize]`            |
-| Make pane narrower                       | `resize_narrower`  | `<C-w><`, `h [resize]`, `<Left> [resize]`, `<lt> [resize]` |
-| Make pane wider                          | `resize_wider`     | `<C-w>>`, `l [resize]`, `<Right> [resize]`, `> [resize]`   |
-| Make pane taller                         | `resize_taller`    | `<C-w>+`, `j [resize]`, `<Down> [resize]`, `+ [resize]`    |
-| Make pane shorter                        | `resize_shorter`   | `<C-w>-`, `k [resize]`, `<Up> [resize]`, `- [resize]`      |
+| Action                                   | Config name        | Bindings                                                 |
+| ---------------------------------------- | ------------------ | -------------------------------------------------------- |
+| Split right                              | `split_vertical`   | `ctrl+b v`                                               |
+| Split down                               | `split_horizontal` | `ctrl+b -`                                               |
+| Focus pane to the left                   | `focus_pane_left`  | `ctrl+b h`, `ctrl+w h`                                   |
+| Focus pane below                         | `focus_pane_down`  | `ctrl+b j`, `ctrl+w j`                                   |
+| Focus pane above                         | `focus_pane_up`    | `ctrl+b k`, `ctrl+w k`                                   |
+| Focus pane to the right                  | `focus_pane_right` | `ctrl+b l`, `ctrl+w l`                                   |
+| Swap with pane to the left               | `swap_pane_left`   | `ctrl+b shift+h`, `ctrl+w H`                             |
+| Swap with pane below                     | `swap_pane_down`   | `ctrl+b shift+j`, `ctrl+w J`                             |
+| Swap with pane above                     | `swap_pane_up`     | `ctrl+b shift+k`, `ctrl+w K`                             |
+| Swap with pane to the right              | `swap_pane_right`  | `ctrl+b shift+l`, `ctrl+w L`                             |
+| Zoom pane                                | `zoom`             | `ctrl+b z`, `ctrl+w o`                                   |
+| Close pane; the last pane closes the tab | `close_pane`       | `ctrl+b x`                                               |
+| Resize mode                              | `resize_mode`      | `ctrl+b r`                                               |
+| Leave resize mode                        | `resize_exit`      | `esc [resize]`, `enter [resize]`, `q [resize]`           |
+| Make pane narrower                       | `resize_narrower`  | `ctrl+w <`, `h [resize]`, `left [resize]`, `< [resize]`  |
+| Make pane wider                          | `resize_wider`     | `ctrl+w >`, `l [resize]`, `right [resize]`, `> [resize]` |
+| Make pane taller                         | `resize_taller`    | `ctrl+w +`, `j [resize]`, `down [resize]`, `+ [resize]`  |
+| Make pane shorter                        | `resize_shorter`   | `ctrl+w -`, `k [resize]`, `up [resize]`, `- [resize]`    |
 
 ## Workspaces
 
 | Action                                                        | Config name          | Bindings         |
 | ------------------------------------------------------------- | -------------------- | ---------------- |
-| Next workspace                                                | `next_workspace`     | `prefix+)`       |
-| Previous workspace                                            | `previous_workspace` | `prefix+(`       |
+| Next workspace                                                | `next_workspace`     | `ctrl+b )`       |
+| Previous workspace                                            | `previous_workspace` | `ctrl+b (`       |
 | Switch to a workspace by name or number                       | `switch_workspace`   | —                |
-| Workspace picker                                              | `workspace_picker`   | `prefix+w`       |
-| New workspace                                                 | `new_workspace`      | `prefix+shift+n` |
-| Rename workspace                                              | `rename_workspace`   | `prefix+shift+w` |
-| Close workspace                                               | `close_workspace`    | `prefix+shift+d` |
+| Workspace picker                                              | `workspace_picker`   | `ctrl+b w`       |
+| New workspace                                                 | `new_workspace`      | `ctrl+b shift+n` |
+| Rename workspace                                              | `rename_workspace`   | `ctrl+b shift+w` |
+| Close workspace                                               | `close_workspace`    | `ctrl+b shift+d` |
 | Move the tab to another workspace (reopens it there)          | `move_to_workspace`  | —                |
 | Routing rules: list them; :route add [workspace], :route move | `route_rules`        | —                |
 
@@ -70,18 +75,18 @@ Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm 
 
 | Action                                    | Config name        | Bindings                       |
 | ----------------------------------------- | ------------------ | ------------------------------ |
-| Goto picker: every tab in every workspace | `goto_picker`      | `prefix+g`, `b`                |
-| Open / close the side panel               | `toggle_sidebar`   | `prefix+b`                     |
-| Scroll down                               | `scroll_down`      | `j`, `<C-e>`                   |
-| Scroll up                                 | `scroll_up`        | `k`, `<C-y>`                   |
+| Goto picker: every tab in every workspace | `goto_picker`      | `ctrl+b g`, `b`                |
+| Open / close the side panel               | `toggle_sidebar`   | `ctrl+b b`                     |
+| Scroll down                               | `scroll_down`      | `j`, `ctrl+e`                  |
+| Scroll up                                 | `scroll_up`        | `k`, `ctrl+y`                  |
 | Scroll left                               | `scroll_left`      | `h`                            |
 | Scroll right                              | `scroll_right`     | `l`                            |
-| Scroll half a page down                   | `scroll_half_down` | `d`, `<C-d>`                   |
-| Scroll half a page up                     | `scroll_half_up`   | `u`, `<C-u>`                   |
+| Scroll half a page down                   | `scroll_half_down` | `d`, `ctrl+d`                  |
+| Scroll half a page up                     | `scroll_half_up`   | `u`, `ctrl+u`                  |
 | Scroll to top                             | `scroll_top`       | `gg`                           |
 | Scroll to bottom                          | `scroll_bottom`    | `G`                            |
-| Go back                                   | `history_back`     | `H`, `<C-o>`                   |
-| Go forward                                | `history_forward`  | `L`, `<C-i>`                   |
+| Go back                                   | `history_back`     | `H`, `ctrl+o`                  |
+| Go forward                                | `history_forward`  | `L`, `ctrl+i`                  |
 | Reload page                               | `reload`           | `r`                            |
 | Open a URL or search in this tab          | `open_url`         | —                              |
 | Go up a level in the URL path             | `url_up`           | `gu`                           |
@@ -100,11 +105,11 @@ Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm 
 
 ## Hints
 
-| Action                 | Config name           | Bindings       |
-| ---------------------- | --------------------- | -------------- |
-| Follow link            | `follow_link`         | `f`            |
-| Follow link in new tab | `follow_link_new_tab` | `F`            |
-| Leave hint mode        | `hint_cancel`         | `<Esc> [hint]` |
+| Action                 | Config name           | Bindings     |
+| ---------------------- | --------------------- | ------------ |
+| Follow link            | `follow_link`         | `f`          |
+| Follow link in new tab | `follow_link_new_tab` | `F`          |
+| Leave hint mode        | `hint_cancel`         | `esc [hint]` |
 
 ## Find
 
@@ -117,13 +122,13 @@ Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm 
 
 ## Modes
 
-| Action                                 | Config name      | Bindings                           |
-| -------------------------------------- | ---------------- | ---------------------------------- |
-| Back to normal mode                    | `normal_mode`    | `<Esc> [insert]`, `<Esc> [visual]` |
-| Insert mode: focus the first input     | `insert_mode`    | `i`                                |
-| Copy mode (caret browsing + selection) | `copy_mode`      | `prefix+[`, `v`                    |
-| Command line                           | `command_line`   | `:`                                |
-| Close the command line                 | `command_cancel` | `<Esc> [command]`                  |
+| Action                                 | Config name      | Bindings                       |
+| -------------------------------------- | ---------------- | ------------------------------ |
+| Back to normal mode                    | `normal_mode`    | `esc [insert]`, `esc [visual]` |
+| Insert mode: focus the first input     | `insert_mode`    | `i`                            |
+| Copy mode (caret browsing + selection) | `copy_mode`      | `ctrl+b [`, `v`                |
+| Command line                           | `command_line`   | `:`                            |
+| Close the command line                 | `command_cancel` | `esc [command]`                |
 
 ## Copy mode
 
@@ -176,15 +181,15 @@ Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm 
 | Select row 9          | `panel_select_9` | `9 [panel]`     |
 | Next row              | `panel_down`     | `j [panel]`     |
 | Previous row          | `panel_up`       | `k [panel]`     |
-| Open the selected row | `panel_open`     | `<CR> [panel]`  |
-| Close the side panel  | `panel_close`    | `<Esc> [panel]` |
+| Open the selected row | `panel_open`     | `enter [panel]` |
+| Close the side panel  | `panel_close`    | `esc [panel]`   |
 
 ## Bookmarks
 
 | Action                                                 | Config name          | Bindings         |
 | ------------------------------------------------------ | -------------------- | ---------------- |
-| Open / close the bookmarks panel                       | `toggle_bookmarks`   | `prefix+shift+b` |
-| Bookmark this page (folders/title files it in folders) | `add_bookmark`       | `prefix+a`       |
+| Open / close the bookmarks panel                       | `toggle_bookmarks`   | `ctrl+b shift+b` |
+| Bookmark this page (folders/title files it in folders) | `add_bookmark`       | `ctrl+b a`       |
 | Bookmarks: close the folder, or go to its parent       | `bookmarks_collapse` | `h [panel]`      |
 | Bookmarks: open the folder or the bookmark             | `bookmarks_expand`   | `l [panel]`      |
 | Bookmarks: open in a new background tab                | `bookmarks_open_tab` | `t [panel]`      |

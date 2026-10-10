@@ -15,7 +15,7 @@ import { ACTIONS, isRunnable } from "./actions.mjs";
  * @property {string} name
  * @property {string} group
  * @property {string} description
- * @property {string[]} bindings
+ * @property {string[]} bindings  the keys a user presses (keymap.keysFor), not config notation
  * @property {boolean} overridden
  * @property {boolean} runnable     false greys the row out (see isRunnable)
  */
@@ -32,10 +32,19 @@ export function bindingTable(keymap, { runnable } = {}) {
     name: a.name,
     group: a.group,
     description: a.description,
-    bindings: keymap.bindingsFor(a.name),
+    bindings: keymap.keysFor(a.name),
     overridden: keymap.isOverridden(a.name),
     runnable: isRunnable(a.id, runnable),
   }));
+}
+
+/**
+ * One line naming the keys `prefix` and `leader` stand for, to head a listing.
+ * @param {Keymap} keymap
+ * @returns {string}
+ */
+export function keyLegend(keymap) {
+  return keymap.legend();
 }
 
 /**

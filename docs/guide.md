@@ -315,7 +315,11 @@ The 2-second check keeps working in every case.
 ## Keys
 
 [bindings.md](bindings.md) lists the full default keymap. It is generated from the same table
-the dispatcher and the `ctrl+b ?` overlay use, so the three always agree.
+the dispatcher and the `ctrl+b ?` overlay use, so the three always agree. Both show the keys
+you press, with your prefix filled in (`ctrl+b b`, not `prefix+b`), under a line that says what
+it is (`prefix = ctrl+b`). Once you add a leader binding, it shows the same way (`space n`) and
+the line adds `leader = space`. A binding you remap in `config.toml` shows there with your
+keys. A `[panel]` after a key means it works only in that mode.
 
 **What works today:**
 
@@ -786,6 +790,10 @@ source = "file"               # Tokyo Night instead of your Omarchy theme
 accent = "#ff9e64"
 ```
 
+- **Notation:** `prefix+t` means the prefix (`[keys] prefix`, default `ctrl+b`), then `t`;
+  `<leader>ff` means the leader (`[modal] leader`, default `space`), then `f f`; keys in a
+  sequence are separated by spaces. The `ctrl+b ?` overlay, `:map` and `about:vimma` show
+  bindings as the keys you press, with your prefix and leader.
 - **Reload:** save the file and Vimma picks it up within 2 seconds, in every window, without a
   restart. `:source` reads it at once.
 - **Another file:** `:source work.toml` loads that file instead, the same way: whole, over the

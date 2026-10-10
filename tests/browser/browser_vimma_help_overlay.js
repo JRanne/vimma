@@ -11,9 +11,8 @@
 // ctrl+b o: a key under the prefix the host has not built (head.js).
 bindUnbuiltPrefixKey();
 
-const { bindingTable, compileKeymap, filterBindings } = ChromeUtils.importESModule(
-  "chrome://browser/content/vimma/core/index.mjs",
-);
+const { DEFAULT_CONFIG, bindingTable, compileKeymap, filterBindings, keyLegend } =
+  ChromeUtils.importESModule("chrome://browser/content/vimma/core/index.mjs");
 const { VimmaHost } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
 );
@@ -87,7 +86,7 @@ add_task(async function shows_bindings_over_about_preferences() {
     await openHelp();
     Assert.ok(visibleNames().includes("new_tab"), "overlay lists new_tab");
     Assert.ok(
-      overlay().querySelector('[data-action="new_tab"]').textContent.includes("prefix+c"),
+      overlay().querySelector('[data-action="new_tab"]').textContent.includes("ctrl+b c"),
       "new_tab row shows its binding",
     );
     await closeHelp();
@@ -127,6 +126,87 @@ add_task(async function slash_filters_the_rows() {
     await closeHelp();
     Assert.equal(document.activeElement, browser, "Esc from the filter returns focus to content");
   });
+});
+
+/** The text of a row's keys column. */
+function keysOf(dialog, name) {
+  return dialog.querySelector(`[data-action="${name}"] .vimma-help-keys`).textContent;
+}
+
+add_task(async function rows_show_the_keys_to_press_under_a_legend() {
+  await BrowserTestUtils.withNewTab("https://example.com/", async (browser) => {
+    browser.focus();
+    await openHelp();
+    const legend = overlay().querySelector(".vimma-help-key-legend");
+    Assert.ok(legend && BrowserTestUtils.isVisible(legend), "a legend heads the overlay");
+    Assert.equal(legend.textContent, keyLegend(compileKeymap()), "the legend of the live keymap");
+    Assert.equal(
+      legend.textContent,
+      "prefix = ctrl+b",
+      "the prefix; no default binding uses the leader",
+    );
+    Assert.equal(
+      overlay().querySelector("header").nextElementSibling,
+      legend,
+      "the legend comes right under the header",
+    );
+    Assert.ok(keysOf(overlay(), "toggle_sidebar").startsWith("ctrl+b b"), "the sidebar keys");
+    Assert.equal(keysOf(overlay(), "close_tab"), "ctrl+b shift+x, x", "close_tab's keys");
+    Assert.ok(!overlay().textContent.includes("prefix+"), "no prefix+ notation anywhere");
+    Assert.ok(!overlay().textContent.includes("<leader>"), "no <leader> notation anywhere");
+
+    for (const query of ["ctrl+b b", "sidebar"]) {
+      EventUtils.synthesizeKey("/");
+      filterInput().value = "";
+      EventUtils.sendString(query);
+      Assert.ok(visibleNames().includes("toggle_sidebar"), `"${query}" finds toggle_sidebar`);
+    }
+    Assert.ok(!visibleNames().includes("new_tab"), "and filters new_tab out");
+    await closeHelp();
+  });
+});
+
+add_task(async function a_remapped_prefix_and_leader_show_in_the_rows_and_legend() {
+  const km = compileKeymap({
+    keys: { prefix: "ctrl+a", toggle_sidebar: ["prefix+b", "<leader>n"] },
+    modal: { leader: "," },
+  });
+  const help = new HelpOverlay(window, compileKeymap());
+  help.setKeymap(km);
+  gBrowser.selectedBrowser.focus();
+  help.open();
+  try {
+    Assert.equal(keysOf(help.dialog, "toggle_sidebar"), "ctrl+a b, , n", "the remapped keys");
+    Assert.equal(
+      help.dialog.querySelector(".vimma-help-key-legend").textContent,
+      "prefix = ctrl+a · leader = ,",
+    );
+  } finally {
+    help.close();
+    help.destroy();
+  }
+});
+
+add_task(async function the_legend_leaves_out_a_leader_nothing_uses() {
+  // Every default list without its leader bindings, so no binding uses the leader.
+  const keys = Object.fromEntries(
+    Object.entries(DEFAULT_CONFIG.keys)
+      .filter(([, v]) => [v].flat().some((b) => /<leader>/i.test(b)))
+      .map(([k, v]) => [k, [v].flat().filter((b) => !/<leader>/i.test(b))]),
+  );
+  const help = new HelpOverlay(window, compileKeymap({ keys }));
+  gBrowser.selectedBrowser.focus();
+  help.open();
+  try {
+    Assert.equal(keysOf(help.dialog, "toggle_sidebar"), "ctrl+b b", "only the prefix binding");
+    Assert.equal(
+      help.dialog.querySelector(".vimma-help-key-legend").textContent,
+      "prefix = ctrl+b",
+    );
+  } finally {
+    help.close();
+    help.destroy();
+  }
 });
 
 add_task(async function esc_closes_and_restores_focus() {
