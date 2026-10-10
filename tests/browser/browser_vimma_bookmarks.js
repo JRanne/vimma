@@ -4,7 +4,8 @@
 
 // Spec: docs/specs/bookmarks.md. `ctrl+b shift+b` toggles a bookmarks panel in the
 // side panel's slot, over Firefox's Places bookmarks, with neo-tree's keys; `ctrl+b a` and
-// `:bookmark` file the page under typed folders.
+// `:bookmark` file the page under typed folders. By default the panel shows the Bookmarks
+// Toolbar's contents (user decision, 2026-10-10); `[bookmarks] root = "all"` the whole tree.
 
 "use strict";
 
@@ -84,6 +85,14 @@ async function openPanel() {
   await until(() => isOpen() && rows().length > 0, "ctrl+b shift+b opens the bookmarks panel");
 }
 
+const emptyState = () => panel()?.querySelector(".vimma-bookmarks-empty") ?? null;
+const header = () => panel()?.querySelector(".vimma-panel-name")?.textContent ?? "";
+
+/** `[bookmarks] root`, as config.toml sets it (ConfigHost calls configure). */
+function setRoot(root) {
+  VimmaHost.configure({ bookmarksRoot: root });
+}
+
 async function closePanel() {
   if (promptOpen()) EventUtils.synthesizeKey("KEY_Escape");
   while (isOpen()) {
@@ -118,11 +127,15 @@ async function placeOf(url) {
 
 const JIRA = `${PAGE}?jira`;
 const MDN = `${PAGE}?mdn`;
+const MENU = `${PAGE}?menu`;
+const OTHER = `${PAGE}?other`;
 
+// The panel's fixture is in the Bookmarks Toolbar, its default root; the menu and Other
+// Bookmarks each hold one more, which the toolbar view leaves out.
 async function seed() {
   await PlacesUtils.bookmarks.eraseEverything();
   await PlacesUtils.bookmarks.insertTree({
-    guid: menuGuid,
+    guid: toolbarGuid,
     children: [
       {
         title: "work",
@@ -141,9 +154,12 @@ async function seed() {
     ],
   });
   await PlacesUtils.bookmarks.insert({ parentGuid: toolbarGuid, title: "Bar", url: `${PAGE}?bar` });
+  await PlacesUtils.bookmarks.insert({ parentGuid: menuGuid, title: "In the menu", url: MENU });
+  await PlacesUtils.bookmarks.insert({ parentGuid: unfiledGuid, title: "In other", url: OTHER });
 }
 
 registerCleanupFunction(async () => {
+  setRoot("workspace"); // the default
   await closePanel();
   while (PaneViews.get(window).panes) PaneViews.get(window).close();
   while (gBrowser.tabs.length > 1) BrowserTestUtils.removeTab(gBrowser.tabs.at(-1));
@@ -157,6 +173,9 @@ registerCleanupFunction(async () => {
 
 add_task(async function setup_bookmarks() {
   await WindowWorkspaces.get(window).ready;
+  // This file is the whole-toolbar view (root = "toolbar"); the default, a folder per
+  // workspace, is browser_vimma_bookmarks_workspaces.js.
+  setRoot("toolbar");
   await seed();
 });
 
@@ -173,9 +192,35 @@ add_task(async function toggles_in_the_side_panels_slot_one_panel_at_a_time() {
   );
   Assert.deepEqual(
     titles(),
-    ["toolbar", "other", "work", "Bookmarklet", "<img src=x onerror=alert(1)>"],
-    "rooted at the Menu, toolbar and other first",
+    ["work", "Bookmarklet", "<img src=x onerror=alert(1)>", "Bar"],
+    "only the Bookmarks Toolbar's contents, at the top",
   );
+  Assert.deepEqual(
+    rows().map((r) => r.dataset.guid),
+    (await PlacesUtils.promiseBookmarksTree(toolbarGuid)).children.map((c) => c.guid),
+    "the first rows are the toolbar's own children, in order",
+  );
+  Assert.ok(
+    rows().every(
+      (r) => ![toolbarGuid, menuGuid, unfiledGuid].includes(r.dataset.guid) && r.dataset.guid,
+    ),
+    "no row is the toolbar folder itself, nor the menu or other",
+  );
+  Assert.ok(
+    !titles().some((t) =>
+      ["toolbar", "menu", "other", "mobile", "In the menu", "In other"].includes(t),
+    ),
+    "no wrapper folders, nothing from the menu or Other Bookmarks",
+  );
+  Assert.ok(
+    rows().every(
+      (r) =>
+        r.getAttribute("aria-level") === "1" &&
+        getComputedStyle(r).getPropertyValue("--vimma-depth").trim() === "0",
+    ),
+    "every top row at depth 0, aria-level 1",
+  );
+  Assert.equal(header(), "Bookmarks Toolbar", "the header names the toolbar");
   Assert.equal(panel().querySelector("img"), null, "a title is text, never HTML");
   prefix("B", { shiftKey: true });
   await until(() => !isOpen(), "ctrl+b shift+b closes it");
@@ -230,7 +275,11 @@ add_task(async function quick_add_files_under_typed_folders_with_completion() {
   await until(() => !promptOpen(), "Enter saves");
   await until(async () => !!(await placeOf(url)), "bookmarked");
   const bm = await placeOf(url);
-  Assert.deepEqual(bm.folders, ["menu", "work", "docs", "new", "deeper"], "missing folders made");
+  Assert.deepEqual(
+    bm.folders,
+    ["toolbar", "work", "docs", "new", "deeper"],
+    "missing folders made, under the toolbar",
+  );
   Assert.equal(bm.title, "Quick", "titled as typed");
 
   await focusPage();
@@ -242,9 +291,9 @@ add_task(async function quick_add_files_under_typed_folders_with_completion() {
   );
   Assert.stringContains(promptLabel(), "move/rename", "and offers to move or rename it");
   Assert.equal(promptInput().value, "work/docs/new/deeper/Quick", "from where it is");
-  answer("other/Renamed");
+  answer("misc/Renamed");
   await until(async () => (await placeOf(url))?.title === "Renamed", "renamed");
-  Assert.equal((await placeOf(url)).parentGuid, unfiledGuid, "and moved to Other Bookmarks");
+  Assert.deepEqual((await placeOf(url)).folders, ["toolbar", "misc"], "and moved to toolbar/misc");
   const all = [];
   await PlacesUtils.bookmarks.fetch({ url }, (b) => all.push(b));
   Assert.equal(all.length, 1, "no duplicate");
@@ -256,17 +305,30 @@ add_task(async function quick_add_files_under_typed_folders_with_completion() {
   await until(() => !promptOpen(), "Esc cancels");
   Assert.equal((await placeOf(url)).title, "Renamed", "nothing changed");
 
-  // :bookmark with a path skips the prompt.
+  // :bookmark with a path skips the prompt; the path is from the toolbar.
   const other = await openPage("Cmd");
   EventUtils.synthesizeKey(":", { shiftKey: true });
-  EventUtils.sendString("bookmark toolbar/tools/Cmd page");
+  EventUtils.sendString("bookmark work/docs/Cmd page");
   EventUtils.synthesizeKey("KEY_Enter");
   await until(async () => !!(await placeOf(`${PAGE}?Cmd`)), ":bookmark path adds at once");
   Assert.deepEqual(
     (await placeOf(`${PAGE}?Cmd`)).folders,
-    ["toolbar", "tools"],
-    "in toolbar/tools",
+    ["toolbar", "work", "docs"],
+    "in toolbar/work/docs",
   );
+
+  // A page bookmarked in the menu is outside the toolbar: offered at the top, by its title.
+  const menuPage = await openPage("menu");
+  prefix("a");
+  await until(promptOpen, "ctrl+b a on a menu bookmark");
+  await until(
+    () => noticeText() === "already bookmarked outside the bookmarks toolbar: In the menu",
+    "it says the bookmark is outside the toolbar",
+  );
+  Assert.equal(promptInput().value, "In the menu", "the prompt offers its title, at the top");
+  EventUtils.synthesizeKey("KEY_Enter");
+  await until(async () => (await placeOf(MENU))?.parentGuid === toolbarGuid, "moved in");
+  BrowserTestUtils.removeTab(menuPage);
   BrowserTestUtils.removeTab(other);
   BrowserTestUtils.removeTab(tab);
   await seed();
@@ -384,7 +446,7 @@ add_task(async function a_A_r_m_d_y_edit_like_neo_tree() {
   EventUtils.sendString("sub/");
   EventUtils.synthesizeKey("KEY_Enter");
   await until(async () => !!(await placeOf(url)), "added");
-  Assert.deepEqual((await placeOf(url)).folders, ["menu", "work", "sub"], "under work/sub");
+  Assert.deepEqual((await placeOf(url)).folders, ["toolbar", "work", "sub"], "under work/sub");
   await until(() => panel().contains(document.activeElement), "focus is back in the panel");
   Assert.equal(VimmaHost.status(window).mode, "panel", "in panel mode");
 
@@ -393,7 +455,7 @@ add_task(async function a_A_r_m_d_y_edit_like_neo_tree() {
   await until(promptOpen, "a again");
   answer("only/folders/");
   await until(async () => {
-    const kids = (await PlacesUtils.promiseBookmarksTree(menuGuid)).children[0].children;
+    const kids = (await PlacesUtils.promiseBookmarksTree(toolbarGuid)).children[0].children;
     return kids.some((c) => c.title === "only" && c.children?.[0]?.title === "folders");
   }, "a trailing slash makes folders");
   let count = 0;
@@ -421,15 +483,24 @@ add_task(async function a_A_r_m_d_y_edit_like_neo_tree() {
   await until(promptOpen, "m asks");
   Assert.equal(promptInput().value, "work/", "from its folder");
   EventUtils.synthesizeKey("a", { accelKey: true });
+  EventUtils.sendString("work/on");
+  EventUtils.synthesizeKey("KEY_Tab");
+  Assert.equal(promptInput().value, "work/only/", "Tab completes a toolbar folder");
+  EventUtils.synthesizeKey("KEY_Enter");
+  await until(
+    async () => (await placeOf(JIRA)).folders.join("/") === "toolbar/work/only",
+    "moved to work/only",
+  );
+  EventUtils.synthesizeKey("m");
+  await until(promptOpen, "m on the toolbar's top");
+  EventUtils.synthesizeKey("a", { accelKey: true });
   EventUtils.sendString("too");
   EventUtils.synthesizeKey("KEY_Tab");
-  Assert.equal(promptInput().value, "toolbar/", "Tab completes the root alias");
-  EventUtils.synthesizeKey("KEY_Enter");
-  await until(async () => (await placeOf(JIRA))?.parentGuid === toolbarGuid, "moved to toolbar");
+  Assert.equal(promptInput().value, "too", "no toolbar alias to complete within the toolbar");
+  EventUtils.synthesizeKey("KEY_Escape");
+  await until(() => !promptOpen(), "Esc");
 
   // y: copy the URL.
-  await highlight("toolbar");
-  EventUtils.synthesizeKey("l");
   await highlight("Bar");
   await SimpleTest.promiseClipboardChange(`${PAGE}?bar`, () => EventUtils.synthesizeKey("y"));
 
@@ -445,12 +516,6 @@ add_task(async function a_A_r_m_d_y_edit_like_neo_tree() {
   EventUtils.synthesizeKey("y");
   await until(async () => !(await placeOf(`${PAGE}?bar`)), "y deletes it");
   await until(() => !titles().includes("Bar"), "and the row goes");
-
-  // Root folders refuse.
-  await highlight("toolbar");
-  EventUtils.synthesizeKey("d");
-  await until(() => noticeText() === "toolbar is a root folder: it can't be changed", "refused");
-  Assert.ok(!promptOpen(), "no question");
 
   await closePanel();
   BrowserTestUtils.removeTab(tab);
@@ -496,12 +561,23 @@ add_task(async function places_changes_show_live_and_the_observer_goes_on_close(
   await openPanel();
   const state = VimmaHost._state(window);
   Assert.ok(state.bookmarks.observing, "listening while open");
+  await PlacesUtils.bookmarks.insert({ parentGuid: menuGuid, title: "Menu only", url: MENU });
   const added = await PlacesUtils.bookmarks.insert({
-    parentGuid: menuGuid,
+    parentGuid: toolbarGuid,
     title: "From the Library",
     url: `${PAGE}?library`,
   });
   await until(() => titles().includes("From the Library"), "an insert elsewhere shows up");
+  Assert.ok(!titles().includes("Menu only"), "one outside the toolbar does not");
+  const docs = (await PlacesUtils.promiseBookmarksTree(toolbarGuid)).children[0].children[0];
+  await PlacesUtils.bookmarks.update({ guid: added.guid, parentGuid: docs.guid, index: 0 });
+  await until(() => !titles().includes("From the Library"), "a move within the toolbar shows");
+  await PlacesUtils.bookmarks.update({
+    guid: added.guid,
+    parentGuid: toolbarGuid,
+    index: PlacesUtils.bookmarks.DEFAULT_INDEX,
+  });
+  await until(() => titles().includes("From the Library"), "and back to the top");
   await PlacesUtils.bookmarks.update({ guid: added.guid, title: "Renamed elsewhere" });
   await until(() => titles().includes("Renamed elsewhere"), "a rename too");
   await PlacesUtils.bookmarks.remove(added.guid);
@@ -513,7 +589,7 @@ add_task(async function places_changes_show_live_and_the_observer_goes_on_close(
 
 add_task(async function a_private_windows_load_leaves_no_history() {
   const url = `${PAGE}?private`;
-  await PlacesUtils.bookmarks.insert({ parentGuid: menuGuid, title: "Private", url });
+  await PlacesUtils.bookmarks.insert({ parentGuid: toolbarGuid, title: "Private", url });
   const win = await BrowserTestUtils.openNewBrowserWindow({ private: true });
   const browser = win.gBrowser.selectedBrowser;
   BrowserTestUtils.startLoadingURIString(browser, `${PAGE}?start`);
@@ -546,7 +622,7 @@ add_task(async function two_thousand_bookmarks_stay_fast() {
     url: `${PAGE}?item${i}`,
   }));
   await PlacesUtils.bookmarks.insertTree({
-    guid: menuGuid,
+    guid: toolbarGuid,
     children: [{ title: "big", type: PlacesUtils.bookmarks.TYPE_FOLDER, children }],
   });
   const tab = await openPage("perf");
@@ -577,6 +653,77 @@ add_task(async function two_thousand_bookmarks_stay_fast() {
   // Generous for a busy 2-CPU runner; the DOM cap above is the real guard.
   Assert.less(expandMs, 2000, "expanding 2,000 items is quick");
   Assert.less(moveMs, 3000, "moving through them is quick");
+  await closePanel();
+  BrowserTestUtils.removeTab(tab);
+  await seed();
+});
+
+// `[bookmarks] root = "all"`: the tree as it was before the toolbar default, from the Menu, with
+// toolbar and other as its first folders, the root aliases and root folders that refuse.
+add_task(async function root_all_shows_the_whole_tree_from_the_menu() {
+  const tab = await openPage("all");
+  setRoot("all");
+  await openPanel();
+  Assert.deepEqual(
+    titles(),
+    ["toolbar", "other", "In the menu"],
+    "rooted at the Menu, toolbar and other first",
+  );
+  Assert.equal(header(), "Bookmarks", "the header says Bookmarks");
+  await highlight("toolbar");
+  EventUtils.synthesizeKey("l");
+  await until(() => titles().includes("work"), "the toolbar opens as a folder");
+  await highlight("toolbar");
+  EventUtils.synthesizeKey("d");
+  await until(() => noticeText() === "toolbar is a root folder: it can't be changed", "refused");
+  Assert.ok(!promptOpen(), "no question");
+  await closePanel();
+
+  await focusPage();
+  EventUtils.synthesizeKey(":", { shiftKey: true });
+  EventUtils.sendString("bookmark other/All page");
+  EventUtils.synthesizeKey("KEY_Enter");
+  await until(async () => !!(await placeOf(`${PAGE}?all`)), ":bookmark with the other alias");
+  Assert.equal((await placeOf(`${PAGE}?all`)).parentGuid, unfiledGuid, "in Other Bookmarks");
+
+  // Switching back while open re-reads at the toolbar.
+  await openPanel();
+  setRoot("toolbar");
+  await until(() => titles()[0] === "work", "back to the toolbar's contents");
+  Assert.ok(!titles().includes("toolbar"), "no toolbar row");
+  await closePanel();
+  BrowserTestUtils.removeTab(tab);
+  await seed();
+});
+
+add_task(async function an_empty_toolbar_says_what_the_panel_shows() {
+  await PlacesUtils.bookmarks.eraseEverything();
+  await PlacesUtils.bookmarks.insert({ parentGuid: menuGuid, title: "In the menu", url: MENU });
+  const tab = await openPage("Empty");
+  await focusPage();
+  prefix("B", { shiftKey: true });
+  await until(() => isOpen() && emptyState(), "the empty state shows");
+  Assert.equal(rows().length, 0, "no rows");
+  const text = emptyState().textContent;
+  Assert.stringContains(text, "This panel shows the Bookmarks Toolbar", "says what it shows");
+  Assert.stringContains(text, "Press a to add the current page", "how to add");
+  Assert.stringContains(text, 'root = "all"', "how to list every bookmark");
+  Assert.stringContains(text, "[bookmarks]", "and where");
+  Assert.equal(emptyState().querySelector("kbd")?.textContent, "a", "the key stands out");
+
+  EventUtils.synthesizeKey("a");
+  await until(promptOpen, "a asks");
+  Assert.stringContains(promptLabel(), "bookmarks toolbar/", "to add at the toolbar's top");
+  EventUtils.synthesizeKey("KEY_Enter");
+  await until(async () => (await placeOf(`${PAGE}?Empty`))?.parentGuid === toolbarGuid, "added");
+  await until(() => !emptyState() && titles().includes("Empty"), "the panel lists it, live");
+  await PlacesUtils.bookmarks.eraseEverything();
+  await until(emptyState, "emptied elsewhere, the empty state is back");
+
+  setRoot("all");
+  await until(() => !emptyState() && titles()[0] === "toolbar", "root all: no empty state");
+  setRoot("toolbar");
+  await until(emptyState, "and back");
   await closePanel();
   BrowserTestUtils.removeTab(tab);
   await seed();

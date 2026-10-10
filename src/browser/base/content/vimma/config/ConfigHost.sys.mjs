@@ -114,6 +114,7 @@ function apply(next) {
     sites: config.sites,
     firefox: config.firefox,
     insertEditing: config.insertEditing,
+    bookmarksRoot: config.bookmarks.root,
   });
   for (const win of windows) applyToWindow(win, config);
   ThemeHost.setConfig(config.theme);

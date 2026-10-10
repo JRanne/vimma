@@ -9,7 +9,16 @@ import {
   folderPath,
   formatBookmarkPath,
   fromPlaces,
+  inTree,
+  isPendingFolder,
+  pendingWorkspaceId,
+  splitWorkspacePath,
+  completeWorkspacePath,
+  workspaceFolderGuid,
+  workspaceTree,
+  BOOKMARKS_ROOTS,
   isOpenable,
+  rootLabel,
   openBookmarks,
   parseBookmarkPath,
   refreshBookmarks,
@@ -110,7 +119,76 @@ describe("fromPlaces", () => {
     const work = /** @type {Folder} */ (root.children[2]);
     expect(work.children.map((c) => c.guid)).toEqual(["docs", "jira"]);
   });
+  test('"all" is the whole tree, rooted at the menu', () => {
+    expect(fromPlaces(places, "all")).toEqual(root);
+    expect(rootLabel(root)).toBe("bookmarks menu");
+  });
 });
+
+// User decision, 2026-10-10: the panel shows only the Bookmarks Toolbar.
+describe('fromPlaces(places, "toolbar")', () => {
+  const nested = structuredClone(places);
+  nested.children[1].children.push(
+    folder("tools", "tools", [bm("vitest", "Vitest", "https://vitest.dev/")]),
+  );
+  const bar = fromPlaces(nested, "toolbar");
+
+  test("the toolbar's own children at the top, no root folders around them", () => {
+    expect(bar.guid).toBe(PLACES_ROOTS.toolbar);
+    expect(bar.root).toBe("toolbar");
+    expect(bar.children.map((c) => c.title)).toEqual(["GitHub", "tools"]);
+    const rows = flattenTree(bar, new Set());
+    expect(rows.map((r) => [r.title, r.depth, r.parent, r.root])).toEqual([
+      ["GitHub", 0, PLACES_ROOTS.toolbar, false],
+      ["tools", 0, PLACES_ROOTS.toolbar, false],
+    ]);
+    expect(rows.some((r) => r.guid === PLACES_ROOTS.toolbar)).toBe(false);
+    expect(rootLabel(bar)).toBe("bookmarks toolbar");
+  });
+  test("menu and other bookmarks are outside it", () => {
+    expect(inTree(bar, "jira")).toBe(false);
+    expect(inTree(bar, "vitest")).toBe(true);
+    expect(filterBookmarks(bar, "jira")).toEqual([]);
+  });
+  test("paths are from the toolbar: no toolbar/other alias", () => {
+    expect(folderPath(bar, "tools")).toEqual(["tools"]);
+    expect(folderPath(bar, PLACES_ROOTS.toolbar)).toEqual([]);
+    expect(resolveFolders(bar, bar.guid, ["work", "docs"])).toEqual({
+      guid: PLACES_ROOTS.toolbar,
+      missing: ["work", "docs"],
+    });
+    expect(resolveFolders(bar, bar.guid, ["toolbar"])).toEqual({
+      guid: PLACES_ROOTS.toolbar,
+      missing: ["toolbar"],
+    });
+    expect(completeFolder(bar, bar.guid, "to")).toEqual(["tools/"]);
+    expect(completeFolder(bar, bar.guid, "wo")).toEqual([]);
+  });
+  test("a and A at the top add to the toolbar, also when it is empty", () => {
+    const s = openBookmarks(bar);
+    expect(sel(s)?.guid).toBe("gh");
+    expect(press(s, [{ id: "bookmarks.add" }]).effect).toEqual({
+      type: "add",
+      folder: PLACES_ROOTS.toolbar,
+    });
+    const empty = openBookmarks(fromPlaces(emptyBar(), "toolbar"));
+    expect(empty.rows).toEqual([]);
+    expect(press(empty, [{ id: "bookmarks.add_folder" }]).effect).toEqual({
+      type: "add_folder",
+      folder: PLACES_ROOTS.toolbar,
+    });
+  });
+  test("without a toolbar in Places, an empty toolbar root", () => {
+    const none = fromPlaces({ guid: "root________", typeCode: 2, children: [] }, "toolbar");
+    expect(none).toMatchObject({ guid: PLACES_ROOTS.toolbar, root: "toolbar", children: [] });
+  });
+});
+
+function emptyBar() {
+  const p = structuredClone(places);
+  p.children[1].children = [];
+  return p;
+}
 
 describe("flattenTree", () => {
   test("collapsed: the top level only", () => {
@@ -394,5 +472,108 @@ describe("keymap and command line", () => {
     });
     expect(parseCommandLine("bookmark")).toMatchObject({ action: { id: "bookmark.add" } });
     expect(parseCommandLine("bookmarks")).toMatchObject({ action: { id: "bookmarks.toggle" } });
+  });
+});
+
+// User decision, 2026-10-10: each workspace owns a folder in the Bookmarks Toolbar.
+describe("workspace folders", () => {
+  const bar = fromPlaces(
+    {
+      guid: "root________",
+      typeCode: 2,
+      children: [
+        folder(PLACES_ROOTS.toolbar, "toolbar", [
+          folder("wf", "work", [
+            folder("wdocs", "docs", [bm("mdn", "MDN", "https://developer.mozilla.org/")]),
+            bm("jira", "Jira", "https://jira.example/"),
+          ]),
+          folder("sf", "shop", [bm("cart", "Cart", "https://shop.example/")]),
+          folder("renamed", "Old name", [bm("x", "X", "https://x.example/")]),
+          bm("loose", "Loose", "https://loose.example/"),
+        ]),
+        folder(PLACES_ROOTS.menu, "menu", [folder("mwork", "work", [])]),
+      ],
+    },
+    "toolbar",
+  );
+  const work = { id: "ws-work", name: "work" };
+  const shop = { id: "ws-shop", name: "shop", folder: "sf" };
+  const fresh = { id: "ws-new", name: "new" };
+
+  test("a folder is found by its stored guid first, else by name in the toolbar", () => {
+    expect(workspaceFolderGuid(bar, work)).toBe("wf");
+    expect(workspaceFolderGuid(bar, shop)).toBe("sf");
+    expect(workspaceFolderGuid(bar, { id: "w", name: "Renamed", folder: "renamed" })).toBe(
+      "renamed",
+    );
+    expect(workspaceFolderGuid(bar, fresh)).toBeNull();
+    // A stored guid that is gone (or moved out of the toolbar) falls back to the name.
+    expect(workspaceFolderGuid(bar, { id: "w", name: "work", folder: "gone________" })).toBe("wf");
+    // The name never matches a bookmark, nor a folder below the top.
+    expect(workspaceFolderGuid(bar, { id: "w", name: "Loose" })).toBeNull();
+    expect(workspaceFolderGuid(bar, { id: "w", name: "docs" })).toBeNull();
+  });
+
+  test("the panel's tree is the folder's contents at the top, named after the workspace", () => {
+    const tree = workspaceTree(bar, work);
+    expect(tree).toMatchObject({ guid: "wf", root: "workspace", title: "work" });
+    const rows = flattenTree(tree, new Set());
+    expect(rows.map((r) => [r.title, r.depth, r.root])).toEqual([
+      ["docs", 0, false],
+      ["Jira", 0, false],
+    ]);
+    expect(rows.some((r) => ["wf", PLACES_ROOTS.toolbar].includes(r.guid))).toBe(false);
+    expect(rootLabel(tree)).toBe("@work");
+    expect(inTree(tree, "cart")).toBe(false);
+    expect(inTree(tree, "loose")).toBe(false);
+    expect(filterBookmarks(tree, "cart")).toEqual([]);
+  });
+
+  test("without a folder yet: an empty tree whose guid says to make it", () => {
+    const tree = workspaceTree(bar, fresh);
+    expect(tree.children).toEqual([]);
+    expect(isPendingFolder(tree.guid)).toBe(true);
+    expect(isPendingFolder("wf")).toBe(false);
+    expect(pendingWorkspaceId(tree.guid)).toBe("ws-new");
+    expect(resolveFolders(tree, tree.guid, ["docs"])).toEqual({
+      guid: tree.guid,
+      missing: ["docs"],
+    });
+    expect(press(openBookmarks(tree), [{ id: "bookmarks.add" }]).effect).toEqual({
+      type: "add",
+      folder: tree.guid,
+    });
+  });
+
+  test("@name/ at the start of a path names another workspace", () => {
+    expect(splitWorkspacePath("@shop/deals/Cart")).toEqual({
+      workspace: "shop",
+      rest: "deals/Cart",
+    });
+    expect(splitWorkspacePath("@shop")).toEqual({ workspace: "shop", rest: "" });
+    expect(splitWorkspacePath("@a\\/b/x")).toEqual({ workspace: "a/b", rest: "x" });
+    expect(splitWorkspacePath("docs/Title")).toEqual({ workspace: null, rest: "docs/Title" });
+    expect(splitWorkspacePath("\\@home/x")).toEqual({ workspace: null, rest: "@home/x" });
+    expect(splitWorkspacePath(" @shop/x")).toEqual({ workspace: "shop", rest: "x" });
+  });
+
+  test("Tab completes workspace names after @, then that workspace's folders", () => {
+    const trees = {
+      current: workspaceTree(bar, work),
+      workspaces: [work, shop, fresh].map((w) => ({ name: w.name, tree: workspaceTree(bar, w) })),
+    };
+    const base = trees.current.guid;
+    expect(completeWorkspacePath(trees, base, "@")).toEqual(["@work/", "@shop/", "@new/"]);
+    expect(completeWorkspacePath(trees, base, "@s")).toEqual(["@shop/"]);
+    expect(completeWorkspacePath(trees, base, "@work/d")).toEqual(["@work/docs/"]);
+    expect(completeWorkspacePath(trees, base, "@nope/d")).toEqual([]);
+    expect(completeWorkspacePath(trees, base, "d")).toEqual(["docs/"]);
+    expect(completeWorkspacePath(trees, base, "")).toEqual(["docs/"]);
+    expect(completeWorkspacePath(trees, "wdocs", "")).toEqual([]);
+  });
+
+  test("toolbar folders and roots: workspace is a root value", () => {
+    expect(BOOKMARKS_ROOTS).toEqual(["workspace", "toolbar", "all"]);
+    expect(fromPlaces(places, "workspace")).toEqual(fromPlaces(places, "toolbar"));
   });
 });

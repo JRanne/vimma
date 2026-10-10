@@ -31,7 +31,7 @@ const TYPE_FOLDER = 2;
 /**
  * `root`: one of Places' roots, which cannot be renamed, moved or deleted.
  * @typedef {{ readonly guid: string, readonly kind: "folder", readonly title: string,
- *   readonly root?: "menu" | "toolbar" | "other" | "mobile",
+ *   readonly root?: "menu" | "toolbar" | "other" | "mobile" | "workspace",
  *   readonly children: readonly Node[] }} Folder
  */
 /** @typedef {Bookmark | Folder} Node */
@@ -134,14 +134,32 @@ function folderOf(item, extra = {}, before = []) {
 }
 
 /**
- * Our tree from Places' (promiseBookmarksTree of the places root): the Menu, with the toolbar,
- * Other Bookmarks and (when not empty) mobile roots as its first folders (spec decision 2).
+ * What the panel is rooted at (config `[bookmarks] root`, spec decisions 2 and 11): the current
+ * workspace's folder in the Bookmarks Toolbar, the toolbar's contents, or every bookmark under
+ * the Menu.
+ * @typedef {"workspace" | "toolbar" | "all"} BookmarksRoot
+ */
+export const BOOKMARKS_ROOTS = Object.freeze(
+  /** @type {const} */ (["workspace", "toolbar", "all"]),
+);
+
+/**
+ * Our tree from Places' (promiseBookmarksTree of the places root), spec decision 2.
+ * `"toolbar"`: the Bookmarks Toolbar folder, its bookmarks and subfolders at the top, with no
+ * root folder around them (`"workspace"` too: workspaceTree then picks a folder of it). `"all"`:
+ * the Menu, with the toolbar, Other Bookmarks and (when not empty) mobile roots as its first
+ * folders.
  * @param {PlacesItem} places
+ * @param {BookmarksRoot} [root]
  * @returns {Folder}
  */
-export function fromPlaces(places) {
+export function fromPlaces(places, root = "all") {
   const kids = places.children ?? [];
   const find = (/** @type {string} */ guid) => kids.find((k) => k.guid === guid);
+  if (root === "toolbar" || root === "workspace") {
+    const bar = find(PLACES_ROOTS.toolbar) ?? { guid: PLACES_ROOTS.toolbar, typeCode: TYPE_FOLDER };
+    return folderOf(bar, { title: "", root: "toolbar" });
+  }
   /** @type {Folder[]} */
   const roots = [];
   for (const [guid, name] of /** @type {const} */ ([
@@ -188,7 +206,128 @@ function index(tree) {
 }
 
 /**
- * A folder's names from the top (the Menu itself: []).
+ * The tree's top folder as prompts name it ("add in bookmarks toolbar/").
+ * @param {Folder} tree
+ */
+export function rootLabel(tree) {
+  if (tree.root === "workspace") return `@${formatBookmarkPath([tree.title])}`;
+  return tree.root === "toolbar" ? "bookmarks toolbar" : "bookmarks menu";
+}
+
+/**
+ * A workspace as the bookmarks see it: `folder` is the guid it stored, if any.
+ * @typedef {{ readonly id: string, readonly name: string,
+ *   readonly folder?: string | null }} BookmarksWorkspace
+ */
+
+const PENDING = "vimma-ws:";
+
+/**
+ * The guid of workspace `ws`'s folder in the toolbar (`fromPlaces(places, "toolbar")`): the
+ * folder it stored when that is still at the toolbar's top, else the first one there named
+ * after it (made outside Vimma, or before the link), else null (spec decision 11).
+ * @param {Folder} toolbar
+ * @param {BookmarksWorkspace} ws
+ * @returns {string | null}
+ */
+export function workspaceFolderGuid(toolbar, ws) {
+  const folders = toolbar.children.filter((c) => c.kind === "folder");
+  if (ws.folder && folders.some((f) => f.guid === ws.folder)) return ws.folder;
+  return folders.find((f) => f.title === ws.name)?.guid ?? null;
+}
+
+/** @param {string} guid  a workspaceTree's guid before its folder exists */
+export const isPendingFolder = (guid) => guid.startsWith(PENDING);
+
+/** @param {string} guid  a pending guid's workspace id */
+export const pendingWorkspaceId = (guid) => guid.slice(PENDING.length);
+
+/**
+ * The panel's tree for workspace `ws`: its folder's contents at the top, titled with the
+ * workspace's name. Without a folder yet, an empty tree with a pending guid, which the host
+ * turns into the folder on the first add.
+ * @param {Folder} toolbar
+ * @param {BookmarksWorkspace} ws
+ * @returns {Folder}
+ */
+export function workspaceTree(toolbar, ws) {
+  const guid = workspaceFolderGuid(toolbar, ws);
+  const found = guid ? /** @type {Folder} */ (index(toolbar).get(guid)?.node) : null;
+  return Object.freeze({
+    guid: guid ?? `${PENDING}${ws.id}`,
+    kind: "folder",
+    title: ws.name,
+    root: "workspace",
+    children: found?.children ?? Object.freeze([]),
+  });
+}
+
+/**
+ * A path that starts with `@name/` is in workspace `name`'s folder; `\@` is a plain `@`.
+ * @param {string} text
+ * @returns {{ workspace: string | null, rest: string }}
+ */
+export function splitWorkspacePath(text) {
+  const { workspace, rest } = splitAt(text);
+  return { workspace, rest };
+}
+
+/**
+ * splitWorkspacePath, and whether the name's `/` was typed.
+ * @param {string} text
+ */
+function splitAt(text) {
+  const t = text.trimStart();
+  if (t.startsWith("\\@")) return { workspace: null, rest: t.slice(1), slash: false };
+  if (!t.startsWith("@")) return { workspace: null, rest: text, slash: false };
+  let name = "";
+  let i = 1;
+  for (; i < t.length; i++) {
+    const c = t[i];
+    const next = t[i + 1];
+    if (c === "\\" && (next === "/" || next === "\\")) {
+      name += next;
+      i++;
+    } else if (c === "/") break;
+    else name += c;
+  }
+  return { workspace: name.trim(), rest: t.slice(i + 1), slash: i < t.length };
+}
+
+/**
+ * Tab completion for a path from folder `base` of the current workspace's tree, or, after `@`,
+ * a workspace's name, then that workspace's folders.
+ * @param {{ current: Folder, workspaces: readonly { name: string, tree: Folder }[] }} trees
+ * @param {string} base
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function completeWorkspacePath(trees, base, text) {
+  const { workspace, rest, slash } = splitAt(text);
+  if (workspace === null) return completeFolder(trees.current, base, text);
+  if (!slash) {
+    const lower = workspace.toLowerCase();
+    return trees.workspaces
+      .filter((w) => w.name.toLowerCase().startsWith(lower))
+      .map((w) => `@${formatBookmarkPath([w.name])}/`);
+  }
+  const target = trees.workspaces.find((w) => w.name === workspace);
+  if (!target) return [];
+  const head = `@${formatBookmarkPath([target.name])}/`;
+  return completeFolder(target.tree, target.tree.guid, rest).map((c) => head + c);
+}
+
+/**
+ * Whether `guid` is the tree's top folder or anything under it.
+ * @param {Folder} tree
+ * @param {string} guid
+ */
+export function inTree(tree, guid) {
+  return index(tree).has(guid);
+}
+
+/**
+ * A folder's names from the top (the top folder itself: []).
  * @param {Folder} tree
  * @param {string} guid
  * @returns {string[]}

@@ -20,12 +20,17 @@ export const DEFINITIONS_SCHEMA_VERSION = 1;
 export const DEFAULT_WORKSPACE_NAME = "main";
 const DEFAULT_LOOKS = Object.freeze({ color: "gray", icon: "circle" });
 const HOME = /^(?:https?:\/\/|about:)\S+$/;
+/** A Places guid (toolkit/components/places/PlacesUtils.sys.mjs isValidGuid). */
+const PLACES_GUID = /^[a-zA-Z0-9\-_]{12}$/;
 
 /**
  * `userContextId` is the workspace's container, or null before one is made. `source` is
  * `"config"` for a `[workspaces]` entry, `"runtime"` for one made while running (or `main`).
+ * `bookmarksFolder` is the Places guid of its folder in the Bookmarks Toolbar, once it has one
+ * (docs/specs/bookmarks.md, decision 11); without it, the folder is found by name.
  * @typedef {{ id: string, name: string, userContextId: number | null, color: string,
- *   icon: string, home?: string, source: "config" | "runtime" }} WorkspaceDefinition
+ *   icon: string, home?: string, source: "config" | "runtime",
+ *   bookmarksFolder?: string }} WorkspaceDefinition
  */
 /**
  * Workspaces in workspace order: config ones in file order, then runtime ones.
@@ -121,6 +126,9 @@ export function readDefinitions(input) {
     if (w.source !== "config" && w.source !== "runtime") {
       throw new DefinitionsError("invalid", at("source"), '"config" or "runtime"');
     }
+    if (w.bookmarksFolder !== undefined && !PLACES_GUID.test(String(w.bookmarksFolder))) {
+      throw new DefinitionsError("invalid", at("bookmarksFolder"), "a Places guid");
+    }
     ids.add(w.id);
     names.add(w.name);
     /** @type {WorkspaceDefinition} */
@@ -133,6 +141,7 @@ export function readDefinitions(input) {
       source: w.source,
     };
     if (w.home !== undefined) def.home = w.home;
+    if (w.bookmarksFolder !== undefined) def.bookmarksFolder = w.bookmarksFolder;
     return def;
   });
   const last = doc.lastActive;
@@ -182,7 +191,8 @@ const sameDef = (a, b) =>
   a.color === b.color &&
   a.icon === b.icon &&
   a.home === b.home &&
-  a.source === b.source;
+  a.source === b.source &&
+  a.bookmarksFolder === b.bookmarksFolder;
 
 /**
  * Reconciles the file with `[workspaces]` (decision 7, Reconcile step 1): config workspaces by
@@ -210,6 +220,7 @@ export function reconcileDefinitions(defs, config, mintId) {
       source: "config",
     };
     if (c.home !== undefined) def.home = c.home;
+    if (old?.bookmarksFolder !== undefined) def.bookmarksFolder = old.bookmarksFolder;
     return def;
   });
   for (const w of defs.workspaces) {
@@ -287,6 +298,26 @@ export function withContainer(defs, id, userContextId) {
   const i = mustIndex(defs, id);
   if (defs.workspaces[i]?.userContextId === userContextId) return defs;
   const workspaces = defs.workspaces.map((w, k) => (k === i ? { ...w, userContextId } : w));
+  return { ...defs, workspaces };
+}
+
+/**
+ * Links workspace `id` to its bookmarks folder (a Places guid), or unlinks it (null).
+ * @param {Definitions} defs
+ * @param {string} id
+ * @param {string | null} guid
+ * @returns {Definitions}
+ */
+export function withBookmarksFolder(defs, id, guid) {
+  const i = mustIndex(defs, id);
+  if (guid !== null && !PLACES_GUID.test(guid)) {
+    throw new DefinitionsError("invalid", "bookmarksFolder", "a Places guid");
+  }
+  const w = /** @type {WorkspaceDefinition} */ (defs.workspaces[i]);
+  if ((w.bookmarksFolder ?? null) === guid) return defs;
+  const next = { ...w, bookmarksFolder: guid ?? undefined };
+  if (guid === null) delete next.bookmarksFolder;
+  const workspaces = defs.workspaces.map((x, k) => (k === i ? next : x));
   return { ...defs, workspaces };
 }
 
@@ -407,6 +438,22 @@ export function closeWorkspaceQuestion(w, tabs) {
   return w.source === "config"
     ? `Close the ${count} of "${w.name}"? It stays, as it is in config.toml. y/N`
     : `Close "${w.name}" (${count}) and delete its cookies and site data? y/N`;
+}
+
+/**
+ * After yes to closing a runtime workspace whose bookmarks folder has items: what becomes of
+ * them (docs/specs/bookmarks.md, decision 12). Keeping the folder is the default (any other key,
+ * Enter, Esc); `m` moves them to `moveTo` (none: no other workspace), `d` deletes them.
+ * @param {string} name  the workspace
+ * @param {number} count  items in its folder, folders included
+ * @param {string | null} moveTo  the workspace `m` moves them to
+ */
+export function deleteBookmarksQuestion(name, count, moveTo) {
+  const what = `The ${count} bookmark${count === 1 ? "" : "s"} of "${name}"`;
+  const them = count === 1 ? "it" : "them";
+  return moveTo === null
+    ? `${what}: k keep the folder (default), d delete ${them}? K/d`
+    : `${what}: k keep the folder (default), m move ${them} to "${moveTo}", d delete ${them}? K/m/d`;
 }
 
 /**

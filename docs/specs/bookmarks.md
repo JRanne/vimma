@@ -15,12 +15,21 @@ As a Vimma user I open my bookmarks the way I open the side panel, with a keybin
 1. **Storage: Firefox's Places** (`PlacesUtils.bookmarks`, `PlacesUtils.promiseBookmarksTree`,
    `PlacesUtils.observers`; grepped in `toolkit/components/places/`). Existing bookmarks,
    import/export, the Library and Sync keep working; Vimma keeps no bookmark store of its own.
-2. **One tree, rooted at the Bookmarks Menu.** Its top level lists, in this order, the folders
-   `toolbar` (Bookmarks Toolbar), `other` (Other Bookmarks), `mobile` (only when it has
-   something), then the Menu's own children. A path is relative to the Menu, and its first
-   segment may name `toolbar`, `other` or `mobile` (an alias wins over a Menu folder of that
-   name). The four roots cannot be renamed, moved or deleted. Separators are not listed. Tags
-   are not shown.
+2. **One tree, rooted at the Bookmarks Toolbar** (`[bookmarks] root = "toolbar"`; the default until decision 11;
+   user decision, 2026-10-10). Its top level is the toolbar folder's own children, at depth 0
+   (`aria-level` 1); no row stands for the toolbar itself, and the header says "Bookmarks
+   Toolbar". Paths (quick add, `a`, `A`, `m`, Tab completion) are relative to the toolbar. The
+   Menu, Other Bookmarks and mobile are not listed; a bookmark there that quick add finds is
+   named by its path from the Menu and offered at the toolbar's top by its title. An empty
+   toolbar shows an empty state (not a row) saying the panel shows the Bookmarks Toolbar, that
+   `a` adds the current page, and how to set `root = "all"`.
+   `root = "all"` (schema 2; anything else is a config error) is the earlier tree, **rooted at
+   the Bookmarks Menu**: its top level lists, in this order, the folders `toolbar` (Bookmarks
+   Toolbar), `other` (Other Bookmarks), `mobile` (only when it has something), then the Menu's
+   own children. A path is relative to the Menu, and its first segment may name `toolbar`,
+   `other` or `mobile` (an alias wins over a Menu folder of that name). The four roots cannot
+   be renamed, moved or deleted. Changing `root` re-reads an open panel. Either way,
+   separators are not listed and tags are not shown.
 3. **Same slot as the side panel, the same modal mode.** The bookmarks panel is its own box
    (`#vimma-bookmarks`) built by the side panel's helpers, styled by `side-panel.css` and the
    theme tokens, first child of `#browser`. Opening one panel closes the other. Both run in
@@ -65,6 +74,30 @@ As a Vimma user I open my bookmarks the way I open the side panel, with a keybin
     keys to the list; `Esc` clears it. With a filter in force, `Esc` in the list clears it
     first, and a second `Esc` closes.
 
+11. **A folder per workspace** (`[bookmarks] root = "workspace"`, the default; user decision,
+    2026-10-10). Each workspace owns a folder at the top of the Bookmarks Toolbar, named after
+    it. The panel's tree is the current workspace's folder: its children at depth 0
+    (`aria-level` 1), no row for the folder or the toolbar, the workspace's name in the header;
+    a workspace switch while open re-reads it afresh. Quick add, `a`, `A`, `m` and Tab
+    completion work from that folder; `@name/` at a path's start is workspace `name`'s folder
+    (`\@` a plain `@`), and Tab after `@` completes workspace names. The folder is made on the
+    first add (core `workspaceTree` gives a pending guid until then). The link is the folder's
+    Places guid, stored as the definition's `bookmarksFolder`; without one (or when that folder
+    left the toolbar's top), the first top-level toolbar folder of the workspace's name is
+    adopted and linked (`workspaceFolderGuid`). `:wsrename` renames the folder; a folder
+    renamed elsewhere stays linked. Bookmarks loose in the toolbar, in the Menu or in Other
+    Bookmarks do not show in a workspace's panel: `root = "toolbar"` (decision 2) or `"all"`
+    shows them, as the empty state says. A window without workspaces (private, containers off)
+    gets the toolbar. Config and runtime workspaces behave alike; opening keeps decision 6.
+12. **Deleting a workspace with bookmarks.** After yes to `:wsdelete` of a runtime workspace
+    whose folder has items, a second question (`choose` on the rename prompt): `k` or `Enter`
+    keeps the folder (the default, unlinked from any workspace), `m` moves its contents into
+    the first other workspace's folder (named in the question) and removes the emptied folder,
+    `d` deletes the folder and its bookmarks; `Esc` or any other key closes nothing. Each answer
+    stands only for the workspace, its folder and the target as asked about (the y/N guard's
+    pattern); the workspace is closed first and its bookmarks change only once that succeeded.
+    A config workspace's close keeps its folder and asks nothing more.
+
 ## Keys
 
 | Key                           | Action                                                       |
@@ -87,7 +120,7 @@ As a Vimma user I open my bookmarks the way I open the side panel, with a keybin
 | `Esc`, the toggle keys        | close (`Esc` clears a filter first)                          |
 
 "Here" is the highlighted folder, or the highlighted bookmark's folder; at the top level, the
-Menu. Digits (`panel.select`) do nothing in the bookmarks panel.
+workspace's folder (the toolbar with `root = "toolbar"`, the Menu with `root = "all"`). Digits (`panel.select`) do nothing in the bookmarks panel.
 
 ## Edge cases
 
@@ -134,3 +167,29 @@ tries` and `ctrl+b a opens the prompt - timed out`.
   so `toggle_bookmarks` is `ctrl+b shift+b` only and `space b` does nothing by default. The leader
   option and `<leader>` bindings in `[keys]` stay for users to add. The bookmarks tests press
   `ctrl+b shift+b` where they pressed `space b`; the assertions are unchanged.
+- **Toolbar root** (user decision, 2026-10-10): "bookmarks button should show only contents of
+  bookmarks toolbar". The panel, quick add and paths are rooted at the Bookmarks Toolbar folder
+  (decision 2), with no wrapper row; `[bookmarks] root = "all"` keeps the Menu tree. Red: Vitest
+  12 failures (`rootLabel is not a function`, `expected 'menu________' to be 'toolbar_____'`,
+  `[bookmarks] root` unknown key); the mochitest 21 (`only the Bookmarks Toolbar's contents, at
+the top - ["toolbar","other","In the menu"]`, `Tab completes the folder name - "work/doQuick"`).
+  Green: Vitest 2,441; the bookmarks mochitest 154/154 with `browser_vimma_a11y.js`. The fixture
+  moved from the Menu to the toolbar, the menu and Other Bookmarks hold one bookmark each, and
+  the assertions that named the old root (the top-level titles, `menu/…` and `other/…` paths, the
+  `toolbar/` completion, root folders refusing) now assert the toolbar view, the old ones under
+  `root = "all"`. `browser_vimma_a11y.js` gives the empty test toolbar a folder to show.
+  Mutation check: with core `fromPlaces` ignoring `"toolbar"`, 5 Vitest tests fail; reverted.
+  The `defaults.toml` snapshot gains the `[bookmarks]` section only.
+- **A folder per workspace** (user decision, 2026-10-10): decisions 11 and 12, on top of the
+  toolbar root, which stays as `root = "toolbar"`; the default is now `"workspace"`. Red: Vitest
+  11 failures (`withBookmarksFolder is not a function`, `workspaceFolderGuid is not a function`,
+  …) and the config tests' new default; the new mochitest `browser_vimma_bookmarks_workspaces.js`
+  9 against the toolbar-root build (`main's folder is listed - timed out`,
+  `first.setBookmarksFolder is not a function`). Green: Vitest 2,479; the bookmarks, workspace
+  and a11y mochitests 404/404, and 9 repeats of both bookmarks files on two CPUs clean.
+  `browser_vimma_bookmarks.js` now sets `root = "toolbar"` at its start (it is that view's test)
+  and `browser_vimma_a11y.js` gives the workspace's folder a subfolder to show; their assertions
+  are unchanged. Mutation check: with core `workspaceFolderGuid` ignoring the stored guid,
+  Vitest fails (`found by its stored guid first`) and so does the mochitest (`a rename … keeps
+the link: still market's - timed out`); reverted. The `defaults.toml` snapshot's
+  `[bookmarks] root` becomes `"workspace"`.
