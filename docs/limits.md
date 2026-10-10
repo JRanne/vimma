@@ -31,8 +31,6 @@ delete its line in the same PR.
 - Command line: history is kept in memory only, until Vimma quits; arguments are not
   completed (URLs, workspace names); no
   `:set`, ranges or counts ([m1-cmdline](specs/m1-cmdline.md), Settled).
-- `:q` and `ctrl+b x` close the tab: with no split panes yet, every tab is one pane
-  ([m1-cmdline](specs/m1-cmdline.md), Settled).
 - Link hints label only what the page has as elements: canvas and WebGL apps (Google Docs,
   Figma, maps, games) have nothing to label, and delegated click handlers with no role or
   listener of their own, image-map `<area>` links and pinch-zoomed pages are missed or
@@ -45,11 +43,13 @@ delete its line in the same PR.
   one millisecond that keep the file's size are seen as one. A workspace removed from
   `[workspaces]` stays, as a runtime workspace with its tabs and container.
   Only the first error is in the status bar (all are in the Browser Console and
-  `about:vimma`). Overridden bindings are not marked in `ctrl+b ?`; `:source <path>` and `:config` do not
-  exist ([m5-config-load](specs/m5-config-load.md)).
-- An Omarchy theme change shows up to 2 s late: Vimma polls `colors.toml`'s stat every 2 s
-  (Firefox has no portable file watcher; plan §3). A `theme-set.d` hook through the control
-  socket could make it instant later ([m5-omarchy-theme](specs/m5-omarchy-theme.md), Limits).
+  `about:vimma`) ([m5-config-load](specs/m5-config-load.md)).
+- Without the `theme-set.d` hook Vimma installs (no Omarchy hooks folder,
+  `vimma.theme.omarchyHook` off, or the hook deleted), an Omarchy theme change shows up to 2 s
+  late: Vimma polls `colors.toml`'s stat every 2 s (Firefox has no portable file watcher; plan
+  §3). With the hook, Vimma follows only after Omarchy has retinted its own apps; a hook run in
+  the moment between Vimma's start and its first window opens a window
+  ([m5-omarchy-theme](specs/m5-omarchy-theme.md), Limits and "Instant reload by default").
 - If the Omarchy theme directory disappears after a theme was shown (as during
   `omarchy-theme-set`'s swap), the colours stay until a theme is back; Tokyo Night only when no
   theme was found since startup or the last `vimma.theme.*` change
@@ -91,7 +91,7 @@ delete its line in the same PR.
 ## Tabs and window
 
 - "List all tabs" (View menu, `#alltabs-button`, the `ctrl+tab` panel's "show all") is unavailable
-  while the tab strip is hidden, until M2's `ctrl+b g` picker
+  while the tab strip is hidden; the `ctrl+b g` goto picker lists every tab instead
   ([m0-tabstrip-hidden](specs/m0-tabstrip-hidden.md)).
 - `ctrl+shift+tab` with `browser.ctrlTab.sortByRecentlyUsed` on does nothing while the strip is
   hidden ([m0-tabstrip-hidden](specs/m0-tabstrip-hidden.md)).
@@ -102,8 +102,7 @@ delete its line in the same PR.
 
 ## Workspaces (M3, by design)
 
-Workspaces are partly built (switching, not yet persistence); these are the limits their design
-accepts
+These are the limits the workspaces' design accepts
 ([m3-workspaces](specs/m3-workspaces.md)).
 
 - Containers do not isolate history, bookmarks, form history, the downloads list, HSTS or site
@@ -125,7 +124,6 @@ accepts
 - Pinned tabs belong to no workspace: they show in every workspace, and a tab opened pinned
   stays in no container (decision 11 plans to unpin them). A tab sharing camera, microphone or
   screen cannot be hidden and stays visible in other workspaces while it shares.
-- The `foreign` mark is kept but not shown until the workspace picker and side panel.
 - Workspaces are saved with Firefox's session, so a crash loses what the session file has not
   caught yet: up to 15 seconds of changes while you are active, and up to an hour after 3
   minutes without input (`browser.sessionstore.interval.idle`). Tabs then come back in the
@@ -157,19 +155,17 @@ accepts
 
 ## Panes
 
-- No split panes yet: `ctrl+b v`, `-`, `x`, `z`, `h/j/k/l` and resize mode are planned for M4
-  ([m4-split-panes](specs/m4-split-panes.md)).
-- Planned for M4: panes are resized from the keyboard only (resize mode); dividers cannot be
-  dragged with the mouse, and tabs cannot be dropped onto a pane
+- Panes are resized from the keyboard only (resize mode); dividers cannot be dragged with the
+  mouse, and tabs cannot be dropped onto a pane
   ([m4-split-panes](specs/m4-split-panes.md), Out of scope).
-- Planned for M4: a pinned tab cannot be shown in a pane; Firefox's split view refuses pinned
+- A pinned tab cannot be shown in a pane; Firefox's split view refuses pinned
   tabs, so Vimma unpins a tab before it joins a split
   ([ADR-013](adr/013-split-on-firefox-split-view.md)).
 - Firefox's own split-view UI is off: the tab and link context-menu items and alt-click
   (`browser.tabs.splitView.enabled` false), the URL bar's split button and the tab-group items of
   a split (hidden by `split.css`); splits come from Vimma's keys
   ([ADR-013](adr/013-split-on-firefox-split-view.md)).
-- At most `[panes] max` panes (default 4, up to 16) in a window: a further split is refused with
+- At most `[panes] max` panes (default 4, up to 16) in a workspace: a further split is refused with
   "at most N panes". Every visible pane's page stays live, so each one costs memory and CPU;
   a zoomed-away pane is paused (its docshell inactive) until unzoom
   ([m4-split-panes](specs/m4-split-panes.md), sub-spec 2).
@@ -182,18 +178,10 @@ accepts
 - The accessible name of the third pane on ("<title>, pane 3 of 4") is English only; Firefox
   names the first two panes "left" and "right" whatever the layout
   ([m4-split-panes](specs/m4-split-panes.md), sub-spec 2).
-- Planned for M4: with three or more panes, extensions that move a split tab (`tabs.move`) and
+- With three or more panes, extensions that move a split tab (`tabs.move`) and
   the all-tabs list's drag targets assume two tabs per split and may misplace them
   ([ADR-013](adr/013-split-on-firefox-split-view.md)).
-- Planned for M4: at most `panes.max` live panes per workspace (default 4); further splits are
-  refused with a status-bar message ([m4-split-panes](specs/m4-split-panes.md), Risks).
-- Planned for M4: more than two panes relies on Firefox's split view accepting n tabs, which
-  Firefox permits but does not test; panes stay unproven until the sub-spec 1 spike
-  ([ADR-013](adr/013-split-on-firefox-split-view.md), Acceptance criteria).
-- Planned for M4: with three or more panes, the Tab key may move focus between panes in DOM
-  order rather than reading order, unless the spike adds a host reorder
-  ([ADR-013](adr/013-split-on-firefox-split-view.md), Known two-tab assumptions).
-- Planned for M4: a split's tabs become adjacent in Firefox's own tab order; Vimma's tab numbers
+- A split's tabs become adjacent in Firefox's own tab order; Vimma's tab numbers
   come from its own list and are unaffected ([m4-split-panes](specs/m4-split-panes.md)).
 
 ## Privacy, security and services
@@ -209,15 +197,12 @@ accepts
   own the same way) and accepted. Rotation: [runbook](runbook.md)
   ([m0-safebrowsing-key](specs/m0-safebrowsing-key.md)).
 - No download reputation: Google serves its download lists (`goog-badbinurl-proto`,
-- Safe Browsing's `goog-harmful-proto` list is requested but did not arrive in the smoke run
-  with our key (phishing, malware and unwanted did); treat it as unavailable. See
-  [m0-safebrowsing-key](specs/m0-safebrowsing-key.md).
   `goog-downloadwhite-proto`) and its remote download check only to Mozilla's key, so Vimma asks
   for neither, and "Block dangerous downloads" in Settings adds nothing beyond the site lists
   ([m0-safebrowsing-key](specs/m0-safebrowsing-key.md), Settled).
-- Firefox's app updater is still built in and asks `aus5.mozilla.org` for updates on the `vimma`
-  channel, and system add-on updates are on. Removing both is in review (PR #15, spec
-  `m0-updater`).
+- Safe Browsing's `goog-harmful-proto` list is requested but did not arrive in the smoke run
+  with our key (phishing, malware and unwanted did); treat it as unavailable. See
+  [m0-safebrowsing-key](specs/m0-safebrowsing-key.md).
 - No update mechanism of our own and no update manifest until M6
   ([m0-app-version](specs/m0-app-version.md), Out of scope).
 - No crash reporting: builds have no crash reporter, so crashes leave only a local core dump.
@@ -285,11 +270,6 @@ accepts
   after a year ([ADR-010](adr/010-pr-artifact-builds.md)).
 - `e2e.yml` is path-filtered, so it cannot be a required check without handling skipped runs
   ([m0-build-strategy](specs/m0-build-strategy.md)).
-- No socket-driven e2e or screenshot diffs yet: the control socket and `tools/e2e` are not on
-  `main` ([m0-build-strategy](specs/m0-build-strategy.md), Out of scope).
-- No performance gate yet (plan §5's >10 % regression check, issue #17).
-- Flaky mochitests under investigation: `browser_vimma_key_capture.js` (issue #14) and
-  `browser_vimma_help_overlay.js` (issue #18).
 - PRs opened by `GITHUB_TOKEN` (upstream bumps, Claude, release-please) do not trigger CI by
   themselves ([runbook](runbook.md)).
 - Firefox bumps are manual after the bot's PR. Plan §4's Claude conflict resolution (≤3 pushes),

@@ -82,13 +82,13 @@ Vimma has two key layers and one dispatcher, which sees every key before Firefox
 in the URL bar, `about:` pages and the PDF viewer.
 
 - **The prefix layer (Herdr).** `ctrl+b` is the prefix. The next key is a command: `ctrl+b ?`
-  shows the bindings, `ctrl+b c` opens a tab, and later `ctrl+b v` splits the pane, and so on.
+  shows the bindings, `ctrl+b c` opens a tab, `ctrl+b v` splits the pane, and so on.
   The prefix works in every mode and waits for the next key with no timeout. `Esc` cancels it.
 - **The modal layer (Neovim).** Bare keys act on the page depending on the mode: `j`/`k` scroll
   in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page.
   `visual` is copy mode (caret and selection), `hint` is link hints, `help` the bindings overlay
-  and `command` the `:` line, `resize` is resize mode for panes (`ctrl+b r`); `panel` (the side
-  panel) is planned.
+  and `command` the `:` line, `resize` is resize mode for panes (`ctrl+b r`) and `panel` the side
+  panel (`<leader>n`).
 
 ### Normal and insert mode
 
@@ -590,7 +590,7 @@ accent = "#ff9e64"
   `3 errors: …`). The Browser Console (`ctrl+shift+j`) lists them all. Fix the file and the
   message goes away at the next check.
 - **What applies live:** `[keys]`, `[modal]` (leader, `timeout_ms`, per-mode keys, `hint_chars`)
-  and `[unbind]`; `[panes] max` (most panes in a window, 1 to 16, default 4; it limits new
+  and `[unbind]`; `[panes] max` (most panes in a workspace, 1 to 16, default 4; it limits new
   splits); `[sites."<host>"] insert` (`auto`, `never` or `always`: whether a text field on that
   site and its subdomains takes insert mode); `[theme]` `source` (`omarchy` or `file`, the
   built-in Tokyo Night), `font` and `[theme.colors]` (single colours over either source);
