@@ -14,6 +14,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - Help-text and `defaults.toml` snapshots recorded for the first time.
 - `vimma-core`: `config.toml` schema v1 validation with `file:line` errors and suggestions, schema migrations, keeping the last good config on error, and theme tokens from Omarchy's `colors.toml`, `[theme.colors]` or the built-in Tokyo Night. The browser does not load `config.toml` yet.
 - Artifact builds (`tools/artifact-build`, `npm run mochitest -- --artifact`): test the front end on Mozilla's binaries for the same release, locally and on every PR.
+- `I` (shift+i) focuses the address bar with its text selected, as `ctrl+l`, from normal mode, copy mode and the side and bookmarks panels (which it closes first); in a split, the focused pane's. In insert mode it stays a typed `I`.
 
 ### Changed
 
@@ -22,6 +23,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - `vimma-core` vendors smol-toml 1.9.0 (BSD-3-Clause) as its TOML parser: source in the repo, not an npm dependency ([ADR-012](docs/adr/012-toml-parser-smol-toml.md)).
 - `defaults.toml` snapshot changed: it gains the commented `[workspaces]`, `[theme]` and `[theme.colors]` sections of schema v1; bindings unchanged.
 - Help-text and `defaults.toml` snapshots changed: they gain the bookmark bindings (`ctrl+b a`, `ctrl+b shift+b`, `<leader>b` and the panel's neo-tree keys); no other row moved ([bookmarks](docs/specs/bookmarks.md)).
+- Help-text and `defaults.toml` snapshots changed: they gain `focus_urlbar` (`I` in normal, copy and panel mode); no other row moved.
 
 ### Fixed
 

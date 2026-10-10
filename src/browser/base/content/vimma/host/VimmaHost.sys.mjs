@@ -223,6 +223,24 @@ function bookmarksAction(s, a) {
 }
 
 /**
+ * `I` (focus_urlbar): Firefox's ctrl+l, the Browser:OpenLocation command (browser.js
+ * openLocation: select the URL bar's text, open its results as a click would). The URL bar is
+ * the selected tab's, so in a split the focused pane's. An open side or bookmarks panel closes
+ * first, and copy mode ends, so neither is waiting when focus comes back to the page.
+ * @param {WindowState} s
+ */
+function focusUrlbar(s) {
+  s.panel.close();
+  s.bookmarks.close();
+  const browser = VimmaHost._contentBrowser(s);
+  if (browser && browserModes.get(browser) === "visual") {
+    VimmaActors.caret(browser, "exit");
+    setBrowserMode(browser, "normal");
+  }
+  /** @type {any} */ (s.win.document.getElementById("Browser:OpenLocation"))?.doCommand();
+}
+
+/**
  * What the bookmark effects run with.
  * @param {WindowState} s
  */
@@ -311,6 +329,7 @@ export const RUNNERS = Object.freeze({
   // Without text (a key bound to open_url) it asks for the URL on the command line.
   "page.open": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
     text ? openOrSay(s, text, "current") : s.cmdline.open("open "),
+  "urlbar.focus": focusUrlbar,
   "command.open": (/** @type {WindowState} */ s) => s.cmdline.open(),
   "command.cancel": (/** @type {WindowState} */ s) => s.cmdline.close(),
   "goto.picker": (/** @type {WindowState} */ s) => {

@@ -68,24 +68,25 @@ Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm 
 
 ## Navigation
 
-| Action                                    | Config name        | Bindings                |
-| ----------------------------------------- | ------------------ | ----------------------- |
-| Goto picker: every tab in every workspace | `goto_picker`      | `prefix+g`, `b`         |
-| Open / close the side panel               | `toggle_sidebar`   | `prefix+b`, `<leader>n` |
-| Scroll down                               | `scroll_down`      | `j`                     |
-| Scroll up                                 | `scroll_up`        | `k`                     |
-| Scroll left                               | `scroll_left`      | `h`                     |
-| Scroll right                              | `scroll_right`     | `l`                     |
-| Scroll half a page down                   | `scroll_half_down` | `d`                     |
-| Scroll half a page up                     | `scroll_half_up`   | `u`                     |
-| Scroll to top                             | `scroll_top`       | `gg`                    |
-| Scroll to bottom                          | `scroll_bottom`    | `G`                     |
-| Go back                                   | `history_back`     | `H`                     |
-| Go forward                                | `history_forward`  | `L`                     |
-| Reload page                               | `reload`           | `r`                     |
-| Open a URL or search in this tab          | `open_url`         | —                       |
-| Go up a level in the URL path             | `url_up`           | `gu`                    |
-| Go to the site's root                     | `url_root`         | `gU`                    |
+| Action                                    | Config name        | Bindings                       |
+| ----------------------------------------- | ------------------ | ------------------------------ |
+| Goto picker: every tab in every workspace | `goto_picker`      | `prefix+g`, `b`                |
+| Open / close the side panel               | `toggle_sidebar`   | `prefix+b`, `<leader>n`        |
+| Scroll down                               | `scroll_down`      | `j`                            |
+| Scroll up                                 | `scroll_up`        | `k`                            |
+| Scroll left                               | `scroll_left`      | `h`                            |
+| Scroll right                              | `scroll_right`     | `l`                            |
+| Scroll half a page down                   | `scroll_half_down` | `d`                            |
+| Scroll half a page up                     | `scroll_half_up`   | `u`                            |
+| Scroll to top                             | `scroll_top`       | `gg`                           |
+| Scroll to bottom                          | `scroll_bottom`    | `G`                            |
+| Go back                                   | `history_back`     | `H`                            |
+| Go forward                                | `history_forward`  | `L`                            |
+| Reload page                               | `reload`           | `r`                            |
+| Open a URL or search in this tab          | `open_url`         | —                              |
+| Go up a level in the URL path             | `url_up`           | `gu`                           |
+| Go to the site's root                     | `url_root`         | `gU`                           |
+| Focus the address bar (as ctrl+l)         | `focus_urlbar`     | `I`, `I [visual]`, `I [panel]` |
 
 ## Page
 

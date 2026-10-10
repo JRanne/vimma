@@ -114,6 +114,14 @@ stay in insert, so their keys are untouched. With focus in the URL bar or the fi
 belong to that field; only `ctrl+b` sequences are Vimma's there (and, in a `/` search,
 `Enter` and `Esc`).
 
+**`I` goes to the address bar** from normal mode, copy mode and the side and bookmarks panels, on
+any page Vimma's keys reach (web pages, `about:` pages, Settings, the PDF viewer, the start page,
+a frame with focus): it selects the address as `ctrl+l` does, and the status bar says INSERT
+while you type there. In a split it is the focused pane's address. An open panel closes first,
+and copy mode ends. `Esc` is then Firefox's: the first closes the suggestions list if it shows, the next
+(with the address unchanged) puts focus back in the page, in normal mode. In insert mode `I` is
+a capital I typed into the field, as in Vim; press `Esc` first.
+
 **`Esc` in a text field is Vimma's.** It leaves insert, so the page does not see that `Esc`: a
 site's own `Esc` (closing an autocomplete list or a dialog) does not fire from the field. Press
 `Esc` again: in normal mode `Esc` has no binding, so it reaches the page (the field no longer
@@ -290,6 +298,7 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `p` / `P`                   | Normal mode: opens the clipboard here / in a new tab, as `:open` / `:tabnew`: a URL loads, other text is searched. No `javascript:`, `data:`.                 |
 | `gu` / `gU`                 | Normal mode: up one level in the URL / to the site's root, without query and hash; `2gu` goes up two. At the top it says so.                                  |
 | `gf`                        | Normal mode: the page's source in a new tab, as `ctrl+u`. In insert mode `gi`, `yy`, `p`, `P`, `gu`, `gU` and `gf` are typed into the field.                  |
+| `I`                         | Normal and copy mode: focus the address bar with its text selected, as `ctrl+l` (in a split, the focused pane's); closes an open panel first.                 |
 | `f` / `F`                   | Normal mode: link hints. Type a label to follow it, or, with `F`, to open the link in a background tab. `Backspace` undoes a key, `Esc` cancels.              |
 | `/` / `?`                   | Normal mode: find in the page (below). `Enter` stays on the match, `Esc` goes back to where you were.                                                         |
 | `n` / `N`                   | Normal mode: next / previous match of the last search (`?` reverses them), wrapping around the page.                                                          |
@@ -468,6 +477,7 @@ highlighted and its number coloured; a tab playing sound shows `♪`, one from a
 | `1` … `9`                      | Go to that row's tab and close the panel.                  |
 | `ctrl+i` / `ctrl+u`            | Switch workspace; the panel stays open and lists that one. |
 | `Esc`, `<leader>n`, `ctrl+b b` | Close the panel; the page has the keys again.              |
+| `I`                            | Close the panel and focus the address bar.                 |
 
 While it is open, every other plain key is the panel's and never reaches the page; `ctrl+b`
 keys and `:` commands still work, and a tab you open meanwhile shows up in the list. The panel
@@ -587,6 +597,7 @@ like neo-tree: the Bookmarks Menu's folders and bookmarks, with `toolbar` and `o
 | `d`                                  | Delete, after `y/N`. A folder says how many items go with it.                             |
 | `y`                                  | Copy the bookmark's address.                                                              |
 | `/`                                  | Filter every bookmark by title, address or folder, letters in order. `Enter` keeps it.    |
+| `I`                                  | Close the panel and focus the address bar.                                                |
 | `Esc`, `ctrl+b shift+b`, `<leader>b` | Close the panel. With a filter, `Esc` clears it first.                                    |
 
 A bookmark opens in your current workspace's container, and in a private window it stays

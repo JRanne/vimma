@@ -74,6 +74,14 @@ skip-if = ["artifact"]
 
 ["browser_vimma_pane_focus.js"]
 
+["browser_vimma_focus_urlbar.js"]
+support-files = [
+  "file_vimma_plain.html",
+  "file_vimma_insert_scroll.html",
+  "file_vimma_frame.html",
+  "file_vimma_test.pdf",
+]
+
 ["browser_vimma_pane_workspaces.js"]
 
 ["browser_vimma_pane_adopt.js"]
