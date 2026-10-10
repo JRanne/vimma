@@ -31,18 +31,18 @@ const TABS = 200;
 
 /**
  * Median budgets in ms, per case and timing; `null`: recorded, not gated (the floors are the
- * yardstick, not a target). About twice the medians of the first CI run (PR #108, ubuntu-24.04,
- * headless artifact build): pane-focus action 8.7 / paint 37.9, workspace-200-in 9.2 / 55.4,
- * workspace-200-out 9.4 / 36.6, floor paint 35.1. A median past one is a regression of about a
- * whole frame or a doubled action, not noise. Re-record from CI, never from a laptop (runbook).
+ * yardstick, not a target). About twice the higher median of two CI runs on PR #108
+ * (ubuntu-24.04, headless artifact build; action / paint): pane-focus 8.7 / 37.9 and
+ * 10.6 / 40.7, workspace-200-in 9.2 / 55.4 and 12.8 / 76.4, workspace-200-out 9.4 / 36.6 and
+ * 12.8 / 56.5; floor paint 35.1 and 36.2. Re-record from CI, never from a laptop (runbook).
  * @type {Record<string, { action: number | null, paint: number | null }>}
  */
 const BUDGETS = {
   floor: { action: null, paint: null },
   "key-floor": { action: null, paint: null },
-  "pane-focus": { action: 20, paint: 75 },
-  "workspace-200-in": { action: 20, paint: 110 },
-  "workspace-200-out": { action: 20, paint: 75 },
+  "pane-focus": { action: 25, paint: 85 },
+  "workspace-200-in": { action: 25, paint: 150 },
+  "workspace-200-out": { action: 25, paint: 115 },
 };
 
 const ww = () => WindowWorkspaces.get(window);
