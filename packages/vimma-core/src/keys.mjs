@@ -318,17 +318,69 @@ export function formatBinding(elements) {
   return out.join(" ");
 }
 
+/** What each physical key (`KeyboardEvent.code`) types on a US layout: [plain, with shift]. */
+/** @type {Record<string, [string, string]>} */
+const US_CODES = {
+  Backquote: ["`", "~"],
+  Minus: ["-", "_"],
+  Equal: ["=", "+"],
+  BracketLeft: ["[", "{"],
+  BracketRight: ["]", "}"],
+  Backslash: ["\\", "|"],
+  Semicolon: [";", ":"],
+  Quote: ["'", '"'],
+  Comma: [",", "<"],
+  Period: [".", ">"],
+  Slash: ["/", "?"],
+  ...Object.fromEntries([..."0123456789"].map((d, i) => [`Digit${d}`, [d, ")!@#$%^&*("[i] ?? ""]])),
+};
+
+/**
+ * Whether `key`, one character, is what its physical key types without Option/AltGr, judged by
+ * a US layout at the same shift state; a letter key typing its own letter. An unknown `code`
+ * (a synthesized event) counts only letters and digits as the key's own.
+ * @param {string} key
+ * @param {string | undefined} code
+ * @param {boolean} shift
+ */
+function ownCharacter(key, code, shift) {
+  const letter = code?.match(/^Key([A-Z])$/)?.[1];
+  if (letter) return key.toLowerCase() === letter.toLowerCase();
+  const us = code ? US_CODES[code] : undefined;
+  if (us) return key === us[shift ? 1 : 0];
+  return /^[a-z0-9]$/i.test(key);
+}
+
 /**
  * Translate a DOM-like keydown event into a chord, or null for modifier-only / unusable keys.
- * @param {{ key: string, ctrlKey: boolean, altKey: boolean, shiftKey: boolean, metaKey: boolean }} e
+ * A character composed with Option (macOS) or AltGr (Linux, Windows) is that character with no
+ * alt, as shift is folded for printable characters (docs/specs/key-handling-batch.md § 3): the
+ * key is one printable character its physical key does not type by itself, and either
+ * `getModifierState("AltGraph")` says so, or ctrl and alt are down together (Windows' ctrl+alt
+ * emulation of AltGr), or alt is down and the event cannot say (no `getModifierState`). Ctrl
+ * goes too when it came with alt. Alt alone with AltGraph up is a real alt chord.
+ * @param {{ key: string, ctrlKey: boolean, altKey: boolean, shiftKey: boolean, metaKey: boolean,
+ *   code?: string, getModifierState?: (key: string) => boolean }} e
  * @returns {Chord | null}
  */
 export function chordFromEvent(e) {
   const norm = normaliseKey(e.key, e.shiftKey);
   if (!norm) return null;
+  let { ctrlKey: ctrl, altKey: alt } = e;
+  const altGraph = e.getModifierState ? e.getModifierState("AltGraph") : alt;
+  const printable = [...e.key].length === 1 && e.key !== " ";
+  if (
+    printable &&
+    !e.metaKey &&
+    (altGraph || (ctrl && alt)) &&
+    !ownCharacter(e.key, e.code, e.shiftKey)
+  ) {
+    if (alt) ctrl = false;
+    alt = false;
+  }
   return makeChord(norm.key, {
-    ctrl: e.ctrlKey,
-    alt: e.altKey,
+    ctrl,
+    alt,
     meta: e.metaKey,
     shift: norm.shift,
   });
