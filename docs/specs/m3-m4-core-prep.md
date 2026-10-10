@@ -1,6 +1,6 @@
 # Spec: m3-m4-core-prep
 
-Status: implemented (core), awaiting review · Milestones: M3 (workspaces), M4 (panes) · Area:
+Status: implemented (core) · Milestones: M3 (workspaces), M4 (panes) · Area:
 `packages/vimma-core`
 
 The core pieces the M3 workspace host and the M4 split-pane host need, so that their specs are

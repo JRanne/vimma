@@ -1,6 +1,6 @@
 # Spec: m0-core-dispatcher
 
-Status: implemented, awaiting review · Milestone: M0 · Area: `packages/vimma-core`
+Status: implemented · Milestone: M0 · Area: `packages/vimma-core`
 
 ## User story
 

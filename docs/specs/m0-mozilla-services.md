@@ -1,6 +1,6 @@
 # Spec: m0-mozilla-services
 
-Status: implemented, awaiting review · Milestone: M0 · Area: default prefs (`src/browser/branding/vimma/pref/`), build
+Status: implemented · Milestone: M0 · Area: default prefs (`src/browser/branding/vimma/pref/`), build
 config (`configs/*/mozconfig`)
 Prerequisite: m0-branding and m0-user-agent merged (Vimma brand prefs file; Firefox UA).
 

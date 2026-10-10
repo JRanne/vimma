@@ -1,6 +1,6 @@
 # ADR-006: Split view is vendored from Zen
 
-- Status: Accepted
+- Status: Superseded by [ADR-013](013-split-on-firefox-split-view.md) (split panes build on Firefox's own split view)
 - Date: 2026-10-09
 
 ## Context

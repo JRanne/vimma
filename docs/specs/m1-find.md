@@ -1,6 +1,6 @@
 # Spec: m1-find
 
-Status: implemented, awaiting review · Milestone: M1 (prototype slice) · Area: host
+Status: implemented · Milestone: M1 (prototype slice) · Area: host
 (`src/browser/base/content/vimma/host/find.mjs`), actors, core (`find.mjs`, `statusbar.mjs`)
 
 ## User story

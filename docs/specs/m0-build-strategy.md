@@ -1,6 +1,6 @@
 # Spec: m0-build-strategy
 
-Status: implemented, awaiting review · Milestone: M0 · Area: CI (`.github/workflows/e2e.yml`,
+Status: implemented · Milestone: M0 · Area: CI (`.github/workflows/e2e.yml`,
 `tools/artifact-build/`) · Decision: ADR-010
 
 ## User story

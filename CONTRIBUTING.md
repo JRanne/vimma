@@ -6,7 +6,7 @@ How to build, run and test Vimma, and how changes get in. For what Vimma is and 
 ## Requirements
 
 - Linux x86_64 (the only platform built and tested so far).
-- About 35 GB of free disk space, as measured on the dev box: `engine/` 27 GB (source and the
+- About 35 GB of free disk space, as measured on one machine: `engine/` 27 GB (source and the
   full build), the sccache compiler cache 6.8 GB, toolchains in `~/.mozbuild` 3.1 GB and the
   Firefox source download in `.surfer/` 0.8 GB.
 - Node.js 20 or later, Python 3, git.
@@ -70,15 +70,15 @@ mochitest run on a full build.
 
 ## Project layout
 
-| Path                              | What                                                                                                                          |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `packages/vimma-core/`            | Pure ES modules with no Firefox imports: key notation, actions, keymap, dispatcher, config and theme. Tested with Vitest.     |
-| `src/browser/base/content/vimma/` | Our browser code: the key host, UI (help overlay, tab strip) and services. `core/` is copied in by `npm run sync-core`.       |
-| `src/**/*.patch`                  | The small upstream patches, each listed in [ADR-003](docs/adr/003-own-files-minimal-patches.md).                              |
-| `configs/`                        | mozconfigs and branding inputs.                                                                                               |
-| `tests/browser/`                  | Mochitests (`browser_vimma_*.js`).                                                                                            |
-| `tools/`                          | Build, upstream-bump, licence and commitlint helpers.                                                                         |
-| `docs/`                           | [User guide](docs/guide.md), [bindings](docs/bindings.md), [limits](docs/limits.md), specs, ADRs, [runbook](docs/runbook.md). |
+| Path                              | What                                                                                                                                             |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/vimma-core/`            | Pure ES modules with no Firefox imports: key notation, actions, keymap, dispatcher, config and theme. Tested with Vitest.                        |
+| `src/browser/base/content/vimma/` | Our browser code: the key host, actors, UI, workspaces, split panes, config and the control socket. `core/` is copied in by `npm run sync-core`. |
+| `src/**/*.patch`                  | The small upstream patches, each listed in [ADR-003](docs/adr/003-own-files-minimal-patches.md).                                                 |
+| `configs/`                        | mozconfigs and branding inputs.                                                                                                                  |
+| `tests/browser/`                  | Mochitests (`browser_vimma_*.js`).                                                                                                               |
+| `tools/`                          | Build, upstream-bump, licence and commitlint helpers.                                                                                            |
+| `docs/`                           | [User guide](docs/guide.md), [bindings](docs/bindings.md), [limits](docs/limits.md), specs, ADRs, [runbook](docs/runbook.md).                    |
 
 ## Workflow
 

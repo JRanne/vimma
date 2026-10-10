@@ -1,7 +1,6 @@
 # Spec: m1-actor-insert-scroll
 
-Status: implemented, awaiting review; navigation keys (`H`/`L`/`r`) implemented, awaiting review
-(below) · Milestone: M1 · Area: actors
+Status: implemented, including the navigation keys (`H`/`L`/`r`, below) · Milestone: M1 · Area: actors
 (`src/browser/base/content/vimma/actors/`), host (`host/VimmaHost.sys.mjs`)
 Prototype slice of M1's modal page layer: the content actor, insert detection and scrolling.
 

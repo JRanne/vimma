@@ -1,6 +1,6 @@
 # Spec: m1-cmdline
 
-Status: implemented, awaiting review · Milestone: M1 (prototype slice) · Area: UI
+Status: implemented · Milestone: M1 (prototype slice) · Area: UI
 (`ui/cmdline.mjs`), host (`host/VimmaHost.sys.mjs`, `host/tab-ops.mjs`), core (`actions.mjs`,
 `cmdline.mjs`)
 
@@ -117,7 +117,7 @@ completion list.
   `--vimma-accent`, `--vimma-selection`, `--vimma-error`, `--vimma-font`) with `Canvas` /
   `CanvasText` fallbacks; the status bar (#34) loads the token sheet once per window.
 - **Notice, fullscreen (review round 1).** The which-key layering (the line dropping to
-  `z-index: 4` while a prefix was pending) went with the strip (user decision 2026-10-09,
+  `z-index: 4` while a prefix was pending) went with the strip (maintainer decision 2026-10-09,
   m2-statusbar-whichkey Settled). While the line is open (`:root[vimma-cmdline-open]`)
   the notice moves above it: a `ResizeObserver` on the panel sets `--vimma-cmdline-height` on
   the root. In DOM fullscreen (`:root[inDOMFullscreen]`) `:` does not open the line and an open

@@ -1,6 +1,6 @@
 # Spec: m2-picker-rename
 
-Status: implemented, awaiting review · Milestone: M2 (completes it) · Area: host
+Status: implemented · Milestone: M2 (completes it) · Area: host
 (`host/VimmaHost.sys.mjs`, `host/tab-labels.mjs`), UI (`ui/picker.mjs`, `ui/rename-prompt.mjs`)
 
 ## User story

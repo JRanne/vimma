@@ -1,6 +1,6 @@
 # Spec: m3-m4-core-models
 
-Status: implemented (core), awaiting review; host wiring pending · Milestones: M3 (workspaces), M4 (panes) · Area: `packages/vimma-core`
+Status: implemented (core); the host wiring followed in the milestone's host specs · Milestones: M3 (workspaces), M4 (panes) · Area: `packages/vimma-core`
 
 ## User stories
 
