@@ -1,6 +1,6 @@
 # Spec: m4-split-panes
 
-Status: in progress (sub-specs 1, 2, 3 and 5 done) · Milestone: M4 · Area: host
+Status: in progress (sub-specs 1 to 5 done) · Milestone: M4 · Area: host
 (`src/browser/base/content/vimma/split/`, `host/`), CSS (`browser/themes/shared/vimma/`)
 
 This is the umbrella spec for M4. It records the research, the decision
@@ -416,6 +416,29 @@ and `resize-mode.test.mjs`.
   (`resolveEscape`) returning to the mode resize was entered from.
 - Which-key is gone (m2-statusbar-whichkey); the help overlay lists the mode's keys as
   `l [resize]` and no longer dims the swap and resize rows.
+
+## Sub-spec 4 results (`m4-split-focus-sync`)
+
+Done: `PaneView` listens for `TabSelect` on the window, tested by `browser_vimma_pane_focus.js`
+(4 tasks).
+
+- **Any selection of a pane's tab focuses that pane:** a click or focus in a panel (Firefox's
+  `MozTabpanels.handleEvent` selects the tab; verified on 157.0.1), the `ctrl+b g` picker,
+  `ctrl+tab`, `alt+N`, an extension. Core's `focusPane` moves focus and the MRU, then
+  `reconcile` runs; the status bar's `pane n/m` and the URL bar follow `TabSelect` and
+  `selectedBrowser`. Before this, the next `reconcile` (after Firefox's `TabSplitViewActivate`)
+  selected core's stale focus again, so a click or the picker snapped back.
+- **Zoom:** selecting a zoomed-away pane's tab unzooms and focuses it, as a pane move does (core's
+  `focusPane`; tmux's `select-pane`). Selecting the focused pane's tab changes nothing.
+- **No loops:** the listener ignores selections made while `reconcile` runs (re-entry flag) and
+  is a no-op when the tab is already the focused pane's, so `reconcile`'s own `selectedTab`
+  never feeds back. Measured: one `TabSelect` per click, picker Enter, outside selection and
+  keyboard move. While Firefox picks a successor for a closing tab (`previousTab.closing`), the
+  `TabClose` reconcile's choice (core's `closePane`) still wins.
+- **Keyboard moves** focus the pane's page, not the URL bar that tab last had (sub-spec 3's
+  `focusPage`, now pinned by a test).
+- **Not here:** a non-member tab selected while split (Firefox suspends the split; core's
+  `setPaneTab` and the replace order) and per-pane mode from the M1 actor move to sub-spec 6.
 
 ## Breakdown into sub-specs
 

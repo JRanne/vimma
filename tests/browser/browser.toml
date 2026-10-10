@@ -66,6 +66,8 @@ skip-if = ["artifact"]
 
 ["browser_vimma_pane_swap_resize.js"]
 
+["browser_vimma_pane_focus.js"]
+
 ["browser_vimma_control.js"]
 
 ["browser_vimma_statusbar.js"]

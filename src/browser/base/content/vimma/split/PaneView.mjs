@@ -15,6 +15,7 @@ import {
   closePane,
   createPanes,
   focus as focusToward,
+  focusPane,
   layout,
   leaves,
   paneOfTab,
@@ -94,11 +95,15 @@ export class PaneView {
     // Firefox re-runs showSplitViewPanels (every member active) whenever the split activates
     // again, e.g. after a TabSelect; reconcile then deactivates the zoomed-away ones again.
     win.addEventListener("TabSplitViewActivate", this);
+    // A click or focus in a panel (MozTabpanels), the picker, ctrl+tab, alt+N, an extension:
+    // whatever selects a pane's tab moves core's focus there (sub-spec 4).
+    win.addEventListener("TabSelect", this);
   }
 
   destroy() {
     this.#win.removeEventListener("TabClose", this);
     this.#win.removeEventListener("TabSplitViewActivate", this);
+    this.#win.removeEventListener("TabSelect", this);
     this.#resize?.disconnect();
     this.#resize = null;
   }
@@ -106,6 +111,7 @@ export class PaneView {
   /** @param {Event} e */
   handleEvent(e) {
     if (e.type === "TabClose") this.#onTabClose(/** @type {Tab} */ (e.target));
+    else if (e.type === "TabSelect") this.#onTabSelect(/** @type {CustomEvent} */ (e));
     // TabSplitViewDeactivate is not listened to: the old wrapper's arrives late after a rebuild
     // and lists the kept members too (sub-spec 1), so it carries nothing to act on.
     else if (e.type === "TabSplitViewActivate" && !this.#reconciling) this.#schedule();
@@ -284,6 +290,24 @@ export class PaneView {
     this.#panes = leaves(panes).length > 2 ? closePane(panes, pane) : null;
     // Not while Firefox is removing the tab: once it is gone, in a later task.
     this.#schedule();
+  }
+
+  /**
+   * A pane's tab was selected from outside Vimma's pane ops: focus that pane (core updates the
+   * MRU and ends any zoom, as a pane move does), then reconcile. Not from our own selection
+   * (the re-entry flag), not when the selected tab is already the focused pane's (a no-op, so
+   * reconcile's own select never loops back), and not while Firefox picks a successor for a
+   * closing tab: the TabClose reconcile selects core's choice instead.
+   * @param {CustomEvent} e
+   */
+  #onTabSelect(e) {
+    const panes = this.#panes;
+    if (!panes || this.#reconciling) return;
+    if (/** @type {Tab | undefined} */ (e.detail?.previousTab)?.closing) return;
+    const pane = paneOfTab(panes, /** @type {Tab} */ (e.target).linkedPanel);
+    if (!pane || pane === panes.focus) return;
+    this.#panes = focusPane(panes, pane);
+    this.reconcile();
   }
 
   #schedule() {
