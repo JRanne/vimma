@@ -1,6 +1,7 @@
 # Spec: m1-actor-insert-scroll
 
-Status: implemented, awaiting review · Milestone: M1 · Area: actors
+Status: implemented, awaiting review; navigation keys (`H`/`L`/`r`) implemented, awaiting review
+(below) · Milestone: M1 · Area: actors
 (`src/browser/base/content/vimma/actors/`), host (`host/VimmaHost.sys.mjs`)
 Prototype slice of M1's modal page layer: the content actor, insert detection and scrolling.
 
@@ -164,6 +165,19 @@ actions that are not implemented yet (parallel spec).
     implemented" notice from the tab-keys spec (PR #28) will cover it when it lands.
   - **Esc in a field** stays Vimma's (it leaves insert). A second `Esc` reaches the page, since
     `Esc` is unbound in normal mode (`esc_in_normal_mode_reaches_the_page`).
+
+## Follow-up: navigation keys (supersedes PR #51)
+
+`H` / `L` go back / forward and `r` reloads, in normal mode, as CONTENT_RUNNERS on the focused
+page's `<browser>`: in a split that is the focused pane's, and the other panes do not move. One
+step uses `goBack` / `goForward` (as the toolbar does); a count (`3H`) uses `gotoIndex`, clamped
+to the first or last entry. The bindings are normal-only, so in insert mode the keys are the
+page's. No hard reload or stop: neither is an action in `actions.mjs`.
+
+With these, every action is built. The notice and dimmed-row tests keep an unbuilt action
+through the test-only `VimmaHost._withhold(id)` (`head.js` `bindUnbuiltPrefixKey` withholds
+`history.back`); `_run` refuses an id outside `RUNNABLE`. Tests:
+`browser_vimma_nav_keys.js` (counts, clamping, reload, a split, insert mode).
 
 ## Limits
 

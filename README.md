@@ -104,9 +104,8 @@ What works today:
 - **Firefox-compatible.** Sites see Firefox 157's user agent, byte for byte. Add-ons, webcompat
   fixes and Remote Settings see Firefox's version number.
 
-What does not work yet: the dimmed bindings in the overlay. The overlay lists the full planned
-keymap; a `ctrl+b` sequence that does not run yet shows "… not implemented yet" for a moment.
-`H`/`L`/`r` reach the page until they are built. There are no packages or updates yet. See
+What does not work yet: every default binding runs, including back, forward and reload
+(`H`/`L`/`r`), but there are no packages or updates yet. See
 [docs/guide.md](docs/guide.md) and [docs/limits.md](docs/limits.md).
 
 ## Requirements
