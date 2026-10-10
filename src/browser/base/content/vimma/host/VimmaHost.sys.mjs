@@ -108,8 +108,8 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {GotoPicker} picker  the prefix+g overlay (m2-picker-rename)
  * @property {WorkspacePicker} wsPicker  the prefix+w overlay (m3-workspaces 5)
  * @property {RenamePrompt} rename  the prefix+shift+t prompt (m2-picker-rename)
- * @property {SidePanel} panel  `<leader>n` / prefix+b, `panel` mode while open (m3-workspaces 6)
- * @property {BookmarksPanel} bookmarks  `<leader>b` / prefix+shift+b, in the side panel's slot
+ * @property {SidePanel} panel  prefix+b, `panel` mode while open (m3-workspaces 6)
+ * @property {BookmarksPanel} bookmarks  prefix+shift+b, in the side panel's slot
  *   and `panel` mode (docs/specs/bookmarks.md)
  * @property {Find} find  `/`, `?`, `n`, `N` over Firefox's find bar (m1-find)
  * @property {boolean} resize  in resize mode (`prefix+r`, m4-split-panes sub-spec 5, ADR-014)

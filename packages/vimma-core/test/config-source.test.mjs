@@ -77,4 +77,15 @@ describe("formatConfigTemplate", () => {
     expect(text).toMatch(/^\[keys\]$/m);
     expect(text).not.toMatch(/^new_tab =/m);
   });
+
+  test("its header, all comments, says how to edit it, that saves reload, :config and ctrl+b ?", () => {
+    const header = text.slice(0, text.indexOf("\nschema = 2")).split("\n");
+    expect(header.every((line) => line.startsWith("#"))).toBe(true);
+    const said = header.join("\n");
+    expect(said).toMatch(/uncomment/i);
+    expect(said).toMatch(/save/i);
+    expect(said).toMatch(/:config\b.*opens this file/);
+    expect(said).toContain("ctrl+b ?");
+    expect(said).toMatch(/remove the `# `/);
+  });
 });

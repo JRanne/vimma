@@ -10,9 +10,10 @@ your hands never leave the keyboard.
 
 - **Vim** brings the modal layer: `j`/`k` to scroll, `f` for link hints, `/` to find, `:` for
   commands, and `Esc` to get back to normal mode.
-- **Tmux** brings the prefix layer: `ctrl+b c` for a new tab, `ctrl+b v` to split, `ctrl+b w` to
-  switch workspace, the same muscle memory as in your terminal (via
-  [Herdr](https://herdr.dev/)'s keymap).
+- **Tmux** brings the prefix layer: `ctrl+b`, like tmux's default prefix, then `c` for a new tab,
+  `v` to split, `w` to switch workspace: the same muscle memory as in your terminal.
+- **Every key is yours:** every binding, the prefix and the leader can be remapped in
+  `config.toml`.
 
 ### The name
 
@@ -51,11 +52,14 @@ theme. Underneath it is Firefox (currently 157), so sites and add-ons work as th
 - Workspaces: each one is its own container, so logins and cookies stay apart. `ctrl+b )` /
   `ctrl+b (` switch, `ctrl+b w` picks one by name, and tabs move between them. Every workspace
   keeps its tabs and split layout across restarts.
-- Side panel: `ctrl+b b` (or `space n`) lists the workspace's tabs; pick one with `j`/`k`.
+- Side panel: `ctrl+b b` lists the workspace's tabs; pick one with `j`/`k`.
 - `ctrl+b ?` lists every binding, searchable.
 
 **Yours to configure**
 
+- Every key is yours: any binding, the `ctrl+b` prefix and the `space` leader can be remapped in
+  `~/.config/vimma/config.toml`, e.g. `keys.prefix = "ctrl+a"`
+  ([guide](docs/guide.md#every-key-is-yours)).
 - `~/.config/vimma/config.toml` sets options, key bindings and workspaces, and applies on save.
   `about:vimma` shows the version and what is in force.
 - Omarchy theming: the bars, pickers, hints and start page follow your current theme, and
@@ -100,6 +104,6 @@ is BSD-3-Clause ([ADR-012](docs/adr/012-toml-parser-smol-toml.md)).
 - [Firefox](https://www.mozilla.org/firefox/) and Mozilla, for the browser underneath.
 - [Surfer](https://github.com/zen-browser/surfer) and [Zen Browser](https://zen-browser.app/),
   for the build toolchain and for showing how to run a Firefox fork this way.
-- [Herdr](https://herdr.dev/), whose keymap is the prefix layer.
+- [Herdr](https://herdr.dev/), the source of the default prefix keymap.
 - [Omarchy](https://omarchy.org/), whose themes Vimma follows.
 - [Tridactyl](https://github.com/tridactyl/tridactyl) and [Vimium](https://github.com/philc/vimium), prior art for Vim keys in a browser.
