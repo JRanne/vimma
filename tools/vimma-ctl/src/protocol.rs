@@ -43,9 +43,16 @@ pub enum Where {
 /// A command the client can send.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
-    SendKeys { keys: String },
+    SendKeys {
+        keys: String,
+    },
     State,
-    Open { url: String, place: Option<Where> },
+    Open {
+        url: String,
+        place: Option<Where>,
+    },
+    /// Re-read the Omarchy theme now (the `theme-set` hook).
+    ReloadTheme,
 }
 
 /// The server's `welcome`.
@@ -106,6 +113,7 @@ pub enum CommandResult {
     SendKeys { sent: u64 },
     State(State),
     Open { tab: String },
+    ReloadTheme { changed: bool },
 }
 
 /// The discovery file `<profile>/vimma-control.json`.
@@ -163,6 +171,7 @@ pub fn request(id: u32, command: &Command) -> Value {
     let (name, args) = match command {
         Command::SendKeys { keys } => ("send-keys", object([("keys", text(keys))])),
         Command::State => ("state", object([])),
+        Command::ReloadTheme => ("reload-theme", object([])),
         Command::Open { url, place } => {
             let mut args = BTreeMap::from([("url".to_string(), text(url))]);
             if let Some(place) = place {
@@ -282,6 +291,10 @@ pub fn decode_result(command: &Command, result: &Value) -> Result<CommandResult,
             _ => Err(fail("result.tab must be a string")),
         },
         Command::State => decode_state(map, result).map(CommandResult::State),
+        Command::ReloadTheme => match map.get("changed") {
+            Some(Value::Bool(changed)) => Ok(CommandResult::ReloadTheme { changed: *changed }),
+            _ => Err(fail("result.changed must be a boolean")),
+        },
     }
 }
 
@@ -465,6 +478,7 @@ mod tests {
         match name {
             "send-keys" => Command::SendKeys { keys: "j".into() },
             "state" => Command::State,
+            "reload-theme" => Command::ReloadTheme,
             "open" => Command::Open {
                 url: "about:blank".into(),
                 place: None,
@@ -507,6 +521,7 @@ mod tests {
                 keys: str_field(args, "keys").unwrap().into(),
             },
             "state" => Command::State,
+            "reload-theme" => Command::ReloadTheme,
             "open" => Command::Open {
                 url: str_field(args, "url").unwrap().into(),
                 place: match str_field(args, "where") {
@@ -522,10 +537,11 @@ mod tests {
 
     /// Client-direction fixtures the client never decodes, and requests it never sends: the
     /// server (vimma-core's validator) owns them. Listed so a new fixture cannot go untested.
-    const SERVER_ONLY: [&str; 7] = [
+    const SERVER_ONLY: [&str; 8] = [
         "auth.invalid.json",
         "hello.invalid.json",
         "request-open.invalid.json",
+        "request-reload-theme.invalid.json",
         "request-reserved.invalid.json",
         "request-reserved.valid.json",
         "request-send-keys.invalid.json",
@@ -606,6 +622,22 @@ mod tests {
             quoted_after(&src("control.mjs"), "ERROR_CODES = Object.freeze(["),
             ERROR_CODES
         );
+    }
+
+    #[test]
+    fn reload_theme_result_is_a_changed_flag() {
+        let decode =
+            |text: &str| decode_result(&Command::ReloadTheme, &crate::json::parse(text).unwrap());
+        assert_eq!(
+            decode(r#"{"changed":true,"later":1}"#),
+            Ok(CommandResult::ReloadTheme { changed: true })
+        );
+        assert_eq!(
+            decode(r#"{"changed":false}"#),
+            Ok(CommandResult::ReloadTheme { changed: false })
+        );
+        assert!(decode(r#"{"changed":"yes"}"#).is_err());
+        assert!(decode("{}").is_err());
     }
 
     #[test]

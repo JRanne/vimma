@@ -303,6 +303,21 @@ export const ThemeHost = {
     };
   },
 
+  /**
+   * The control socket's `reload-theme` (Omarchy's theme-set hook): check the theme now rather
+   * than at the next poll, and read colors.toml even if its stat looks unchanged. Same rules as
+   * a poll (the configured path only, strict validation); settles once the windows show it.
+   * @returns {Promise<{ changed: boolean }>}
+   */
+  async reload() {
+    const before = css;
+    // A check that stat'ed before the hook ran may skip the new file: let it finish first.
+    while (running) await running;
+    signature = "";
+    await poll();
+    return { changed: css !== before };
+  },
+
   /** The token stylesheet in force (tests, about:vimma later). */
   get css() {
     return css;

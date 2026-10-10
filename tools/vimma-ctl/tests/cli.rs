@@ -232,6 +232,25 @@ fn opens_a_url_and_prints_the_tab() {
 }
 
 #[test]
+fn reloads_the_theme_and_says_whether_it_changed() {
+    for (changed, printed) in [("true", "changed\n"), ("false", "unchanged\n")] {
+        let response =
+            format!(r#"{{"type":"response","id":1,"ok":true,"result":{{"changed":{changed}}}}}"#);
+        let server = Server::authed(move |n, _| match n {
+            0 => Some(vec![response.clone()]),
+            _ => None,
+        });
+        let out = vimma_ctl(&server.profile, &["reload-theme"]);
+        assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+        assert_eq!(stdout(&out), printed);
+        assert_eq!(
+            server.lines()[2],
+            r#"{"args":{},"command":"reload-theme","id":1,"type":"request"}"#
+        );
+    }
+}
+
+#[test]
 fn reports_a_server_error_with_exit_1() {
     let server = Server::answering(
         r#"{"type":"response","id":1,"ok":false,"error":{"code":"invalid-args","message":"url scheme must be http, https, file or about"}}"#,

@@ -144,6 +144,7 @@ connection. `busy` may come instead of a `challenge` (evicted while waiting) or 
 | `send-keys`     | `{ "keys": "ctrl+b c" }`                               | `{ "sent": 2 }`         |
 | `state`         | `{}`                                                   | the state object below  |
 | `open`          | `{ "url": "https://…", "where"?: "tab" \| "current" }` | `{ "tab": "<tab id>" }` |
+| `reload-theme`  | `{}`                                                   | `{ "changed": true }`   |
 | `list-tabs`     | reserved, not implemented: `not-implemented`           |                         |
 | `screenshot`    | reserved, not implemented: `not-implemented`           |                         |
 | `reload-config` | reserved, not implemented: `not-implemented`           |                         |
@@ -186,6 +187,18 @@ are sent.
 else (notably `javascript:` and `data:`) is `invalid-args`. At most 65536 characters. `where`
 defaults to `tab` (a new foreground tab); `current` loads it in the selected tab. The result is
 the tab's id, as in `state`.
+
+**`reload-theme`** (added 2026-10-10, spec m5-omarchy-theme "Instant reload"). Re-reads the
+Omarchy theme now instead of at the next poll: the same check as the poll (the directory in
+`vimma.theme.omarchyPath`, the same strict validation, a rejected file keeps the colours), except
+that `colors.toml` is read even when its stat looks unchanged. No args: a client cannot point the
+browser at another file. The response comes once every window shows the result; `changed` says
+whether the colours differ from before. With `vimma.theme.source` = `builtin` it is a no-op
+(`changed: false`). Its whole effect is one early poll: it takes no input, reads only the file
+the poll reads anyway, and changes only the theme's token stylesheet.
+
+Adding a command within v1: a v1 client never sends it unasked, and an older server answers it
+`unknown-command` (exit 1), which is the right message. No existing message changes shape.
 
 ## Security
 
@@ -268,6 +281,7 @@ note here.
 vimma-ctl [--profile DIR] [--timeout SECS] send-keys KEYS
 vimma-ctl [--profile DIR] [--timeout SECS] state [--json]
 vimma-ctl [--profile DIR] [--timeout SECS] open URL
+vimma-ctl [--profile DIR] [--timeout SECS] reload-theme   # prints changed or unchanged
 ```
 
 | Exit | Meaning                                                                                       |
