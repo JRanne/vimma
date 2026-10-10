@@ -61,6 +61,10 @@ describe("parseCommandLine: plan §2 commands", () => {
     [":help", run("help", "help.show")],
     [":h", run("help", "help.show")],
     [":source", run("source", "config.reload")],
+    [":source ~/work.toml", run("source", "config.reload", { text: "~/work.toml" })],
+    [':so "my config.toml"', run("source", "config.reload", { text: "my config.toml" })],
+    [":config", run("config", "config.edit")],
+    [":edit_config", run("edit_config", "config.edit")],
     [":about", run("about", "tab.new", { text: "about:vimma" })],
     [":vimma", run("about", "tab.new", { text: "about:vimma" })],
     [":bug", run("bug", "tab.new", { text: "about:vimma#bug" })],
@@ -80,6 +84,7 @@ describe("parseCommandLine: plan §2 commands", () => {
     [":map j k", "unexpected-argument"],
     [":ls x", "unexpected-argument"],
     [":about x", "unexpected-argument"],
+    [":config work.toml", "unexpected-argument"],
   ])("%j → %s", (text, code) => {
     const r = parseCommandLine(text);
     expect(r.kind).toBe("error");

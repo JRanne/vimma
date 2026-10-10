@@ -193,6 +193,86 @@ add_task(async function colon_source_reloads_at_once() {
   await resetConfig();
 });
 
+/** Types `:line` and Enter. */
+function command(line) {
+  EventUtils.synthesizeKey(":", { shiftKey: true });
+  EventUtils.sendString(line);
+  EventUtils.synthesizeKey("KEY_Enter");
+}
+
+add_task(async function colon_source_a_path_replaces_the_config_and_reports_that_file() {
+  await SpecialPowers.pushPrefEnv({ set: [["vimma.config.pollMs", 600000]] });
+  const tab = await openPage("source-path");
+  await writeConfig(`[keys]\nnew_tab = "prefix+t"`);
+  await ConfigHost.reload();
+  Assert.equal(ConfigHost.config.keys.new_tab, "prefix+t", "sanity: config.toml is in force");
+
+  // Relative: next to config.toml. The file replaces the config, it is not merged into it.
+  await IOUtils.writeUTF8(PathUtils.join(dir, "work.toml"), `[keys]\nclose_tab = "prefix+q"\n`);
+  command("source work.toml");
+  await until(() => ConfigHost.config?.keys.close_tab === "prefix+q", ":source work.toml loads");
+  Assert.equal(ConfigHost.config.keys.new_tab, undefined, "config.toml's binding is gone");
+  Assert.equal(ConfigHost.path, PathUtils.join(dir, "work.toml"), "the file in force");
+  await focusContent(tab.linkedBrowser);
+  Assert.equal((await tabsAfterPrefix("t")).delta, 0, "ctrl+b t no longer opens a tab");
+
+  // A missing file: said in the status bar as a config error is, and nothing changes.
+  await focusContent(tab.linkedBrowser);
+  command("source nope.toml");
+  await until(() => segText("error") === "nope.toml: no such file", "a missing file is said");
+  Assert.equal(ConfigHost.config.keys.close_tab, "prefix+q", "the config in force stays");
+
+  // A broken file: its own name and line, and nothing changes.
+  await IOUtils.writeUTF8(PathUtils.join(dir, "bad.toml"), `[keys]\nnew_tabb = "prefix+u"\n`);
+  await focusContent(tab.linkedBrowser);
+  command(`source ${PathUtils.join(dir, "bad.toml")}`);
+  await until(() => segText("error")?.startsWith("bad.toml:2:"), "bad.toml:2: in the bar");
+  Assert.ok(segText("error").includes('did you mean "new_tab"'), "with the suggestion");
+  Assert.equal(ConfigHost.config.keys.close_tab, "prefix+q", "the config in force stays");
+
+  // Plain :source goes back to config.toml.
+  await focusContent(tab.linkedBrowser);
+  command("source");
+  await until(() => ConfigHost.config?.keys.new_tab === "prefix+t", ":source reads config.toml");
+  Assert.equal(segText("error"), null, "and the error is gone");
+  Assert.equal(ConfigHost.path, file, "config.toml is the file in force again");
+
+  BrowserTestUtils.removeTab(tab);
+  await SpecialPowers.popPrefEnv();
+  await resetConfig();
+});
+
+add_task(async function colon_config_opens_the_file_and_creates_it_from_the_template() {
+  const fresh = PathUtils.join(dir, "fresh", "vimma", "config.toml");
+  await SpecialPowers.pushPrefEnv({ set: [["vimma.config.path", fresh]] });
+  await ConfigHost.reload();
+  const tab = await openPage("config");
+  const url = `view-source:${PathUtils.toFileURI(fresh)}`;
+
+  const opened = BrowserTestUtils.waitForNewTab(gBrowser, url, true);
+  command("config");
+  const shown = await opened;
+  Assert.ok(await IOUtils.exists(fresh), "the missing file was created, folders too");
+  const text = await IOUtils.readUTF8(fresh);
+  Assert.ok(text.startsWith("# Vimma config"), "from the commented template");
+  Assert.stringContains(text, '# new_tab = ["prefix+c"]', "listing the defaults, commented");
+  await ConfigHost.reload();
+  Assert.deepEqual(ConfigHost.errors, [], "the template is a valid config");
+  BrowserTestUtils.removeTab(shown);
+
+  // An existing file is opened as it is, never rewritten.
+  await IOUtils.writeUTF8(fresh, `[keys]\nnew_tab = "prefix+t"\n`);
+  await focusContent(tab.linkedBrowser);
+  const again = BrowserTestUtils.waitForNewTab(gBrowser, url, true);
+  command("config");
+  BrowserTestUtils.removeTab(await again);
+  Assert.equal(await IOUtils.readUTF8(fresh), `[keys]\nnew_tab = "prefix+t"\n`, "untouched");
+
+  BrowserTestUtils.removeTab(tab);
+  await SpecialPowers.popPrefEnv();
+  await resetConfig();
+});
+
 add_task(async function panes_max_refuses_a_third_split() {
   const tab = await openPage("panes");
   await writeConfig(`schema = 2\n[panes]\nmax = 2`);

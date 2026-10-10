@@ -148,6 +148,7 @@ Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm 
 
 ## Config
 
-| Action        | Config name     | Bindings |
-| ------------- | --------------- | -------- |
-| Reload config | `reload_config` | —        |
+| Action                    | Config name     | Bindings |
+| ------------------------- | --------------- | -------- |
+| Reload config             | `reload_config` | —        |
+| Open config.toml in a tab | `edit_config`   | —        |

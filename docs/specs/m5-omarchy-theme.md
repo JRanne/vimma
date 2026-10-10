@@ -88,6 +88,9 @@ re-recorded from CI's image (the overlay is now Tokyo Night).
   pokes the control socket could make it instant; not done (docs/notes/omarchy-theming.md).
 - Font, `[theme.colors]` overrides and `[theme] source = "file"` come with `config.toml` loading.
 - Not covered: Hyprland's gaps, rounding and borders (docs/notes/omarchy-theming.md).
+- Issue #66 (2026-10-10): a check still reading the old path when the path or source changed
+  applied that theme afterwards; `recheck()` now bumps a generation and a stale check drops
+  what it read (test `a_path_change_during_a_check_is_not_undone_by_it`; m5-config-load).
 
 ## Settled
 
