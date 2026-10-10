@@ -167,7 +167,9 @@ const SCHEMA_2_KEYS = [
 const NEEDS_SCHEMA_2 = "is new in schema 2: put schema = 2 at the top of the file";
 const LABEL = "[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?";
 const DOMAIN = new RegExp(`^(?=.{1,253}$)${LABEL}(?:\\.${LABEL})*\\.?$`, "i");
-const IPV6 = /^(?:\[[0-9a-f:.]*:[0-9a-f:.]*\]|[0-9a-f.]*:[0-9a-f:.]*)$/i;
+// Hex digits, dots and colons, bracketed or not; with a colon (tested apart: a pattern placing
+// the colon inside the run backtracks quadratically on a long key).
+const IPV6 = /^(?:\[[0-9a-f:.]*\]|[0-9a-f:.]*)$/i;
 const BAD_HOST = 'must be a hostname like "docs.google.com", without scheme, port, path or *';
 const MAX_TIMEOUT_MS = 10000;
 export const MAX_WORKSPACE_NAME = 32;
@@ -204,7 +206,7 @@ const isTable = (v) =>
  * an IPv6 address, bracketed or not), optionally with a trailing dot.
  * @param {string} host
  */
-const isSiteHost = (host) => DOMAIN.test(host) || IPV6.test(host);
+const isSiteHost = (host) => DOMAIN.test(host) || (host.includes(":") && IPV6.test(host));
 
 /**
  * The same host as matchSiteRule compares it: case, a trailing dot and IPv6 brackets ignored.

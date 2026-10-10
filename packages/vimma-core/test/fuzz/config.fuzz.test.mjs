@@ -301,7 +301,9 @@ describe("config.toml fuzzing", () => {
         "5,000 workspaces": Array.from({ length: 5000 }, (_, i) => `[workspaces.w${i}]`).join("\n"),
         "a 1 MiB comment": `# ${"#".repeat(1024 * 1024)}`,
         "unclosed brackets": "a = [".repeat(50_000),
-        "a long IPv6-like site": `schema = 2\n[sites."[${":".repeat(64 * 1024)}g"]\ninsert = "auto"\n`,
+        // Regression: the [sites] IPv6 pattern backtracked quadratically (minutes at 512 KiB).
+        "a long IPv6-like site": `schema = 2\n[sites."[${":".repeat(512 * 1024)}g"]\ninsert = "auto"\n`,
+        "a long bracketed site": `schema = 2\n[sites."[${"1:".repeat(256 * 1024)}]"]\ninsert = "auto"\n`,
         "a long unknown key": `${"k".repeat(1024 * 1024)} = 1`,
       };
       for (const [name, text] of Object.entries(cases)) {
