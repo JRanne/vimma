@@ -308,6 +308,32 @@ describe("autopilot body", () => {
     expect(patchLine(null, "norun")).toBe("**did not run**; no verdict");
   });
 
+  it("outside text in a table cell stays one cell of plain text (js/incomplete-sanitization)", () => {
+    const error = "a\\|b | [x](https://evil/) <img src=x> *y* `z`\\";
+    const line = patchLine({ ...failingReport, ran: false, error }, "norun");
+    // An unescaped pipe would end the cell: one preceded by an even run of backslashes.
+    expect(line).not.toMatch(/(?:^|[^\\])(?:\\\\)*\|/);
+    expect(line).toBe(
+      "**did not run**: a\\\\\\|b \\| \\[x\\](https://evil/) \\<img src=x\\> \\*y\\* " +
+        "\\`z\\`\\\\; no verdict",
+    );
+    const audit = auditLine("Total: 1 | 2 \\| <b>\nRegister matches\n");
+    expect(audit).toBe("1 \\| 2 \\\\\\| \\<b\\>; register matches");
+  });
+
+  it("outside text in a code span cannot close it", () => {
+    const report = {
+      ...failingReport,
+      patches: [
+        {
+          ...failingReport.patches[1],
+          hunks: [{ ...failingReport.patches[1]?.hunks[1], header: "@@ -1 +1 @@ a`b\\` c|d" }],
+        },
+      ],
+    };
+    expect(conflictLines(report).join("\n")).toContain("`@@ -1 +1 @@ a'b\\' c|d` fails");
+  });
+
   it("lists the conflicting files and hunks, fuzz included", () => {
     expect(conflictLines(cleanReport)).toEqual([]);
     const lines = conflictLines({

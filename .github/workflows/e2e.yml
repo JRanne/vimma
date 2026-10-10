@@ -18,28 +18,9 @@ on:
     # ready_for_review: PRs opened with GITHUB_TOKEN (claude.yml, upstream.yml) do not trigger
     # workflows; marking them ready (or a manual run) starts this as the owner.
     types: [opened, synchronize, reopened, ready_for_review]
-    # Only what can change the browser or the test run: Actions minutes are limited while the
-    # repo is private (docs/runbook.md, "Actions minutes budget").
-    paths:
-      - "src/**"
-      - "tests/browser/**"
-      - "packages/vimma-core/**"
-      - "configs/**"
-      - "surfer.json"
-      - "package.json"
-      - "package-lock.json"
-      - "tools/artifact-build/**"
-      - "tools/branding/**"
-      - "tools/mochitest.mjs"
-      - "tools/start.mjs" # the e2e profile takes its dev prefs (sandbox read path) from it
-      - "tools/sync-core.mjs"
-      - "tools/version-files/**"
-      - "tools/e2e/**"
-      - "tools/vimma-ctl/**"
-      - "tests/e2e/**"
-      - "tools/upstream/upstream-prefs.mjs"
-      - "tools/upstream/verify-sha512.py"
-      - ".github/workflows/e2e.yml"
+    # No paths filter: "mochitest (artifact build)" is a required check on main, so it must
+    # report on every PR, docs-only ones too. Hosted minutes are free for a public repo
+    # (docs/runbook.md, "Actions minutes budget").
   workflow_dispatch:
   workflow_call:
     inputs:

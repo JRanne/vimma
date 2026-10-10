@@ -44,6 +44,23 @@ describe("markdownLinks", () => {
       { text: "x", target: "d.md", line: 5 },
     ]);
   });
+
+  test("a line of unclosed brackets and backtick pairs is read in linear time (js/redos)", () => {
+    const line = `[${"``".repeat(40)} [${"`".repeat(100_000)}`;
+    const start = performance.now();
+    expect(markdownLinks(`${line}\n[\`t\`](a.js)`)).toEqual([
+      { text: "`t`", target: "a.js", line: 2 },
+    ]);
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
+
+  test("a ] inside a code span does not end the link text; a lone backtick is text", () => {
+    expect(markdownLinks("[`a]b` c](x.js) [d ` e](y.md) [f](g h) [](z.md)")).toEqual([
+      { text: "`a]b` c", target: "x.js", line: 1 },
+      { text: "d ` e", target: "y.md", line: 1 },
+      { text: "", target: "z.md", line: 1 },
+    ]);
+  });
 });
 
 describe("checkFile", () => {

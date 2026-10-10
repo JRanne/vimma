@@ -466,7 +466,10 @@ add_task(async function route_add_writes_a_rule_and_route_lists_them() {
     'schema = 2\n\n[[routes]]\ndomain = "example.org"\nworkspace = "rt-work"\n',
     "appended to config.toml",
   );
-  await until(() => noticeText().includes("example.org"), "the notice says what was added");
+  await until(
+    () => noticeText() === 'added: example.org → "rt-work" (config.toml)',
+    "the notice says what was added",
+  );
 
   await runCommand("route add rt-home");
   await until(

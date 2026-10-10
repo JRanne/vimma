@@ -7,13 +7,30 @@
  * redaction `:bug` applies before the report reaches the clipboard.
  */
 
+import { trimTrailing } from "./strings.mjs";
+
 /** @import { DispatchResult } from "./dispatcher.mjs" */
 
 /** Any `scheme://…` up to whitespace: web pages, file:///, extensions. */
 const URL_RE = /\b[a-z][a-z0-9+.-]*:\/\/\S*?(?=[\s,;)\]]|[.,;:!?]?(?:\s|$))/gi;
 
-/** @param {string} s */
-const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** A character `\w` matches. @param {string | undefined} c */
+const isWordChar = (c) => c !== undefined && /\w/.test(c);
+
+/**
+ * Whether `home`, found at `at` in `text`, ends a whole path component there: what follows is
+ * the end, a `/`, or a character that cannot continue a file name (`/home/alice` is not the home
+ * in `/home/alicebob` or `/home/alice.bak`).
+ * @param {string} text
+ * @param {number} at
+ * @param {string} home
+ */
+function homeEndsAt(text, at, home) {
+  const next = text[at + home.length];
+  if (next === undefined || next === "/") return true;
+  if (isWordChar(next) || next === "." || next === "-") return false;
+  return isWordChar(home.at(-1)); // the word boundary a `\b` would want
+}
 
 /**
  * The report as `:bug` copies it: every URL becomes `<url>` and every path under `home` starts
@@ -23,10 +40,18 @@ const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
  * @returns {string}
  */
 export function redactReport(text, home) {
-  let out = text.replace(URL_RE, "<url>");
-  const h = home.replace(/\/+$/, "");
-  if (h) out = out.replace(new RegExp(`${escapeRe(h)}(?=/|\\b|$)(?![\\w.-])`, "g"), "~");
-  return out;
+  const out = text.replace(URL_RE, "<url>");
+  // Linear scans rather than a regular expression built from $HOME (CodeQL js/polynomial-redos).
+  const h = trimTrailing(home, "/");
+  if (!h) return out;
+  let redacted = "";
+  let from = 0;
+  for (let at = out.indexOf(h); at !== -1; at = out.indexOf(h, at + 1)) {
+    if (at < from || !homeEndsAt(out, at, h)) continue;
+    redacted += `${out.slice(from, at)}~`;
+    from = at + h.length;
+  }
+  return redacted + out.slice(from);
 }
 
 /**

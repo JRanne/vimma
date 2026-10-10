@@ -666,13 +666,18 @@ mod tests {
         );
     }
 
-    const NONCE: &str = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
-
     #[test]
     fn hello_carries_the_nonce_and_never_the_token() {
+        // The test nonce comes from the shared contract fixture, so the client's hello is
+        // checked against the very message the server's tests decode.
+        let all = fixtures();
+        let fixture = all.iter().find(|(n, _)| n == "hello.valid.json").unwrap();
+        let message = fixture.1.get("message").unwrap();
+        let nonce = str_field(message, "nonce").unwrap();
+        assert_eq!(hello(nonce), *message);
         assert_eq!(
-            hello(NONCE).to_string(),
-            format!(r#"{{"nonce":"{NONCE}","protocol":1,"type":"hello"}}"#)
+            hello(nonce).to_string(),
+            format!(r#"{{"nonce":"{nonce}","protocol":1,"type":"hello"}}"#)
         );
         assert_eq!(
             auth(TOKEN).to_string(),
