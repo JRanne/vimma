@@ -130,3 +130,7 @@ tries` and `ctrl+b a opens the prompt - timed out`.
   (`KEY_Enter refuses - timed out`); reverted.
 - The `help.test.mjs` and `defaults.toml` snapshots gain the Bookmarks rows only; the action
   names stay within the old column width so no other row moved.
+- **Leader default removed** (2026-10-10): by user decision the leader has no default bindings,
+  so `toggle_bookmarks` is `ctrl+b shift+b` only and `space b` does nothing by default. The leader
+  option and `<leader>` bindings in `[keys]` stay for users to add. The bookmarks tests press
+  `ctrl+b shift+b` where they pressed `space b`; the assertions are unchanged.

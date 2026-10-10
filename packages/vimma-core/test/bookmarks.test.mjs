@@ -365,10 +365,9 @@ describe("keymap and command line", () => {
     for (const k of keys) r = d.dispatch(mode, parseKey(k));
     return r?.kind === "action" ? r.action.id : r?.kind;
   };
-  test("ctrl+b shift+b and space b toggle; ctrl+b a adds", () => {
+  test("ctrl+b shift+b toggles, from panel mode too; ctrl+b a adds", () => {
     expect(run("normal", ["ctrl+b", "shift+b"])).toBe("bookmarks.toggle");
-    expect(run("normal", ["space", "b"])).toBe("bookmarks.toggle");
-    expect(run("panel", ["space", "b"])).toBe("bookmarks.toggle");
+    expect(run("panel", ["ctrl+b", "shift+b"])).toBe("bookmarks.toggle");
     expect(run("insert", ["ctrl+b", "a"])).toBe("bookmark.add");
   });
   test("the neo-tree keys in panel mode", () => {

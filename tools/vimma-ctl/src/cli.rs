@@ -23,7 +23,7 @@ pub const USAGE: &str = "\
 Usage: vimma-ctl [--profile DIR] [--timeout SECS] COMMAND
 
 Commands:
-  send-keys KEYS...   send chords in Herdr notation, e.g. send-keys ctrl+b c
+  send-keys KEYS...   send chords in Vimma's key notation, e.g. send-keys ctrl+b c
   state [--json]      print mode, workspace and tabs (--json: the raw result)
   open URL            open an http(s), file or about URL in a new tab
   reload-theme        re-read the Omarchy theme now (prints changed or unchanged)

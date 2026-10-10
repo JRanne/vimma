@@ -8,9 +8,9 @@
 // watcher), and reads it at once on `:source`. vimma-core parses and validates (reloadConfig:
 // a file is applied whole or not at all, else the last good config stays); this module does
 // the I/O and hands each part to the module that uses it. `:source <path>` puts another file in
-// force the same way, until config.toml changes or a plain `:source`. Two writes: `:config`
-// creates a missing config.toml from the commented template, never touching an existing one;
-// `:route add` appends one `[[routes]]` table (spec workspace-routing), checked to parse first.
+// force the same way, until config.toml changes or a plain `:source`. Writes: the first run and
+// `:config` create a missing config.toml from the commented template, never touching an existing
+// one; `:route add` appends one `[[routes]]` table (spec workspace-routing), checked to parse first.
 
 import {
   appendRouteText,
@@ -37,6 +37,14 @@ ChromeUtils.defineESModuleGetters(lazy, {
 /** A full path overrides the XDG location (tests; `~/` is expanded). */
 const PATH_PREF = "vimma.config.path";
 const POLL_PREF = "vimma.config.pollMs";
+/** Set once the first run has looked for config.toml: a file deleted later stays deleted. */
+const FIRST_RUN_PREF = "vimma.config.firstRunDone";
+/**
+ * A created config.toml and its folder are the user's alone: the file can name intranet hosts
+ * ([workspaces] home, [[routes]]), and the XDG base directory spec asks for 0700 folders.
+ */
+const FILE_MODE = 0o600;
+const DIR_MODE = 0o700;
 const DEFAULT_POLL_MS = 2000;
 
 /** IOUtils rejects with a DOMException named NotFoundError for a missing file. */
@@ -229,6 +237,65 @@ function sourcePath(arg) {
 }
 
 /**
+ * Creates `path` from the commented template, its folder too (0700, only when missing), with
+ * mode 0600. Never overwrites: "create" fails on a file (or symlink) that is there.
+ * @param {string} path
+ * @returns {Promise<boolean>} whether this call created it
+ */
+async function createFromTemplate(path) {
+  if (await IOUtils.exists(path)) return false;
+  const parent = PathUtils.parent(path);
+  if (parent && !(await IOUtils.exists(parent))) {
+    await IOUtils.makeDirectory(parent, { createAncestors: true, permissions: DIR_MODE });
+  }
+  await IOUtils.writeUTF8(path, formatConfigTemplate(), { mode: "create" });
+  await IOUtils.setPermissions(path, FILE_MODE, false);
+  return true;
+}
+
+/** `path` with the home folder as `~`, for a notice. */
+function tilde(/** @type {string} */ path) {
+  const h = home();
+  return path.startsWith(h + "/") ? `~${path.slice(h.length)}` : path;
+}
+
+/**
+ * First run: creates a missing config.toml from the template (as `:config` would), with one
+ * notice, and marks the profile done either way. An existing file, even empty, is left alone.
+ * @param {Window} win
+ * @returns {Promise<"created" | "exists" | "failed">}
+ */
+async function firstRun(win) {
+  const path = configPath();
+  let created;
+  try {
+    created = await createFromTemplate(path);
+  } catch (e) {
+    if (!(await IOUtils.exists(path))) {
+      console.warn(`vimma: cannot create ${path}`, e);
+      return "failed"; // tried again at the next start
+    }
+    created = false; // appeared meanwhile: someone else's
+  }
+  Services.prefs.setBoolPref(FIRST_RUN_PREF, true);
+  if (!created) return "exists";
+  VimmaHost.say(win, `created ${tilde(path)}`);
+  return "created";
+}
+
+/**
+ * Why startup does not create config.toml, or null when it may: another file is in force
+ * (`vimma.config.path`), the profile's first run is done, or a test harness runs the browser.
+ * @returns {"path" | "done" | "automation" | null}
+ */
+function firstRunBlocked() {
+  if (Services.prefs.getStringPref(PATH_PREF, "")) return "path";
+  if (Services.prefs.getBoolPref(FIRST_RUN_PREF, false)) return "done";
+  if (Cu.isInAutomation) return "automation";
+  return null;
+}
+
+/**
  * `:config`: config.toml in a new tab (view-source, read-only), first created from the
  * commented template, folders too, when it does not exist. An existing file is never written.
  * @param {Window} win
@@ -236,12 +303,7 @@ function sourcePath(arg) {
 async function edit(win) {
   const path = configPath();
   try {
-    if (!(await IOUtils.exists(path))) {
-      const parent = PathUtils.parent(path);
-      if (parent) await IOUtils.makeDirectory(parent, { createAncestors: true });
-      // "create" fails rather than overwrite a file that appeared meanwhile.
-      await IOUtils.writeUTF8(path, formatConfigTemplate(), { mode: "create" });
-    }
+    await createFromTemplate(path);
   } catch (e) {
     if (!(await IOUtils.exists(path))) {
       console.error(`vimma: cannot create ${path}`, e);
@@ -282,14 +344,19 @@ const editObserver = (subject) => {
   edit(/** @type {Window} */ (subject)).catch((e) => console.error("vimma: :config failed", e));
 };
 
-function start() {
+/** @param {Window} win  the first window, for the first run's notice */
+function start(win) {
   Services.prefs.addObserver(PATH_PREF, onPref);
   Services.prefs.addObserver(POLL_PREF, onPref);
   Services.obs.addObserver(reloadObserver, CONFIG_RELOAD_TOPIC);
   Services.obs.addObserver(editObserver, CONFIG_EDIT_TOPIC);
   startTimer();
-  // Never blocks startup: the windows start on the built-in keymap and swap when read.
-  poll(true);
+  // Never blocks startup: the windows start on the built-in keymap and swap when read. The
+  // first run's file, all comments, means the defaults: read after it either way.
+  const created = firstRunBlocked() ? Promise.resolve() : firstRun(win);
+  created
+    .catch((e) => console.warn("vimma: first run config not created", e))
+    .finally(() => poll(true));
 }
 
 function stop() {
@@ -320,7 +387,7 @@ export const ConfigHost = {
       },
       { once: true },
     );
-    if (first) start();
+    if (first) start(win);
   },
 
   /**
@@ -361,8 +428,11 @@ export const ConfigHost = {
     try {
       if ("create" in r) {
         const parent = PathUtils.parent(path);
-        if (parent) await IOUtils.makeDirectory(parent, { createAncestors: true });
+        if (parent && !(await IOUtils.exists(parent))) {
+          await IOUtils.makeDirectory(parent, { createAncestors: true, permissions: DIR_MODE });
+        }
         await IOUtils.writeUTF8(path, r.create, { mode: "create" });
+        await IOUtils.setPermissions(path, FILE_MODE, false);
       } else {
         await IOUtils.writeUTF8(path, r.append, { mode: "append" });
       }
@@ -372,6 +442,13 @@ export const ConfigHost = {
     }
     await this.reload();
     return null;
+  },
+
+  firstRun,
+
+  /** Why startup leaves config.toml alone, or null when it creates a missing one. */
+  get firstRunBlocked() {
+    return firstRunBlocked();
   },
 
   /** The resolved config in force (core's ResolvedConfig), null before the first read. */
