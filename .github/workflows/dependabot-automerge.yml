@@ -1,0 +1,80 @@
+# Dependabot auto-merge (.github/dependabot.yml; CONTRIBUTING.md, "Dependency updates").
+# Security updates, and patch and minor version updates, get GitHub's auto-merge (squash): GitHub
+# merges them only once every check the main ruleset requires is green, so nothing here skips CI.
+# Majors stay open with a comment for a person to review. GitHub Actions updates never merge
+# themselves (workflows hold write tokens and the Claude secret), and neither do version updates of
+# @zen-browser/surfer (it drives the Firefox build; a nightly build should prove it first).
+# pull_request, never pull_request_target: no checkout, nothing from the PR runs; the job only reads
+# Dependabot's signed commit metadata and calls the API. On Dependabot's PRs GITHUB_TOKEN gets the
+# permissions below and no secrets.
+name: Dependabot auto-merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions: {}
+
+concurrency:
+  group: dependabot-automerge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  automerge:
+    # Both: the PR is Dependabot's and so is this event (not a person pushing to its branch).
+    if: github.actor == 'dependabot[bot]' && github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # enabling auto-merge
+      pull-requests: write # enabling auto-merge; the comment on majors
+    steps:
+      # Fails unless the commit is Dependabot's and verified.
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+
+      - name: Decide
+        id: decide
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+          ECOSYSTEM: ${{ steps.metadata.outputs.package-ecosystem }}
+          DEPENDENCIES: ${{ steps.metadata.outputs.dependency-names }}
+        run: |
+          # Dependabot puts "[security]" in the title of a security update.
+          security=false
+          case "$TITLE" in *"[security]"* | *"[Security]"*) security=true ;; esac
+          decision=review
+          if [ "$ECOSYSTEM" = github_actions ]; then
+            decision=review
+          elif [ "$security" = true ]; then
+            decision=merge
+          elif [ "$UPDATE_TYPE" = version-update:semver-patch ] \
+            || [ "$UPDATE_TYPE" = version-update:semver-minor ]; then
+            case ",$DEPENDENCIES," in
+              *,@zen-browser/surfer,*) decision=review ;;
+              *) decision=merge ;;
+            esac
+          fi
+          echo "security=$security ecosystem=$ECOSYSTEM update=$UPDATE_TYPE -> $decision"
+          echo "decision=$decision" >> "$GITHUB_OUTPUT"
+
+      - name: Enable auto-merge (squash, after the required checks)
+        if: steps.decide.outputs.decision == 'merge'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"
+
+      - name: Ask for a review
+        if: steps.decide.outputs.decision == 'review' && github.event.action == 'opened'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+        run: |
+          body="Not auto-merged (\`$UPDATE_TYPE\`): a major, GitHub Actions or Surfer update"
+          body="$body needs a person to read the changelog and merge it"
+          body="$body (CONTRIBUTING.md, \"Dependency updates\")."
+          gh pr comment "$PR_URL" --body "$body"

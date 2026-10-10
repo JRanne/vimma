@@ -352,19 +352,19 @@ Limits:
 
 ## CI and automation (spec m0-pipeline)
 
-| Workflow             | Trigger                          | Runner                    | Needs from you                             |
-| -------------------- | -------------------------------- | ------------------------- | ------------------------------------------ |
-| `ci.yml`             | push to `main`, PRs, manual      | `ubuntu-latest`           | nothing                                    |
-| `e2e.yml`            | PRs touching the browser, manual | `ubuntu-24.04`            | nothing (ADR-010)                          |
-| `nightly.yml`        | 03:00 UTC, manual                | self-hosted `vimma-build` | register the runner, set `NIGHTLY_ENABLED` |
-| `upstream.yml`       | every 4 h (`:17`), manual        | `ubuntu-latest` + e2e.yml | allow Actions to open PRs; optional token  |
-| `claude.yml`         | `@claude`, `spec`+`claude:go`    | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
-| `release-please.yml` | push to `main`, manual           | `ubuntu-latest`           | Actions may open PRs; optional token       |
-| `release.yml`        | release published, manual        | `vimma-build` + hosted    | see "Release packages" (gated off)         |
-| `mutation.yml`       | Sundays 04:23 UTC, manual        | `ubuntu-latest`           | nothing (creates its `mutation` label)     |
-| `semgrep.yml`        | push to `main`, PRs, Mon, manual | `ubuntu-latest`           | nothing                                    |
-| `codeql.yml`         | push to `main`, PRs, Mon, manual | `ubuntu-latest`           | nothing; skipped while the repo is private |
-| Renovate             | Mondays before 07:00 Helsinki    | Renovate's own            | install the Renovate app                   |
+| Workflow                   | Trigger                          | Runner                    | Needs from you                             |
+| -------------------------- | -------------------------------- | ------------------------- | ------------------------------------------ |
+| `ci.yml`                   | push to `main`, PRs, manual      | `ubuntu-latest`           | nothing                                    |
+| `e2e.yml`                  | PRs touching the browser, manual | `ubuntu-24.04`            | nothing (ADR-010)                          |
+| `nightly.yml`              | 03:00 UTC, manual                | self-hosted `vimma-build` | register the runner, set `NIGHTLY_ENABLED` |
+| `upstream.yml`             | every 4 h (`:17`), manual        | `ubuntu-latest` + e2e.yml | allow Actions to open PRs; optional token  |
+| `claude.yml`               | `@claude`, `spec`+`claude:go`    | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
+| `release-please.yml`       | push to `main`, manual           | `ubuntu-latest`           | Actions may open PRs; optional token       |
+| `release.yml`              | release published, manual        | `vimma-build` + hosted    | see "Release packages" (gated off)         |
+| `mutation.yml`             | Sundays 04:23 UTC, manual        | `ubuntu-latest`           | nothing (creates its `mutation` label)     |
+| `semgrep.yml`              | push to `main`, PRs, Mon, manual | `ubuntu-latest`           | nothing                                    |
+| `codeql.yml`               | push to `main`, PRs, Mon, manual | `ubuntu-latest`           | nothing; skipped while the repo is private |
+| `dependabot-automerge.yml` | Dependabot's PRs                 | `ubuntu-latest`           | nothing (Dependabot, below)                |
 
 Locally, before pushing: `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:py`,
 `npm run license-check`, `npx surfer license-check`, `npx commitlint --from main`.
@@ -574,7 +574,7 @@ issue with the log; do not re-run to green), and look at the numbers before touc
 `node-version-file: .nvmrc`. Exceptions, none of which runs the bench: release.yml's package job
 checks out a release tag (tags from before `.nvmrc` lack it) and stays on major 22; the
 self-hosted nightly and release build jobs use the runner's own Node for Surfer. The baseline is keyed on the exact version because a V8 patch can move these numbers. A
-Node bump therefore comes as its own Renovate PR (`nvm` manager, never automerged): its bench
+Node bump is therefore its own PR, by hand (Dependabot has no `.nvmrc` support): its bench
 step falls back to the previous version's entries with a warning, and that PR records the new key.
 
 Updating the baseline, deliberately (like snapshots: never to make a red run green without
@@ -787,18 +787,20 @@ log/status` and `gh issue view`. Tests Claude writes still run as code on that r
 why its token is read-only. `spec-pr` (no Claude): contents and pull-requests write;
 GITHUB_TOKEN cannot change `.github/workflows`. No other secret is passed.
 
-### Renovate
+### Dependabot
 
-1. Install the Renovate GitHub app for this repo: <https://github.com/apps/renovate> → Configure →
-   Only select repositories → `vimma`.
-2. It opens an onboarding PR only when no config exists; `renovate.json` is already here, so the
-   first run goes straight to the dependency dashboard issue and update PRs.
+`.github/dependabot.yml`: npm (`/`), cargo and rust-toolchain (`tools/vimma-ctl`) and GitHub
+Actions, Mondays 06:00 Helsinki, releases at least 3 days old, minor and patch grouped into one
+PR per ecosystem, majors one PR each. Actions stay pinned to commit SHAs. Security updates
+(Dependabot alerts) open at once. `dependabot-automerge.yml` enables GitHub auto-merge (squash)
+for security, patch and minor updates, so GitHub merges them once every required check is
+green; majors, every GitHub Actions update (workflows hold write tokens and the Claude secret)
+and `@zen-browser/surfer` version updates get a comment and stay open for review. Policy in
+CONTRIBUTING.md, "Dependency updates". Needs: Dependabot alerts and security updates on
+(Settings → Code security), and "Allow auto-merge" on (it is).
 
-`renovate.json`: npm and GitHub Actions only, Mondays, releases at least 3 days old, actions kept
-pinned to commit SHAs. npm patch/minor PRs automerge once all checks pass; Renovate merges them
-itself (`platformAutomerge: false`, since there is no branch protection for GitHub auto-merge to
-wait on). Majors, `@zen-browser/surfer` and every GitHub Actions update (workflows hold write
-tokens and the Claude secret) stay open for review.
+A merge by auto-merge is pushed with `GITHUB_TOKEN`, which starts no workflow on `main`: the
+push runs of CI, Semgrep and release-please wait for the next ordinary push to `main`.
 
 ### Releases (`release-please.yml`)
 
