@@ -121,6 +121,8 @@ support-files = ["file_vimma_cookie.html"]
 
 ["browser_vimma_workspace_edges.js"]
 
+["browser_vimma_workspace_buffer_keys.js"]
+
 ["browser_vimma_side_panel.js"]
 
 ["browser_vimma_firefox_keys.js"]

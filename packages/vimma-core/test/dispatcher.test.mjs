@@ -431,3 +431,90 @@ describe("copy mode: Vim motions, selection and yank keys", () => {
     });
   });
 });
+
+// Workspaces as Vim buffers: ctrl+^ (ctrl+6) for the alternate, ]w / [w to step, and the
+// prefix forms that work in every mode.
+describe("workspace keys like Vim's buffer keys", () => {
+  const action = (/** @type {string} */ mode, /** @type {string} */ keys) =>
+    last(feed(make(), mode, keys));
+  const alternate = { kind: "action", action: { id: "workspace.last" } };
+
+  test.each([
+    ["normal", "ctrl+^"],
+    ["normal", "ctrl+6"],
+    ["normal", "ctrl+b ^"],
+    ["normal", "ctrl+b ctrl+6"],
+    ["insert", "ctrl+b ^"],
+    ["insert", "ctrl+b ctrl+6"],
+  ])("%s: %s goes to the alternate workspace", (mode, keys) => {
+    expect(action(mode, keys)).toEqual(alternate);
+  });
+
+  test("ctrl+^ and ctrl+6 stay the page's in insert mode", () => {
+    expect(action("insert", "ctrl+^")).toEqual({ kind: "pass" });
+    expect(action("insert", "ctrl+6")).toEqual({ kind: "pass" });
+  });
+
+  test("] w and [ w step through the workspaces in normal mode", () => {
+    expect(feed(make(), "normal", "] w")).toEqual([
+      { kind: "pending" },
+      { kind: "action", action: { id: "workspace.next" } },
+    ]);
+    expect(action("normal", "[ w")).toEqual({
+      kind: "action",
+      action: { id: "workspace.previous" },
+    });
+    expect(action("insert", "]")).toEqual({ kind: "pass" });
+  });
+
+  /**
+   * A GTK keydown: `key` typed on physical key `code`.
+   * @param {string} key
+   * @param {string} code
+   * @param {Record<string, boolean>} [mods]
+   */
+  const ev = (key, code, { altGraph = false, ...mods } = {}) => ({
+    key,
+    code,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    metaKey: false,
+    ...mods,
+    getModifierState: (/** @type {string} */ m) => m === "AltGraph" && altGraph,
+  });
+
+  test("the keydowns US and Finnish layouts send reach the same actions", () => {
+    const d = make();
+    const press = (/** @type {any} */ e) => d.dispatch("normal", chordFromEvent(e));
+    // US: ctrl+shift+6 is "^" with shift (GTK keeps the shifted keyval under ctrl).
+    expect(press(ev("^", "Digit6", { ctrlKey: true, shiftKey: true }))).toEqual(alternate);
+    // Any layout: ctrl+6 is "6".
+    expect(press(ev("6", "Digit6", { ctrlKey: true }))).toEqual(alternate);
+    // Finnish: ] and [ are AltGr+9 and AltGr+8.
+    expect(press(ev("]", "Digit9", { altGraph: true }))).toEqual({ kind: "pending" });
+    expect(press(ev("w", "KeyW"))).toEqual({ kind: "action", action: { id: "workspace.next" } });
+    expect(press(ev("[", "Digit8", { altGraph: true }))).toEqual({ kind: "pending" });
+    expect(press(ev("w", "KeyW"))).toEqual({
+      kind: "action",
+      action: { id: "workspace.previous" },
+    });
+    // Finnish ^ is a dead key: GTK reports key "Dead" (NativeKeyToDOMKeyName.inc), no chord.
+    expect(chordFromEvent(ev("Dead", "BracketRight", { ctrlKey: true, shiftKey: true }))).toBe(
+      null,
+    );
+  });
+
+  test("config.toml rebinds them like any other key", () => {
+    const d = make({
+      keys: { last_workspace: "prefix+tab" },
+      modal: { normal: { "<C-^>": "tab.next", gb: "last_workspace" } },
+    });
+    expect(last(feed(d, "normal", "ctrl+b tab"))).toEqual(alternate);
+    expect(last(feed(d, "normal", "ctrl+^"))).toEqual({
+      kind: "action",
+      action: { id: "tab.next" },
+    });
+    expect(last(feed(d, "normal", "g b"))).toEqual(alternate);
+  });
+});
