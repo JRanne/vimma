@@ -60,6 +60,26 @@ Core: `dispatcher.test.mjs` "copy mode keys" (`v 0 $ gg G y` in visual, a count 
 Mutation check: dropping the consume of passing keys in `visual` fails "the page gets no keys"
 (`["x","z","q","z"]` vs `["z"]`); reverted.
 
+## Vim motions, selection keys and mouse selection (2026-10-10)
+
+Added to `[modal.visual]` (actions in "Copy mode"; none clashes: normal mode's `f`/`F`/`t` are
+hints and tab keys in another table, and `{ } ^ ; , o V Y e E W B` were unbound in `visual`):
+`e`, `ge`, `W`, `B`, `E`, `^`, `{`, `}`, `f`/`F`/`t`/`T` + a character, `;`, `,`, `V`, `o`, `iw`,
+`aw`, `Y`. Counts apply to every motion (the dispatcher already counted in `visual`). A
+selection the user makes with the mouse in normal mode enters copy mode with it.
+
+Tests: core `motions.test.mjs` (targets per motion, counts, line limits of `f`/`t`, `;`/`,`,
+`iw`/`aw`) and `dispatcher.test.mjs` "copy mode: Vim motions…" (the keys, `f` waiting for its
+character, a count kept across it, Esc/named keys/chords cancelling it, `f f`).
+`browser_vimma_copy_motions.js` asserts the selected string for each motion, `V`, `o` (both
+kinds), `iw`/`aw` and `Y`, and that malformed find messages are refused.
+`browser_vimma_copy_mouse.js`: drag, double and triple click enter `VISUAL`; `y`, `ctrl+c`, the
+context menu's Copy and the primary selection copy it; `e` extends it, `Esc` clears it; a plain
+click, a link, a script's selection (also from a click handler) and a drag in a text field do
+not enter; the same in the second of two split panes. Mutation check: dropping the
+`sel.isCollapsed` guard of the selection listener fails "a plain click: normal" (`visual`), the
+link click and the click-handler case; reverted.
+
 ## Settled (2026-10-09, from the engine tree)
 
 - **Caret API.** Firefox's caret browsing (F7) sets `accessibility.browsewithcaret`, and
@@ -81,12 +101,59 @@ Mutation check: dropping the consume of passing keys in `visual` fails "the page
   the tab goes back to normal (that key does nothing).
 - **Counts** repeat a motion, at most 1000 steps.
 
+## Settled (2026-10-10: Vim motions, mouse selection)
+
+- **Two kinds of motion.** Layout motions stay `nsISelectionController`'s: `{` / `}` are
+  `paragraphMove` (from a paragraph's edge it does not move, so a `characterMove` steps over the
+  edge first), `^` is `intraLineMove` then the text rule. Vim's text motions (`e ge W B E ^ f t F T
+iw aw`) are pure functions in core `motions.mjs` over a flat string; `actors/text-model.mjs`
+  builds it from the rendered text nodes around the caret (TreeWalker, `checkVisibility`, no
+  `script`/`style`/`select`/`textarea`), with U+2029 between blocks (`display` other than
+  `inline`, `contents`, `ruby*`) and `\n` for `<br>`, keeping each node's length so an index maps
+  back to (node, offset). Collapsible white space has its line breaks and tabs read as spaces.
+  The target is set with `Selection.extend` / `collapse`.
+- **Caret, not cursor.** Vim's cursor is on a character and its selection includes it; the caret
+  is between two. Motions that Vim ends on a character (`e`, `ge`, `E`, `f`, `T`) end after it,
+  the others before it, so `v e y` yanks the word and `v f , y` the comma as Vim's would. `t` and
+  `T` skip a match right next to the caret, so `;` after them moves on.
+- **`f` waits in the dispatcher.** An action with `takesChar` (ActionDef) is not emitted at its
+  key: the dispatcher returns `pending` (no timeout: `ambiguous()` is false) and the next key is
+  its character, whatever it is bound to (`f f`); Esc, a named key or a chord cancels. The action
+  carries `char`; the host keeps the last find for `;` and `,` (core `repeatFind`) and sends
+  `{ op: "find_forward", char }`; `isCaretMessage` wants one code point there and no `char`
+  elsewhere.
+- **`V`** keeps the anchor's and the focus's visual lines (`intraLineMove` both ways from each
+  point); after any motion the focus's line is measured again and the selection set from the
+  anchor line's start to its end (down) or from its end to its start (up), with
+  `setBaseAndExtent`. `o` swaps the two lines; `v` in `V` keeps the text, character-wise.
+  `Y` sets the selection to the whole lines of its two ends and copies `Selection.toString()`
+  (the plain-text serializer: `\n` between blocks and at `<br>`, white space as rendered).
+- **`y` keeps leaving copy mode**, as this spec's user story says; so does `Y`.
+- **Mouse selection.** The child adds an `nsISelectionListener` (Selection's chrome-only
+  `addSelectionListener`) to its document's selection. Firefox ends every mouse selection
+  (drag, double or triple click, shift+click) with a `MOUSEUP_REASON` notification when its drag
+  state ends (`nsFrameSelection::SetDragState`); a script's change carries `JS_REASON`, a key's
+  `KEYPRESS_REASON`. On `MOUSEUP_REASON` without `JS_REASON`, with a non-collapsed selection, no
+  `dragstart` since the last mousedown and nothing editable focused, it sends
+  `Vimma:MouseSelection`; the parent takes it from the focused frame only, as focus reports, and
+  the host runs `mode.visual` unless the tab is in insert mode. `enter` keeps a selection on
+  screen, so copy mode starts with it. A text field's selection is its own, never the document's.
+  A plain click also ends with `MOUSEUP_REASON` (collapsed): the guard on `isCollapsed` is what
+  keeps it in normal mode (the mutation check).
+- **Primary selection.** `AutoCopyListener` copies the selection to the X primary selection on
+  `MOUSEUP_REASON`, `KEYPRESS_REASON` or `SELECTALL_REASON` but never on `JS_REASON`, so the text
+  motions (Selection API) do not update it; mouse and layout motions do. Left as a limit.
+
 ## Limits
 
 - Copy mode works in the frame that has focus. A cross-origin frame needs focus first (a click,
   or a hint on something in it); the caret does not move from one frame into another.
-- `w` is Firefox's word motion, not Vim's (above); no `e`, `W`, `B`, `{`, `}`, `o` (swap ends)
-  or line-wise `V`.
+- `w` is Firefox's word motion, not Vim's (above); `e`, `W`, `B`, `E` are Vim's.
+- The text motions see a window of text around the caret (2000 characters each way plus 64 per
+  count step) and no shadow roots or frames; `f`/`t` search between line breaks, not the
+  wrapped line. `V` takes visual lines, ambiguous at a soft wrap. `iw`/`aw` always select the
+  word at the caret (no growing, no count); `Y` adds no trailing line break. The primary
+  selection does not follow the text motions (above).
 - The text inside `<input>` and `<textarea>` is not part of the page's selection (a text control
   is its own editor): to copy from a field, focus it (insert mode) and use `ctrl+c`.
 - `y` copies plain text only; no HTML flavour.
@@ -94,5 +161,6 @@ Mutation check: dropping the consume of passing keys in `visual` fails "the page
 
 ## Out of scope
 
-Yank shortcuts not in plan §2 (`yy` URL, `yf` link), line-wise visual, registers, search
-inside copy mode (`/` there is unbound), copy mode in pages without our actor.
+Yank shortcuts not in plan §2 (`yy` URL, `yf` link), registers, search inside copy mode (`/`
+there is unbound), copy mode in pages without our actor, Vim's other text objects (`is`, `ip`,
+`i(`…).
