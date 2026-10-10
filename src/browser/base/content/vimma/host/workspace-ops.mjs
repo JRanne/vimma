@@ -2,14 +2,17 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Workspace operations (docs/specs/m3-workspaces.md, sub-specs 4a and 4b): new, rename, close
-// (after a y/N question) and moving the current tab, over the app's WorkspaceStore and the
-// window's WindowWorkspaces. Each returns the text to show in the notice, or null.
+// Workspace operations (docs/specs/m3-workspaces.md, sub-specs 4a, 4b and 5): new, rename, close
+// (after a y/N question), moving the current tab (from the picker after a y/N warning) and the
+// picker's rows, over the app's WorkspaceStore and the window's WindowWorkspaces. Each operation
+// returns the text to show in the notice, or null.
 
-import { closeWorkspaceQuestion } from "../core/workspacedefs.mjs";
+import { workspaceItems } from "../core/picker.mjs";
+import { closeWorkspaceQuestion, moveTabQuestion } from "../core/workspacedefs.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
 
+/** @import { WorkspaceItem } from "../core/picker.mjs" */
 /** @import { WorkspaceRef } from "../core/workspaces.mjs" */
 
 export const NO_WORKSPACES = "no workspaces in this window";
@@ -163,4 +166,53 @@ export function moveTabToWorkspace(win, text) {
   if (refused) return refused;
   const to = "index" in ref ? ww.model.workspaces[ref.index - 1]?.name : text;
   return `moved to "${to}": reopened there, without its back/forward history`;
+}
+
+/**
+ * The `prefix+w` picker's rows: the window's workspaces, with their tab counts.
+ * @param {Window} win
+ * @returns {WorkspaceItem[]}
+ */
+export function workspacePickerItems(win) {
+  const ww = WindowWorkspaces.get(win);
+  const model = ww?.model;
+  if (!ww || !model) return [];
+  return workspaceItems(model, (id) => {
+    const tab = ww.tabOf(id);
+    return !!tab && ww.isForeign(tab);
+  });
+}
+
+/**
+ * `m` in the workspace picker: moves the selected tab to workspace `id` once the user has
+ * answered y to the warning that its history stays behind (decision 6). The yes stands for this
+ * tab and the workspace as asked about: a tab no longer selected, or a workspace renamed or gone
+ * by the time of the `y`, moves nothing.
+ * @param {Window} win
+ * @param {string} id
+ * @param {(question: string, yes: () => void) => void} ask
+ * @param {(text: string) => void} say  the notice, after the answer
+ * @returns {string | null} why not, before asking
+ */
+export function moveTabFromPicker(win, id, ask, say) {
+  const ww = WindowWorkspaces.get(win);
+  const model = ww?.model;
+  if (!ww || !model) return NO_WORKSPACES;
+  const target = model.workspaces.find((w) => w.id === id);
+  if (!target) return "that workspace is gone";
+  const gBrowser = /** @type {any} */ (win).gBrowser;
+  const tab = gBrowser.selectedTab;
+  if (target.tabs.includes(ww.idOf(tab)) && !ww.isForeign(tab)) {
+    return `already in "${target.name}"`;
+  }
+  const name = target.name;
+  ask(moveTabQuestion(name), () => {
+    const now = ww.model?.workspaces.find((w) => w.id === id);
+    if (now?.name !== name || !tab.isConnected || gBrowser.selectedTab !== tab) {
+      say(`move: the tab or "${name}" changed since you were asked; nothing was moved`);
+      return;
+    }
+    say(ww.moveTab(tab, { id }) ?? `moved to "${name}": reopened there, without its history`);
+  });
+  return null;
 }

@@ -199,8 +199,8 @@ add_task(async function notice_sits_above_the_bar() {
   await BrowserTestUtils.withNewTab(TITLE_PAGE, async (browser) => {
     await focusContent(browser);
     EventUtils.synthesizeKey("b", { ctrlKey: true });
-    EventUtils.synthesizeKey("w"); // workspace_picker: not implemented yet
-    await until(noticeShown, "ctrl+b w shows the notice");
+    EventUtils.synthesizeKey("b"); // toggle_sidebar: not implemented yet
+    await until(noticeShown, "ctrl+b b shows the notice");
     Assert.lessOrEqual(
       $("vimma-notice").getBoundingClientRect().bottom,
       bar().getBoundingClientRect().top,
@@ -228,8 +228,8 @@ add_task(async function prefix_question_shows_exactly_one_list() {
     await focusContent(browser);
     // A toast from an earlier key must not linger over the overlay.
     EventUtils.synthesizeKey("b", { ctrlKey: true });
-    EventUtils.synthesizeKey("w");
-    await until(noticeShown, "ctrl+b w shows the notice");
+    EventUtils.synthesizeKey("b");
+    await until(noticeShown, "ctrl+b b shows the notice");
     EventUtils.synthesizeKey("b", { ctrlKey: true });
     EventUtils.synthesizeKey("?", { shiftKey: true });
     await until(() => $("vimma-help")?.open, "ctrl+b ? opens the help overlay");

@@ -3,7 +3,7 @@
 Status: research and plan; split into sub-specs (see Breakdown). Sub-specs 1 (store), 2a
 (routing) and 2b (switching) merged; sub-spec 3 (persistence) implemented, awaiting review;
 4a (lifecycle) and 4b (move) implemented together, awaiting review, with the open items in their
-Settled section ·
+Settled section; 5 (picker) implemented, awaiting review ·
 Milestone: M3 · Area: host
 (`src/browser/base/content/vimma/workspaces/`, `ui/`), four upstream patch files (five hunks)
 
@@ -914,6 +914,46 @@ dependency for 4b, 5 and parts of 4a.
   says afterwards that the history stayed behind). `contextual-identity-deleted` (a container
   removed in Settings gets a new one) and the startup `privacy.userContext.enabled` status-bar
   error from 4a's scope are still open.
+
+## Settled: sub-spec 5, m3-workspace-picker (2026-10-10)
+
+- **Core** (`picker.mjs`): the goto picker's state machine, matching and highlights now take
+  either item kind. `workspaceItems(model, isForeign)` gives one `WorkspaceItem` per workspace
+  (`kind: "workspace"`, place, name, `tabCount`, `foreignCount`, `active`); a workspace matches
+  by its name only. `itemId` is a tab's or a workspace's id: `openPicker`'s option is `activeId`
+  and Enter's effect is `{ type: "select", id }` (both were tab-only). `m` in browse mode on a
+  workspace row gives `{ type: "move", id }`; in a goto picker it does nothing, in search it
+  types. `workspacedefs.mjs`: `moveTabQuestion(name)`, decision 6's warning.
+- **UI**: the same dialog class (`GotoPicker`, now with a look: id, heading, hint, a row's cells)
+  and `WorkspacePicker` (`#vimma-workspace-picker`); a row reads
+  `2  work  3 tabs, 1 foreign · current`, and the current workspace's row is also
+  `.vimma-picker-active` (its index in `--vimma-accent`).
+  `picker.css` styles `.vimma-picker`, so both take the theme tokens.
+- **Keys**: `prefix+w` / `:workspace` with no name (`workspace.picker`): `j`/`k`, `/` filters,
+  Enter switches (`switchTo({ id })`), `m` moves the selected tab, `Esc`/`q` close. No rename,
+  delete or create keys in the picker: the spec gives those to `prefix+shift+w/d/n` only.
+- **Move from the picker** (`moveTabFromPicker`): the picker closes, and the rename prompt's line
+  asks `moveTabQuestion` ("Move this tab to "beta"? It is reopened there; its back/forward
+  history and form data are lost. y/N"); `y` runs 4b's `moveTab`. As with closing, the yes stands for what was asked about:
+  at the answer the tab must still be the selected one and the workspace still there under the
+  same name, else `nothing was moved`. A move to the tab's own workspace is refused without
+  asking (a foreign tab may move into the workspace it was adopted by).
+- **`opened in "work"`** (decision 12): `WindowWorkspaces` takes a `notify` option; a `TabOpen`
+  that `#adopt` hides in another workspace calls it, and the host shows the notice. The status
+  bar's workspace segment was done in 2b.
+- **Tests:** `browser_vimma_workspace_picker.js` (7 tasks): the list, counts, current mark and
+  selection, theme token, `/` filter and highlight, Enter switches, Esc keeps; `:workspace`
+  opens it; `m` asks, `n` keeps, `y` moves and the window stays; a rename before the `y` moves
+  nothing; `m` on the own workspace refused unasked; a background open says where. Red before
+  (7 unexpected), green after; the whole `tests/browser/` suite passes. Vitest: workspace items,
+  name-only matching, `m`/Enter effects, selection kept by id, the question text. The notice
+  examples in `browser_vimma_tab_keys.js`, `browser_vimma_statusbar.js`,
+  `browser_vimma_cmdline.js` and `browser_vimma_help_overlay.js` used `ctrl+b w` as the
+  not-yet key; they use `ctrl+b b` (side panel) now, and `workspace_picker` is in the overlay's runnable list. Mutation check: dropping
+  the name comparison from the stale-answer guard fails "the answer is refused".
+- **Not done here:** a moved lazy background tab still needs selecting first (the picker moves
+  the selected tab); `contextual-identity-deleted` and the startup `privacy.userContext.enabled`
+  error stay open from 4a.
 
 ## Out of scope
 

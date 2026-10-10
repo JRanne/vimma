@@ -25,7 +25,7 @@ import { Find } from "./find.mjs";
 import { copyModeRunners } from "./copy-mode.mjs";
 import { Notice } from "../ui/notice.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
-import { GotoPicker } from "../ui/picker.mjs";
+import { GotoPicker, WorkspacePicker } from "../ui/picker.mjs";
 import { RenamePrompt } from "../ui/rename-prompt.mjs";
 import { gotoItems, tabById } from "./goto.mjs";
 import { getTabLabel, setTabLabel } from "./tab-labels.mjs";
@@ -46,9 +46,11 @@ import {
   NO_WORKSPACES,
   activeWorkspaceName,
   closeWorkspace,
+  moveTabFromPicker,
   moveTabToWorkspace,
   newWorkspace,
   renameWorkspace,
+  workspacePickerItems,
   workspaceRef,
 } from "./workspace-ops.mjs";
 import { KeyLog } from "../about/key-log.mjs";
@@ -97,6 +99,7 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {Set<() => void>} listeners  told after mode or pending keys may have changed
  * @property {StatusBar | null} statusBar  m2-statusbar-whichkey (the bar; no which-key strip)
  * @property {GotoPicker} picker  the prefix+g overlay (m2-picker-rename)
+ * @property {WorkspacePicker} wsPicker  the prefix+w overlay (m3-workspaces 5)
  * @property {RenamePrompt} rename  the prefix+shift+t prompt (m2-picker-rename)
  * @property {Find} find  `/`, `?`, `n`, `N` over Firefox's find bar (m1-find)
  * @property {boolean} resize  in resize mode (`prefix+r`, m4-split-panes sub-spec 5, ADR-014)
@@ -271,6 +274,12 @@ export const RUNNERS = Object.freeze({
   },
   "tab.rename": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
     renameTab(s, text),
+  // m3-workspaces 5: prefix+w (and `:workspace` without a name).
+  "workspace.picker": (/** @type {WindowState} */ s) => {
+    s.notice.hide();
+    if (WindowWorkspaces.get(s.win)?.model) s.wsPicker.open();
+    else s.notice.show(NO_WORKSPACES);
+  },
   // m3-workspaces 2b: one workspace's tabs visible at a time (WindowWorkspaces).
   "workspace.next": workspaceStep("next"),
   "workspace.previous": workspaceStep("previous"),
@@ -459,6 +468,7 @@ export const VimmaHost = {
         state.help.close({ tabChanged: true });
         state.cmdline.close({ tabChanged: true });
         state.picker.close({ tabChanged: true });
+        state.wsPicker.close({ tabChanged: true });
         state.rename.close({ tabChanged: true });
       },
       dispatcher: createDispatcher(keymap),
@@ -478,7 +488,7 @@ export const VimmaHost = {
       statusBar: null,
       picker: new GotoPicker(win, {
         items: () => gotoItems(win),
-        activeTabId: () =>
+        activeId: () =>
           /** @type {{ gBrowser: { selectedTab: { linkedPanel: string } } }} */ (
             /** @type {unknown} */ (win)
           ).gBrowser.selectedTab.linkedPanel,
@@ -488,6 +498,23 @@ export const VimmaHost = {
           /** @type {{ gBrowser: { selectedTab: Element } }} */ (
             /** @type {unknown} */ (win)
           ).gBrowser.selectedTab = tab;
+        },
+      }),
+      wsPicker: new WorkspacePicker(win, {
+        items: () => workspacePickerItems(win),
+        activeId: () => WindowWorkspaces.get(win)?.model?.active ?? null,
+        select: (id) => {
+          const refused = WindowWorkspaces.get(win)?.switchTo({ id });
+          if (refused) state.notice.show(refused);
+        },
+        move: (id) => {
+          const refused = moveTabFromPicker(
+            win,
+            id,
+            (question, yes) => state.rename.ask(question, yes),
+            (said) => state.notice.show(said),
+          );
+          if (refused) state.notice.show(refused);
         },
       }),
       rename: new RenamePrompt(win, {
@@ -527,7 +554,10 @@ export const VimmaHost = {
     }
     // After the keys too: a failure costs the workspaces, not ctrl+b (m3-workspaces 2b).
     try {
-      WindowWorkspaces.init(win, { onChange: () => this._emit(state) });
+      WindowWorkspaces.init(win, {
+        onChange: () => this._emit(state),
+        notify: (text) => state.notice.show(text),
+      });
     } catch (e) {
       console.error("vimma: no workspaces", e);
     }
@@ -547,6 +577,7 @@ export const VimmaHost = {
     state.notice.destroy();
     state.cmdline.destroy();
     state.picker.destroy();
+    state.wsPicker.destroy();
     state.rename.destroy();
     state.tabStrip?.uninit();
     WindowWorkspaces.uninit(win);
@@ -682,14 +713,14 @@ export const VimmaHost = {
   },
 
   /**
-   * `help` while the overlay or the goto picker (modal too) is open; `command` while the `:` line
+   * `help` while the overlay or a picker (modal too) is open; `command` while the `:` line
    * is; `resize` in resize mode (ADR-014); the focused page's mode;
    * `insert` in chrome, so chrome text fields keep their keys and only global chords are ours.
    * @param {WindowState} state
    * @returns {Mode}
    */
   _mode(state) {
-    if (state.help.isOpen || state.picker.isOpen) return "help";
+    if (state.help.isOpen || state.picker.isOpen || state.wsPicker.isOpen) return "help";
     if (state.cmdline.isOpen) return "command";
     // Resize mode ends by itself when the window is down to one pane (a tab closed meanwhile).
     if (state.resize && !hasPanes(state.win)) state.resize = false;
@@ -751,11 +782,12 @@ export const VimmaHost = {
       const mods = MODIFIERS.filter((m) => chord[m]);
       console.debug("vimma key", { key, mods, mode });
     }
-    // The goto picker takes every key, bare ones too, before any binding: nothing reaches the
-    // page or Firefox underneath (ctrl+w would close a tab), and its j / q are not keymap keys.
-    if (state.picker.isOpen) {
+    // A picker takes every key, bare ones too, before any binding: nothing reaches the page or
+    // Firefox underneath (ctrl+w would close a tab), and its j / q are not keymap keys.
+    const picker = [state.picker, state.wsPicker].find((p) => p.isOpen);
+    if (picker) {
       consume(e);
-      state.picker.key(key);
+      picker.key(key);
       this._emit(state);
       return;
     }

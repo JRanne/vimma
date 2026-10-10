@@ -427,8 +427,8 @@ add_task(async function a_notice_does_not_cover_the_line() {
   const tabs = await openTabs(1);
   typeCommand("ta");
   EventUtils.synthesizeKey("b", { ctrlKey: true });
-  EventUtils.synthesizeKey("w");
-  Assert.ok(noticeShown(), "ctrl+b w from the line shows the notice");
+  EventUtils.synthesizeKey("b");
+  Assert.ok(noticeShown(), "ctrl+b b from the line shows the notice");
   Assert.ok(isOpen(), "and the line stays open");
   const gap = () =>
     document.getElementById(NOTICE_ID).getBoundingClientRect().bottom -
