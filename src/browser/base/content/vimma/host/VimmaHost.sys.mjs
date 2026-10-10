@@ -43,6 +43,7 @@ import {
 import { PaneViews } from "../split/PaneView.mjs";
 import { leaves } from "../core/panes.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
+import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
 import {
   NO_WORKSPACES,
   activeWorkspaceName,
@@ -157,7 +158,8 @@ function switchWorkspace(s, text) {
     s.cmdline.open("workspace ");
     return;
   }
-  const refused = WindowWorkspaces.get(s.win)?.switchTo(workspaceRef(text)) ?? NO_WORKSPACES;
+  const ww = WindowWorkspaces.get(s.win);
+  const refused = ww?.switchTo(workspaceRef(text, ww.model)) ?? NO_WORKSPACES;
   if (refused) s.notice.show(refused);
 }
 
@@ -651,7 +653,7 @@ export const VimmaHost = {
    * @param {Window} win
    * @returns {{ mode: Mode, pending: string[], find?: FindStatus | null,
    *   pane?: { index: number, count: number } | null, configErrors?: readonly ConfigError[],
-   *   configFile?: string,
+   *   configFile?: string, alerts?: readonly string[],
    *   workspace?: { name: string, index: number, color?: string } | null }}
    */
   status(win) {
@@ -666,6 +668,8 @@ export const VimmaHost = {
       workspace: WindowWorkspaces.get(win)?.status() ?? null,
       configErrors: settings.configErrors,
       configFile: settings.configFile,
+      // Persistent, unlike a notice: containers off at startup (m3-workspaces).
+      alerts: WorkspaceStore.alert ? [WorkspaceStore.alert] : [],
     };
   },
 

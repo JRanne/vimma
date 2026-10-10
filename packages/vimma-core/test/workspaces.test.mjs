@@ -19,6 +19,8 @@ import {
   workspaceOfTab,
   WorkspaceError,
   MAX_WORKSPACE_ID,
+  setWorkspaceContainer,
+  workspaceRefFor,
 } from "../src/workspaces.mjs";
 import { closePane, focus, leaves, resize, setPaneTab, swap, toggleZoom } from "../src/panes.mjs";
 import { toSnapshot, fromSnapshot } from "../src/snapshot.mjs";
@@ -541,5 +543,38 @@ describe("workspace properties", () => {
         expect(back).toEqual(s);
       }),
     );
+  });
+});
+
+describe("container and typed references (m3 leftovers)", () => {
+  test("setWorkspaceContainer swaps a workspace's container, keeping its tabs", () => {
+    const s = abc();
+    const next = setWorkspaceContainer(s, { name: "work" }, "c-new");
+    expect(findWorkspace(next, { name: "work" })).toMatchObject({
+      container: "c-new",
+      tabs: ["a", "b", "c"],
+      activeTab: "b",
+    });
+    expect(setWorkspaceContainer(next, { name: "work" }, "c-new")).toBe(next);
+    expectWsError(
+      () => setWorkspaceContainer(s, { name: "work" }, "c-personal"),
+      "duplicate-container",
+    );
+    expectWsError(() => setWorkspaceContainer(s, { name: "work" }, ""), "empty-container");
+    expectWsError(() => setWorkspaceContainer(s, { name: "nope" }, "x"), "unknown-workspace");
+  });
+
+  test("workspaceRefFor: an exact name first, then digits as a place, else a name", () => {
+    const s = createWorkspaces([
+      { name: "2", container: "c1" },
+      { name: "x", container: "c2" },
+      { name: "main", container: "c3" },
+    ]);
+    expect(workspaceRefFor(s, "2")).toEqual({ name: "2" });
+    expect(workspaceRefFor(s, "3")).toEqual({ index: 3 });
+    expect(workspaceRefFor(s, "x")).toEqual({ name: "x" });
+    expect(workspaceRefFor(s, "9")).toEqual({ index: 9 });
+    expect(workspaceRefFor(null, "2")).toEqual({ index: 2 });
+    expect(workspaceRefFor(s, "nowhere")).toEqual({ name: "nowhere" });
   });
 });

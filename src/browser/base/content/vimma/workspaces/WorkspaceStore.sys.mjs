@@ -40,6 +40,10 @@ export const DEFINITIONS_FILE = "vimma-workspaces.json";
 /** Observer topic: the definitions changed (subject null, data a JSON list of workspace ids). */
 export const CHANGED_TOPIC = "vimma-workspaces-changed";
 const CONTAINERS_PREF = "privacy.userContext.enabled";
+/** The status bar's persistent error while containers are off at startup. */
+export const CONTAINERS_OFF_ALERT =
+  "workspaces off: containers are disabled (set privacy.userContext.enabled to true, restart)";
+const DELETED_TOPIC = "contextual-identity-deleted";
 /** `lastActive`'s container, so a start routes its first tab without reading the file. */
 const STARTUP_PREF = "vimma.workspaces.startupUserContextId";
 
@@ -60,11 +64,18 @@ export class WorkspaceStoreImpl {
   /** @type {string[]} */
   lostContainers = [];
 
+  /** The status bar's persistent error, or null: containers off at startup. */
+  get alert() {
+    return this.disabled ? CONTAINERS_OFF_ALERT : null;
+  }
+
   #path;
   #config;
   #enabled;
   /** @type {string | null} */
   #cachePref;
+  #watch;
+  #watching = false;
   /** @type {any} */
   #file = null;
   /** @type {Promise<void> | null} */
@@ -75,10 +86,12 @@ export class WorkspaceStoreImpl {
 
   /**
    * @param {{ path?: string, config?: readonly Workspace[],
-   *   enabled?: () => boolean, saveDelayMs?: number, cachePref?: string | null }} [options]
+   *   enabled?: () => boolean, saveDelayMs?: number, cachePref?: string | null,
+   *   watch?: boolean }} [options]
    *   `config` is the resolved `[workspaces]` (core `mergeWithDefaults(...).workspaces`); the M5
    *   host passes it once it reads `config.toml`. `enabled` reads the containers pref.
    *   `cachePref` (the app's store only) caches `lastActive`'s container for the next start.
+   *   `watch` (the app's store only) replaces a workspace's container deleted outside Vimma.
    */
   constructor({
     path = PathUtils.join(PathUtils.profileDir, DEFINITIONS_FILE),
@@ -86,8 +99,10 @@ export class WorkspaceStoreImpl {
     enabled = () => Services.prefs.getBoolPref(CONTAINERS_PREF, true),
     saveDelayMs,
     cachePref = null,
+    watch = false,
   } = {}) {
     this.#cachePref = cachePref;
+    this.#watch = watch;
     this.#path = path;
     this.#config = config;
     this.#enabled = enabled;
@@ -118,7 +133,29 @@ export class WorkspaceStoreImpl {
     if (this.readOnly) return;
     const containersChanged = this.#checkContainers();
     if (changed || containersChanged) this.#save();
+    if (this.#watch && !this.#watching) {
+      Services.obs.addObserver(this.#onDeleted, DELETED_TOPIC);
+      this.#watching = true;
+    }
   }
+
+  /**
+   * A container deleted outside Vimma (Settings → Containers, which closes its tabs first; an
+   * extension's `contextualIdentities.remove`, which leaves them open in the deleted container):
+   * if it was a workspace's, the workspace stays and gets a new, empty container at once, so its
+   * new tabs never fall back to container 0. Vimma's own deleteWorkspace drops the definition
+   * before it removes the container, so it never comes here.
+   * @param {any} subject  `{ wrappedJSObject: { userContextId, name, ... } }`
+   */
+  #onDeleted = (subject) => {
+    if (this.disabled || this.readOnly || !this.#enabled()) return;
+    const ucid = subject?.wrappedJSObject?.userContextId;
+    const w = ucid ? this.definitions.workspaces.find((d) => d.userContextId === ucid) : null;
+    if (!w) return;
+    this.#createContainer(w);
+    this.#save();
+    this.#notify([w.id]);
+  };
 
   #open() {
     this.#file ??= new lazy.JSONFile({
@@ -411,9 +448,11 @@ export class WorkspaceStoreImpl {
 
   /** Flushes a pending save and stops saving (shutdown does this on its own). */
   async finalize() {
+    if (this.#watching) Services.obs.removeObserver(this.#onDeleted, DELETED_TOPIC);
+    this.#watching = false;
     if (this.#file) await this.#file.finalize();
   }
 }
 
 /** The app's store. */
-export const WorkspaceStore = new WorkspaceStoreImpl({ cachePref: STARTUP_PREF });
+export const WorkspaceStore = new WorkspaceStoreImpl({ cachePref: STARTUP_PREF, watch: true });
