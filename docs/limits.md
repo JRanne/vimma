@@ -6,15 +6,9 @@ delete its line in the same PR.
 
 ## Features
 
-- Only `ctrl+b ?`, the tab keys (`ctrl+b c`, `n`, `p`, `1..9`, `shift+x`, `x`; `t`, `x`, `gt`,
-  `gT` in normal mode), scrolling (`j k h l d u gg G`), `i`, `Esc`, link hints (`f`, `F`), `:`
-  and find (`/ ? n N`) run. The other bindings are dimmed in the overlay; their `ctrl+b`
-  sequences (or a count before them) are consumed and show "… not implemented yet"
-  ([m2-tab-keys](specs/m2-tab-keys.md), Settled).
 - Tab keys count Firefox's visible tabs: the current workspace's and any pinned tab.
-- Single-key actions the host cannot run yet (`r`, `H`, `L`, …) pass through
-  to the page or Firefox, and so does the first key of a sequence with nothing runnable under it
-  ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled). `ctrl+w`'s pane keys run
+- The first key of a sequence with nothing runnable under it passes through to the page or
+  Firefox ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Settled). `ctrl+w`'s pane keys run
   only with two panes or more, so with one pane `ctrl+w` closes the tab; with a split, in normal
   mode, it is Vim's window prefix and does not close the tab
   ([m4-split-panes](specs/m4-split-panes.md), sub-spec 3).

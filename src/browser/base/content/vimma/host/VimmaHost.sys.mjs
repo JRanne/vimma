@@ -361,6 +361,11 @@ export const CONTENT_RUNNERS = Object.freeze({
   "scroll.half_up": (b, a) => VimmaActors.scroll(b, "half_up", a.count),
   "scroll.top": (b) => VimmaActors.scroll(b, "top"),
   "scroll.bottom": (b) => VimmaActors.scroll(b, "bottom"),
+  // History and reload act on the focused page's <browser>, so in a split the focused pane's
+  // (plan §2, M1 navigation keys). In insert mode the keys are the page's (normal-only bindings).
+  "history.back": (b, a) => goHistory(b, -(a.count ?? 1)),
+  "history.forward": (b, a) => goHistory(b, a.count ?? 1),
+  "page.reload": (b) => b.reload(),
   // Esc in insert (escape.mjs: blur); the focusout recheck that follows stays in normal.
   "mode.normal": (b) => {
     // Esc in copy mode: the frame drops its selection and caret first.
@@ -388,6 +393,23 @@ export const CONTENT_RUNNERS = Object.freeze({
 });
 
 /**
+ * Moves `browser` `delta` entries through its session history, clamped to the first and last
+ * entry (`5H` on the third page lands on the first). One step goes through goBack/goForward,
+ * which skip entries the user never interacted with, like the toolbar buttons.
+ * @param {any} browser
+ * @param {number} delta  negative goes back
+ */
+function goHistory(browser, delta) {
+  if (delta === -1) return browser.goBack();
+  if (delta === 1) return browser.goForward();
+  const history = browser.browsingContext?.sessionHistory;
+  if (!history) return undefined;
+  const index = Math.min(Math.max(history.index + delta, 0), history.count - 1);
+  if (index !== history.index) browser.gotoIndex(index);
+  return undefined;
+}
+
+/**
  * The find state of the window that owns `browser`.
  * @param {any} browser
  * @returns {Find | undefined}
@@ -397,16 +419,18 @@ function findOf(browser) {
   return (win && states.get(win))?.find ?? undefined;
 }
 
+/** Every action id the host implements. */
+const BUILT = Object.freeze([...Object.keys(RUNNERS), ...Object.keys(CONTENT_RUNNERS)]);
+
 /**
- * Every action id the host implements: the one source for the help overlay's dimmed rows, the
+ * The action ids the host runs: the one source for the help overlay's dimmed rows, the
  * not-implemented notice. Whether one runs right now is
  * `VimmaHost._runnable(state, id)`, which adds "a page with our actor has focus" for
- * CONTENT_RUNNERS.
+ * CONTENT_RUNNERS. Every action is built since the navigation keys (M1), so this is BUILT
+ * unless the test-only `VimmaHost._withhold(id)` takes one out.
  * @type {ReadonlySet<string>}
  */
-export const RUNNABLE = Object.freeze(
-  new Set([...Object.keys(RUNNERS), ...Object.keys(CONTENT_RUNNERS)]),
-);
+export const RUNNABLE = new Set(BUILT);
 
 /** @type {WeakMap<Window, WindowState>} */
 const states = new WeakMap();
@@ -479,6 +503,20 @@ export const VimmaHost = {
    * @type {number}
    */
   _hintRuns: 0,
+
+  /**
+   * Test-only: treats `id` as not built until the returned function is called, so the "not
+   * implemented yet" notice and the overlay's dimmed rows stay testable now that every action
+   * is built. Call it before `configure`, which rebuilds the overlay's rows.
+   * @param {string} id
+   * @returns {() => void} restores it
+   */
+  _withhold(id) {
+    /** @type {Set<string>} */ (RUNNABLE).delete(id);
+    return () => {
+      if (BUILT.includes(id)) /** @type {Set<string>} */ (RUNNABLE).add(id);
+    };
+  },
 
   /** @param {Window} win */
   init(win) {
@@ -961,6 +999,10 @@ export const VimmaHost = {
   _run(state, result, text) {
     if (result?.kind !== "action") return;
     const { action } = result;
+    if (!RUNNABLE.has(action.id)) {
+      state.notice.show(notImplementedText(action));
+      return;
+    }
     const contentRunner = CONTENT_RUNNERS[action.id];
     if (contentRunner) {
       const browser = this._contentBrowser(state);
