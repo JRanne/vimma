@@ -1,0 +1,15 @@
+# CodeQL configuration for codeql.yml. Scans our own code only: the Firefox engine checkout
+# (engine/, never committed) and vendored third-party code are not ours to fix here.
+name: vimma
+queries:
+  - uses: security-extended
+paths:
+  - packages
+  - src/browser/base/content/vimma
+  - tools
+  - tests
+paths-ignore:
+  - engine
+  - "**/vendor/**"
+  - "**/node_modules/**"
+  - tools/vimma-ctl/target

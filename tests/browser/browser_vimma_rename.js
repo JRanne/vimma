@@ -114,7 +114,7 @@ add_task(async function esc_cancels_the_prompt() {
 add_task(async function bidi_and_format_characters_are_stripped() {
   const tab = await openTitled();
   renameKey();
-  input().value = "‮evil​  name⁦";
+  input().value = "\u202eevil\u200b  name\u2066";
   EventUtils.synthesizeKey("KEY_Enter");
   Assert.equal(storedLabel(tab), "evil name", "format characters gone, spaces collapsed");
   await until(() => titleSegment() === "evil name", "the status bar shows the clean label");

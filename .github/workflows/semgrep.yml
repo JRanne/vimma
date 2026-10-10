@@ -1,0 +1,60 @@
+# Semgrep CE static analysis while CodeQL is gated off (codeql.yml). Engine: semgrep/semgrep,
+# LGPL-2.1, run from its container image pinned by digest; not linked into or shipped with
+# Vimma. Rules: the public registry rulesets under the Semgrep Rules License v1.0, which allows
+# use for internal purposes; we only run them in our CI and neither redistribute nor offer them
+# as a service. No semgrep.dev login, token or upload: results stay in the run as SARIF.
+name: Semgrep
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  schedule:
+    - cron: "11 5 * * 1" # Mondays 05:11 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: semgrep-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  scan:
+    name: semgrep (javascript, typescript, rust, secrets, github-actions)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # semgrep/semgrep:1.180.0
+      SEMGREP_IMAGE: semgrep/semgrep@sha256:529ee8a277ec8adc5b534d7c74eea0a47e9de21d62852b6ba7ac6ba9566845c3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Paths skipped: .semgrepignore. Every finding goes into the SARIF; only ERROR fails the job.
+      - name: Semgrep scan
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src "$SEMGREP_IMAGE" semgrep scan \
+            --metrics=off --disable-version-check \
+            --config=p/javascript --config=p/typescript --config=p/rust \
+            --config=p/secrets --config=p/github-actions \
+            --sarif-output=semgrep.sarif --json-output=semgrep.json
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: semgrep-sarif
+          path: semgrep.sarif
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Fail on ERROR findings
+        run: |
+          jq -r '.results[] | "\(.extra.severity) \(.path):\(.start.line) \(.check_id)"' \
+            semgrep.json | sort | tee -a "$GITHUB_STEP_SUMMARY"
+          errors=$(jq '[.results[] | select(.extra.severity == "ERROR")] | length' semgrep.json)
+          if [ "$errors" -gt 0 ]; then
+            echo "::error::$errors Semgrep finding(s) of severity ERROR (see the semgrep-sarif artifact)"
+            exit 1
+          fi
