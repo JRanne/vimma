@@ -160,6 +160,60 @@ function render(d) {
       : el("p", { class: "muted" }, "No workspaces in this window."),
   );
 
+  const routes = d.routes;
+  /** @type {(Node | string)[]} */
+  const tabLine = [];
+  if (routes.tab) {
+    const t = routes.tab;
+    const text =
+      t.rule === null
+        ? `${t.host} (in ${t.workspace}): no rule matches.`
+        : `${t.host} (in ${t.workspace}): route ${t.rule} sends it to ${t.target}` +
+          (t.target === t.workspace ? "." : "; :route move moves it there.");
+    tabLine.push(el("p", { id: "route-tab" }, `The tab :route was typed in: ${text}`));
+  }
+  fill(
+    "routes",
+    ...tabLine,
+    routes.rules.length
+      ? el(
+          "table",
+          {},
+          el(
+            "thead",
+            {},
+            el(
+              "tr",
+              {},
+              el("th", {}, "#"),
+              el("th", {}, "Matches"),
+              el("th", {}, "Workspace"),
+              el("th", {}, "State"),
+            ),
+          ),
+          el(
+            "tbody",
+            {},
+            ...routes.rules.map((r) =>
+              el(
+                "tr",
+                r.skipped ? { class: "error" } : {},
+                el("td", {}, String(r.index)),
+                el("td", {}, r.match),
+                el("td", {}, r.workspace),
+                el("td", {}, r.skipped ?? "in force"),
+              ),
+            ),
+          ),
+        )
+      : el("p", { class: "muted" }, "No [[routes]] in config.toml."),
+    el(
+      "p",
+      { class: "muted" },
+      "The first matching rule, top to bottom, wins. :route add [workspace] adds one for a site.",
+    ),
+  );
+
   fill(
     "control",
     dl([
@@ -197,7 +251,9 @@ function render(d) {
 }
 
 async function refresh() {
-  const data = await AboutVimma.collect(win);
+  const data = await AboutVimma.collect(win, {
+    tab: new URLSearchParams(location.search).get("tab"),
+  });
   render(data);
   document.documentElement.dataset.ready = "true";
   return data;
@@ -222,4 +278,9 @@ document.getElementById("copy")?.addEventListener("click", () => copyReport());
 
 // `:bug` opens about:vimma#bug: the report goes to the clipboard at once.
 if (location.hash === "#bug") copyReport();
-else refresh();
+else {
+  refresh().then(() => {
+    // `:route` opens about:vimma#routes: the browser scrolled to it before it had content.
+    if (location.hash === "#routes") document.getElementById("routes")?.scrollIntoView();
+  });
+}

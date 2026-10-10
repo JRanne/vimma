@@ -2,8 +2,13 @@ diff --git a/browser/modules/BrowserDOMWindow.sys.mjs b/browser/modules/BrowserD
 index 21bd77185457ea204c198c8b5bc3a2401f3f0ffd..7bc6a2901916fe7a03e409e8a1aa04ff30853149 100644
 --- a/browser/modules/BrowserDOMWindow.sys.mjs
 +++ b/browser/modules/BrowserDOMWindow.sys.mjs
-@@ -256,7 +256,8 @@ export class BrowserDOMWindow {
+@@ -256,7 +256,13 @@ export class BrowserDOMWindow {
      var openingUserContextId =
++      // Vimma (workspace-routing): a [[routes]] rule for a link from another app comes first.
++      (isExternal &&
++        ChromeUtils.importESModule(
++          "chrome://browser/content/vimma/workspaces/WorkspaceRouter.sys.mjs"
++        ).WorkspaceRouter.externalUserContextId(aURI, this.win)) ||
        (guessUserContextIdEnabled &&
          lazy.URILoadingHelper.guessUserContextId(aURI)) ||
 -      Ci.nsIScriptSecurityManager.DEFAULT_USER_CONTEXT_ID;

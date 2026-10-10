@@ -48,6 +48,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   E10SUtils: "resource://gre/modules/E10SUtils.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
   SessionStore: "moz-src:///browser/components/sessionstore/SessionStore.sys.mjs",
+  WorkspaceRouter: "chrome://browser/content/vimma/workspaces/WorkspaceRouter.sys.mjs",
 });
 
 /** The window value holding core's snapshot. */
@@ -64,7 +65,8 @@ export const TAB_WORKSPACE_KEY = "vimma-workspace";
  *   linkedBrowser: any }} Tab
  * @typedef {{ tabs: Tab[], visibleTabs: Tab[], selectedTab: Tab, hideTab: (t: Tab) => void,
  *   showTab: (t: Tab) => void, addTrustedTab: (url: string, options?: object) => Tab,
- *   insertBrowser: (t: Tab) => void,
+ *   insertBrowser: (t: Tab) => void, getTabForBrowser: (b: unknown) => Tab | null,
+ *   addTabsProgressListener: (l: object) => void, removeTabsProgressListener: (l: object) => void,
  *   selectedBrowser: Element & { focus: () => void } }} TabBrowser
  * @typedef {object} WindowWorkspacesOptions
  * @property {() => void} [onChange]  told after the model or visibility changed
@@ -157,6 +159,7 @@ export class WindowWorkspacesImpl {
       this.#win.removeEventListener(type, this);
     }
     Services.obs.removeObserver(this.#observer, CHANGED_TOPIC);
+    this.#win.gBrowser?.removeTabsProgressListener(this.#progress);
     const view = PaneViews.get(this.#win);
     if (view) {
       view.onChange = null;
@@ -175,6 +178,7 @@ export class WindowWorkspacesImpl {
     }
     if (win.closed || WorkspaceStore.disabled) return;
     this.#started = true;
+    win.gBrowser.addTabsProgressListener(this.#progress);
     const view = PaneViews.get(win);
     if (view) {
       view.onChange = () => this.#scheduleSave();
@@ -391,6 +395,47 @@ export class WindowWorkspacesImpl {
     }
   }
 
+  /** The host last hinted about, per tab (spec workspace-routing, decision 5). */
+  /** @type {WeakMap<Tab, string>} */
+  #hinted = new WeakMap();
+
+  /**
+   * Same-tab navigation is never moved to another workspace (spec workspace-routing, decision
+   * 5: Zen moved tabs mid-load). When the selected tab's page lands on a site a `[[routes]]`
+   * rule sends elsewhere, the notice says so, once per tab and host, and `:route move` moves it.
+   */
+  #progress = {
+    onLocationChange: (
+      /** @type {any} */ browser,
+      /** @type {any} */ webProgress,
+      /** @type {unknown} */ _request,
+      /** @type {any} */ location,
+      /** @type {number} */ flags,
+    ) => {
+      if (!webProgress?.isTopLevel || !this.#model || this.#pending) return;
+      if (flags & Ci.nsIWebProgressListener.LOCATION_CHANGE_SAME_DOCUMENT) return;
+      const tab = /** @type {Tab | null} */ (this.#gBrowser.getTabForBrowser(browser));
+      if (!tab?.selected || tab.pinned || !location) return;
+      const hit = lazy.WorkspaceRouter.match(location.spec, null);
+      if (!hit || hit.workspace.userContextId === tab.userContextId) {
+        this.#hinted.delete(tab);
+        return;
+      }
+      /** @type {string} */
+      let host;
+      try {
+        host = location.host;
+      } catch {
+        return;
+      }
+      if (this.#hinted.get(tab) === host) return;
+      this.#hinted.set(tab, host);
+      this.#notify(
+        `${host} goes to "${hit.workspace.name}" (route ${hit.route.index}): :route move`,
+      );
+    },
+  };
+
   /** Observer: the store's definitions changed (a workspace added, renamed or deleted). */
   #observer = () => {
     if (this.#model && !this.#win.closed && !this.#pending) this.#sync();
@@ -600,9 +645,11 @@ export class WindowWorkspacesImpl {
    * Puts a tab in the model: in the workspace owning its container, else the active one, marked
    * foreign. A tab joining a workspace that is not shown is hidden (decision 12: no switch).
    * @param {Tab} tab
-   * @returns {string | null} the name of the workspace it was hidden in, if it was
+   * @param {((name: string) => void) | null} [defer]  hide in a microtask instead, unless the
+   *   tab got selected meanwhile, and then call this with the workspace's name (TabOpen)
+   * @returns {string | null} the name of the workspace it was hidden in, if it was (now)
    */
-  #adopt(tab) {
+  #adopt(tab, defer = null) {
     const model = /** @type {Workspaces} */ (this.#model);
     const id = this.#idOf(tab);
     if (workspaceOfTab(model, id)) return null;
@@ -611,6 +658,24 @@ export class WindowWorkspacesImpl {
     if (!owner) this.#foreign.add(id);
     this.#model = openTab(model, id, { workspace: { id: ws.id }, activate: false });
     if (ws.id === model.active || tab.selected) return null;
+    if (defer) {
+      // A foreground open (addTab selects the tab right after TabOpen, in the same task) is
+      // never hidden first nor said to be "opened in": its selection switches to its
+      // workspace (spec workspace-routing, decision 4). Microtasks run before any paint.
+      this.#win.queueMicrotask(() => {
+        const now = this.#model;
+        if (!now || this.#win.closed || this.#pending || tab.closing || !tab.isConnected) return;
+        if (tab.selected || tab.hidden) return;
+        const w = workspaceOfTab(now, id);
+        if (!w || w.id === now.active) return;
+        if (!this.#gBrowser.visibleTabs.some((/** @type {Tab} */ t) => t !== tab && !t.closing)) {
+          return;
+        }
+        this.#gBrowser.hideTab(tab);
+        defer(w.name);
+      });
+      return null;
+    }
     // Firefox's replacement for a closing last tab must stay visible: it is about to be
     // selected, and with it hidden the close would find no tab to select. Its selection then
     // switches to its workspace.
@@ -637,8 +702,7 @@ export class WindowWorkspacesImpl {
       if (moving.to !== model.active) this.#gBrowser.hideTab(tab);
     } else {
       // Decision 12: a background open into another workspace never switches; it says where.
-      const hiddenIn = this.#adopt(tab);
-      if (hiddenIn !== null) this.#notify(`opened in "${hiddenIn}"`);
+      this.#adopt(tab, (hiddenIn) => this.#notify(`opened in "${hiddenIn}"`));
     }
     this.#changed();
   }

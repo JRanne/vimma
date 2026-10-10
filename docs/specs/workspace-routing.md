@@ -1,6 +1,6 @@
 # Spec: workspace-routing
 
-Status: implemented, awaiting review · Milestone: after M3 (m3-workspaces listed "URL-to-workspace
+Status: implemented, awaiting review (see Settled) · Milestone: after M3 (m3-workspaces listed "URL-to-workspace
 routing rules" as out of scope) · Area: `packages/vimma-core/src/routes.mjs` (new), `config.mjs`,
 `toml.mjs`, `cmdline.mjs`, `actions.mjs`; `src/browser/base/content/vimma/workspaces/`
 (`WorkspaceRouter.sys.mjs` new, `WorkspaceStore`, `WindowWorkspaces`), `host/route-ops.mjs`
@@ -253,6 +253,43 @@ WindowWorkspaces: TabOpen/TabSelect (switch or notice), location changes (hint)
 - Shell (`tools/package/test/vimma-open.test.mjs`): fake `/proc` trees: xdg-open → slack,
   sh → xdg-open → nvim, gio, a portal (unknown), systemd (unknown), the AppImage runtime, a bad
   name, a loop, flags passed through, the sibling binary.
+
+## Settled (2026-10-10)
+
+- **As designed:** decisions 1-8, no new patch file and no new hunk. Three existing hunks grew:
+  `Tabbrowser-sys-mjs.patch` hunk 2 calls `firstTabUserContextId` (one line changed),
+  `BrowserDOMWindow-sys-mjs.patch` asks the router before Firefox's guess (+5 lines),
+  `URILoadingHelper-sys-mjs.patch` calls `routeLinkIn` before its new-window default (+5
+  lines). ADR-003's register lines say so.
+- **Found while building (deviations):**
+  - `openLinkIn` keeps its own `let userContextId` from the destructured params and passes that,
+    not `params.userContextId`, to `addTab` for `tab`; only `current` (its container check) and
+    windows read `params`. The first green attempt routed nothing in tabs (10 unexpected in the
+    new test): the hunk now assigns the router's answer to both.
+  - A page's link routed into another container loses its referrer, as Firefox's own "Open Link
+    in New Container Tab" does (`nsContextMenu._openLinkInParameters`).
+  - `WindowWorkspaces.#adopt` on `TabOpen` hides a tab of another workspace in a microtask, and
+    only if it was not selected meanwhile (decision 4). Before, a foreground open into another
+    workspace was hidden, said `opened in`, then shown again by its selection.
+  - `:route` with no argument opens about:vimma's new Routing section (`?tab=<uuid>#routes`)
+    rather than drawing a list over the page: a list needs a modal overlay with its own keys
+    (the help overlay is being changed by another branch), and about:vimma already lists config
+    state. It shows the tab's host, never its URL; the `:bug` report has only the rule count.
+  - core `locateKeys` now indexes `[[array]]` tables, so `routes[2].url` errors carry their own
+    line; `toml.test.mjs`'s array-table path gains the index the parsed value always had.
+  - Packaging: `vimma-open` lives in `tools/package/vimma-open.sh`; `package.mjs` installs it
+    next to `vimma` in the AppImage (AppRun runs it), the .deb (`/usr/bin/vimma-open`) and the
+    AUR package (a third source file with its SHA-256; `release.yml` pushes it and the .deb smoke
+    test checks it). The desktop entry's `Exec` is `vimma-open %u`; its actions stay `vimma`.
+  - The startup app comes from `VIMMA_FROM` as planned; `-vimma-from` at a cold start is logged
+    by x-default as an unrecognized flag and its value skipped, which is harmless.
+- **Tests:** Vitest `routes.test.mjs` (30), plus `cmdline`, `actions`, `config`, `toml`; red
+  first (the module missing), then green. `vimma-open.test.mjs` (12, fake `/proc`): red (no
+  script), green. Mochitest `browser_vimma_workspace_routes.js` (10 tasks, 60 checks): the
+  first run of the implementation had 10 unexpected (the `openLinkIn` copy above, a stale
+  notice in the test, a private-window helper), then green; whole `tests/browser/` green.
+  Mutation check: hiding a foreground-opened tab anyway (dropping `tab.selected` from the
+  microtask's guard) fails "a foreground open does not say 'opened in'"; reverted.
 
 ## Out of scope
 
