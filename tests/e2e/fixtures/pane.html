@@ -1,0 +1,49 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- m4-split-panes: pane.html#<name> titles itself "<name> <innerWidth>" (in DOM fullscreen
+     "<name> <innerWidth>x<innerHeight> fs") and keeps the title current on every resize, so a
+     scenario reads each pane's size from state's tab titles. pane.html#<name>.fs adds a
+     focused text input (Vimma: insert mode) where Enter toggles DOM fullscreen: a key event is
+     a user activation, which requestFullscreen needs. -->
+<meta charset="utf-8" />
+<title>pane</title>
+<style>
+  html {
+    height: 100%;
+    background: #e8e8e8;
+    font: 48px sans-serif;
+    text-align: center;
+  }
+  html.fs-page {
+    background: #d8e8f8;
+  }
+  input {
+    font: inherit;
+    width: 4em;
+  }
+</style>
+<p id="name"></p>
+<script>
+  const [name, option] = location.hash.slice(1).split(".");
+  document.getElementById("name").textContent = name;
+  const show = () => {
+    const fs = document.fullscreenElement ? `x${window.innerHeight} fs` : "";
+    document.title = `${name} ${window.innerWidth}${fs}`;
+  };
+  if (option === "fs") {
+    document.documentElement.className = "fs-page";
+    const input = document.createElement("input");
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen();
+    });
+    document.body.append(input);
+    input.focus();
+  }
+  addEventListener("resize", show);
+  document.addEventListener("fullscreenchange", show);
+  show();
+</script>
