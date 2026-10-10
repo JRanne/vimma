@@ -10,6 +10,7 @@ import {
   MAX_LINE_LENGTH,
   validateMessage,
   tokensEqual,
+  LineFramer,
 } from "../src/control.mjs";
 
 const FIXTURES = fileURLToPath(new URL("../../../tests/contract/control/v1/", import.meta.url));
@@ -368,5 +369,39 @@ describe("tokensEqual", () => {
   test("non-strings are never equal", () => {
     expect(tokensEqual(/** @type {any} */ (undefined), /** @type {any} */ (undefined))).toBe(false);
     expect(tokensEqual(TOKEN, /** @type {any} */ (null))).toBe(false);
+  });
+});
+
+describe("LineFramer (the server's framing)", () => {
+  const bytes = (/** @type {string} */ s) => new TextEncoder().encode(s);
+  const text = (/** @type {Uint8Array[]} */ lines) => lines.map((l) => new TextDecoder().decode(l));
+
+  test("splits on \\n, drops one \\r before it, and keeps a partial line for the next push", () => {
+    const f = new LineFramer(16);
+    expect(text(f.push(bytes('{"a":1}\n{"b"')))).toEqual(['{"a":1}']);
+    expect(text(f.push(bytes(":2}\r\n\r\n\n")))).toEqual(['{"b":2}', "", ""]);
+    expect(text(f.push(bytes("x\r\r\n")))).toEqual(["x\r"]);
+    expect(f.overflow).toBe(false);
+  });
+
+  test("a line of max bytes passes, with or without \\r; one byte more overflows", () => {
+    expect(text(new LineFramer(4).push(bytes("abcd\nabcd\r\n")))).toEqual(["abcd", "abcd"]);
+    const f = new LineFramer(4);
+    expect(text(f.push(bytes("ab\nabcde\nok\n")))).toEqual(["ab"]);
+    expect(f.overflow).toBe(true);
+    expect(f.push(bytes("ok\n"))).toEqual([]);
+  });
+
+  test("an endless line overflows before its newline, holding at most max + 1 bytes", () => {
+    const f = new LineFramer(4);
+    expect(f.push(bytes("abcd"))).toEqual([]);
+    expect(f.push(bytes("\r"))).toEqual([]);
+    expect(f.overflow).toBe(false);
+    expect(f.push(bytes("x"))).toEqual([]);
+    expect(f.overflow).toBe(true);
+  });
+
+  test("the default limit is MAX_LINE_LENGTH", () => {
+    expect(new LineFramer().max).toBe(MAX_LINE_LENGTH);
   });
 });
