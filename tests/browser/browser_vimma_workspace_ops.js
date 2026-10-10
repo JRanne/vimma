@@ -33,6 +33,7 @@ const { ContextualIdentityService } = ChromeUtils.importESModule(
 );
 
 const PAGE = "https://example.com/";
+const START = "chrome://browser/content/vimma/start/start.html";
 const NOTICE_ID = "vimma-notice";
 const PROMPT_ID = "vimma-rename";
 const CMDLINE_INPUT_ID = "vimma-cmdline-input";
@@ -66,9 +67,27 @@ function prefix(key, mods = {}) {
   EventUtils.synthesizeKey(key, mods);
 }
 
+/** Focuses the selected page, once it has loaded, so keys reach it in normal mode. */
+async function focusPage() {
+  // A new workspace's home tab may still be swapping its initial about:blank for the start
+  // page; a spawn into it then fails on a busy runner. Wait until it has loaded.
+  const browser = gBrowser.selectedBrowser;
+  await until(() => !browser.webProgress?.isLoadingDocument, "the selected page has loaded");
+  await focusContent(browser);
+}
+
+/** Waits for the selected tab (a new workspace's home tab) to show the start page. */
+function startPageLoaded() {
+  const browser = gBrowser.selectedBrowser;
+  return until(
+    () => browser.currentURI.spec === START && browser.contentDocument?.readyState === "complete",
+    "the start page has loaded",
+  );
+}
+
 /** `:line` Enter, from the selected page in normal mode. */
 async function runCommand(line) {
-  await focusContent(gBrowser.selectedBrowser);
+  await focusPage();
   EventUtils.synthesizeKey(":", { shiftKey: true });
   EventUtils.sendString(line);
   EventUtils.synthesizeKey("KEY_Enter");
@@ -127,6 +146,7 @@ function setCookie(/** @type {number} */ userContextId) {
 async function create(name) {
   await runCommand(`wsnew ${name}`);
   await until(() => def(name) && active() === def(name).id, `created and switched to ${name}`);
+  await startPageLoaded();
   return def(name);
 }
 
@@ -139,13 +159,14 @@ add_task(async function the_last_workspace_cannot_be_closed() {
 });
 
 add_task(async function new_workspace_appears_in_cycling_the_bar_and_the_snapshot() {
-  await focusContent(gBrowser.selectedBrowser);
+  await focusPage();
   prefix("N", { shiftKey: true });
   const input = document.getElementById(CMDLINE_INPUT_ID);
   await until(() => input?.value === "wsnew ", "prefix+shift+n asks on the command line");
   EventUtils.sendString("shop");
   EventUtils.synthesizeKey("KEY_Enter");
   await until(() => def("shop") && active() === def("shop").id, "shop is created and shown");
+  await startPageLoaded();
   const shop = def("shop");
   Assert.equal(shop.source, "runtime", "a runtime workspace");
   Assert.ok(identity(shop.userContextId), "with a container of its own");
@@ -181,7 +202,7 @@ add_task(async function new_workspace_appears_in_cycling_the_bar_and_the_snapsho
 add_task(async function rename_shows_in_the_bar_and_renames_the_container() {
   const shop = def("shop");
   ww().switchTo({ id: shop.id });
-  await focusContent(gBrowser.selectedBrowser);
+  await focusPage();
   prefix("W", { shiftKey: true });
   const input = document.getElementById(CMDLINE_INPUT_ID);
   await until(() => input?.value === "wsrename shop", "prefix+shift+w offers the name to edit");
@@ -206,7 +227,7 @@ add_task(async function closing_asks_n_keeps_y_deletes_the_container_and_its_coo
   setCookie(0);
   Assert.equal(cookieCount(market.userContextId), 1, "market has a cookie");
 
-  await focusContent(gBrowser.selectedBrowser);
+  await focusPage();
   prefix("D", { shiftKey: true });
   await until(promptOpen, "prefix+shift+d asks");
   Assert.equal(
