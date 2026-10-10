@@ -7,6 +7,7 @@
 // EditableDescriptor (vimma-core editable.mjs) and runs scroll, blur and focus-input commands.
 
 import { isEditable } from "../core/editable.mjs";
+import { inputIndex } from "../core/pageurl.mjs";
 import { collectTargets } from "./hint-collect.mjs";
 import { Caret, isCaretMessage } from "./caret.mjs";
 
@@ -283,7 +284,7 @@ export class VimmaChild extends JSWindowActorChild {
         return undefined;
       }
       case "Vimma:FocusInput":
-        return this.#focusInput();
+        return this.#focusInput(msg.data?.count);
       case "Vimma:ScrollPosition": {
         const win = this.contentWindow;
         return win ? { x: win.scrollX, y: win.scrollY } : null;
@@ -421,14 +422,24 @@ export class VimmaChild extends JSWindowActorChild {
     return true;
   }
 
-  #focusInput() {
-    for (const el of this.document.querySelectorAll(TEXT_FIELDS)) {
-      if (el.localName === "select" || !isEditable(describe(el)).editable) continue;
-      if (!el.checkVisibility({ visibilityProperty: true })) continue;
-      /** @type {HTMLElement} */ (el).focus();
-      return true;
-    }
-    return false;
+  /**
+   * Focuses the visible text field a count picks (`i`, `gi`: the first; `3gi`: the third,
+   * clamped to the last), in document order.
+   * @param {number} [count]
+   * @returns {boolean} whether one took focus
+   */
+  #focusInput(count) {
+    const fields = [...this.document.querySelectorAll(TEXT_FIELDS)].filter(
+      (el) =>
+        el.localName !== "select" &&
+        isEditable(describe(el)).editable &&
+        el.checkVisibility({ visibilityProperty: true }),
+    );
+    const el = /** @type {HTMLElement | undefined} */ (
+      fields[inputIndex(Number(count) || undefined, fields.length)]
+    );
+    el?.focus();
+    return !!el;
   }
 
   /**

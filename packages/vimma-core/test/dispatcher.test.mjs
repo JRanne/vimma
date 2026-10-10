@@ -66,7 +66,7 @@ describe("dispatcher (spec acceptance criteria)", () => {
   });
 
   test("a count followed by an unbound key cancels", () => {
-    expect(last(feed(make(), "normal", "3 y"))).toEqual({ kind: "cancel" });
+    expect(last(feed(make(), "normal", "3 z"))).toEqual({ kind: "cancel" });
   });
 
   test("ctrl+b then an unbound key cancels", () => {

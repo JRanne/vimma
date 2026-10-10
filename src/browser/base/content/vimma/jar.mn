@@ -12,6 +12,7 @@ browser.jar:
         content/browser/vimma/host/workspace-ops.mjs      (host/workspace-ops.mjs)
         content/browser/vimma/host/find.mjs               (host/find.mjs)
         content/browser/vimma/host/copy-mode.mjs          (host/copy-mode.mjs)
+        content/browser/vimma/host/page-ops.mjs           (host/page-ops.mjs)
         content/browser/vimma/actors/VimmaActors.sys.mjs  (actors/VimmaActors.sys.mjs)
         content/browser/vimma/actors/VimmaChild.sys.mjs   (actors/VimmaChild.sys.mjs)
         content/browser/vimma/actors/VimmaParent.sys.mjs  (actors/VimmaParent.sys.mjs)

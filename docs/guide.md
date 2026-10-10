@@ -285,6 +285,11 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `H` / `L`                   | Normal mode: back / forward in the page's history (in a split, the focused pane's). A count moves that many pages, stopping at the first or last: `3H`.       |
 | `r`                         | Normal mode: reloads the page (in a split, the focused pane's). In insert mode `H`, `L` and `r` are typed into the field.                                     |
 | `i`                         | Normal mode: focus the first text field and enter insert mode.                                                                                                |
+| `gi`                        | Normal mode: focus the first visible text field, insert mode; `3gi` the third (or the last). With none, it says so and stays normal.                          |
+| `yy`                        | Normal mode: copies the page's URL (in a split, the focused pane's); the notice shows it.                                                                     |
+| `p` / `P`                   | Normal mode: opens the clipboard here / in a new tab, as `:open` / `:tabnew`: a URL loads, other text is searched. No `javascript:`, `data:`.                 |
+| `gu` / `gU`                 | Normal mode: up one level in the URL / to the site's root, without query and hash; `2gu` goes up two. At the top it says so.                                  |
+| `gf`                        | Normal mode: the page's source in a new tab, as `ctrl+u`. In insert mode `gi`, `yy`, `p`, `P`, `gu`, `gU` and `gf` are typed into the field.                  |
 | `f` / `F`                   | Normal mode: link hints. Type a label to follow it, or, with `F`, to open the link in a background tab. `Backspace` undoes a key, `Esc` cancels.              |
 | `/` / `?`                   | Normal mode: find in the page (below). `Enter` stays on the match, `Esc` goes back to where you were.                                                         |
 | `n` / `N`                   | Normal mode: next / previous match of the last search (`?` reverses them), wrapping around the page.                                                          |
@@ -308,6 +313,14 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `ctrl+b shift+x`, `x`       | Closes the tab, as `ctrl+w` does: on a pinned tab it selects the first unpinned tab instead; the last tab closes the window. `x` in normal mode.              |
 | `ctrl+b` then anything else | Never leaks to the page. A binding that does not run yet shows "… not implemented yet" for 1.5 s; an unbound key does nothing. No more bookmarks sidebar.     |
 | Firefox's own keys          | Unchanged: `ctrl+t`, `ctrl+w`, `ctrl+tab`, `ctrl+shift+tab`, `ctrl+pagedown`, `alt+1..9` (tab N on Linux), `ctrl+l`, `ctrl+f`, `ctrl+u`, `ctrl+i`, and so on. |
+
+`p` and `P` read the system clipboard (the one `yy` and copy mode's `y` write). The text is
+trimmed and its line breaks become spaces; one word with a scheme, a dot or a port (`https://…`,
+`example.com`, `localhost:3000`) loads as a URL, anything else goes to your default search
+engine. Text that would load as a `javascript:` or `data:` URL (also behind `view-source:`), or
+is longer than 8192 characters, is refused with a notice and nothing opens. `P`'s tab opens in
+the current workspace, as `:tabnew`'s does. Page zoom has no Vimma keys: `ctrl+plus`,
+`ctrl+minus` and `ctrl+0` work as in Firefox.
 
 Clicking into a pane focuses it, as `ctrl+b h/j/k/l` would. So does selecting a pane's tab any
 other way (the `ctrl+b g` picker, `ctrl+tab`, `alt+1..9`): the status bar's `pane n/m` and the

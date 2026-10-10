@@ -121,6 +121,20 @@ group("Navigation", [
   ["history_forward", "history.forward", "Go forward"],
   ["reload", "page.reload", "Reload page"],
   ["open_url", "page.open", "Open a URL or search in this tab"],
+  ["url_up", "page.url_up", "Go up a level in the URL path"],
+  ["url_root", "page.url_root", "Go to the site's root"],
+]);
+
+group("Page", [
+  ["yank_url", "page.yank_url", "Copy the page's URL"],
+  ["open_clipboard", "page.open_clipboard", "Open the clipboard's URL or search in this tab"],
+  [
+    "open_clipboard_tab",
+    "page.open_clipboard_new_tab",
+    "Open the clipboard's URL or search in a new tab",
+  ],
+  ["focus_input", "page.focus_input", "Focus the first text field (with a count: the Nth)"],
+  ["view_source", "page.view_source", "View the page's source in a new tab"],
 ]);
 
 group("Hints", [
