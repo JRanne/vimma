@@ -70,6 +70,8 @@ const keys = {
   close_workspace: ["prefix+shift+d"],
   goto_picker: ["prefix+g"],
   toggle_sidebar: ["prefix+b", "<leader>n"],
+  toggle_bookmarks: ["prefix+shift+b", "<leader>b"],
+  add_bookmark: ["prefix+a"],
   copy_mode: ["prefix+["],
 };
 
@@ -163,6 +165,19 @@ const modal = {
     k: "panel.up",
     "<CR>": "panel.open",
     "<Esc>": "panel.close",
+    // The bookmarks panel (docs/specs/bookmarks.md), neo-tree's keys; nothing in the tabs panel.
+    h: "bookmarks.collapse",
+    l: "bookmarks.expand",
+    t: "bookmarks.open_tab",
+    s: "bookmarks.open_vsplit",
+    S: "bookmarks.open_hsplit",
+    a: "bookmarks.add",
+    A: "bookmarks.add_folder",
+    r: "bookmarks.rename",
+    m: "bookmarks.move",
+    d: "bookmarks.delete",
+    y: "bookmarks.yank",
+    "/": "bookmarks.filter",
   },
   // ctrl+b r (m4-split-panes sub-spec 5, ADR-014): each key moves the focused pane's divider a
   // step; a count repeats it (3l).

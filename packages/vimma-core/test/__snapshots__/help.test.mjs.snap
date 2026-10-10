@@ -134,6 +134,22 @@ Side panel
   panel_open           <CR> [panel]                                        Open the selected row
   panel_close          <Esc> [panel]                                       Close the side panel
 
+Bookmarks
+  toggle_bookmarks     prefix+shift+b, <leader>b                           Open / close the bookmarks panel
+  add_bookmark         prefix+a                                            Bookmark this page (folders/title files it in folders)
+  bookmarks_collapse   h [panel]                                           Bookmarks: close the folder, or go to its parent
+  bookmarks_expand     l [panel]                                           Bookmarks: open the folder or the bookmark
+  bookmarks_open_tab   t [panel]                                           Bookmarks: open in a new background tab
+  bookmarks_vsplit     s [panel]                                           Bookmarks: open in a split right
+  bookmarks_hsplit     S [panel]                                           Bookmarks: open in a split below
+  bookmarks_add        a [panel]                                           Bookmarks: add this page here (a/b/ makes folders)
+  bookmarks_folder     A [panel]                                           Bookmarks: add a folder here
+  bookmarks_rename     r [panel]                                           Bookmarks: rename
+  bookmarks_move       m [panel]                                           Bookmarks: move to a folder
+  bookmarks_delete     d [panel]                                           Bookmarks: delete (asks y/N)
+  bookmarks_yank       y [panel]                                           Bookmarks: copy the URL
+  bookmarks_filter     / [panel]                                           Bookmarks: filter
+
 Config
   reload_config        (unbound)                                           Reload config
   edit_config          (unbound)                                           Open config.toml in a tab

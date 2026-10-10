@@ -206,6 +206,23 @@ group("Side panel", [
   ["panel_close", "panel.close", "Close the side panel"],
 ]);
 
+group("Bookmarks", [
+  ["toggle_bookmarks", "bookmarks.toggle", "Open / close the bookmarks panel"],
+  ["add_bookmark", "bookmark.add", "Bookmark this page (folders/title files it in folders)"],
+  ["bookmarks_collapse", "bookmarks.collapse", "Bookmarks: close the folder, or go to its parent"],
+  ["bookmarks_expand", "bookmarks.expand", "Bookmarks: open the folder or the bookmark"],
+  ["bookmarks_open_tab", "bookmarks.open_tab", "Bookmarks: open in a new background tab"],
+  ["bookmarks_vsplit", "bookmarks.open_vsplit", "Bookmarks: open in a split right"],
+  ["bookmarks_hsplit", "bookmarks.open_hsplit", "Bookmarks: open in a split below"],
+  ["bookmarks_add", "bookmarks.add", "Bookmarks: add this page here (a/b/ makes folders)"],
+  ["bookmarks_folder", "bookmarks.add_folder", "Bookmarks: add a folder here"],
+  ["bookmarks_rename", "bookmarks.rename", "Bookmarks: rename"],
+  ["bookmarks_move", "bookmarks.move", "Bookmarks: move to a folder"],
+  ["bookmarks_delete", "bookmarks.delete", "Bookmarks: delete (asks y/N)"],
+  ["bookmarks_yank", "bookmarks.yank", "Bookmarks: copy the URL"],
+  ["bookmarks_filter", "bookmarks.filter", "Bookmarks: filter"],
+]);
+
 group("Config", [
   ["reload_config", "config.reload", "Reload config"],
   ["edit_config", "config.edit", "Open config.toml in a tab"],
