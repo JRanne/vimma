@@ -91,3 +91,50 @@ describe("compileKeymap", () => {
     expect(() => compileKeymap({ modal: { timeout_ms: -1 } })).toThrow(KeymapError);
   });
 });
+
+describe("normal-mode extras (yy, p, P, gi, gu, gU, gf)", () => {
+  /**
+   * The action a key sequence reaches in `mode`, or undefined.
+   * @param {string} mode
+   * @param {string[]} keys
+   */
+  const actionAt = (mode, keys) => {
+    let node = compileKeymap().trie(/** @type {any} */ (mode));
+    for (const k of keys) node = node?.children.get(k);
+    return node?.action?.id;
+  };
+
+  test.each([
+    [["y", "y"], "page.yank_url"],
+    [["p"], "page.open_clipboard"],
+    [["shift+p"], "page.open_clipboard_new_tab"],
+    [["g", "i"], "page.focus_input"],
+    [["g", "u"], "page.url_up"],
+    [["g", "shift+u"], "page.url_root"],
+    [["g", "f"], "page.view_source"],
+  ])("normal %j runs %s", (keys, id) => {
+    expect(actionAt("normal", keys)).toBe(id);
+  });
+
+  test("y alone is a prefix in normal mode, not an action of its own", () => {
+    const y = compileKeymap().trie("normal").children.get("y");
+    expect(y?.action).toBeFalsy();
+    expect([...(y?.children.keys() ?? [])]).toEqual(["y"]);
+  });
+
+  test("copy mode keeps y and Y for the selection", () => {
+    expect(actionAt("visual", ["y"])).toBe("selection.yank");
+    expect(actionAt("visual", ["shift+y"])).toBe("selection.yank_lines");
+    expect(actionAt("visual", ["p"])).toBeUndefined();
+  });
+
+  test("the keys are normal-only: insert mode has none of them", () => {
+    for (const key of ["y", "p", "shift+p", "g"]) {
+      expect(compileKeymap().trie("insert").children.get(key)).toBeUndefined();
+    }
+  });
+
+  test("z stays unbound in normal mode (the pass-through key the tests rely on)", () => {
+    expect(compileKeymap().trie("normal").children.get("z")).toBeUndefined();
+  });
+});

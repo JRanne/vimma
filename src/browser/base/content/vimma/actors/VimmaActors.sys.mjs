@@ -312,6 +312,20 @@ export const VimmaActors = {
   },
 
   /**
+   * Focuses the visible text field a count picks in the top frame (`gi`, `3gi`).
+   * @param {any} browser XULBrowserElement
+   * @param {number} [count]
+   * @returns {Promise<boolean>} whether one took focus
+   */
+  async focusNthInput(browser, count) {
+    try {
+      return !!(await actorFor(browser.browsingContext)?.sendQuery("Vimma:FocusInput", { count }));
+    } catch {
+      return false;
+    }
+  },
+
+  /**
    * The top frame's scroll position (where `/` started, spec m1-find), or null.
    * @param {any} browser XULBrowserElement
    * @returns {Promise<{ x: number, y: number } | null>}

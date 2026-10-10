@@ -23,6 +23,7 @@ import { HintOverlay } from "../ui/hint-overlay.mjs";
 import { StatusBar } from "../ui/statusbar.mjs";
 import { Find } from "./find.mjs";
 import { copyModeRunners } from "./copy-mode.mjs";
+import { pageRunners } from "./page-ops.mjs";
 import { Notice } from "../ui/notice.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
 import { GotoPicker, WorkspacePicker } from "../ui/picker.mjs";
@@ -415,6 +416,16 @@ function setBrowserMode(browser, mode) {
 }
 
 /**
+ * Shows `text` as the notice of the window that owns `browser`.
+ * @param {any} browser
+ * @param {string} text
+ */
+function noticeFor(browser, text) {
+  const win = browser?.ownerDocument?.defaultView;
+  (win && states.get(win))?.notice.show(text);
+}
+
+/**
  * Actions on the focused page (m1-actor-insert-scroll). Runnable only while a content browser
  * with our actor has focus; elsewhere (the URL bar) they count as not runnable, so Esc there
  * still reaches Firefox. Every runnable id is a key of RUNNERS or CONTENT_RUNNERS; whether one
@@ -455,10 +466,9 @@ export const CONTENT_RUNNERS = Object.freeze({
   "find.next": (b) => findOf(b)?.again(b, false),
   "find.previous": (b) => findOf(b)?.again(b, true),
   // Copy mode: caret, selection and yank in the focused frame (m1-copy-mode).
-  ...copyModeRunners(setBrowserMode, (b, text) => {
-    const win = b?.ownerDocument?.defaultView;
-    (win && states.get(win))?.notice.show(text);
-  }),
+  ...copyModeRunners(setBrowserMode, noticeFor),
+  // yy, p / P, gi, gu / gU, gf (m1-actor-insert-scroll, follow-up: normal-mode extras).
+  ...pageRunners(setBrowserMode, noticeFor),
 });
 
 /**

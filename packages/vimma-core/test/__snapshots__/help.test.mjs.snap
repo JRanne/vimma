@@ -67,6 +67,15 @@ Navigation
   history_forward      L                                                   Go forward
   reload               r                                                   Reload page
   open_url             (unbound)                                           Open a URL or search in this tab
+  url_up               gu                                                  Go up a level in the URL path
+  url_root             gU                                                  Go to the site's root
+
+Page
+  yank_url             yy                                                  Copy the page's URL
+  open_clipboard       p                                                   Open the clipboard's URL or search in this tab
+  open_clipboard_tab   P                                                   Open the clipboard's URL or search in a new tab
+  focus_input          gi                                                  Focus the first text field (with a count: the Nth)
+  view_source          gf                                                  View the page's source in a new tab
 
 Hints
   follow_link          f                                                   Follow link
