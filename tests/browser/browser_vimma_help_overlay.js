@@ -11,7 +11,7 @@
 // ctrl+b o: a key under the prefix the host has not built (head.js).
 bindUnbuiltPrefixKey();
 
-const { bindingTable, compileKeymap, filterBindings } = ChromeUtils.importESModule(
+const { bindingTable, compileKeymap, filterBindings, keyLegend } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/core/index.mjs",
 );
 const { VimmaHost } = ChromeUtils.importESModule(
@@ -140,13 +140,14 @@ add_task(async function rows_show_the_keys_to_press_under_a_legend() {
     await openHelp();
     const legend = overlay().querySelector(".vimma-help-key-legend");
     Assert.ok(legend && BrowserTestUtils.isVisible(legend), "a legend heads the overlay");
-    Assert.equal(legend.textContent, "prefix = ctrl+b · leader = space");
+    Assert.equal(legend.textContent, keyLegend(compileKeymap()), "the legend of the live keymap");
+    Assert.ok(legend.textContent.startsWith("prefix = ctrl+b"), "it names the prefix");
     Assert.equal(
       overlay().querySelector("header").nextElementSibling,
       legend,
       "the legend comes right under the header",
     );
-    Assert.equal(keysOf(overlay(), "toggle_sidebar"), "ctrl+b b, space n", "the sidebar keys");
+    Assert.ok(keysOf(overlay(), "toggle_sidebar").startsWith("ctrl+b b"), "the sidebar keys");
     Assert.equal(keysOf(overlay(), "close_tab"), "ctrl+b shift+x, x", "close_tab's keys");
     Assert.ok(!overlay().textContent.includes("prefix+"), "no prefix+ notation anywhere");
     Assert.ok(!overlay().textContent.includes("<leader>"), "no <leader> notation anywhere");
@@ -163,7 +164,10 @@ add_task(async function rows_show_the_keys_to_press_under_a_legend() {
 });
 
 add_task(async function a_remapped_prefix_and_leader_show_in_the_rows_and_legend() {
-  const km = compileKeymap({ keys: { prefix: "ctrl+a" }, modal: { leader: "," } });
+  const km = compileKeymap({
+    keys: { prefix: "ctrl+a", toggle_sidebar: ["prefix+b", "<leader>n"] },
+    modal: { leader: "," },
+  });
   const help = new HelpOverlay(window, compileKeymap());
   help.setKeymap(km);
   gBrowser.selectedBrowser.focus();
@@ -173,6 +177,22 @@ add_task(async function a_remapped_prefix_and_leader_show_in_the_rows_and_legend
     Assert.equal(
       help.dialog.querySelector(".vimma-help-key-legend").textContent,
       "prefix = ctrl+a · leader = ,",
+    );
+  } finally {
+    help.close();
+    help.destroy();
+  }
+});
+
+add_task(async function the_legend_leaves_out_a_leader_nothing_uses() {
+  const help = new HelpOverlay(window, compileKeymap({ keys: { toggle_sidebar: ["prefix+b"] } }));
+  gBrowser.selectedBrowser.focus();
+  help.open();
+  try {
+    Assert.equal(keysOf(help.dialog, "toggle_sidebar"), "ctrl+b b", "only the prefix binding");
+    Assert.equal(
+      help.dialog.querySelector(".vimma-help-key-legend").textContent,
+      "prefix = ctrl+b",
     );
   } finally {
     help.close();

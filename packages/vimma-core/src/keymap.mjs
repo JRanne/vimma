@@ -311,8 +311,14 @@ export function compileKeymap(user = {}) {
      * @param {string} name
      */
     keysFor: (name) => listBindings(name, (text) => displayBinding(text, { prefix, leader })),
-    /** What prefix and leader stand for, e.g. `prefix = ctrl+b · leader = space`. */
-    legend: () => `prefix = ${displayKey(prefix)} · leader = ${displayKey(leader)}`,
+    /**
+     * What prefix and leader stand for, e.g. `prefix = ctrl+b · leader = space`. The leader is
+     * named only when a live binding uses it: none of the defaults do.
+     */
+    legend: () =>
+      entries.some((e) => e.modes.size > 0 && e.labels.includes("leader"))
+        ? `prefix = ${displayKey(prefix)} · leader = ${displayKey(leader)}`
+        : `prefix = ${displayKey(prefix)}`,
     /** @param {string} name */
     isOverridden: (name) => overridden.has(name),
   };

@@ -10,7 +10,9 @@ describe("help table", () => {
   });
 
   test("shows the keys a user presses, not config notation", () => {
-    const rows = bindingTable(compileKeymap());
+    // An explicit sidebar list, so the leader binding does not hang on the defaults.
+    const km = compileKeymap({ keys: { toggle_sidebar: ["prefix+b", "<leader>n"] } });
+    const rows = bindingTable(km);
     const keys = (name) => rows.find((r) => r.name === name)?.bindings;
     expect(keys("show_keybinds")).toContain("ctrl+b ?");
     expect(keys("toggle_sidebar")).toEqual(["ctrl+b b", "space n"]);
@@ -30,16 +32,42 @@ describe("help table", () => {
   });
 
   test("follows a remapped prefix and leader", () => {
-    const km = compileKeymap({ keys: { prefix: "ctrl+a" }, modal: { leader: "," } });
+    const km = compileKeymap({
+      keys: { prefix: "ctrl+a", toggle_sidebar: ["prefix+b", "<leader>n"] },
+      modal: { leader: "," },
+    });
     const row = bindingTable(km).find((r) => r.name === "toggle_sidebar");
     expect(row?.bindings).toEqual(["ctrl+a b", ", n"]);
   });
 
-  test("the legend names the prefix and leader keys", () => {
-    expect(keyLegend(compileKeymap())).toBe("prefix = ctrl+b · leader = space");
-    expect(keyLegend(compileKeymap({ keys: { prefix: "ctrl+a" }, modal: { leader: "," } }))).toBe(
-      "prefix = ctrl+a · leader = ,",
-    );
+  test("the legend always names the prefix", () => {
+    expect(keyLegend(compileKeymap())).toMatch(/^prefix = ctrl\+b\b/);
+    expect(keyLegend(compileKeymap({ keys: { prefix: "ctrl+a" } }))).toMatch(/^prefix = ctrl\+a\b/);
+  });
+
+  test("the legend leaves the leader out when nothing is bound to it", () => {
+    // toggle_sidebar's list replaces the default one, so no binding uses the leader.
+    const km = compileKeymap({ keys: { toggle_sidebar: ["prefix+b"] } });
+    expect(ACTIONS.flatMap((a) => km.bindingsFor(a.name)).join(" ")).not.toMatch(/<leader>/i);
+    expect(keyLegend(km)).toBe("prefix = ctrl+b");
+  });
+
+  test("the legend leaves the leader out when its only binding is unbound", () => {
+    const km = compileKeymap({
+      modal: { normal: { "<leader>ff": "goto.picker" } },
+      keys: { toggle_sidebar: ["prefix+b"] },
+      unbind: { normal: ["<leader>ff"] },
+    });
+    expect(keyLegend(km)).toBe("prefix = ctrl+b");
+  });
+
+  test("the legend names the leader once a user binds a key to it", () => {
+    const km = compileKeymap({
+      keys: { prefix: "ctrl+a", toggle_sidebar: ["prefix+b"] },
+      modal: { leader: ",", normal: { "<leader>ff": "goto.picker" } },
+    });
+    expect(keyLegend(km)).toBe("prefix = ctrl+a · leader = ,");
+    expect(bindingTable(km).find((r) => r.name === "goto_picker")?.bindings).toContain(", ff");
   });
 
   test("marks user overrides", () => {

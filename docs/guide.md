@@ -256,8 +256,8 @@ The 2-second check keeps working in every case.
 [bindings.md](bindings.md) lists the full default keymap. It is generated from the same table
 the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree. Both show the keys
 you press, with your prefix and leader filled in (`ctrl+b b`, `space n`), under a line that says
-what they are (`prefix = ctrl+b · leader = space`); a binding you remap in `config.toml` shows
-there with your keys. A `[panel]` after a key means it works only in that mode.
+what they are (`prefix = ctrl+b`, plus `leader = space` once a binding uses the leader); a
+binding you remap in `config.toml` shows there with your keys. A `[panel]` after a key means it works only in that mode.
 
 **What works today:**
 
