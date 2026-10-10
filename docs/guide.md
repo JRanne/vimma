@@ -1011,6 +1011,9 @@ Refresh for the current state. It is an ordinary page, so `j` / `k` scroll it.
 defaults, with every URL replaced by `<url>` and your home directory by `~`. It never contains
 page titles or addresses.
 
+The licences of Firefox's third-party code are in `about:license`; the code Vimma adds itself
+(the smol-toml TOML parser, BSD-3-Clause) is listed there too, under Vimma.
+
 ## Settings (about:config)
 
 Vimma's own preferences today:
