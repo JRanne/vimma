@@ -5,6 +5,9 @@
 #   magick SRC \( +clone -fill 'rgb(3,3,5)' -colorize 100 \) -compose difference -composite \
 #     -colorspace gray -level 2.5%,11% ALPHA     # then SRC + ALPHA via copy_opacity,
 #   -crop 470x367+284+228 +repage -background none -gravity center -extent 512x512
+# then laid over a solid dark window, so the icon reads on light desktops too (the key leaves the
+# panes see-through): roundrectangle 30,81 481,419 20,20 in rgb(8,12,16), its lower pane
+# (y >= 283) rgb(14,18,26); the corners outside the frame stay transparent.
 # Needs ImageMagick (magick). Re-run after replacing the mark or document-pdf.svg, and commit
 # the outputs.
 set -euo pipefail
