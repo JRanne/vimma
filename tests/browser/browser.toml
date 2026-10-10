@@ -31,6 +31,12 @@ support-files = [
 ["browser_vimma_copy_mode.js"]
 support-files = ["file_vimma_copy.html", "file_vimma_copy_frame.html"]
 
+["browser_vimma_copy_motions.js"]
+support-files = ["file_vimma_copy_motions.html"]
+
+["browser_vimma_copy_mouse.js"]
+support-files = ["file_vimma_copy_motions.html"]
+
 ["browser_vimma_branding.js"]
 
 ["browser_vimma_user_agent.js"]
@@ -94,6 +100,8 @@ support-files = [
 
 ["browser_vimma_workspace_store.js"]
 
+["browser_vimma_workspace_routes.js"]
+
 ["browser_vimma_workspace_routing.js"]
 support-files = ["file_vimma_cookie.html"]
 
@@ -107,6 +115,8 @@ support-files = ["file_vimma_cookie.html"]
 
 ["browser_vimma_side_panel.js"]
 
+["browser_vimma_bookmarks.js"]
+
 ["browser_vimma_workspace_restore.js"]
 support-files = ["file_vimma_insert_scroll.html"]
 
@@ -118,3 +128,7 @@ run-if = ["os == 'linux'"] # ln -s for the omarchy-theme-set symlink swap
 ["browser_vimma_about.js"]
 
 ["browser_vimma_omarchy_hook.js"]
+
+["browser_vimma_nav_keys.js"]
+
+["browser_vimma_normal_extras.js"]

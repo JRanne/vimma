@@ -19,6 +19,7 @@
  * @property {string} description
  * @property {number} [arg]
  * @property {readonly string[]} [aliases]
+ * @property {boolean} [takesChar]  the key after it is its character (`f x`), not a binding
  */
 
 /** @type {ActionDef[]} */
@@ -103,6 +104,11 @@ group("Workspaces", [
     "workspace.move_tab",
     "Move the tab to another workspace (reopens it there)",
   ],
+  [
+    "route_rules",
+    "workspace.route",
+    "Routing rules: list them; :route add [workspace], :route move",
+  ],
 ]);
 
 group("Navigation", [
@@ -120,6 +126,20 @@ group("Navigation", [
   ["history_forward", "history.forward", "Go forward"],
   ["reload", "page.reload", "Reload page"],
   ["open_url", "page.open", "Open a URL or search in this tab"],
+  ["url_up", "page.url_up", "Go up a level in the URL path"],
+  ["url_root", "page.url_root", "Go to the site's root"],
+]);
+
+group("Page", [
+  ["yank_url", "page.yank_url", "Copy the page's URL"],
+  ["open_clipboard", "page.open_clipboard", "Open the clipboard's URL or search in this tab"],
+  [
+    "open_clipboard_tab",
+    "page.open_clipboard_new_tab",
+    "Open the clipboard's URL or search in a new tab",
+  ],
+  ["focus_input", "page.focus_input", "Focus the first text field (with a count: the Nth)"],
+  ["view_source", "page.view_source", "View the page's source in a new tab"],
 ]);
 
 group("Hints", [
@@ -154,8 +174,47 @@ group("Copy mode", [
   ["caret_line_end", "caret.line_end", "Move caret to the end of the line"],
   ["caret_top", "caret.top", "Move caret to the top of the page"],
   ["caret_bottom", "caret.bottom", "Move caret to the bottom of the page"],
+  ["caret_word_end", "caret.word_end", "Move caret to the end of the word"],
+  ["caret_prev_word_end", "caret.word_end_backward", "Move caret to the previous word's end"],
+  ["caret_bigword_next", "caret.bigword_forward", "Move caret to the next WORD (by spaces)"],
+  ["caret_bigword_back", "caret.bigword_backward", "Move caret to the WORD's start"],
+  ["caret_bigword_end", "caret.bigword_end", "Move caret to the end of the WORD"],
+  ["caret_first_char", "caret.first_nonblank", "Move caret to the line's first non-blank"],
+  ["caret_para_back", "caret.paragraph_backward", "Move caret to the paragraph's start"],
+  ["caret_para_next", "caret.paragraph_forward", "Move caret to the paragraph's end"],
+  [
+    "caret_find_forward",
+    "caret.find_forward",
+    "Find a character forward on the line",
+    { takesChar: true },
+  ],
+  [
+    "caret_find_backward",
+    "caret.find_backward",
+    "Find a character backward on the line",
+    { takesChar: true },
+  ],
+  [
+    "caret_till_forward",
+    "caret.till_forward",
+    "Till a character forward on the line",
+    { takesChar: true },
+  ],
+  [
+    "caret_till_backward",
+    "caret.till_backward",
+    "Till a character backward on the line",
+    { takesChar: true },
+  ],
+  ["caret_find_repeat", "caret.find_repeat", "Repeat the last f, F, t or T"],
+  ["caret_find_reverse", "caret.find_repeat_reverse", "Repeat the last find, reversed"],
   ["toggle_selection", "selection.toggle", "Start or drop a selection at the caret"],
+  ["line_selection", "selection.line", "Start or drop a line-wise selection"],
+  ["swap_selection_ends", "selection.swap", "Swap the selection's ends"],
+  ["select_inner_word", "selection.inner_word", "Select the word at the caret"],
+  ["select_a_word", "selection.a_word", "Select the word at the caret and its spaces"],
   ["yank_selection", "selection.yank", "Copy selection and leave copy mode"],
+  ["yank_lines", "selection.yank_lines", "Copy the selection's whole lines and leave"],
 ]);
 
 group("Side panel", [
@@ -164,6 +223,23 @@ group("Side panel", [
   ["panel_up", "panel.up", "Previous row"],
   ["panel_open", "panel.open", "Open the selected row"],
   ["panel_close", "panel.close", "Close the side panel"],
+]);
+
+group("Bookmarks", [
+  ["toggle_bookmarks", "bookmarks.toggle", "Open / close the bookmarks panel"],
+  ["add_bookmark", "bookmark.add", "Bookmark this page (folders/title files it in folders)"],
+  ["bookmarks_collapse", "bookmarks.collapse", "Bookmarks: close the folder, or go to its parent"],
+  ["bookmarks_expand", "bookmarks.expand", "Bookmarks: open the folder or the bookmark"],
+  ["bookmarks_open_tab", "bookmarks.open_tab", "Bookmarks: open in a new background tab"],
+  ["bookmarks_vsplit", "bookmarks.open_vsplit", "Bookmarks: open in a split right"],
+  ["bookmarks_hsplit", "bookmarks.open_hsplit", "Bookmarks: open in a split below"],
+  ["bookmarks_add", "bookmarks.add", "Bookmarks: add this page here (a/b/ makes folders)"],
+  ["bookmarks_folder", "bookmarks.add_folder", "Bookmarks: add a folder here"],
+  ["bookmarks_rename", "bookmarks.rename", "Bookmarks: rename"],
+  ["bookmarks_move", "bookmarks.move", "Bookmarks: move to a folder"],
+  ["bookmarks_delete", "bookmarks.delete", "Bookmarks: delete (asks y/N)"],
+  ["bookmarks_yank", "bookmarks.yank", "Bookmarks: copy the URL"],
+  ["bookmarks_filter", "bookmarks.filter", "Bookmarks: filter"],
 ]);
 
 group("Config", [

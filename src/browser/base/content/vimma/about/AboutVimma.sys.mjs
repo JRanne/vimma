@@ -14,6 +14,7 @@ import { bindingTable } from "../core/help.mjs";
 import { compileKeymap } from "../core/keymap.mjs";
 import { formatConfigError } from "../core/config.mjs";
 import { leaves } from "../core/panes.mjs";
+import { describeRoute } from "../core/routes.mjs";
 import { redactReport } from "../core/report.mjs";
 import { ConfigHost } from "../config/ConfigHost.sys.mjs";
 import { ENABLED_PREF, VimmaControl } from "../ctl/VimmaControl.sys.mjs";
@@ -21,6 +22,7 @@ import { VimmaHost } from "../host/VimmaHost.sys.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
+import { WorkspaceRouter } from "../workspaces/WorkspaceRouter.sys.mjs";
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
 import { KeyLog } from "./key-log.mjs";
 
@@ -50,6 +52,16 @@ const CONTRACT = "@mozilla.org/network/protocol/about;1?what=vimma";
  * @property {{ count: number, window: { name: string, active: boolean, tabs: number,
  *   panes: number }[] }} workspaces
  * @property {{ enabled: boolean, port: number | null }} control
+ * @property {RoutesData} routes
+ */
+
+/**
+ * The `[[routes]]` rules in force, and the one for the tab `:route` was typed in (by its uuid in
+ * the page's `?tab=`): its host only, never its URL.
+ * @typedef {object} RoutesData
+ * @property {{ index: number, match: string, workspace: string, skipped: string | null }[]} rules
+ * @property {{ host: string, workspace: string, rule: number | null, target: string | null }
+ *   | null} tab
  */
 
 /** An nsIAboutModule that is its own nsIFactory; XPCOM types are untyped here (types/). */
@@ -103,6 +115,46 @@ async function omarchyThemeName(dir) {
 }
 
 /**
+ * The rules, and the match for the tab with uuid `tabId` in `win` (spec workspace-routing).
+ * @param {Window} win
+ * @param {string | null} tabId
+ * @returns {RoutesData}
+ */
+function routesOf(win, tabId) {
+  const names = WorkspaceStore.definitions.workspaces.map((d) => d.name);
+  const rules = WorkspaceRouter.routes.map((r) => ({
+    index: r.index,
+    match: describeRoute(r),
+    workspace: r.workspace,
+    skipped: names.includes(r.workspace) ? null : "no such workspace",
+  }));
+  const ww = WindowWorkspaces.get(win);
+  const tab = tabId && ww?.model ? /** @type {any} */ (ww.tabOf(tabId)) : null;
+  if (!tab) return { rules, tab: null };
+  const uri = tab.linkedBrowser.currentURI;
+  /** @type {string} */
+  let host;
+  try {
+    host = uri.host;
+  } catch {
+    host = uri.scheme;
+  }
+  const hit = WorkspaceRouter.match(uri.spec, null);
+  const inWs = WorkspaceStore.definitions.workspaces.find(
+    (d) => d.userContextId === tab.userContextId,
+  );
+  return {
+    rules,
+    tab: {
+      host,
+      workspace: inWs?.name ?? "no workspace's container",
+      rule: hit?.route.index ?? null,
+      target: hit?.workspace.name ?? null,
+    },
+  };
+}
+
+/**
  * The workspaces of `win`: each one's name, tab count and pane count.
  * @param {Window} win
  */
@@ -140,9 +192,10 @@ export const AboutVimma = {
   /**
    * Everything the page shows, read now. Never the control token, page URLs or titles.
    * @param {Window} win  the browser window the page is in (its workspaces are listed)
+   * @param {{ tab?: string | null }} [options]  `tab`: the uuid `:route` passes (routing)
    * @returns {Promise<AboutData>}
    */
-  async collect(win) {
+  async collect(win, { tab = null } = {}) {
     const app = lazy.AppConstants;
     const keymap = ConfigHost.keymap ?? compileKeymap();
     const configPath = ConfigHost.path;
@@ -186,6 +239,7 @@ export const AboutVimma = {
         enabled: Services.prefs.getBoolPref(ENABLED_PREF, false),
         port: VimmaControl.port,
       },
+      routes: routesOf(win, tab),
     };
   },
 
@@ -219,6 +273,9 @@ export const AboutVimma = {
       `Workspaces: ${data.workspaces.count}; this window: ${
         data.workspaces.window.map((w) => `${w.name} ${w.tabs}t/${w.panes}p`).join(", ") || "none"
       }`,
+      // Only counts: a rule's domain can name the user's employer.
+      `Routes: ${data.routes.rules.length}` +
+        ` (${data.routes.rules.filter((r) => r.skipped).length} skipped)`,
       `Control socket: ${data.control.enabled ? `enabled, port ${data.control.port ?? "-"}` : "off"}`,
     ];
     const home = Services.dirsvc.get("Home", Ci.nsIFile).path;

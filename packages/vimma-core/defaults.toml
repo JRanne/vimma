@@ -41,6 +41,8 @@ rename_workspace = ["prefix+shift+w"]
 close_workspace = ["prefix+shift+d"]
 goto_picker = ["prefix+g"]
 toggle_sidebar = ["prefix+b", "<leader>n"]
+toggle_bookmarks = ["prefix+shift+b", "<leader>b"]
+add_bookmark = ["prefix+a"]
 copy_mode = ["prefix+["]
 
 [modal]
@@ -75,6 +77,13 @@ hint_chars = "asdfghjkl"
 "gt" = "tab.next"
 "gT" = "tab.previous"
 "b" = "goto.picker"
+"yy" = "page.yank_url"
+"p" = "page.open_clipboard"
+"P" = "page.open_clipboard_new_tab"
+"gi" = "page.focus_input"
+"gu" = "page.url_up"
+"gU" = "page.url_root"
+"gf" = "page.view_source"
 "<C-w>h" = "pane.focus_left"
 "<C-w>j" = "pane.focus_down"
 "<C-w>k" = "pane.focus_up"
@@ -104,8 +113,27 @@ hint_chars = "asdfghjkl"
 "$" = "caret.line_end"
 "gg" = "caret.top"
 "G" = "caret.bottom"
+"e" = "caret.word_end"
+"ge" = "caret.word_end_backward"
+"W" = "caret.bigword_forward"
+"B" = "caret.bigword_backward"
+"E" = "caret.bigword_end"
+"^" = "caret.first_nonblank"
+"{" = "caret.paragraph_backward"
+"}" = "caret.paragraph_forward"
+"f" = "caret.find_forward"
+"F" = "caret.find_backward"
+"t" = "caret.till_forward"
+"T" = "caret.till_backward"
+";" = "caret.find_repeat"
+"," = "caret.find_repeat_reverse"
 "v" = "selection.toggle"
+"V" = "selection.line"
+"o" = "selection.swap"
+"iw" = "selection.inner_word"
+"aw" = "selection.a_word"
 "y" = "selection.yank"
+"Y" = "selection.yank_lines"
 
 [modal.command]
 "<Esc>" = "command.cancel"
@@ -132,6 +160,18 @@ hint_chars = "asdfghjkl"
 "k" = "panel.up"
 "<CR>" = "panel.open"
 "<Esc>" = "panel.close"
+"h" = "bookmarks.collapse"
+"l" = "bookmarks.expand"
+"t" = "bookmarks.open_tab"
+"s" = "bookmarks.open_vsplit"
+"S" = "bookmarks.open_hsplit"
+"a" = "bookmarks.add"
+"A" = "bookmarks.add_folder"
+"r" = "bookmarks.rename"
+"m" = "bookmarks.move"
+"d" = "bookmarks.delete"
+"y" = "bookmarks.yank"
+"/" = "bookmarks.filter"
 
 [modal.resize]
 "h" = "pane.resize_narrower"
@@ -175,3 +215,9 @@ max = 4
 # A host also covers its subdomains. None by default.
 # [sites."docs.google.com"]
 # insert = "always"
+
+# Which workspace a link opens in: by domain (and its subdomains), url prefix, or the app
+# that opened it (vimma-open). The first matching rule wins. None by default.
+# [[routes]]
+# domain = "github.com"
+# workspace = "work"

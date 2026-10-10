@@ -121,6 +121,8 @@ export const VimmaActors = {
           focus: { capture: true },
           // Only for an editable document root; a frame never focused has no actor to ask.
           mousedown: { capture: true, createActor: false },
+          // A drag and drop's end is no mouse selection (m1-copy-mode).
+          dragstart: { capture: true, createActor: false },
         },
       },
       allFrames: true,
@@ -310,6 +312,20 @@ export const VimmaActors = {
   },
 
   /**
+   * Focuses the visible text field a count picks in the top frame (`gi`, `3gi`).
+   * @param {any} browser XULBrowserElement
+   * @param {number} [count]
+   * @returns {Promise<boolean>} whether one took focus
+   */
+  async focusNthInput(browser, count) {
+    try {
+      return !!(await actorFor(browser.browsingContext)?.sendQuery("Vimma:FocusInput", { count }));
+    } catch {
+      return false;
+    }
+  },
+
+  /**
    * The top frame's scroll position (where `/` started, spec m1-find), or null.
    * @param {any} browser XULBrowserElement
    * @returns {Promise<{ x: number, y: number } | null>}
@@ -342,15 +358,19 @@ export const VimmaActors = {
 
   /**
    * Copy mode (m1-copy-mode) in the focused frame: `enter`, a motion (caret.mjs), `toggle`,
-   * `yank` or `exit`. The reply is from a content process: anything but the expected type
+   * a selection op, `yank`, `yank_lines` or `exit`. The reply is from a content process: anything but the expected type
    * counts as a failure (false, or "" for `yank`).
    * @param {any} browser XULBrowserElement
    * @param {string} op
    * @param {number} [count]
+   * @param {string} [char]  a find's character (`f x`)
    * @returns {Promise<boolean | string>}
    */
-  async caret(browser, op, count) {
-    const data = count === undefined ? { op } : { op, count };
+  async caret(browser, op, count, char) {
+    /** @type {{ op: string, count?: number, char?: string }} */
+    const data = { op };
+    if (count !== undefined) data.count = count;
+    if (char !== undefined) data.char = char;
     /** @type {unknown} */
     let reply;
     try {
@@ -358,7 +378,7 @@ export const VimmaActors = {
     } catch {
       reply = null; // the frame navigated or its process went away
     }
-    if (op === "yank") return typeof reply === "string" ? reply : "";
+    if (op === "yank" || op === "yank_lines") return typeof reply === "string" ? reply : "";
     return reply === true;
   },
 };

@@ -11,9 +11,8 @@
 // ctrl+b o: a key under the prefix the host has not built (head.js).
 bindUnbuiltPrefixKey();
 
-const { bindingTable, compileKeymap, filterBindings, keyLegend } = ChromeUtils.importESModule(
-  "chrome://browser/content/vimma/core/index.mjs",
-);
+const { DEFAULT_CONFIG, bindingTable, compileKeymap, filterBindings, keyLegend } =
+  ChromeUtils.importESModule("chrome://browser/content/vimma/core/index.mjs");
 const { VimmaHost } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
 );
@@ -185,7 +184,13 @@ add_task(async function a_remapped_prefix_and_leader_show_in_the_rows_and_legend
 });
 
 add_task(async function the_legend_leaves_out_a_leader_nothing_uses() {
-  const help = new HelpOverlay(window, compileKeymap({ keys: { toggle_sidebar: ["prefix+b"] } }));
+  // Every default list without its leader bindings, so no binding uses the leader.
+  const keys = Object.fromEntries(
+    Object.entries(DEFAULT_CONFIG.keys)
+      .filter(([, v]) => [v].flat().some((b) => /<leader>/i.test(b)))
+      .map(([k, v]) => [k, [v].flat().filter((b) => !/<leader>/i.test(b))]),
+  );
+  const help = new HelpOverlay(window, compileKeymap({ keys }));
   gBrowser.selectedBrowser.focus();
   help.open();
   try {

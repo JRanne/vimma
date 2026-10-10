@@ -2,6 +2,14 @@ import { describe, test, expect } from "vitest";
 import { compileKeymap } from "../src/keymap.mjs";
 import { bindingTable, filterBindings, keyLegend, renderHelpText } from "../src/help.mjs";
 import { ACTIONS } from "../src/actions.mjs";
+import { DEFAULT_CONFIG } from "../src/defaults.mjs";
+
+/** [keys] lists that drop every default leader binding, so no binding uses the leader. */
+const NO_LEADER_KEYS = Object.fromEntries(
+  Object.entries(DEFAULT_CONFIG.keys)
+    .filter(([, v]) => [v].flat().some((b) => /<leader>/i.test(b)))
+    .map(([k, v]) => [k, [v].flat().filter((b) => !/<leader>/i.test(b))]),
+);
 
 describe("help table", () => {
   test("has one row per action in ACTIONS order", () => {
@@ -46,8 +54,7 @@ describe("help table", () => {
   });
 
   test("the legend leaves the leader out when nothing is bound to it", () => {
-    // toggle_sidebar's list replaces the default one, so no binding uses the leader.
-    const km = compileKeymap({ keys: { toggle_sidebar: ["prefix+b"] } });
+    const km = compileKeymap({ keys: NO_LEADER_KEYS });
     expect(ACTIONS.flatMap((a) => km.bindingsFor(a.name)).join(" ")).not.toMatch(/<leader>/i);
     expect(keyLegend(km)).toBe("prefix = ctrl+b");
   });
@@ -55,7 +62,7 @@ describe("help table", () => {
   test("the legend leaves the leader out when its only binding is unbound", () => {
     const km = compileKeymap({
       modal: { normal: { "<leader>ff": "goto.picker" } },
-      keys: { toggle_sidebar: ["prefix+b"] },
+      keys: NO_LEADER_KEYS,
       unbind: { normal: ["<leader>ff"] },
     });
     expect(keyLegend(km)).toBe("prefix = ctrl+b");
@@ -63,7 +70,7 @@ describe("help table", () => {
 
   test("the legend names the leader once a user binds a key to it", () => {
     const km = compileKeymap({
-      keys: { prefix: "ctrl+a", toggle_sidebar: ["prefix+b"] },
+      keys: { ...NO_LEADER_KEYS, prefix: "ctrl+a" },
       modal: { leader: ",", normal: { "<leader>ff": "goto.picker" } },
     });
     expect(keyLegend(km)).toBe("prefix = ctrl+a · leader = ,");

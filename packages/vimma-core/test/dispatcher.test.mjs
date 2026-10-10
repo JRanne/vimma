@@ -1,7 +1,7 @@
 import { describe, test, expect } from "vitest";
 import { createDispatcher } from "../src/dispatcher.mjs";
 import { compileKeymap } from "../src/keymap.mjs";
-import { parseKey } from "../src/keys.mjs";
+import { formatKey, parseKey } from "../src/keys.mjs";
 
 /** Feed space-separated chords; return all results. */
 function feed(d, mode, keys) {
@@ -66,7 +66,7 @@ describe("dispatcher (spec acceptance criteria)", () => {
   });
 
   test("a count followed by an unbound key cancels", () => {
-    expect(last(feed(make(), "normal", "3 y"))).toEqual({ kind: "cancel" });
+    expect(last(feed(make(), "normal", "3 z"))).toEqual({ kind: "cancel" });
   });
 
   test("ctrl+b then an unbound key cancels", () => {
@@ -240,6 +240,115 @@ describe("copy mode keys (spec m1-copy-mode)", () => {
     expect(last(feed(make(), "visual", "3 w"))).toEqual({
       kind: "action",
       action: { id: "caret.word_forward", count: 3 },
+    });
+  });
+});
+
+describe("copy mode: Vim motions, selection and yank keys", () => {
+  test.each([
+    ["e", "caret.word_end"],
+    ["g e", "caret.word_end_backward"],
+    ["W", "caret.bigword_forward"],
+    ["B", "caret.bigword_backward"],
+    ["E", "caret.bigword_end"],
+    ["^", "caret.first_nonblank"],
+    ["{", "caret.paragraph_backward"],
+    ["}", "caret.paragraph_forward"],
+    [";", "caret.find_repeat"],
+    [",", "caret.find_repeat_reverse"],
+    ["V", "selection.line"],
+    ["o", "selection.swap"],
+    ["i w", "selection.inner_word"],
+    ["a w", "selection.a_word"],
+    ["Y", "selection.yank_lines"],
+  ])("%s in visual mode runs %s", (keys, id) => {
+    expect(last(feed(make(), "visual", keys))).toEqual({ kind: "action", action: { id } });
+  });
+
+  test.each([
+    ["f", "caret.find_forward"],
+    ["F", "caret.find_backward"],
+    ["t", "caret.till_forward"],
+    ["T", "caret.till_backward"],
+  ])("%s waits for a character, then runs %s with it", (key, id) => {
+    const d = make();
+    expect(d.dispatch("visual", parseKey(key))).toEqual({ kind: "pending" });
+    expect(d.ambiguous()).toBe(false);
+    expect(d.pending()).toEqual([formatKey(parseKey(key))]);
+    expect(d.dispatch("visual", parseKey("x"))).toEqual({
+      kind: "action",
+      action: { id, char: "x" },
+    });
+    expect(d.pending()).toEqual([]);
+  });
+
+  test("the character keeps its case, and shifted characters are themselves", () => {
+    expect(last(feed(make(), "visual", "f X"))).toEqual({
+      kind: "action",
+      action: { id: "caret.find_forward", char: "X" },
+    });
+    expect(last(feed(make(), "visual", "t {"))).toEqual({
+      kind: "action",
+      action: { id: "caret.till_forward", char: "{" },
+    });
+    expect(last(feed(make(), "visual", "f space"))).toEqual({
+      kind: "action",
+      action: { id: "caret.find_forward", char: " " },
+    });
+  });
+
+  test("a bound key is the character, not its binding (f then f, f then 3)", () => {
+    expect(last(feed(make(), "visual", "f f"))).toEqual({
+      kind: "action",
+      action: { id: "caret.find_forward", char: "f" },
+    });
+    expect(last(feed(make(), "visual", "f 3"))).toEqual({
+      kind: "action",
+      action: { id: "caret.find_forward", char: "3" },
+    });
+  });
+
+  test("a count before f is kept", () => {
+    expect(last(feed(make(), "visual", "2 f a"))).toEqual({
+      kind: "action",
+      action: { id: "caret.find_forward", char: "a", count: 2 },
+    });
+  });
+
+  test("Esc or a key that is no character cancels the pending f", () => {
+    const d = make();
+    expect(last(feed(d, "visual", "f esc"))).toEqual({ kind: "cancel" });
+    expect(d.pending()).toEqual([]);
+    expect(last(feed(d, "visual", "f enter"))).toEqual({ kind: "cancel" });
+    expect(last(feed(d, "visual", "f ctrl+x"))).toEqual({ kind: "cancel" });
+    expect(last(feed(d, "visual", "l"))).toEqual({
+      kind: "action",
+      action: { id: "caret.right" },
+    });
+  });
+
+  test("flush drops a pending f", () => {
+    const d = make();
+    d.dispatch("visual", parseKey("f"));
+    expect(d.flush()).toEqual({ kind: "cancel" });
+    expect(d.pending()).toEqual([]);
+  });
+
+  test("a count repeats the new motions", () => {
+    expect(last(feed(make(), "visual", "3 e"))).toEqual({
+      kind: "action",
+      action: { id: "caret.word_end", count: 3 },
+    });
+    expect(last(feed(make(), "visual", "5 j"))).toEqual({
+      kind: "action",
+      action: { id: "caret.down", count: 5 },
+    });
+  });
+
+  test("f in normal mode is still hints", () => {
+    expect(feed(make(), "normal", "f")[0]).toEqual({
+      kind: "action",
+      action: { id: "hint.follow" },
     });
   });
 });

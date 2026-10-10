@@ -59,16 +59,17 @@ are written in notation: `ctrl+b b` is `prefix+b`, `space n` is `<leader>n`
 
 ## Workspaces
 
-| Action                                               | Config name          | Bindings         |
-| ---------------------------------------------------- | -------------------- | ---------------- |
-| Next workspace                                       | `next_workspace`     | `ctrl+i`         |
-| Previous workspace                                   | `previous_workspace` | `ctrl+u`         |
-| Switch to a workspace by name or number              | `switch_workspace`   | —                |
-| Workspace picker                                     | `workspace_picker`   | `ctrl+b w`       |
-| New workspace                                        | `new_workspace`      | `ctrl+b shift+n` |
-| Rename workspace                                     | `rename_workspace`   | `ctrl+b shift+w` |
-| Close workspace                                      | `close_workspace`    | `ctrl+b shift+d` |
-| Move the tab to another workspace (reopens it there) | `move_to_workspace`  | —                |
+| Action                                                        | Config name          | Bindings         |
+| ------------------------------------------------------------- | -------------------- | ---------------- |
+| Next workspace                                                | `next_workspace`     | `ctrl+i`         |
+| Previous workspace                                            | `previous_workspace` | `ctrl+u`         |
+| Switch to a workspace by name or number                       | `switch_workspace`   | —                |
+| Workspace picker                                              | `workspace_picker`   | `ctrl+b w`       |
+| New workspace                                                 | `new_workspace`      | `ctrl+b shift+n` |
+| Rename workspace                                              | `rename_workspace`   | `ctrl+b shift+w` |
+| Close workspace                                               | `close_workspace`    | `ctrl+b shift+d` |
+| Move the tab to another workspace (reopens it there)          | `move_to_workspace`  | —                |
+| Routing rules: list them; :route add [workspace], :route move | `route_rules`        | —                |
 
 ## Navigation
 
@@ -88,6 +89,18 @@ are written in notation: `ctrl+b b` is `prefix+b`, `space n` is `<leader>n`
 | Go forward                                | `history_forward`  | `L`                   |
 | Reload page                               | `reload`           | `r`                   |
 | Open a URL or search in this tab          | `open_url`         | —                     |
+| Go up a level in the URL path             | `url_up`           | `gu`                  |
+| Go to the site's root                     | `url_root`         | `gU`                  |
+
+## Page
+
+| Action                                             | Config name          | Bindings |
+| -------------------------------------------------- | -------------------- | -------- |
+| Copy the page's URL                                | `yank_url`           | `yy`     |
+| Open the clipboard's URL or search in this tab     | `open_clipboard`     | `p`      |
+| Open the clipboard's URL or search in a new tab    | `open_clipboard_tab` | `P`      |
+| Focus the first text field (with a count: the Nth) | `focus_input`        | `gi`     |
+| View the page's source in a new tab                | `view_source`        | `gf`     |
 
 ## Hints
 
@@ -118,20 +131,39 @@ are written in notation: `ctrl+b b` is `prefix+b`, `space n` is `<leader>n`
 
 ## Copy mode
 
-| Action                                 | Config name           | Bindings      |
-| -------------------------------------- | --------------------- | ------------- |
-| Move caret left                        | `caret_left`          | `h [visual]`  |
-| Move caret down                        | `caret_down`          | `j [visual]`  |
-| Move caret up                          | `caret_up`            | `k [visual]`  |
-| Move caret right                       | `caret_right`         | `l [visual]`  |
-| Move caret a word forward              | `caret_word_forward`  | `w [visual]`  |
-| Move caret a word back                 | `caret_word_backward` | `b [visual]`  |
-| Move caret to the start of the line    | `caret_line_start`    | `0 [visual]`  |
-| Move caret to the end of the line      | `caret_line_end`      | `$ [visual]`  |
-| Move caret to the top of the page      | `caret_top`           | `gg [visual]` |
-| Move caret to the bottom of the page   | `caret_bottom`        | `G [visual]`  |
-| Start or drop a selection at the caret | `toggle_selection`    | `v [visual]`  |
-| Copy selection and leave copy mode     | `yank_selection`      | `y [visual]`  |
+| Action                                      | Config name           | Bindings      |
+| ------------------------------------------- | --------------------- | ------------- |
+| Move caret left                             | `caret_left`          | `h [visual]`  |
+| Move caret down                             | `caret_down`          | `j [visual]`  |
+| Move caret up                               | `caret_up`            | `k [visual]`  |
+| Move caret right                            | `caret_right`         | `l [visual]`  |
+| Move caret a word forward                   | `caret_word_forward`  | `w [visual]`  |
+| Move caret a word back                      | `caret_word_backward` | `b [visual]`  |
+| Move caret to the start of the line         | `caret_line_start`    | `0 [visual]`  |
+| Move caret to the end of the line           | `caret_line_end`      | `$ [visual]`  |
+| Move caret to the top of the page           | `caret_top`           | `gg [visual]` |
+| Move caret to the bottom of the page        | `caret_bottom`        | `G [visual]`  |
+| Move caret to the end of the word           | `caret_word_end`      | `e [visual]`  |
+| Move caret to the previous word's end       | `caret_prev_word_end` | `ge [visual]` |
+| Move caret to the next WORD (by spaces)     | `caret_bigword_next`  | `W [visual]`  |
+| Move caret to the WORD's start              | `caret_bigword_back`  | `B [visual]`  |
+| Move caret to the end of the WORD           | `caret_bigword_end`   | `E [visual]`  |
+| Move caret to the line's first non-blank    | `caret_first_char`    | `^ [visual]`  |
+| Move caret to the paragraph's start         | `caret_para_back`     | `{ [visual]`  |
+| Move caret to the paragraph's end           | `caret_para_next`     | `} [visual]`  |
+| Find a character forward on the line        | `caret_find_forward`  | `f [visual]`  |
+| Find a character backward on the line       | `caret_find_backward` | `F [visual]`  |
+| Till a character forward on the line        | `caret_till_forward`  | `t [visual]`  |
+| Till a character backward on the line       | `caret_till_backward` | `T [visual]`  |
+| Repeat the last f, F, t or T                | `caret_find_repeat`   | `; [visual]`  |
+| Repeat the last find, reversed              | `caret_find_reverse`  | `, [visual]`  |
+| Start or drop a selection at the caret      | `toggle_selection`    | `v [visual]`  |
+| Start or drop a line-wise selection         | `line_selection`      | `V [visual]`  |
+| Swap the selection's ends                   | `swap_selection_ends` | `o [visual]`  |
+| Select the word at the caret                | `select_inner_word`   | `iw [visual]` |
+| Select the word at the caret and its spaces | `select_a_word`       | `aw [visual]` |
+| Copy selection and leave copy mode          | `yank_selection`      | `y [visual]`  |
+| Copy the selection's whole lines and leave  | `yank_lines`          | `Y [visual]`  |
 
 ## Side panel
 
@@ -150,6 +182,25 @@ are written in notation: `ctrl+b b` is `prefix+b`, `space n` is `<leader>n`
 | Previous row          | `panel_up`       | `k [panel]`     |
 | Open the selected row | `panel_open`     | `enter [panel]` |
 | Close the side panel  | `panel_close`    | `esc [panel]`   |
+
+## Bookmarks
+
+| Action                                                 | Config name          | Bindings                    |
+| ------------------------------------------------------ | -------------------- | --------------------------- |
+| Open / close the bookmarks panel                       | `toggle_bookmarks`   | `ctrl+b shift+b`, `space b` |
+| Bookmark this page (folders/title files it in folders) | `add_bookmark`       | `ctrl+b a`                  |
+| Bookmarks: close the folder, or go to its parent       | `bookmarks_collapse` | `h [panel]`                 |
+| Bookmarks: open the folder or the bookmark             | `bookmarks_expand`   | `l [panel]`                 |
+| Bookmarks: open in a new background tab                | `bookmarks_open_tab` | `t [panel]`                 |
+| Bookmarks: open in a split right                       | `bookmarks_vsplit`   | `s [panel]`                 |
+| Bookmarks: open in a split below                       | `bookmarks_hsplit`   | `S [panel]`                 |
+| Bookmarks: add this page here (a/b/ makes folders)     | `bookmarks_add`      | `a [panel]`                 |
+| Bookmarks: add a folder here                           | `bookmarks_folder`   | `A [panel]`                 |
+| Bookmarks: rename                                      | `bookmarks_rename`   | `r [panel]`                 |
+| Bookmarks: move to a folder                            | `bookmarks_move`     | `m [panel]`                 |
+| Bookmarks: delete (asks y/N)                           | `bookmarks_delete`   | `d [panel]`                 |
+| Bookmarks: copy the URL                                | `bookmarks_yank`     | `y [panel]`                 |
+| Bookmarks: filter                                      | `bookmarks_filter`   | `/ [panel]`                 |
 
 ## Config
 

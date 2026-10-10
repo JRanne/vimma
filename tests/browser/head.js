@@ -83,9 +83,11 @@ function waitForPageKey(browser, entries, ms = 5000) {
 }
 
 /**
- * Every default binding under ctrl+b runs since the side panel (m3-workspaces 6), so the tests
- * of the "not implemented yet" notice bind one the host has not built: `ctrl+b o` to
- * history_back ("Go back"), for the rest of the test file. Returns the notice text it gives.
+ * Every action runs since the navigation keys (M1), so the tests of the "not implemented yet"
+ * notice and the overlay's dimmed rows withhold one, history_back ("Go back"), as if it were not
+ * built (`VimmaHost._withhold`), and bind it to `ctrl+b o` as well, for the rest of the test
+ * file: `H` and `ctrl+b o` are then an unbuilt single key and an unbuilt prefix key. Returns the
+ * notice text it gives.
  * @returns {string}
  */
 function bindUnbuiltPrefixKey() {
@@ -95,7 +97,11 @@ function bindUnbuiltPrefixKey() {
   const { compileKeymap } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/core/keymap.mjs",
   );
+  const restore = VimmaHost._withhold("history.back");
   VimmaHost.configure({ keymap: compileKeymap({ keys: { history_back: ["prefix+o"] } }) });
-  registerCleanupFunction(() => VimmaHost.configure({ keymap: compileKeymap() }));
+  registerCleanupFunction(() => {
+    restore();
+    VimmaHost.configure({ keymap: compileKeymap() });
+  });
   return "Go back: not implemented yet";
 }

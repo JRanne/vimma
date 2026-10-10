@@ -7,6 +7,7 @@
 // EditableDescriptor (vimma-core editable.mjs) and runs scroll, blur and focus-input commands.
 
 import { isEditable } from "../core/editable.mjs";
+import { inputIndex } from "../core/pageurl.mjs";
 import { collectTargets } from "./hint-collect.mjs";
 import { Caret, isCaretMessage } from "./caret.mjs";
 
@@ -126,6 +127,10 @@ function selectionOnScreen(sel, win) {
   return r.bottom > 0 && r.top < win.innerHeight;
 }
 
+/** nsISelectionListener reasons (spec m1-copy-mode, mouse selection). */
+const MOUSEUP_REASON = 4;
+const JS_REASON = 256;
+
 /**
  * @param {unknown} n
  * @returns {n is number}
@@ -141,6 +146,65 @@ export class VimmaChild extends JSWindowActorChild {
   #emptySearchAt = 0;
   /** Copy mode in this document (m1-copy-mode). */
   #caret = new Caret();
+  /** The document's selection while a listener for mouse selections is on it. */
+  /** @type {Selection | null} */
+  #watched = null;
+  /** A drag and drop started since the last mousedown: its end is no selection gesture. */
+  #dragging = false;
+  /** Tells the parent about a selection the user made with the mouse (spec m1-copy-mode). */
+  #selectionListener = {
+    QueryInterface: ChromeUtils.generateQI(["nsISelectionListener"]),
+    /**
+     * @param {Document} _doc
+     * @param {Selection} sel
+     * @param {number} reason
+     */
+    notifySelectionChanged: (_doc, sel, reason) => {
+      // Firefox ends every mouse selection (drag, double and triple click, shift+click) with a
+      // MOUSEUP_REASON notification (nsFrameSelection::SetDragState); a script's has JS_REASON.
+      if (!(reason & MOUSEUP_REASON) || reason & JS_REASON) return;
+      if (this.#dragging) {
+        this.#dragging = false;
+        return;
+      }
+      if (sel.isCollapsed || this.#inEditable()) return;
+      this.sendAsyncMessage("Vimma:MouseSelection");
+    },
+  };
+
+  actorCreated() {
+    this.#watchSelection();
+  }
+
+  didDestroy() {
+    try {
+      this.#watched?.removeSelectionListener(this.#selectionListener);
+    } catch {
+      // the document is gone with its selection
+    }
+    this.#watched = null;
+  }
+
+  /** Listens to this document's selection (again, if the PresShell replaced it). */
+  #watchSelection() {
+    const sel = this.contentWindow?.getSelection() ?? null;
+    if (!sel || sel === this.#watched) return;
+    try {
+      this.#watched?.removeSelectionListener(this.#selectionListener);
+    } catch {
+      // the old selection went away with its PresShell
+    }
+    sel.addSelectionListener(this.#selectionListener);
+    this.#watched = sel;
+  }
+
+  /** Whether the focus is in something editable, whose selection is insert mode's. */
+  #inEditable() {
+    const doc = this.document;
+    if (doc.designMode === "on") return true;
+    const el = deepActiveElement(doc);
+    return !!el && el !== doc.body && isEditable(describe(el)).editable;
+  }
 
   /** @param {Event} event */
   handleEvent(event) {
@@ -169,10 +233,15 @@ export class VimmaChild extends JSWindowActorChild {
         return;
       }
       case "mousedown": {
+        this.#dragging = false;
+        this.#watchSelection();
         // A click into an editable root whose window already has focus fires no focus event.
         const root = this.#editableRoot();
         if (root) this.#report(root, "focusin");
+        return;
       }
+      case "dragstart":
+        this.#dragging = true;
     }
   }
 
@@ -215,7 +284,7 @@ export class VimmaChild extends JSWindowActorChild {
         return undefined;
       }
       case "Vimma:FocusInput":
-        return this.#focusInput();
+        return this.#focusInput(msg.data?.count);
       case "Vimma:ScrollPosition": {
         const win = this.contentWindow;
         return win ? { x: win.scrollX, y: win.scrollY } : null;
@@ -353,14 +422,24 @@ export class VimmaChild extends JSWindowActorChild {
     return true;
   }
 
-  #focusInput() {
-    for (const el of this.document.querySelectorAll(TEXT_FIELDS)) {
-      if (el.localName === "select" || !isEditable(describe(el)).editable) continue;
-      if (!el.checkVisibility({ visibilityProperty: true })) continue;
-      /** @type {HTMLElement} */ (el).focus();
-      return true;
-    }
-    return false;
+  /**
+   * Focuses the visible text field a count picks (`i`, `gi`: the first; `3gi`: the third,
+   * clamped to the last), in document order.
+   * @param {number} [count]
+   * @returns {boolean} whether one took focus
+   */
+  #focusInput(count) {
+    const fields = [...this.document.querySelectorAll(TEXT_FIELDS)].filter(
+      (el) =>
+        el.localName !== "select" &&
+        isEditable(describe(el)).editable &&
+        el.checkVisibility({ visibilityProperty: true }),
+    );
+    const el = /** @type {HTMLElement | undefined} */ (
+      fields[inputIndex(Number(count) || undefined, fields.length)]
+    );
+    el?.focus();
+    return !!el;
   }
 
   /**

@@ -8,13 +8,14 @@
  * Core does no I/O: the host passes file contents.
  */
 import { closest, resolveActionName } from "./actions.mjs";
-import { DEFAULT_CONFIG, WORKSPACE_DEFAULTS } from "./defaults.mjs";
+import { DEFAULT_CONFIG, WORKSPACE_DEFAULTS, formatConfigTemplate } from "./defaults.mjs";
 import { INSERT_SITE_MODES } from "./editable.mjs";
 import { DEFAULT_HINT_CHARS, hintLabels } from "./hints.mjs";
 import { KeymapError, compileKeymap } from "./keymap.mjs";
 import { MODES, isMode } from "./modes.mjs";
 import { PANES_MAX_DEFAULT, PANES_MAX_LIMIT } from "./panes.mjs";
 import { PALETTE_KEYS, isHexColor, normalizeHex } from "./theme.mjs";
+import { resolveRoutes, validateRoutes } from "./routes.mjs";
 import { formatPath, locateKeys, parsePath, parseToml } from "./toml.mjs";
 
 /** @import { Keymap } from "./keymap.mjs" */
@@ -22,6 +23,7 @@ import { formatPath, locateKeys, parsePath, parseToml } from "./toml.mjs";
 /** @import { Path } from "./toml.mjs" */
 /** @import { ThemeConfig } from "./theme.mjs" */
 /** @import { InsertSiteMode, InsertSiteRule } from "./editable.mjs" */
+/** @import { Route } from "./routes.mjs" */
 
 /**
  * @typedef {object} ConfigError
@@ -52,6 +54,7 @@ import { formatPath, locateKeys, parsePath, parseToml } from "./toml.mjs";
  * @property {{ max: number }} panes                     `[panes]` (schema 2)
  * @property {string} hintChars                          `[modal] hint_chars` (schema 2)
  * @property {InsertSiteRule[]} sites                    `[sites."<host>"]` in file order (schema 2)
+ * @property {Route[]} routes                            `[[routes]]` in file order (schema 2)
  */
 
 /** @typedef {{ config: ResolvedConfig, keymap: Keymap }} ActiveConfig */
@@ -122,7 +125,17 @@ export const CONTAINER_ICONS = [
   "circle",
   "fence",
 ];
-const TOP_KEYS = ["schema", "keys", "modal", "unbind", "workspaces", "theme", "panes", "sites"];
+const TOP_KEYS = [
+  "schema",
+  "keys",
+  "modal",
+  "unbind",
+  "workspaces",
+  "theme",
+  "panes",
+  "sites",
+  "routes",
+];
 const KEYMAP_SECTIONS = new Set(["keys", "modal", "unbind"]);
 const WORKSPACE_KEYS = ["color", "icon", "home", "autofill"];
 const THEME_KEYS = ["source", "font", "colors"];
@@ -131,7 +144,7 @@ const PANES_KEYS = ["max"];
 const SITE_KEYS = ["insert"];
 const MODAL_KEYS = ["leader", "timeout_ms", "hint_chars"];
 /** Keys a file may use only when it declares `schema = 2`, by config path. */
-const SCHEMA_2_KEYS = ["panes", "sites", "modal.hint_chars"];
+const SCHEMA_2_KEYS = ["panes", "sites", "modal.hint_chars", "routes"];
 const NEEDS_SCHEMA_2 = "is new in schema 2: put schema = 2 at the top of the file";
 const LABEL = "[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?";
 const DOMAIN = new RegExp(`^(?=.{1,253}$)${LABEL}(?:\\.${LABEL})*\\.?$`, "i");
@@ -251,7 +264,12 @@ function validate(raw, declared) {
 
   for (const [key, v] of Object.entries(raw)) {
     if (!TOP_KEYS.includes(key)) unknownKey([key], key, TOP_KEYS);
-    else if (key !== "schema" && !gated([key])) table([key], v);
+    else if (key === "routes") {
+      // An array of tables (workspace-routing); routes.mjs checks it.
+      if (!gated([key])) {
+        for (const p of validateRoutes(v)) problems.push({ ...p, path: [key, ...p.path] });
+      }
+    } else if (key !== "schema" && !gated([key])) table([key], v);
   }
 
   if (isTable(raw.modal)) {
@@ -458,6 +476,7 @@ export function mergeWithDefaults(user, workspaceOrder, siteOrder) {
       match,
       insert: /** @type {NonNullable<UserConfig["sites"]>} */ (user.sites)[match]?.insert ?? "auto",
     })),
+    routes: resolveRoutes(/** @type {Record<string, string>[]} */ (user.routes ?? [])),
   };
 }
 
@@ -559,6 +578,33 @@ export function reloadConfig(active, text) {
     return { active: { config: r.config, keymap: r.keymap }, errors: [], kept: false };
   const fallback = active ?? { config: mergeWithDefaults({}), keymap: compileKeymap() };
   return { active: fallback, errors: r.errors, kept: true };
+}
+
+/**
+ * `:route add` (spec workspace-routing): the text to append to config.toml for a `domain` rule,
+ * or the whole file to create when it is missing (`text` null: the template plus the rule).
+ * The result must parse: a file with errors now, an older schema or an inline `routes = [...]`
+ * is refused with the reason, and nothing is written.
+ * @param {string | null} text  config.toml as it is, null when missing
+ * @param {{ domain: string, workspace: string }} rule
+ * @returns {{ append: string } | { create: string } | { error: string }}
+ */
+export function appendRouteText(text, { domain, workspace }) {
+  const block = `[[routes]]\ndomain = ${JSON.stringify(domain)}\nworkspace = ${JSON.stringify(workspace)}\n`;
+  const base = text ?? formatConfigTemplate();
+  if (text !== null && parseConfig(text).errors.length) {
+    return { error: "config.toml does not parse now; fix it first (:config shows it)" };
+  }
+  const glue = base === "" ? "" : base.endsWith("\n") ? "\n" : "\n\n";
+  const added = `${glue}${block}`;
+  const after = parseConfig(base + added);
+  const first = after.errors[0];
+  if (first) {
+    return {
+      error: `config.toml does not parse with the rule added: ${first.path ? `${first.path}: ` : ""}${first.message}`,
+    };
+  }
+  return text === null ? { create: base + added } : { append: added };
 }
 
 /**

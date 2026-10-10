@@ -109,3 +109,30 @@ add_task(async function vimma_keys_work_on_the_start_page() {
   );
   BrowserTestUtils.removeTab(tab);
 });
+
+add_task(async function the_logo_is_transparent_with_a_tile_only_under_a_light_theme() {
+  const tab = await openStartTab();
+  const state = await SpecialPowers.spawn(tab.linkedBrowser, [], async () => {
+    const doc = content.document;
+    const img = doc.querySelector("img");
+    await img.decode();
+    const canvas = doc.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    const corner = ctx.getImageData(2, 2, 1, 1).data[3];
+    const tile = (scheme) => {
+      doc.documentElement.style.setProperty("--vimma-color-scheme", scheme);
+      return content.getComputedStyle(img).backgroundColor;
+    };
+    const dark = tile("dark");
+    const light = tile("light");
+    doc.documentElement.style.removeProperty("--vimma-color-scheme");
+    return { corner, dark, light };
+  });
+  Assert.equal(state.corner, 0, "the logo's corner is transparent, so no square shows");
+  Assert.equal(state.dark, "rgba(0, 0, 0, 0)", "a dark theme shows the page behind the logo");
+  Assert.equal(state.light, "rgb(8, 12, 16)", "a light theme gets a dark tile for the wordmark");
+  BrowserTestUtils.removeTab(tab);
+});

@@ -6,10 +6,10 @@ index e41d07a03d564b2c5960d5b70cd76f8e528e6532..213e1877fc660b7e906b6e4981073495
      if (openWindowInfo) {
        userContextId = openWindowInfo.originAttributes.userContextId;
      }
-+    // Vimma (m3-workspaces): a first tab with no container takes the workspace's.
++    // Vimma (m3-workspaces): a first tab with no container: its URL's route, else the workspace's.
 +    userContextId ??= ChromeUtils.importESModule(
 +      "chrome://browser/content/vimma/workspaces/WorkspaceStore.sys.mjs"
-+    ).WorkspaceStore.defaultUserContextId(this.documentGlobal);
++    ).WorkspaceStore.firstTabUserContextId(this.documentGlobal);
  
      let remoteTypeOptions = { window: this.documentGlobal, userContextId };
      if (triggeringRemoteType) {

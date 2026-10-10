@@ -34,6 +34,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "moz-src:///toolkit/components/contextualidentity/ContextualIdentityService.sys.mjs",
   JSONFile: "resource://gre/modules/JSONFile.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
+  WorkspaceRouter: "chrome://browser/content/vimma/workspaces/WorkspaceRouter.sys.mjs",
 });
 
 export const DEFINITIONS_FILE = "vimma-workspaces.json";
@@ -434,6 +435,24 @@ export class WorkspaceStoreImpl {
     }
     const id = active ?? this.definitions.lastActive;
     return this.definitions.workspaces.find((w) => w.id === id)?.userContextId ?? null;
+  }
+
+  /**
+   * A new window's first tab (Tabbrowser-sys-mjs.patch, hunk 2): the container a `[[routes]]`
+   * rule gives the window's URL (spec workspace-routing), else defaultUserContextId's. Null
+   * where that is null (private windows, popups, containers off).
+   * @param {any} win  the window being set up
+   * @returns {number | null}
+   */
+  firstTabUserContextId(win) {
+    const fallback = this.defaultUserContextId(win);
+    if (fallback === null || this !== WorkspaceStore) return fallback;
+    return lazy.WorkspaceRouter.firstTab(win) ?? fallback;
+  }
+
+  /** The definitions, read synchronously when init() has not loaded them yet (routing). */
+  ensureLoaded() {
+    if (!this.disabled && !this.#file?.dataReady) this.#readSync();
   }
 
   #readSync() {

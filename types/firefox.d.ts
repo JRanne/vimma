@@ -8,6 +8,7 @@ declare const Services: {
     getStringPref(name: string, defaultValue?: string): string;
     setBoolPref(name: string, value: boolean): void;
     setIntPref(name: string, value: number): void;
+    setStringPref(name: string, value: string): void;
     prefHasUserValue(name: string): boolean;
     clearUserPref(name: string): void;
     getDefaultBranch(root: string): {
@@ -38,12 +39,24 @@ declare const Services: {
     getSystemPrincipal(): unknown;
     checkLoadURIWithPrincipal(principal: unknown, uri: unknown, flags?: number): void;
   };
+  // engine/widget/nsIClipboard.idl
+  clipboard: {
+    readonly kGlobalClipboard: number;
+    getData(transferable: unknown, whichClipboard: number): void;
+  };
   // engine/dom/events/nsIEventListenerService.idl
   els: {
     hasListenersFor(target: EventTarget, type: string): boolean;
   };
   // engine/xpcom/threads/nsIThreadManager.idl
-  tm: { readonly mainThread: unknown };
+  tm: { readonly mainThread: unknown; dispatchToMainThread(task: () => void): void };
+  // engine/docshell/base/nsIURIFixup.idl
+  uriFixup: {
+    getFixupURIInfo(
+      text: string,
+      flags: number,
+    ): { readonly preferredURI: { spec: string } | null };
+  };
   // engine/xpcom/system/nsIXULRuntime.idl
   appinfo: { readonly processID: number; readonly version: string; readonly appBuildID: string };
   // engine/xpcom/ds/nsIObserverService.idl
@@ -63,7 +76,11 @@ declare const Services: {
   // engine/xpcom/io/nsIDirectoryService.idl (nsIProperties)
   dirsvc: { get(prop: string, iface: unknown): { readonly path: string } };
   // engine/xpcom/system/nsIEnvironment.idl ("" for an unset variable)
-  env: { get(name: string): string; exists(name: string): boolean };
+  env: {
+    get(name: string): string;
+    exists(name: string): boolean;
+    set(name: string, value: string): void;
+  };
   // engine/xpcom/base/nsIWindowMediator.idl
   wm: { getMostRecentWindow(type: string): Window | null };
   // engine/xpcom/ds/nsICategoryManager.idl
@@ -181,7 +198,19 @@ interface nsISelectionController {
   lineMove(forward: boolean, extend: boolean): void;
   intraLineMove(forward: boolean, extend: boolean): void;
   completeMove(forward: boolean, extend: boolean): void;
+  paragraphMove(forward: boolean, extend: boolean): void;
   scrollSelectionIntoView(type: number, region: number, flags: number): void;
+}
+
+// engine/dom/base/nsISelectionListener.idl (spec m1-copy-mode: mouse selection)
+interface nsISelectionListener {
+  notifySelectionChanged(doc: Document, sel: Selection, reason: number, amount?: number): void;
+}
+
+// engine/dom/webidl/Selection.webidl (chrome-only part)
+interface Selection {
+  addSelectionListener(listener: nsISelectionListener): void;
+  removeSelectionListener(listener: nsISelectionListener): void;
 }
 
 // engine/dom/interfaces/base/nsIDOMWindowUtils.idl

@@ -51,6 +51,7 @@ Workspaces
   rename_workspace     ctrl+b shift+w                                    Rename workspace
   close_workspace      ctrl+b shift+d                                    Close workspace
   move_to_workspace    (unbound)                                         Move the tab to another workspace (reopens it there)
+  route_rules          (unbound)                                         Routing rules: list them; :route add [workspace], :route move
 
 Navigation
   goto_picker          ctrl+b g, b                                       Goto picker: every tab in every workspace
@@ -67,6 +68,15 @@ Navigation
   history_forward      L                                                 Go forward
   reload               r                                                 Reload page
   open_url             (unbound)                                         Open a URL or search in this tab
+  url_up               gu                                                Go up a level in the URL path
+  url_root             gU                                                Go to the site's root
+
+Page
+  yank_url             yy                                                Copy the page's URL
+  open_clipboard       p                                                 Open the clipboard's URL or search in this tab
+  open_clipboard_tab   P                                                 Open the clipboard's URL or search in a new tab
+  focus_input          gi                                                Focus the first text field (with a count: the Nth)
+  view_source          gf                                                View the page's source in a new tab
 
 Hints
   follow_link          f                                                 Follow link
@@ -97,8 +107,27 @@ Copy mode
   caret_line_end       $ [visual]                                        Move caret to the end of the line
   caret_top            gg [visual]                                       Move caret to the top of the page
   caret_bottom         G [visual]                                        Move caret to the bottom of the page
+  caret_word_end       e [visual]                                        Move caret to the end of the word
+  caret_prev_word_end  ge [visual]                                       Move caret to the previous word's end
+  caret_bigword_next   W [visual]                                        Move caret to the next WORD (by spaces)
+  caret_bigword_back   B [visual]                                        Move caret to the WORD's start
+  caret_bigword_end    E [visual]                                        Move caret to the end of the WORD
+  caret_first_char     ^ [visual]                                        Move caret to the line's first non-blank
+  caret_para_back      { [visual]                                        Move caret to the paragraph's start
+  caret_para_next      } [visual]                                        Move caret to the paragraph's end
+  caret_find_forward   f [visual]                                        Find a character forward on the line
+  caret_find_backward  F [visual]                                        Find a character backward on the line
+  caret_till_forward   t [visual]                                        Till a character forward on the line
+  caret_till_backward  T [visual]                                        Till a character backward on the line
+  caret_find_repeat    ; [visual]                                        Repeat the last f, F, t or T
+  caret_find_reverse   , [visual]                                        Repeat the last find, reversed
   toggle_selection     v [visual]                                        Start or drop a selection at the caret
+  line_selection       V [visual]                                        Start or drop a line-wise selection
+  swap_selection_ends  o [visual]                                        Swap the selection's ends
+  select_inner_word    iw [visual]                                       Select the word at the caret
+  select_a_word        aw [visual]                                       Select the word at the caret and its spaces
   yank_selection       y [visual]                                        Copy selection and leave copy mode
+  yank_lines           Y [visual]                                        Copy the selection's whole lines and leave
 
 Side panel
   panel_select_1       1 [panel]                                         Select row 1
@@ -114,6 +143,22 @@ Side panel
   panel_up             k [panel]                                         Previous row
   panel_open           enter [panel]                                     Open the selected row
   panel_close          esc [panel]                                       Close the side panel
+
+Bookmarks
+  toggle_bookmarks     ctrl+b shift+b, space b                           Open / close the bookmarks panel
+  add_bookmark         ctrl+b a                                          Bookmark this page (folders/title files it in folders)
+  bookmarks_collapse   h [panel]                                         Bookmarks: close the folder, or go to its parent
+  bookmarks_expand     l [panel]                                         Bookmarks: open the folder or the bookmark
+  bookmarks_open_tab   t [panel]                                         Bookmarks: open in a new background tab
+  bookmarks_vsplit     s [panel]                                         Bookmarks: open in a split right
+  bookmarks_hsplit     S [panel]                                         Bookmarks: open in a split below
+  bookmarks_add        a [panel]                                         Bookmarks: add this page here (a/b/ makes folders)
+  bookmarks_folder     A [panel]                                         Bookmarks: add a folder here
+  bookmarks_rename     r [panel]                                         Bookmarks: rename
+  bookmarks_move       m [panel]                                         Bookmarks: move to a folder
+  bookmarks_delete     d [panel]                                         Bookmarks: delete (asks y/N)
+  bookmarks_yank       y [panel]                                         Bookmarks: copy the URL
+  bookmarks_filter     / [panel]                                         Bookmarks: filter
 
 Config
   reload_config        (unbound)                                         Reload config
