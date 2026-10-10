@@ -19,6 +19,7 @@
  * @property {string} description
  * @property {number} [arg]
  * @property {readonly string[]} [aliases]
+ * @property {boolean} [takesChar]  the key after it is its character (`f x`), not a binding
  */
 
 /** @type {ActionDef[]} */
@@ -154,8 +155,47 @@ group("Copy mode", [
   ["caret_line_end", "caret.line_end", "Move caret to the end of the line"],
   ["caret_top", "caret.top", "Move caret to the top of the page"],
   ["caret_bottom", "caret.bottom", "Move caret to the bottom of the page"],
+  ["caret_word_end", "caret.word_end", "Move caret to the end of the word"],
+  ["caret_prev_word_end", "caret.word_end_backward", "Move caret to the previous word's end"],
+  ["caret_bigword_next", "caret.bigword_forward", "Move caret to the next WORD (by spaces)"],
+  ["caret_bigword_back", "caret.bigword_backward", "Move caret to the WORD's start"],
+  ["caret_bigword_end", "caret.bigword_end", "Move caret to the end of the WORD"],
+  ["caret_first_char", "caret.first_nonblank", "Move caret to the line's first non-blank"],
+  ["caret_para_back", "caret.paragraph_backward", "Move caret to the paragraph's start"],
+  ["caret_para_next", "caret.paragraph_forward", "Move caret to the paragraph's end"],
+  [
+    "caret_find_forward",
+    "caret.find_forward",
+    "Find a character forward on the line",
+    { takesChar: true },
+  ],
+  [
+    "caret_find_backward",
+    "caret.find_backward",
+    "Find a character backward on the line",
+    { takesChar: true },
+  ],
+  [
+    "caret_till_forward",
+    "caret.till_forward",
+    "Till a character forward on the line",
+    { takesChar: true },
+  ],
+  [
+    "caret_till_backward",
+    "caret.till_backward",
+    "Till a character backward on the line",
+    { takesChar: true },
+  ],
+  ["caret_find_repeat", "caret.find_repeat", "Repeat the last f, F, t or T"],
+  ["caret_find_reverse", "caret.find_repeat_reverse", "Repeat the last find, reversed"],
   ["toggle_selection", "selection.toggle", "Start or drop a selection at the caret"],
+  ["line_selection", "selection.line", "Start or drop a line-wise selection"],
+  ["swap_selection_ends", "selection.swap", "Swap the selection's ends"],
+  ["select_inner_word", "selection.inner_word", "Select the word at the caret"],
+  ["select_a_word", "selection.a_word", "Select the word at the caret and its spaces"],
   ["yank_selection", "selection.yank", "Copy selection and leave copy mode"],
+  ["yank_lines", "selection.yank_lines", "Copy the selection's whole lines and leave"],
 ]);
 
 group("Side panel", [

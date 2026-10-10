@@ -15,7 +15,7 @@ import { COUNT_MODES, isMode } from "./modes.mjs";
 /** @import { TrieNode } from "./keymap.mjs" */
 /** @import { ActionDef } from "./actions.mjs" */
 
-/** @typedef {{ id: string, count?: number, arg?: number }} Action */
+/** @typedef {{ id: string, count?: number, arg?: number, char?: string }} Action */
 /**
  * @typedef {{ kind: "action", action: Action, replay?: true }
  *   | { kind: "pending" }
@@ -31,6 +31,19 @@ const PASS = Object.freeze({ kind: /** @type {const} */ ("pass") });
 const isBareDigit = (c) => /^[0-9]$/.test(c.key) && !c.ctrl && !c.alt && !c.meta;
 
 /**
+ * The character a chord types, for an action that takes one (`f x`), or null for a named key
+ * or a chord with ctrl, alt or meta.
+ * @param {Chord} c
+ * @returns {string | null}
+ */
+function typedChar(c) {
+  if (c.ctrl || c.alt || c.meta) return null;
+  if (c.key === "space") return " ";
+  if ([...c.key].length !== 1) return null;
+  return c.shift ? c.key.toUpperCase() : c.key;
+}
+
+/**
  * @param {Keymap} keymap
  */
 export function createDispatcher(keymap) {
@@ -41,22 +54,27 @@ export function createDispatcher(keymap) {
   /** @type {string[]} */
   let labels = [];
   let count = "";
+  /** @type {ActionDef | null} an action waiting for its character (`f`, then `x`) */
+  let wantsChar = null;
 
   function reset() {
     node = null;
     labels = [];
     count = "";
+    wantsChar = null;
   }
 
   /**
    * @param {ActionDef} def
+   * @param {string} [char]
    * @returns {{ kind: "action", action: Action }}
    */
-  function emit(def) {
+  function emit(def, char) {
     /** @type {Action} */
     const action = { id: def.id };
     if (def.arg !== undefined) action.arg = def.arg;
     if (count) action.count = Number(count);
+    if (char !== undefined) action.char = char;
     reset();
     return { kind: "action", action };
   }
@@ -72,11 +90,20 @@ export function createDispatcher(keymap) {
       reset();
       mode = m;
     }
-    const busy = node !== null || count !== "";
+    const busy = node !== null || count !== "" || wantsChar !== null;
     const isEsc = chord.key === "esc" && !chord.ctrl && !chord.alt && !chord.meta && !chord.shift;
     if (busy && isEsc) {
       reset();
       return CANCEL;
+    }
+    if (wantsChar) {
+      // `f` was the last key: this one is its character, whatever it is bound to.
+      const char = typedChar(chord);
+      if (char === null) {
+        reset();
+        return CANCEL;
+      }
+      return emit(wantsChar, char);
     }
     const root = keymap.trie(m);
     const key = formatKey(chord);
@@ -100,7 +127,11 @@ export function createDispatcher(keymap) {
         reset();
         return CANCEL;
       }
-      if (node.action) return { ...emit(node.action), replay: true };
+      if (node.action?.takesChar) {
+        // A prefix that also takes a character: this key is the character.
+        const char = typedChar(chord);
+        if (char !== null) return emit(node.action, char);
+      } else if (node.action) return { ...emit(node.action), replay: true };
       reset();
       return CANCEL;
     }
@@ -110,7 +141,14 @@ export function createDispatcher(keymap) {
       return PENDING;
     }
     // A leaf always carries an action: compileKeymap only creates nodes along bound sequences.
-    return emit(/** @type {ActionDef} */ (next.action));
+    const def = /** @type {ActionDef} */ (next.action);
+    if (def.takesChar) {
+      node = null;
+      labels.push(next.label);
+      wantsChar = def;
+      return PENDING;
+    }
+    return emit(def);
   }
 
   /**
@@ -118,8 +156,8 @@ export function createDispatcher(keymap) {
    * @returns {DispatchResult | null}
    */
   function flush() {
-    if (node === null && count === "") return null;
-    if (node?.action) return emit(node.action);
+    if (node === null && count === "" && wantsChar === null) return null;
+    if (node?.action && !node.action.takesChar) return emit(node.action);
     reset();
     return CANCEL;
   }
@@ -133,7 +171,7 @@ export function createDispatcher(keymap) {
      * an action. Only then should the host arm the timeout_ms timer; a bare prefix waits for
      * the next key or Esc.
      */
-    ambiguous: () => !!node?.action,
+    ambiguous: () => !!node?.action && !node.action.takesChar,
     /** Pending keys for the status bar, e.g. ["prefix"] or ["2", "g"]. */
     pending: () => [...count, ...labels],
     timeoutMs: keymap.timeoutMs,

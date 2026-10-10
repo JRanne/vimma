@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Fixture for browser_vimma_copy_motions.js and browser_vimma_copy_mouse.js: known words,
+   - an indented preformatted line, a line of separators, two paragraphs (one with inline
+   - markup), lines broken by <br>, a text field, a link and a paragraph that selects itself
+   - when clicked (a page's own, programmatic selection). -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vimma copy motions</title>
+    <style>
+      body {
+        font: 16px/1.5 monospace;
+        margin: 0;
+      }
+      p,
+      pre {
+        margin: 0 0 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <p id="words">alpha beta.gamma delta</p>
+    <pre id="pre">    indented line</pre>
+    <p id="find">one,two,three;four</p>
+    <p id="para1">first paragraph <b>bold</b>word end.</p>
+    <p id="para2">second paragraph here.</p>
+    <p id="lines">line one<br />line two<br />line three</p>
+    <p><input id="field" value="field text here" /></p>
+    <p><a id="link" href="#linked">a link to follow</a></p>
+    <p id="selectme" onclick="getSelection().selectAllChildren(this)">a click selects me</p>
+  </body>
+</html>

@@ -788,6 +788,17 @@ export const VimmaHost = {
   },
 
   /**
+   * The user selected text with the mouse in the focused frame of `browser` (VimmaParent):
+   * normal mode enters copy mode with that selection, so `y` copies it and motions extend it.
+   * Insert mode keeps it (a text field's selection is its own).
+   * @param {any} browser
+   */
+  onMouseSelection(browser) {
+    if (this._browserMode(browser) === "insert") return;
+    CONTENT_RUNNERS["mode.visual"]?.(browser, { id: "mode.visual" });
+  },
+
+  /**
    * Called after a tab's page mode changes (normal ↔ insert), whatever caused it (a focus
    * report, `i`, `Esc`): tells the owning window's state listeners (the status bar).
    * The listeners read the mode back through `status(win)`, so the mode argument is unused.
