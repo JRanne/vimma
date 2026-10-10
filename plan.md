@@ -173,7 +173,7 @@ vimma/
   tools/
     vimma-ctl/                    # Rust CLI client for the control socket (ADR-011)
     e2e/                          # harness: launch build with temp profile, drive via socket
-    upstream/                     # check-release.py, bump-surfer-json.py, rebase helpers
+    upstream/                     # detect.mjs (autopilot), bump-surfer-json.py, patch-check.py, rebase helpers
   tests/
     browser/                      # mochitest browser-chrome: browser_vimma_*.js
     e2e/                          # socket-driven scenarios + screenshot baselines (LFS)

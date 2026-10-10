@@ -1,55 +1,175 @@
-# Spec m0-pipeline, ADR-002: poll Firefox release versions; on a new release open
-# `upstream: update to Firefox X.Y` bumping surfer.json. Cheap on purpose (Python stdlib, no
-# npm ci): it runs 4 times a day on the free plan's minutes.
+# The upstream autopilot (spec m7-upstream-autopilot, ADR-015; before it m0-pipeline and
+# m0-rebase-playbook, ADR-002). When Firefox ships a release, above all a security release, it
+# rebases Vimma onto it and opens a tested PR with no manual step; a person reviews and merges.
 #
-# Spec m0-rebase-playbook: before opening the PR, dry-run our .patch files against the new
-# release's source tarball (tools/upstream/patch-check.py) and put the result in the PR body.
-# That job has a read-only token; only the job that opens the PR can write. docs/rebase.md.
+#   detect       every 4 h, < 1 min, read-only. Newer release? security (MFSA)? drift?
+#   track        a newer release: its tracking issue, labelled upstream (+ security).
+#   patch-check  stream + SHA-512-verify the source tarball, dry-run our patches, patch audit,
+#                artifact preflight. Read-only.
+#   test         e2e.yml (workflow_call) on the bumped surfer.json: import, artifact build,
+#                tests/browser/ and tests/e2e/. Read-only. Only when every patch applies and
+#                Mozilla's artifacts exist.
+#   publish      push upstream/firefox-X.Y.Z and open the PR (a draft unless all green and CI
+#                can run), or, when Actions may not open PRs, comment a compare link on the issue.
+#   drift        Vimma past the drift limit (docs/security.md, G2): issue + a failing run.
 #
-# PRs opened with the default GITHUB_TOKEN do not trigger other workflows, so CI would not run on
-# them. Add a fine-grained token as the UPSTREAM_PR_TOKEN secret to fix that (docs/runbook.md).
+# The heavy jobs run once per release: when the upstream/firefox-X.Y.Z branch exists the
+# release has been handled (rerun with `gh workflow run upstream.yml -f rebuild=true`).
+# Detection reads public Mozilla feeds and needs no secret; no job gets SAFEBROWSING_API_KEY.
+# Never pull_request_target: nothing here runs code from a PR.
 name: upstream
 
 on:
   schedule:
-    - cron: "17 */6 * * *"
+    - cron: "17 */4 * * *"
   workflow_dispatch:
+    inputs:
+      rebuild:
+        description: Rebase and test again even if upstream/firefox-X.Y.Z exists (it is rebuilt)
+        type: boolean
+        default: false
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: upstream
   cancel-in-progress: false
 
 jobs:
-  check:
+  detect:
     runs-on: ubuntu-latest
-    # A release: stream the ~810 MB source tarball through patch-check (~1 min); else seconds.
+    timeout-minutes: 5
+    permissions:
+      contents: read # surfer.json, tools/upstream; the branch lookup
+      issues: read # the tracking and drift issues
+    outputs:
+      version: ${{ steps.detect.outputs.version }}
+      labels: ${{ steps.detect.outputs.labels }}
+      security: ${{ steps.detect.outputs.security }}
+      drift: ${{ steps.detect.outputs.drift }}
+      drift-line: ${{ steps.detect.outputs.drift-line }}
+      detection: ${{ steps.detect.outputs.detection }}
+      rebase: ${{ steps.state.outputs.rebase }}
+      issue: ${{ steps.state.outputs.issue }}
+      track: ${{ steps.state.outputs.track }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/upstream # and the root files, surfer.json among them
+
+      # The runner's own Node: no setup-node, no npm ci (Node built-ins only).
+      - name: Detect a newer Firefox release, classify it, measure drift
+        id: detect
+        run: |
+          node tools/upstream/detect.mjs --github-output "$GITHUB_OUTPUT" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: What is already done for this release
+        id: state
+        if: steps.detect.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.detect.outputs.version }}
+          SECURITY: ${{ steps.detect.outputs.security }}
+          REBUILD: ${{ inputs.rebuild || false }}
+        run: |
+          branch="upstream/firefox-$VERSION"
+          if [ "$REBUILD" = true ] ||
+            ! gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$branch" --silent 2>/dev/null; then
+            rebase=true
+          else
+            rebase=false
+          fi
+          title="Firefox $VERSION released"
+          issue=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label upstream \
+            --search "\"$title\" in:title" --json number,title,labels \
+            --jq "[.[] | select(.title == \"$title\")][0]")
+          number=$(jq -r '.number // empty' <<< "${issue:-null}")
+          has_security=$(jq -r '[.labels[]?.name] | index("security") != null' <<< "${issue:-null}")
+          # A new issue, or one that needs the security label now that an advisory exists.
+          if [ -z "$number" ] || { [ "$SECURITY" != false ] && [ "$has_security" != true ]; }; then
+            track=true
+          else
+            track=false
+          fi
+          {
+            echo "rebase=$rebase"
+            echo "issue=$number"
+            echo "track=$track"
+          } >> "$GITHUB_OUTPUT"
+          echo "Branch $branch: rebase=$rebase; tracking issue: ${number:-none} (track=$track)" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+  track:
+    needs: detect
+    if: needs.detect.outputs.track == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write # create or label the tracking issue
+    outputs:
+      issue: ${{ steps.issue.outputs.issue }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/upstream
+
+      - name: Open or label the tracking issue
+        id: issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DETECTION: ${{ needs.detect.outputs.detection }}
+          LABELS: ${{ needs.detect.outputs.labels }}
+          SECURITY: ${{ needs.detect.outputs.security }}
+          ISSUE: ${{ needs.detect.outputs.issue }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          printf '%s' "$DETECTION" > detection.json
+          gh label create upstream --color 1D76DB --description "Firefox upstream release" --force
+          gh label create security --color B60205 --description "Security: act within days" --force
+          node tools/upstream/autopilot-body.mjs issue --detection detection.json \
+            --run-url "$RUN_URL" --owner "$OWNER" > issue.md
+          if [ -z "$ISSUE" ]; then
+            title=$(node tools/upstream/autopilot-body.mjs issue-title --detection detection.json)
+            url=$(gh issue create --title "$title" --label "$LABELS" --body-file issue.md)
+            ISSUE=${url##*/}
+          else
+            # An advisory appeared after the issue was opened (or the advisories page could not be
+            # read, which counts as security until it can): label it and tell the owner.
+            gh issue edit "$ISSUE" --add-label "$LABELS" --body-file issue.md
+            if [ "$SECURITY" = true ]; then
+              why="Mozilla now lists an advisory for this release"
+            else
+              why="The advisories page could not be read, so this release counts as one"
+            fi
+            gh issue comment "$ISSUE" --body "@$OWNER $why: labelled \`security\` ([run]($RUN_URL))."
+          fi
+          echo "issue=$ISSUE" >> "$GITHUB_OUTPUT"
+
+  patch-check:
+    needs: detect
+    if: needs.detect.outputs.rebase == 'true'
+    runs-on: ubuntu-latest
+    # Streams the ~810 MB source tarball through patch-check (~1–2 min).
     timeout-minutes: 15
     permissions:
       contents: read
     outputs:
-      version: ${{ steps.check.outputs.version }}
-      patch-summary: ${{ steps.patches.outputs.summary }}
-      patch-result: ${{ steps.patches.outputs.result }}
+      result: ${{ steps.patches.outputs.result }}
+      artifacts: ${{ steps.preflight.outputs.artifacts }}
+      artifacts-note: ${{ steps.preflight.outputs.artifacts-note }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Check for a new Firefox release
-        id: check
-        run: |
-          latest=$(python3 tools/upstream/check-release.py)
-          echo "version=$latest" >> "$GITHUB_OUTPUT"
-          echo "Latest newer release: ${latest:-none}" >> "$GITHUB_STEP_SUMMARY"
-
       - name: Dry-run our patches on the new release's source
         id: patches
-        if: steps.check.outputs.version != ''
         env:
-          VERSION: ${{ steps.check.outputs.version }}
+          VERSION: ${{ needs.detect.outputs.version }}
         run: |
           base="https://archive.mozilla.org/pub/firefox/releases/$VERSION"
           name="source/firefox-$VERSION.source.tar.xz"
@@ -91,71 +211,173 @@ jobs:
           esac
           echo "result=$result" >> "$GITHUB_OUTPUT"
           cat patch-check.md >> "$GITHUB_STEP_SUMMARY"
-          delim="EOF_$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
-          { echo "summary<<$delim"; cat patch-check.md; echo "$delim"; } >> "$GITHUB_OUTPUT"
+
+      - name: Patch-size audit (ADR-003 register)
+        run: python3 tools/upstream/patch-audit.py > patch-audit.txt || true
+
+      - name: Are Mozilla's artifacts for this revision indexed?
+        id: preflight
+        if: steps.patches.outputs.result == 'ok'
+        run: node tools/upstream/artifact-preflight.mjs patch-check.json --github-output "$GITHUB_OUTPUT"
 
       - name: Upload the patch-check report
-        if: steps.check.outputs.version != ''
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: patch-check
-          path: patch-check.*
+          path: |
+            patch-check.*
+            patch-audit.txt
           if-no-files-found: ignore
           retention-days: 30
 
-  pr:
-    needs: check
-    if: needs.check.outputs.version != ''
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  test:
+    needs: [detect, patch-check]
+    if: needs.patch-check.outputs.result == 'ok' && needs.patch-check.outputs.artifacts == 'yes'
     permissions:
-      contents: write
-      pull-requests: write
-      issues: write # create the `upstream` label if missing
+      contents: read
+    uses: ./.github/workflows/e2e.yml
+    with:
+      firefox-version: ${{ needs.detect.outputs.version }}
+
+  publish:
+    needs: [detect, track, patch-check, test]
+    # Also after failed tests (a draft PR says so); never without a finished patch check.
+    if: >-
+      always() && needs.detect.outputs.rebase == 'true' &&
+      needs.patch-check.result == 'success' && needs.test.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # push upstream/firefox-X.Y.Z
+      pull-requests: write # open the PR, close superseded ones
+      issues: write # labels, the fallback comment, superseded tracking issues
     env:
       GH_TOKEN: ${{ secrets.UPSTREAM_PR_TOKEN || github.token }}
+      VERSION: ${{ needs.detect.outputs.version }}
+      LABELS: ${{ needs.detect.outputs.labels }}
+      ISSUE: ${{ needs.track.outputs.issue || needs.detect.outputs.issue }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           token: ${{ secrets.UPSTREAM_PR_TOKEN || github.token }}
 
-      - name: Open the bump PR
-        env:
-          VERSION: ${{ needs.check.outputs.version }}
-          PATCH_SUMMARY: ${{ needs.check.outputs.patch-summary }}
-          PATCH_RESULT: ${{ needs.check.outputs.patch-result }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: patch-check
+          path: ${{ runner.temp }}/patch-check
+
+      - name: Push the bump branch
         run: |
-          case "$PATCH_RESULT" in
-            ok) verdict="Patch check: every patch applies (tarball SHA-512 verified)." ;;
-            fail) verdict="Patch check: **some patches do not apply**; fix them first (docs/rebase.md, step 3)." ;;
-            *) verdict="Patch check: **did not run**, so there is no verdict; run it by hand (docs/rebase.md, step 2)." ;;
-          esac
           branch="upstream/firefox-$VERSION"
-          open=$(gh pr list --head "$branch" --state open --json number --jq '.[].number')
-          if [ -n "$open" ]; then
-            echo "PR #$open for $branch is already open; nothing to do."
-            exit 0
-          fi
-          # No open PR: a branch left by a failed or closed run is rebuilt from main.
           old=$(python3 tools/upstream/bump-surfer-json.py "$VERSION" | cut -d' ' -f1)
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -C "$branch"
-          git commit -am "upstream: update to Firefox $VERSION" \
-            -m "Bump surfer.json from Firefox $old to $VERSION (ADR-002)."
-          git push --force origin "$branch"
-          gh label create upstream --color 1D76DB --description "Firefox upstream bump" --force
-          {
-            echo "Firefox $VERSION is out (was $old). Opened by upstream.yml."
-            echo
-            echo "$verdict"
-            echo
-            printf '%s\n' "${PATCH_SUMMARY:-(No patch-check summary; see the upstream.yml run.)}"
-            echo
-            echo "Before merging, follow docs/rebase.md: \`npm run import && npx surfer build\` on"
-            echo "the build machine, \`npm run mochitest -- tests/browser/\` on the built engine and"
-            echo "on an artifact build, refresh the cfr provider pref, then mark this PR ready for"
-            echo "review, which starts CI. ADR-002."
-          } > body.md
-          gh pr create --draft --base main --head "$branch" --label upstream \
-            --title "upstream: update to Firefox $VERSION" --body-file body.md
+          git commit -am "upstream: firefox $VERSION" \
+            -m "Bump surfer.json from Firefox $old to $VERSION. Opened by the upstream autopilot" \
+            -m "(upstream.yml, ADR-015): patches checked, suites run, see the PR."
+          # Only this job writes upstream/*; a rebuild replaces the branch.
+          git push --force origin "HEAD:refs/heads/$branch"
+
+      - name: Open the PR, or comment a compare link when Actions may not
+        env:
+          DETECTION: ${{ needs.detect.outputs.detection }}
+          PATCH_RESULT: ${{ needs.patch-check.outputs.result }}
+          ARTIFACTS: ${{ needs.patch-check.outputs.artifacts || 'unknown' }}
+          ARTIFACTS_NOTE: ${{ needs.patch-check.outputs.artifacts-note }}
+          TESTS: ${{ needs.test.result }}
+          HAS_TOKEN: ${{ secrets.UPSTREAM_PR_TOKEN != '' }}
+        run: |
+          branch="upstream/firefox-$VERSION"
+          pc="$RUNNER_TEMP/patch-check"
+          printf '%s' "$DETECTION" > "$RUNNER_TEMP/detection.json"
+          body() {
+            node tools/upstream/autopilot-body.mjs "$@" --detection "$RUNNER_TEMP/detection.json" \
+              --patch-check "$pc/patch-check.json" --patch-markdown "$pc/patch-check.md" \
+              --audit "$pc/patch-audit.txt" --patch-result "$PATCH_RESULT" \
+              --artifacts "$ARTIFACTS" --artifacts-note "$ARTIFACTS_NOTE" --tests "$TESTS" \
+              --has-token "$HAS_TOKEN" --issue "$ISSUE" --branch "$branch" \
+              --repo "$GITHUB_REPOSITORY" --run-url "$RUN_URL" --error "$RUNNER_TEMP/pr-error.txt"
+          }
+          body pr > "$RUNNER_TEMP/pr.md"
+          title=$(body title)
+          draft=()
+          [ "$(body pr --draft-only)" = true ] && draft=(--draft)
+          gh label create upstream --color 1D76DB --description "Firefox upstream release" --force
+          gh label create security --color B60205 --description "Security: act within days" --force
+
+          existing=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --body-file "$RUNNER_TEMP/pr.md" --add-label "$LABELS"
+            pr="#$existing"
+          elif url=$(gh pr create "${draft[@]}" --base main --head "$branch" --label "$LABELS" \
+              --title "$title" --body-file "$RUNNER_TEMP/pr.md" 2> "$RUNNER_TEMP/pr-error.txt"); then
+            pr="#${url##*/}"
+          elif grep -qi "not permitted to create or approve pull requests" "$RUNNER_TEMP/pr-error.txt"; then
+            # The repository setting is off (docs/runbook.md): the branch is pushed; hand over.
+            cat "$RUNNER_TEMP/pr-error.txt"
+            echo "::warning::Actions may not open PRs here; commented a compare link on #$ISSUE"
+            body fallback > "$RUNNER_TEMP/fallback.md"
+            if [ -n "$ISSUE" ]; then
+              gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/fallback.md"
+            else
+              gh issue create --title "$title: open the PR" --label "$LABELS" \
+                --body-file "$RUNNER_TEMP/fallback.md"
+            fi
+            cat "$RUNNER_TEMP/fallback.md" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          else
+            cat "$RUNNER_TEMP/pr-error.txt"
+            exit 1
+          fi
+          echo "Opened or updated $pr for $branch" >> "$GITHUB_STEP_SUMMARY"
+          [ -n "$ISSUE" ] && gh issue comment "$ISSUE" --body "The autopilot opened $pr ([run]($RUN_URL))."
+
+          # A newer release supersedes the bump PRs and tracking issues of older ones.
+          gh pr list --state open --label upstream --json number,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"upstream/firefox-\")) | select(.headRefName != \"$branch\") | .number" |
+            while read -r n; do
+              gh pr close "$n" --delete-branch --comment "Superseded by $pr (Firefox $VERSION)."
+            done
+          gh issue list --state open --label upstream --json number,title \
+            --jq ".[] | select(.title | test(\"^Firefox [0-9.]+ released$\")) | select(.number != ${ISSUE:-0}) | .number" |
+            while read -r n; do
+              gh issue close "$n" --comment "Superseded by Firefox $VERSION ($pr)."
+            done
+
+  drift:
+    needs: detect
+    if: needs.detect.outputs.drift == 'overdue'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write # the drift issue
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/upstream
+
+      - name: Open the drift issue (once) and fail
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DETECTION: ${{ needs.detect.outputs.detection }}
+          DRIFT_LINE: ${{ needs.detect.outputs.drift-line }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          printf '%s' "$DETECTION" > detection.json
+          title=$(node tools/upstream/autopilot-body.mjs drift-title --detection detection.json)
+          gh label create security --color B60205 --description "Security: act within days" --force
+          open=$(gh issue list --state open --label security --search "\"$title\" in:title" \
+            --json number,title --jq "[.[] | select(.title == \"$title\")][0].number // empty")
+          if [ -z "$open" ]; then
+            node tools/upstream/autopilot-body.mjs drift --detection detection.json \
+              --run-url "$RUN_URL" --owner "$OWNER" > drift.md
+            gh issue create --title "$title" --label security --body-file drift.md
+          fi
+          echo "::error::$DRIFT_LINE (docs/security.md, G2)"
+          exit 1

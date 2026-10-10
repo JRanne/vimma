@@ -221,6 +221,12 @@ class PatchCheckFromTarball(unittest.TestCase):
         self.assertEqual(statuses["failed-txt.patch"], "failed")
         self.assertEqual(report["firefox"], "158.0")
 
+    def test_report_carries_the_source_revision_for_the_artifact_preflight(self):
+        # upstream.yml asks Taskcluster for Mozilla's build of this revision (spec
+        # m7-upstream-autopilot) before it spends minutes on an artifact build.
+        r, report = self.check("--tarball", str(self.tarball))
+        self.assertEqual(report["revision"], "0" * 40)
+
     def test_tarball_on_stdin(self):
         r, report = self.check("--tarball", "-", stdin=self.tarball.read_bytes())
         self.assertEqual(r.returncode, 1, r.stderr)

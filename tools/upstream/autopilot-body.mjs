@@ -1,0 +1,404 @@
+#!/usr/bin/env node
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/**
+ * Upstream autopilot texts (spec m7-upstream-autopilot): the tracking issue, the bump PR's
+ * title and body (what applied, what conflicts, what the tests said), the fallback comment when
+ * Actions may not open PRs, and the drift issue.
+ *
+ *   node tools/upstream/autopilot-body.mjs <issue|title|pr|fallback|drift> --detection FILE
+ *     [--patch-check FILE --patch-markdown FILE --patch-result ok|fail|norun --audit FILE
+ *      --artifacts yes|no|unknown --artifacts-note TEXT --tests RESULT --has-token true|false
+ *      --issue N --branch NAME --repo OWNER/NAME --run-url URL --owner LOGIN --error FILE]
+ *
+ * Writes Markdown to stdout (`pr --draft-only` prints "true" or "false"). Node built-ins only.
+ * Every string from outside (a hunk, an advisory) is either constrained by a regexp in
+ * releases.mjs or inside a code fence that patch-check.py sized for it.
+ */
+
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
+import { describe, driftLine, labelsFor } from "./detect.mjs";
+
+/** A PR body may hold 65,536 characters; keep a margin for GitHub's own additions. */
+export const BODY_LIMIT = 64000;
+
+/**
+ * @typedef {import("./detect.mjs").Detection} Detection
+ * @typedef {{ patch: string, files: string[], status: string, imports: boolean,
+ *   missing: string[], hunks: { file: string, index: number, of: number, header: string,
+ *   status: string, offset: number, fuzz: number }[] }} PatchRow
+ * @typedef {{ ran: boolean, ok: boolean, error?: string, firefox: string | null,
+ *   revision?: string | null, counts: Record<string, number>, patches: PatchRow[] }} PatchReport
+ * @typedef {{ detection: Detection, patchReport: PatchReport | null, patchMarkdown: string,
+ *   patchResult: string, audit: string, artifacts: string, artifactsNote: string,
+ *   tests: string, hasToken: boolean, issue: string, branch: string, repo: string,
+ *   runUrl: string, owner: string, error: string }} Context
+ */
+
+/** @param {string} version */
+export function prTitle(version) {
+  return `upstream: firefox ${version}`;
+}
+
+/** @param {string} version */
+export function issueTitle(version) {
+  return `Firefox ${version} released`;
+}
+
+/** @param {string} version */
+export function branchName(version) {
+  return `upstream/firefox-${version}`;
+}
+
+/** @param {string} current */
+export function driftTitle(current) {
+  return `Vimma's Firefox ${current} is past the security drift limit`;
+}
+
+/**
+ * Open the PR as a draft unless it can be merged as it stands: every patch imports, the suites
+ * passed, and a token is set so that the PR's own CI runs (a PR opened with GITHUB_TOKEN
+ * starts no workflows; marking it ready for review does).
+ * @param {{ patchResult: string, tests: string, hasToken: boolean }} c
+ * @returns {{ draft: boolean, reason: string }}
+ */
+export function draftDecision({ patchResult, tests, hasToken }) {
+  if (patchResult !== "ok") return { draft: true, reason: "some patches do not apply" };
+  if (tests !== "success") return { draft: true, reason: "the suites did not pass" };
+  if (!hasToken) {
+    return { draft: true, reason: "opened with GITHUB_TOKEN: mark it ready to start CI" };
+  }
+  return { draft: false, reason: "all green" };
+}
+
+/**
+ * @param {PatchReport | null} report
+ * @param {string} result ok, fail or norun (upstream.yml's patch-check step)
+ */
+export function patchLine(report, result) {
+  if (!report || !report.ran || result === "norun") {
+    return `**did not run**${report?.error ? `: ${oneLine(report.error)}` : ""}; no verdict`;
+  }
+  const order = ["clean", "offset", "applied", "fuzz", "failed"];
+  const counts = order
+    .filter((s) => report.counts[s])
+    .map((s) => `${report.counts[s]} ${s}`)
+    .join(", ");
+  const n = report.patches.length;
+  return report.ok
+    ? `${n} patches apply (${counts})`
+    : `**${report.patches.filter((p) => !p.imports).length} of ${n} do not apply** (${counts})`;
+}
+
+/**
+ * The conflicts section: each patch that `surfer import` would stop at, its upstream files and
+ * the hunks that need fuzz or fail. Empty when every patch imports.
+ * @param {PatchReport | null} report
+ * @returns {string[]}
+ */
+export function conflictLines(report) {
+  if (!report?.ran) return [];
+  const bad = report.patches.filter((p) => !p.imports);
+  if (bad.length === 0) return [];
+  const files = [...new Set(bad.flatMap((p) => p.files))].sort();
+  const out = [
+    "### Conflicts",
+    "",
+    `Upstream files to look at: ${files.map((f) => `\`${f}\``).join(", ")}.`,
+    "",
+  ];
+  for (const p of bad) {
+    out.push(`- \`${p.patch}\` (${p.status})`);
+    for (const m of p.missing) out.push(`  - \`${m}\` is gone upstream`);
+    for (const h of p.hunks.filter((x) => x.status === "fuzz" || x.status === "failed")) {
+      const what = h.status === "fuzz" ? `applies only with fuzz ${h.fuzz}` : "fails";
+      out.push(
+        `  - hunk ${h.index}/${h.of} of \`${h.file}\` \`${oneLine(h.header).replace(/`/g, "'")}\` ${what}`,
+      );
+    }
+  }
+  out.push(
+    "",
+    "Fix: check out this branch, `npx surfer download --force`, re-make each change in " +
+      "`engine/` and `npx surfer export <file>` (docs/rebase.md, step 3). The hunks are in the " +
+      "patch check below and in the run's `patch-check` artifact. Then push to this branch: " +
+      "PR CI runs the suites again.",
+    "",
+  );
+  return out;
+}
+
+/** @param {string} tests @param {Context} c */
+export function testsLine(tests, c) {
+  if (tests === "success") return "passed (`tests/browser/` and `tests/e2e/`)";
+  if (tests === "failure") return "**failed**: see the run's `mochitest (artifact build)` job";
+  if (tests === "cancelled") return "**cancelled** (timeout?): see the run";
+  if (c.patchResult !== "ok") return "not run: the patches must apply first";
+  if (c.artifacts === "no") {
+    return "not run: no Mozilla artifacts for this revision (see the full-build path below)";
+  }
+  return `not run (${tests || "unknown"})`;
+}
+
+/** @param {Context} c */
+function artifactsLine(c) {
+  if (c.artifacts === "yes") return c.artifactsNote || "Mozilla's build is indexed";
+  if (c.artifacts === "no") return `**not indexed**: ${c.artifactsNote}`;
+  return c.patchResult === "ok"
+    ? `not checked: ${c.artifactsNote || "see the run"}`
+    : "not checked";
+}
+
+/** @param {Detection} d */
+function advisoryLines(d) {
+  const r = d.release;
+  if (r.security === null) {
+    return ["Advisories: the MFSA index could not be read; treated as a security release."];
+  }
+  if (!r.security) {
+    return [
+      "Advisories: none names this release yet. If Mozilla publishes one later, the next run " +
+        "adds the `security` label.",
+    ];
+  }
+  return r.advisories.map((a) => `- [${a.id}](${a.url}): ${a.severity}`);
+}
+
+/**
+ * The bump PR's body.
+ * @param {Context} c
+ */
+export function prBody(c) {
+  const d = c.detection;
+  const r = d.release;
+  const { draft, reason } = draftDecision(c);
+  const out = [
+    `## Firefox ${d.current} → ${r.version} (${describe(r)})`,
+    "",
+    `Opened by the upstream autopilot ([run](${c.runUrl})).` +
+      (c.issue ? ` Closes #${c.issue}.` : ""),
+    "",
+    "| Check | Result |",
+    "| --- | --- |",
+    "| Source tarball | SHA-512 matches Mozilla's `SHA512SUMS` |",
+    `| Patches (\`surfer import\`) | ${patchLine(c.patchReport, c.patchResult)} |`,
+    `| Patch register (ADR-003) | ${oneLine(c.audit) || "not run"} |`,
+    `| Artifact build | ${artifactsLine(c)} |`,
+    `| Mochitests + e2e on the artifact build | ${testsLine(c.tests, c)} |`,
+    "",
+    "### Advisories",
+    "",
+    ...advisoryLines(d),
+    "",
+    ...conflictLines(c.patchReport),
+    "### What you do",
+    "",
+  ];
+  if (!draft) {
+    out.push(
+      "Everything passed and CI runs on this PR. Review the diff (`surfer.json`) and merge.",
+    );
+  } else if (reason.startsWith("opened with")) {
+    out.push(
+      "Everything passed in the autopilot run. Mark this PR **ready for review** (that starts " +
+        "`ci.yml` and `e2e.yml` as you), then merge when green.",
+    );
+  } else {
+    out.push(`This is a draft because ${reason}. docs/rebase.md says what to do.`);
+  }
+  out.push(
+    "",
+    'After the merge the nightly does the full build and runs the `skip-if = ["artifact"]` ' +
+      "tests. The suites include the playbook's prefs checks (cfr provider, Safe Browsing " +
+      "lists: `tools/upstream/upstream-prefs.mjs`).",
+  );
+  if (r.security !== false) {
+    out.push(
+      "",
+      `Security release: merge by ${d.drift.worst?.deadline ?? "the drift deadline"} ` +
+        "(docs/security.md, G2), or the drift check fails.",
+    );
+  }
+  const head = out.join("\n") + "\n";
+  const detail = c.patchMarkdown.trim()
+    ? `\n<details><summary>Patch check</summary>\n\n${c.patchMarkdown.trim()}\n\n</details>\n`
+    : "";
+  return head.length + detail.length <= BODY_LIMIT
+    ? head + detail
+    : head +
+        "\nThe full patch check is too long for a PR body: see the run's `patch-check` artifact.\n";
+}
+
+/**
+ * Comment on the tracking issue when GitHub refused to let Actions open the PR.
+ * @param {Context} c
+ */
+export function fallbackBody(c) {
+  const v = c.detection.release.version;
+  const params = new URLSearchParams({
+    expand: "1",
+    title: prTitle(v),
+    body: `Closes #${c.issue}. Summary: the autopilot comment on #${c.issue}.`,
+  });
+  const compare = `https://github.com/${c.repo}/compare/main...${c.branch}?${params}`;
+  return [
+    `The autopilot pushed \`${c.branch}\` but could not open the PR: Actions may not create ` +
+      "pull requests in this repository (Settings → Actions → General → Workflow permissions → " +
+      '"Allow GitHub Actions to create and approve pull requests"; docs/runbook.md).',
+    "",
+    `**Open it yourself:** [compare main...${c.branch}](${compare}) (title and \`Closes\` line ` +
+      "filled in), then mark it ready.",
+    c.error ? `\nGitHub said: \`${oneLine(c.error).slice(0, 300)}\`` : "",
+    "",
+    "---",
+    "",
+    prBody(c),
+  ].join("\n");
+}
+
+/**
+ * The tracking issue for a new release.
+ * @param {Context} c
+ */
+export function issueBody(c) {
+  const d = c.detection;
+  const r = d.release;
+  const mention = r.security !== false && c.owner ? `@${c.owner} ` : "";
+  const deadline = d.drift.unshipped.find((u) => u.version === r.version)?.deadline;
+  return [
+    `${mention}Firefox ${r.version} was released on ${r.date ?? "an unknown date"}: ` +
+      `${describe(r)}. Vimma ships ${d.current}.`,
+    "",
+    ...advisoryLines(d),
+    "",
+    `The upstream autopilot ([run](${c.runUrl})) rebases our patches on it, runs the suites ` +
+      `and opens a PR on \`${branchName(r.version)}\` that closes this issue (docs/rebase.md).`,
+    deadline
+      ? `\nDrift limit: merged by ${deadline}, or the drift check fails (docs/security.md, G2).`
+      : "",
+    "",
+    `Labels: ${labelsFor(r)
+      .map((l) => `\`${l}\``)
+      .join(", ")}.`,
+  ].join("\n");
+}
+
+/**
+ * The drift issue: opened once while Vimma is past a limit; upstream.yml fails every run until
+ * surfer.json on main moves.
+ * @param {Context} c
+ */
+export function driftBody(c) {
+  const d = c.detection.drift;
+  const rows = d.unshipped.map(
+    (u) =>
+      `| ${u.version} | ${u.date} | ${describe(u)} | ${u.limitDays} d | ${u.deadline} | ` +
+      `${u.overdueHours ? `**${u.overdueHours} h over**` : "not yet"} |`,
+  );
+  return [
+    `${c.owner ? `@${c.owner} ` : ""}${driftLine(d)}`,
+    "",
+    "| Release | Date | Kind | Limit | Deadline | Overdue |",
+    "| --- | --- | --- | --- | --- | --- |",
+    ...rows,
+    "",
+    "Merge the open `upstream` PR, or follow docs/rebase.md. `upstream.yml` fails every run " +
+      `until \`surfer.json\` on main is past these releases ([run](${c.runUrl})). ` +
+      "docs/security.md, G2.",
+  ].join("\n");
+}
+
+/**
+ * One line from patch-audit.py's output: its totals and whether the ADR-003 register matches.
+ * @param {string} text
+ */
+export function auditLine(text) {
+  const lines = text.split("\n").map((l) => l.trim());
+  const total = lines.find((l) => l.startsWith("Total:"))?.replace(/^Total:\s*/, "");
+  if (!total) return "";
+  const ok = lines.some((l) => l.startsWith("Register matches"));
+  return `${total}; ${ok ? "register matches" : "**register does not match** (patch-audit.py)"}`;
+}
+
+/** @param {string} s */
+function oneLine(s) {
+  return s.replace(/\s+/g, " ").replace(/\|/g, "\\|").trim();
+}
+
+/** @param {string | undefined} path */
+function readMaybe(path) {
+  return path && existsSync(path) ? readFileSync(path, "utf8") : "";
+}
+
+function main() {
+  const { values, positionals } = parseArgs({
+    allowPositionals: true,
+    options: {
+      detection: { type: "string" },
+      "patch-check": { type: "string" },
+      "patch-markdown": { type: "string" },
+      "patch-result": { type: "string", default: "norun" },
+      audit: { type: "string" },
+      artifacts: { type: "string", default: "unknown" },
+      "artifacts-note": { type: "string", default: "" },
+      tests: { type: "string", default: "skipped" },
+      "has-token": { type: "string", default: "false" },
+      issue: { type: "string", default: "" },
+      branch: { type: "string", default: "" },
+      repo: { type: "string", default: "" },
+      "run-url": { type: "string", default: "" },
+      owner: { type: "string", default: "" },
+      error: { type: "string" },
+      "draft-only": { type: "boolean", default: false },
+    },
+  });
+  const what = positionals[0];
+  if (!values.detection) throw new Error("--detection FILE is required");
+  const detection = JSON.parse(readFileSync(values.detection, "utf8"));
+  const patchJson = readMaybe(values["patch-check"]);
+  /** @type {Context} */
+  const c = {
+    detection,
+    patchReport: patchJson ? JSON.parse(patchJson) : null,
+    patchMarkdown: readMaybe(values["patch-markdown"]),
+    patchResult: values["patch-result"] ?? "norun",
+    audit: auditLine(readMaybe(values.audit)),
+    artifacts: values.artifacts ?? "unknown",
+    artifactsNote: values["artifacts-note"] ?? "",
+    tests: values.tests ?? "skipped",
+    hasToken: values["has-token"] === "true",
+    issue: values.issue ?? "",
+    branch: values.branch || branchName(detection.release.version),
+    repo: values.repo ?? "",
+    runUrl: values["run-url"] ?? "",
+    owner: values.owner ?? "",
+    error: readMaybe(values.error),
+  };
+  const v = detection.release.version;
+  /** @type {Record<string, () => string>} */
+  const texts = {
+    issue: () => issueBody(c),
+    "issue-title": () => issueTitle(v),
+    title: () => prTitle(v),
+    pr: () => (values["draft-only"] ? String(draftDecision(c).draft) : prBody(c)),
+    fallback: () => fallbackBody(c),
+    drift: () => driftBody(c),
+    "drift-title": () => driftTitle(detection.current),
+  };
+  const make = texts[what ?? ""];
+  if (!make) throw new Error(`unknown text ${what}; one of ${Object.keys(texts).join(", ")}`);
+  process.stdout.write(make().replace(/\n*$/, "\n"));
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  try {
+    main();
+  } catch (e) {
+    console.error(`autopilot-body: ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(2);
+  }
+}

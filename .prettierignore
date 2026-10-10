@@ -6,9 +6,8 @@ package-lock.json
 packages/vimma-core/test/__snapshots__/
 surfer.json
 
-# upstream fixtures: byte-exact surfer.json as Surfer writes it, and one deliberately invalid JSON
+# upstream fixtures: byte-exact surfer.json as Surfer writes it
 tools/upstream/fixtures/surfer-*.json
-tools/upstream/fixtures/versions-malformed.json
 .claude/
 
 # vendored smol-toml, generated from the upstream tarball by tools/vendor-smol-toml.mjs
@@ -22,3 +21,6 @@ CHANGELOG.md
 # vendored byte-exact copies, pinned by SHA-256 in tools/package/vendor/README.md
 tools/package/vendor/cyclonedx-*/
 tools/package/vendor/spdx-license-list-*/
+
+# upstream autopilot fixtures: excerpts of Mozilla's live feeds, byte-exact as served (tools/upstream/test)
+tools/upstream/test/fixtures/
