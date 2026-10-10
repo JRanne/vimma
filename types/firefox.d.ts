@@ -9,6 +9,7 @@ declare const Services: {
     setBoolPref(name: string, value: boolean): void;
     setIntPref(name: string, value: number): void;
     prefHasUserValue(name: string): boolean;
+    clearUserPref(name: string): void;
     getDefaultBranch(root: string): {
       setBoolPref(name: string, value: boolean): void;
     };
@@ -65,6 +66,16 @@ declare const Services: {
   env: { get(name: string): string; exists(name: string): boolean };
   // engine/xpcom/base/nsIWindowMediator.idl
   wm: { getMostRecentWindow(type: string): Window | null };
+  // engine/xpcom/ds/nsICategoryManager.idl
+  catMan: {
+    addCategoryEntry(
+      category: string,
+      entry: string,
+      value: string,
+      persist: boolean,
+      replace: boolean,
+    ): string;
+  };
 };
 
 // XPCOM component classes and results (engine/js/xpconnect). Untyped on purpose: each use
@@ -87,8 +98,9 @@ declare const IOUtils: {
   writeUTF8(
     path: string,
     data: string,
-    options?: { mode?: "overwrite" | "append" | "appendOrCreate" | "create" },
+    options?: { mode?: "overwrite" | "append" | "appendOrCreate" | "create"; tmpPath?: string },
   ): Promise<number>;
+  setPermissions(path: string, permissions: number, honorUmask?: boolean): Promise<void>;
   makeDirectory(
     path: string,
     options?: { createAncestors?: boolean; ignoreExisting?: boolean; permissions?: number },
@@ -98,12 +110,16 @@ declare const IOUtils: {
     size: number;
     lastModified: number;
     creationTime?: number;
+    permissions: number;
   }>;
   exists(path: string): Promise<boolean>;
   copy(from: string, to: string): Promise<void>;
   move(from: string, to: string): Promise<void>;
   remove(path: string, options?: { ignoreAbsent?: boolean; recursive?: boolean }): Promise<void>;
 };
+
+// engine/js/xpconnect/idl/xpccomponents.idl (nsIXPCComponents_Utils)
+declare const Cu: { readonly isInAutomation: boolean };
 
 // XPCOM in system modules: interface constants and component constructors.
 declare const Ci: any;

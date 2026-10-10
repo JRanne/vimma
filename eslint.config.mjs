@@ -97,6 +97,11 @@ export default [
     languageOptions: { globals: { Components: "readonly" } },
   },
   {
+    // The -vimma-reload-theme command-line handler: registrar, and Cu.isInAutomation.
+    files: ["src/**/vimma/omarchy/**"],
+    languageOptions: { globals: { Components: "readonly", Cu: "readonly" } },
+  },
+  {
     files: ["src/**/vimma/**/*.js"],
     languageOptions: { sourceType: "script" },
   },
@@ -117,6 +122,7 @@ export default [
         Cc: "readonly",
         Ci: "readonly",
         Cr: "readonly",
+        Cu: "readonly",
         ContentTaskUtils: "readonly", // inside SpecialPowers.spawn
         NewTabPagePreloading: "readonly",
         add_task: "readonly",

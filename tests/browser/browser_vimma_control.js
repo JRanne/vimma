@@ -620,7 +620,7 @@ add_task(async function test_vimma_ctl_end_to_end() {
   const state = JSON.parse(out);
   Assert.equal(state.mode, "normal", "vimma-ctl reads the live state");
   Assert.equal(state.tabs.length, gBrowser.visibleTabs.length, "with every tab");
-  // What the Omarchy hook runs (tools/omarchy); browser.toml pins the built-in theme here.
+  // The Omarchy hook's fallback (omarchy/vimma-theme-reload.sh); browser.toml pins the built-in theme here.
   const reload = await runVimmaCtl(bin, ["reload-theme"]);
   Assert.deepEqual(reload, { exitCode: 0, out: "unchanged\n" }, "vimma-ctl reload-theme");
 

@@ -56,8 +56,10 @@ These map one-to-one onto Vimma's CSS custom properties (`--vimma-accent`, `--vi
 
 Read `colors.toml` directly with the TOML parser from ADR-008 and poll its mtime with the config
 reload (plan §3). Nothing to install, works for every theme, stock or user. A `theme-set.d` hook
-that pokes the control socket (ADR-007) gives instant refresh: `tools/omarchy/vimma-theme-reload.sh`
-runs `vimma-ctl reload-theme` (spec m5-omarchy-theme, "Instant reload"); it is optional.
+gives instant refresh: Vimma installs `vimma-theme-reload.sh` itself, which sends
+`-vimma-reload-theme` over Firefox's D-Bus command-line remoting, with `vimma-ctl reload-theme` as
+the fallback (spec m5-omarchy-theme, "Instant reload by default"; opt out with
+`vimma.theme.omarchyHook`).
 
 ## Not covered by Omarchy
 
