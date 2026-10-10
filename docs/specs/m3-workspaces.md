@@ -1102,6 +1102,54 @@ dependency for 4b, 5 and parts of 4a.
   the e2e scenarios (m3-restart-restore, m4-split-panes) press the new keys; no assertion changed.
   Mutation check: binding `<C-d>` to `scroll.down` fails two dispatcher tests.
 
+## Settled: workspaces as Vim buffers (maintainer request, 2026-10-10)
+
+- **Request:** "make workspace switching feel like Vim buffers": an alternate workspace as
+  `ctrl+^`, unimpaired-style `]w` / `[w`, and short commands like the buffer commands.
+- **Alternate (`last_workspace`, `workspace.last`):** core's model gains an optional
+  `alternate` (Vim's `#`): every change of `active` through `updateState` records the workspace
+  left, if it is still in the list; an alternate that is deleted or becomes active is dropped
+  (`deleteWorkspace` of the active one keeps a different alternate). `lastWorkspace` switches to
+  it, which swaps the two, so a second press toggles. Nothing tracked recency before: the store's
+  `lastActive` is app-wide (the next start's routing), the panes' `mru` is per split, so neither
+  fits. Per window, since the model is. **Persisted** as the snapshot's optional `alternate`
+  field (schema 1 stays: written only when set, read leniently, dropped unless it names another
+  workspace), in the window value; `#reconcile` rebuilds the model with switches of its own, so
+  it then sets the saved alternate explicitly (`setAlternate`). Without one the runner says
+  `no previous workspace in this window`.
+- **Keys:** `[keys] last_workspace = ["prefix+^", "prefix+ctrl+6"]` (every mode; tmux's last
+  session is `prefix+L`, but that is a pane key here), `[modal.normal]` `<C-^>` and `<C-6>`;
+  `]w` / `[w` run `workspace.next` / `.previous`. No normal-mode binding started with `[` or `]`
+  before (`prefix+[` is copy mode, a prefix key).
+- **Dead keys (widget/gtk):** `KeymapWrapper::ComputeDOMKeyNameIndex` maps every
+  `GDK_dead_*` keyval to `KEY_NAME_INDEX_Dead` (`widget/NativeKeyToDOMKeyName.inc:452-461`);
+  `ctrl` does not change the keyval's level, so Finnish `ctrl+shift+¨` is `key = "Dead"`
+  (`code = "BracketRight"`, `keyCode` 0 by `ComputeDOMKeyCode`, nsGtkKeyUtils.cpp:1264-1299),
+  and `chordFromEvent` returns null for it. In a dead-key sequence the IM's commit keeps the raw
+  key value (IMContextWrapper.cpp, "expose raw keyCode and key value"), so `^` never arrives as
+  a chord on those layouts. US `ctrl+shift+6` is `key = "^"` with shift (folded away). `ctrl+6`
+  is `key = "6"` on every layout and is no Firefox key on Linux (`key_selectTab6` is `alt` under
+  `XP_GNOME`, browser-sets.inc.xhtml:380-391), hence the `ctrl+6` aliases. Finnish `]` / `[` are
+  `AltGr+9` / `AltGr+8`, matched by key-handling-batch § 3.
+- **Commands:** aliases `ws` (`:workspace`), `wn` / `wp` (`:wsnext` / `:wsprev`), `wd`
+  (`:wsdelete`), `wa` (`:wsnew`), and `:workspaces` (picker, like `:ls`); `:ws #` is the
+  alternate unless a workspace is named `#`. `wsn` stays `:wsnext`. **Prefixes:** `:ws` was
+  ambiguous and is now exact; `:workspaces` would have made `:wo`…`:workspac` ambiguous, so
+  `parseCommandLine` now lets a candidate whose name begins a word of every other candidate win
+  (Vim's shortest abbreviation): `:wor` → `:workspace`, and likewise `:bookm` → `:bookmark`,
+  `:addo` → `:addon` (ambiguous before). `:w` stays ambiguous. No word belongs to two commands
+  (a core test). **Completion:** `ARGUMENT_KINDS` maps `workspace`, `wsdelete` and `wsmove` to
+  the host's `workspace` names list (`workspaceNames`), and keeps the word as typed (`:ws per` →
+  `ws personal`); `:wa` names a new workspace and completes nothing.
+- **Tests:** core: model and snapshot (6 red, then green; the round-trip property covers the
+  field), commands and keys (26 red, then green), including GTK-shaped US and Finnish events.
+  Mochitest `browser_vimma_workspace_buffer_keys.js`: `ctrl+^` toggles and back, `ctrl+6`,
+  `ctrl+b ^` / `ctrl+b ctrl+6` from insert mode, the notice in a new window, `]w` / `[w` (also
+  as AltGr+9 / AltGr+8), every alias, `Tab` completion, and the alternate across a session
+  restore (saved alternate `main`, where the rebuild alone would give `A`); 10 unexpected
+  before, 0 after; 9 repeats on two busy CPUs clean. Mutation check: dropping the
+  `setAlternate` in `#reconcile` fails the new-window and restore tasks.
+
 ## Out of scope
 
 Per-workspace autofill stance (`autofill`, M6); syncing workspaces between devices; a web page in

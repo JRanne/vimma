@@ -71,16 +71,26 @@ export const COMMANDS = Object.freeze([
   }),
   cmd("vsplit", "none", "pane.split_vertical", "Split right", { aliases: ["vs"] }),
   cmd("split", "none", "pane.split_horizontal", "Split down", { aliases: ["sp"] }),
-  // `wsn`, as Vim's `:wsn[ext]`: the prefix was unique before `wsnew` came.
-  cmd("wsnext", "none", "workspace.next", "Next workspace", { aliases: ["wsn"] }),
-  cmd("wsprev", "none", "workspace.previous", "Previous workspace"),
-  cmd("workspace", "optional", "workspace.picker", "Switch workspace (without a name: picker)", {
-    textAction: "workspace.switch",
-  }),
+  // `wsn`, as Vim's `:wsn[ext]`: the prefix was unique before `wsnew` came. The short aliases
+  // follow Vim's buffer commands (`:b`, `:bn`, `:bp`, `:bd`, `:badd`, `:ls`; m3-workspaces).
+  cmd("wsnext", "none", "workspace.next", "Next workspace", { aliases: ["wsn", "wn"] }),
+  cmd("wsprev", "none", "workspace.previous", "Previous workspace", { aliases: ["wp"] }),
+  cmd(
+    "workspace",
+    "optional",
+    "workspace.picker",
+    "Switch workspace by name or number, # the previous one (without: picker)",
+    { aliases: ["ws"], textAction: "workspace.switch" },
+  ),
+  cmd("workspaces", "none", "workspace.picker", "Workspace picker (as :ls lists buffers)"),
   // m3-workspaces 4a/4b. Without text, new / rename / move ask on the command line.
-  cmd("wsnew", "optional", "workspace.new", "New workspace (and switch to it)"),
+  cmd("wsnew", "optional", "workspace.new", "New workspace (and switch to it)", {
+    aliases: ["wa"],
+  }),
   cmd("wsrename", "optional", "workspace.rename", "Rename this workspace"),
-  cmd("wsdelete", "optional", "workspace.close", "Close this (or the named) workspace; asks"),
+  cmd("wsdelete", "optional", "workspace.close", "Close this (or the named) workspace; asks", {
+    aliases: ["wd"],
+  }),
   cmd("wsmove", "optional", "workspace.move_tab", "Move the tab to a workspace (name or number)"),
   // workspace-routing: without text, the rules (about:vimma); `add [workspace]`, `move`.
   cmd("route", "optional", "workspace.route", "Routing rules (add [workspace] | move)"),
@@ -198,7 +208,17 @@ export function parseCommandLine(line) {
       if (def.arg !== undefined) action.arg = def.arg;
       return runResult(word, action);
     }
-    const candidates = commandsWithPrefix(word);
+    let candidates = commandsWithPrefix(word);
+    if (candidates.length > 1) {
+      // `:wor` is `:workspace`, not also `:workspaces`: a command whose name begins a word of
+      // every other match wins, as Vim's shortest abbreviation does.
+      const outer = candidates.filter(
+        (c) =>
+          c.name.startsWith(word) &&
+          candidates.every((o) => [o.name, ...o.aliases].some((w) => w.startsWith(c.name))),
+      );
+      if (outer.length === 1) candidates = outer;
+    }
     if (candidates.length > 1) {
       const names = candidates.map((c) => c.name);
       return fail("ambiguous-command", `ambiguous command "${word}": ${names.join(", ")}`, names);
@@ -269,19 +289,28 @@ const CANDIDATES = [
   })),
 ].map((c) => Object.freeze(c));
 
-/** What an argument candidate says it is, per command that completes its argument. */
-/** @type {Readonly<Record<string, string>>} */
-const ARGUMENT_KINDS = Object.freeze({ addon: "add-on" });
+/**
+ * Commands that complete their argument: the list of names the host passes (its key in
+ * `args`), and what a candidate says it is.
+ * @type {Readonly<Record<string, { names: string, kind: string }>>}
+ */
+const ARGUMENT_KINDS = Object.freeze({
+  addon: { names: "addon", kind: "add-on" },
+  workspace: { names: "workspace", kind: "workspace" },
+  wsdelete: { names: "workspace", kind: "workspace" },
+  wsmove: { names: "workspace", kind: "workspace" },
+});
 
 /**
  * Candidates for a command's argument (`:addon bit` → `addon Bitwarden`): `names` matched
  * fuzzily (the pickers' scoring), best first; a blank argument lists them all in order.
- * @param {string} command
+ * @param {string} command  the command word as typed (`ws`, `workspace`)
+ * @param {string} kind     what a candidate is, for its description
  * @param {string} text  the argument typed so far
  * @param {readonly string[]} names
  * @returns {Candidate[]}
  */
-function argumentCandidates(command, text, names) {
+function argumentCandidates(command, kind, text, names) {
   const t = text.trim();
   const ranked = t
     ? names
@@ -296,15 +325,15 @@ function argumentCandidates(command, text, names) {
     Object.freeze({
       value: `${command} ${name}`,
       kind: /** @type {const} */ ("argument"),
-      description: ARGUMENT_KINDS[command] ?? "",
+      description: kind,
       label: name,
     }),
   );
 }
 
 /**
- * Completion candidates for the command word, or for the argument of a command in `args`
- * (its names, from the host: `{ addon: [...] }`).
+ * Completion candidates for the command word, or for the argument of a command that completes
+ * one, from the names the host passes in `args` (`{ addon: [...], workspace: [...] }`).
  * @param {string} line
  * @param {{ limit?: number, args?: Readonly<Record<string, readonly string[]>> }} [options]
  * @returns {{ word: string, candidates: Candidate[] }}
@@ -315,10 +344,14 @@ export function completeCommandLine(line, { limit = 20, args = {} } = {}) {
   const word = (m?.[1] ?? "").toLowerCase();
   if (m?.[2]) {
     const command = byWord.get(word)?.name;
-    const names = command && Object.hasOwn(args, command) ? args[command] : undefined;
-    if (!command || !names || !(command in ARGUMENT_KINDS)) return { word, candidates: [] };
+    const spec = command && Object.hasOwn(ARGUMENT_KINDS, command) ? ARGUMENT_KINDS[command] : null;
+    const names = spec && Object.hasOwn(args, spec.names) ? args[spec.names] : undefined;
+    if (!spec || !names) return { word, candidates: [] };
     const text = rest.slice(/** @type {string} */ (m[1]).length + 1);
-    return { word, candidates: argumentCandidates(command, text, names).slice(0, limit) };
+    return {
+      word,
+      candidates: argumentCandidates(word, spec.kind, text, names).slice(0, limit),
+    };
   }
   /** @type {Candidate[]} */
   const exact = [];

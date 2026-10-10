@@ -43,8 +43,9 @@ Panes
   resize_shorter       ctrl+w -, k [resize], up [resize], - [resize]     Make pane shorter
 
 Workspaces
-  next_workspace       ctrl+b )                                          Next workspace
-  previous_workspace   ctrl+b (                                          Previous workspace
+  next_workspace       ctrl+b ), ]w                                      Next workspace
+  previous_workspace   ctrl+b (, [w                                      Previous workspace
+  last_workspace       ctrl+b ^, ctrl+b ctrl+6, ctrl+^, ctrl+6           Previous workspace you were in; again toggles back (Vim's ctrl+^)
   switch_workspace     (unbound)                                         Switch to a workspace by name or number
   workspace_picker     ctrl+b w                                          Workspace picker
   new_workspace        ctrl+b shift+n                                    New workspace

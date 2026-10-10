@@ -168,6 +168,15 @@ export function moveTabToWorkspace(win, text) {
 }
 
 /**
+ * The window's workspace names in workspace order, for Tab after `:ws`, `:wd` and `:wsmove`.
+ * @param {Window} win
+ * @returns {string[]}
+ */
+export function workspaceNames(win) {
+  return WindowWorkspaces.get(win)?.model?.workspaces.map((w) => w.name) ?? [];
+}
+
+/**
  * The `prefix+w` picker's rows: the window's workspaces, with their tab counts.
  * @param {Window} win
  * @returns {WorkspaceItem[]}

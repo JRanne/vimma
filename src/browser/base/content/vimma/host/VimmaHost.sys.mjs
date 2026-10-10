@@ -67,6 +67,7 @@ import {
   moveTabToWorkspace,
   newWorkspace,
   renameWorkspace,
+  workspaceNames,
   workspacePickerItems,
   workspaceRef,
 } from "./workspace-ops.mjs";
@@ -190,8 +191,9 @@ function paneRunner(op) {
 }
 
 /**
- * `workspace.switch`: by number (`:workspace 2`) or name (`:workspace work`); a key bound to
- * switch_workspace asks on the command line.
+ * `workspace.switch`: by number (`:workspace 2`) or name (`:workspace work`), `#` the previous
+ * workspace as Vim's `:b#` (unless a workspace is named `#`); a key bound to switch_workspace
+ * asks on the command line.
  * @param {WindowState} s
  * @param {string} [text]
  */
@@ -201,8 +203,11 @@ function switchWorkspace(s, text) {
     return;
   }
   const ww = WindowWorkspaces.get(s.win);
+  const alternate = text === "#" && !ww?.model?.workspaces.some((w) => w.name === "#");
   // null is success, not "no model": `?? NO_WORKSPACES` would show it after every switch.
-  const refused = ww ? ww.switchTo(workspaceRef(text, ww.model)) : NO_WORKSPACES;
+  /** @type {string | null} */
+  let refused = NO_WORKSPACES;
+  if (ww) refused = alternate ? ww.last() : ww.switchTo(workspaceRef(text, ww.model));
   if (refused) s.notice.show(refused);
 }
 
@@ -226,8 +231,8 @@ function workspaceRunner(op, prompt) {
 }
 
 /**
- * A workspace step (ctrl+b ) / ctrl+b (); shows its refusal, if any.
- * @param {"next" | "previous"} step
+ * A workspace step (ctrl+b ) / ctrl+b (, ]w / [w, ctrl+^); shows its refusal, if any.
+ * @param {"next" | "previous" | "last"} step
  * @returns {(state: WindowState) => void}
  */
 function workspaceStep(step) {
@@ -440,6 +445,8 @@ export const RUNNERS = Object.freeze({
   // m3-workspaces 2b: one workspace's tabs visible at a time (WindowWorkspaces).
   "workspace.next": workspaceStep("next"),
   "workspace.previous": workspaceStep("previous"),
+  // Vim's ctrl+^ (alternate buffer), tmux's last session: the window's previous workspace.
+  "workspace.last": workspaceStep("last"),
   "workspace.switch": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
     switchWorkspace(s, text),
   // m3-workspaces 4a/4b: new, rename, close (asks y/N), move the tab (workspace-ops.mjs).
@@ -769,7 +776,7 @@ export const VimmaHost = {
       cmdline: new CommandLine(win, {
         run: (result) => this._runCommand(state, result),
         changed: () => this._emit(state),
-        args: () => ({ addon: addonNames() }),
+        args: () => ({ addon: addonNames(), workspace: workspaceNames(win) }),
       }),
       tabStrip: null,
       timer: null,

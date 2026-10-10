@@ -89,7 +89,8 @@ function checkNext(next, ids, prefix, path) {
 /**
  * Plain JSON for persistence. `tabLabels` (tab renames, spec m2-core-logic) is written as the
  * optional `tabLabels` field, only for tabs that are still open and only when there are any, so
- * a snapshot without renames is plain v1.
+ * a snapshot without renames is plain v1. The alternate workspace (`ctrl+^`) is the optional
+ * `alternate` field, likewise only when there is one.
  * @param {Workspaces} s
  * @param {{ tabLabels?: TabLabels }} [options]
  */
@@ -114,6 +115,7 @@ export function toSnapshot(s, { tabLabels } = {}) {
       activeTab: w.activeTab,
       panes: w.panes && JSON.parse(JSON.stringify(w.panes)),
     })),
+    ...(s.alternate !== undefined ? { alternate: s.alternate } : {}),
     ...(labels ? { tabLabels: labels } : {}),
   };
 }
@@ -263,7 +265,8 @@ export function fromSnapshot(input, options) {
 /**
  * `fromSnapshot` plus the tab renames. The workspace state is validated strictly (a broken file
  * throws `SnapshotError`); the optional `tabLabels` field is read leniently: stale or invalid
- * entries are dropped with a warning, so one bad label never fails a restore.
+ * entries are dropped with a warning, so one bad label never fails a restore. The optional
+ * `alternate` is kept only when it names a workspace other than `active`, else dropped.
  * @param {unknown} input
  * @param {{ migrations?: Readonly<Record<number, SnapshotMigration>> }} [options]
  * @returns {{ state: Workspaces, tabLabels: TabLabels, warnings: TabLabelWarning[] }}
@@ -329,10 +332,15 @@ export function readSnapshot(input, { migrations } = {}) {
   });
   if (!ids.has(doc.active)) fail("active", "must name a workspace");
   checkNext(doc.next, ids, "w", "next");
+  const alternate =
+    typeof doc.alternate === "string" && doc.alternate !== doc.active && ids.has(doc.alternate)
+      ? doc.alternate
+      : undefined;
   const state = Object.freeze({
     workspaces: Object.freeze(workspaces),
     active: doc.active,
     next: doc.next,
+    ...(alternate !== undefined ? { alternate } : {}),
   });
   const { labels, warnings } = readTabLabels(doc.tabLabels, allTabs);
   return { state, tabLabels: labels, warnings };
