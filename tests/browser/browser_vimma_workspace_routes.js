@@ -133,6 +133,21 @@ add_task(async function open_routes_but_keeps_a_page_that_is_not_blank() {
   tidy();
 });
 
+add_task(async function shift_p_routes_a_clipboard_url() {
+  await inHome();
+  const url = `${WORK}?pasted`;
+  await SimpleTest.promiseClipboardChange(url, () => SpecialPowers.clipboardCopyString(url));
+  const browser = gBrowser.selectedBrowser;
+  await until(() => !browser.webProgress?.isLoadingDocument, "the page has loaded");
+  await focusContent(browser);
+  const opened = nextTab();
+  EventUtils.synthesizeKey("P");
+  const routed = await opened;
+  Assert.equal(routed.userContextId, work.userContextId, "P opens the URL in rt-work's container");
+  await until(() => activeName() === "rt-work", "and switches there");
+  tidy();
+});
+
 add_task(async function no_loop_when_the_rule_names_the_shown_workspace() {
   ww().switchTo({ id: work.id });
   const tab = await BrowserTestUtils.openNewForegroundTab(gBrowser, `${WORK}?first`);
