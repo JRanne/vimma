@@ -18,6 +18,7 @@ import {
 } from "../core/control.mjs";
 import { parseKey } from "../core/keys.mjs";
 import { VimmaHost } from "../host/VimmaHost.sys.mjs";
+import { PaneViews } from "../split/PaneView.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
 
@@ -214,6 +215,37 @@ function pressChords(win, chords) {
 // ---------------------------------------------------------------------------------------------
 // Commands
 
+/**
+ * `state.panes`: the window's pane tree with state's tab ids, or null with one pane (protocol
+ * spec, "state"). The tree names tabs by panel; a leaf also gets its place in `tabs` (-1 when
+ * its tab is not visible), so a scenario can match a layout without knowing the ids.
+ * @param {any} win
+ * @param {any[]} visible gBrowser.visibleTabs
+ */
+function paneState(win, visible) {
+  const panes = PaneViews.get(win)?.panes;
+  if (!panes) return null;
+  const tabOf = (/** @type {string} */ panel) =>
+    win.gBrowser.tabs.find((/** @type {any} */ t) => t.linkedPanel === panel);
+  const idOf = (/** @type {any} */ tab) => (tab ? String(tab.linkedBrowser.browserId) : null);
+  /** @param {any} n @returns {object} */
+  const node = (n) => {
+    if (n.type === "leaf") {
+      const tab = tabOf(n.tab);
+      return { tab: idOf(tab), index: visible.indexOf(tab) };
+    }
+    return { axis: n.axis, ratios: [...n.ratios], children: n.children.map(node) };
+  };
+  /** @param {any} n @returns {any} */
+  const focused = (n) =>
+    n.type === "leaf" ? (n.pane === panes.focus ? n : null) : n.children.map(focused).find(Boolean);
+  return {
+    focus: idOf(tabOf(focused(panes.root)?.tab)),
+    zoomed: panes.zoom !== null,
+    root: node(panes.root),
+  };
+}
+
 /** @type {Record<string, (args: any) => object>} */
 const COMMANDS = {
   "send-keys"({ keys }) {
@@ -227,11 +259,12 @@ const COMMANDS = {
     const win = /** @type {any} */ (topWindow());
     const host = VimmaHost.status(win);
     const { gBrowser } = win;
+    const visible = gBrowser.visibleTabs;
     return {
       mode: host.mode,
       pending: host.pending.length ? host.pending.join(" ") : null,
-      workspace: null,
-      tabs: gBrowser.visibleTabs.map((/** @type {any} */ tab, /** @type {number} */ index) => ({
+      workspace: host.workspace?.name ?? null,
+      tabs: visible.map((/** @type {any} */ tab, /** @type {number} */ index) => ({
         id: String(tab.linkedBrowser.browserId),
         index,
         url: tab.linkedBrowser.currentURI.spec,
@@ -239,7 +272,7 @@ const COMMANDS = {
         selected: tab.selected,
         pinned: tab.pinned,
       })),
-      panes: null,
+      panes: paneState(win, visible),
     };
   },
 

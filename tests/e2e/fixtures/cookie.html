@@ -1,0 +1,14 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- m3-restart-restore: cookie.html#<name> sets a persistent cookie ws=<name> in the tab's
+     container; every load titles the page with the cookies it sees, so a scenario reads a
+     container's cookie jar from state's tab title. -->
+<meta charset="utf-8" />
+<title>cookie</title>
+<script>
+  const name = location.hash.slice(1);
+  if (name) document.cookie = `ws=${name}; max-age=86400; path=/; samesite=lax`;
+  document.title = `cookie ${document.cookie || "none"}`;
+</script>

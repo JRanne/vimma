@@ -17,6 +17,12 @@ const { VimmaControl } = ChromeUtils.importESModule(
 const { VimmaHost } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
 );
+const { WindowWorkspaces } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/workspaces/WindowWorkspaces.sys.mjs",
+);
+const { PaneViews } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/split/PaneView.mjs",
+);
 const { AppConstants } = ChromeUtils.importESModule("resource://gre/modules/AppConstants.sys.mjs");
 const { Subprocess } = ChromeUtils.importESModule("resource://gre/modules/Subprocess.sys.mjs");
 
@@ -353,8 +359,13 @@ add_task(async function test_send_keys_and_state() {
   let { result } = await client.request(1, "state");
   Assert.equal(result.mode, "normal", "the page's mode, normal (m1-actor-insert-scroll)");
   Assert.equal(result.pending, null, "nothing pending");
-  Assert.equal(result.workspace, null, "no workspaces before M3");
-  Assert.equal(result.panes, null, "no panes before split view");
+  Assert.equal(
+    result.workspace,
+    WindowWorkspaces.get(window).status().name,
+    "the active workspace's name (m3-workspaces 7)",
+  );
+  Assert.equal(typeof result.workspace, "string", "a name, not null, now that workspaces exist");
+  Assert.equal(result.panes, null, "one pane: no tree");
   Assert.equal(result.tabs.length, gBrowser.visibleTabs.length, "every visible tab");
   const selected = result.tabs.filter((t) => t.selected);
   Assert.equal(selected.length, 1, "one selected tab");
@@ -391,6 +402,51 @@ add_task(async function test_send_keys_and_state() {
 
   client.close();
   await disable();
+});
+
+// m3-workspaces 7: the e2e restart scenario asserts the split layout through `state.panes`.
+add_task(async function test_state_panes() {
+  await enable();
+  const client = await session();
+  const view = PaneViews.get(window);
+  const left = gBrowser.selectedTab;
+  Assert.ok(view.split("vertical").ok, "split right");
+  await TestUtils.waitForCondition(() => view.panes, "the split is laid out");
+  const right = gBrowser.selectedTab;
+  Assert.notEqual(right, left, "the new pane shows a new tab");
+
+  const { result } = await client.request(1, "state");
+  const v = validateMessage(
+    { type: "response", id: 1, ok: true, result },
+    { kind: "response", command: "state" },
+  );
+  Assert.ok(v.valid, `the state is valid: ${v.errors.join("; ")}`);
+  const id = (tab) => String(tab.linkedBrowser.browserId);
+  const index = (tab) => result.tabs.findIndex((t) => t.id === id(tab));
+  Assert.ok(index(left) >= 0 && index(right) >= 0, "both panes' tabs are in tabs");
+  Assert.deepEqual(
+    result.panes,
+    {
+      focus: id(right),
+      zoomed: false,
+      root: {
+        axis: "x",
+        ratios: [0.5, 0.5],
+        children: [
+          { tab: id(left), index: index(left) },
+          { tab: id(right), index: index(right) },
+        ],
+      },
+    },
+    "the pane tree in state's tab ids, with each leaf's place in tabs",
+  );
+
+  client.close();
+  await disable();
+  Assert.ok(view.close().ok, "close the right pane");
+  gBrowser.removeTab(right);
+  await TestUtils.waitForCondition(() => !view.panes, "one pane again");
+  Services.prefs.clearUserPref("browser.tabs.splitview.hasUsed");
 });
 
 add_task(async function test_send_keys_reach_the_page() {

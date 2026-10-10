@@ -21,6 +21,14 @@ describe("fixtureUrl", () => {
     expect(fixtureUrl("about:blank", "http://127.0.0.1:9/")).toBe("about:blank");
   });
 
+  it("keeps a #fragment, which the page reads and the server never sees", () => {
+    expect(fixtureUrl("fixture:cookie.html#work", "http://127.0.0.1:9/")).toBe(
+      "http://127.0.0.1:9/cookie.html#work",
+    );
+    expect(() => fixtureUrl("fixture:cookie.html#a b", "http://h/")).toThrow(/fixture name/);
+    expect(() => fixtureUrl("fixture:#x", "http://h/")).toThrow(/fixture name/);
+  });
+
   it("refuses names that are not one plain file", () => {
     expect(() => fixtureUrl("fixture:../x.html", "http://h/")).toThrow(/fixture name/);
     expect(() => fixtureUrl("fixture:", "http://h/")).toThrow(/fixture name/);
