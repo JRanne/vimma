@@ -1,6 +1,6 @@
 # Spec: m4-split-panes
 
-Status: in progress (sub-specs 1 to 5 and 7 done; 6 core done, adoption handed over) ·
+Status: done (sub-specs 1 to 7; key-to-paint timing goes with the perf gate, issue #17) ·
 Milestone: M4 · Area: host
 (`src/browser/base/content/vimma/split/`, `host/`), CSS (`browser/themes/shared/vimma/`)
 
@@ -498,6 +498,43 @@ tested by `browser_vimma_pane_workspaces.js` (3 tasks).
   the focused browser's, so a pane move takes the new pane's mode; no test pins it yet (insert in
   pane 1's text field, `ctrl+b l` gives normal, `ctrl+b h` insert again).
 
+**Sub-spec 6 results, the rest (adopting foreign splits):** done, tested by
+`browser_vimma_pane_adopt.js` (4 tasks) and core's `createRow` (vitest).
+
+- **Events:** `PaneView` listens for `SplitViewCreated` (Firefox's `addTabSplitView`),
+  `SplitViewTabChange` (any membership change; SessionStore builds wrappers with
+  `#createTabSplitView` and `addTabs(…, { isSessionRestore })`, which fire no `SplitViewCreated`)
+  and `SplitViewRemoved`, outside `reconcile`, and runs `adopt()` then `reconcile()` in its
+  scheduled task. Our own rebuilds' events arrive late (the wrapper's `MutationObserver`), so
+  `adopt` compares the DOM with the trees and finds nothing to do for them.
+- **Adopted:** the shown workspace's split of the selected tab becomes a row (core `createRow`;
+  Firefox lays out two columns, so a row is what the user saw), in the wrapper's order, focus on
+  the selected tab. Shares: Firefox's splitter stores the first panel's `width` attribute; with
+  two tabs that over the content width gives the ratios (clamped at `MIN_RATIO`), else equal.
+  Restore keeps no widths, so a restored Firefox split comes back equal. A split of background
+  tabs waits until one is selected (`TabSplitViewActivate`); one of a hidden workspace until a
+  switch shows it (`WindowWorkspaces.#show` calls `adopt()` after the switch, also after a
+  restore, which covers a wrapper restored without a tree in the snapshot).
+- **Undone, with a notice** (`WindowWorkspaces`' notify, the status-bar toast): a wrapper whose
+  tabs are in different workspaces (m3 decision 14; `plan.unsplit`'s `console.warn` is gone) and
+  a second split in a workspace that has one (shown or parked). Tabs stay where they are.
+- **The shown tree's wrapper changed outside Vimma:** dissolved (Firefox's "separate tabs"), the
+  panes close and the selected tab stays; a tab taken out closes its pane; a tab added joins on
+  the right (core `split`, so within `[panes] max`; another workspace's is dropped by reconcile).
+  `WindowWorkspaces.moveTab` now closes the moved tab's pane through `PaneView.release(tab)`
+  first, instead of unsplitting the whole wrapper (which would read as a dissolve).
+- **Contract test:** `browser_vimma_split_contract.js` pins Firefox's split view without Vimma;
+  PaneView would now adopt its wrappers, so it removes PaneView's listeners
+  (`PANE_VIEW_EVENTS`) for its run and adds them back in cleanup.
+- **Per-pane mode:** pinned end to end by the sub-spec 7 e2e scenario (below); no mochitest
+  added.
+- **Red/green:** the new test red before (4 tasks time out: nothing adopted), green after; 9 of
+  9 under `taskset -c 0,1` load; whole `tests/browser/` suite green (2723). Mutation check: not
+  showing the notice for a split across workspaces fails "the notice says why".
+- **Not done:** Firefox's `about:opentabs` tab in an adopted split closes when the split is
+  separated (upstream `unsplitTabs`), including Vimma's own rebuilds and `ctrl+b x` down to one
+  pane ([limits](../limits.md)).
+
 ## Sub-spec 7 results (`m4-split-gate`)
 
 Done: `tests/e2e/scenarios/m4-split-panes.json` with the fixture `tests/e2e/fixtures/pane.html`
@@ -532,8 +569,8 @@ step, protocol field or product code was needed.
   covers it); key-to-paint timing for `prefix+l` (and m3's 200-tab `ctrl+i` measurement) need a
   paint timestamp the control socket does not report; it belongs with the perf gate.
 
-What is left of M4: sub-spec 6's handover (adopting foreign splits; the per-pane mode test is
-now covered end to end here) and the key-to-paint measurement.
+What is left of M4: nothing. The key-to-paint measurement needs the perf gate (issue #17) and
+moves there.
 
 ## Breakdown into sub-specs
 
