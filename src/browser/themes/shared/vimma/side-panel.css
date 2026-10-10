@@ -2,12 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* The side panel (ui/side-panel.mjs): the pickers' look (picker.css), theme tokens when the
-   status bar has loaded them, legible system colours otherwise. SidebarController.setPosition()
+/* The side panel and the bookmarks panel (ui/side-panel.mjs, ui/bookmarks-panel.mjs): the
+   pickers' look (picker.css), theme tokens when the status bar has loaded them, legible system colours otherwise. SidebarController.setPosition()
    writes an inline `order` on every child of #browser (browser-sidebar.js), so ours is
    !important to stay leftmost. */
 
-#vimma-panel {
+.vimma-side-panel {
   order: -1 !important;
   box-sizing: border-box;
   width: var(--vimma-panel-width, 18rem);
@@ -106,5 +106,43 @@
 
   & .vimma-panel-hint {
     padding: 0.5rem 0.75rem;
+  }
+}
+
+/* The bookmarks panel (docs/specs/bookmarks.md): a tree, indented by depth (--vimma-depth). */
+#vimma-bookmarks {
+  & .vimma-panel-row {
+    grid-template-columns: 1.5ch minmax(0, 1fr);
+    padding-inline-start: calc(0.75rem + var(--vimma-depth, 0) * 1.25ch);
+  }
+
+  & .vimma-bookmarks-twisty {
+    color: var(--vimma-accent, AccentColor);
+  }
+
+  & .vimma-bookmarks-folder .vimma-panel-title {
+    font-weight: bold;
+  }
+
+  & .vimma-bookmarks-more {
+    padding: 0.15rem 0.75rem;
+    font-size: 0.85em;
+    opacity: 0.7;
+  }
+
+  & .vimma-bookmarks-filter {
+    flex-basis: 100%;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 0.15rem 0.35rem;
+    border: 1px solid var(--vimma-muted, color-mix(in srgb, CanvasText 25%, transparent));
+    background: var(--vimma-bg, Field);
+    color: var(--vimma-fg, FieldText);
+    font: inherit;
+
+    &[hidden] {
+      display: none;
+    }
   }
 }

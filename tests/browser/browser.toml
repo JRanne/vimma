@@ -107,6 +107,8 @@ support-files = ["file_vimma_cookie.html"]
 
 ["browser_vimma_side_panel.js"]
 
+["browser_vimma_bookmarks.js"]
+
 ["browser_vimma_workspace_restore.js"]
 support-files = ["file_vimma_insert_scroll.html"]
 

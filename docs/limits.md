@@ -161,6 +161,21 @@ accepts
   sidebar beside Vimma's side panel; Firefox's four default containers stay in Settings.
 - Extensions that hide or show tabs (`tabs.hide`) conflict with workspace visibility.
 
+## Bookmarks
+
+- Tags, keywords, separators, sorting, drag and drop, undo and editing a bookmark's address are
+  left to Firefox's Library (`ctrl+shift+o`); a folder's bookmarks cannot be opened all at once
+  ([bookmarks](specs/bookmarks.md), Out of scope).
+- `javascript:` and `data:` bookmarks (bookmarklets) are listed but never open from Vimma, nor
+  does anything but `http`, `https`, `file` and `about:` ([bookmarks](specs/bookmarks.md),
+  decision 6).
+- A `/` inside a folder or bookmark name is typed `\/` in a path; a top-level folder named
+  `toolbar`, `other` or `mobile` is reached by Firefox's root of that name instead
+  ([bookmarks](specs/bookmarks.md), decision 2).
+- The panel's `a` adds the page even when it is bookmarked already (Firefox allows several);
+  only `ctrl+b a` and `:bookmark` offer to move the existing one. The filter lists bookmarks,
+  not folders ([bookmarks](specs/bookmarks.md), decisions 7 and 10).
+
 ## Panes
 
 - No split panes yet: `ctrl+b v`, `-`, `x`, `z`, `h/j/k/l` and resize mode are planned for M4

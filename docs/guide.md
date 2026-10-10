@@ -278,6 +278,8 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `:`                         | Normal mode: opens the command line at the bottom of the window ([below](#the-command-line)). In a text field `:` is typed.                                   |
 | `ctrl+b g`, `b`             | Opens the goto picker over the page (`b` in normal mode): every tab of the window ([below](#goto-picker-and-tab-rename)).                                     |
 | `ctrl+b shift+t`            | Renames the tab ([below](#goto-picker-and-tab-rename)); an empty name restores the page title.                                                                |
+| `ctrl+b a`                  | Bookmarks the page; type folders before its title: `work/docs/title` ([below](#bookmarks)).                                                                   |
+| `ctrl+b shift+b`, `space b` | Opens or closes the bookmarks panel ([below](#bookmarks)).                                                                                                    |
 | `ctrl+b v` / `ctrl+b -`     | Splits the pane right / down. The new pane opens a new tab (the start page, URL bar focused). At most 4 panes (`[panes] max`); a refused split says why.      |
 | `ctrl+b h j k l`            | Focuses the pane left / below / above / right; when several touch, the one used last. `ctrl+w h j k l` in normal mode. The page of that pane gets focus.      |
 | `ctrl+b z`, `ctrl+w o`      | Zooms the pane to the whole window, or back. The other panes' pages pause. A pane focus key unzooms when it moves.                                            |
@@ -444,6 +446,52 @@ follows your Omarchy theme as the status bar does. Change its keys under `[modal
 `config.toml`; `[keys] toggle_sidebar` changes the keys that open it, and a `<leader>` binding
 there closes it too.
 
+## Bookmarks
+
+Vimma's bookmarks are Firefox's: what you imported, what Sync brings and what the Library shows.
+Vimma keeps no list of its own.
+
+**Bookmark a page from anywhere:** `ctrl+b a` (or `:bookmark`). A prompt opens at the foot of
+the window with the page's title and the cursor before it. Type folders in front of the title,
+separated by `/`: `work/docs/My page` files the page in folder `work`, then `docs`, and makes the
+folders that are not there yet. `Tab` completes a folder name (again: the next match). `Enter`
+saves, `Esc` cancels. A path is counted from the Bookmarks Menu; start it with `toolbar/` or
+`other/` for the Bookmarks Toolbar or Other Bookmarks. A path ending in `/` files the page in
+that folder under its title. `:bookmark work/docs/My page` saves at once, without the prompt.
+
+If the page is bookmarked already, Vimma says where (`already bookmarked: work/docs/My page`)
+and the prompt changes to `move/rename:` with that path: edit it and press `Enter` to move or
+rename the bookmark, or `Esc` to leave it. Only `http`, `https`, `file` and `about:` pages can
+be bookmarked this way.
+
+**The bookmarks panel:** `ctrl+b shift+b`, `<leader>b` (`space b`) or `:bookmarks` opens your
+bookmarks on the left, where the side panel opens; one of the two shows at a time. It works
+like neo-tree: the Bookmarks Menu's folders and bookmarks, with `toolbar` and `other` (and
+`mobile`, when you have some) as the first folders.
+
+| Key                                  | What it does                                                                              |
+| ------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `j` / `k`                            | Move down / up.                                                                           |
+| `l`                                  | Open the folder (again: go into it). On a bookmark: open it in this tab.                  |
+| `h`                                  | Close the folder; inside one, go to its folder and close that.                            |
+| `Enter`                              | Open the bookmark in this tab and close the panel; on a folder, open or close it.         |
+| `t`                                  | Open the bookmark in a new tab behind this one; the panel stays open for more.            |
+| `s` / `S`                            | Open it in a new pane right / below (as `ctrl+b v` / `-`, at most 4 panes).               |
+| `a`                                  | Add this page in the highlighted folder, as a path. As in neo-tree, `a/b/` makes folders. |
+| `A`                                  | Add a folder there.                                                                       |
+| `r`                                  | Rename.                                                                                   |
+| `m`                                  | Move to a folder: type its path (`Tab` completes); missing folders are made.              |
+| `d`                                  | Delete, after `y/N`. A folder says how many items go with it.                             |
+| `y`                                  | Copy the bookmark's address.                                                              |
+| `/`                                  | Filter every bookmark by title, address or folder, letters in order. `Enter` keeps it.    |
+| `Esc`, `ctrl+b shift+b`, `<leader>b` | Close the panel. With a filter, `Esc` clears it first.                                    |
+
+A bookmark opens in your current workspace's container, and in a private window it stays
+private. `javascript:` and `data:` bookmarks (bookmarklets) are listed but do not open from
+Vimma: it says so instead, since they would run code in the page. Changes made elsewhere (the
+Library, Sync, another window) show in the panel at once. The four top folders cannot be
+renamed, moved or deleted. The panel remembers which folders you opened until Vimma quits.
+
 ## Goto picker and tab rename
 
 `ctrl+b g` (or `b` in normal mode, or `:ls`) opens a list of the window's tabs over the page: the tab number (the
@@ -506,6 +554,8 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:workspace name`, `:workspace 2` | Switches to the workspace with that name, or that number in `ctrl+i` order.                                    |
 | `:workspace`                      | Opens the workspace picker.                                                                                    |
 | `:sidebar`                        | Opens or closes the side panel, as `<leader>n`.                                                                |
+| `:bookmarks`                      | Opens or closes the [bookmarks panel](#bookmarks), as `<leader>b`.                                             |
+| `:bookmark [path]`                | Bookmarks the page under `path` (`work/docs/title`); without one, opens the prompt, as `ctrl+b a`.             |
 | `:source`                         | Reads `config.toml` now instead of within 2 seconds (see [config.toml](#configtoml)).                          |
 | `:source path`                    | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                |
 | `:config`                         | Opens `config.toml` in a new tab (read-only view); creates it from a commented template when it is missing.    |
@@ -759,8 +809,9 @@ strip, or move the "List all tabs" button to the toolbar in customize mode, or u
 **I don't see window controls.** On tiling window managers such as Hyprland there are none, as in
 Firefox. On GNOME or KDE with client-side decorations they move to the navigation bar.
 
-**Did `ctrl+b` stop opening bookmarks?** Yes, it is Vimma's prefix. Use `ctrl+shift+o` for the
-bookmarks library.
+**Did `ctrl+b` stop opening bookmarks?** Yes, it is Vimma's prefix. `ctrl+b shift+b` (or
+`space b`) opens Vimma's [bookmarks panel](#bookmarks), and `ctrl+b a` bookmarks the page.
+Firefox's Library (`ctrl+shift+o`) still works for the rest.
 
 **A binding says "not implemented yet".** Only the keys under [Keys](#keys) run today; the
 overlay dims the rest. See [Keys](#keys) for when each binding arrives.
