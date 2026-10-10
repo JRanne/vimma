@@ -6,6 +6,9 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
+- `ctrl+b e` or `:addons` opens a keyboard add-on manager: `Enter` opens an add-on's popup with focus inside it, `o` its options, `x` turns it on or off, `d` removes it after y/N, `u` checks for updates and `shift+p` allows it in private windows; `:addon <name>` opens one popup directly. System and hidden add-ons are never listed.
+- In text fields `ctrl+w` deletes the previous word, `ctrl+u` deletes to the start of the line and `ctrl+h` deletes a character, as in Vim, and `ctrl+z` undoes them (`[modal] insert_editing = false` turns this off).
+- `x` in the side panel closes the selected tab and keeps the panel open; pinned tabs are left alone.
 - The browser builds as Vimma: `vimma --version` prints `Vimma Vimma 0.1.0`, and the window title, brand strings, app name and vendor say Vimma. The app icon is the window-and-V mark from the Vimma logo, on a dark window that reads on light and dark desktops; the start page shows the full logo, transparent, with a dark tile under light themes.
 - `ctrl+b ?` opens a bindings overlay over any page, including `about:preferences` and the PDF viewer. `/` filters it, `Esc` or `q` closes it and focus returns to where it was. A bare `ctrl+b` waits for the next key without a timeout.
 - Firefox's tab strip is hidden by default. Set `vimma.ui.tabstrip.hidden` to `false` in `about:config` to show it again, without a restart. Firefox's tab keys and the window controls keep working.
@@ -38,6 +41,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Changed
 
+- Firefox's own shortcuts that overlap Vimma or Vim are off: `ctrl+w` (close tab), `ctrl+u` (page source), `ctrl+h` (history), `ctrl+d` (bookmark dialog), `ctrl+o` (open file), `ctrl+i` (page info), `ctrl+k` (web search) and `ctrl+b` (bookmarks sidebar). `[firefox] disable = "all" | [...]` and `enable = [...]` in `config.toml` change the set; `about:vimma` lists what is off. The help-text and `defaults.toml` snapshots changed with the new keys and options.
+- Characters typed with AltGr (Linux, Windows) or Option (macOS), such as `{`, `}` and `$` on Finnish layouts, match their bindings.
 - `ctrl+b ?`, `:map` and `about:vimma` list the keys you press (`ctrl+b b`, `ctrl+b shift+x`, `ctrl+w h`) instead of config notation (`prefix+b`), following a remapped prefix or leader; the legend names the leader only when a binding uses it. The help-text snapshot changed to match.
 - Workspaces switch with `ctrl+b (` / `ctrl+b )` instead of `ctrl+u` / `ctrl+i`, which are Vim's half-page-up and jump-forward keys in normal mode now; `ctrl+o` there goes back instead of opening a file (the File menu and `:open` still do). The help-text and `defaults.toml` snapshots changed with the defaults: the workspace, scroll and history rows list the new keys.
 - Project renamed from vimux to Vimma: `packages/vimma-core`, `src/browser/base/content/vimma/`, `~/.config/vimma/config.toml`. The `defaults.toml` snapshot changed only in its generator-path comment.
@@ -51,6 +56,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Fixed
 
+- Switching workspaces with `ctrl+b (`, `ctrl+b )` or `:workspace` no longer shows "no workspaces in this window" after a successful switch.
 - Sites see Firefox's user agent (`… Gecko/20100101 Firefox/157.0`), not `Vimma/0.1.0`.
 - Everything that asks for the Firefox version (webcompat interventions, add-on updates, Remote Settings and Nimbus targeting, backups) gets Firefox's (157.0.1). `--version` and the About dialog still show Vimma's 0.1.0.
 - Startup no longer throws in BrowserGlue, so `about:home` and `about:newtab` load again.
@@ -64,7 +70,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - Remote Settings (CRLite certificate revocation, intermediates), the add-on blocklist, Sync and AMO add-on updates stay as in Firefox. Safe Browsing's phishing, malware and unwanted-software lists are on in builds made with a Google API key (the nightly); a keyless build shows the protection as off ([docs/limits.md](docs/limits.md)).
 - The control socket listens on `127.0.0.1` only and is off by default. Clients need a 256-bit token from a file only you can read, the browser proves it holds the token before the client sends it, and connection, size and idle limits apply. `open` refuses `javascript:` and `data:`.
 - Routing never acts on a link a page opens or a page's own navigation, so a page cannot open a site with another workspace's logins.
-- Bookmarks and `p`/`P` from the clipboard refuse `javascript:` and `data:` URLs, and `:open` and `:tabnew` refuse `javascript:`, instead of running them.
+- Every way Vimma opens a URL (`:open`, `:tabnew`, `p`/`P`, bookmarks, the control socket) refuses `javascript:` and `data:`, also behind `view-source:`.
+- [docs/security.md](docs/security.md) states what each risky part may and must never do, every rule linked to the test that enforces it, and CI fails if a linked test disappears. [SECURITY.md](SECURITY.md) explains how to report a vulnerability privately.
 - Deleting a workspace asks first and clears its container's site data; a container deleted outside Vimma is replaced at once, so new tabs never land in the default container.
 - Semgrep scans every PR; CodeQL scanning is set up and starts once the repository is public.
 
