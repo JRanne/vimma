@@ -567,6 +567,21 @@ workspace-200-out action 8.6 ms, paint 34.7 ms. So 200 hidden tabs cost about as
 as one pane focus, and both land in the first paint after the key; the time goes to the
 synchronous action (tab selection), not to waiting for a frame.
 
+CI (PR #108's e2e run, `ubuntu-24.04` hosted runner, headless artifact build, medians): floor
+paint 35.1 ms; key-floor action 0.8 ms; pane-focus action 8.7 ms, paint 37.9 ms;
+workspace-200-in action 9.2 ms, paint 55.4 ms (one frame more than locally); workspace-200-out
+action 9.4 ms, paint 36.6 ms.
+
+**Budgets** (`BUDGETS` in the test, on medians, about twice CI's): action 20 ms for all three
+cases; paint 75 ms for pane-focus and workspace-200-out, 110 ms for workspace-200-in. Past one
+means a doubled action or about a whole extra frame, not runner noise (p90 stayed within 1.5×
+the median except workspace-200-out, 51.9 ms). The floors are not gated. Plan §5's "< 5 ms
+key-to-paint" cannot be checked as an absolute in a headless run whose paints come every
+~35 ms; the closest gated reading is the action time, and today it is 8 to 9 ms, mostly
+Firefox's own tab selection. Like the bench baseline, re-record from CI numbers only, with a
+changelog line in the commit body, and only one CI sample backs them so far: add the next
+runs' `VIMMA_PERF` lines here before tightening anything.
+
 ### Nightly build runner (`nightly.yml`)
 
 A full build does not fit a GitHub-hosted runner (22 GB `engine/`, 39 min on 16 threads), so it

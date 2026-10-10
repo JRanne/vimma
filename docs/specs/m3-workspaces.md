@@ -2,7 +2,8 @@
 
 Status: done; split into sub-specs (see Breakdown). Sub-specs 1 (store), 2a (routing), 2b
 (switching), 3 (persistence), 4a (lifecycle), 4b (move), 5 (picker), 6 (side panel), 7 (e2e
-restart scenario) and the 4a/4b/5 leftovers are merged; the 200-tab measurement is still open ·
+restart scenario) and the 4a/4b/5 leftovers are merged; the 200-tab measurement is in
+`browser_vimma_perf.js` (runbook, "Key-to-paint timings") ·
 Milestone: M3 · Area: host
 (`src/browser/base/content/vimma/workspaces/`, `ui/`), four upstream patch files (five hunks)
 
