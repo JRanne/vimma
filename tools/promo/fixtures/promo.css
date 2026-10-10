@@ -1,0 +1,163 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* The promo video's fictional sites (tools/promo/record.mjs): a handbook, a news front page
+   and a mail inbox. Dark and calm, so they sit well in a Tokyo Night video, and responsive, so
+   the same pages work in the 16:9 and the 9:16 recordings and in a half-width pane. */
+
+:root {
+  --bg: #16161e;
+  --panel: #1f2030;
+  --text: #c8cde8;
+  --dim: #8a90b0;
+  --link: #8fb4ff;
+  --accent: #e0af68;
+  --rule: #2c2f45;
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+html {
+  background: var(--bg);
+  color: var(--text);
+  font:
+    18px/1.65 "Noto Serif",
+    Georgia,
+    serif;
+}
+body {
+  margin: 0;
+}
+a {
+  color: var(--link);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+header.site {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em 1.4em;
+  align-items: baseline;
+  padding: 14px 28px;
+  border-bottom: 1px solid var(--rule);
+  font-family: "Noto Sans", sans-serif;
+  font-size: 16px;
+}
+header.site .brand {
+  font-weight: 700;
+  color: var(--accent);
+  text-decoration: none;
+  margin-right: auto;
+  letter-spacing: 0.02em;
+}
+header.site a:not(.brand) {
+  color: var(--dim);
+  text-decoration: none;
+}
+main {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 28px 24px 120px;
+}
+h1 {
+  font-size: 2.1em;
+  line-height: 1.2;
+  margin: 0.3em 0 0.2em;
+  color: #e6e9ff;
+}
+h2 {
+  font-size: 1.35em;
+  margin: 1.6em 0 0.4em;
+  color: #e6e9ff;
+}
+.meta {
+  color: var(--dim);
+  font-family: "Noto Sans", sans-serif;
+  font-size: 15px;
+}
+pre {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 12px 16px;
+  font:
+    15px/1.5 "Noto Sans Mono",
+    monospace;
+  overflow-x: auto;
+}
+code {
+  font-family: "Noto Sans Mono", monospace;
+  font-size: 0.88em;
+  background: var(--panel);
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+}
+blockquote {
+  margin: 1.2em 0;
+  padding: 0.2em 1em;
+  border-left: 3px solid var(--accent);
+  color: var(--dim);
+}
+ul.cards {
+  list-style: none;
+  padding: 0;
+}
+ul.cards li {
+  border-bottom: 1px solid var(--rule);
+  padding: 14px 0;
+}
+ul.cards li a {
+  font-size: 1.15em;
+  font-weight: 600;
+  text-decoration: none;
+}
+ul.cards .meta {
+  display: block;
+}
+
+/* the inbox */
+.who {
+  display: inline-block;
+  margin: 0.4em 0 1em;
+  padding: 0.35em 0.9em;
+  border-radius: 999px;
+  font:
+    600 20px "Noto Sans",
+    sans-serif;
+  background: #2a2f4a;
+  color: #e6e9ff;
+}
+.who.work {
+  background: #4a3a1c;
+  color: #ffd38a;
+}
+.who.personal {
+  background: #1d3f3a;
+  color: #9ff0d8;
+}
+table.mail {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "Noto Sans", sans-serif;
+  font-size: 17px;
+}
+table.mail td {
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+table.mail td.from {
+  width: 32%;
+  font-weight: 600;
+  color: #e6e9ff;
+}
+table.mail td.subject {
+  color: var(--text);
+}
+table.mail td.when {
+  color: var(--dim);
+  text-align: right;
+  white-space: nowrap;
+}

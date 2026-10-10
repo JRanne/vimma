@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- The promo video: the page link hints lead to (http://handbook.example/panes.html), where
+     the video then searches for "pane" with /. -->
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Panes, the tmux way · Handbook</title>
+  <link rel="stylesheet" href="promo.css" />
+  <header class="site">
+    <a class="brand" href="modal-browsing.html">handbook.example</a>
+    <a href="modal-browsing.html#notes">Notes</a>
+    <a href="modal-browsing.html#tools">Tools</a>
+    <a href="modal-browsing.html#archive">Archive</a>
+    <a href="modal-browsing.html#about">About</a>
+  </header>
+  <main>
+    <p class="meta">Field notes · 4 min read</p>
+    <h1>Panes, the tmux way</h1>
+    <p>
+      A pane is a page that shares the window. Split once and the docs sit next to the code review;
+      split again and the dashboard joins them. Each pane keeps its own mode, its own scroll
+      position and its own history.
+    </p>
+    <p>
+      The prefix does the work: <code>ctrl+b v</code> splits right, <code>ctrl+b -</code> splits
+      down, <code>ctrl+b h j k l</code> moves between panes, and <code>ctrl+b z</code> zooms the
+      current pane to the full window and back.
+    </p>
+    <h2>Why panes beat windows</h2>
+    <p>
+      Windows overlap, panes never do. A pane layout is a tree, so it survives a restart, and a
+      workspace keeps its own layout while you are away in another.
+    </p>
+    <p>
+      Close a pane and its tab stays; zoom a pane and the others wait, exactly where you left them.
+    </p>
+  </main>
+</html>

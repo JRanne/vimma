@@ -1,0 +1,80 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- The promo video's first page (http://handbook.example/modal-browsing.html, through the
+     fixture server as a proxy). The link marked data-promo="target" is the one the video follows
+     with link hints. With #probe the page titles itself with that link's hint label (probe.js),
+     worked out with vimma-core's own hints.mjs; a `z` then loads the clean page. -->
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Leave the mouse in the drawer · Handbook</title>
+  <link rel="stylesheet" href="promo.css" />
+  <script type="module" src="probe.js"></script>
+  <header class="site">
+    <a class="brand" href="modal-browsing.html">handbook.example</a>
+    <a href="modal-browsing.html#notes">Notes</a>
+    <a href="modal-browsing.html#tools">Tools</a>
+    <a href="modal-browsing.html#archive">Archive</a>
+    <a href="modal-browsing.html#about">About</a>
+  </header>
+  <main>
+    <p class="meta">
+      Field notes · 6 min read · by <a href="modal-browsing.html#author">R. Kettu</a>
+    </p>
+    <h1>Leave the mouse in the drawer</h1>
+    <p>
+      Your editor is modal, your multiplexer has a prefix and your window manager tiles. Every tool
+      on the desk speaks the same <a href="modal-browsing.html#keys">keyboard language</a>, and your
+      hands never leave the home row. Then you open a browser.
+    </p>
+    <p>
+      The browser still assumes a pointer. Reading means a scroll wheel, following a link means
+      aiming, and a second page means another window to
+      <a href="modal-browsing.html#drag">drag around</a>. Small things, but each one breaks the flow
+      you built in the <a href="modal-browsing.html#terminal">terminal</a>.
+    </p>
+    <p>
+      A modal browser fixes this the way <a href="modal-browsing.html#vim">Vim</a> did:
+      <code>j</code> and <code>k</code> to read, <code>f</code> to put a label on every link,
+      <code>/</code> to search. The window itself works like
+      <a href="modal-browsing.html#tmux">tmux</a>: a prefix, then a key, to
+      <a data-promo="target" href="panes.html">split it into panes</a> or jump between
+      <a href="modal-browsing.html#workspaces">workspaces</a>.
+    </p>
+    <h2 id="notes">Reading without a wheel</h2>
+    <p>
+      Scrolling by line is calmer than flinging a wheel. <code>d</code> and <code>u</code> move half
+      a page, <code>gg</code> and <code>G</code> go to the ends, and a count repeats a motion,
+      exactly as in the editor. The page never sees these keys; a text field still gets every one of
+      them.
+    </p>
+    <pre>
+j  k      scroll a line
+d  u      half a page
+gg G      top, bottom
+H  L      back, forward</pre>
+    <h2 id="tools">Clicking without aiming</h2>
+    <p>
+      Link hints are the trick that makes the rest possible. Press <code>f</code> and every link on
+      screen gets a short label from the home row. Type the label and the link is followed; targets
+      near the top get the shortest labels, so the common case is two keys.
+    </p>
+    <blockquote>The fastest pointer is the one you never have to pick up.</blockquote>
+    <h2 id="archive">Searching without a dialog</h2>
+    <p>
+      <code>/</code> opens a search at the foot of the page that highlights as you type and counts
+      the matches. <code>Enter</code> keeps the match, <code>n</code> and <code>N</code>
+      walk through the rest, wrapping at the ends. Smartcase, of course.
+    </p>
+    <h2 id="about">One keymap, every tool</h2>
+    <p>
+      None of this is new. It is the same small set of habits, finally applied to the one window
+      that ignored them. Every key is yours to remap, and the defaults stay out of each other's way.
+    </p>
+    <p>
+      Keep reading: <a href="panes.html">panes</a>, <a href="modal-browsing.html#w">workspaces</a>,
+      <a href="modal-browsing.html#t">themes</a>.
+    </p>
+  </main>
+</html>
