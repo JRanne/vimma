@@ -1,0 +1,15 @@
+# semgrep.yml. Replaces Semgrep's default ignore list, so the generic entries are repeated.
+.git/
+node_modules/
+coverage/
+reports/
+.stryker-tmp/
+# The Firefox engine checkout (never committed) and its build output.
+engine/
+.surfer/
+dist/
+tools/vimma-ctl/target/
+# Vendored third-party code: smol-toml, CycloneDX schema, SPDX list. Fixed upstream, not here.
+vendor/
+# The generated copy of packages/vimma-core (npm run sync-core); scanned at its source.
+src/browser/base/content/vimma/core/

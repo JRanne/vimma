@@ -79,6 +79,21 @@ Two rows of plan §5 and issue #17:
 - mutation.yml reuses results only from main's scheduled or manual runs; `GH_TOKEN` is scoped to
   the download step.
 
+## Security scanning (2026-10-10)
+
+- **Semgrep CE now, CodeQL when the repo is public.** `semgrep.yml` runs on every PR, push to
+  `main` and on Mondays. It fails on ERROR findings only and keeps the SARIF as the
+  `semgrep-sarif` artifact. `codeql.yml` (`javascript-typescript` and `rust`, `build-mode: none`,
+  `security-extended`) is already in the repo but gated with
+  `if: github.event.repository.private == false`. It turns on by itself when the repo goes public
+  and needs no change then. While the repo is private, a GitHub Code Security licence would be
+  needed to upload results, and the CodeQL CLI licence does not cover a private codebase.
+- **First scan:** bidirectional and zero-width characters had been written as literal characters
+  in three tests (WARNING `contains-bidirectional-characters`). They are now `\u` escapes, and the
+  tests are unchanged. Three INFO findings in vimma-ctl are left as they are: `temp_dir()` in two
+  test helpers, and `std::env::args` in a CLI that reads its own arguments.
+- Details, licences and how to read the SARIF: docs/runbook.md, "Security scanning".
+
 ## Handover
 
 Done. Follow-up: when the CI log of another runner CPU model prints "no baseline for machine",

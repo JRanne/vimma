@@ -38,7 +38,7 @@ describe("tab labels in snapshot v1 (m2-core-logic)", () => {
 
   test("a snapshot with stale or invalid labels still restores, with warnings", () => {
     const raw = valid();
-    raw.tabLabels = { "tab-a": " padded‮ ", gone: "x", "tab-b": 7, "tab-c": "" };
+    raw.tabLabels = { "tab-a": " padded\u202e ", gone: "x", "tab-b": 7, "tab-c": "" };
     const r = readSnapshot(raw);
     expect(r.state).toEqual(fromSnapshot(valid()));
     expect(r.tabLabels).toEqual({ "tab-a": "padded" });

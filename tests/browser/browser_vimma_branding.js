@@ -27,7 +27,7 @@ function formatBrandTerms(terms) {
   for (const t of terms) {
     const msg = bundle.getMessage(`vimma-test-${t}`);
     // Strip Unicode isolation marks Fluent wraps placeables in.
-    out[t] = bundle.formatPattern(msg.value).replace(/[⁨⁩]/g, "");
+    out[t] = bundle.formatPattern(msg.value).replace(/[\u2068\u2069]/g, "");
   }
   return out;
 }

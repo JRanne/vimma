@@ -26,3 +26,6 @@ __pycache__/
 tools/vimma-ctl/target/
 # e2e failure output: actual and diff screenshots (tools/e2e, spec m0-e2e-harness)
 e2e-output/
+# semgrep.yml output when run locally (docs/runbook.md, "Security scanning")
+semgrep.json
+semgrep.sarif
