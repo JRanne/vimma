@@ -54,8 +54,9 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
 - Split panes: `ctrl+b v` and `ctrl+b -` split, `ctrl+b h/j/k/l` move, `ctrl+b z` zoom, plus
   swap, resize and close. Up to 4 panes, built on Firefox's own split view.
 - Workspaces: each one is its own container, so logins and cookies stay apart. `ctrl+b )` /
-  `ctrl+b (` switch, `ctrl+b w` picks one by name, and tabs move between them. Every workspace
-  keeps its tabs and split layout across restarts.
+  `ctrl+b (` switch, `ctrl+^` goes back to the last one as Vim's alternate buffer does,
+  `ctrl+b w` picks one by name, and tabs move between them. Every workspace keeps its tabs and
+  split layout across restarts.
 - Side panel: `ctrl+b b` lists the workspace's tabs; pick one with `j`/`k`.
 - `ctrl+b ?` lists every binding, searchable.
 

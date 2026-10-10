@@ -94,6 +94,11 @@ group("Workspaces", [
     "Previous workspace",
     { aliases: ["prev_workspace"] },
   ],
+  [
+    "last_workspace",
+    "workspace.last",
+    "Previous workspace you were in; again toggles back (Vim's ctrl+^)",
+  ],
   ["switch_workspace", "workspace.switch", "Switch to a workspace by name or number"],
   ["workspace_picker", "workspace.picker", "Workspace picker"],
   ["new_workspace", "workspace.new", "New workspace"],

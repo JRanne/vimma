@@ -29,8 +29,10 @@ import {
  */
 /**
  * `next` mints workspace ids (`w<next>`). A workspace's index is its 1-based position.
+ * `alternate`, when present, is the workspace that was active before `active` (Vim's alternate
+ * buffer, `ctrl+^`): always another workspace of the list, never `active` itself.
  * @typedef {{ readonly workspaces: readonly WorkspaceState[], readonly active: string,
- *   readonly next: number }} Workspaces
+ *   readonly next: number, readonly alternate?: string }} Workspaces
  */
 /** @typedef {{ id: string } | { index: number } | { name: string }} WorkspaceRef */
 /**
@@ -117,13 +119,37 @@ function updateWs(w, changes) {
 }
 
 /**
+ * A copy of `s` without its `alternate`.
+ * @template {{ alternate?: string }} T
+ * @param {T} s
+ * @returns {Omit<T, "alternate">}
+ */
+function withoutAlternate(s) {
+  const copy = { ...s };
+  delete copy.alternate;
+  return copy;
+}
+
+/**
+ * A change of `active` remembers the workspace left (if it is still there) as the alternate; an
+ * alternate that is gone or has become active is dropped.
  * @param {Workspaces} s
- * @param {{ workspaces?: WorkspaceState[], active?: string, next?: number }} changes
+ * @param {{ workspaces?: readonly WorkspaceState[], active?: string, next?: number }} changes
  * @returns {Workspaces}
  */
 function updateState(s, changes) {
-  const next = { ...s, ...changes };
-  return Object.freeze({ ...next, workspaces: Object.freeze(next.workspaces.slice()) });
+  const next = withoutAlternate({ ...s, ...changes });
+  const left = next.active !== s.active && next.workspaces.some((w) => w.id === s.active);
+  const alternate = left ? s.active : s.alternate;
+  const keep =
+    alternate !== undefined &&
+    alternate !== next.active &&
+    next.workspaces.some((w) => w.id === alternate);
+  return Object.freeze({
+    ...next,
+    workspaces: Object.freeze(next.workspaces.slice()),
+    ...(keep ? { alternate } : {}),
+  });
 }
 
 /**
@@ -336,6 +362,41 @@ export function deleteWorkspace(s, ref) {
 export function switchWorkspace(s, ref) {
   const w = /** @type {WorkspaceState} */ (s.workspaces[mustIndex(s, ref)]);
   return w.id === s.active ? s : updateState(s, { active: w.id });
+}
+
+/**
+ * The alternate workspace: the one active before this one (Vim's `#`), or undefined.
+ * @param {Workspaces} s
+ * @returns {WorkspaceState | undefined}
+ */
+export function alternateWorkspace(s) {
+  return s.alternate === undefined ? undefined : findWorkspace(s, { id: s.alternate });
+}
+
+/**
+ * `ctrl+^` / `ctrl+b ^`: back to the alternate workspace, which makes the one left the
+ * alternate, so a second press toggles back. Without an alternate, the input itself.
+ * @param {Workspaces} s
+ * @returns {Workspaces}
+ */
+export function lastWorkspace(s) {
+  const w = alternateWorkspace(s);
+  return w ? switchWorkspace(s, { id: w.id }) : s;
+}
+
+/**
+ * Sets the alternate workspace (a restore): `id` when it names a workspace other than the
+ * active one, else none. The input itself when nothing changes.
+ * @param {Workspaces} s
+ * @param {string | undefined} id
+ * @returns {Workspaces}
+ */
+export function setAlternate(s, id) {
+  const usable = id !== undefined && id !== s.active && s.workspaces.some((w) => w.id === id);
+  const alternate = usable ? id : undefined;
+  if (alternate === s.alternate) return s;
+  const rest = withoutAlternate(s);
+  return Object.freeze(alternate === undefined ? rest : { ...rest, alternate });
 }
 
 /**
