@@ -389,7 +389,7 @@ describe("mergeWithDefaults", () => {
         enable: [],
       },
       insertEditing: true,
-      bookmarks: { root: "toolbar" },
+      bookmarks: { root: "workspace" },
     });
   });
 });

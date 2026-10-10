@@ -441,7 +441,7 @@ function validate(raw, declared) {
       if (key !== "root") unknownKey(path, key, BOOKMARKS_KEYS);
       else if (typeof v !== "string") typeError(path, v, "a string");
       else if (!BOOKMARKS_ROOTS.includes(/** @type {BookmarksRoot} */ (v))) {
-        fail(path, 'must be "toolbar" or "all"', closest(v, BOOKMARKS_ROOTS));
+        fail(path, 'must be "workspace", "toolbar" or "all"', closest(v, BOOKMARKS_ROOTS));
       }
     }
   }
@@ -587,7 +587,7 @@ export function mergeWithDefaults(user, workspaceOrder, siteOrder) {
     routes: resolveRoutes(/** @type {Record<string, string>[]} */ (user.routes ?? [])),
     firefox: resolveFirefox(user.firefox),
     insertEditing: /** @type {boolean | undefined} */ (user.modal?.insert_editing) ?? true,
-    bookmarks: { root: user.bookmarks?.root ?? "toolbar" },
+    bookmarks: { root: user.bookmarks?.root ?? "workspace" },
   };
 }
 

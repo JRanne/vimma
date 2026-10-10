@@ -25,7 +25,7 @@ import { OVERLAP_CHORDS } from "./firefox-keys.mjs";
  * @property {Record<string, string>[]} [routes]  `[[routes]]` (workspace-routing)
  * @property {{ disable?: "all" | readonly string[], enable?: readonly string[] }} [firefox]
  *   Firefox's own shortcuts that are off (docs/specs/key-handling-batch.md)
- * @property {{ root?: "toolbar" | "all" }} [bookmarks]  the bookmarks panel's root
+ * @property {{ root?: "workspace" | "toolbar" | "all" }} [bookmarks]  the bookmarks panel's root
  *   (docs/specs/bookmarks.md)
  */
 
@@ -261,7 +261,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   },
   sites: {},
   firefox: { disable: OVERLAP_CHORDS, enable: [] },
-  bookmarks: { root: /** @type {const} */ ("toolbar") },
+  bookmarks: { root: /** @type {const} */ ("workspace") },
 });
 
 /** @param {string} s */
@@ -338,10 +338,10 @@ export function formatDefaultsToml() {
     "# The main pane's size in the main-vertical and main-horizontal layouts, 20 to 80 percent.",
     `main_size = ${MAIN_SIZE_DEFAULT * 100}`,
     "",
-    '# The bookmarks panel (ctrl+b shift+b): "toolbar" lists the Bookmarks Toolbar\'s contents,',
-    '# where ctrl+b a files new bookmarks; "all" lists every bookmark from the Bookmarks Menu.',
+    '# The bookmarks panel (ctrl+b shift+b) and ctrl+b a: "workspace" is the current workspace\'s',
+    '# folder in the Bookmarks Toolbar; "toolbar" the whole toolbar; "all" every bookmark.',
     "[bookmarks]",
-    `root = ${tomlString(DEFAULT_CONFIG.bookmarks?.root ?? "toolbar")}`,
+    `root = ${tomlString(DEFAULT_CONFIG.bookmarks?.root ?? "workspace")}`,
     "",
     "# Per-site insert mode: auto (detect text fields), never (keys stay vimma's), always.",
     "# A host also covers its subdomains. None by default.",

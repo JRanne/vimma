@@ -159,7 +159,7 @@ async function seed() {
 }
 
 registerCleanupFunction(async () => {
-  setRoot("toolbar");
+  setRoot("workspace"); // the default
   await closePanel();
   while (PaneViews.get(window).panes) PaneViews.get(window).close();
   while (gBrowser.tabs.length > 1) BrowserTestUtils.removeTab(gBrowser.tabs.at(-1));
@@ -173,6 +173,9 @@ registerCleanupFunction(async () => {
 
 add_task(async function setup_bookmarks() {
   await WindowWorkspaces.get(window).ready;
+  // This file is the whole-toolbar view (root = "toolbar"); the default, a folder per
+  // workspace, is browser_vimma_bookmarks_workspaces.js.
+  setRoot("toolbar");
   await seed();
 });
 

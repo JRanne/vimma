@@ -469,7 +469,9 @@ the model, so `TabMove` updates the model and no tab is ever moved behind the us
 ### Formats
 
 - `vimma-workspaces.json`: `{ schema: 1, lastActive, workspaces: [{ id, name, userContextId,
-color, icon, home?, source }] }` with `source` `"config"` or `"runtime"`, in workspace order
+color, icon, home?, source, bookmarksFolder? }] }` with `source` `"config"` or `"runtime"`, and
+  `bookmarksFolder` the Places guid of the workspace's folder in the Bookmarks Toolbar (optional,
+  so still schema 1; see [bookmarks](bookmarks.md) decision 11), in workspace order
   (config order first, runtime ones after, in creation order). `lastActive` is the workspace a
   window switched to last (debounced with the rest), used for the first window at startup
   (decision 3). JSONFile with `backupTo: "vimma-workspaces.json.bak"`.
@@ -1158,3 +1160,13 @@ spec, [workspace-routing](workspace-routing.md): `[[routes]]` by domain, URL or 
 the link, through the same three patch hunks as decision 3); isolating permissions
 (`permissions.isolateBy.userContext` is a possible later opt-in, untested by us); pinned tabs;
 config reload of `[workspaces]` while running (M5 host: it reuses the definitions reconcile).
+
+## Cross-reference: bookmarks per workspace (user decision, 2026-10-10)
+
+Each workspace owns a folder in the Bookmarks Toolbar, kept in its definition as
+`bookmarksFolder` (the folder's Places guid; a folder made outside Vimma is found by the
+workspace's name and then linked). `:wsrename` renames the folder; `:wsdelete` of a runtime
+workspace with bookmarks asks a second question (keep the folder, move its bookmarks to another
+workspace, delete them; Esc closes nothing), under the same stale-answer guard as its y/N. The
+bookmarks panel and quick add are rooted at the current workspace's folder. Details, tests and
+the Settled note: [bookmarks](bookmarks.md), decisions 11 and 12.

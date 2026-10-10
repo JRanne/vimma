@@ -779,41 +779,57 @@ that has errors, and a file without `schema = 2`. It only ever appends to the fi
 Vimma's bookmarks are Firefox's: what you imported, what Sync brings and what the Library shows.
 Vimma keeps no list of its own; it gives you keys to reach them.
 
-**Bookmark a page from anywhere:** `ctrl+b a` (or `:bookmark`). A prompt opens at the foot of
-the window with the page's title and the cursor before it. Type folders in front of the title,
-separated by `/`: `work/docs/My page` files the page in folder `work`, then `docs`, and makes the
-folders that are not there yet. `Tab` completes a folder name (again: the next match). `Enter`
-saves, `Esc` cancels. A path is counted from the Bookmarks Toolbar: `work/docs/My page` lands in
-the toolbar's `work` folder. A path ending in `/` files the page in that folder under its title.
-`:bookmark work/docs/My page` saves at once, without the prompt. (With `[bookmarks] root = "all"`,
-below, a path is counted from the Bookmarks Menu instead; start it with `toolbar/` or `other/`
-for the Bookmarks Toolbar or Other Bookmarks.)
+**One folder per workspace.** Each [workspace](#workspaces) owns a folder in the Bookmarks
+Toolbar, named after it: `work`'s bookmarks live in Bookmarks Toolbar → `work`. The folder is
+made when you add the workspace's first bookmark, or adopted when a toolbar folder of that name
+is already there. Vimma remembers it by its id, not only its name: renaming the workspace
+(`:wsrename`) renames the folder, and a folder renamed in the Library stays the workspace's.
+A workspace from `config.toml` and one made with `:wsnew` work the same.
 
-If the page is bookmarked already, Vimma says where (`already bookmarked: work/docs/My page`)
-and the prompt changes to `move/rename:` with that path: edit it and press `Enter` to move or
-rename the bookmark, or `Esc` to leave it. A bookmark outside the toolbar (in the Menu or Other
-Bookmarks) is named by its path from the Menu, and the prompt offers its title alone: `Enter`
-moves it to the toolbar. Only `http`, `https`, `file` and `about:` pages can be bookmarked this
-way.
+**Bookmark a page from anywhere:** `ctrl+b a` (or `:bookmark`). A prompt opens at the foot of
+the window with the page's title and the cursor before it, in the current workspace's folder.
+Type folders in front of the title, separated by `/`: in `work`, `docs/My page` files the page
+in Bookmarks Toolbar → `work` → `docs`, and makes the folders that are not there yet. `Tab`
+completes a folder name (again: the next match). `Enter` saves, `Esc` cancels. A path ending in
+`/` files the page in that folder under its title. `:bookmark docs/My page` saves at once,
+without the prompt. Start a path with `@name/` for another workspace's folder:
+`@shop/deals/Cart`; `Tab` after `@` completes workspace names.
+
+If the page is bookmarked already, Vimma says where (`already bookmarked: docs/My page`, or
+`@shop/deals/Cart` in another workspace) and the prompt changes to `move/rename:` with that path:
+edit it and press `Enter` to move or rename the bookmark, or `Esc` to leave it. A bookmark
+outside every workspace folder (in the Menu, Other Bookmarks or loose in the toolbar) is named by
+its path from the Menu, and the prompt offers its title alone: `Enter` moves it into this
+workspace. Only `http`, `https`, `file` and `about:` pages can be bookmarked this way.
 
 **The bookmarks panel:** `ctrl+b shift+b` or `:bookmarks` opens your
 bookmarks on the left, where the side panel opens; one of the two shows at a time. It works
-like neo-tree over the **Bookmarks Toolbar**: the toolbar's own bookmarks and folders are the
-top level, with no folder around them, and its header says "Bookmarks Toolbar". The Menu, Other
-Bookmarks and mobile bookmarks are not listed. An empty toolbar shows a note saying so, that `a`
-adds the current page, and how to list everything.
+like neo-tree over **the current workspace's folder**: its bookmarks and subfolders are the top
+level, with no folder row around them, and the header shows the workspace's name. Switch
+workspace and the panel follows. An empty folder shows a note saying what the panel shows,
+that `a` adds the current page, and how to see the rest.
 
-To see every bookmark as before, set this in [config.toml](#configtoml):
+Bookmarks outside workspace folders (loose in the toolbar, in the Menu or in Other Bookmarks)
+do not show in a workspace's panel. To see them, set `root` in [config.toml](#configtoml):
 
 ```toml
 schema = 2
 
 [bookmarks]
-root = "all"    # default "toolbar"
+root = "toolbar"    # the whole Bookmarks Toolbar; "all": every bookmark; default "workspace"
 ```
 
-Then the panel is the Bookmarks Menu's folders and bookmarks, with `toolbar` and `other` (and
-`mobile`, when you have some) as the first folders, and paths count from the Menu.
+With `"toolbar"` the panel is the toolbar's contents, workspace folders and loose bookmarks
+alike, and paths count from the toolbar. With `"all"` it is the Bookmarks Menu's folders and
+bookmarks, with `toolbar` and `other` (and `mobile`, when you have some) as the first folders,
+and paths count from the Menu (start one with `toolbar/` or `other/` for those). A private
+window, which has no workspaces, shows the toolbar.
+
+**Deleting a workspace** (`:wsdelete`, `ctrl+b shift+d`) asks y/N as before; when the workspace
+has bookmarks, a second question asks what becomes of them: `k` (or `Enter`) keeps its folder in
+the toolbar, no longer linked to a workspace; `m` moves them into another workspace's folder (it
+names which); `d` deletes them. `Esc` or any other key closes nothing. Nothing is deleted
+unless you press `d`.
 
 | Key                     | What it does                                                                              |
 | ----------------------- | ----------------------------------------------------------------------------------------- |
@@ -826,7 +842,7 @@ Then the panel is the Bookmarks Menu's folders and bookmarks, with `toolbar` and
 | `a`                     | Add this page in the highlighted folder, as a path. As in neo-tree, `a/b/` makes folders. |
 | `A`                     | Add a folder there.                                                                       |
 | `r`                     | Rename.                                                                                   |
-| `m`                     | Move to a folder: type its path (`Tab` completes); missing folders are made.              |
+| `m`                     | Move to a folder: type its path (`Tab` completes); `@name/…` is another workspace's.      |
 | `d`                     | Delete, after `y/N`. A folder says how many items go with it.                             |
 | `y`                     | Copy the bookmark's address.                                                              |
 | `/`                     | Filter every bookmark by title, address or folder, letters in order. `Enter` keeps it.    |
@@ -837,7 +853,8 @@ A bookmark opens in your current workspace's container, and in a private window 
 private. `javascript:` and `data:` bookmarks (bookmarklets) are listed but do not open from
 Vimma: it says so instead, since they would run code in the page. Changes made elsewhere (the
 Library, Sync, another window) show in the panel at once. With `root = "all"`, the four top
-folders cannot be renamed, moved or deleted. The panel remembers which folders you opened until Vimma quits.
+folders cannot be renamed, moved or deleted. The panel remembers which folders you opened until
+Vimma quits.
 
 ## Goto picker and tab rename
 
@@ -1063,8 +1080,9 @@ accent = "#ff9e64"
   `[workspaces]` (a new one gets its container at once; one removed from the file stays, as a
   workspace you can close yourself); `[firefox] disable` and `enable` (which of Firefox's own
   shortcuts are off, [above](#firefoxs-own-shortcuts)); `[modal] insert_editing` (`ctrl+w`,
-  `ctrl+u`, `ctrl+h` in text fields, default `true`); `[bookmarks] root` (`"toolbar"`, the
-  default, or `"all"`: what the [bookmarks panel](#bookmarks) lists and where paths start).
+  `ctrl+u`, `ctrl+h` in text fields, default `true`); `[bookmarks] root` (`"workspace"`, the
+  default: the current workspace's folder; `"toolbar"`; or `"all"`: what the
+  [bookmarks panel](#bookmarks) lists and where paths start).
 - **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]`, `[firefox]`, `[bookmarks]`,
   `hint_chars` and `insert_editing`; every key,
   its type and default are in [m5-core-config-and-theme](specs/m5-core-config-and-theme.md#schema-v1)

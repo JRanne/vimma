@@ -347,12 +347,22 @@ add_task(async function side_panel_returns_focus_to_the_url_bar_it_was_opened_fr
 });
 
 add_task(async function bookmarks_panel_is_a_tree_with_levels_and_expanded_states() {
-  // The panel lists the Bookmarks Toolbar's contents (docs/specs/bookmarks.md): give it a folder.
-  const folder0 = await PlacesUtils.bookmarks.insert({
-    parentGuid: PlacesUtils.bookmarks.toolbarGuid,
-    type: PlacesUtils.bookmarks.TYPE_FOLDER,
-    title: "a11y folder",
-  });
+  // The panel lists the workspace's folder in the Bookmarks Toolbar (docs/specs/bookmarks.md):
+  // give it a folder to show.
+  const model = WindowWorkspaces.get(window).model;
+  const active = model.workspaces.find((w) => w.id === model.active).name;
+  const folder0 = await PlacesUtils.bookmarks
+    .insertTree({
+      guid: PlacesUtils.bookmarks.toolbarGuid,
+      children: [
+        {
+          title: active,
+          type: PlacesUtils.bookmarks.TYPE_FOLDER,
+          children: [{ title: "a11y folder", type: PlacesUtils.bookmarks.TYPE_FOLDER }],
+        },
+      ],
+    })
+    .then(([f]) => f);
   registerCleanupFunction(() => PlacesUtils.bookmarks.remove(folder0.guid).catch(() => {}));
   const tab = await openPage();
   prefix("B", { shiftKey: true });

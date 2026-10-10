@@ -21,6 +21,7 @@ import {
   removeWorkspaceDefinition,
   renameWorkspaceDefinition,
   setLastActive,
+  withBookmarksFolder,
   withContainer,
 } from "../core/workspacedefs.mjs";
 
@@ -335,6 +336,20 @@ export class WorkspaceStoreImpl {
     }
     this.#save();
     this.#notify([id]);
+  }
+
+  /**
+   * Links workspace `id` to its folder in the Bookmarks Toolbar (a Places guid; null unlinks),
+   * docs/specs/bookmarks.md decision 11. Saved with the definitions; nothing to tell windows.
+   * @param {string} id
+   * @param {string | null} guid
+   */
+  setBookmarksFolder(id, guid) {
+    this.#writable();
+    const next = withBookmarksFolder(this.definitions, id, guid);
+    if (next === this.definitions) return;
+    this.definitions = next;
+    this.#save();
   }
 
   /**

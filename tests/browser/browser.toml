@@ -135,6 +135,8 @@ support-files = ["file_vimma_insert_scroll.html", "file_vimma_frame.html"]
 
 ["browser_vimma_bookmarks.js"]
 
+["browser_vimma_bookmarks_workspaces.js"]
+
 ["browser_vimma_workspace_restore.js"]
 support-files = ["file_vimma_insert_scroll.html"]
 

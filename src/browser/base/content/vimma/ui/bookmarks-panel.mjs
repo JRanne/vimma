@@ -40,13 +40,14 @@ const RELOAD_DELAY_MS = 30;
  */
 
 /**
- * The empty Bookmarks Toolbar (docs/specs/bookmarks.md, decision 2): what the panel shows,
- * how to add to it, and how to list every bookmark instead. Not a row: the tree describes
- * itself with it, as with "no bookmarks".
+ * An empty workspace folder or Bookmarks Toolbar (docs/specs/bookmarks.md, decisions 2 and
+ * 11): what the panel shows, how to add to it, and how to see the bookmarks it leaves out. Not
+ * a row: the tree describes itself with it, as with "no bookmarks".
  * @param {Document} doc
  * @param {HTMLElement} list
+ * @param {Folder} tree
  */
-function toolbarEmptyState(doc, list) {
+function emptyState(doc, list, tree) {
   const li = emptyRow(
     doc,
     list,
@@ -61,6 +62,24 @@ function toolbarEmptyState(doc, list) {
   const el = (tag, text) => panelElement(doc, tag, "", text);
   const add = el("p", "Press ");
   add.append(el("kbd", "a"), " to add the current page here.");
+  if (tree.root === "workspace") {
+    const others = el("p", "Bookmarks outside workspace folders show with ");
+    others.append(
+      el("code", 'root = "toolbar"'),
+      " or ",
+      el("code", 'root = "all"'),
+      " under ",
+      el("code", "[bookmarks]"),
+      " in config.toml.",
+    );
+    li.append(
+      panelElement(doc, "p", "vimma-bookmarks-empty-title", `No bookmarks in ${tree.title} yet`),
+      el("p", `This panel shows workspace ${tree.title}'s folder in the Bookmarks Toolbar.`),
+      add,
+      others,
+    );
+    return li;
+  }
   const all = el("p", "To list every bookmark, set ");
   all.append(el("code", 'root = "all"'), " under ", el("code", "[bookmarks]"), " in config.toml.");
   li.append(
@@ -122,6 +141,10 @@ export class BookmarksPanel {
     /** @type {number | null} */
     this.reloadTimer = null;
     this.generation = 0;
+    /** @type {string | null} the window's workspace, as the host last said it */
+    this.workspace = null;
+    /** The next load starts afresh: a workspace switch (other folders, other rows). */
+    this.fresh = false;
     /** @type {import("./side-panel.mjs").Opener | null} focus before open, for close */
     this.opener = null;
     this.onSwitchDone = () => {
@@ -229,6 +252,20 @@ export class BookmarksPanel {
     }, RELOAD_DELAY_MS);
   }
 
+  /**
+   * The window's workspace (an id and name, or null): a change re-reads the panel afresh, as
+   * it shows that workspace's folder (docs/specs/bookmarks.md, decision 11).
+   * @param {string | null} key
+   */
+  setWorkspace(key) {
+    if (key === this.workspace) return;
+    const switched = this.workspace?.split("\n")[0] !== key?.split("\n")[0];
+    this.workspace = key;
+    if (!this.opened) return;
+    if (switched) this.fresh = true;
+    this.scheduleReload();
+  }
+
   /** @private */
   reload() {
     const generation = ++this.generation;
@@ -236,9 +273,16 @@ export class BookmarksPanel {
       .load()
       .then((tree) => {
         if (!this.opened || generation !== this.generation) return;
-        this.state = this.state
-          ? refreshBookmarks(this.state, tree)
-          : openBookmarks(tree, { expanded: this.expanded, selectedGuid: this.lastGuid });
+        const fresh = this.fresh;
+        this.fresh = false;
+        this.state =
+          this.state && !fresh
+            ? refreshBookmarks(this.state, tree)
+            : openBookmarks(tree, {
+                expanded: fresh ? [] : this.expanded,
+                selectedGuid: fresh ? null : this.lastGuid,
+              });
+        if (fresh) this.endFilter();
         this.render();
       })
       .catch((e) => console.error("vimma: bookmarks could not be read", e));
@@ -303,8 +347,13 @@ export class BookmarksPanel {
     list.removeAttribute("aria-busy");
     const { rows, selected } = state;
     const filtering = !!state.query.trim();
-    const toolbar = state.tree.root === "toolbar";
-    const name = toolbar ? "Bookmarks Toolbar" : "Bookmarks";
+    const toolbar = state.tree.root === "toolbar" || state.tree.root === "workspace";
+    const name =
+      state.tree.root === "workspace"
+        ? state.tree.title
+        : state.tree.root === "toolbar"
+          ? "Bookmarks Toolbar"
+          : "Bookmarks";
     if (this.name && this.name.textContent !== name) this.name.textContent = name;
     const start = renderStart(rows.length, selected, this.start);
     if (rows === this.rendered && start === this.start) {
@@ -351,7 +400,7 @@ export class BookmarksPanel {
         items.push(row);
       }
       if (end < rows.length) items.push(more(`… ${rows.length - end} more`));
-      if (!rows.length && toolbar && !filtering) items.push(toolbarEmptyState(doc, list));
+      if (!rows.length && toolbar && !filtering) items.push(emptyState(doc, list, state.tree));
       else if (!rows.length) {
         const text = filtering ? "no match" : "no bookmarks";
         items.push(emptyRow(doc, list, `${BOOKMARKS_ID}-empty`, text));

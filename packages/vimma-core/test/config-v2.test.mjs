@@ -378,25 +378,25 @@ describe("[modal] insert_editing", () => {
 
 // docs/specs/bookmarks.md, decision 2 (user decision, 2026-10-10).
 describe("[bookmarks] root", () => {
-  test('defaults to "toolbar"', () => {
-    expect(ok(v2()).bookmarks).toEqual({ root: "toolbar" });
-    expect(DEFAULT_CONFIG.bookmarks).toEqual({ root: "toolbar" });
-    expect(formatDefaultsToml()).toMatch(/^\[bookmarks\]\n(#.*\n)*root = "toolbar"$/m);
+  test('defaults to "workspace"', () => {
+    expect(ok(v2()).bookmarks).toEqual({ root: "workspace" });
+    expect(DEFAULT_CONFIG.bookmarks).toEqual({ root: "workspace" });
+    expect(formatDefaultsToml()).toMatch(/^\[bookmarks\]\n(#.*\n)*root = "workspace"$/m);
   });
 
-  test.each([["toolbar"], ["all"]])('root = "%s" is accepted', (root) => {
+  test.each([["workspace"], ["toolbar"], ["all"]])('root = "%s" is accepted', (root) => {
     expect(ok(v2("[bookmarks]", `root = "${root}"`)).bookmarks.root).toBe(root);
   });
 
   test("an unknown root is an error, with the nearest name when one is close", () => {
     expect(errors(v2("[bookmarks]", 'root = "menu"'))).toEqual([
-      { line: 3, path: "bookmarks.root", message: 'must be "toolbar" or "all"' },
+      { line: 3, path: "bookmarks.root", message: 'must be "workspace", "toolbar" or "all"' },
     ]);
     expect(errors(v2("[bookmarks]", 'root = "tolbar"'))).toEqual([
       {
         line: 3,
         path: "bookmarks.root",
-        message: 'must be "toolbar" or "all"',
+        message: 'must be "workspace", "toolbar" or "all"',
         suggestion: "toolbar",
       },
     ]);

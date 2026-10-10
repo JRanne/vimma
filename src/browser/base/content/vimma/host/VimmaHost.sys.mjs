@@ -495,6 +495,7 @@ export const RUNNERS = Object.freeze({
       text,
       (question, yes) => s.rename.ask(question, yes),
       (said) => s.notice.show(said),
+      (question, choices) => s.rename.choose(question, choices),
     );
     if (refused) s.notice.show(refused);
   },
@@ -886,7 +887,7 @@ export const VimmaHost = {
         say: (text) => state.notice.show(text),
       }),
       bookmarks: new BookmarksPanel(win, {
-        load: loadTree,
+        load: () => loadTree(win),
         observe: observeBookmarks,
         effect: (effect) => runBookmarkEffect(bookmarkContext(state), effect),
       }),
@@ -940,6 +941,10 @@ export const VimmaHost = {
       WindowWorkspaces.init(win, {
         onChange: () => {
           state.panel.refresh();
+          // docs/specs/bookmarks.md decision 11: the bookmarks panel follows the workspace.
+          const model = WindowWorkspaces.get(win)?.model;
+          const active = model?.workspaces.find((w) => w.id === model.active);
+          state.bookmarks.setWorkspace(active ? `${active.id}\n${active.name}` : null);
           this._emit(state);
         },
         notify: (text) => state.notice.show(text),
