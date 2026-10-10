@@ -1,0 +1,78 @@
+{
+  "name": "m3-crash-restore",
+  "description": "M3 gate 2 after a crash, not a quit: three workspaces, a split in one and a long page scrolled to the bottom in another; once SessionStore's recovery file has settled (save interval 500 ms here, 15 s by default) the browser is SIGKILLed (no quit observers, no final save), and a start on the same profile brings back the workspaces in order, the active one, each one's tabs, the split and the scroll position. Crash recovery is the build's default (resume_from_crash on); Vimma's browser.startup.page = 3 would restore the session even without it. With both off it fails at the first check after the start.",
+  "timeoutSeconds": 120,
+  "prefs": {
+    "browser.startup.page": null,
+    "browser.sessionstore.resume_from_crash": null,
+    "browser.sessionstore.interval": 500
+  },
+  "steps": [
+    { "wait-for-state": { "workspace": "main" }, "timeoutSeconds": 20 },
+    { "open": "fixture:long.html#main" },
+    {
+      "wait-for-state": {
+        "workspace": "main",
+        "tabs": [{}, { "title": "long top navigate", "selected": true }]
+      }
+    },
+    { "keys": "shift+g" },
+    { "wait-for-state": { "tabs": [{}, { "title": "long bottom navigate" }] } },
+
+    { "keys": "ctrl+b shift+n" },
+    { "wait-for-state": { "mode": "command" } },
+    { "keys": "w o r k enter" },
+    { "wait-for-state": { "workspace": "work", "tabs": [{ "selected": true }] } },
+    { "open": "fixture:cookie.html#work" },
+    {
+      "wait-for-state": {
+        "workspace": "work",
+        "tabs": [{}, { "title": "cookie ws=work", "selected": true }]
+      }
+    },
+    { "keys": "ctrl+b v" },
+    {
+      "wait-for-state": {
+        "workspace": "work",
+        "tabs": [{}, {}, {}],
+        "panes": { "zoomed": false, "root": { "axis": "x", "children": [{}, {}] } }
+      }
+    },
+
+    { "keys": "ctrl+b shift+n" },
+    { "wait-for-state": { "mode": "command" } },
+    { "keys": "p e r s o n a l enter" },
+    { "wait-for-state": { "workspace": "personal", "tabs": [{ "selected": true }] } },
+    { "keys": "ctrl+b )" },
+    {
+      "wait-for-state": {
+        "workspace": "main",
+        "tabs": [{}, { "title": "long bottom navigate", "selected": true }],
+        "panes": null
+      }
+    },
+
+    { "restart": "kill" },
+
+    {
+      "wait-for-state": {
+        "workspace": "main",
+        "tabs": [{}, { "title": "long bottom back_forward", "selected": true }],
+        "panes": null
+      },
+      "timeoutSeconds": 20
+    },
+    { "keys": "ctrl+b )" },
+    {
+      "wait-for-state": {
+        "workspace": "work",
+        "tabs": [{}, { "title": "cookie ws=work" }, {}],
+        "panes": { "zoomed": false, "root": { "axis": "x", "children": [{}, {}] } }
+      }
+    },
+    { "keys": "ctrl+b )" },
+    { "wait-for-state": { "workspace": "personal", "tabs": [{}], "panes": null } },
+    { "keys": "ctrl+b )" },
+    { "wait-for-state": { "workspace": "main" } }
+  ]
+}

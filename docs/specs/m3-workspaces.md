@@ -2,7 +2,8 @@
 
 Status: done; split into sub-specs (see Breakdown). Sub-specs 1 (store), 2a (routing), 2b
 (switching), 3 (persistence), 4a (lifecycle), 4b (move), 5 (picker), 6 (side panel), 7 (e2e
-restart scenario) and the 4a/4b/5 leftovers are merged; the 200-tab measurement is still open ·
+restart scenario) and the 4a/4b/5 leftovers are merged; the 200-tab measurement is in
+`browser_vimma_perf.js` (runbook, "Key-to-paint timings") ·
 Milestone: M3 · Area: host
 (`src/browser/base/content/vimma/workspaces/`, `ui/`), four upstream patch files (five hunks)
 
@@ -1101,6 +1102,29 @@ dependency for 4b, 5 and parts of 4a.
   (`browser_vimma_workspace_switching.js`); 11 unexpected before, 0 after. The workspace tests and
   the e2e scenarios (m3-restart-restore, m4-split-panes) press the new keys; no assertion changed.
   Mutation check: binding `<C-d>` to `scroll.down` fails two dispatcher tests.
+
+## Settled: crash restore and scroll after a real restart (e2e leftovers, 2026-10-10)
+
+- **`m3-crash-restore`**: `main` with a long page scrolled to the bottom (`G`), `work` with a
+  split, `personal` empty, `main` active; `"restart": "kill"` (harness, spec m0-e2e-harness)
+  waits for `recovery.jsonlz4` to settle (`browser.sessionstore.interval` 500 ms in the
+  scenario), SIGKILLs the browser pid and starts again. Asserted: `main` active with the page
+  reloaded at the bottom, then `prefix+)` through `work` (three tabs, the split) and `personal`
+  back to `main`. Crash recovery (`resume_from_crash`, the build default) and Vimma's
+  `browser.startup.page = 3` each restore it alone (checked); with both off it fails at the
+  first check after the start (one tab). 3/3 locally (Xvfb, artifact build), about 7 s.
+- **`m3-restart-scroll`**: two long pages, one at the bottom and one part-way down (`j j j`),
+  `ctrl+q`, start: the selected one reloads part-way down, the other keeps its saved label until
+  selected. The page reports where it is in its title (`tests/e2e/fixtures/long.html`); the
+  navigation type (`navigate` vs `back_forward`) tells the reloaded page from the stale label.
+  A load counter in localStorage was tried first and fails after a SIGKILL (its last write is
+  lost), hence the navigation type. Red check: the fixture forcing `scrollTo(0, 0)` on a
+  restored load fails it ("long top back_forward").
+- **Watch:** after merging main's Vim-buffer workspace keys, `m3-crash-restore` failed once in
+  21 local runs (the first run after a fresh artifact build): the second `prefix+)` after the
+  restart left the window in `work` (with its split) for 10 s, as if the key was lost. It did
+  not recur in 20 more runs, 6 of them on two busy CPUs, and CI passed. If it recurs, quarantine
+  it with an issue (plan §5) and look at keys sent while a restored split's tabs load.
 
 ## Settled: workspaces as Vim buffers (maintainer request, 2026-10-10)
 

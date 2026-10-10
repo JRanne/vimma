@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -19,11 +20,13 @@ import {
   browserArgs,
   browserEnv,
   createProfile,
+  crashBrowser,
   findBuild,
   launch,
   quitBrowser,
   userJs,
   waitForDiscovery,
+  waitForSessionSaved,
   xvfbArgs,
 } from "../launcher.mjs";
 import { devPrefs } from "../../start.mjs";
@@ -330,6 +333,19 @@ describe("waitForDiscovery", () => {
     await expect(waitForDiscovery(profile, { timeoutMs: 300 })).rejects.toThrow(/port/);
   });
 
+  it("skips the discovery file a killed browser left behind (stalePid)", async () => {
+    const profile = tempDir();
+    const fake = await startFakeServer(profile);
+    cleanups.push(() => fake.close());
+    const { pid } = JSON.parse(readFileSync(fake.discoveryPath, "utf8"));
+    await expect(waitForDiscovery(profile, { timeoutMs: 300, stalePid: pid })).rejects.toThrow(
+      new RegExp(`left by the killed browser \\(pid ${pid}\\)`),
+    );
+    await expect(
+      waitForDiscovery(profile, { timeoutMs: 300, stalePid: pid + 1 }),
+    ).resolves.toMatchObject({ pid });
+  });
+
   it("fails at once when the browser exits before the socket is up", async () => {
     const profile = tempDir();
     const started = Date.now();
@@ -425,6 +441,23 @@ describe("launch and teardown (fake browser)", () => {
     await session.teardown();
     expect(alive(second)).toBe(false);
     expect(existsSync(session.profile)).toBe(false);
+  });
+
+  it("crashBrowser SIGKILLs the browser alone, reaps its children, keeps its files", async () => {
+    const session = await start({ FAKE_BROWSER_CHILD: "1", FAKE_BROWSER_IGNORE_TERM: "1" });
+    cleanups.push(() => session.teardown());
+    const pid = /** @type {number} */ (session.child.pid);
+    const grandchild = Number(readFileSync(join(session.profile, "grandchild.pid"), "utf8"));
+    const killed = await crashBrowser(session.child, { reapMs: 300 });
+    expect(killed).toBe(pid);
+    expect(session.child.signalCode).toBe("SIGKILL");
+    expect(alive(pid)).toBe(false);
+    expect(alive(grandchild)).toBe(false); // a content process would follow its parent
+    // No quit observers ran: the discovery file stays, as after a real crash.
+    expect(existsSync(join(session.profile, "vimma-control.json"))).toBe(true);
+    await session.relaunch({ stalePid: pid });
+    expect(session.discovery.pid).toBe(session.child.pid);
+    expect(session.discovery.pid).not.toBe(pid);
   });
 
   it("escalates to SIGKILL when the browser ignores SIGTERM", async () => {
@@ -618,6 +651,41 @@ describe("cancelling while Xvfb starts (fake Xvfb)", () => {
     expect(alive(pid)).toBe(false);
     expect(existsSync(fbdir)).toBe(false);
     expect(readdirSync(tmp)).toEqual([]);
+  });
+});
+
+describe("waitForSessionSaved (before a crash-style kill)", () => {
+  /** @param {string} profile */
+  const recovery = (profile) => join(profile, "sessionstore-backups", "recovery.jsonlz4");
+
+  it("waits for SessionStore's recovery file to exist and go quiet", async () => {
+    const profile = tempDir();
+    const started = Date.now();
+    setTimeout(() => {
+      mkdirSync(join(profile, "sessionstore-backups"));
+      writeFileSync(recovery(profile), "1");
+    }, 150);
+    setTimeout(() => writeFileSync(recovery(profile), "2"), 350);
+    await waitForSessionSaved(profile, { quietMs: 300, timeoutMs: 5000, pollMs: 20 });
+    // the last write at ~350 ms, then 300 ms of quiet
+    expect(Date.now() - started).toBeGreaterThanOrEqual(600);
+    expect(readFileSync(recovery(profile), "utf8")).toBe("2");
+  });
+
+  it("counts the quiet from the call, not from an older write", async () => {
+    const profile = tempDir();
+    mkdirSync(join(profile, "sessionstore-backups"));
+    writeFileSync(recovery(profile), "old");
+    const started = Date.now();
+    await waitForSessionSaved(profile, { quietMs: 250, timeoutMs: 5000, pollMs: 20 });
+    expect(Date.now() - started).toBeGreaterThanOrEqual(250);
+  });
+
+  it("times out when SessionStore never writes", async () => {
+    const profile = tempDir();
+    await expect(
+      waitForSessionSaved(profile, { quietMs: 100, timeoutMs: 300, pollMs: 20 }),
+    ).rejects.toThrow(/recovery\.jsonlz4[^]*300 ms/);
   });
 });
 

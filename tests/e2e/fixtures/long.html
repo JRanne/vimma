@@ -1,0 +1,34 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- m3-restart-scroll, m3-crash-restore: a page far taller than the window. Its title reads
+     "long <top|middle|bottom> <how>": where the page is scrolled, and how this document was
+     loaded (the navigation timing type): "navigate" when the scenario opened it, "back_forward"
+     when SessionStore restored it from its history entry. After a restart the tab first shows
+     its saved title ("… navigate"); only the reloaded page says "back_forward", so a scenario
+     waiting for it cannot pass on the stale label. Not a load counter in localStorage: a
+     SIGKILL can lose its last write. -->
+<meta charset="utf-8" />
+<title>long</title>
+<style>
+  body {
+    height: 20000px;
+    margin: 0;
+  }
+</style>
+<script>
+  const nav = performance.getEntriesByType("navigation")[0]?.type ?? "unknown";
+  const where = () => {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    if (scrollY <= 0) return "top";
+    return scrollY >= max - 1 ? "bottom" : "middle";
+  };
+  const show = () => (document.title = `long ${where()} ${nav}`);
+  addEventListener("scroll", show);
+  addEventListener("load", show);
+  // SessionStore restores the scroll position after load, which fires a scroll event; poll too,
+  // in case the restore lands before the listener runs.
+  setInterval(show, 200);
+  show();
+</script>

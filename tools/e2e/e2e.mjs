@@ -12,7 +12,8 @@
  *   npm run e2e -- --update-baselines            # rewrite baselines: needs a changelog line
  *   npm run e2e -- --run-pending                 # also run scenarios marked pending
  *
- * A scenario's `restart` step quits with ctrl+q and relaunches on the same profile; its
+ * A scenario's `restart` step quits with ctrl+q ("quit") or SIGKILLs the browser once its
+ * session is saved ("kill", a crash), and relaunches on the same profile; its
  * `prefs` override the profile's (null: the build's default).
  *
  * Exit 0 when nothing failed (pending scenarios are reported, not passed), 1 on failures,
@@ -24,7 +25,15 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { Ctl, findVimmaCtl } from "./driver.mjs";
-import { DISCOVERY_FILE, findBuild, launch, quitBrowser, unpackTarball } from "./launcher.mjs";
+import {
+  DISCOVERY_FILE,
+  crashBrowser,
+  findBuild,
+  launch,
+  quitBrowser,
+  unpackTarball,
+  waitForSessionSaved,
+} from "./launcher.mjs";
 import { fixtureUrl, startPageServer } from "./pages.mjs";
 import { exitCode, formatReport, githubAnnotations, runScenarios } from "./runner.mjs";
 import { loadScenarios } from "./scenario.mjs";
@@ -201,7 +210,17 @@ async function main() {
       };
       // A `restart` step: quit the way a user does (ctrl+q, so SessionStore writes the session
       // and the quit observers remove the discovery file), then start again on the profile.
-      const restart = async () => {
+      // `restart: "kill"` instead crashes it: once SessionStore's recovery file has settled,
+      // SIGKILL to the browser's pid (no quit observers, so the discovery file stays), then a
+      // start on the same profile that ignores the dead browser's discovery file.
+      const restart = async (/** @type {"quit" | "kill"} */ how) => {
+        if (how === "kill") {
+          await waitForSessionSaved(session.profile);
+          const pid = await crashBrowser(session.child);
+          await session.relaunch({ stalePid: pid });
+          await ctl.ready();
+          return;
+        }
         if (!(await quitBrowser({ ctl, child: session.child }))) {
           throw new Error("ctrl+q did not quit the browser");
         }
