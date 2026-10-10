@@ -28,7 +28,7 @@ const HOME = /^(?:https?:\/\/|about:)\S+$/;
  *   icon: string, home?: string, source: "config" | "runtime" }} WorkspaceDefinition
  */
 /**
- * Workspaces in `ctrl+i` order: config ones in file order, then runtime ones.
+ * Workspaces in workspace order: config ones in file order, then runtime ones.
  * @typedef {{ schema: number, lastActive: string | null,
  *   workspaces: WorkspaceDefinition[] }} Definitions
  */
@@ -426,7 +426,7 @@ const NEW_COLORS = ["blue", "green", "orange", "purple", "red", "yellow", "pink"
 
 /**
  * A runtime workspace's colour and icon: the first colour no workspace uses (all used: by
- * count), so neighbours in `ctrl+i` order look different; the icon is a circle.
+ * count), so neighbours in workspace order look different; the icon is a circle.
  * @param {Definitions} defs
  * @returns {{ color: string, icon: string }}
  */

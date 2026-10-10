@@ -54,7 +54,7 @@ dispatch(mode, keyEvent)
 | Zoom pane | `prefix+z` | `Ctrl-w o` |
 | Close pane | `prefix+x` | `:q` in a pane |
 | Resize mode | `prefix+r` | `Ctrl-w <>+-` |
-| Next / previous workspace | `ctrl+i` / `ctrl+u` (direct chords) | `:wsnext` / `:wsprev` |
+| Next / previous workspace | `prefix+)` / `prefix+(` (tmux; was `ctrl+i` / `ctrl+u` until 2026-10-10) | `:wsnext` / `:wsprev` |
 | Workspace picker | `prefix+w` | `:workspace name` |
 | New / rename / close workspace | `prefix+shift+n` / `shift+w` / `shift+d` | — |
 | Goto picker (every tab, all workspaces, `/` search) | `prefix+g` | `:ls`, `b` |
@@ -66,9 +66,9 @@ dispatch(mode, keyEvent)
 | Command line | — | `:` |
 | Reload config | — | `:source` |
 
-Because `ctrl+u` switches workspace, half-page scroll is `d`/`u` (Vimium) and close-tab is `x`. The fork owns the window, so `ctrl+t`, `ctrl+w`, `ctrl+l` are free to rebind or unbind; defaults keep Firefox's meaning for them until the user says otherwise.
+Half-page scroll is `d`/`u` (Vimium) and, since the user moved workspaces to `prefix+(`/`prefix+)` (2026-10-10), Vim's `ctrl+d`/`ctrl+u` too; `ctrl+o`/`ctrl+i` walk history; close-tab is `x`. The fork owns the window, so `ctrl+t`, `ctrl+w`, `ctrl+l` are free to rebind or unbind; defaults keep Firefox's meaning for them until the user says otherwise.
 
-**Side panel:** closed by default. `<leader>n` opens a panel on the left headed by the current workspace (name, colour, neighbour hints `ctrl+u` / `ctrl+i`) listing that workspace's tabs as numbered rows. `1-9`, `j/k`, Enter select; `<leader>n` / `Esc` close. Workspaces are never a permanent list on screen.
+**Side panel:** closed by default. `<leader>n` opens a panel on the left headed by the current workspace (name, colour, neighbour hints `prefix+(` / `prefix+)`) listing that workspace's tabs as numbered rows. `1-9`, `j/k`, Enter select; `<leader>n` / `Esc` close. Workspaces are never a permanent list on screen.
 
 **Status bar:** one line at the window foot, always visible: mode badge, pending prefix, workspace dot + name, `tab 2/5`, `pane 1/2`, config error indicator, blocklist/update hints.
 
@@ -83,11 +83,11 @@ prefix = "ctrl+b"
 new_tab = ["prefix+c", "ctrl+alt+c"]
 split_vertical = ["prefix+v"]
 show_keybinds = ["prefix+?"]
-next_workspace = ["ctrl+i"]
-prev_workspace = ["ctrl+u"]
+next_workspace = ["prefix+)"]
+prev_workspace = ["prefix+("]
 toggle_sidebar = ["prefix+b", "<leader>n"]
 
-[workspaces]                            # order = ctrl+i order; each is a Firefox container
+[workspaces]                            # order = prefix+) order; each is a Firefox container
 work     = { color = "blue",  home = "https://intranet.example" }
 admin    = { color = "red",   autofill = false }
 personal = { color = "green" }

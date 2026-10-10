@@ -30,7 +30,7 @@ import { graphemes } from "./textwidth.mjs";
  * @property {"workspace"} kind
  * @property {string} workspaceId
  * @property {string} workspaceName
- * @property {number} workspaceIndex 1-based, the ctrl+i order
+ * @property {number} workspaceIndex 1-based, the workspace order
  * @property {number} tabCount
  * @property {number} foreignCount   tabs adopted from a container no workspace owns
  * @property {string} display        the name
@@ -353,7 +353,7 @@ export function pickerItems(state, info, labels) {
 }
 
 /**
- * One item per workspace, in `ctrl+i` order, with its tab count (`isForeign` tells the foreign
+ * One item per workspace, in workspace order, with its tab count (`isForeign` tells the foreign
  * ones among them).
  * @param {Workspaces} state
  * @param {(tabId: string) => boolean} [isForeign]

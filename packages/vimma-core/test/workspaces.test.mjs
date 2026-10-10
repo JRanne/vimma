@@ -71,7 +71,7 @@ describe("workspace lifecycle", () => {
     expectWsError(() => createWorkspaces([]), "last-workspace");
   });
 
-  test("next/previous wrap around in ctrl+i order", () => {
+  test("next/previous wrap around in workspace order", () => {
     let s = two();
     s = nextWorkspace(s);
     expect(ws(s).name).toBe("personal");

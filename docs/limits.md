@@ -13,6 +13,10 @@ the same PR.
   only with two panes or more, so with one pane `ctrl+w` closes the tab; with a split, in normal
   mode, it is Vim's window prefix and does not close the tab
   ([m4-split-panes](specs/m4-split-panes.md), sub-spec 3).
+- In normal mode `ctrl+d`, `ctrl+u`, `ctrl+e`, `ctrl+y`, `ctrl+o` and `ctrl+i` are Vim's scroll
+  and jump keys, so Firefox's bookmark-this-page, view-source, Open File and Page Info need the
+  menus, insert mode, `ctrl+b a`, `gf` or `:open` there
+  ([m3-workspaces](specs/m3-workspaces.md), Settled 2026-10-10).
 - Pages that take keys outside a text field (games, Google Docs' canvas, Figma) lose their bare
   keys to normal mode; press `i` to let every key through until `Esc`. Text editors are
   detected ([m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md), Limits).

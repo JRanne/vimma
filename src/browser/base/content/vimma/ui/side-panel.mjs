@@ -47,7 +47,7 @@ export class SidePanel {
     this.onTabEvent = () => this.refresh();
     // Firefox moves focus to the page at the end of every tab switch (Tabbrowser.sys.mjs
     // _adjustFocusBeforeTabSwitch blurs chrome, AsyncTabSwitcher then focuses the browser), so a
-    // switch made from the panel (ctrl+i, prefix+c) would leave it without focus.
+    // switch made from the panel (ctrl+b ), prefix+c) would leave it without focus.
     this.onSwitchDone = () => {
       const el = this.win.document.activeElement;
       if (this.isOpen && el?.localName === "browser") this.box?.focus();
@@ -121,7 +121,7 @@ export class SidePanel {
     }
   }
 
-  /** The model or a tab changed (ctrl+i, a new tab, a title): list it again. */
+  /** The model or a tab changed (ctrl+b ), a new tab, a title): list it again. */
   refresh() {
     if (!this.state) return;
     const model = this.host.model();
@@ -170,7 +170,7 @@ export class SidePanel {
     const neighbours =
       state.previous === null
         ? ""
-        : `ctrl+u ${state.previous} · ctrl+i ${/** @type {string} */ (state.next)}`;
+        : `ctrl+b ( ${state.previous} · ctrl+b ) ${/** @type {string} */ (state.next)}`;
     header.replaceChildren(
       dot,
       el("span", "vimma-panel-name", `${w.index}:${w.name}`),

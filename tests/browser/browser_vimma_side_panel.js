@@ -3,9 +3,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Spec: docs/specs/m3-workspaces.md, sub-spec 6 (m3-side-panel): `prefix+b` /
-// `:sidebar` open a panel on the left headed by the current workspace and its ctrl+u / ctrl+i
+// `:sidebar` open a panel on the left headed by the current workspace and its ctrl+b ( / ctrl+b )
 // neighbours, listing its tabs as numbered rows. In `panel` mode j/k move, Enter or a digit
-// selects a tab and closes, Esc / `prefix+b` close; ctrl+i re-renders it.
+// selects a tab and closes, Esc / `prefix+b` close; ctrl+b ) re-renders it.
 
 "use strict";
 
@@ -119,7 +119,7 @@ add_task(async function hidden_by_default_and_prefix_b_opens_it_on_the_left() {
     "the pages sit to its right",
   );
   Assert.stringContains(text(header(), "name"), "1:main", "headed by the current workspace");
-  Assert.stringContains(text(header(), "neighbours"), "alpha", "and its ctrl+i neighbour");
+  Assert.stringContains(text(header(), "neighbours"), "alpha", "and its ctrl+b ) neighbour");
   const n = tabsIn("main").length;
   Assert.deepEqual(
     titles().slice(-2),
@@ -213,17 +213,17 @@ add_task(async function esc_and_prefix_b_close_and_keys_never_reach_the_page() {
   Assert.equal(gBrowser.tabs.length, count, "x closed no tab");
 });
 
-add_task(async function ctrl_i_re_renders_the_panel_for_the_next_workspace() {
+add_task(async function next_workspace_re_renders_the_panel_for_the_next_workspace() {
   await openPanel();
-  EventUtils.synthesizeKey("i", { ctrlKey: true });
-  await until(() => active() === def("alpha").id, "ctrl+i switches to alpha");
+  prefix(")", { shiftKey: true });
+  await until(() => active() === def("alpha").id, "ctrl+b ) switches to alpha");
   await until(() => text(header(), "name").includes("2:alpha"), "the header follows");
   Assert.ok(isOpen(), "the panel stays open");
   await until(() => titles().includes("alpha-one"), "and lists alpha's tabs");
   Assert.equal(rows().length, tabsIn("alpha").length, "only alpha's");
   Assert.stringContains(text(header(), "neighbours"), "main", "its neighbour is main");
-  EventUtils.synthesizeKey("u", { ctrlKey: true });
-  await until(() => active() === def("main").id, "ctrl+u goes back");
+  prefix("(", { shiftKey: true });
+  await until(() => active() === def("main").id, "ctrl+b ( goes back");
   await until(() => titles().includes("main-two"), "and main's rows come back");
   await until(() => panel().contains(document.activeElement), "focus stays in the panel");
   EventUtils.synthesizeKey("KEY_Escape");

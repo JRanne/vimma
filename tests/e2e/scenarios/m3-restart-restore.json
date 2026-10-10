@@ -45,7 +45,7 @@
         "panes": null
       }
     },
-    { "keys": "ctrl+u" },
+    { "keys": "ctrl+b (" },
     {
       "wait-for-state": {
         "workspace": "work",
@@ -64,7 +64,7 @@
       },
       "timeoutSeconds": 20
     },
-    { "keys": "ctrl+i" },
+    { "keys": "ctrl+b )" },
     {
       "wait-for-state": {
         "workspace": "personal",
@@ -72,7 +72,7 @@
         "panes": null
       }
     },
-    { "keys": "ctrl+i" },
+    { "keys": "ctrl+b )" },
     {
       "wait-for-state": {
         "workspace": "main",
@@ -80,7 +80,7 @@
         "panes": null
       }
     },
-    { "keys": "ctrl+i" },
+    { "keys": "ctrl+b )" },
     {
       "wait-for-state": {
         "workspace": "work",
@@ -88,7 +88,7 @@
       }
     },
 
-    { "keys": "ctrl+u" },
+    { "keys": "ctrl+b (" },
     { "wait-for-state": { "workspace": "main" } },
     { "open": "fixture:cookie.html" },
     {
@@ -97,7 +97,7 @@
         "tabs": [{}, {}, { "title": "cookie ws=main", "selected": true }]
       }
     },
-    { "keys": "ctrl+u" },
+    { "keys": "ctrl+b (" },
     { "wait-for-state": { "workspace": "personal" } },
     { "open": "fixture:cookie.html" },
     {
@@ -106,7 +106,7 @@
         "tabs": [{}, {}, { "title": "cookie ws=personal", "selected": true }]
       }
     },
-    { "keys": "ctrl+u" },
+    { "keys": "ctrl+b (" },
     { "wait-for-state": { "workspace": "work" } },
     { "open": "fixture:cookie.html" },
     {

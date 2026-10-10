@@ -15,15 +15,15 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - `vimma-core`: `config.toml` schema v1 validation with `file:line` errors and suggestions, schema migrations, keeping the last good config on error, and theme tokens from Omarchy's `colors.toml`, `[theme.colors]` or the built-in Tokyo Night.
 - Artifact builds (`tools/artifact-build`, `npm run mochitest -- --artifact`): test the front end on Mozilla's binaries for the same release, locally and on every PR.
 - A tmux-style prefix layer: `ctrl+b` (tmux's default prefix), then a key, works in every mode. `ctrl+b c`, `n`/`p`, `1`-`9` and `shift+x` open, cycle, pick and close tabs; `t`, `x`, `gt` and `gT` do the same in normal mode.
-- Vim keys on pages: `j`/`k`/`h`/`l` with counts, `d`/`u`, `gg`/`G`; focusing a text field enters insert mode and `Esc` leaves it, `i` and `gi` focus the first field. Keys Vimma does not bind still reach the page.
-- `H`/`L` go back and forward and `r` reloads, in the focused pane; `yy` copies the page URL, `p`/`P` open the clipboard here or in a new tab, `gu`/`gU` go up a level or to the site's root, and `gf` shows the page source.
+- Vim keys on pages: `j`/`k`/`h`/`l` with counts, `d`/`u` and `ctrl+d`/`ctrl+u` (half a page), `ctrl+e`/`ctrl+y`, `gg`/`G`; focusing a text field enters insert mode and `Esc` leaves it, `i` and `gi` focus the first field. Keys Vimma does not bind still reach the page.
+- `H`/`L` (or Vim's `ctrl+o`/`ctrl+i`) go back and forward and `r` reloads, in the focused pane; `yy` copies the page URL, `p`/`P` open the clipboard here or in a new tab, `gu`/`gU` go up a level or to the site's root, and `gf` shows the page source.
 - Link hints: `f` labels every link, button and field on screen, also in frames and web components, and `F` opens a link in a background tab. The labels are drawn by the browser, so pages cannot see or restyle them.
 - Vim-style find: `/` and `?` search forward and backward with smartcase, `n`/`N` repeat, and the status bar shows the match count.
 - Copy mode: `v` or `ctrl+b [` puts a caret on the page; Vim motions (`w`, `e`, `f`/`t`, `{`/`}`, counts), `v`/`V` selections, `iw`/`aw` and `y`/`Y` copy text. Selecting text with the mouse enters copy mode too.
 - An always-visible status bar on the window's last line: mode, pending keys, workspace, `tab n/N`, panes, title or tab name, search, loading and URL.
 - A Vim-style command line on `:`, with completion, history (a private window keeps its own), errors with "did you mean" and commands such as `:open`, `:tabnew`, `:q`, `:ls`, `:tabrename` and any action by name.
 - `ctrl+b g` (or `b`) opens a fuzzy goto picker of the window's tabs, and `ctrl+b shift+t` names a tab; the name shows in the status bar and picker and survives a restart.
-- Workspaces, each a Firefox container of its own, so a login in one is invisible in another: `ctrl+i`/`ctrl+u` switch, `ctrl+b shift+n`/`shift+w`/`shift+d` (or `:wsnew`, `:wsrename`, `:wsdelete`) create, rename and delete, `:wsmove` moves a tab, and the `ctrl+b w` picker shows tab counts and moves tabs. New tabs and windows open in the current workspace, and a restart restores every workspace, its tabs, panes and tab names.
+- Workspaces, each a Firefox container of its own, so a login in one is invisible in another: `ctrl+b (`/`ctrl+b )` switch (tmux's session keys, from every mode), `ctrl+b shift+n`/`shift+w`/`shift+d` (or `:wsnew`, `:wsrename`, `:wsdelete`) create, rename and delete, `:wsmove` moves a tab, and the `ctrl+b w` picker shows tab counts and moves tabs. New tabs and windows open in the current workspace, and a restart restores every workspace, its tabs, panes and tab names.
 - An on-demand side panel (`ctrl+b b` or `:sidebar`) lists the current workspace's tabs; `j`/`k`, `Enter` or `1`-`9` pick one.
 - Routing: `[[routes]]` in `config.toml` sends a domain, URL prefix or the app that opened a link (via `vimma-open`) to a workspace; `:route` lists, adds and moves.
 - Split panes on Firefox's split view, up to 4 per workspace (`[panes] max`): `ctrl+b v`/`-` split, `ctrl+b h/j/k/l` (or `ctrl+w h/j/k/l`) move focus, `ctrl+b z` zooms, `ctrl+b x` closes a pane, `ctrl+b shift+h/j/k/l` swap and `ctrl+b r` enters a resize mode. Each workspace keeps its own split, and a split made outside Vimma becomes panes.
@@ -37,6 +37,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Changed
 
+- Workspaces switch with `ctrl+b (` / `ctrl+b )` instead of `ctrl+u` / `ctrl+i`, which are Vim's half-page-up and jump-forward keys in normal mode now; `ctrl+o` there goes back instead of opening a file (the File menu and `:open` still do). The help-text and `defaults.toml` snapshots changed with the defaults: the workspace, scroll and history rows list the new keys.
 - Project renamed from vimux to Vimma: `packages/vimma-core`, `src/browser/base/content/vimma/`, `~/.config/vimma/config.toml`. The `defaults.toml` snapshot changed only in its generator-path comment.
 - `ctrl+b` no longer opens Firefox's bookmarks sidebar. It is Vimma's tmux-style prefix key; `ctrl+b shift+b` opens Vimma's bookmarks panel.
 - `vimma-core` vendors smol-toml 1.9.0 (BSD-3-Clause) as its TOML parser: source in the repo, not an npm dependency ([ADR-012](docs/adr/012-toml-parser-smol-toml.md)).

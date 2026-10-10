@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Spec: docs/specs/m3-workspaces.md, sub-spec 2b (m3-workspace-switching): ctrl+i / ctrl+u and
+// Spec: docs/specs/m3-workspaces.md, sub-spec 2b (m3-workspace-switching): ctrl+b ) / ctrl+b ( and
 // `:workspace name` show one workspace's tabs and hide the others' (gBrowser.hideTab), a split
 // hides and comes back whole, pinned tabs stay, new tabs join the active workspace, a tab of no
 // workspace's container is `foreign`, and the tab keys and the goto picker follow.
@@ -109,10 +109,11 @@ function openPage(url = PAGE) {
   return BrowserTestUtils.openNewForegroundTab(gBrowser, url);
 }
 
-/** Pressing `key` (ctrl+i / ctrl+u) and waiting for the window to show workspace `to`. */
+/** Pressing prefix+`key` (`)` next / `(` previous) and waiting for the window to show `to`. */
 async function press(key, to) {
-  EventUtils.synthesizeKey(key, { ctrlKey: true });
-  await until(() => active() === to.id, `${key} switched to ${to.name}`);
+  EventUtils.synthesizeKey("b", { ctrlKey: true });
+  EventUtils.synthesizeKey(key, { shiftKey: true });
+  await until(() => active() === to.id, `ctrl+b ${key} switched to ${to.name}`);
 }
 
 /**
@@ -126,7 +127,7 @@ async function setup(a, b) {
     ww().model.workspaces.some((w) => w.id === B.id),
     "the window's model has the new workspaces",
   );
-  await press("i", A);
+  await press(")", A);
   const a0 = await startTab();
   const a1 = await openPage(`${PAGE}?a1`);
   const a2 = await openPage(`${PAGE}?a2`);
@@ -134,7 +135,7 @@ async function setup(a, b) {
   return { A, B, aTabs: [a0, a1, a2] };
 }
 
-add_task(async function ctrl_i_and_ctrl_u_show_one_workspace_and_restore_its_tab() {
+add_task(async function prefix_parens_show_one_workspace_and_restore_its_tab() {
   const first = gBrowser.selectedTab;
   Assert.equal(active(), main().id, "the window starts in main");
   await until(() => segText("workspace") === wsLabel(main()), "the bar shows main");
@@ -145,7 +146,7 @@ add_task(async function ctrl_i_and_ctrl_u_show_one_workspace_and_restore_its_tab
     Assert.equal(workspaceOf(t), A.id, "and in A");
   }
 
-  await press("i", B);
+  await press(")", B);
   const b0 = await startTab();
   Assert.equal(b0.userContextId, B.userContextId, "an empty B gets a start tab in its container");
   Assert.equal(workspaceOf(b0), B.id, "which is B's");
@@ -154,17 +155,17 @@ add_task(async function ctrl_i_and_ctrl_u_show_one_workspace_and_restore_its_tab
   Assert.deepEqual(gBrowser.visibleTabs, [b0], "only B's tabs are visible");
   await until(() => segText("workspace") === wsLabel(B), "the bar shows B");
 
-  await press("u", A);
-  Assert.equal(gBrowser.selectedTab, aTabs[1], "ctrl+u back to A restores A's selected tab");
+  await press("(", A);
+  Assert.equal(gBrowser.selectedTab, aTabs[1], "ctrl+b ( back to A restores A's selected tab");
   Assert.deepEqual(gBrowser.visibleTabs, aTabs, "A's tabs show, in order");
   Assert.ok(b0.hidden, "B's tab hides");
   await until(() => segText("workspace") === wsLabel(A), "the bar shows A");
 
-  await press("u", main());
+  await press("(", main());
   Assert.equal(gBrowser.selectedTab, first, "main's tab comes back");
-  await press("u", B);
-  Assert.equal(gBrowser.selectedTab, b0, "ctrl+u wraps from the first workspace to the last");
-  await press("i", main());
+  await press("(", B);
+  Assert.equal(gBrowser.selectedTab, b0, "ctrl+b ( wraps from the first workspace to the last");
+  await press(")", main());
 
   for (const t of [...aTabs, b0]) BrowserTestUtils.removeTab(t);
   Assert.deepEqual(
@@ -174,13 +175,31 @@ add_task(async function ctrl_i_and_ctrl_u_show_one_workspace_and_restore_its_tab
   );
 });
 
+// User decision 2026-10-10: ctrl+u / ctrl+i are vim's half page up and jump forward in normal
+// mode, so they no longer switch workspace; prefix+( and prefix+) do (tmux's session keys).
+add_task(async function ctrl_i_and_ctrl_u_no_longer_switch_workspace() {
+  Assert.equal(active(), main().id, "the window is in main");
+  const tab = await openPage(`${PAGE}?old-keys`);
+  await focusContent(tab.linkedBrowser);
+  EventUtils.synthesizeKey("u", { ctrlKey: true });
+  EventUtils.synthesizeKey("i", { ctrlKey: true });
+  EventUtils.synthesizeKey("u", { ctrlKey: true });
+  // Had ctrl+u or ctrl+i switched (sw-b, then main, then sw-b), prefix+) would not land on sw-a.
+  await press(")", def("sw-a"));
+  const start = await startTab();
+  await press("(", main());
+  Assert.equal(gBrowser.selectedTab, tab, "main's page is selected again");
+  BrowserTestUtils.removeTab(start);
+  BrowserTestUtils.removeTab(tab);
+});
+
 add_task(async function tab_keys_count_only_the_visible_workspace() {
   const A = def("sw-a");
   const B = def("sw-b");
-  await press("i", A);
+  await press(")", A);
   const a0 = await startTab();
   const a1 = await openPage(`${PAGE}?a1`);
-  await press("i", B);
+  await press(")", B);
   const b0 = await startTab();
   const b1 = await openPage(`${PAGE}?b1`);
   const b2 = await openPage(`${PAGE}?b2`);
@@ -199,13 +218,13 @@ add_task(async function tab_keys_count_only_the_visible_workspace() {
   Assert.equal(active(), B.id, "still B");
 
   for (const t of [a0, a1, ...bTabs]) BrowserTestUtils.removeTab(t);
-  await press("i", main());
+  await press(")", main());
 });
 
 add_task(async function a_split_hides_as_a_whole_and_comes_back_laid_out() {
   const A = def("sw-a");
   const B = def("sw-b");
-  await press("i", A);
+  await press(")", A);
   const left = await openPage(`${PAGE}?left`);
   prefix("v");
   const right = await startTab();
@@ -214,14 +233,14 @@ add_task(async function a_split_hides_as_a_whole_and_comes_back_laid_out() {
   const wrapper = left.splitview;
   Assert.ok(wrapper && right.splitview === wrapper, "in one split view");
 
-  await press("i", B);
+  await press(")", B);
   const b0 = await startTab();
   Assert.ok(left.hidden && right.hidden, "every member of A's split is hidden");
   Assert.ok(wrapper.hasAttribute("hidden"), "and so is its wrapper");
   Assert.equal(view.panes, null, "B shows one pane");
   Assert.equal(gBrowser.selectedTab, b0, "B's tab is selected");
 
-  await press("u", A);
+  await press("(", A);
   Assert.ok(!left.hidden && !right.hidden, "the split comes back");
   Assert.equal(gBrowser.selectedTab, right, "on its focused pane");
   Assert.equal(leaves(view.panes).length, 2, "with A's two panes");
@@ -237,7 +256,7 @@ add_task(async function a_split_hides_as_a_whole_and_comes_back_laid_out() {
   for (const t of gBrowser.tabs.filter((t) => workspaceOf(t) === A.id)) {
     BrowserTestUtils.removeTab(t);
   }
-  await press("u", main());
+  await press("(", main());
 });
 
 add_task(async function pinned_tabs_stay_visible_in_every_workspace() {
@@ -245,11 +264,11 @@ add_task(async function pinned_tabs_stay_visible_in_every_workspace() {
   const pinned = BrowserTestUtils.addTab(gBrowser, `${PAGE}?pinned`);
   gBrowser.pinTab(pinned);
   Assert.equal(workspaceOf(pinned), null, "a pinned tab is out of the model");
-  await press("i", A);
+  await press(")", A);
   const a0 = await startTab();
   Assert.ok(!pinned.hidden, "the pinned tab is visible in A");
   Assert.deepEqual(gBrowser.visibleTabs, [pinned, a0], "beside A's tab");
-  await press("u", main());
+  await press("(", main());
   Assert.ok(!pinned.hidden, "and in main");
   BrowserTestUtils.removeTab(a0);
   BrowserTestUtils.removeTab(pinned);
@@ -258,7 +277,7 @@ add_task(async function pinned_tabs_stay_visible_in_every_workspace() {
 add_task(async function the_goto_picker_lists_every_workspace_and_switches() {
   const A = def("sw-a");
   const B = def("sw-b");
-  await press("i", A);
+  await press(")", A);
   const a0 = await startTab();
   // A background tab in B's container joins B, hidden (decision 12: no switch on open).
   const bTab = BrowserTestUtils.addTab(gBrowser, `${PAGE}?only-in-b`, {
@@ -293,7 +312,7 @@ add_task(async function the_goto_picker_lists_every_workspace_and_switches() {
 
 add_task(async function new_tabs_join_the_active_workspace_and_other_containers_are_foreign() {
   const A = def("sw-a");
-  await press("i", A);
+  await press(")", A);
   const a0 = await startTab();
   const opened = BrowserTestUtils.waitForNewTab(gBrowser, null, false, true);
   EventUtils.synthesizeKey("t", { accelKey: true });
@@ -308,7 +327,7 @@ add_task(async function new_tabs_join_the_active_workspace_and_other_containers_
   Assert.ok(ww().isForeign(none), "marked foreign");
   Assert.ok(!none.hidden, "and visible there");
 
-  await press("u", main());
+  await press("(", main());
   Assert.ok(none.hidden, "it hides with A");
   for (const t of [a0, fresh, none]) BrowserTestUtils.removeTab(t);
 });
