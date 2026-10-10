@@ -193,6 +193,33 @@ add_task(async function ctrl_i_and_ctrl_u_no_longer_switch_workspace() {
   BrowserTestUtils.removeTab(tab);
 });
 
+// A switch that worked says nothing: switchTo/next/previous return null on success, and
+// `null ?? NO_WORKSPACES` showed "no workspaces in this window" after every one (found by the
+// website's screenshots).
+add_task(async function a_switch_that_worked_shows_no_notice() {
+  const notice = () => document.getElementById(NOTICE_ID);
+  const noticeShown = () => !!notice()?.matches(":popover-open");
+  notice()?.hidePopover?.();
+  Assert.equal(active(), main().id, "the window is in main");
+  const tab = await openPage(`${PAGE}?no-notice`);
+
+  await press(")", def("sw-a"));
+  const start = await startTab();
+  Assert.ok(!noticeShown(), `ctrl+b ) shows no notice (got "${notice()?.textContent}")`);
+  await press("(", main());
+  Assert.ok(!noticeShown(), `ctrl+b ( shows no notice (got "${notice()?.textContent}")`);
+
+  await runCommand("workspace sw-a");
+  await until(() => active() === def("sw-a").id, ":workspace sw-a");
+  Assert.ok(!noticeShown(), `:workspace shows no notice (got "${notice()?.textContent}")`);
+  await runCommand("workspace main");
+  await until(() => active() === main().id, ":workspace main");
+  Assert.ok(!noticeShown(), "nor going back");
+
+  BrowserTestUtils.removeTab(start);
+  BrowserTestUtils.removeTab(tab);
+});
+
 add_task(async function tab_keys_count_only_the_visible_workspace() {
   const A = def("sw-a");
   const B = def("sw-b");
