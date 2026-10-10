@@ -6,6 +6,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
+- `about:license` lists the smol-toml TOML parser's BSD-3-Clause notice under Vimma, so release builds carry it (#16).
 - Bookmarks per workspace: each workspace has its own folder in the Bookmarks Toolbar, and the bookmarks panel shows only the current workspace's bookmarks, following you as you switch. `ctrl+b a` and `:bookmark` file there, `@name/` targets another workspace, and renaming or deleting a workspace renames its folder or asks what to do with its bookmarks. `[bookmarks] root = "workspace" | "toolbar" | "all"` picks the view.
 - Accessibility: pickers and panels expose the selected row to screen readers, bookmarks are a tree, prompts are dialogs, notices are announced once, and panels give focus back when they close. Text colours meet WCAG AA in the built-in dark and light themes. The help-overlay screenshot baseline was re-recorded for the new colours.
 - Tiling layouts: `ctrl+b enter` opens a pane split along the focused pane's longer side (dwindle), and `ctrl+b space` or `:layout` cycles tmux's presets (even-horizontal, even-vertical, main-vertical, main-horizontal, tiled) and dwindle without reloading any page. `[panes] layout` and `main_size` in `config.toml` set the defaults; each workspace keeps its layout across switches and restarts. The help-text and `defaults.toml` snapshots changed with the new keys and options.
@@ -81,7 +82,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - Every way Vimma opens a URL (`:open`, `:tabnew`, `p`/`P`, bookmarks, the control socket) refuses `javascript:` and `data:`, also behind `view-source:`.
 - [docs/security.md](docs/security.md) states what each risky part may and must never do, every rule linked to the test that enforces it, and CI fails if a linked test disappears. [SECURITY.md](SECURITY.md) explains how to report a vulnerability privately.
 - Deleting a workspace asks first and clears its container's site data; a container deleted outside Vimma is replaced at once, so new tabs never land in the default container.
-- Semgrep scans every PR; CodeQL scanning is set up and starts once the repository is public.
+- Semgrep and CodeQL scan every PR, and a PR that adds a high-severity CodeQL alert cannot merge. CodeQL's first scan found 15 alerts; 14 were fixed (regex backtracking replaced by linear scans, file races, Markdown escaping in generated docs) and one was a false positive.
+- Dependencies are kept current: Dependabot proposes updates weekly, and security, patch and minor updates merge on their own once every required check passes. The build tools' outdated `sharp` and `qs` were lifted past their advisories.
 
 ### Removed
 
