@@ -364,7 +364,7 @@ fixes; our front-end patches nearly always stay `clean`. Mozilla's advisories:
 | When         | What happens                                                                   |
 | ------------ | ------------------------------------------------------------------------------ |
 | 0–4 h        | `detect` sees it; tracking issue labelled `security` mentions you              |
-| + ≈ 20 min   | Patch check, suites on the artifact build, PR (or a draft naming the conflict) |
+| + ≈ 25 min   | Patch check, suites on the artifact build, PR (or a draft naming the conflict) |
 | day 0–1      | You: mark ready (or review), CI green, merge                                   |
 | day 1–2      | Merge the release-please PR (a dot release alone produces one), `release.yml`  |
 | day 3, 00:00 | Not merged yet: `upstream.yml` fails every run, `security` drift issue opened  |

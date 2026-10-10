@@ -368,8 +368,8 @@ to approve the first run of a first-time contributor (Settings → Actions → G
 
 The free plan has a limited monthly budget of minutes for private repos, billed per job and rounded
 up to the minute. Rough use: CI ≈ 2 min per PR push, e2e ≈ 6 min per PR push that touches the
-browser (5.5 min wall, ADR-010); upstream 6 × 1 min a day (≈ 180 min a month), plus ≈ 12 min
-(issue, patch check, the e2e suites, PR) when a release is found, ≈ 240 a month in all (spec
+browser (5.5 min wall, ADR-010); upstream 6 × 1 min a day (≈ 180 min a month), plus ≈ 16 min
+(issue, patch check, the e2e suites, PR) when a release is found, ≈ 270 a month in all (spec
 m7-upstream-autopilot); claude.yml only
 when triggered. `nightly.yml` uses the self-hosted runner, which costs no hosted minutes. Check usage in Settings → Billing → Usage. Once the repo is public,
 standard hosted runners are free and unlimited; the e2e paths filter can then go.

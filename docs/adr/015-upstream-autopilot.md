@@ -43,6 +43,6 @@ red run. Reusing `e2e.yml` keeps one definition of "the suites pass".
 
 ## Consequences
 
-About 240 Actions minutes a month while the repo is private (spec). The owner enables "Allow
+About 270 Actions minutes a month while the repo is private (spec). The owner enables "Allow
 GitHub Actions to create and approve pull requests" (runbook). Bumps use the `upstream` commit
 type so release-please lists them and cuts a release PR.

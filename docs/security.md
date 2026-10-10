@@ -270,7 +270,7 @@ playbook: [docs/rebase.md](rebase.md).
 Taskcluster index) and this repository. Nothing here runs code from a pull request.
 
 - G1. A newer Firefox release **must** produce a tested bump PR within 6 hours of
-  product-details listing it (detection every 4 h, the rebase and suites ≈ 20 min), or, when
+  product-details listing it (detection every 4 h, the rebase and suites ≈ 25 min), or, when
   Actions may not open PRs, a pushed branch and a prefilled compare link on its tracking issue.
   [`detects every 4 hours, so a release has a PR within 6 hours`](../tools/test/upstream-workflow.test.mjs),
   [`finds 157.0.2 as a critical security dot release, 3 days to merge`](../tools/upstream/test/autopilot.test.mjs),

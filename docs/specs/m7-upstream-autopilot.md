@@ -87,7 +87,7 @@ One workflow, six jobs; the heavy ones run once per release (`upstream.yml` has 
   our patches nearly always stay clean, so 3 days covers a weekend. Majors get 7 (a real rebase,
   4-weekly, predictable from `NEXT_RELEASE_DATE`). ADR-002's "within 7 days" target for security
   releases tightens to 3 for dot releases.
-- **Every 4 h**: 6 runs a day. A release has a PR within ≈ 4 h 20 min (worst case, plus GitHub's
+- **Every 4 h**: 6 runs a day. A release has a PR within ≈ 4 h 30 min (worst case, plus GitHub's
   cron delay), inside G1's 6 hours. Every 2 h would cost 360 min a month for at most 2 h earlier.
 - **Commit type `upstream:`**, not `chore(upstream):` as first proposed: release-please hides
   `chore` (`release-please-config.json`), so a Firefox security bump would neither appear in the
@@ -102,17 +102,17 @@ One workflow, six jobs; the heavy ones run once per release (`upstream.yml` has 
 
 ## Actions minutes (private repo, ≈ 2,000 a month)
 
-| What                                                        | Billed minutes                               |
-| ----------------------------------------------------------- | -------------------------------------------- |
-| `detect`, nothing new (6 a day)                             | 1 each → **≈ 180 a month**                   |
-| A release: detect 1, track 1, patch-check 2                 | 4                                            |
-| `test` (e2e.yml: vimma-ctl, import, artifact build, suites) | ≈ 7                                          |
-| `publish`                                                   | 1                                            |
-| **Per release**                                             | **≈ 12** (+ ≈ 8 when marked ready: ci + e2e) |
-| `drift` while overdue                                       | +1 per run                                   |
+| What                                                        | Billed minutes                                |
+| ----------------------------------------------------------- | --------------------------------------------- |
+| `detect`, nothing new (6 a day)                             | 1 each → **≈ 180 a month**                    |
+| A release: detect 1, track 1, patch-check 2                 | 4                                             |
+| `test` (e2e.yml: vimma-ctl, import, artifact build, suites) | ≈ 11 (10 min 21 s on this PR's e2e run)       |
+| `publish`                                                   | 1                                             |
+| **Per release**                                             | **≈ 16** (+ ≈ 14 when marked ready: ci + e2e) |
+| `drift` while overdue                                       | +1 per run                                    |
 
-About 3 releases a month (one major, one or two dot releases): ≈ 180 + 3 × 20 = **≈ 240 a
-month**, 12 % of the budget (was ≈ 130). Once the repo is public, hosted minutes are free.
+About 3 releases a month (one major, one or two dot releases): ≈ 180 + 3 × 30 = **≈ 270 a
+month**, 14 % of the budget (was ≈ 130). Once the repo is public, hosted minutes are free.
 
 ## Tests (written first)
 
