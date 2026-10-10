@@ -6,6 +6,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
+- Bookmarks per workspace: each workspace has its own folder in the Bookmarks Toolbar, and the bookmarks panel shows only the current workspace's bookmarks, following you as you switch. `ctrl+b a` and `:bookmark` file there, `@name/` targets another workspace, and renaming or deleting a workspace renames its folder or asks what to do with its bookmarks. `[bookmarks] root = "workspace" | "toolbar" | "all"` picks the view.
+- Accessibility: pickers and panels expose the selected row to screen readers, bookmarks are a tree, prompts are dialogs, notices are announced once, and panels give focus back when they close. Text colours meet WCAG AA in the built-in dark and light themes. The help-overlay screenshot baseline was re-recorded for the new colours.
 - Tiling layouts: `ctrl+b enter` opens a pane split along the focused pane's longer side (dwindle), and `ctrl+b space` or `:layout` cycles tmux's presets (even-horizontal, even-vertical, main-vertical, main-horizontal, tiled) and dwindle without reloading any page. `[panes] layout` and `main_size` in `config.toml` set the defaults; each workspace keeps its layout across switches and restarts. The help-text and `defaults.toml` snapshots changed with the new keys and options.
 - Workspaces work like Vim buffers: `ctrl+^` (or `ctrl+6`, since `^` is a dead key on Finnish layouts) and `ctrl+b ^` flip to the previous workspace, `]w` / `[w` step through them, and `:ws`, `:wn`, `:wp`, `:wd`, `:wa`, `:workspaces` and `:ws #` mirror the buffer commands. A command abbreviation now runs when it begins every other match (`:wor` is `:workspace`).
 - `ctrl+b e` or `:addons` opens a keyboard add-on manager: `Enter` opens an add-on's popup with focus inside it, `o` its options, `x` turns it on or off, `d` removes it after y/N, `u` checks for updates and `shift+p` allows it in private windows; `:addon <name>` opens one popup directly. System and hidden add-ons are never listed.
@@ -58,6 +60,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Fixed
 
+- `npm run import` no longer fails after a patch changes: it restores the Firefox files our patches touch before re-applying them. `tools/relocate-checkout.mjs` repairs a checkout that was moved.
 - Switching workspaces with `ctrl+b (`, `ctrl+b )` or `:workspace` no longer shows "no workspaces in this window" after a successful switch.
 - Sites see Firefox's user agent (`… Gecko/20100101 Firefox/157.0`), not `Vimma/0.1.0`.
 - Everything that asks for the Firefox version (webcompat interventions, add-on updates, Remote Settings and Nimbus targeting, backups) gets Firefox's (157.0.1). `--version` and the About dialog still show Vimma's 0.1.0.
@@ -67,6 +70,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Security
 
+- A quarterly audit checks every change to Firefox's own code against its register entry, size budget and review date, and opens an issue with the report.
 - Firefox security updates on autopilot: every 4 hours CI checks Mozilla's releases and advisories, opens a tracking issue, verifies the source, checks the patches, runs every test suite and opens the update pull request. A security release left unshipped for 3 days fails CI and opens an issue.
 - Every parser of outside input (control protocol, `config.toml`, routing rules, key notation, the command line, Omarchy theme files, `vimma-ctl`) is fuzzed in CI and nightly. Fuzzing found and fixed unbounded TOML nesting, `constructor`-named keys crashing a reload, a slow IPv6 pattern, an 8 s freeze on a huge `:` paste and a malformed control message wedging its connection.
 - Vimma does not join Mozilla's studies, experiments or rollouts (Normandy, Nimbus) and shows no sponsored stories, shortcuts or address-bar suggestions, remote recommendations or Mozilla promos. Each default can be turned back on in `about:config`.
