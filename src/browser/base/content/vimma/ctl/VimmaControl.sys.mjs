@@ -503,7 +503,12 @@ class Connection {
     }
     if (!CONTROL_COMMANDS.includes(command)) {
       this.respond(id, {
-        error: { code: "unknown-command", message: `unknown command ${String(command)}` },
+        error: {
+          code: "unknown-command",
+          // Not String(command): a parsed object can carry a toString that is not a function.
+          message:
+            typeof command === "string" ? `unknown command ${command}` : "command must be a string",
+        },
       });
       return;
     }

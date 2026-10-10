@@ -83,6 +83,15 @@ describe("validateMessage: envelopes", () => {
     expect(errorsOf({ type: "goodbye" })).toEqual(['unknown message type "goodbye"']);
   });
 
+  // Regression (found by the fuzzer, seed 31429): the error message stringified `type`, which
+  // throws for an object whose toString is not a function, as JSON.parse can make.
+  test("a type that is not a string is an error, never a throw", () => {
+    for (const text of ['{"type":{"toString":0}}', '{"type":{"valueOf":{}}}', '{"type":[]}']) {
+      expect(validateMessage(JSON.parse(text)).valid, text).toBe(false);
+    }
+    expect(errorsOf({ type: 7 })).toEqual(["unknown message type 7"]);
+  });
+
   test("a kind that disagrees with type is an error", () => {
     expect(errorsOf(req("state"), { kind: "response" })).toContain('type must be "response"');
   });

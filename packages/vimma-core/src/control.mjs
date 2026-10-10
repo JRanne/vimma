@@ -253,6 +253,17 @@ function checkResponse(m, command, errors) {
 }
 
 /**
+ * A value for an error message, without calling anything on it: an object from JSON.parse can
+ * carry a `toString` that is not a function, and String() would throw.
+ * @param {unknown} v
+ */
+function describe(v) {
+  if (typeof v === "string") return JSON.stringify(v);
+  if (v === null || typeof v !== "object") return String(v);
+  return Array.isArray(v) ? "(an array)" : "(an object)";
+}
+
+/**
  * Validate one decoded protocol message (or the discovery file, `kind: "discovery"`).
  * Without `kind`, it is taken from the message's `type`. For responses, `command` names the
  * request's command so the result shape can be checked; without it only the envelope is.
@@ -299,7 +310,7 @@ export function validateMessage(message, { kind, command } = {}) {
       checkResponse(message, command, errors);
       break;
     default:
-      errors.push(`unknown message type "${String(effective)}"`);
+      errors.push(`unknown message type ${describe(effective)}`);
   }
   return { valid: errors.length === 0, errors };
 }
