@@ -61,8 +61,8 @@ shows as `space n` ([guide](guide.md#configtoml)).
 
 | Action                                                        | Config name          | Bindings         |
 | ------------------------------------------------------------- | -------------------- | ---------------- |
-| Next workspace                                                | `next_workspace`     | `ctrl+i`         |
-| Previous workspace                                            | `previous_workspace` | `ctrl+u`         |
+| Next workspace                                                | `next_workspace`     | `ctrl+b )`       |
+| Previous workspace                                            | `previous_workspace` | `ctrl+b (`       |
 | Switch to a workspace by name or number                       | `switch_workspace`   | —                |
 | Workspace picker                                              | `workspace_picker`   | `ctrl+b w`       |
 | New workspace                                                 | `new_workspace`      | `ctrl+b shift+n` |
@@ -77,16 +77,16 @@ shows as `space n` ([guide](guide.md#configtoml)).
 | ----------------------------------------- | ------------------ | ------------------------------ |
 | Goto picker: every tab in every workspace | `goto_picker`      | `ctrl+b g`, `b`                |
 | Open / close the side panel               | `toggle_sidebar`   | `ctrl+b b`                     |
-| Scroll down                               | `scroll_down`      | `j`                            |
-| Scroll up                                 | `scroll_up`        | `k`                            |
+| Scroll down                               | `scroll_down`      | `j`, `ctrl+e`                  |
+| Scroll up                                 | `scroll_up`        | `k`, `ctrl+y`                  |
 | Scroll left                               | `scroll_left`      | `h`                            |
 | Scroll right                              | `scroll_right`     | `l`                            |
-| Scroll half a page down                   | `scroll_half_down` | `d`                            |
-| Scroll half a page up                     | `scroll_half_up`   | `u`                            |
+| Scroll half a page down                   | `scroll_half_down` | `d`, `ctrl+d`                  |
+| Scroll half a page up                     | `scroll_half_up`   | `u`, `ctrl+u`                  |
 | Scroll to top                             | `scroll_top`       | `gg`                           |
 | Scroll to bottom                          | `scroll_bottom`    | `G`                            |
-| Go back                                   | `history_back`     | `H`                            |
-| Go forward                                | `history_forward`  | `L`                            |
+| Go back                                   | `history_back`     | `H`, `ctrl+o`                  |
+| Go forward                                | `history_forward`  | `L`, `ctrl+i`                  |
 | Reload page                               | `reload`           | `r`                            |
 | Open a URL or search in this tab          | `open_url`         | —                              |
 | Go up a level in the URL path             | `url_up`           | `gu`                           |

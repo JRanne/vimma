@@ -20,7 +20,7 @@ export const NO_WORKSPACES = "no workspaces in this window";
 
 /**
  * What the user typed as a workspace: a workspace of exactly that name first (config.toml
- * accepts names of digits), else a number is its place in `ctrl+i` order, else a name.
+ * accepts names of digits), else a number is its place in workspace order, else a name.
  * @param {string} text
  * @param {Workspaces | null | undefined} model  the window's
  * @returns {WorkspaceRef}

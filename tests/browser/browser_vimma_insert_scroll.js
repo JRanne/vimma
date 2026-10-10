@@ -134,6 +134,58 @@ add_task(async function d_and_u_scroll_half_a_page() {
   });
 });
 
+// Vim's scroll keys (user decision 2026-10-10) next to Vimium's d / u.
+add_task(async function ctrl_d_ctrl_u_ctrl_e_and_ctrl_y_scroll_as_in_vim() {
+  await withPage(async (browser) => {
+    const half = await SpecialPowers.spawn(
+      browser,
+      [],
+      () => content.document.scrollingElement.clientHeight / 2,
+    );
+    EventUtils.synthesizeKey("d", { ctrlKey: true });
+    await waitForScroll(browser, (y) => Math.abs(y - half) <= 1, "ctrl+d scrolls half a viewport");
+    EventUtils.synthesizeKey("d", { ctrlKey: true });
+    await waitForScroll(browser, (y) => Math.abs(y - 2 * half) <= 1, "ctrl+d again");
+    EventUtils.synthesizeKey("u", { ctrlKey: true });
+    await waitForScroll(browser, (y) => Math.abs(y - half) <= 1, "ctrl+u scrolls half a page up");
+    EventUtils.synthesizeKey("e", { ctrlKey: true });
+    await waitForScroll(browser, (y) => Math.abs(y - half - STEP) <= 1, "ctrl+e scrolls a step");
+    EventUtils.synthesizeKey("y", { ctrlKey: true });
+    await waitForScroll(browser, (y) => Math.abs(y - half) <= 1, "ctrl+y scrolls a step up");
+    Assert.deepEqual(
+      await pageKeysThenUnbound(browser),
+      [UNBOUND],
+      "the page saw none of ctrl+d, ctrl+u, ctrl+e or ctrl+y",
+    );
+  });
+});
+
+add_task(async function in_insert_mode_ctrl_d_and_ctrl_u_are_the_pages() {
+  await withPage(async (browser) => {
+    // The page takes its ctrl keys, as an editor would, so Firefox's own ctrl+d (bookmark) and
+    // ctrl+u (view source) stay out of the test.
+    await SpecialPowers.spawn(browser, [], () => {
+      content.document.getElementById("text").addEventListener("keydown", (e) => {
+        if (e.ctrlKey) e.preventDefault();
+      });
+    });
+    await focusIn(browser, "text");
+    await waitForMode(browser, "insert");
+    EventUtils.synthesizeKey("d", { ctrlKey: true });
+    EventUtils.synthesizeKey("u", { ctrlKey: true });
+    EventUtils.synthesizeKey("x");
+    Assert.ok(await waitForPageKey(browser, ["x"]), "the page received x");
+    Assert.deepEqual(await pageKeys(browser), ["d", "u", "x"], "and ctrl+d, ctrl+u unprevented");
+    Assert.equal(
+      await SpecialPowers.spawn(browser, [], () => content.document.getElementById("text").value),
+      "x",
+      "x is typed into the input",
+    );
+    Assert.equal(await pageScrollY(browser), 0, "and nothing scrolls");
+    Assert.equal(VimmaHost._browserMode(browser), "insert", "still in insert mode");
+  });
+});
+
 add_task(async function an_input_enters_insert_and_esc_leaves_it() {
   await withPage(async (browser) => {
     await focusIn(browser, "text");
