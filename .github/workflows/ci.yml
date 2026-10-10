@@ -55,6 +55,10 @@ jobs:
       - name: Python tests (tools/upstream)
         run: npm run test:py
 
+      # docs/security.md names the test behind each rule; a renamed or deleted test fails here.
+      - name: Security model test links (docs/security.md)
+        run: npm run security-links
+
       - name: Licences of package-lock.json
         run: npm run license-check
 
