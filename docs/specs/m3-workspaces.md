@@ -947,9 +947,9 @@ dependency for 4b, 5 and parts of 4a.
   nothing; `m` on the own workspace refused unasked; a background open says where. Red before
   (7 unexpected), green after; the whole `tests/browser/` suite passes. Vitest: workspace items,
   name-only matching, `m`/Enter effects, selection kept by id, the question text. The notice
-  examples in `browser_vimma_tab_keys.js`, `browser_vimma_statusbar.js` and
-  `browser_vimma_help_overlay.js` used `ctrl+b w` as the not-yet key; they use `ctrl+b b` (side
-  panel) now, and `workspace_picker` is in the overlay's runnable list. Mutation check: dropping
+  examples in `browser_vimma_tab_keys.js`, `browser_vimma_statusbar.js`,
+  `browser_vimma_cmdline.js` and `browser_vimma_help_overlay.js` used `ctrl+b w` as the
+  not-yet key; they use `ctrl+b b` (side panel) now, and `workspace_picker` is in the overlay's runnable list. Mutation check: dropping
   the name comparison from the stale-answer guard fails "the answer is refused".
 - **Not done here:** a moved lazy background tab still needs selecting first (the picker moves
   the selected tab); `contextual-identity-deleted` and the startup `privacy.userContext.enabled`

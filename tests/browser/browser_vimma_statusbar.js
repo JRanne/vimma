@@ -228,7 +228,7 @@ add_task(async function prefix_question_shows_exactly_one_list() {
     await focusContent(browser);
     // A toast from an earlier key must not linger over the overlay.
     EventUtils.synthesizeKey("b", { ctrlKey: true });
-    EventUtils.synthesizeKey("w");
+    EventUtils.synthesizeKey("b");
     await until(noticeShown, "ctrl+b b shows the notice");
     EventUtils.synthesizeKey("b", { ctrlKey: true });
     EventUtils.synthesizeKey("?", { shiftKey: true });

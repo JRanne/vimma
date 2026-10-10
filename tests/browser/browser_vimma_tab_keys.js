@@ -257,12 +257,12 @@ add_task(async function no_notice_over_dom_fullscreen() {
   const root = document.documentElement;
   root.setAttribute("inDOMFullscreen", "true"); // as browser-fullScreenAndPointerLock.js does
   try {
-    prefix("w");
+    prefix("b");
     Assert.ok(!noticeShown(), "no notice over a fullscreen video");
   } finally {
     root.removeAttribute("inDOMFullscreen");
   }
-  Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "ctrl+b w is still consumed");
+  Assert.deepEqual(await pageKeysThenZ(tabs[0]), ["z"], "ctrl+b b is still consumed");
   closeTabs(tabs);
 });
 
