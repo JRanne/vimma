@@ -31,7 +31,8 @@ theme. Underneath it is Firefox (currently 157), so sites and add-ons work as th
 
 **Vim on the page**
 
-- Normal mode: `j`/`k`/`h`/`l` scroll, `d`/`u` half a page, `gg`/`G` top and bottom.
+- Normal mode: `j`/`k`/`h`/`l` scroll, `d`/`u` half a page, `gg`/`G` top and bottom,
+  `H`/`L` back and forward, `r` reload.
 - Link hints: `f` labels every link, button and field on screen; type a label to follow it,
   `F` opens it in a background tab.
 - Find: `/` searches as you type (smartcase, frames and PDFs too), `n`/`N` jump between matches.
