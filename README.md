@@ -124,7 +124,8 @@ requirements, faster front-end-only rebuilds, tests, the project layout and how 
 
 [MPL-2.0](LICENSE), like Firefox. The vendored TOML parser
 [smol-toml](https://github.com/squirrelchat/smol-toml) (`packages/vimma-core/src/vendor/smol-toml/`)
-is BSD-3-Clause ([ADR-012](docs/adr/012-toml-parser-smol-toml.md)).
+is BSD-3-Clause ([ADR-012](docs/adr/012-toml-parser-smol-toml.md)); its notice is in the browser's
+`about:license`, with Firefox's own third-party licences.
 
 ## Acknowledgements
 

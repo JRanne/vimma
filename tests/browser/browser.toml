@@ -149,6 +149,8 @@ run-if = ["os == 'linux'"] # ln -s for the omarchy-theme-set symlink swap
 
 ["browser_vimma_about.js"]
 
+["browser_vimma_licence.js"]
+
 ["browser_vimma_omarchy_hook.js"]
 
 ["browser_vimma_nav_keys.js"]

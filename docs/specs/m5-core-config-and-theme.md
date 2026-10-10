@@ -205,7 +205,8 @@ injecting CSS, creating containers from `[workspaces]`, the Omarchy `theme-set.d
   `tokensToCss(tokens)` unless there are errors (then keeps the previous tokens and reports them);
 - surfaces `warnings` (contrast, Omarchy theme missing) in `about:vimma`, not the status bar;
 - copies `packages/vimma-core/src/vendor/smol-toml/LICENSE` into `about:license` or an equivalent
-  third-party notice when release packaging is built (M6).
+  third-party notice when release packaging is built (M6). Done (issue #16): `about:license` lists
+  it from `src/browser/base/content/vimma/licence/body.html` (ADR-012, Consequences).
 
 ## Settled (2026-10-09)
 
