@@ -108,6 +108,22 @@ Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
 Before pushing, run `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:py`,
 `npm run license-check` and `npx surfer license-check`.
 
+## Branch policy
+
+A ruleset protects `main`:
+
+- **Pull requests only.** Nobody pushes to `main` directly. PRs are squash-merged, so history
+  stays linear and each PR is one commit whose subject is the PR's changelog line.
+- **Required checks.** A PR merges only when these pass: "lint, typecheck, test, commitlint,
+  licences" (`ci.yml`), "mochitest (artifact build)" (`e2e.yml`, which runs on every PR), the
+  Semgrep check (`semgrep.yml`), "CodeQL (javascript-typescript)" and "CodeQL (rust)".
+- **Code scanning gate.** A PR that adds a code-scanning alert of severity high or above
+  cannot merge. Fix the alert; a false positive is dismissed on GitHub with a reason, never
+  silenced in the code.
+- **No force-push or deletion** of `main`.
+- **Branches are deleted on merge.** Start new work from a fresh `origin/main`.
+- **Auto-merge is available.** Turn it on for a PR and it squash-merges once the checks pass.
+
 ## More
 
 - [docs/runbook.md](docs/runbook.md): builds, CI, e2e tests, parallel browser lanes and releases.
