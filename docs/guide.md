@@ -218,15 +218,15 @@ layout where `?` is shifted): the overlay is the one place that lists them.
 
 ### Colours: your Omarchy theme
 
-The status bar, the command line, the pickers, link hints, notices, pane borders and the start
-page take their colours from your current [Omarchy](https://omarchy.org) theme, with nothing to
+The status bar, the command line, the `ctrl+b ?` overlay, the pickers and prompts, link hints,
+notices, pane borders and the start page take their colours from your current [Omarchy](https://omarchy.org) theme, with nothing to
 set up: Vimma reads `~/.local/state/omarchy/current/theme/colors.toml` (and `light.mode`, for a
 light theme) and checks it every 2 seconds, so `omarchy-theme-set` (or picking a theme from the
 Omarchy menu) recolours every open window and start page within 2 seconds, without a restart.
 Without Omarchy, or with `vimma.theme.source` set to `builtin`, the colours are Vimma's built-in
 Tokyo Night. A `colors.toml` Vimma cannot read (a value that is not a `#rrggbb` colour, a
 missing key) is ignored: the colours stay as they were, and the Browser Console
-(`ctrl+shift+j`) says which line is wrong. The `ctrl+b ?` overlay keeps its own colours for now.
+(`ctrl+shift+j`) says which line is wrong.
 
 ## Keys
 
@@ -270,7 +270,8 @@ other way (the `ctrl+b g` picker, `ctrl+tab`, `alt+1..9`): the status bar's `pan
 URL bar follow, and a zoom ends, as it does when a pane key moves.
 
 While the overlay is open it takes every key, so `ctrl+w` cannot close the tab behind it. Rows
-for bindings that do not run yet are dimmed, under a legend that says so. In normal mode bare
+for bindings that do not run yet are dimmed, under a legend that says so; actions your
+`config.toml` rebinds are marked `*`. In normal mode bare
 digits start a count (`3j`), so a page's own digit shortcuts need `i` first.
 
 ### Resize mode

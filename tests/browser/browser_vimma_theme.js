@@ -7,6 +7,7 @@
 "use strict";
 
 /* global BrowserCommands -- browser window global (browser.js) */
+/* global focusContent -- from head.js */
 
 const { Subprocess } = ChromeUtils.importESModule("resource://gre/modules/Subprocess.sys.mjs");
 
@@ -78,6 +79,65 @@ const barBackground = () =>
 /** Waits until the status bar shows `hex` as its background. */
 function waitForBar(hex, msg) {
   return TestUtils.waitForCondition(() => barBackground() === rgb(hex), msg, 50, 100);
+}
+
+/**
+ * Opens each overlay and prompt in turn (ctrl+b ?, ctrl+b g, `:`, ctrl+b T) and checks that its
+ * surface and text are the current theme's tokens: --vimma-bg-dark and --vimma-fg.
+ * @param {string} label  which theme, for the messages
+ */
+async function assertSurfacesFollowTheTheme(label) {
+  const tab = await BrowserTestUtils.openNewForegroundTab(gBrowser, "https://example.org/");
+  await focusContent(tab.linkedBrowser);
+  const surface = rgb(token("--vimma-bg-dark"));
+  const text = rgb(token("--vimma-fg"));
+  const $ = (/** @type {string} */ id) => document.getElementById(id);
+  const shown = (/** @type {Element | null | undefined} */ el) =>
+    !!el && BrowserTestUtils.isVisible(el);
+  const surfaces = [
+    {
+      what: "the ctrl+b ? help overlay",
+      prefix: true,
+      open: () => EventUtils.synthesizeKey("?", { shiftKey: true }),
+      el: () => $("vimma-help"),
+    },
+    {
+      what: "the ctrl+b g picker",
+      prefix: true,
+      open: () => EventUtils.synthesizeKey("g"),
+      el: () => $("vimma-picker"),
+    },
+    {
+      what: "the : command line",
+      prefix: false,
+      open: () => EventUtils.synthesizeKey(":", { shiftKey: true }),
+      el: () => $("vimma-cmdline")?.querySelector(".vimma-cmdline-panel"),
+    },
+    {
+      what: "the ctrl+b T rename prompt",
+      prefix: true,
+      open: () => EventUtils.synthesizeKey("T", { shiftKey: true }),
+      el: () => $("vimma-rename")?.querySelector(".vimma-cmdline-panel"),
+    },
+  ];
+  for (const s of surfaces) {
+    if (s.prefix) EventUtils.synthesizeKey("b", { ctrlKey: true });
+    s.open();
+    await TestUtils.waitForCondition(() => shown(s.el()), `${label}: ${s.what} opens`);
+    const style = getComputedStyle(/** @type {Element} */ (s.el()));
+    Assert.equal(style.backgroundColor, surface, `${label}: ${s.what} is on --vimma-bg-dark`);
+    Assert.equal(style.color, text, `${label}: ${s.what} text is --vimma-fg`);
+    if (s.el()?.id === "vimma-help") {
+      const help = /** @type {Element} */ (s.el());
+      const part = (/** @type {string} */ sel) =>
+        getComputedStyle(/** @type {Element} */ (help.querySelector(sel)));
+      Assert.equal(part("header").backgroundColor, surface, `${label}: the help header too`);
+      Assert.equal(part("input").color, text, `${label}: the help filter's text is --vimma-fg`);
+    }
+    EventUtils.synthesizeKey("KEY_Escape");
+    await TestUtils.waitForCondition(() => !shown(s.el()), `${label}: ${s.what} closes`);
+  }
+  BrowserTestUtils.removeTab(tab);
 }
 
 async function ln(target, link) {
@@ -184,10 +244,20 @@ add_task(async function swapping_the_symlink_follows_the_new_theme() {
   Assert.equal(token("--vimma-bg"), "#2a1a2a", "and its background token");
 });
 
+add_task(async function overlays_and_prompts_follow_a_dark_theme() {
+  Assert.equal(token("--vimma-bg-dark"), "#301030", "theme two is current");
+  await assertSurfacesFollowTheTheme("dark");
+});
+
 add_task(async function light_mode_file_switches_to_light_tokens() {
   await ln(dir("light"), currentTheme);
   await waitForBar("#e6e9ef", "the light theme");
   Assert.equal(token("--vimma-color-scheme"), "light", "light.mode makes the tokens light");
+});
+
+add_task(async function overlays_and_prompts_follow_a_light_theme() {
+  Assert.equal(token("--vimma-fg"), "#4c4f69", "the light theme's dark text is current");
+  await assertSurfacesFollowTheTheme("light");
 });
 
 add_task(async function no_omarchy_dir_means_tokyo_night() {
