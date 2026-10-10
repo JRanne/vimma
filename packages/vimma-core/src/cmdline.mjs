@@ -65,11 +65,17 @@ export const COMMANDS = Object.freeze([
   }),
   cmd("vsplit", "none", "pane.split_vertical", "Split right", { aliases: ["vs"] }),
   cmd("split", "none", "pane.split_horizontal", "Split down", { aliases: ["sp"] }),
-  cmd("wsnext", "none", "workspace.next", "Next workspace"),
+  // `wsn`, as Vim's `:wsn[ext]`: the prefix was unique before `wsnew` came.
+  cmd("wsnext", "none", "workspace.next", "Next workspace", { aliases: ["wsn"] }),
   cmd("wsprev", "none", "workspace.previous", "Previous workspace"),
   cmd("workspace", "optional", "workspace.picker", "Switch workspace (without a name: picker)", {
     textAction: "workspace.switch",
   }),
+  // m3-workspaces 4a/4b. Without text, new / rename / move ask on the command line.
+  cmd("wsnew", "optional", "workspace.new", "New workspace (and switch to it)"),
+  cmd("wsrename", "optional", "workspace.rename", "Rename this workspace"),
+  cmd("wsdelete", "optional", "workspace.close", "Close this (or the named) workspace; asks"),
+  cmd("wsmove", "optional", "workspace.move_tab", "Move the tab to a workspace (name or number)"),
   cmd("ls", "none", "goto.picker", "Goto picker: every tab in every workspace"),
   cmd("sidebar", "none", "sidebar.toggle", "Open / close the side panel"),
   cmd("map", "none", "help.show", "Show all bindings"),

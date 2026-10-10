@@ -95,6 +95,8 @@ support-files = ["file_vimma_cookie.html"]
 
 ["browser_vimma_workspace_switching.js"]
 
+["browser_vimma_workspace_ops.js"]
+
 ["browser_vimma_workspace_restore.js"]
 support-files = ["file_vimma_insert_scroll.html"]
 

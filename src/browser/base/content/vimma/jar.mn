@@ -9,6 +9,7 @@ browser.jar:
         content/browser/vimma/config/ConfigHost.sys.mjs   (config/ConfigHost.sys.mjs)
         content/browser/vimma/host/tab-ops.mjs            (host/tab-ops.mjs)
         content/browser/vimma/host/pane-ops.mjs           (host/pane-ops.mjs)
+        content/browser/vimma/host/workspace-ops.mjs      (host/workspace-ops.mjs)
         content/browser/vimma/host/find.mjs               (host/find.mjs)
         content/browser/vimma/host/copy-mode.mjs          (host/copy-mode.mjs)
         content/browser/vimma/actors/VimmaActors.sys.mjs  (actors/VimmaActors.sys.mjs)

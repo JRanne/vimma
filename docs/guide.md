@@ -292,16 +292,16 @@ normal mode (`3 ctrl+w >` by three), as in Vim. A config can rebind the mode's k
 
 - **Back, forward and reload** (`H`/`L`, `r`): bound, not built yet. Until then these keys
   reach the page as before.
-- **M3, the rest of workspaces and the side panel:** the `ctrl+b w` picker, new/rename/close
-  workspace, and `ctrl+b b` or `<leader>n` for the side panel. `ctrl+i` / `ctrl+u` and restoring
-  workspaces after a restart work now (see [Workspaces](#workspaces)).
+- **M3, the rest of workspaces and the side panel:** the `ctrl+b w` picker, and `ctrl+b b` or
+  `<leader>n` for the side panel. `ctrl+i` / `ctrl+u`, new/rename/close workspace, moving a tab
+  and restoring workspaces after a restart work now (see [Workspaces](#workspaces)).
 
 ## Workspaces
 
 Every tab lives in a workspace, and every workspace is a Firefox container of its own: a site
 you are signed in to in one workspace sees none of its cookies or storage in another. A new
-profile has one workspace, `main`; creating, renaming and closing workspaces from the keyboard
-comes later in M3 (until then they are made through the workspace store, as the tests do).
+profile has one workspace, `main`; you make more as you need them (see
+[Managing workspaces](#managing-workspaces)).
 
 - `ctrl+i` / `ctrl+u` (or `:wsnext` / `:wsprev`) go to the next / previous workspace, wrapping
   around; `:workspace work` or `:workspace 2` goes to one by name or number. The status bar
@@ -327,7 +327,34 @@ comes later in M3 (until then they are made through the workspace store, as the 
 - **Pinned tabs** belong to no workspace and show in every one. Vimma has no key to pin; an
   extension or an old session can still pin.
 - Each window has its own current workspace; the workspaces themselves are shared by all
-  windows. Workspaces and their tabs are not kept across a restart yet (later in M3).
+  windows.
+
+### Managing workspaces
+
+| Keys             | Command                        | What it does                                                        |
+| ---------------- | ------------------------------ | ------------------------------------------------------------------- |
+| `ctrl+b shift+n` | `:wsnew shop`                  | New workspace, with a container of its own; you switch to it.       |
+| `ctrl+b shift+w` | `:wsrename market`             | Rename the current workspace (and its container).                   |
+| `ctrl+b shift+d` | `:wsdelete` / `:wsdelete shop` | Close the current (or the named) workspace, after a `y/N` question. |
+|                  | `:wsmove work` / `:wsmove 2`   | Move the current tab to another workspace, by name or number.       |
+
+- The keys open the command line with the command typed for you (`ctrl+b shift+w` with the
+  current name to edit).
+- **Closing asks first**, at the foot of the window: `y` closes, any other key (`n`, `Esc`,
+  `Enter`) keeps it. Closing a workspace you made **deletes its container, and with it its
+  cookies, logins and site data**; the question says so. A workspace from `[workspaces]` in
+  `config.toml` cannot go while it is there: closing it closes its tabs only, and it keeps its
+  logins. Renaming one is done in `config.toml` too. The last workspace cannot be closed.
+  If the workspace changes between the question and your `y` (say `config.toml` was reloaded),
+  nothing is closed. If you renamed its container in Firefox's Settings, its tabs and site data
+  are kept, and the status bar says so.
+- A workspace name cannot be only digits: in `:wsmove 2` and `:workspace 2` a number means the
+  workspace's place in `ctrl+i` order.
+- **Moving a tab reopens it** in the other workspace's container, as Firefox's "Reopen in
+  Container" does: its address, name and mute come along, but not its back/forward history,
+  what you typed into forms, its scroll position, or a form submission (the page is loaded
+  again, signed in as that workspace). A tab in a split leaves the split first. You stay in the
+  workspace you were in.
 
 ## Goto picker and tab rename
 
