@@ -75,7 +75,7 @@ add_task(async function window_title_names_vimma() {
 add_task(async function about_logo_is_ours() {
   const res = await fetch("chrome://branding/content/about-logo.svg");
   const text = await res.text();
-  Assert.ok(text.includes("vimma-placeholder"), "about-logo.svg is the Vimma placeholder");
+  Assert.ok(text.includes("vimma-mark"), "about-logo.svg is the Vimma mark");
 });
 
 add_task(async function default_bookmarks_import_succeeds() {
