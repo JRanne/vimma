@@ -352,6 +352,18 @@ Taskcluster index) and this repository. Nothing here runs code from a pull reque
   [`our branding prefs match Firefox 157.0.1's`](../tools/upstream/test/upstream-prefs.test.mjs),
   [`a new upstream cfr field is reported with the line to paste`](../tools/upstream/test/upstream-prefs.test.mjs),
   [`a pref upstream renamed or removed is its own problem, not a silent pass`](../tools/upstream/test/upstream-prefs.test.mjs)
+- G8. Every upstream file Vimma patches **must** have a line in the ADR-003 register with a hunk
+  and line budget it stays within, and a person **must** review each patch at least once a
+  quarter: `patch-audit.yml` opens an `upstream` `audit` issue on the first day of each quarter,
+  listing reviews over 92 days old, with `issues: write` only in the job that runs no repository
+  code.
+  [`test_a_patch_over_its_hunk_or_line_budget_fails_the_audit`](../tools/upstream/test_patch_audit.py),
+  [`test_a_register_line_without_a_budget_or_review_date_fails_the_audit`](../tools/upstream/test_patch_audit.py),
+  [`test_within_budget_passes_and_reviews_over_92_days_old_are_due`](../tools/upstream/test_patch_audit.py),
+  [`test_every_patch_has_a_budget_and_review_date_and_stays_within_it`](../tools/upstream/test_patch_audit.py),
+  [`runs on the first day of each quarter, and by hand`](../tools/test/patch-audit-workflow.test.mjs),
+  [`grants nothing by default; issues: write only in the report job`](../tools/test/patch-audit-workflow.test.mjs),
+  [`the job holding the issue token never checks out or runs repository code`](../tools/test/patch-audit-workflow.test.mjs)
 
 ## 11. Out of scope and trust boundaries
 

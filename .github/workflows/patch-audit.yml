@@ -1,0 +1,108 @@
+# The quarterly patch audit (plan M7, docs/security.md G8, docs/rebase.md "Patch-size audit").
+# tools/upstream/patch-audit.py checks every src/**/*.patch against the ADR-003 register: each
+# patch has a register line and each line a patch, each stays within its hunk and line budget,
+# and each review is at most 92 days old. The report becomes a tracking issue labelled
+# `upstream` and `audit`, so a person reviews the patch set once a quarter even when nothing
+# failed; a failing audit fails the run as well. (CI's `npm run test:py` already fails a push
+# that breaks the register or a budget; this run adds the review cadence.)
+#
+# Minutes (private repo): two jobs of under a minute, four times a year. No npm or toolchain
+# install: the audit is Python stdlib on the runner's python3. Two jobs, so the step that runs
+# repository code never holds a token that can write issues.
+name: patch-audit
+
+on:
+  schedule:
+    - cron: "23 7 1 1,4,7,10 *" # 07:23 UTC on the first day of each quarter
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: patch-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Audit the patches against the ADR-003 register
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      status: ${{ steps.audit.outputs.status }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Exit 1 (a finding) still uploads the report for the issue; exit 2 (unreadable) fails here.
+      - name: Audit
+        id: audit
+        run: |
+          mkdir -p audit
+          status=0
+          python3 tools/upstream/patch-audit.py --json audit/audit.json --markdown audit/audit.md || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          cat audit/audit.md >> "$GITHUB_STEP_SUMMARY"
+          [ "$status" -le 1 ]
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: patch-audit
+          path: audit/
+          retention-days: 90
+
+  report:
+    name: Open the quarterly patch audit issue
+    needs: audit
+    if: ${{ !cancelled() && needs.audit.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write # create the tracking issue (or comment on this quarter's), and its labels
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: patch-audit
+          path: audit
+
+      - name: Issue
+        env:
+          STATUS: ${{ needs.audit.outputs.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          quarter="$(date -u +%Y)-Q$(( ($(date -u +%-m) + 2) / 3 ))"
+          title="Patch audit ${quarter}"
+          {
+            if [ "$STATUS" = "0" ]; then
+              echo "The quarterly patch audit passed. Review each patch (docs/rebase.md,"
+              echo "\"Patch-size audit\"): can its code move into our own files (ADR-003)? Then set"
+              echo "its Reviewed date in the register and close this issue."
+            else
+              echo "**The quarterly patch audit failed:** fix the register or the patches below."
+            fi
+            echo
+            echo "Run: ${RUN_URL} (at ${SHA})."
+            echo
+            cat audit/audit.md
+          } > issue.md
+          # The same colour and description as upstream.yml's, so neither rewrites the other's.
+          gh label create upstream --color 1D76DB --description "Firefox upstream release" --force
+          gh label create audit --force --color FBCA04 \
+            --description "A scheduled review (patch-audit.yml)"
+          issue=$(gh issue list --label upstream,audit --state open --search "\"${title}\" in:title" \
+            --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body-file issue.md
+          else
+            gh issue create --title "$title" --label upstream,audit --body-file issue.md
+          fi
+          if [ "$STATUS" != "0" ]; then
+            echo "::error::patch audit failed (exit $STATUS); see the issue"
+            exit 1
+          fi

@@ -405,10 +405,25 @@ Total: 6 patches, 6 hunks, +10 -5
 Register matches src/ (6 patches).
 ```
 
-Exit 1 means a patch is not in the ADR-003 register, or a register line has no patch (both are
-listed). `npm run test:py` runs the same check on every push. Review: a patch that grew (more
-hunks or lines than last month, or `large`, Surfer's 8,000-character warning) is a candidate for
-moving code into our own files (ADR-003). Propose that in a spec, not in a bump PR.
+Exit 1 means a patch is not in the ADR-003 register, a register line has no patch, a patch is
+over its budget (the register's Hunks and Lines columns, lines being added plus removed), or a
+line has no budget or Reviewed date (all are listed). `npm run test:py` runs the same check on
+every push. Review: a patch that grew (more hunks or lines than last month, or `large`, Surfer's
+8,000-character warning) is a candidate for moving code into our own files (ADR-003). Propose
+that in a spec, not in a bump PR. Raising a budget is a change to the register table, with the
+reason in its Why cell.
+
+**Quarterly** (`.github/workflows/patch-audit.yml`, security rule G8): on the first day of
+January, April, July and October, and on manual dispatch, the audit runs and opens an issue
+"Patch audit YYYY-Qn" labelled `upstream` and `audit` with the Markdown report (`--markdown`):
+every patch with used / budget, its review date and age, and the reviews over 92 days old
+(`--max-age-days`; due reviews are listed but do not fail the audit). Work through it: review
+each patch, set its Reviewed date in the register (even when nothing changed), and close the
+issue in the same PR. A failing audit also fails the run. Locally, the same report:
+
+```sh
+python3 tools/upstream/patch-audit.py --markdown /dev/stdout --today 2027-01-01
+```
 
 ## Reference: measurements (Firefox 157.0.1, 2026-10-09)
 
