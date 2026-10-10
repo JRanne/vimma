@@ -259,11 +259,63 @@ Spec: [m0-mozilla-services](specs/m0-mozilla-services.md),
   [`test_keyed_build_fetches_google_lists`](../tests/browser/browser_vimma_safebrowsing.js),
   [`test_keyless_build_is_honestly_off`](../tests/browser/browser_vimma_safebrowsing.js)
 
-## 10. Out of scope and trust boundaries
+## 10. Firefox updates (the upstream autopilot, `upstream.yml`)
+
+Vimma is only as safe as the Firefox release under it. The autopilot finds each new release,
+rebases our patches onto it, runs the suites and opens the PR; a person reviews and merges. Spec:
+[m7-upstream-autopilot](specs/m7-upstream-autopilot.md), [ADR-015](adr/015-upstream-autopilot.md),
+playbook: [docs/rebase.md](rebase.md).
+
+**Reach:** Mozilla's public feeds (product-details, the MFSA index, archive.mozilla.org, the
+Taskcluster index) and this repository. Nothing here runs code from a pull request.
+
+- G1. A newer Firefox release **must** produce a tested bump PR within 6 hours of
+  product-details listing it (detection every 4 h, the rebase and suites ≈ 20 min), or, when
+  Actions may not open PRs, a pushed branch and a prefilled compare link on its tracking issue.
+  [`detects every 4 hours, so a release has a PR within 6 hours`](../tools/test/upstream-workflow.test.mjs),
+  [`finds 157.0.2 as a critical security dot release, 3 days to merge`](../tools/upstream/test/autopilot.test.mjs),
+  [`falls back to a compare link when Actions may not open PRs`](../tools/test/upstream-workflow.test.mjs),
+  [`the fallback comment links a prefilled compare page and keeps the summary`](../tools/upstream/test/autopilot.test.mjs)
+- G2. `upstream.yml` **must** fail, and open a `security` issue that mentions the owner, once the
+  Firefox on `main` is more than 3 days behind a security dot release (7 days for a major
+  release, 14 for a dot release without an advisory), counted from the release date.
+  [`limits: 3 days for a security dot release, 7 for a major, 14 otherwise`](../tools/upstream/test/releases.test.mjs),
+  [`a security dot release is behind for 3 days, then overdue`](../tools/upstream/test/releases.test.mjs),
+  [`the earliest deadline wins: a skipped security release still counts`](../tools/upstream/test/releases.test.mjs),
+  [`the drift job fails the run`](../tools/test/upstream-workflow.test.mjs),
+  [`the drift issue tables every unshipped release and mentions the owner`](../tools/upstream/test/autopilot.test.mjs)
+- G3. A release whose advisories cannot be read **must** count as a security release (label and
+  limit), never as one without.
+  [`unreadable advisories make security unknown (null), never false`](../tools/upstream/test/releases.test.mjs),
+  [`unknown security status (advisories unreadable) uses the security limit`](../tools/upstream/test/releases.test.mjs),
+  [`an unreachable advisories page: security unknown, labelled security, a warning`](../tools/upstream/test/autopilot.test.mjs)
+- G4. Nothing is **ever** reported on or built from a Firefox source tarball whose SHA-512
+  differs from Mozilla's `SHA512SUMS`.
+  [`nothing is built from a tarball whose SHA-512 Mozilla did not publish`](../tools/test/upstream-workflow.test.mjs),
+  [`test_mismatch_exits_one_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py)
+- G5. A bump PR is **never** opened ready for review unless every patch applies and the suites
+  passed on the new release; otherwise it is a draft that names the conflicting files and hunks.
+  [`a ready PR only when patches apply, suites pass and a token starts CI`](../tools/upstream/test/autopilot.test.mjs),
+  [`a conflicting bump is a draft that lists the conflicts`](../tools/upstream/test/autopilot.test.mjs),
+  [`lists the conflicting files and hunks, fuzz included`](../tools/upstream/test/autopilot.test.mjs)
+- G6. The autopilot's jobs **must** run with least privilege: nothing by default, write access
+  only in the job that publishes, no secret in detection, the patch check or the suites, no
+  `pull_request_target`, every action pinned by commit SHA.
+  [`grants nothing by default and each job only what it needs`](../tools/test/upstream-workflow.test.mjs),
+  [`no secret reaches detection, the patch check or the suites`](../tools/test/upstream-workflow.test.mjs),
+  [`no workflow runs on pull_request_target`](../tools/test/upstream-workflow.test.mjs),
+  [`every action it uses is pinned by a full commit SHA`](../tools/test/upstream-workflow.test.mjs)
+- G7. The prefs we copy from upstream (the cfr provider, the Safe Browsing lists) **must** match
+  the release under test, or the suites fail with the line to paste.
+  [`our branding prefs match Firefox 157.0.1's`](../tools/upstream/test/upstream-prefs.test.mjs),
+  [`a new upstream cfr field is reported with the line to paste`](../tools/upstream/test/upstream-prefs.test.mjs),
+  [`a pref upstream renamed or removed is its own problem, not a silent pass`](../tools/upstream/test/upstream-prefs.test.mjs)
+
+## 11. Out of scope and trust boundaries
 
 - **Gecko itself.** Page isolation, the sandbox, TLS and the JavaScript engine are Firefox's.
   Vimma is only as safe as the Firefox release under it, so security comes from shipping each
-  Firefox release, and each security dot release, quickly:
+  Firefox release, and each security dot release, quickly: §10 above and
   [docs/rebase.md](rebase.md) ("Security dot release: the fast path"). Vimma has no built-in
   updater ([`updater_is_not_built`](../tests/browser/browser_vimma_updater.js)); updates come
   with your package.
