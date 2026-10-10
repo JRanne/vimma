@@ -83,9 +83,25 @@ export function urlRoot(href) {
  *   | { kind: "url", text: string } | { kind: "search", text: string }} ClipboardOpen
  */
 
-/** Schemes `p` refuses, also behind view-source: (as the URL parser sees them). */
+/** Schemes Vimma never opens, also behind view-source: (as the URL parser sees them). */
 // eslint-disable-next-line no-control-regex -- the URL parser skips control characters here too
 const REFUSED = /^(?:view-source:[\s\u0000-\u001f]*)*(javascript|data):/i;
+
+/**
+ * The one check every Vimma open of text from someone else goes through (`p` / `P`, `:open`,
+ * `:tabnew`): `"javascript"` or `"data"` when a URL parser would read `text` as such a URL, also
+ * behind `view-source:`, else null. The parser drops tabs and newlines anywhere, leading spaces
+ * and C0 controls, and ignores case, so this does too. A `javascript:` URL runs script; a
+ * `data:` one, loaded with the system principal, is a whole page of the sender's choosing.
+ * @param {string} text
+ * @returns {"javascript" | "data" | null}
+ */
+export function refusedScheme(text) {
+  // eslint-disable-next-line no-control-regex -- leading C0 controls are what the parser strips
+  const asUrl = text.replace(/[\t\n\r]/g, "").replace(/^[\u0000-\u0020]+/, "");
+  const scheme = REFUSED.exec(asUrl)?.[1]?.toLowerCase();
+  return scheme === "javascript" || scheme === "data" ? scheme : null;
+}
 
 /**
  * What clipboard text opens as with `p` / `P`. The text is untrusted: control characters go,
@@ -105,11 +121,8 @@ export function classifyClipboard(raw) {
   if (flat.length > MAX_CLIPBOARD_CHARS) {
     return { kind: "refused", reason: `over ${MAX_CLIPBOARD_CHARS} characters` };
   }
-  // What a URL parser reads: tabs and newlines dropped anywhere, leading spaces and controls too.
-  // eslint-disable-next-line no-control-regex -- leading C0 controls are what the parser strips
-  const asUrl = raw.replace(/[\t\n\r]/g, "").replace(/^[\u0000-\u0020]+/, "");
-  const scheme = REFUSED.exec(asUrl);
-  if (scheme) return { kind: "refused", reason: `${scheme[1]?.toLowerCase()}: URL` };
+  const scheme = refusedScheme(raw);
+  if (scheme) return { kind: "refused", reason: `${scheme}: URL` };
   if (!flat.includes(" ") && looksLikeUrl(flat)) return { kind: "url", text: flat };
   return { kind: "search", text: flat };
 }

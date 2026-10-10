@@ -133,12 +133,16 @@ link targets for hints, which chrome must treat as untrusted.
   never run).
   [`javascript_and_data_bookmarks_refuse_with_a_notice`](../tests/browser/browser_vimma_bookmarks.js),
   [`a javascript: bookmark is listed but refuses to open`](../packages/vimma-core/test/bookmarks.test.mjs)
-- U4. `:open` and `:tabnew` **never** open `javascript:` URLs.
-  [`javascript_urls_are_blocked_with_a_notice`](../tests/browser/browser_vimma_cmdline.js)
-- U5. **⚠ gap ([#98](https://github.com/JRanne/vimma/issues/98)):** `:open` and `:tabnew` should
-  never open `data:` URLs either, as `p`, bookmarks and the socket refuse them; today they load
-  them (a pasted `data:text/html` page can pose as a login page). No length cap applies to text
-  typed on the command line.
+- U4. `:open` and `:tabnew` **never** open `javascript:` or `data:` URLs, however disguised (case,
+  tabs, newlines, leading controls, `view-source:`)
+  ([#98](https://github.com/JRanne/vimma/issues/98)). No length cap applies to text typed there.
+  [`javascript_urls_are_blocked_with_a_notice`](../tests/browser/browser_vimma_cmdline.js),
+  [`data_urls_are_blocked_with_a_notice`](../tests/browser/browser_vimma_cmdline.js)
+- U5. Every Vimma open of text with the system principal (`p`, `P`, `:open`, `:tabnew`) **must**
+  refuse those schemes through one shared check (`refusedScheme`, `core/pageurl.mjs`); bookmarks
+  and the socket's `open` go further and allow only http, https, file and about.
+  [`refuses %j as %s`](../packages/vimma-core/test/pageurl.test.mjs),
+  [`lets %j through`](../packages/vimma-core/test/pageurl.test.mjs)
 - U6. Hint replies from a page **must** be capped (5,000 targets, 64 frames, 8 KiB links) and
   copied field by field before chrome uses them.
   [`the caps are 5,000 targets, 64 frames and 8 KiB hrefs`](../packages/vimma-core/test/hints.test.mjs),
