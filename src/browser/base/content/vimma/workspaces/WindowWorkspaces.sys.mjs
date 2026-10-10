@@ -63,7 +63,8 @@ export const TAB_WORKSPACE_KEY = "vimma-workspace";
  *   linkedBrowser: any }} Tab
  * @typedef {{ tabs: Tab[], visibleTabs: Tab[], selectedTab: Tab, hideTab: (t: Tab) => void,
  *   showTab: (t: Tab) => void, addTrustedTab: (url: string, options?: object) => Tab,
- *   insertBrowser: (t: Tab) => void }} TabBrowser
+ *   insertBrowser: (t: Tab) => void,
+ *   selectedBrowser: Element & { focus: () => void } }} TabBrowser
  */
 
 const TAB_EVENTS = ["TabOpen", "TabClose", "TabSelect", "TabPinned", "TabUnpinned", LABEL_EVENT];
@@ -151,7 +152,10 @@ export class WindowWorkspacesImpl {
     }
     Services.obs.removeObserver(this.#observer, CHANGED_TOPIC);
     const view = PaneViews.get(this.#win);
-    if (view) view.onChange = null;
+    if (view) {
+      view.onChange = null;
+      view.accepts = null;
+    }
     this.#model = null;
   }
 
@@ -165,7 +169,16 @@ export class WindowWorkspacesImpl {
     if (win.closed || WorkspaceStore.disabled) return;
     this.#started = true;
     const view = PaneViews.get(win);
-    if (view) view.onChange = () => this.#scheduleSave();
+    if (view) {
+      view.onChange = () => this.#scheduleSave();
+      // Decision 14: only the shown workspace's tabs go into its panes; another workspace's tab
+      // switches (#onSelect), and a switch or restore selects tabs of its own.
+      view.accepts = (/** @type {any} */ tab) => {
+        const model = this.#model;
+        if (!model || this.#switching || this.#pending) return false;
+        return workspaceOfTab(model, this.#idOf(tab))?.id === model.active;
+      };
+    }
     // A restore under way builds on its SSWindowStateReady, from the restored values.
     if (!this.#pending) this.#reconcile();
   }
@@ -723,12 +736,28 @@ export class WindowWorkspacesImpl {
       // Decision 14 broken outside Vimma; adopting such splits is M4 sub-spec 6.
       if (plan.unsplit.length) console.warn("vimma: a split spans workspaces", plan.unsplit);
       view?.reconcile();
+      if (view?.panes) this.#focusPane();
     } finally {
       this.#switching = false;
     }
     const active = /** @type {Workspaces} */ (this.#model).active;
     if (active !== prev.active) WorkspaceStore.setActive(this.#win, active);
     this.#changed();
+  }
+
+  /**
+   * After a switch to a split workspace: its focused pane's page gets focus when focus is left
+   * nowhere (the body) or in the workspace left's page. A split's browsers are already active,
+   * so Firefox's tab switch completes at once and its focus adjustment sees the old page still
+   * focused and keeps away; hiding that page then drops focus to the body (M4 sub-spec 6). The
+   * URL bar, a tab-modal dialog and other chrome focus are left alone.
+   */
+  #focusPane() {
+    const doc = this.#win.document;
+    const browser = this.#gBrowser.selectedBrowser;
+    const el = doc.activeElement;
+    const lost = !el || el === doc.body || (el.localName === "browser" && el !== browser);
+    if (lost && !browser.hasAttribute("tabDialogShowing")) browser.focus();
   }
 
   /**
