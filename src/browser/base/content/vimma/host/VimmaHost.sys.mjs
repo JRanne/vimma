@@ -28,6 +28,9 @@ import { TabStrip } from "../ui/tabstrip.mjs";
 import { GotoPicker, WorkspacePicker } from "../ui/picker.mjs";
 import { RenamePrompt } from "../ui/rename-prompt.mjs";
 import { SidePanel } from "../ui/side-panel.mjs";
+import { BookmarksPanel } from "../ui/bookmarks-panel.mjs";
+import { quickAdd, runBookmarkEffect } from "./bookmark-actions.mjs";
+import { loadTree, observeBookmarks } from "./bookmark-ops.mjs";
 import { gotoItems, pickerWorkspaces, tabById } from "./goto.mjs";
 import { getTabLabel, setTabLabel } from "./tab-labels.mjs";
 import { BLOCKED_URL_TEXT, closeTab, newTab, openUrl, selectTab } from "./tab-ops.mjs";
@@ -105,6 +108,8 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {WorkspacePicker} wsPicker  the prefix+w overlay (m3-workspaces 5)
  * @property {RenamePrompt} rename  the prefix+shift+t prompt (m2-picker-rename)
  * @property {SidePanel} panel  `<leader>n` / prefix+b, `panel` mode while open (m3-workspaces 6)
+ * @property {BookmarksPanel} bookmarks  `<leader>b` / prefix+shift+b, in the side panel's slot
+ *   and `panel` mode (docs/specs/bookmarks.md)
  * @property {Find} find  `/`, `?`, `n`, `N` over Firefox's find bar (m1-find)
  * @property {boolean} resize  in resize mode (`prefix+r`, m4-split-panes sub-spec 5, ADR-014)
  */
@@ -192,6 +197,40 @@ function workspaceStep(step) {
   return (s) => {
     const refused = WindowWorkspaces.get(s.win)?.[step]() ?? NO_WORKSPACES;
     if (refused) s.notice.show(refused);
+  };
+}
+
+/**
+ * The open panel `j`, `k`, `Enter`, `Esc` and digits go to: the bookmarks panel's, else the
+ * side panel's (only one is open at a time).
+ * @param {WindowState} s
+ * @param {Action} a
+ */
+function panelAction(s, a) {
+  if (s.bookmarks.isOpen) s.bookmarks.action(a);
+  else s.panel.action(a);
+}
+
+/**
+ * The bookmarks panel's own keys (`[modal.panel]` h, l, t, s, S, a, A, r, m, d, y, /); nothing
+ * while it is closed (the side panel shares the mode).
+ * @param {WindowState} s
+ * @param {Action} a
+ */
+function bookmarksAction(s, a) {
+  if (s.bookmarks.isOpen) s.bookmarks.action(a);
+}
+
+/**
+ * What the bookmark effects run with.
+ * @param {WindowState} s
+ */
+function bookmarkContext(s) {
+  return {
+    win: s.win,
+    prompt: s.rename,
+    panel: s.bookmarks,
+    say: (/** @type {string} */ text) => s.notice.show(text),
   };
 }
 
@@ -317,13 +356,43 @@ export const RUNNERS = Object.freeze({
   "sidebar.toggle": (/** @type {WindowState} */ s) => {
     s.notice.hide();
     if (s.panel.isOpen) s.panel.close();
-    else if (!s.panel.open()) s.notice.show(NO_WORKSPACES);
+    else {
+      s.bookmarks.close(); // one panel in the slot at a time
+      if (!s.panel.open()) s.notice.show(NO_WORKSPACES);
+    }
   },
-  "panel.down": (/** @type {WindowState} */ s, /** @type {Action} */ a) => s.panel.action(a),
-  "panel.up": (/** @type {WindowState} */ s, /** @type {Action} */ a) => s.panel.action(a),
-  "panel.open": (/** @type {WindowState} */ s, /** @type {Action} */ a) => s.panel.action(a),
-  "panel.select": (/** @type {WindowState} */ s, /** @type {Action} */ a) => s.panel.action(a),
-  "panel.close": (/** @type {WindowState} */ s, /** @type {Action} */ a) => s.panel.action(a),
+  "panel.down": panelAction,
+  "panel.up": panelAction,
+  "panel.open": panelAction,
+  "panel.select": panelAction,
+  "panel.close": panelAction,
+  // docs/specs/bookmarks.md: the bookmarks panel, in the side panel's slot and mode.
+  "bookmarks.toggle": (/** @type {WindowState} */ s) => {
+    s.notice.hide();
+    if (s.bookmarks.isOpen) s.bookmarks.close();
+    else {
+      s.panel.close();
+      s.bookmarks.open();
+    }
+  },
+  "bookmark.add": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) => {
+    quickAdd(bookmarkContext(s), text).catch((e) => {
+      console.error("vimma: bookmark failed", e);
+      s.notice.show(`bookmark: ${e?.message ?? e}`);
+    });
+  },
+  "bookmarks.collapse": bookmarksAction,
+  "bookmarks.expand": bookmarksAction,
+  "bookmarks.open_tab": bookmarksAction,
+  "bookmarks.open_vsplit": bookmarksAction,
+  "bookmarks.open_hsplit": bookmarksAction,
+  "bookmarks.add": bookmarksAction,
+  "bookmarks.add_folder": bookmarksAction,
+  "bookmarks.rename": bookmarksAction,
+  "bookmarks.move": bookmarksAction,
+  "bookmarks.delete": bookmarksAction,
+  "bookmarks.yank": bookmarksAction,
+  "bookmarks.filter": bookmarksAction,
   // `:source` (m5-config-load): ConfigHost reads config.toml now instead of at the next poll;
   // `:source <path>` passes the path as typed, which ConfigHost expands.
   "config.reload": (_s, _a, /** @type {string | undefined} */ text) =>
@@ -623,6 +692,11 @@ export const VimmaHost = {
         },
         say: (text) => state.notice.show(text),
       }),
+      bookmarks: new BookmarksPanel(win, {
+        load: loadTree,
+        observe: observeBookmarks,
+        effect: (effect) => runBookmarkEffect(bookmarkContext(state), effect),
+      }),
     };
     states.set(win, state);
     windows.add(win);
@@ -681,6 +755,7 @@ export const VimmaHost = {
     state.wsPicker.destroy();
     state.rename.destroy();
     state.panel.destroy();
+    state.bookmarks.destroy();
     state.tabStrip?.uninit();
     WindowWorkspaces.uninit(win);
     state.statusBar?.uninit();
@@ -795,6 +870,17 @@ export const VimmaHost = {
   },
 
   /**
+   * The user selected text with the mouse in the focused frame of `browser` (VimmaParent):
+   * normal mode enters copy mode with that selection, so `y` copies it and motions extend it.
+   * Insert mode keeps it (a text field's selection is its own).
+   * @param {any} browser
+   */
+  onMouseSelection(browser) {
+    if (this._browserMode(browser) === "insert") return;
+    CONTENT_RUNNERS["mode.visual"]?.(browser, { id: "mode.visual" });
+  },
+
+  /**
    * Called after a tab's page mode changes (normal ↔ insert), whatever caused it (a focus
    * report, `i`, `Esc`): tells the owning window's state listeners (the status bar).
    * The listeners read the mode back through `status(win)`, so the mode argument is unused.
@@ -839,7 +925,9 @@ export const VimmaHost = {
   _mode(state) {
     if (state.help.isOpen || state.picker.isOpen || state.wsPicker.isOpen) return "help";
     if (state.cmdline.isOpen) return "command";
-    if (state.panel.isOpen) return "panel";
+    // A prompt over a panel (the bookmarks' add, rename, a y/N) types: keys are its input's.
+    if (state.rename.isOpen) return "insert";
+    if (state.panel.isOpen || state.bookmarks.isOpen) return "panel";
     // Resize mode ends by itself when the window is down to one pane (a tab closed meanwhile).
     if (state.resize && !hasPanes(state.win)) state.resize = false;
     if (state.resize) return "resize";
@@ -916,7 +1004,8 @@ export const VimmaHost = {
     }
     // Typing into the help filter: plain keys belong to the input; Esc and chords stay ours.
     const typing = !chord.ctrl && !chord.alt && !chord.meta && chord.key !== "esc";
-    if (typing && state.help.filterFocused && state.dispatcher.pending().length === 0) return;
+    const filtering = state.help.filterFocused || state.bookmarks.filterFocused;
+    if (typing && filtering && state.dispatcher.pending().length === 0) return;
     this._dispatch(win, state, e, mode, chord);
     this._emit(state);
   },

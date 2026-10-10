@@ -1,0 +1,346 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// The bookmarks panel (spec: docs/specs/bookmarks.md): a box in the side panel's slot, built by
+// its helpers (side-panel.mjs) and styled by side-panel.css, listing Places' bookmarks as a
+// tree. Keys reach it only through VimmaHost (`action`) in `panel` mode; the logic is core
+// bookmarks.mjs, the Places calls host/bookmark-ops.mjs. Text only, at most RENDER_CAP rows.
+
+import {
+  RENDER_CAP,
+  bookmarksKey,
+  openBookmarks,
+  refreshBookmarks,
+  renderStart,
+  setBookmarksQuery,
+} from "../core/bookmarks.mjs";
+import { buildPanelBox, panelElement } from "./side-panel.mjs";
+
+/** @import { BookmarksEffect, BookmarksState, Folder, Row } from "../core/bookmarks.mjs" */
+
+export const BOOKMARKS_ID = "vimma-bookmarks";
+export const FILTER_ID = "vimma-bookmarks-filter";
+const HTML_NS = "http://www.w3.org/1999/xhtml";
+/** Places events in one burst (an import, Sync) re-read the tree once, after this delay. */
+const RELOAD_DELAY_MS = 30;
+
+/**
+ * @typedef {object} BookmarksPanelHost
+ * @property {() => Promise<Folder>} load  the tree from Places
+ * @property {(fn: () => void) => () => void} observe  Places changes; returns the unsubscribe
+ * @property {(effect: BookmarksEffect) => void} effect  an open, add, rename, move, delete,
+ *   yank or refusal for the host to carry out
+ */
+
+/**
+ * What a row shows under its title: a bookmark's site (its folder path in the filter's flat
+ * list), nothing for a folder.
+ * @param {Row} row
+ * @param {boolean} filtering
+ */
+function subtitle(row, filtering) {
+  if (row.kind === "folder") return "";
+  if (filtering) return row.path;
+  try {
+    const url = new URL(row.url);
+    return url.host || url.protocol;
+  } catch {
+    return row.url;
+  }
+}
+
+export class BookmarksPanel {
+  /**
+   * @param {Window} win  a browser window
+   * @param {BookmarksPanelHost} host
+   */
+  constructor(win, host) {
+    this.win = win;
+    this.host = host;
+    /** @type {HTMLElement | null} */
+    this.box = null;
+    /** @type {HTMLElement | null} */
+    this.list = null;
+    /** @type {HTMLInputElement | null} */
+    this.filter = null;
+    /** @type {BookmarksState | null} null until the tree has loaded */
+    this.state = null;
+    this.opened = false;
+    /** Kept from one opening to the next, for this window's session. */
+    /** @type {readonly string[]} */
+    this.expanded = [];
+    /** @type {string | null} */
+    this.lastGuid = null;
+    /** The first rendered row and the rows it was rendered from. */
+    this.start = 0;
+    /** @type {readonly Row[] | null} */
+    this.rendered = null;
+    /** @type {(() => void) | null} */
+    this.unobserve = null;
+    /** @type {number | null} */
+    this.reloadTimer = null;
+    this.generation = 0;
+    this.onSwitchDone = () => {
+      const el = this.win.document.activeElement;
+      if (this.isOpen && el?.localName === "browser") this.box?.focus();
+    };
+  }
+
+  get isOpen() {
+    return this.opened;
+  }
+
+  /** Whether the Places observer is in place (only while open). */
+  get observing() {
+    return !!this.unobserve;
+  }
+
+  /** Typing goes to the filter, not the keymap, while it has focus. */
+  get filterFocused() {
+    return !!this.filter && this.win.document.activeElement === this.filter;
+  }
+
+  /** The current tree, once loaded. */
+  get tree() {
+    return this.state?.tree ?? null;
+  }
+
+  open() {
+    if (this.opened) return;
+    const box = this.box ?? this.build();
+    this.opened = true;
+    this.state = null;
+    this.rendered = null;
+    this.render();
+    box.hidden = false;
+    this.unobserve = this.host.observe(() => this.scheduleReload());
+    this.win.addEventListener("TabSwitchDone", this.onSwitchDone);
+    box.focus();
+    this.reload();
+  }
+
+  toggle() {
+    if (this.opened) this.close();
+    else this.open();
+  }
+
+  /** Closes it; focus goes to the page when it was in the panel. */
+  close() {
+    if (!this.opened) return;
+    this.opened = false;
+    this.generation++;
+    if (this.state) {
+      this.expanded = this.state.expanded;
+      this.lastGuid = this.state.rows[this.state.selected]?.guid ?? null;
+    }
+    this.state = null;
+    this.unobserve?.();
+    this.unobserve = null;
+    if (this.reloadTimer !== null) this.win.clearTimeout(this.reloadTimer);
+    this.reloadTimer = null;
+    this.win.removeEventListener("TabSwitchDone", this.onSwitchDone);
+    const box = /** @type {HTMLElement} */ (this.box);
+    const doc = this.win.document;
+    const el = doc.activeElement;
+    const hadFocus = !el || el === doc.body || box.contains(el);
+    /** @type {HTMLInputElement} */ (this.filter).hidden = true;
+    box.hidden = true;
+    if (hadFocus) {
+      /** @type {{ gBrowser?: { selectedBrowser: HTMLElement } }} */ (
+        /** @type {unknown} */ (this.win)
+      ).gBrowser?.selectedBrowser.focus();
+    }
+  }
+
+  /** Focus back on the list (after a prompt, Enter in the filter). */
+  focus() {
+    if (this.opened) this.box?.focus();
+  }
+
+  /**
+   * One `[modal.panel]` action: `panel.*` and `bookmarks.*`.
+   * @param {{ id: string, arg?: number }} action
+   */
+  action(action) {
+    // Still loading: only Esc means something.
+    if (!this.state) {
+      if (action.id === "panel.close") this.close();
+      return;
+    }
+    const { state, effect } = bookmarksKey(this.state, action);
+    if (state !== this.state) {
+      this.state = state;
+      if (!state.query) this.endFilter();
+      this.render();
+    }
+    if (!effect) return;
+    if (effect.type === "close") this.close();
+    else if (effect.type === "filter") this.startFilter();
+    else this.host.effect(effect);
+  }
+
+  /** Re-reads Places soon, once for a burst of changes. */
+  scheduleReload() {
+    if (!this.opened || this.reloadTimer !== null) return;
+    this.reloadTimer = this.win.setTimeout(() => {
+      this.reloadTimer = null;
+      this.reload();
+    }, RELOAD_DELAY_MS);
+  }
+
+  /** @private */
+  reload() {
+    const generation = ++this.generation;
+    this.host
+      .load()
+      .then((tree) => {
+        if (!this.opened || generation !== this.generation) return;
+        this.state = this.state
+          ? refreshBookmarks(this.state, tree)
+          : openBookmarks(tree, { expanded: this.expanded, selectedGuid: this.lastGuid });
+        this.render();
+      })
+      .catch((e) => console.error("vimma: bookmarks could not be read", e));
+  }
+
+  /** @private */
+  startFilter() {
+    const filter = /** @type {HTMLInputElement} */ (this.filter);
+    filter.hidden = false;
+    filter.value = this.state?.query ?? "";
+    filter.focus();
+  }
+
+  /** @private */
+  endFilter() {
+    const filter = /** @type {HTMLInputElement} */ (this.filter);
+    const focused = this.filterFocused;
+    filter.hidden = true;
+    filter.value = "";
+    if (focused) this.box?.focus();
+  }
+
+  /** @private */
+  onFilterInput() {
+    if (!this.state) return;
+    this.state = setBookmarksQuery(this.state, /** @type {HTMLInputElement} */ (this.filter).value);
+    this.render();
+  }
+
+  /**
+   * Enter keeps the filter and gives the keys back to the list. Esc comes through the host as
+   * panel.close, which clears it.
+   * @private
+   * @param {KeyboardEvent} e
+   */
+  onFilterKey(e) {
+    if (e.key !== "Enter" || e.ctrlKey || e.altKey || e.metaKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!this.state?.query) this.endFilter();
+    else this.box?.focus();
+  }
+
+  /** Close and remove the box (VimmaHost.uninit). */
+  destroy() {
+    this.close();
+    this.box?.remove();
+    this.box = this.list = this.filter = null;
+  }
+
+  /** @private */
+  render() {
+    const doc = this.win.document;
+    const list = /** @type {HTMLElement} */ (this.list);
+    const state = this.state;
+    if (!state) {
+      list.replaceChildren(panelElement(doc, "li", "vimma-panel-empty", "loading…"));
+      list.removeAttribute("aria-activedescendant");
+      return;
+    }
+    const { rows, selected } = state;
+    const filtering = !!state.query.trim();
+    const start = renderStart(rows.length, selected, this.start);
+    if (rows === this.rendered && start === this.start) {
+      // Only the highlight moved, within the rendered window.
+      for (const li of list.querySelectorAll("[role=option][aria-selected=true]")) {
+        li.setAttribute("aria-selected", "false");
+      }
+    } else {
+      this.start = start;
+      this.rendered = rows;
+      const end = Math.min(rows.length, start + RENDER_CAP);
+      const items = [];
+      if (start > 0) items.push(panelElement(doc, "li", "vimma-bookmarks-more", `… ${start} more`));
+      for (let i = start; i < end; i++) {
+        const r = /** @type {Row} */ (rows[i]);
+        const row = panelElement(doc, "li", "vimma-panel-row");
+        row.id = `${BOOKMARKS_ID}-${i}`;
+        row.setAttribute("role", "option");
+        row.setAttribute("aria-selected", "false");
+        row.dataset.guid = r.guid;
+        row.style.setProperty("--vimma-depth", String(r.depth));
+        if (r.kind === "folder") {
+          row.classList.add("vimma-bookmarks-folder");
+          row.setAttribute("aria-expanded", String(r.open));
+        }
+        const twisty = r.kind === "folder" ? (r.open ? "▾" : "▸") : "";
+        row.append(
+          panelElement(doc, "span", "vimma-bookmarks-twisty", twisty),
+          panelElement(doc, "span", "vimma-panel-title", r.title),
+        );
+        const sub = subtitle(r, filtering);
+        if (sub) row.append(panelElement(doc, "span", "vimma-panel-host", sub));
+        items.push(row);
+      }
+      if (end < rows.length) {
+        items.push(panelElement(doc, "li", "vimma-bookmarks-more", `… ${rows.length - end} more`));
+      }
+      if (!rows.length) {
+        items.push(
+          panelElement(doc, "li", "vimma-panel-empty", filtering ? "no match" : "no bookmarks"),
+        );
+      }
+      list.replaceChildren(...items);
+    }
+    const current = doc.getElementById(`${BOOKMARKS_ID}-${selected}`);
+    if (current && rows.length) {
+      current.setAttribute("aria-selected", "true");
+      list.setAttribute("aria-activedescendant", current.id);
+      current.scrollIntoView({ block: "nearest" });
+    } else {
+      list.removeAttribute("aria-activedescendant");
+    }
+  }
+
+  /**
+   * @private
+   * @returns {HTMLElement}
+   */
+  build() {
+    const { box, header, list } = buildPanelBox(this.win, {
+      id: BOOKMARKS_ID,
+      label: "Bookmarks",
+      hint: "j/k move · h/l fold · Enter t s S open · a A r m d y edit · / filter · Esc close",
+    });
+    const doc = this.win.document;
+    list.setAttribute("aria-label", "Bookmarks");
+    const filter = /** @type {HTMLInputElement} */ (doc.createElementNS(HTML_NS, "input"));
+    filter.id = FILTER_ID;
+    filter.className = "vimma-bookmarks-filter";
+    filter.type = "text";
+    filter.spellcheck = false;
+    filter.autocomplete = "off";
+    filter.placeholder = "filter";
+    filter.setAttribute("aria-label", "Filter bookmarks");
+    filter.hidden = true;
+    filter.addEventListener("input", () => this.onFilterInput());
+    filter.addEventListener("keydown", (e) => this.onFilterKey(e));
+    header.append(panelElement(doc, "span", "vimma-panel-name", "Bookmarks"), filter);
+    this.box = box;
+    this.list = list;
+    this.filter = filter;
+    return box;
+  }
+}

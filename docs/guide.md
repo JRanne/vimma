@@ -82,13 +82,13 @@ Vimma has two key layers and one dispatcher, which sees every key before Firefox
 in the URL bar, `about:` pages and the PDF viewer.
 
 - **The prefix layer (Herdr).** `ctrl+b` is the prefix. The next key is a command: `ctrl+b ?`
-  shows the bindings, `ctrl+b c` opens a tab, and later `ctrl+b v` splits the pane, and so on.
+  shows the bindings, `ctrl+b c` opens a tab, `ctrl+b v` splits the pane, and so on.
   The prefix works in every mode and waits for the next key with no timeout. `Esc` cancels it.
 - **The modal layer (Neovim).** Bare keys act on the page depending on the mode: `j`/`k` scroll
   in `normal` mode, while in `insert` mode (focus in a text field) keys go to the page.
   `visual` is copy mode (caret and selection), `hint` is link hints, `help` the bindings overlay
-  and `command` the `:` line, `resize` is resize mode for panes (`ctrl+b r`); `panel` (the side
-  panel) is planned.
+  and `command` the `:` line, `resize` is resize mode for panes (`ctrl+b r`) and `panel` the side
+  panel (`<leader>n`).
 
 ### Normal and insert mode
 
@@ -177,13 +177,32 @@ caret browsing (`F7`), for this page only, driven by Vim keys:
 
 - **`h` / `l`** move the caret a character, **`j` / `k`** a line, **`w` / `b`** a word (Firefox's
   word steps: `w` stops at the end of a word), **`0` / `$`** to the start / end of the line,
-  **`gg` / `G`** to the top / bottom of the page. A count repeats: `3w`. The page scrolls to
-  keep the caret in view.
+  **`gg` / `G`** to the top / bottom of the page. The page scrolls to keep the caret in view.
+- **`e`** goes to the end of the word, **`ge`** to the end of the previous one. **`W` / `B` /
+  `E`** are the same for WORDs, which only spaces delimit (`beta.gamma` is one WORD).
+  **`^`** goes to the first non-blank character of the line, **`{` / `}`** to the start / end of
+  the paragraph (the next one from its edge).
+- **`f` / `F`** and a character go to the next / previous one on the line, including it in the
+  selection; **`t` / `T`** stop just before it. **`;`** repeats the last of these, **`,`** repeats
+  it the other way. The line here is the text between line breaks, even if the page wraps it.
+- A count repeats any motion: `3e`, `5j`, `2f,`.
 - **`v`** starts a selection at the caret; the motions then extend it. `v` again drops it and
-  the caret moves on its own.
+  the caret moves on its own. **`V`** selects whole lines instead: the motions add lines, and
+  `V` again drops it (`v` keeps the same text, character by character). **`o`** swaps the ends,
+  so the motions move the other one. **`iw`** selects the word at the caret, **`aw`** the word
+  and the spaces after it.
 - **`y`** copies the selection to the clipboard as plain text, says "yanked 12 chars" and goes
-  back to normal mode. With nothing selected it says "nothing to yank".
+  back to normal mode. With nothing selected it says "nothing to yank". **`Y`** copies the whole
+  lines the selection (or the caret) is on, then leaves the same way.
 - **`Esc`** drops the selection and goes back to normal mode.
+
+**With the mouse.** Selecting text with the mouse in normal mode (dragging, a double click for a
+word, a triple click for a paragraph, shift+click) enters copy mode with that selection: the
+badge says `VISUAL`, `y` copies it, the motions extend it (a double click on a word, then `e`,
+takes the next word too) and `Esc` clears it. A click that selects nothing stays in normal mode,
+and so do links, text fields (insert mode, as always), drag and drop, and a page that selects text
+by itself. Firefox's own copying keeps working in every mode and in each pane: `ctrl+c`, the
+context menu's Copy, and a middle click pasting the mouse selection.
 
 The page gets none of these keys, nor any other plain key while copy mode is on; chords such as
 `ctrl+c` or `ctrl+t` still work. In a frame (an embedded video page, a comment widget) copy mode
@@ -269,7 +288,7 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `f` / `F`                   | Normal mode: link hints. Type a label to follow it, or, with `F`, to open the link in a background tab. `Backspace` undoes a key, `Esc` cancels.              |
 | `/` / `?`                   | Normal mode: find in the page (below). `Enter` stays on the match, `Esc` goes back to where you were.                                                         |
 | `n` / `N`                   | Normal mode: next / previous match of the last search (`?` reverses them), wrapping around the page.                                                          |
-| `v`, `ctrl+b [`             | Normal mode: copy mode ([above](#copy-mode)): `h j k l w b 0 $ gg G` move the caret, `v` selects, `y` copies and leaves, `Esc` leaves.                        |
+| `v`, `ctrl+b [`             | Normal mode: copy mode ([above](#copy-mode)): `h j k l w b e ge W B E 0 ^ $ { } gg G f t F T ; ,` move, `v V o iw aw` select, `y Y` copy, `Esc` leaves.       |
 | `Esc`                       | Insert mode: leave the text field, back to normal mode. In normal mode the page gets `Esc`.                                                                   |
 | `ctrl+b ?`                  | Opens the bindings overlay over any page, including `about:preferences` and the PDF viewer. Press it again to close.                                          |
 | `/` (in the overlay)        | Filters the list as you type.                                                                                                                                 |
@@ -280,6 +299,8 @@ the dispatcher and the `ctrl+b ?` overlay use, so the three cannot disagree.
 | `:`                         | Normal mode: opens the command line at the bottom of the window ([below](#the-command-line)). In a text field `:` is typed.                                   |
 | `ctrl+b g`, `b`             | Opens the goto picker over the page (`b` in normal mode): every tab of the window ([below](#goto-picker-and-tab-rename)).                                     |
 | `ctrl+b shift+t`            | Renames the tab ([below](#goto-picker-and-tab-rename)); an empty name restores the page title.                                                                |
+| `ctrl+b a`                  | Bookmarks the page; type folders before its title: `work/docs/title` ([below](#bookmarks)).                                                                   |
+| `ctrl+b shift+b`, `space b` | Opens or closes the bookmarks panel ([below](#bookmarks)).                                                                                                    |
 | `ctrl+b v` / `ctrl+b -`     | Splits the pane right / down. The new pane opens a new tab (the start page, URL bar focused). At most 4 panes (`[panes] max`); a refused split says why.      |
 | `ctrl+b h j k l`            | Focuses the pane left / below / above / right; when several touch, the one used last. `ctrl+w h j k l` in normal mode. The page of that pane gets focus.      |
 | `ctrl+b z`, `ctrl+w o`      | Zooms the pane to the whole window, or back. The other panes' pages pause. A pane focus key unzooms when it moves.                                            |
@@ -512,6 +533,52 @@ is called, run `vimma-open https://example.com` from it, or look at its process 
 `:route add` refuses a site an earlier rule already routes (it names the rule), a `config.toml`
 that has errors, and a file without `schema = 2`. It only ever appends to the file.
 
+## Bookmarks
+
+Vimma's bookmarks are Firefox's: what you imported, what Sync brings and what the Library shows.
+Vimma keeps no list of its own.
+
+**Bookmark a page from anywhere:** `ctrl+b a` (or `:bookmark`). A prompt opens at the foot of
+the window with the page's title and the cursor before it. Type folders in front of the title,
+separated by `/`: `work/docs/My page` files the page in folder `work`, then `docs`, and makes the
+folders that are not there yet. `Tab` completes a folder name (again: the next match). `Enter`
+saves, `Esc` cancels. A path is counted from the Bookmarks Menu; start it with `toolbar/` or
+`other/` for the Bookmarks Toolbar or Other Bookmarks. A path ending in `/` files the page in
+that folder under its title. `:bookmark work/docs/My page` saves at once, without the prompt.
+
+If the page is bookmarked already, Vimma says where (`already bookmarked: work/docs/My page`)
+and the prompt changes to `move/rename:` with that path: edit it and press `Enter` to move or
+rename the bookmark, or `Esc` to leave it. Only `http`, `https`, `file` and `about:` pages can
+be bookmarked this way.
+
+**The bookmarks panel:** `ctrl+b shift+b`, `<leader>b` (`space b`) or `:bookmarks` opens your
+bookmarks on the left, where the side panel opens; one of the two shows at a time. It works
+like neo-tree: the Bookmarks Menu's folders and bookmarks, with `toolbar` and `other` (and
+`mobile`, when you have some) as the first folders.
+
+| Key                                  | What it does                                                                              |
+| ------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `j` / `k`                            | Move down / up.                                                                           |
+| `l`                                  | Open the folder (again: go into it). On a bookmark: open it in this tab.                  |
+| `h`                                  | Close the folder; inside one, go to its folder and close that.                            |
+| `Enter`                              | Open the bookmark in this tab and close the panel; on a folder, open or close it.         |
+| `t`                                  | Open the bookmark in a new tab behind this one; the panel stays open for more.            |
+| `s` / `S`                            | Open it in a new pane right / below (as `ctrl+b v` / `-`, at most 4 panes).               |
+| `a`                                  | Add this page in the highlighted folder, as a path. As in neo-tree, `a/b/` makes folders. |
+| `A`                                  | Add a folder there.                                                                       |
+| `r`                                  | Rename.                                                                                   |
+| `m`                                  | Move to a folder: type its path (`Tab` completes); missing folders are made.              |
+| `d`                                  | Delete, after `y/N`. A folder says how many items go with it.                             |
+| `y`                                  | Copy the bookmark's address.                                                              |
+| `/`                                  | Filter every bookmark by title, address or folder, letters in order. `Enter` keeps it.    |
+| `Esc`, `ctrl+b shift+b`, `<leader>b` | Close the panel. With a filter, `Esc` clears it first.                                    |
+
+A bookmark opens in your current workspace's container, and in a private window it stays
+private. `javascript:` and `data:` bookmarks (bookmarklets) are listed but do not open from
+Vimma: it says so instead, since they would run code in the page. Changes made elsewhere (the
+Library, Sync, another window) show in the panel at once. The four top folders cannot be
+renamed, moved or deleted. The panel remembers which folders you opened until Vimma quits.
+
 ## Goto picker and tab rename
 
 `ctrl+b g` (or `b` in normal mode, or `:ls`) opens a list of the window's tabs over the page: the tab number (the
@@ -575,6 +642,8 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:workspace`                          | Opens the workspace picker.                                                                                                     |
 | `:sidebar`                            | Opens or closes the side panel, as `<leader>n`.                                                                                 |
 | `:route`, `:route add`, `:route move` | Workspace routing rules: list them, add one for this site, move this tab ([Routing](#routing-which-workspace-a-link-opens-in)). |
+| `:bookmarks`                          | Opens or closes the [bookmarks panel](#bookmarks), as `<leader>b`.                                                              |
+| `:bookmark [path]`                    | Bookmarks the page under `path` (`work/docs/title`); without one, opens the prompt, as `ctrl+b a`.                              |
 | `:source`                             | Reads `config.toml` now instead of within 2 seconds (see [config.toml](#configtoml)).                                           |
 | `:source path`                        | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                                 |
 | `:config`                             | Opens `config.toml` in a new tab (read-only view); creates it from a commented template when it is missing.                     |
@@ -662,7 +731,7 @@ accent = "#ff9e64"
   `3 errors: …`). The Browser Console (`ctrl+shift+j`) lists them all. Fix the file and the
   message goes away at the next check.
 - **What applies live:** `[keys]`, `[modal]` (leader, `timeout_ms`, per-mode keys, `hint_chars`)
-  and `[unbind]`; `[panes] max` (most panes in a window, 1 to 16, default 4; it limits new
+  and `[unbind]`; `[panes] max` (most panes in a workspace, 1 to 16, default 4; it limits new
   splits); `[sites."<host>"] insert` (`auto`, `never` or `always`: whether a text field on that
   site and its subdomains takes insert mode); `[theme]` `source` (`omarchy` or `file`, the
   built-in Tokyo Night), `font` and `[theme.colors]` (single colours over either source);
@@ -828,8 +897,9 @@ strip, or move the "List all tabs" button to the toolbar in customize mode, or u
 **I don't see window controls.** On tiling window managers such as Hyprland there are none, as in
 Firefox. On GNOME or KDE with client-side decorations they move to the navigation bar.
 
-**Did `ctrl+b` stop opening bookmarks?** Yes, it is Vimma's prefix. Use `ctrl+shift+o` for the
-bookmarks library.
+**Did `ctrl+b` stop opening bookmarks?** Yes, it is Vimma's prefix. `ctrl+b shift+b` (or
+`space b`) opens Vimma's [bookmarks panel](#bookmarks), and `ctrl+b a` bookmarks the page.
+Firefox's Library (`ctrl+shift+o`) still works for the rest.
 
 **A binding says "not implemented yet".** Every default binding runs now; the message is for
 a binding whose command is not built yet, which the overlay also dims.

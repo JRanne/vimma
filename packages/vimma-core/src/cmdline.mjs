@@ -80,6 +80,9 @@ export const COMMANDS = Object.freeze([
   cmd("route", "optional", "workspace.route", "Routing rules (add [workspace] | move)"),
   cmd("ls", "none", "goto.picker", "Goto picker: every tab in every workspace"),
   cmd("sidebar", "none", "sidebar.toggle", "Open / close the side panel"),
+  // docs/specs/bookmarks.md: with a path, files the page without the prompt.
+  cmd("bookmark", "optional", "bookmark.add", "Bookmark this page (optionally folders/title)"),
+  cmd("bookmarks", "none", "bookmarks.toggle", "Open / close the bookmarks panel"),
   cmd("map", "none", "help.show", "Show all bindings"),
   cmd("help", "none", "help.show", "Show all bindings", { aliases: ["h"] }),
   // m5-config-load: with a path, that file replaces the config in force (all or nothing).
