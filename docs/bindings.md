@@ -56,8 +56,8 @@ Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm 
 
 | Action                                                        | Config name          | Bindings         |
 | ------------------------------------------------------------- | -------------------- | ---------------- |
-| Next workspace                                                | `next_workspace`     | `ctrl+i`         |
-| Previous workspace                                            | `previous_workspace` | `ctrl+u`         |
+| Next workspace                                                | `next_workspace`     | `prefix+)`       |
+| Previous workspace                                            | `previous_workspace` | `prefix+(`       |
 | Switch to a workspace by name or number                       | `switch_workspace`   | —                |
 | Workspace picker                                              | `workspace_picker`   | `prefix+w`       |
 | New workspace                                                 | `new_workspace`      | `prefix+shift+n` |
@@ -72,16 +72,16 @@ Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm 
 | ----------------------------------------- | ------------------ | ----------------------- |
 | Goto picker: every tab in every workspace | `goto_picker`      | `prefix+g`, `b`         |
 | Open / close the side panel               | `toggle_sidebar`   | `prefix+b`, `<leader>n` |
-| Scroll down                               | `scroll_down`      | `j`                     |
-| Scroll up                                 | `scroll_up`        | `k`                     |
+| Scroll down                               | `scroll_down`      | `j`, `<C-e>`            |
+| Scroll up                                 | `scroll_up`        | `k`, `<C-y>`            |
 | Scroll left                               | `scroll_left`      | `h`                     |
 | Scroll right                              | `scroll_right`     | `l`                     |
-| Scroll half a page down                   | `scroll_half_down` | `d`                     |
-| Scroll half a page up                     | `scroll_half_up`   | `u`                     |
+| Scroll half a page down                   | `scroll_half_down` | `d`, `<C-d>`            |
+| Scroll half a page up                     | `scroll_half_up`   | `u`, `<C-u>`            |
 | Scroll to top                             | `scroll_top`       | `gg`                    |
 | Scroll to bottom                          | `scroll_bottom`    | `G`                     |
-| Go back                                   | `history_back`     | `H`                     |
-| Go forward                                | `history_forward`  | `L`                     |
+| Go back                                   | `history_back`     | `H`, `<C-o>`            |
+| Go forward                                | `history_forward`  | `L`, `<C-i>`            |
 | Reload page                               | `reload`           | `r`                     |
 | Open a URL or search in this tab          | `open_url`         | —                       |
 | Go up a level in the URL path             | `url_up`           | `gu`                    |

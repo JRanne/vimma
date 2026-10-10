@@ -43,8 +43,8 @@ Panes
   resize_shorter       <C-w>-, k [resize], <Up> [resize], - [resize]       Make pane shorter
 
 Workspaces
-  next_workspace       ctrl+i                                              Next workspace
-  previous_workspace   ctrl+u                                              Previous workspace
+  next_workspace       prefix+)                                            Next workspace
+  previous_workspace   prefix+(                                            Previous workspace
   switch_workspace     (unbound)                                           Switch to a workspace by name or number
   workspace_picker     prefix+w                                            Workspace picker
   new_workspace        prefix+shift+n                                      New workspace
@@ -56,16 +56,16 @@ Workspaces
 Navigation
   goto_picker          prefix+g, b                                         Goto picker: every tab in every workspace
   toggle_sidebar       prefix+b, <leader>n                                 Open / close the side panel
-  scroll_down          j                                                   Scroll down
-  scroll_up            k                                                   Scroll up
+  scroll_down          j, <C-e>                                            Scroll down
+  scroll_up            k, <C-y>                                            Scroll up
   scroll_left          h                                                   Scroll left
   scroll_right         l                                                   Scroll right
-  scroll_half_down     d                                                   Scroll half a page down
-  scroll_half_up       u                                                   Scroll half a page up
+  scroll_half_down     d, <C-d>                                            Scroll half a page down
+  scroll_half_up       u, <C-u>                                            Scroll half a page up
   scroll_top           gg                                                  Scroll to top
   scroll_bottom        G                                                   Scroll to bottom
-  history_back         H                                                   Go back
-  history_forward      L                                                   Go forward
+  history_back         H, <C-o>                                            Go back
+  history_forward      L, <C-i>                                            Go forward
   reload               r                                                   Reload page
   open_url             (unbound)                                           Open a URL or search in this tab
   url_up               gu                                                  Go up a level in the URL path

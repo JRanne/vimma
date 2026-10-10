@@ -10,7 +10,7 @@ move, number-like names) implemented, awaiting review ·
 Milestone: M3 · Area: host
 (`src/browser/base/content/vimma/workspaces/`, `ui/`), four upstream patch files (five hunks)
 
-Plan §6 M3: container-backed workspaces; hidden tabs; `ctrl+i`/`ctrl+u`; a `prefix+w` picker; a
+Plan §6 M3: container-backed workspaces; hidden tabs; `prefix+)`/`prefix+(`; a `prefix+w` picker; a
 `<leader>n` side panel with `panel` mode; SessionStore persistence and restore; `[workspaces]`
 config. **Gate:** a login in `work` is invisible in `personal`; a restart restores workspaces,
 tabs and scroll positions.
@@ -26,7 +26,7 @@ relative to `engine/` (Firefox 157.0.1); Zen paths are relative to `zen-browser/
 
 - As a user, my tabs live in named workspaces (`work`, `admin`, `personal`), each a Firefox
   container: a site I am signed in to in `work` sees no cookies or storage of mine in `personal`.
-- As a user, `ctrl+i` / `ctrl+u` go to the next / previous workspace (wrapping), and I see only
+- As a user, `prefix+)` / `prefix+(` go to the next / previous workspace (wrapping), and I see only
   that workspace's tabs: `prefix+1..9`, `gt`, `ctrl+tab`, `ctrl+pagedown` and closing a tab never
   take me into another workspace.
 - As a user, a new tab (`prefix+c`, `t`, `ctrl+t`, a bookmark, a link from another app) opens in
@@ -37,7 +37,7 @@ relative to `engine/` (Firefox 157.0.1); Zen paths are relative to `zen-browser/
 - As a user, `prefix+shift+n` / `prefix+shift+w` / `prefix+shift+d` create, rename and close a
   workspace. Closing asks first when it has tabs, and says whether the site data goes too.
 - As a user, `<leader>n` (or `prefix+b`) opens a panel on the left headed by the current workspace
-  (name, colour, `ctrl+u` / `ctrl+i` neighbours), listing its tabs as numbered rows; `1-9`, `j/k`,
+  (name, colour, `prefix+(` / `prefix+)` neighbours), listing its tabs as numbered rows; `1-9`, `j/k`,
   Enter pick a tab; `<leader>n` / `Esc` close it.
 - As a user, `[workspaces]` in `config.toml` defines my workspaces, their order, colour, icon and
   home page; without it I get one workspace and can add more at runtime.
@@ -473,7 +473,7 @@ the model, so `TabMove` updates the model and no tab is ever moved behind the us
 ### Formats
 
 - `vimma-workspaces.json`: `{ schema: 1, lastActive, workspaces: [{ id, name, userContextId,
-color, icon, home?, source }] }` with `source` `"config"` or `"runtime"`, in `ctrl+i` order
+color, icon, home?, source }] }` with `source` `"config"` or `"runtime"`, in workspace order
   (config order first, runtime ones after, in creation order). `lastActive` is the workspace a
   window switched to last (debounced with the rest), used for the first window at startup
   (decision 3). JSONFile with `backupTo: "vimma-workspaces.json.bak"`.
@@ -551,12 +551,12 @@ allowed).
   `side-panel.css` gives it `order: -1 !important` and a fixed width token. Hidden until opened;
   never persisted open (plan §2: closed by default).
 - Content (chrome HTML, rendered from core data like the help overlay): a header with the
-  workspace dot (container colour), `index:name`, and the neighbours (`ctrl+u` previous name,
-  `ctrl+i` next name); then the workspace's tabs as rows `n  label  host`, the active tab marked,
+  workspace dot (container colour), `index:name`, and the neighbours (`prefix+(` previous name,
+  `prefix+)` next name); then the workspace's tabs as rows `n  label  host`, the active tab marked,
   `foreign` and sound-playing tabs marked.
 - Mode `panel` while open (exists in `MODES`, keys in `defaults.mjs`): `1-9` selects that tab and
   closes the panel; `j`/`k` move the highlight; `Enter` selects the highlighted tab and closes;
-  `Esc` and `toggle_sidebar` (`<leader>n`, `prefix+b`) close. `ctrl+i`/`ctrl+u` switch workspace
+  `Esc` and `toggle_sidebar` (`<leader>n`, `prefix+b`) close. `prefix+)`/`prefix+(` switch workspace
   with the panel open and it re-renders. Focus stays in the chrome document; closing returns focus
   to the selected browser.
 - A web page in the panel is out of scope for M3; when needed it is a nested
@@ -617,7 +617,7 @@ Mochitests (`tests/browser/`, one per acceptance criterion; the gate's two first
   bracket are applied after `SSWindowStateReady`; two brackets in a row (a second restore before
   the first is ready) end in one consistent model; a new window opened by the user after startup
   is settled without any restore event.
-- `browser_vimma_workspaces_switch.js`: `ctrl+i`/`ctrl+u` wrap; only the active workspace's tabs
+- `browser_vimma_workspaces_switch.js`: `prefix+)`/`prefix+(` wrap; only the active workspace's tabs
   are visible; `ctrl+tab`, `alt+1..9`, `ctrl+pagedown` stay in it; closing the active tab selects
   one in the same workspace; closing the last one opens a new tab in the same container and keeps
   the window; switching to an empty workspace opens its `home`. With a split in the workspace
@@ -639,14 +639,14 @@ Mochitests (`tests/browser/`, one per acceptance criterion; the gate's two first
   of the target applies), keeps label and mute, closes the original, and stays in the current
   workspace; a lazy tab moves by its saved URL.
 - `browser_vimma_side_panel.js`: `<leader>n` opens the panel on the left listing the workspace's
-  tabs; `j`/`k`/`1-9`/Enter/Esc; `ctrl+i` re-renders it; it stays leftmost when
+  tabs; `j`/`k`/`1-9`/Enter/Esc; `prefix+)` re-renders it; it stays leftmost when
   `sidebar.position_start` flips; focus returns to the page on close.
 - **Limits as tests**: a permission granted in `work` is visible in `personal`; HSTS is shared.
   When either is fixed, the test and the limits line go together.
 - Vitest: `workspacedefs.mjs` reconcile table (config add/remove/reorder, renamed config entry,
   missing containers, an empty result → `main`), schema fixtures `tests/contract/workspaces/v1/`,
   and the core `id` option.
-- Performance: e2e with 200 tabs over 4 workspaces, `ctrl+i` to paint (plan §9 risk); the
+- Performance: e2e with 200 tabs over 4 workspaces, `prefix+)` to paint (plan §9 risk); the
   `ctrl+t` new-tab measurement of decision 13 (sub-spec 2a, recorded in its Settled section).
 
 ## Risks
@@ -672,7 +672,7 @@ dependency for 4b, 5 and parts of 4a.
 | --- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
 | 1   | `m3-workspace-store`       | Core: `workspacedefs.mjs` (schema, reconcile, `main` default, `lastActive`) and the optional `id` in `workspaces.mjs`. Host: `WorkspaceStore` (JSONFile, `canWrite`, containers create/update/check, one-shot `[workspaces]` read, `defaultUserContextId`). Lifecycle test (no delete yet). | PR #10 merged          |
 | 2a  | `m3-workspace-routing`     | The two-hunk patch and its ADR-003 line; new-tab, lazy-tab and new-window routing; `foreign` tabs; `browser.newtab.preload = false` with the decision-13 measurement. **Gate 1** test with the routing cases.                                                                               | 1                      |
-| 2b  | `m3-workspace-switching`   | `WindowWorkspaces`: tab uuids, `TabOpen`/`TabClose`/`TabSelect`/`TabMove`/`TabPinned`, `hideTab`/`showTab`, `ctrl+i`/`ctrl+u`, empty workspace opens `home`, `closeWindowWithLastTab` pref, the one-split-one-workspace rule. Switch and events tests.                                      | 2a                     |
+| 2b  | `m3-workspace-switching`   | `WindowWorkspaces`: tab uuids, `TabOpen`/`TabClose`/`TabSelect`/`TabMove`/`TabPinned`, `hideTab`/`showTab`, `prefix+)`/`prefix+(`, empty workspace opens `home`, `closeWindowWithLastTab` pref, the one-split-one-workspace rule. Switch and events tests.                                  | 2a                     |
 | 3   | `m3-workspace-persistence` | Window value and tab values, the provisional model and re-entrant pending, the reconcile, `browser.startup.page = 3` and the sync prefs, duplicate and adopt handling, `canWrite` for the window value, `tabLabels`. **Gate 2** and live-restore tests.                                     | 2b                     |
 | 4a  | `m3-workspace-lifecycle`   | `prefix+shift+n/w/d` (new, rename, close with the confirmation rules), cross-window propagation, `contextual-identity-deleted`, the `privacy.userContext.enabled` check. Lifecycle test.                                                                                                    | 3; M2 prompt line      |
 | 4b  | `m3-workspace-move`        | Move a tab: reopen by URL in the target container, label and mute, lazy tabs; the warning text. Move test.                                                                                                                                                                                  | 4a                     |
@@ -769,7 +769,7 @@ dependency for 4b, 5 and parts of 4a.
   calls `WorkspaceStore.setActive` on build and every switch, so routing (2a) follows the
   window's workspace. Tab ids are `linkedPanel`, as the picker and `PaneView` use; uuids in tab
   values come with persistence (3).
-- **Switching** (`ctrl+i`/`ctrl+u`, `:wsnext`/`:wsprev`, `:workspace name|number`): core
+- **Switching** (`prefix+)`/`prefix+(`, `:wsnext`/`:wsprev`, `:workspace name|number`): core
   `switchWorkspace`/`next`/`previous`, then `planWorkspaceSwitch` applied as the mapping table
   says: select the target's `activeTab` (none: `addTrustedTab` of its `home`, else the start page,
   in its container), `showTab` the target's, `hideTab` one tab per other group. `unsplit` is only
@@ -802,7 +802,7 @@ dependency for 4b, 5 and parts of 4a.
   `● 2:work`. `browser_vimma_statusbar.js`'s narrow-bar check now uses 40ch (the segment takes
   nine columns of the old 30).
 - **Pref:** `browser.tabs.closeWindowWithLastTab = false` (decision 9).
-- **Tests:** `browser_vimma_workspace_switching.js` (7 tasks): ctrl+i/ctrl+u with wrap, hiding,
+- **Tests:** `browser_vimma_workspace_switching.js` (7 tasks): prefix+)/prefix+( with wrap, hiding,
   restore of the selected tab, the bar; tab keys and ctrl+tab within the workspace; a split
   hidden whole and back laid out; pinned tabs; the picker across workspaces switching; ctrl+t
   and a container-0 tab (`foreign`); `:workspace` by name, number and an unknown name. Red
@@ -962,7 +962,7 @@ dependency for 4b, 5 and parts of 4a.
 
 - **What it shows** (as the "Side panel" section planned): the current workspace only, never a
   list of every workspace (plan §2). Head: a dot in the workspace's colour (the status bar's
-  `WORKSPACE_COLOR_TOKENS`), `index:name`, and `ctrl+u <previous> · ctrl+i <next>` (wrapping;
+  `WORKSPACE_COLOR_TOKENS`), `index:name`, and `ctrl+b ( <previous> · ctrl+b ) <next>` (wrapping;
   none with one workspace). Rows: number, label (rename > title > URL, as the picker), host,
   `♪` while playing, `foreign`; the selected tab's row is `.vimma-panel-active`. Tabs in window
   order (`pickerWorkspaces`); pinned tabs are in no workspace and not listed, so a row's number
@@ -975,7 +975,7 @@ dependency for 4b, 5 and parts of 4a.
   `panel.close` `{ type: "close" }`.
 - **Keymap:** a `[keys]` binding that starts with `<leader>` now lives in `normal` and `panel`
   mode, so `<leader>n` closes what it opened, and a user's rebinding of `toggle_sidebar` does too.
-  Prefix and ctrl/alt chords were global already (`prefix+b`, `ctrl+i`).
+  Prefix and ctrl/alt chords were global already (`prefix+b`, `prefix+)`).
 - **Host:** `ui/side-panel.mjs` (`SidePanel`), a XUL `vbox#vimma-panel` prepended to `#browser`
   on first open, `side-panel.css` with `order: -1 !important` and `--vimma-panel-width` (18rem).
   `sidebar.toggle` opens or closes it (no workspaces, a private window: the picker's notice).
@@ -986,7 +986,7 @@ dependency for 4b, 5 and parts of 4a.
 - **Focus:** opening focuses the panel; closing focuses the selected page if focus was in the
   panel. Firefox moves focus to the page at the end of every tab switch
   (`_adjustFocusBeforeTabSwitch` blurs chrome, `AsyncTabSwitcher` focuses the browser), so the
-  panel takes focus back on `TabSwitchDone` while open (ctrl+i, prefix+c from the panel).
+  panel takes focus back on `TabSwitchDone` while open (prefix+), prefix+c from the panel).
 - **Not-yet examples:** with `ctrl+b b` built, no default binding under the prefix and no `:`
   command is unbuilt. `head.js` `bindUnbuiltPrefixKey()` binds `history_back` to `ctrl+b o` for
   the notice tests in `browser_vimma_tab_keys.js`, `_statusbar.js`, `_cmdline.js` and
@@ -996,7 +996,7 @@ dependency for 4b, 5 and parts of 4a.
 - **Tests:** `browser_vimma_side_panel.js` (9 tasks): hidden at start, `<leader>n` opens it
   leftmost with header, neighbours, numbered rows, the active row, focus, `panel` mode and the
   theme token; j/k clamp, Enter selects and focuses the page; a digit selects, a missing one is
-  refused; Esc, `prefix+b` and unbound keys never reach the page; ctrl+i/ctrl+u re-render with
+  refused; Esc, `prefix+b` and unbound keys never reach the page; prefix+)/prefix+( re-render with
   focus kept; a tab opened while open gets a row; leftmost with `sidebar.position_start=false`;
   `:sidebar`. Red before (8 failures: no panel), green after; the whole `tests/browser/`
   suite passes. Vitest `sidepanel.test.mjs` (18). Mutation check: dropping `!important` from
@@ -1048,9 +1048,9 @@ dependency for 4b, 5 and parts of 4a.
 - **Scenario** `tests/e2e/scenarios/m3-restart-restore.json`, gate 2 on a real quit and start:
   fresh profile; `main` gets a page that sets the persistent cookie `ws=main` in its container
   (`tests/e2e/fixtures/cookie.html#<name>`); `prefix+shift+n` creates `work` (cookie
-  `ws=work`, then `prefix+v` splits it) and `personal` (`ws=personal`); `ctrl+u` back to `work`;
+  `ws=work`, then `prefix+v` splits it) and `personal` (`ws=personal`); `prefix+(` back to `work`;
   `ctrl+q`; the same profile starts again. Asserted after the start: `work` active with its
-  three tabs and its split (axis `x`, two leaves); `ctrl+i` → `personal`, → `main`, → `work`
+  three tabs and its split (axis `x`, two leaves); `prefix+)` → `personal`, → `main`, → `work`
   (order, count and wrap), each with its tabs, titles and no split where there was none; then
   a fresh tab of `cookie.html` in each workspace sees only that workspace's cookie, so the
   containers and their cookie jars came back mapped to the right workspaces. In `work` that
@@ -1067,13 +1067,39 @@ dependency for 4b, 5 and parts of 4a.
   pane tree in `state`'s tab ids (shape in m0-control-protocol-and-vimma-ctl), read-only; no
   new command and no change to `vimma-ctl` (it prints `state --json` as received).
   `browser_vimma_control.js` asserts both (red before: 3 failures).
-- **Not done here:** the 200-tab `ctrl+i` measurement (plan §9 risk) needs a paint timestamp
+- **Not done here:** the 200-tab `prefix+)` measurement (plan §9 risk) needs a paint timestamp
   the control socket does not report; a crash-style kill and crash-recovery restore (the
   harness profile turns `resume_from_crash` off, and the 15 s save interval makes it a timing
   test); the scroll position after a real restart (gate 2's mochitest covers it).
 - **Still open after m4-split-panes sub-spec 7** (2026-10-10): the 200-tab measurement was not
   folded into the M4 e2e gate. It has the same blocker as M4's key-to-paint timing: a paint
   timestamp from the control socket (a protocol addition, its own spec with the perf gate).
+
+## Settled: workspace keys move to `prefix+(` / `prefix+)` (user decision, 2026-10-10)
+
+- **Decision** (the user): "ctrl + d and ctrl + u keybinds from vim are not there yet" and "we
+  need to find other keys for switching workspaces as those are vim defaults". `next_workspace`
+  is `prefix+)` and `previous_workspace` `prefix+(` (tmux's `switch-client -n` / `-p` keys),
+  global like every `[keys]` binding, so they work from normal, insert, visual and panel mode as
+  `ctrl+i` / `ctrl+u` did. The `prefix+w` picker stays. Normal mode gains vim's `ctrl+d` /
+  `ctrl+u` (half page, as `d` / `u`, which stay), `ctrl+e` / `ctrl+y` (a step, as `j` / `k`) and
+  `ctrl+o` / `ctrl+i` (history back / forward, as `H` / `L`). `ctrl+f` is left to Firefox's find
+  and `ctrl+b` stays the prefix. In insert mode all six are the page's (and then Firefox's).
+- **Firefox keys given up in normal mode:** `ctrl+d` (bookmark: `prefix+a`), `ctrl+u` (view
+  source: `gf`), `ctrl+o` (Open File: the File menu or `:open file:///…`), `ctrl+i` (Page Info:
+  the menu). `ctrl+e` and `ctrl+y` are no Firefox key on Linux (`ctrl+e` is search on other
+  platforms; Linux uses `ctrl+j`), so they clash with nothing. Recorded in docs/limits.md.
+- **Layout:** the host matches a chord by `KeyboardEvent.key` (`chordFromEvent`), and a shifted
+  punctuation key is its character with shift folded in, so `prefix+(` is whatever key types `(`:
+  `shift+9` on US, `shift+8` on Finnish. `prefix+0` is unaffected (unbound; `cancel`).
+- **Tests:** dispatcher (core): `prefix+(`/`)` in every mode, `(` from a shift+8 event, old keys no
+  longer switch in any mode, the six ctrl keys in normal and insert, a count with `ctrl+d` (13
+  red, then green). Mochitests: `ctrl+d`/`ctrl+u`/`ctrl+e`/`ctrl+y` scroll and reach the page in
+  insert mode (`browser_vimma_insert_scroll.js`), `ctrl+o`/`ctrl+i` walk history with no file
+  picker (`browser_vimma_nav_keys.js`), the old keys no longer switch
+  (`browser_vimma_workspace_switching.js`); 11 unexpected before, 0 after. The workspace tests and
+  the e2e scenarios (m3-restart-restore, m4-split-panes) press the new keys; no assertion changed.
+  Mutation check: binding `<C-d>` to `scroll.down` fails two dispatcher tests.
 
 ## Out of scope
 

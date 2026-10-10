@@ -129,7 +129,7 @@ tab ids and container ids; the model mints pane ids (`p1`, `p2`, …) and worksp
 /** @typedef {{ id: string } | { index: number } | { name: string }} WorkspaceRef */
 ```
 
-- A workspace's **index** is its 1-based position in `workspaces` (the `ctrl+i` order); it is not
+- A workspace's **index** is its 1-based position in `workspaces` (the workspace order); it is not
   stored. Names are unique, non-empty after trimming, compared case-sensitively.
 - `container` is the opaque string the host maps to a `userContextId`. Unique per workspace.
 - `createWorkspaces([{ name, container }, …])` (≥ 1; config `[workspaces]` order); first is active.
@@ -309,7 +309,7 @@ text. These belong to the host specs (see below).
   `closePane(split(x))` restore ratios exactly (`r/2 + r/2 === r` in binary floating point).
 - **Closing a pane keeps its tab** (Vim `:q` in a window, Zen "unsplit"); `prefix+shift+x` closes
   tabs. Closing the last pane is an error for the host to turn into "close tab".
-- **No wrap-around for pane focus** (Herdr); workspaces wrap (`ctrl+i` on the last goes to the first).
+- **No wrap-around for pane focus** (Herdr); workspaces wrap (`prefix+)` on the last goes to the first).
 - **Deleting a workspace closes its tabs** (Herdr `close_workspace`); there is no "move to another
   workspace" because a move reopens every page in another container.
 - **Zoom is persisted** (a restart looks the same) and cleared by any change; no-ops keep it.

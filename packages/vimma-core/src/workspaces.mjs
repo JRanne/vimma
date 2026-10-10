@@ -180,7 +180,7 @@ function showTab(w, tabId) {
 }
 
 /**
- * Workspaces in `[workspaces]` (ctrl+i) order; the first is active.
+ * Workspaces in `[workspaces]` order; the first is active.
  * @param {WorkspaceDef[]} defs
  * @returns {Workspaces}
  */
@@ -296,7 +296,7 @@ export function setWorkspaceContainer(s, ref, container) {
 
 /**
  * What the user typed as a workspace (`:workspace 2`, `:wsmove 2`): a workspace of exactly that
- * name first (config.toml accepts names of digits), else digits are a place in ctrl+i order,
+ * name first (config.toml accepts names of digits), else digits are a place in workspace order,
  * else a name. Without a model, digits are a place.
  * @param {Workspaces | null | undefined} s
  * @param {string} text
@@ -348,7 +348,7 @@ function cycle(s, step) {
 }
 
 /**
- * `ctrl+i`; wraps around.
+ * `ctrl+b )`; wraps around.
  * @param {Workspaces} s
  * @returns {Workspaces}
  */
@@ -357,7 +357,7 @@ export function nextWorkspace(s) {
 }
 
 /**
- * `ctrl+u`; wraps around.
+ * `ctrl+b (`; wraps around.
  * @param {Workspaces} s
  * @returns {Workspaces}
  */

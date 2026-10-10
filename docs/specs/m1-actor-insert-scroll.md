@@ -21,8 +21,9 @@ explicitly.
   reports to the host.
 - The host keeps a mode per `<browser>` (`normal` or `insert`) and runs `scroll.*`,
   `mode.normal` and `mode.insert` from `normal` and `insert` mode.
-- Bindings are plan §2's: `j k h l`, `gg`, `G`, `d`/`u` (half page; `ctrl+u` is the previous
-  workspace, so half-page scroll is not `ctrl+d`/`ctrl+u`), `i`, and `Esc` in insert. A count
+- Bindings are plan §2's: `j k h l`, `gg`, `G`, `d`/`u` (half page; `ctrl+u` was the previous
+  workspace then, so half-page scroll was not `ctrl+d`/`ctrl+u`; since 2026-10-10 normal mode has
+  `ctrl+d`/`ctrl+u` too, see m3-workspaces, Settled), `i`, and `Esc` in insert. A count
   multiplies `j k h l d u` (`3j`).
 
 ## Tests (write first)

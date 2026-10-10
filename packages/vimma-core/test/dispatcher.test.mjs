@@ -1,7 +1,7 @@
 import { describe, test, expect } from "vitest";
 import { createDispatcher } from "../src/dispatcher.mjs";
 import { compileKeymap } from "../src/keymap.mjs";
-import { formatKey, parseKey } from "../src/keys.mjs";
+import { chordFromEvent, formatKey, parseKey } from "../src/keys.mjs";
 
 /** Feed space-separated chords; return all results. */
 function feed(d, mode, keys) {
@@ -172,7 +172,10 @@ describe("dispatcher (spec acceptance criteria)", () => {
   });
 
   test("modal bindings override globals in their mode", () => {
-    const d = make({ modal: { normal: { "<C-i>": "scroll.down" } } });
+    const d = make({
+      keys: { next_workspace: ["ctrl+i"] },
+      modal: { normal: { "<C-i>": "scroll.down" } },
+    });
     expect(feed(d, "normal", "ctrl+i")[0]).toEqual({
       kind: "action",
       action: { id: "scroll.down" },
@@ -183,10 +186,76 @@ describe("dispatcher (spec acceptance criteria)", () => {
     });
   });
 
-  test("ctrl+i switches workspace in every mode", () => {
+  test("ctrl+b ) switches workspace in every mode", () => {
     for (const mode of ["normal", "insert", "visual", "panel"]) {
-      expect(feed(make(), mode, "ctrl+i")[0].action?.id).toBe("workspace.next");
+      expect(last(feed(make(), mode, "ctrl+b )")).action?.id).toBe("workspace.next");
     }
+  });
+
+  test("ctrl+b ( and ctrl+b ) go to the previous and next workspace in every mode", () => {
+    for (const mode of ["normal", "insert", "visual", "panel"]) {
+      expect(last(feed(make(), mode, "ctrl+b ("))).toEqual({
+        kind: "action",
+        action: { id: "workspace.previous" },
+      });
+      expect(last(feed(make(), mode, "ctrl+b )"))).toEqual({
+        kind: "action",
+        action: { id: "workspace.next" },
+      });
+    }
+  });
+
+  test("ctrl+b ( matches the character, so shift+8 on a Finnish layout works too", () => {
+    const d = make();
+    const ev = { ctrlKey: false, altKey: false, shiftKey: true, metaKey: false };
+    d.dispatch("normal", parseKey("ctrl+b"));
+    // event.key is "(" whichever key made it: shift+9 (US) or shift+8 (Finnish).
+    expect(d.dispatch("normal", /** @type {any} */ (chordFromEvent({ ...ev, key: "(" })))).toEqual({
+      kind: "action",
+      action: { id: "workspace.previous" },
+    });
+  });
+
+  test("ctrl+b 0 is still not bound", () => {
+    expect(last(feed(make(), "normal", "ctrl+b 0"))).toEqual({ kind: "cancel" });
+  });
+
+  test("ctrl+i and ctrl+u no longer switch workspace in any mode", () => {
+    for (const mode of ["normal", "insert", "visual", "panel"]) {
+      for (const key of ["ctrl+i", "ctrl+u"]) {
+        const id = feed(make(), mode, key)[0].action?.id;
+        expect(id === "workspace.next" || id === "workspace.previous", `${mode} ${key}`).toBe(
+          false,
+        );
+      }
+    }
+  });
+
+  test.each([
+    ["ctrl+d", "scroll.half_down"],
+    ["ctrl+u", "scroll.half_up"],
+    ["ctrl+e", "scroll.down"],
+    ["ctrl+y", "scroll.up"],
+    ["ctrl+o", "history.back"],
+    ["ctrl+i", "history.forward"],
+    ["d", "scroll.half_down"],
+    ["u", "scroll.half_up"],
+  ])("%s in normal mode runs %s, as in vim", (key, id) => {
+    expect(feed(make(), "normal", key)[0]).toEqual({ kind: "action", action: { id } });
+  });
+
+  test.each(["ctrl+d", "ctrl+u", "ctrl+e", "ctrl+y", "ctrl+o", "ctrl+i"])(
+    "%s in insert mode passes to the page",
+    (key) => {
+      expect(feed(make(), "insert", key)[0]).toEqual({ kind: "pass" });
+    },
+  );
+
+  test("a count carries to ctrl+d", () => {
+    expect(last(feed(make(), "normal", "3 ctrl+d"))).toEqual({
+      kind: "action",
+      action: { id: "scroll.half_down", count: 3 },
+    });
   });
 
   test("help mode: esc closes, / filters", () => {

@@ -31,8 +31,8 @@ theme. Underneath it is Firefox (currently 157), so sites and add-ons work as th
 
 **Vim on the page**
 
-- Normal mode: `j`/`k`/`h`/`l` scroll, `d`/`u` half a page, `gg`/`G` top and bottom,
-  `H`/`L` back and forward, `r` reload.
+- Normal mode: `j`/`k`/`h`/`l` scroll, `d`/`u` or `ctrl+d`/`ctrl+u` half a page, `gg`/`G` top
+  and bottom, `H`/`L` or `ctrl+o`/`ctrl+i` back and forward, `r` reload.
 - Link hints: `f` labels every link, button and field on screen; type a label to follow it,
   `F` opens it in a background tab.
 - Find: `/` searches as you type (smartcase, frames and PDFs too), `n`/`N` jump between matches.
@@ -48,8 +48,8 @@ theme. Underneath it is Firefox (currently 157), so sites and add-ons work as th
   you are.
 - Split panes: `ctrl+b v` and `ctrl+b -` split, `ctrl+b h/j/k/l` move, `ctrl+b z` zoom, plus
   swap, resize and close. Up to 4 panes, built on Firefox's own split view.
-- Workspaces: each one is its own container, so logins and cookies stay apart. `ctrl+i` /
-  `ctrl+u` switch, `ctrl+b w` picks one by name, and tabs move between them. Every workspace
+- Workspaces: each one is its own container, so logins and cookies stay apart. `ctrl+b )` /
+  `ctrl+b (` switch, `ctrl+b w` picks one by name, and tabs move between them. Every workspace
   keeps its tabs and split layout across restarts.
 - Side panel: `ctrl+b b` (or `space n`) lists the workspace's tabs; pick one with `j`/`k`.
 - `ctrl+b ?` lists every binding, searchable.

@@ -33,8 +33,8 @@ swap_pane_right = ["prefix+shift+l"]
 zoom = ["prefix+z"]
 close_pane = ["prefix+x"]
 resize_mode = ["prefix+r"]
-next_workspace = ["ctrl+i"]
-previous_workspace = ["ctrl+u"]
+next_workspace = ["prefix+)"]
+previous_workspace = ["prefix+("]
 workspace_picker = ["prefix+w"]
 new_workspace = ["prefix+shift+n"]
 rename_workspace = ["prefix+shift+w"]
@@ -58,10 +58,16 @@ hint_chars = "asdfghjkl"
 "l" = "scroll.right"
 "d" = "scroll.half_down"
 "u" = "scroll.half_up"
+"<C-d>" = "scroll.half_down"
+"<C-u>" = "scroll.half_up"
+"<C-e>" = "scroll.down"
+"<C-y>" = "scroll.up"
 "gg" = "scroll.top"
 "G" = "scroll.bottom"
 "H" = "history.back"
 "L" = "history.forward"
+"<C-o>" = "history.back"
+"<C-i>" = "history.forward"
 "r" = "page.reload"
 "f" = "hint.follow"
 "F" = "hint.follow_new_tab"
@@ -193,7 +199,7 @@ hint_chars = "asdfghjkl"
 [unbind]
 normal = []
 
-# Order here is ctrl+i order; each workspace is a Firefox container. None by default.
+# Order here is the order ctrl+b ) goes in; each workspace is a Firefox container. None by default.
 # Left-out keys: color = "gray", icon = "circle", autofill = true.
 [workspaces]
 # work = { color = "blue", icon = "briefcase", home = "https://intranet.example" }

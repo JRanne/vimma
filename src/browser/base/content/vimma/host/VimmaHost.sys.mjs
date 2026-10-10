@@ -190,7 +190,7 @@ function workspaceRunner(op, prompt) {
 }
 
 /**
- * A workspace step (ctrl+i / ctrl+u); shows its refusal, if any.
+ * A workspace step (ctrl+b ) / ctrl+b (); shows its refusal, if any.
  * @param {"next" | "previous"} step
  * @returns {(state: WindowState) => void}
  */

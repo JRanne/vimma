@@ -344,14 +344,14 @@ export class WindowWorkspacesImpl {
     return principal;
   }
 
-  /** ctrl+i; wraps. */
+  /** ctrl+b ); wraps. */
   next() {
     if (!this.#model) return "no workspaces in this window";
     this.#show(this.#model, nextWorkspace(this.#model));
     return null;
   }
 
-  /** ctrl+u; wraps. */
+  /** ctrl+b (; wraps. */
   previous() {
     if (!this.#model) return "no workspaces in this window";
     this.#show(this.#model, previousWorkspace(this.#model));
@@ -517,7 +517,7 @@ export class WindowWorkspacesImpl {
     }
   }
 
-  /** Workspace definitions with a container, in ctrl+i order. */
+  /** Workspace definitions with a container, in workspace order. */
   #defs() {
     return WorkspaceStore.definitions.workspaces.filter((d) => d.userContextId !== null);
   }
