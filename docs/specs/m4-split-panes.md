@@ -1,6 +1,7 @@
 # Spec: m4-split-panes
 
-Status: done (sub-specs 1 to 7; key-to-paint timing goes with the perf gate, issue #17) ·
+Status: done (sub-specs 1 to 7; key-to-paint timing: `browser_vimma_perf.js`, runbook
+"Key-to-paint timings") ·
 Milestone: M4 · Area: host
 (`src/browser/base/content/vimma/split/`, `host/`), CSS (`browser/themes/shared/vimma/`)
 

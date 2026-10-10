@@ -26,8 +26,7 @@ how browsing should feel: fast, fluent and absorbed.
 Vimma is for people who spend their day in Vim and a terminal multiplexer and want the browser to
 work the same way. Pages get Vim's modes. Tabs and splits answer to tmux's `ctrl+b` prefix.
 Each workspace is a container of its own, so the session you are signed in to at work stays out
-of your personal one. The whole window takes its colours from your [Omarchy](https://omarchy.org/) theme and changes with
-it.
+of your personal one. The whole window can follow your desktop theme and change with it.
 
 Underneath is Firefox (currently 157), a foundation you can trust: sites and add-ons work as they
 do in Firefox, and Vimma starts with quieter defaults for your privacy.
@@ -69,8 +68,9 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
   ([guide](docs/guide.md#every-key-is-yours)).
 - `~/.config/vimma/config.toml` sets options, key bindings and workspaces, and applies on save.
   `about:vimma` shows the version and what is in force.
-- Omarchy theming: the bars, pickers, hints and start page follow your current theme, and
-  switch at once when you change it (Tokyo Night without Omarchy).
+- Theming: the bars, pickers, hints and start page take their colours from your desktop theme
+  and switch at once when it changes, or from your own colours in `config.toml` (Tokyo Night
+  by default).
 - Accessible: Vimma's own UI works with a screen reader, keeps focus where you left it, and its
   text meets WCAG AA contrast in dark and light themes
   ([guide](docs/guide.md#accessibility)).
@@ -92,6 +92,13 @@ The [user guide](docs/guide.md) covers every key and option,
 **Pre-alpha.** Everything above works today, and Vimma is being used as a daily browser ahead of
 its first release. There are no packages or binaries yet: you build it from source, on Linux
 x86_64 only. Version `0.1.0`, on Firefox 157.0.1.
+
+### How it is built
+
+Vimma is built with heavy AI assistance (Claude Code): features start as written specs, are
+built test-first by AI agents, reviewed, and checked by CI and the security model in
+[docs/security.md](docs/security.md). The author reviews the work and tries it in daily use before each release.
+[CLAUDE.md](CLAUDE.md) holds the rules the agents follow.
 
 ## Getting started
 

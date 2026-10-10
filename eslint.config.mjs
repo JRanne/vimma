@@ -116,6 +116,13 @@ export default [
     languageOptions: { sourceType: "script" },
   },
   {
+    // The promo video's fixture pages' script: a web page (a module), in Firefox.
+    files: ["tools/promo/fixtures/*.js"],
+    languageOptions: {
+      globals: { ...globals.browser, mozInnerScreenX: "readonly", mozInnerScreenY: "readonly" },
+    },
+  },
+  {
     // Default-pref files (browser/branding/*/pref/): `pref()` is the only global.
     files: ["src/browser/branding/**/pref/*.js"],
     languageOptions: { sourceType: "script", globals: { pref: "readonly" } },

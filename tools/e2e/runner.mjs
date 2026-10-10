@@ -9,7 +9,7 @@ import { runSteps } from "./scenario.mjs";
  * @typedef {{
  *   ctl: import("./scenario.mjs").StepContext["ctl"],
  *   screenshot: (name: string) => Promise<void>,
- *   restart?: (how: "quit") => Promise<void>,
+ *   restart?: (how: "quit" | "kill") => Promise<void>,
  *   teardown: () => Promise<void>,
  * }} Session
  */

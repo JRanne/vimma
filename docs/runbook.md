@@ -73,6 +73,50 @@ needed; the crash-reporter flag needs `npm run import && (cd engine && ./mach bu
 Placeholder artwork: `configs/branding/vimma/*.svg`, rendered by `tools/branding/render.sh`
 (`rsvg-convert`, ImageMagick). Replace the SVGs, re-run the script, commit the PNG/ICO outputs.
 
+## Re-importing after a patch changes
+
+`surfer import` applies each `src/**/*.patch` as `git apply -R` (failure ignored), then
+`git apply`. When a patch changed since the last import, its reverse no longer matches what the
+old version left in `engine/`, so the forward apply fails ("Exiting due to error") on a file
+that still carries the old hunks. `npm run import` therefore runs
+`tools/import/restore-patched.mjs` first: it reads the `+++ b/<path>` line of each header pair in
+`src/**/*.patch` and runs `git -C engine checkout -- <those files>` (10 files today), so every
+import starts from upstream. It touches only those files: never `git checkout .`, never a
+clean. A file a patch creates (`--- /dev/null`) is skipped, as is a path upstream does not track.
+
+```sh
+node tools/import/restore-patched.mjs --dry-run   # list the files and the git command, change nothing
+```
+
+Without an `engine/` (before `surfer download`) it does nothing.
+
+## Moving the checkout
+
+`surfer import` links `engine/` into `src/` with absolute symlinks, and an objdir records the
+checkout's absolute path in Make dependency, cargo and config files. After `mv old new`, links
+dangle and the build mixes paths. The 2026-10-10 move (`~/repositories/VimHerdr` →
+`~/repositories/vimma`) needed about 139k symlinks retargeted and the old path rewritten in about
+6.9k objdir text files. `tools/import/relocate-checkout.mjs` does both:
+
+```sh
+mv ~/repositories/old ~/repositories/new && cd ~/repositories/new
+git worktree prune                     # or `git worktree repair` for worktrees you keep
+node tools/import/relocate-checkout.mjs --from ~/repositories/old --dry-run   # counts only
+node tools/import/relocate-checkout.mjs --from ~/repositories/old
+npm run import && npx surfer build     # mach reconfigures; the 2026-10-10 full build: 21 min
+```
+
+1. Every symlink under `engine/` (not `.git`) whose absolute target lies in the old checkout is
+   pointed at the same place in this one. Relative links and links elsewhere stay.
+2. In each `engine/obj-*`, the old path is replaced in text files outside `dist/` (`dist/` is
+   links, handled by step 1). The path only matches whole: `/old/repo` does not touch
+   `/old/repo2`. Binaries (a NUL byte) and files over 64 MB are left for the build to relink.
+
+Upstream sources and anything outside `engine/` are never written; a second run changes
+nothing. Things outside the repo that name the old path (a launcher such as
+`~/.local/bin/vimma-dev`, a `.desktop` file, `~/.claude/projects/<path>` memory) are yours to
+update. A lane (below) does not need this: `npm run lane:setup -- --force` rebuilds it.
+
 ## Testing
 
 ### Mochitests that send keys to a page
@@ -182,7 +226,19 @@ MOZ_HEADLESS=1 npm run e2e -- --artifact --filter m3   # no Xvfb at hand: headle
 
 A `restart` step (`m3-restart-restore`) quits with `ctrl+q` and starts the build again on the
 same profile; a scenario's `prefs` override the harness's `user.js` (`null`: the build's
-default). Without Xvfb, `MOZ_HEADLESS=1` runs every scenario that takes no screenshot.
+default). `"restart": "kill"` (`m3-crash-restore`) is a crash instead: it waits until
+SessionStore's `sessionstore-backups/recovery.jsonlz4` exists and has not changed for 3 s (set
+`browser.sessionstore.interval` low in the scenario's `prefs`, or that wait takes 15 s+), sends
+SIGKILL to the browser pid the harness started (its content processes follow; any left in its
+process group are killed after 5 s; never `pkill -f`), and starts again. The dead browser's
+`vimma-control.json` stays, as after a real crash; the relaunch skips the file whose `pid` is
+the killed one until the new browser rewrites it. The harness profile turns
+`resume_from_crash` off; a crash scenario sets it to `null` (the build's default, on).
+
+Scroll positions are read from the page, not from the control socket: `fixture:long.html`
+titles itself `long <top|middle|bottom> <navigation type>`, so after a restart the reloaded
+page says `back_forward` (SessionStore restores it from its history entry) where the stale
+saved label still says `navigate` (`m3-restart-scroll`). Without Xvfb, `MOZ_HEADLESS=1` runs every scenario that takes no screenshot.
 
 Without `DISPLAY` (CI) the harness starts its own Xvfb at 1280×800×24; with a desktop, pass
 `--xvfb` for screenshots and to keep the window off your screen. The browser never inherits
@@ -532,6 +588,50 @@ saying why):
 3. Keep the notes (runner image, why), and prefer two or more samples per entry.
 4. The commit body carries a changelog line naming the cases and the change, e.g.
    `bench baseline: prefix + key +12 % from per-mode leader lookup (intended)`.
+
+### Key-to-paint timings (`browser_vimma_perf.js`)
+
+Plan §5's second perf line, key-to-paint in the window, and plan §9's 200-tab risk, measured
+read-only in a mochitest (no paint timestamp on the control socket): `performance.now()` just
+before `EventUtils.synthesizeKey`, again when the synchronous key handling returns (**action**),
+and at the first `MozAfterPaint` of the chrome window after which the result holds (**paint**).
+21 presses per case; each case logs one line:
+
+```sh
+npm run mochitest -- --artifact tests/browser/browser_vimma_perf.js 2>&1 | grep VIMMA_PERF
+```
+
+| Case                | What                                                                     |
+| ------------------- | ------------------------------------------------------------------------ |
+| `floor`             | an outline on the status bar, no key: the paint pipeline alone           |
+| `key-floor`         | `ctrl+b esc`: two synthesized keys through Vimma's dispatch, no action   |
+| `pane-focus`        | `ctrl+b l` / `ctrl+b h` across two live example.com panes                |
+| `workspace-200-in`  | `ctrl+b )` from `main` into a workspace of 200 tabs (lazy `about:blank`) |
+| `workspace-200-out` | `ctrl+b (` back, hiding the 200                                          |
+
+Read paint against `floor`: in the headless test run the refresh driver's next paint comes
+about 35 ms after any change (measured locally), so "key-to-paint < 5 ms" as an absolute is not
+measurable there; what Vimma adds is action time plus paint minus floor. Local numbers
+(2026-10-10, artifact build, headless, medians): floor paint 35.5 ms; key-floor action 1.1 ms;
+pane-focus action 8.6 ms, paint 36.7 ms; workspace-200-in action 9.0 ms, paint 35.8 ms;
+workspace-200-out action 8.6 ms, paint 34.7 ms. So 200 hidden tabs cost about as much to switch
+as one pane focus, and both land in the first paint after the key; the time goes to the
+synchronous action (tab selection), not to waiting for a frame.
+
+CI (two e2e runs on PR #108, `ubuntu-24.04` hosted runner, headless artifact build, medians,
+first / second): floor paint 35.1 / 36.2 ms; key-floor action 0.8 / 1.1 ms; pane-focus action
+8.7 / 10.6 ms, paint 37.9 / 40.7 ms; workspace-200-in action 9.2 / 12.8 ms, paint 55.4 / 76.4
+ms; workspace-200-out action 9.4 / 12.8 ms, paint 36.6 / 56.5 ms. Into the 200-tab workspace
+takes one or two frames more on CI than locally.
+
+**Budgets** (`BUDGETS` in the test, on medians, about twice the higher CI median): action 25
+ms for all three cases; paint 85 ms for pane-focus, 150 ms for workspace-200-in, 115 ms for
+workspace-200-out. Past one means a doubled action or about two extra frames, not runner noise.
+The floors are not gated. Plan §5's "< 5 ms key-to-paint" cannot be checked as an absolute in
+a headless run whose paints come every ~35 ms; the closest gated reading is the action time,
+8 to 13 ms today, mostly Firefox's own tab selection. Like the bench baseline, re-record from CI
+numbers only, with a changelog line in the commit body; two CI samples back them so far, so add
+later runs' `VIMMA_PERF` lines here before tightening anything.
 
 ### Nightly build runner (`nightly.yml`)
 

@@ -9,7 +9,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 /**
  * @typedef {{
  *   open?: string, keys?: string, "wait-for-state"?: Record<string, unknown>,
- *   "assert-state"?: Record<string, unknown>, screenshot?: string, restart?: "quit",
+ *   "assert-state"?: Record<string, unknown>, screenshot?: string, restart?: "quit" | "kill",
  *   timeoutSeconds?: number,
  * }} Step
  * @typedef {{
@@ -21,7 +21,7 @@ import { setTimeout as sleep } from "node:timers/promises";
  *   ctl: { state: () => Promise<any>, sendKeys: (keys: string) => Promise<void>,
  *     open: (url: string) => Promise<string> },
  *   screenshot: (name: string) => Promise<void>,
- *   restart?: (how: "quit") => Promise<void>,
+ *   restart?: (how: "quit" | "kill") => Promise<void>,
  *   pollMs?: number,
  *   signal?: AbortSignal,
  * }} StepContext
@@ -45,8 +45,12 @@ const FIELDS = new Set([
   "steps",
 ]);
 const PREF_NAME = /^[\w.-]+$/;
-/** How `restart` restarts: `quit` is ctrl+q, then a launch on the same profile. */
-const RESTARTS = ["quit"];
+/**
+ * How `restart` restarts: `quit` is ctrl+q, then a launch on the same profile; `kill` waits for
+ * SessionStore's recovery file to settle, SIGKILLs the browser process (a crash: no quit
+ * observers, no final session write), then launches on the same profile.
+ */
+const RESTARTS = ["quit", "kill"];
 const MILESTONE_NAME = /^m\d+-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const ISSUE_NAME = /^issue-(\d+)-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SHOT_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

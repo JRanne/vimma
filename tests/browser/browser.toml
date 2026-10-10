@@ -160,4 +160,6 @@ support-files = ["file_vimma_addon_updates.json"]
 
 ["browser_vimma_security_invariants.js"]
 
+["browser_vimma_perf.js"]
+
 ["browser_vimma_a11y.js"]

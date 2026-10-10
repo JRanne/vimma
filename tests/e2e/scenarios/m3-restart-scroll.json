@@ -1,0 +1,37 @@
+{
+  "name": "m3-restart-scroll",
+  "description": "M3 gate 2, scroll part, on a real restart: two long pages, one scrolled to the bottom (G) and one part-way (j j j), the second selected; ctrl+q, then a start on the same profile with Vimma's browser.startup.page (3). The selected page reloads (its load counter says run=2, so the saved title cannot pass) at the same scroll position.",
+  "timeoutSeconds": 90,
+  "prefs": { "browser.startup.page": null },
+  "steps": [
+    { "wait-for-state": { "workspace": "main" }, "timeoutSeconds": 20 },
+    { "open": "fixture:long.html#a" },
+    {
+      "wait-for-state": { "tabs": [{}, { "title": "long top navigate", "selected": true }] }
+    },
+    { "keys": "shift+g" },
+    { "wait-for-state": { "tabs": [{}, { "title": "long bottom navigate" }] } },
+    { "open": "fixture:long.html#b" },
+    {
+      "wait-for-state": {
+        "tabs": [{}, {}, { "title": "long top navigate", "selected": true }]
+      }
+    },
+    { "keys": "j j j" },
+    { "wait-for-state": { "tabs": [{}, {}, { "title": "long middle navigate" }] } },
+
+    { "restart": "quit" },
+
+    {
+      "wait-for-state": {
+        "workspace": "main",
+        "tabs": [
+          {},
+          { "title": "long bottom navigate", "selected": false },
+          { "title": "long middle back_forward", "selected": true }
+        ]
+      },
+      "timeoutSeconds": 20
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- The promo video: an inbox at http://mail.example/inbox.html that shows who is signed in,
+     from the cookie signin.html set. Each Vimma workspace is a container with its own cookies,
+     so the same address shows "work" in one workspace and "personal" in another. The title
+     says who, for the recorder's state waits. -->
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Inbox · mail.example</title>
+  <link rel="stylesheet" href="promo.css" />
+  <header class="site">
+    <a class="brand" href="inbox.html">mail.example</a>
+    <a href="inbox.html#compose">Compose</a>
+    <a href="inbox.html#starred">Starred</a>
+    <a href="inbox.html#sent">Sent</a>
+  </header>
+  <main>
+    <h1>Inbox</h1>
+    <span class="who" id="who">signed out</span>
+    <table class="mail" id="mail"></table>
+  </main>
+  <script>
+    const MAIL = {
+      work: [
+        ["Build bot", "main is green again", "09:41"],
+        ["Aino (design)", "Status bar mock-ups, round 3", "09:12"],
+        ["Release train", "Freeze moves to Thursday", "08:55"],
+        ["Mikko", "Re: pane resize keys", "Yesterday"],
+        ["Calendar", "Planning, Friday 10:00", "Yesterday"],
+      ],
+      personal: [
+        ["Bike shop", "Your wheel is trued and ready", "10:02"],
+        ["Mum", "Sunday lunch?", "09:30"],
+        ["Book club", "Next month: Dune Messiah", "08:14"],
+        ["Sauna society", "Winter swim schedule", "Yesterday"],
+        ["Ferry", "Your ticket to Suomenlinna", "Yesterday"],
+      ],
+    };
+    const who = /(?:^|; )who=([a-z]+)/.exec(document.cookie)?.[1] ?? "";
+    const rows = MAIL[who];
+    if (rows) {
+      const badge = document.getElementById("who");
+      badge.textContent = `signed in as ${who}`;
+      badge.className = `who ${who}`;
+      for (const [from, subject, when] of rows) {
+        const tr = document.getElementById("mail").insertRow();
+        for (const [cls, text] of [
+          ["from", from],
+          ["subject", subject],
+          ["when", when],
+        ]) {
+          const td = tr.insertCell();
+          td.className = cls;
+          td.textContent = text;
+        }
+      }
+    }
+    document.title = rows ? `Inbox (${who}) · mail.example` : "Inbox · mail.example";
+  </script>
+</html>
