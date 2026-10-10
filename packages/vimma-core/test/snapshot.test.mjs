@@ -182,6 +182,36 @@ describe("validation", () => {
   });
 });
 
+describe("panes.layout (docs/specs/tiling-layouts.md): optional, no schema bump", () => {
+  /** @param {unknown} layout */
+  const withLayout = (layout) =>
+    mutated((r) => {
+      const w = r.workspaces.find((/** @type {any} */ x) => x.panes?.root.type === "split");
+      w.panes.layout = layout;
+    });
+  const read = (/** @type {any} */ raw) =>
+    /** @type {any} */ (fromSnapshot(raw)).workspaces.find(
+      (/** @type {any} */ w) => w.panes?.root.type === "split",
+    ).panes;
+
+  test("a preset name is kept and written back", () => {
+    const raw = withLayout("tiled");
+    const panes = read(raw);
+    expect(panes.layout).toBe("tiled");
+    expect(toSnapshot(fromSnapshot(raw))).toEqual(raw);
+    expect(raw.schema).toBe(SCHEMA_VERSION);
+  });
+
+  test.each([["grid"], [3], [null]])("%s is dropped without failing the restore", (bad) => {
+    const panes = read(withLayout(bad));
+    expect("layout" in panes).toBe(false);
+  });
+
+  test("a snapshot without it reads as before (no layout key)", () => {
+    expect("layout" in read(JSON.parse(fixture("valid.json")))).toBe(false);
+  });
+});
+
 describe("migrations", () => {
   test("a newer schema is unsupported", () => {
     const e = snapshotError(() => fromSnapshot(mutated((r) => (r.schema = 2))));

@@ -57,10 +57,12 @@ describe("schema 2", () => {
 
   test("defaults: panes.max 4, hint_chars the home row, no sites; defaults.toml is schema 2", () => {
     expect(PANES_MAX_DEFAULT).toBe(4);
-    expect(DEFAULT_CONFIG.panes).toEqual({ max: 4 });
+    expect(DEFAULT_CONFIG.panes).toEqual({ max: 4, layout: "dwindle", main_size: 60 });
     const text = formatDefaultsToml();
     expect(text).toMatch(/^schema = 2$/m);
-    expect(text).toMatch(/^\[panes\]\nmax = 4$/m);
+    expect(text).toMatch(
+      /^\[panes\]\nmax = 4\n(#.*\n)*layout = "dwindle"\n(#.*\n)*main_size = 60$/m,
+    );
     expect(text).toMatch(/^hint_chars = "asdfghjkl"$/m);
     expect(text).toMatch(/^# \[sites\."docs\.google\.com"\]$/m);
     expect(parseConfig(text).migratedFrom).toBeNull();
@@ -75,7 +77,11 @@ describe("schema 2", () => {
 
 describe("[panes] max", () => {
   test.each([[1], [4], [7], [PANES_MAX_LIMIT]])("max = %i is accepted", (max) => {
-    expect(ok(v2("[panes]", `max = ${max}`)).panes).toEqual({ max });
+    expect(ok(v2("[panes]", `max = ${max}`)).panes).toEqual({
+      max,
+      layout: "dwindle",
+      mainSize: 0.6,
+    });
   });
 
   test.each([
@@ -107,6 +113,57 @@ describe("[panes] max", () => {
         if (r.config) expect(r.config.panes.max).toBe(max);
       }),
     );
+  });
+});
+
+// docs/specs/tiling-layouts.md
+describe("[panes] layout and main_size", () => {
+  test("defaults: dwindle, 60 %", () => {
+    expect(ok(v2("")).panes).toEqual({ max: 4, layout: "dwindle", mainSize: 0.6 });
+  });
+
+  test.each([["dwindle"], ["manual"]])('layout = "%s" is accepted', (layout) => {
+    expect(ok(v2("[panes]", `layout = "${layout}"`)).panes.layout).toBe(layout);
+  });
+
+  test("an unknown layout is an error with the nearest name", () => {
+    expect(errors(v2("[panes]", 'layout = "dwindel"'))).toEqual([
+      {
+        line: 3,
+        path: "panes.layout",
+        message: 'must be "dwindle" or "manual"',
+        suggestion: "dwindle",
+      },
+    ]);
+    expect(errors(v2("[panes]", "layout = 1"))).toEqual([
+      { line: 3, path: "panes.layout", message: "expected a string, got an integer" },
+    ]);
+  });
+
+  test.each([[20], [55], [80]])("main_size = %i is that percent", (pct) => {
+    expect(ok(v2("[panes]", `main_size = ${pct}`)).panes.mainSize).toBeCloseTo(pct / 100, 9);
+  });
+
+  test.each([
+    ["19", "must be an integer between 20 and 80 (percent)"],
+    ["81", "must be an integer between 20 and 80 (percent)"],
+    ["0.6", "expected an integer, got a float"],
+    ['"60%"', "expected an integer, got a string"],
+  ])("main_size = %s is an error", (v, message) => {
+    expect(errors(v2("[panes]", `main_size = ${v}`))).toEqual([
+      { line: 3, path: "panes.main_size", message },
+    ]);
+  });
+
+  test("an unknown key suggests the nearest of max, layout, main_size", () => {
+    expect(errors(v2("[panes]", "mainsize = 60"))).toEqual([
+      {
+        line: 3,
+        path: "panes.mainsize",
+        message: 'unknown key "mainsize"',
+        suggestion: "main_size",
+      },
+    ]);
   });
 });
 

@@ -20,8 +20,10 @@
 /** @typedef {"x" | "y"} Axis */
 /**
  * `mru` lists every pane, most recently focused first (`mru[0] === focus`); `next` mints pane ids.
+ * `layout`, when set, is the last preset applied (layouts.mjs, docs/specs/tiling-layouts.md);
+ * every operation here keeps it, as tmux keeps a window's last layout across manual changes.
  * @typedef {{ readonly root: PaneNode, readonly focus: string, readonly mru: readonly string[],
- *   readonly zoom: string | null, readonly next: number }} Panes
+ *   readonly zoom: string | null, readonly next: number, readonly layout?: string }} Panes
  */
 /** @typedef {"left" | "down" | "up" | "right"} Direction */
 /** @typedef {"vertical" | "horizontal"} SplitDirection */
@@ -82,7 +84,7 @@ function leafNode(pane, tab) {
  * @param {readonly number[]} ratios
  * @returns {PaneNode}
  */
-function makeSplit(axis, children, ratios) {
+export function makeSplit(axis, children, ratios) {
   if (children.length === 1) return /** @type {PaneNode} */ (children[0]);
   /** @type {PaneNode[]} */
   const kids = [];
