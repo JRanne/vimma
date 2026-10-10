@@ -17,6 +17,8 @@ import { PANES_MAX_DEFAULT, PANES_MAX_LIMIT } from "./panes.mjs";
 import { PALETTE_KEYS, isHexColor, normalizeHex } from "./theme.mjs";
 import { resolveRoutes, validateRoutes } from "./routes.mjs";
 import { formatPath, locateKeys, parsePath, parseToml } from "./toml.mjs";
+import { OVERLAP_CHORDS, canonicalChord, isShortcutChord } from "./firefox-keys.mjs";
+import { KeyNotationError, parseKey } from "./keys.mjs";
 
 /** @import { Keymap } from "./keymap.mjs" */
 /** @import { UserConfig } from "./defaults.mjs" */
@@ -55,6 +57,13 @@ import { formatPath, locateKeys, parsePath, parseToml } from "./toml.mjs";
  * @property {string} hintChars                          `[modal] hint_chars` (schema 2)
  * @property {InsertSiteRule[]} sites                    `[sites."<host>"]` in file order (schema 2)
  * @property {Route[]} routes                            `[[routes]]` in file order (schema 2)
+ * @property {FirefoxKeySetting} firefox                 `[firefox]`, chords canonical (schema 2)
+ * @property {boolean} insertEditing                     `[modal] insert_editing` (schema 2)
+ */
+
+/**
+ * Which of Firefox's own shortcuts are off (docs/specs/key-handling-batch.md § 1).
+ * @typedef {{ disable: "all" | string[], enable: string[] }} FirefoxKeySetting
  */
 
 /** @typedef {{ config: ResolvedConfig, keymap: Keymap }} ActiveConfig */
@@ -135,6 +144,7 @@ const TOP_KEYS = [
   "panes",
   "sites",
   "routes",
+  "firefox",
 ];
 const KEYMAP_SECTIONS = new Set(["keys", "modal", "unbind"]);
 const WORKSPACE_KEYS = ["color", "icon", "home", "autofill"];
@@ -142,9 +152,18 @@ const THEME_KEYS = ["source", "font", "colors"];
 const THEME_SOURCES = ["omarchy", "file"];
 const PANES_KEYS = ["max"];
 const SITE_KEYS = ["insert"];
-const MODAL_KEYS = ["leader", "timeout_ms", "hint_chars"];
+const MODAL_KEYS = ["leader", "timeout_ms", "hint_chars", "insert_editing"];
+const FIREFOX_KEYS = ["disable", "enable"];
+const FIREFOX_DISABLE = 'must be "all" or a list of keys like "ctrl+w"';
 /** Keys a file may use only when it declares `schema = 2`, by config path. */
-const SCHEMA_2_KEYS = ["panes", "sites", "modal.hint_chars", "routes"];
+const SCHEMA_2_KEYS = [
+  "panes",
+  "sites",
+  "modal.hint_chars",
+  "routes",
+  "firefox",
+  "modal.insert_editing",
+];
 const NEEDS_SCHEMA_2 = "is new in schema 2: put schema = 2 at the top of the file";
 const LABEL = "[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?";
 const DOMAIN = new RegExp(`^(?=.{1,253}$)${LABEL}(?:\\.${LABEL})*\\.?$`, "i");
@@ -288,11 +307,46 @@ function validate(raw, declared) {
         else if (!isHintCharset(v)) {
           fail(path, "must be at least 2 distinct characters, none uppercase or whitespace");
         }
+      } else if (key === "insert_editing") {
+        if (gated(path)) continue;
+        if (typeof v !== "boolean") typeError(path, v, "a boolean");
       } else if (isMode(key)) {
         table(path, v);
       } else {
         unknownKey(path, key, [...MODES, ...MODAL_KEYS]);
       }
+    }
+  }
+
+  if (declared >= 2 && isTable(raw.firefox)) {
+    for (const [key, v] of Object.entries(raw.firefox)) {
+      const path = ["firefox", key];
+      if (!FIREFOX_KEYS.includes(key)) {
+        unknownKey(path, key, FIREFOX_KEYS);
+        continue;
+      }
+      if (key === "disable" && v === "all") continue;
+      if (!Array.isArray(v)) {
+        if (key === "disable") fail(path, FIREFOX_DISABLE);
+        else typeError(path, v, "a list of key strings");
+        continue;
+      }
+      v.forEach((chord, i) => {
+        const at = [...path, i];
+        if (typeof chord !== "string") {
+          typeError(at, chord, "a key string");
+          return;
+        }
+        try {
+          if (!isShortcutChord(parseKey(chord))) {
+            fail(at, "Firefox's shortcuts have ctrl, alt or meta, or are function keys");
+          }
+        } catch (e) {
+          /* c8 ignore next */
+          if (!(e instanceof KeyNotationError)) throw e;
+          fail(at, e.message);
+        }
+      });
     }
   }
 
@@ -435,6 +489,19 @@ function toNumbers(v) {
 }
 
 /**
+ * `[firefox]` with the defaults filled in and every chord canonical, each once.
+ * @param {UserConfig["firefox"]} firefox  valid
+ * @returns {FirefoxKeySetting}
+ */
+function resolveFirefox(firefox) {
+  const disable = firefox?.disable ?? OVERLAP_CHORDS;
+  return {
+    disable: disable === "all" ? "all" : [...new Set(disable.map(canonicalChord))],
+    enable: [...new Set((firefox?.enable ?? []).map(canonicalChord))],
+  };
+}
+
+/**
  * Fill every section of a valid config (as parsed) with defaults and normalise values.
  * @param {UserConfig} user
  * @param {string[]} [workspaceOrder]  workspace names in file order; JS objects list
@@ -477,6 +544,8 @@ export function mergeWithDefaults(user, workspaceOrder, siteOrder) {
       insert: /** @type {NonNullable<UserConfig["sites"]>} */ (user.sites)[match]?.insert ?? "auto",
     })),
     routes: resolveRoutes(/** @type {Record<string, string>[]} */ (user.routes ?? [])),
+    firefox: resolveFirefox(user.firefox),
+    insertEditing: /** @type {boolean | undefined} */ (user.modal?.insert_editing) ?? true,
   };
 }
 

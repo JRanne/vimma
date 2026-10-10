@@ -193,3 +193,115 @@ describe("chordFromEvent", () => {
     },
   );
 });
+
+// docs/specs/key-handling-batch.md § 3: a character typed with Option (macOS) or AltGr (Linux,
+// Windows) is that character, as shift is folded for printable characters.
+describe("chordFromEvent: Option and AltGr characters", () => {
+  /**
+   * @param {string} key
+   * @param {string} code
+   * @param {{ ctrlKey?: boolean, altKey?: boolean, shiftKey?: boolean, metaKey?: boolean,
+   *   altGraph?: boolean }} [mods]
+   */
+  const ev = (key, code, { altGraph, ...mods } = {}) => ({
+    key,
+    code,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    metaKey: false,
+    ...mods,
+    /** @param {string} m */
+    getModifierState: (m) => m === "AltGraph" && !!altGraph,
+  });
+  /** @param {string} key @param {string} code @param {object} mods */
+  const plain = (key, code, mods) => ({
+    key,
+    code,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    metaKey: false,
+    ...mods,
+  });
+  /** @param {any} e */
+  const text = (e) => formatKey(/** @type {any} */ (chordFromEvent(e)));
+
+  test.each([
+    // macOS sets AltGraph with every Option press (widget/cocoa nsCocoaUtils.mm), and altKey.
+    [
+      "Finnish Mac Option+shift+8",
+      ev("{", "Digit8", { altKey: true, shiftKey: true, altGraph: true }),
+      "{",
+    ],
+    ["Finnish Mac Option+8", ev("[", "Digit8", { altKey: true, altGraph: true }), "["],
+    [
+      "Finnish Mac Option+shift+7",
+      ev("|", "Digit7", { altKey: true, shiftKey: true, altGraph: true }),
+      "|",
+    ],
+    ["Finnish Mac Option+2", ev("@", "Digit2", { altKey: true, altGraph: true }), "@"],
+    // Linux GTK: AltGr is ISO_Level3_Shift, AltGraph without altKey (nsGtkKeyUtils.cpp).
+    ["Finnish PC AltGr+7", ev("{", "Digit7", { altGraph: true }), "{"],
+    ["Finnish PC AltGr+4", ev("$", "Digit4", { altGraph: true }), "$"],
+    ["AltGr+0 with alt reported too", ev("}", "Digit0", { altKey: true, altGraph: true }), "}"],
+    // Windows: left ctrl + alt emulates AltGr and arrives as ctrl+alt, AltGraph false.
+    ["Windows ctrl+alt as AltGr+7", ev("{", "Digit7", { ctrlKey: true, altKey: true }), "{"],
+    ["Windows ctrl+alt as AltGr+4", ev("$", "Digit4", { ctrlKey: true, altKey: true }), "$"],
+    ["Windows ctrl+alt as AltGr+Minus", ev("\\", "Minus", { ctrlKey: true, altKey: true }), "\\"],
+    ["a composed letter (Option+a)", ev("å", "KeyA", { altKey: true, altGraph: true }), "å"],
+    [
+      "Mac Option+shift+8 without getModifierState",
+      plain("{", "Digit8", { altKey: true, shiftKey: true }),
+      "{",
+    ],
+  ])("%s is the bare character", (_name, e, want) => {
+    expect(text(e)).toBe(want);
+  });
+
+  test.each([
+    ["a real alt+1", ev("1", "Digit1", { altKey: true }), "alt+1"],
+    ["alt+1 without getModifierState", plain("1", "Digit1", { altKey: true }), "alt+1"],
+    [
+      "alt alone, AltGraph up (Finnish Linux alt+plus)",
+      ev("+", "Minus", { altKey: true }),
+      "alt+plus",
+    ],
+    [
+      "ctrl+alt+] on a US layout",
+      ev("]", "BracketRight", { ctrlKey: true, altKey: true }),
+      "ctrl+alt+]",
+    ],
+    [
+      "ctrl+alt+shift+4 on a US layout",
+      ev("$", "Digit4", { ctrlKey: true, altKey: true, shiftKey: true }),
+      "ctrl+alt+$",
+    ],
+    ["ctrl+w", ev("w", "KeyW", { ctrlKey: true }), "ctrl+w"],
+    ["ctrl+shift+t", ev("T", "KeyT", { ctrlKey: true, shiftKey: true }), "ctrl+shift+t"],
+    ["ctrl+alt+j", ev("j", "KeyJ", { ctrlKey: true, altKey: true }), "ctrl+alt+j"],
+    ["ctrl+[ (no alt)", ev("[", "BracketLeft", { ctrlKey: true }), "ctrl+["],
+    [
+      "ctrl with AltGraph keeps ctrl",
+      ev("{", "Digit7", { ctrlKey: true, altGraph: true }),
+      "ctrl+{",
+    ],
+    [
+      "meta is never folded",
+      ev("{", "Digit7", { metaKey: true, altKey: true, altGraph: true }),
+      "alt+meta+{",
+    ],
+    [
+      "a named key keeps alt",
+      ev("ArrowLeft", "ArrowLeft", { altKey: true, altGraph: true }),
+      "alt+left",
+    ],
+    [
+      "Option with the key's own character",
+      ev("1", "Digit1", { altKey: true, altGraph: true }),
+      "alt+1",
+    ],
+  ])("%s keeps its modifiers", (_name, e, want) => {
+    expect(text(e)).toBe(want);
+  });
+});

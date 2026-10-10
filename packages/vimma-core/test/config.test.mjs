@@ -373,6 +373,22 @@ describe("mergeWithDefaults", () => {
       hintChars: "asdfghjkl",
       sites: [],
       routes: [],
+      firefox: {
+        disable: [
+          "ctrl+b",
+          "ctrl+d",
+          "ctrl+e",
+          "ctrl+h",
+          "ctrl+i",
+          "ctrl+k",
+          "ctrl+o",
+          "ctrl+u",
+          "ctrl+w",
+          "ctrl+y",
+        ],
+        enable: [],
+      },
+      insertEditing: true,
     });
   });
 });

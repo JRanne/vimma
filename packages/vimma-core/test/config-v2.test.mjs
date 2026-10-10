@@ -4,6 +4,7 @@ import fc from "fast-check";
 import { CONFIG_SCHEMA_VERSION, MIGRATIONS, migrate, parseConfig } from "../src/config.mjs";
 import { DEFAULT_CONFIG, formatDefaultsToml } from "../src/defaults.mjs";
 import { DEFAULT_HINT_CHARS } from "../src/hints.mjs";
+import { OVERLAP_CHORDS } from "../src/firefox-keys.mjs";
 import { PANES_MAX_DEFAULT, PANES_MAX_LIMIT } from "../src/panes.mjs";
 
 /** @param {string[]} lines */
@@ -233,6 +234,85 @@ describe("schema 2 keys need schema = 2", () => {
       {
         line,
         path,
+        message: "is new in schema 2: put schema = 2 at the top of the file",
+      },
+    ]);
+  });
+});
+
+// docs/specs/key-handling-batch.md § 1 and § 2.
+describe("[firefox] disable and enable", () => {
+  test("the default turns off the overlapping chords and enables none", () => {
+    expect(ok(v2()).firefox).toEqual({ disable: [...OVERLAP_CHORDS], enable: [] });
+    const text = formatDefaultsToml();
+    expect(text).toMatch(
+      /^\[firefox\]\ndisable = \["ctrl\+b", "ctrl\+d", .*"ctrl\+y"\]\nenable = \[\]$/m,
+    );
+    expect(ok(text).firefox).toEqual({ disable: [...OVERLAP_CHORDS], enable: [] });
+  });
+
+  test('"all" and a list with enable are resolved, chords canonical', () => {
+    expect(ok(v2("[firefox]", 'disable = "all"', 'enable = ["ctrl+T", "alt+1"]')).firefox).toEqual({
+      disable: "all",
+      enable: ["ctrl+shift+t", "alt+1"],
+    });
+    expect(ok(v2("[firefox]", 'disable = ["control+w", "ctrl+U", "F5"]')).firefox).toEqual({
+      disable: ["ctrl+w", "ctrl+shift+u", "f5"],
+      enable: [],
+    });
+    expect(ok(v2("[firefox]", "disable = []")).firefox).toEqual({ disable: [], enable: [] });
+  });
+
+  test.each([
+    ['disable = "none"', "firefox.disable", 'must be "all" or a list of keys like "ctrl+w"'],
+    ["disable = 3", "firefox.disable", 'must be "all" or a list of keys like "ctrl+w"'],
+    ['disable = ["ctrl+ww"]', "firefox.disable[0]", 'unknown key "ww" in "ctrl+ww"'],
+    [
+      'enable = ["w"]',
+      "firefox.enable[0]",
+      "Firefox's shortcuts have ctrl, alt or meta, or are function keys",
+    ],
+    ["enable = [1]", "firefox.enable[0]", "expected a key string, got an integer"],
+    ['enable = "all"', "firefox.enable", "expected a list of key strings, got a string"],
+  ])("%s is an error", (line, path, message) => {
+    expect(errors(v2("[firefox]", line))).toEqual([{ line: 3, path, message }]);
+  });
+
+  test("an unknown key in [firefox] suggests one", () => {
+    expect(errors(v2("[firefox]", "disabel = []"))).toEqual([
+      { line: 3, path: "firefox.disabel", message: 'unknown key "disabel"', suggestion: "disable" },
+    ]);
+  });
+
+  test("[firefox] is new in schema 2", () => {
+    expect(errors(toml("schema = 1", "[firefox]", "disable = []"))).toEqual([
+      {
+        line: 2,
+        path: "firefox",
+        message: "is new in schema 2: put schema = 2 at the top of the file",
+      },
+    ]);
+  });
+});
+
+describe("[modal] insert_editing", () => {
+  test("is on by default and can be turned off; the keymap ignores it", () => {
+    expect(ok(v2()).insertEditing).toBe(true);
+    expect(formatDefaultsToml()).toMatch(/^insert_editing = true$/m);
+    const r = parseConfig(v2("[modal]", "insert_editing = false"));
+    expect(r.errors).toEqual([]);
+    expect(r.config?.insertEditing).toBe(false);
+    expect(r.keymap).not.toBeNull();
+  });
+
+  test("must be a boolean, and is new in schema 2", () => {
+    expect(errors(v2("[modal]", 'insert_editing = "yes"'))).toEqual([
+      { line: 3, path: "modal.insert_editing", message: "expected a boolean, got a string" },
+    ]);
+    expect(errors(toml("schema = 1", "[modal]", "insert_editing = false"))).toEqual([
+      {
+        line: 3,
+        path: "modal.insert_editing",
         message: "is new in schema 2: put schema = 2 at the top of the file",
       },
     ]);

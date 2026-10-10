@@ -96,6 +96,32 @@ export const INSERT_SITE_MODES = Object.freeze(["auto", "never", "always"]);
 const EDITABLE_CE = new Set(["true", "", "plaintext-only"]);
 
 /**
+ * Vim's insert-mode keys in text fields (docs/specs/key-handling-batch.md § 2): chord → the
+ * editor's own command, so the edit is one undo step.
+ * @type {Readonly<Record<string, string>>}
+ */
+const INSERT_EDIT_KEYS = Object.freeze({
+  "ctrl+w": "cmd_deleteWordBackward",
+  "ctrl+u": "cmd_deleteToBeginningOfLine",
+  "ctrl+h": "cmd_deleteCharBackward",
+});
+
+/** The commands a text-field key may run; the content actor takes no other. */
+export const INSERT_EDIT_COMMANDS = Object.freeze(Object.values(INSERT_EDIT_KEYS));
+
+/**
+ * The editor command a chord runs in a text field, or null. On macOS Cocoa's own key bindings
+ * already make ctrl+h a backspace, so Vimma adds none there.
+ * @param {string} chord  canonical (formatKey)
+ * @param {{ mac?: boolean }} [options]
+ * @returns {string | null}
+ */
+export function insertEditCommand(chord, { mac = false } = {}) {
+  if (mac && chord === "ctrl+h") return null;
+  return INSERT_EDIT_KEYS[chord] ?? null;
+}
+
+/**
  * @param {boolean} editable
  * @param {string} reason
  * @returns {EditableResult}

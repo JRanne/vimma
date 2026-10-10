@@ -110,7 +110,9 @@ function assertToolboxHidden(label) {
   Assert.ok($("nav-bar").classList.contains("browser-titlebar"), `${label}: nav bar is titlebar`);
 }
 
-add_task(async function ctrl_t_and_ctrl_w_still_work() {
+// ctrl+w is no longer Firefox's close tab (docs/specs/key-handling-batch.md): Vimma's
+// ctrl+b shift+x closes it, which must re-run TabBarVisibility the same way.
+add_task(async function ctrl_t_and_closing_the_tab_still_work() {
   await withCustomTitlebar(async () => {
     gBrowser.selectedBrowser.focus();
     const before = gBrowser.tabs.length;
@@ -124,14 +126,18 @@ add_task(async function ctrl_t_and_ctrl_w_still_work() {
     assertToolboxHidden("after ctrl+t");
 
     clearToolboxState();
-    EventUtils.synthesizeKey("w", { accelKey: true });
-    await TestUtils.waitForCondition(() => gBrowser.tabs.length === before, "ctrl+w closed it");
+    EventUtils.synthesizeKey("b", { ctrlKey: true });
+    EventUtils.synthesizeKey("X", { shiftKey: true });
+    await TestUtils.waitForCondition(
+      () => gBrowser.tabs.length === before,
+      "ctrl+b shift+x closed it",
+    );
     Assert.ok(!tab.isConnected, "the new tab is gone");
     await TestUtils.waitForCondition(
       () => window.gNavToolbox.hasAttribute("tabs-hidden"),
       "tab close re-runs TabBarVisibility",
     );
-    assertToolboxHidden("after ctrl+w");
+    assertToolboxHidden("after ctrl+b shift+x");
   });
 });
 

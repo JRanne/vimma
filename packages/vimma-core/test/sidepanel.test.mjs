@@ -62,6 +62,7 @@ describe("openPanel", () => {
         active: false,
         foreign: false,
         playing: false,
+        pinned: false,
       },
       {
         tabId: "t3",
@@ -71,6 +72,7 @@ describe("openPanel", () => {
         active: true,
         foreign: false,
         playing: true,
+        pinned: false,
       },
       {
         tabId: "t4",
@@ -80,6 +82,7 @@ describe("openPanel", () => {
         active: false,
         foreign: true,
         playing: false,
+        pinned: false,
       },
     ]);
   });
@@ -145,6 +148,51 @@ describe("panelKey", () => {
   test("an action that is not the panel's leaves it as it is", () => {
     expect(press(s, [{ id: "tab.new" }])).toEqual({ state: s, effect: null });
   });
+
+  // docs/specs/key-handling-batch.md § 4
+  test("x closes the highlighted tab and moves the highlight to the next row", () => {
+    const { state, effect } = press(s, [{ id: "panel.up" }, { id: "panel.close_tab" }]);
+    expect(effect).toEqual({ type: "closeTab", id: "t2" });
+    expect(state.rows[state.selected].tabId).toBe("t3");
+  });
+
+  test("x on the last row moves the highlight to the row before it", () => {
+    const { state, effect } = press(s, [{ id: "panel.down" }, { id: "panel.close_tab" }]);
+    expect(effect).toEqual({ type: "closeTab", id: "t4" });
+    expect(state.rows[state.selected].tabId).toBe("t3");
+  });
+
+  test("x after the refresh closes the next tab: three x close three rows", () => {
+    let state = press(s, [{ id: "panel.up" }]).state;
+    const closed = [];
+    let left = model;
+    for (let i = 0; i < 3; i++) {
+      const r = panelKey(state, { id: "panel.close_tab" });
+      closed.push(/** @type {any} */ (r.effect).id);
+      left = {
+        ...left,
+        workspaces: left.workspaces.map((w) =>
+          w.id === "w2" ? { ...w, tabs: w.tabs.filter((t) => t !== closed.at(-1)) } : w,
+        ),
+      };
+      state = refreshPanel(r.state, left, info);
+    }
+    expect(closed).toEqual(["t2", "t3", "t4"]);
+    expect(state.rows).toEqual([]);
+  });
+
+  test("x on a pinned tab refuses and closes nothing", () => {
+    const pinned = openPanel(model, (id) => ({ ...tabs[id], pinned: id === "t3" }));
+    expect(pinned.rows[1].pinned).toBe(true);
+    const { state, effect } = press(pinned, [{ id: "panel.close_tab" }]);
+    expect(state).toBe(pinned);
+    expect(effect).toEqual({ type: "refuse", text: "pinned tab: unpin it to close it" });
+  });
+
+  test("x in an empty workspace does nothing", () => {
+    const empty = openPanel({ ...model, active: "w3" }, info);
+    expect(press(empty, [{ id: "panel.close_tab" }]).effect).toBeNull();
+  });
 });
 
 describe("refreshPanel", () => {
@@ -193,6 +241,18 @@ describe("panel keys in the keymap", () => {
 
   test("prefix b toggles it from panel mode", () => {
     expect(feed("panel", "ctrl+b b").at(-1)).toMatchObject({ action: { id: "sidebar.toggle" } });
+  });
+
+  test("x closes the tab and ctrl+shift+t reopens one in panel mode; 3 still selects row 3", () => {
+    expect(feed("panel", "x")[0]).toEqual({ kind: "action", action: { id: "panel.close_tab" } });
+    expect(feed("panel", "ctrl+shift+t")[0]).toEqual({
+      kind: "action",
+      action: { id: "tab.restore" },
+    });
+    expect(feed("panel", "3 x")).toEqual([
+      { kind: "action", action: { id: "panel.select", arg: 3 } },
+      { kind: "action", action: { id: "panel.close_tab" } },
+    ]);
   });
 
   test("leader bindings still do not fire in insert mode", () => {

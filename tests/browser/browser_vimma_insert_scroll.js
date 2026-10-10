@@ -519,15 +519,19 @@ add_task(async function i_with_no_text_field_lets_keys_through() {
   }, ROOT + "file_vimma_plain.html");
 });
 
-add_task(async function ctrl_w_still_closes_the_tab_in_normal_mode() {
+add_task(async function ctrl_w_in_normal_mode_with_one_pane_passes_to_the_page() {
   const tab = await BrowserTestUtils.openNewForegroundTab(gBrowser, PAGE);
-  await focusContent(tab.linkedBrowser);
-  await waitForMode(tab.linkedBrowser, "normal");
-  const closing = BrowserTestUtils.waitForTabClosing(tab);
-  // ctrl+w starts only <C-w> pane sequences (M4), none runnable yet: the first key passes.
+  const browser = tab.linkedBrowser;
+  await recordPageKeys(browser);
+  await focusContent(browser);
+  await waitForMode(browser, "normal");
+  // ctrl+w starts only <C-w> pane sequences (M4), none runnable with one pane: the first key
+  // passes, to the page now that Firefox's close-tab ctrl+w is off (key-handling-batch § 1).
   EventUtils.synthesizeKey("w", { ctrlKey: true });
-  await closing;
-  await TestUtils.waitForCondition(() => !tab.isConnected, "ctrl+w closed the tab");
+  Assert.ok(await waitForPageKey(browser, ["w"]), "the page got ctrl+w");
+  Assert.ok(tab.isConnected, "the tab stays open");
+  Assert.equal(VimmaHost._browserMode(browser), "normal", "still in normal mode");
+  BrowserTestUtils.removeTab(tab);
 });
 
 add_task(async function every_mode_change_calls_the_hook_once() {

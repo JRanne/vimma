@@ -222,6 +222,48 @@ function render(d) {
     ]),
   );
 
+  const fk = d.firefoxKeys;
+  fill(
+    "firefox-keys",
+    fk.off.length
+      ? el(
+          "table",
+          {},
+          el(
+            "thead",
+            {},
+            el(
+              "tr",
+              {},
+              el("th", {}, "Keys"),
+              el("th", {}, "Firefox's key"),
+              el("th", {}, "Command"),
+            ),
+          ),
+          el(
+            "tbody",
+            {},
+            ...fk.off.map((k) =>
+              el(
+                "tr",
+                {},
+                el("td", {}, k.chord),
+                el("td", {}, k.id || "-"),
+                el("td", {}, k.command),
+              ),
+            ),
+          ),
+        )
+      : el("p", { class: "muted" }, "None: every Firefox shortcut is on."),
+    el(
+      "p",
+      { class: "muted", id: "firefox-keys-unmatched" },
+      fk.unmatched.length
+        ? `No Firefox shortcut on: ${fk.unmatched.join(", ")}.`
+        : "[firefox] in config.toml says which are off.",
+    ),
+  );
+
   fill(
     "bindings",
     el("p", { class: "muted" }, "* marks a binding config.toml overrides."),

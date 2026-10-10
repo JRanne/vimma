@@ -6,7 +6,7 @@
 // including out-of-process iframes: reports focus changes in its own document as an
 // EditableDescriptor (vimma-core editable.mjs) and runs scroll, blur and focus-input commands.
 
-import { isEditable } from "../core/editable.mjs";
+import { INSERT_EDIT_COMMANDS, isEditable } from "../core/editable.mjs";
 import { inputIndex } from "../core/pageurl.mjs";
 import { collectTargets } from "./hint-collect.mjs";
 import { Caret, isCaretMessage } from "./caret.mjs";
@@ -285,6 +285,14 @@ export class VimmaChild extends JSWindowActorChild {
       }
       case "Vimma:FocusInput":
         return this.#focusInput(msg.data?.count);
+      case "Vimma:Edit": {
+        // ctrl+w, ctrl+u, ctrl+h after the page left them alone (key-handling-batch § 2): the
+        // editor's own command on the focused text field, so undo works.
+        const command = msg.data?.command;
+        if (!INSERT_EDIT_COMMANDS.includes(command)) return undefined;
+        if (this.document.hasFocus() && this.#inEditable()) this.docShell?.doCommand(command);
+        return undefined;
+      }
       case "Vimma:ScrollPosition": {
         const win = this.contentWindow;
         return win ? { x: win.scrollX, y: win.scrollY } : null;
