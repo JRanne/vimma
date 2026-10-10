@@ -41,8 +41,12 @@ These map one-to-one onto Vimma's CSS custom properties (`--vimma-accent`, `--vi
   `/usr/share/omarchy/default/themed/` and the user's `~/.config/omarchy/themed/` into the theme dir,
   replacing `{{ key }}` (hex) and `{{ key_rgb }}` (`r,g,b`). This is how Obsidian, VS Code and
   Chromium get themed.
-- **Hook:** executables in `~/.config/omarchy/hooks/theme-set.d/` run after every theme switch,
-  with the theme name as `$1`.
+- **Hook:** files in `~/.config/omarchy/hooks/theme-set.d/` (and a single
+  `~/.config/omarchy/hooks/theme-set`) run after every theme switch, with the theme name as `$1`.
+  Checked on Omarchy 4 (2026-10-10): `omarchy-theme-set` ends with `omarchy-hook theme-set
+<name>`, which runs each non-`.sample` file as `bash <file> <name>` (so no exec bit needed),
+  after the theme directory swap and after the parallel app retints (`omarchy-restart-terminal`,
+  `omarchy-theme-set-browser`, …), with its output discarded.
 - **Chromium/Brave:** set by browser policy (`omarchy-theme-set-browser`), accent colour only.
 - **Firefox prior art:** [Omafox](https://addons.mozilla.org/en-US/firefox/addon/omafox/)
   ([source](https://github.com/cover/omafox), MIT): a WebExtension plus an AUR native-messaging
@@ -52,7 +56,8 @@ These map one-to-one onto Vimma's CSS custom properties (`--vimma-accent`, `--vi
 
 Read `colors.toml` directly with the TOML parser from ADR-008 and poll its mtime with the config
 reload (plan §3). Nothing to install, works for every theme, stock or user. A `theme-set.d` hook
-that pokes the control socket (ADR-007) can give instant refresh later; it is optional.
+that pokes the control socket (ADR-007) gives instant refresh: `tools/omarchy/vimma-theme-reload.sh`
+runs `vimma-ctl reload-theme` (spec m5-omarchy-theme, "Instant reload"); it is optional.
 
 ## Not covered by Omarchy
 

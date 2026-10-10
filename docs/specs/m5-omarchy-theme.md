@@ -1,6 +1,6 @@
 # Spec: m5-omarchy-theme
 
-Status: implemented, awaiting review · Area: UI (`src/browser/base/content/vimma/ui/theme-host.mjs`,
+Status: implemented, awaiting review (instant reload: in review) · Area: UI (`src/browser/base/content/vimma/ui/theme-host.mjs`,
 `vimma.js`, `ui/statusbar.mjs`, `start/start.mjs`)
 
 The theme half of M5. `config.toml` loading and its `[theme]` table: [m5-config-load](m5-config-load.md).
@@ -9,7 +9,8 @@ The theme half of M5. `config.toml` loading and its `[theme]` table: [m5-config-
 
 As an Omarchy user, Vimma's chrome UI (status bar, command line, pickers, hints, notices, pane
 borders, start page) has my current Omarchy theme's colours, and when I switch theme with
-`omarchy-theme-set` every open window and start page follows within 2 seconds, with no restart.
+`omarchy-theme-set` every open window and start page follows within 2 seconds, with no restart
+(at once with the optional theme-set hook, "Instant reload" below).
 Without Omarchy I get the built-in Tokyo Night, and I can force it.
 
 ## Scope
@@ -82,10 +83,51 @@ passed). Green: 37/37. Mutation: the overlay's `color` back to `CanvasText` fail
 assertions (`rgb(251, 251, 254)` vs `rgb(169, 177, 214)`); reverted. The e2e help baseline is
 re-recorded from CI's image (the overlay is now Tokyo Night).
 
+## Instant reload (2026-10-10)
+
+Opt-in: a theme change shows as soon as `omarchy-theme-set` finishes, not at the next poll.
+
+- **Why not a file watch:** Firefox 157 exposes none to chrome JS. `IOUtils`
+  (`dom/chrome-webidl/IOUtils.webidl`) and `nsIFile` have no watch; no `.idl` names a watcher
+  (Windows' `nsINativeFileWatcher` is long gone); the only `inotify`/`GFileMonitor` users are the
+  sandbox's syscall tables and `widget/gtk/nsLookAndFeel` (GTK settings, internal). An inotify
+  loop through js-ctypes would be a native call in a security-reviewed area for no gain over (b),
+  so: no.
+- **Mechanism (b):** checked on this machine (Omarchy 4): `omarchy-theme-set` swaps the theme
+  directory (`rm -rf` + `mv`), retints its own apps in parallel, then runs `omarchy-hook theme-set
+<name>`, which runs `~/.config/omarchy/hooks/theme-set` and each non-`.sample` file in
+  `theme-set.d/` as `bash <file> <name>`. `tools/omarchy/vimma-theme-reload.sh`, copied there
+  by the user (guide: "Instant theme changes"; never installed automatically), runs
+  `vimma-ctl --timeout 2 reload-theme`, silently, and always exits 0.
+- **`reload-theme`** (control protocol v1, m0-control-protocol-and-vimma-ctl): authenticated like
+  every command, no args. `ThemeHost.reload()` waits for a check in flight, clears the signature
+  (so a same-size, same-mtime rewrite is read too) and runs one check; the response
+  `{ changed }` comes after the new sheet is in every window. Nothing else changes: same path pref,
+  same validation, the "missing theme" rule intact.
+- **Fallback:** the 2 s poll stays. Without the socket (off by default), `vimma-ctl` on `PATH` or
+  the hook, nothing changes.
+
+Tests (written first). `browser_vimma_control.js` `test_reload_theme`: with `pollMs` an hour,
+rewriting `colors.toml` and then a request before `hello`, a request after `hello` without
+`auth`, and a wrong token leave the bar alone (each connection closed); an authenticated
+`reload-theme` answers `{ changed: true }` and the bar has the new colour when the reply is read,
+no waiting; again `{ changed: false }`; `args.path` is `invalid-args`. `test_vimma_ctl_end_to_end`
+runs the real `vimma-ctl reload-theme` (`unchanged`). Vitest: the contract fixtures
+(`request-`/`response-reload-theme`), the validator, and `tools/omarchy/test/theme-hook.test.mjs`
+(the hook run as `omarchy-hook` runs it, with a fake `vimma-ctl` in a temp `HOME`). Cargo: CLI
+parsing, result decoding, an integration test against the fake server.
+
+Red: mochitest 4 failures (`"unknown-command" == "invalid-args"`, `"rgb(16, 24, 32)" ==
+"rgb(48, 16, 48)"`, the results `undefined`); Vitest 5 (control) + 4 (hook, no script); cargo
+did not compile (`no variant named ReloadTheme`). Green: control mochitest 258/258 with
+`VIMMA_REQUIRE_CTL=1`, Vitest and cargo all pass. Mutation: `reload()` not awaiting its check
+(`poll()` for `await poll()`) failed three assertions (`{"changed":false}` vs `true`, the bar
+still `rgb(16, 24, 32)`); reverted.
+
 ## Limits
 
-- Up to 2 s latency per theme change (polling). A `~/.config/omarchy/hooks/theme-set.d/` hook that
-  pokes the control socket could make it instant; not done (docs/notes/omarchy-theming.md).
+- Without the hook, up to 2 s latency per theme change (polling). With it, Vimma follows when
+  Omarchy runs its hooks, which is after it has retinted its own apps (terminals restart first).
 - Font, `[theme.colors]` overrides and `[theme] source = "file"` come with `config.toml` loading.
 - Not covered: Hyprland's gaps, rounding and borders (docs/notes/omarchy-theming.md).
 - Issue #66 (2026-10-10): a check still reading the old path when the path or source changed

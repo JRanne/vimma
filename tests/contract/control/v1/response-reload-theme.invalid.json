@@ -1,0 +1,13 @@
+{
+  "description": "changed must be a boolean",
+  "kind": "response",
+  "command": "reload-theme",
+  "message": {
+    "type": "response",
+    "id": 3,
+    "ok": true,
+    "result": {
+      "changed": "yes"
+    }
+  }
+}

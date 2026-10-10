@@ -14,7 +14,7 @@ import { MODES } from "./modes.mjs";
 export const CONTROL_PROTOCOL = 1;
 /** Longest accepted line in UTF-16 code units, excluding the newline. */
 export const MAX_LINE_LENGTH = 1024 * 1024;
-export const CONTROL_COMMANDS = Object.freeze(["send-keys", "state", "open"]);
+export const CONTROL_COMMANDS = Object.freeze(["send-keys", "state", "open", "reload-theme"]);
 export const RESERVED_COMMANDS = Object.freeze(["list-tabs", "screenshot", "reload-config"]);
 export const ERROR_CODES = Object.freeze([
   "bad-request",
@@ -165,7 +165,9 @@ function checkRequest(m, errors) {
   }
   if (command === "send-keys") checkSendKeysArgs(args, errors);
   else if (command === "open") checkOpenArgs(args, errors);
-  else if (command === "state") noExtraFields(args, [], errors, "args.");
+  else if (command === "state" || command === "reload-theme") {
+    noExtraFields(args, [], errors, "args.");
+  }
 }
 
 /** @param {Obj} result @param {string[]} errors */
@@ -209,6 +211,8 @@ function checkResult(result, command, errors) {
     errors.push("result.sent must be an integer >= 0");
   } else if (command === "open" && typeof result.tab !== "string") {
     errors.push("result.tab must be a string");
+  } else if (command === "reload-theme" && typeof result.changed !== "boolean") {
+    errors.push("result.changed must be a boolean");
   } else if (command === "state") {
     checkStateResult(result, errors);
   }
