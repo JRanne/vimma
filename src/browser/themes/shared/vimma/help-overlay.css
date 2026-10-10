@@ -2,7 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* The prefix+? overlay (ui/help-overlay.mjs). Legible defaults only; theme tokens come in M5. */
+/* The prefix+? overlay (ui/help-overlay.mjs). M5's theme tokens (ui/theme-host.mjs loads them
+   into every window), with the picker's surface (picker.css); legible system colours otherwise. */
 
 #vimma-help {
   box-sizing: border-box;
@@ -10,13 +11,14 @@
   max-height: calc(100vh - 4rem);
   overflow: auto;
   padding: 0 1.25rem 1rem;
-  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  border: 1px solid var(--vimma-muted, color-mix(in srgb, CanvasText 25%, transparent));
   border-radius: 8px;
-  background: Canvas;
-  color: CanvasText;
+  background: var(--vimma-bg-dark, Canvas);
+  color: var(--vimma-fg, CanvasText);
   font: message-box;
   font-size: 13px;
   outline: none;
+  color-scheme: var(--vimma-color-scheme, light dark);
 
   &::backdrop {
     background: rgb(0 0 0 / 0.45);
@@ -33,7 +35,7 @@
     align-items: center;
     gap: 1rem;
     padding: 0.75rem 0 0.5rem;
-    background: Canvas;
+    background: var(--vimma-bg-dark, Canvas);
   }
 
   & h1 {
@@ -44,15 +46,31 @@
 
   & input {
     width: 18rem;
+    padding: 0.15rem 0.4rem;
+    border: 1px solid var(--vimma-muted, color-mix(in srgb, CanvasText 25%, transparent));
+    border-radius: 4px;
+    background: var(--vimma-bg, Field);
+    color: var(--vimma-fg, FieldText);
     font: inherit;
+    font-family: var(--vimma-font, monospace);
+    outline: none;
+
+    &:focus {
+      border-color: var(--vimma-accent, AccentColor);
+    }
+
+    &::placeholder {
+      color: var(--vimma-fg-dim, GrayText);
+      opacity: 1;
+    }
   }
 
   & h2 {
     margin: 0.9rem 0 0.25rem;
+    color: var(--vimma-accent, inherit);
     font-size: 0.85em;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    opacity: 0.7;
   }
 
   & .vimma-help-row {
@@ -69,12 +87,24 @@
 
   & .vimma-help-legend {
     margin: 0 0 0.25rem;
+    color: var(--vimma-fg-dim, GrayText);
     font-size: 0.85em;
-    opacity: 0.7;
+  }
+
+  & .vimma-help-override {
+    color: var(--vimma-warning, inherit);
   }
 
   & .vimma-help-keys,
   & .vimma-help-name {
-    font-family: monospace;
+    font-family: var(--vimma-font, monospace);
+  }
+
+  & .vimma-help-keys {
+    color: var(--vimma-fg-bright, inherit);
+  }
+
+  & .vimma-help-name {
+    color: var(--vimma-fg-dim, inherit);
   }
 }
