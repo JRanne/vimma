@@ -7,8 +7,10 @@
 // planSplit says which tabs join, leave, move, show, hide, (de)activate; layout() gives each
 // pane its rectangle. Firefox's wrapper keeps deciding which browsers are live and which tab is
 // selected; the tree decides the geometry. The tree shown is the active workspace's; a switch
-// parks it (`swap`, m3-workspaces 2b) until M4 sub-spec 6 keeps it in the model. The pane keys (host/pane-ops.mjs, sub-specs 3 and 5) call split / focus / close /
-// zoom / swapPane / resize; nothing here binds a key.
+// parks it under the workspace left and brings back the target's (`swap`, m3-workspaces 2b; M4
+// sub-spec 6), and a restore hands every workspace's tree back (`restore`). The pane keys
+// (host/pane-ops.mjs, sub-specs 3 and 5) call split / focus / close / zoom / swapPane / resize;
+// nothing here binds a key.
 
 import { mergeWithDefaults } from "../core/config.mjs";
 import {
@@ -20,6 +22,7 @@ import {
   leaves,
   paneOfTab,
   resize,
+  setPaneTab,
   split,
   splitRefusal,
   swap as swapToward,
@@ -81,6 +84,12 @@ export class PaneView {
   /** Told after every reconcile (WindowWorkspaces saves the window's snapshot, m3 sub-spec 3). */
   /** @type {(() => void) | null} */
   onChange = null;
+  /**
+   * Whether a tab selected outside the panes may show in the focused pane; WindowWorkspaces
+   * allows only the shown workspace's tabs, and none while it switches or restores. Unset: any.
+   * @type {((tab: Tab) => boolean) | null}
+   */
+  accepts = null;
 
   /**
    * @param {Window} win
@@ -293,9 +302,12 @@ export class PaneView {
   }
 
   /**
-   * A pane's tab was selected from outside Vimma's pane ops: focus that pane (core updates the
-   * MRU and ends any zoom, as a pane move does), then reconcile. Not from our own selection
-   * (the re-entry flag), not when the selected tab is already the focused pane's (a no-op, so
+   * A tab was selected from outside Vimma's pane ops. A pane's tab: focus that pane (core updates
+   * the MRU and ends any zoom, as a pane move does). Any other tab the workspace may show (the
+   * picker, ctrl+tab, a new foreground tab): it replaces the focused pane's tab (core's
+   * `setPaneTab`), the split rebuilt around it in this same task, so no paint sees Firefox's
+   * suspended split; the old tab stays open. Then reconcile. Not from our own selection (the
+   * re-entry flag), not when the selected tab is already the focused pane's (a no-op, so
    * reconcile's own select never loops back), and not while Firefox picks a successor for a
    * closing tab: the TabClose reconcile selects core's choice instead.
    * @param {CustomEvent} e
@@ -304,10 +316,23 @@ export class PaneView {
     const panes = this.#panes;
     if (!panes || this.#reconciling) return;
     if (/** @type {Tab | undefined} */ (e.detail?.previousTab)?.closing) return;
-    const pane = paneOfTab(panes, /** @type {Tab} */ (e.target).linkedPanel);
-    if (!pane || pane === panes.focus) return;
-    this.#panes = focusPane(panes, pane);
+    const tab = /** @type {Tab} */ (e.target);
+    const pane = paneOfTab(panes, tab.linkedPanel);
+    if (pane === panes.focus) return;
+    if (pane) this.#panes = focusPane(panes, pane);
+    else if (this.#canShow(tab)) this.#panes = setPaneTab(panes, panes.focus, tab.linkedPanel);
+    else return;
     this.reconcile();
+  }
+
+  /**
+   * Whether `tab`, selected outside the panes, may replace the focused pane's tab. A pinned tab
+   * cannot join a split (and is in every workspace): Firefox shows it alone, the tree waits.
+   * @param {Tab} tab
+   */
+  #canShow(tab) {
+    if (tab.pinned || tab.closing || !tab.linkedPanel) return false;
+    return this.accepts?.(tab) ?? true;
   }
 
   #schedule() {
