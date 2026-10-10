@@ -84,6 +84,18 @@ Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm 
 | Go forward                                | `history_forward`  | `L`                     |
 | Reload page                               | `reload`           | `r`                     |
 | Open a URL or search in this tab          | `open_url`         | —                       |
+| Go up a level in the URL path             | `url_up`           | `gu`                    |
+| Go to the site's root                     | `url_root`         | `gU`                    |
+
+## Page
+
+| Action                                             | Config name          | Bindings |
+| -------------------------------------------------- | -------------------- | -------- |
+| Copy the page's URL                                | `yank_url`           | `yy`     |
+| Open the clipboard's URL or search in this tab     | `open_clipboard`     | `p`      |
+| Open the clipboard's URL or search in a new tab    | `open_clipboard_tab` | `P`      |
+| Focus the first text field (with a count: the Nth) | `focus_input`        | `gi`     |
+| View the page's source in a new tab                | `view_source`        | `gf`     |
 
 ## Hints
 
