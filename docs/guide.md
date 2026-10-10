@@ -228,26 +228,28 @@ Tokyo Night. A `colors.toml` Vimma cannot read (a value that is not a `#rrggbb` 
 missing key) is ignored: the colours stay as they were, and the Browser Console
 (`ctrl+shift+j`) says which line is wrong.
 
-**Instant theme changes.** To have Vimma recolour as soon as `omarchy-theme-set` finishes,
-instead of within 2 seconds, install the Omarchy hook that ships in this repository. It asks the
-running Vimma, through [vimma-ctl](#scripting-with-vimma-ctl), to read the theme again:
+**Instant theme changes.** On Omarchy, Vimma recolours as soon as `omarchy-theme-set` finishes,
+not within 2 seconds, with nothing to set up. When Vimma starts and finds
+`~/.config/omarchy/hooks/`, it writes its hook, `vimma-theme-reload.sh`, into
+`~/.config/omarchy/hooks/theme-set.d/` (mode 0644). Omarchy runs that hook after every theme
+change; it tells each running Vimma to read the theme again, through the same channel a second
+`vimma` command uses to reach the running one (no control socket, no `vimma-ctl`). With Vimma
+not running, the hook does nothing and starts nothing. Omarchy runs its hooks after it has
+restarted the terminals and retinted the other apps, so Vimma changes together with them.
 
-1. Turn the control socket on (`vimma.control.enabled` = `true` in `about:config`) and put
-   `vimma-ctl` on your `PATH` (steps 1 and 2 of [Scripting with vimma-ctl](#scripting-with-vimma-ctl)).
-2. Install the hook. Omarchy runs every file in `~/.config/omarchy/hooks/theme-set.d/` after it
-   sets a theme:
+- **Your edits stay yours.** The hook's last line is a checksum. As long as it matches, Vimma
+  keeps the file up to date; once you edit the file, Vimma never writes or removes it again.
+- **Deleting it sticks.** Vimma writes the hook once; if you delete it, it does not come back.
+- **To opt out**, set `vimma.theme.omarchyHook` to `false` in `about:config`: Vimma removes its
+  own, unedited hook at once and writes no new one. Set it back to `true` to have it written
+  again.
+- **By hand:** `vimma -vimma-reload-theme` makes the running Vimma read its theme now. Only use
+  it while Vimma runs: with none running it starts Vimma (the hook checks first, so it never
+  does).
+- Without D-Bus, the hook falls back to `vimma-ctl reload-theme` when `vimma-ctl` is on your
+  `PATH` and the [control socket](#scripting-with-vimma-ctl) is on.
 
-   ```sh
-   install -Dm644 tools/omarchy/vimma-theme-reload.sh \
-     ~/.config/omarchy/hooks/theme-set.d/vimma-theme-reload.sh
-   ```
-
-3. Check it: `vimma-ctl reload-theme` prints `changed` or `unchanged`.
-
-To remove it: `rm ~/.config/omarchy/hooks/theme-set.d/vimma-theme-reload.sh`. The hook is silent
-and harmless when Vimma is not running, the socket is off or `vimma-ctl` is missing; the 2-second
-check keeps working either way. Omarchy runs its hooks after it has restarted the terminals and
-retinted the other apps, so Vimma changes together with them, not before.
+The 2-second check keeps working in every case.
 
 ## Keys
 
@@ -547,6 +549,7 @@ Vimma's own preferences today:
 | `vimma.control.enabled`    | `false`                                | Turns on the control socket for `vimma-ctl` and scripts (see [Scripting with vimma-ctl](#scripting-with-vimma-ctl)). Applies at once, no restart.          |
 | `vimma.theme.source`       | `omarchy`                              | `omarchy` follows your Omarchy theme (see [Colours](#colours-your-omarchy-theme)); `builtin` forces the built-in Tokyo Night. Applies at once.             |
 | `vimma.theme.omarchyPath`  | `~/.local/state/omarchy/current/theme` | The Omarchy theme directory to read `colors.toml` and `light.mode` from. Applies at once.                                                                  |
+| `vimma.theme.omarchyHook`  | `true`                                 | Installs the Omarchy theme-set hook for instant theme changes (see [Colours](#colours-your-omarchy-theme)). `false` removes Vimma's unedited hook at once. |
 
 | `vimma.config.path` | unset | A different config file than `$XDG_CONFIG_HOME/vimma/config.toml` (tests use it). Applies at once. |
 | `vimma.config.pollMs` | `2000` | How often Vimma checks `config.toml` for a change, in milliseconds. Applies at once. |
@@ -621,7 +624,7 @@ is **off by default**. Spec: [m0-control-server](specs/m0-control-server.md), pr
    vimma-ctl send-keys "ctrl+b ?"     # typed as if on the keyboard: opens the help overlay
    vimma-ctl send-keys esc
    vimma-ctl open https://example.com # a new tab; only http, https, file and about URLs
-   vimma-ctl reload-theme             # read the Omarchy theme now (the theme-set hook)
+   vimma-ctl reload-theme             # read the Omarchy theme now (the hook's fallback)
    ```
 
    It finds your default profile itself; pass `--profile DIR` (or set `VIMMA_PROFILE`) for

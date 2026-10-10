@@ -110,6 +110,11 @@ pref("vimma.ui.tabstrip.hidden", true);
 // 127.0.0.1 and writes <profile>/vimma-control.json (0600) for vimma-ctl; live on change.
 pref("vimma.control.enabled", false);
 
+// Instant Omarchy theme reload (spec m5-omarchy-theme): with ~/.config/omarchy/hooks present,
+// Vimma writes its theme-set hook there, which reaches it through Firefox's command-line remoting
+// (no socket). false removes Vimma's own unedited copy, live; an edited hook is never touched.
+pref("vimma.theme.omarchyHook", true);
+
 // Find (spec m1-find): Vim's smartcase for `/` and Firefox's own find bar alike. 2 is the find
 // bar's "auto" mode: a query with a capital letter matches case, an all lower-case one does not.
 pref("accessibility.typeaheadfind.casesensitive", 2);

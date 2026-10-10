@@ -116,3 +116,5 @@ support-files = ["file_vimma_insert_scroll.html"]
 run-if = ["os == 'linux'"] # ln -s for the omarchy-theme-set symlink swap
 
 ["browser_vimma_about.js"]
+
+["browser_vimma_omarchy_hook.js"]

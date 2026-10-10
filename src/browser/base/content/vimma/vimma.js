@@ -35,6 +35,13 @@
   );
   ThemeHost.init(window);
 
+  // Instant theme reload (m5-omarchy-theme): `-vimma-reload-theme` from Omarchy's theme-set hook,
+  // which this installs when it finds Omarchy. Once per process.
+  const { OmarchyHook } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/omarchy/OmarchyHook.sys.mjs",
+  );
+  OmarchyHook.init();
+
   const { VimmaHost } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
   );

@@ -7,8 +7,10 @@
  *   npm start -- --import              # run `npm run import` first
  *   npm start -- -- --jsconsole URL    # anything after a second -- goes to the browser
  *
- * Always `--no-remote`, so it never hands off to (or touches) a running Firefox. The profile's
- * user.js gets security.sandbox.content.read_path_whitelist = <repo>/src/: in a local objdir the
+ * No `--no-remote`: Firefox 157 strips it unread, and remoting stays on either way. It never hands
+ * off to a running Firefox: remoting is keyed by app name and profile (D-Bus
+ * org.mozilla.vimma.<profile>), so the dev instance only answers `vimma <args>` for its own
+ * profile, such as the Omarchy hook's `-vimma-reload-theme`. The profile's user.js gets security.sandbox.content.read_path_whitelist = <repo>/src/: in a local objdir the
  * chrome files are symlinks into engine/, which `surfer import` links to this repo's src/, outside
  * the Firefox tree, so the content sandbox refuses to read them and VimmaChild never loads.
  * Packaged builds copy the files and do not need it. Other user.js lines are kept.
@@ -99,7 +101,7 @@ export function selectBuild({ engine, exists = existsSync }) {
  * @returns {[string, string[]]}
  */
 export function browserCommand(build, profile, extra) {
-  return [build.binary, ["--no-remote", "--profile", profile, ...extra]];
+  return [build.binary, ["--profile", profile, ...extra]];
 }
 
 /**

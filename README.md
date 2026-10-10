@@ -138,8 +138,8 @@ npm start -- --import   # run `npm run import` first
 npm start -- --profile DIR -- --jsconsole   # another profile; after the second -- browser flags
 ```
 
-`npm start` (`tools/start.mjs`) always passes `--no-remote` and its own profile, so it never
-touches your Firefox profile, and refuses to start a second instance on the same profile. It adds
+`npm start` (`tools/start.mjs`) passes its own profile, so it never touches your Firefox profile
+(remoting is keyed by app name and profile: a `vimma` command line never reaches Firefox), and refuses to start a second instance on the same profile. It adds
 one line to the profile's `user.js` (other lines are kept):
 `security.sandbox.content.read_path_whitelist` set to this checkout's `src/`. A local build's
 front-end files are symlinks into `src/`, outside the Firefox tree, and without that pref the
