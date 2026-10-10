@@ -51,7 +51,8 @@ Unknown keys anywhere in the schema are errors with the closest known key as sug
 | `[workspaces.<name>] icon`     | string                    | `"circle"`              | Firefox container icon: `fingerprint briefcase dollar cart vacation gift food fruit pet tree chill circle fence`                        |
 | `[workspaces.<name>] home`     | string                    | none                    | `http://…`, `https://…` or `about:…`, no whitespace                                                                                     |
 | `[workspaces.<name>] autofill` | boolean                   | `true`                  | boolean                                                                                                                                 |
-| `[theme] source`               | string                    | `"omarchy"`             | `"omarchy"` (follow Omarchy's `colors.toml`, Tokyo Night when absent) or `"file"` (Tokyo Night)                                         |
+| `[theme] source`               | string                    | `"omarchy"`             | `"omarchy"` (follow Omarchy's `colors.toml`, the built-in `name` when absent) or `"file"` (the built-in `name`)                         |
+| `[theme] name` (schema 2)      | string                    | `"vimma"`               | `"vimma"` (vimma.dev's colours, dark and light) or `"tokyo-night"` (suggestion); added after M5, see `BUILTIN_THEMES`                   |
 | `[theme] font`                 | string                    | `"monospace"`           | 1–200 characters, none of `" ; { } \ < >` or control characters (it goes into CSS)                                                      |
 | `[theme.colors] <key>`         | hex colour string         | from the source palette | key ∈ `PALETTE_KEYS` (Omarchy's `colors.toml` keys; suggestion); `#rgb` or `#rrggbb`, stored as `#rrggbb` lowercase                     |
 | `[theme.colors] mode`          | string                    | source palette's        | `"dark"` or `"light"`                                                                                                                   |
@@ -126,12 +127,19 @@ bright_red bright_yellow bright_green bright_cyan bright_blue bright_magenta`. O
 
 Picking badge text by contrast is what makes one rule work for light and dark themes.
 
-- `TOKYO_NIGHT`: the built-in palette, identical to Omarchy's stock tokyo-night `colors.toml`.
-- `resolveTheme({ theme, omarchy?, omarchyLightMode? })` → `{ tokens, mode, errors, warnings }`.
-  Base: Omarchy text when `source = "omarchy"` and the host found the file, else Tokyo Night
-  (warning when `source = "omarchy"` but no file). `[theme.colors]` overlays the base for both
-  sources. An invalid Omarchy file → errors with `colors.toml` lines and the Tokyo Night base; the
-  host keeps the previous tokens on errors, as for config.
+- `TOKYO_NIGHT`: identical to Omarchy's stock tokyo-night `colors.toml`; the built-in palette
+  until `VIMMA_DARK` / `VIMMA_LIGHT` (vimma.dev's colours) replaced it as the default.
+  `BUILTIN_THEMES` maps `[theme] name` to `{ dark, light? }`.
+- `resolveTheme({ theme, omarchy?, omarchyLightMode?, scheme? })` →
+  `{ tokens, mode, errors, warnings, adaptive }`. Base: Omarchy text when `source = "omarchy"`
+  and the host found the file, else the built-in `name`, its light variant when `scheme` is
+  `"light"` (or `[theme.colors] mode` pins it) and it has one (warning when
+  `source = "omarchy"` but no file). `[theme.colors]` overlays the base for both sources. An
+  invalid Omarchy file → errors with `colors.toml` lines and the built-in base; the host keeps
+  the previous tokens on errors, as for config.
+- `themeStylesheet({ theme, omarchy?, omarchyLightMode?, selector? })` → `{ css, errors,
+warnings }`: what the host injects; an adaptive built-in adds its light tokens under
+  `@media (prefers-color-scheme: light)`, so it switches with the browser, live.
 - `isHexColor`: `#rgb` / `#rrggbb`, case-insensitive; no alpha (contrast needs opaque colours).
 - `contrastRatio(a, b)`: WCAG 2.x, `(L1 + 0.05) / (L2 + 0.05)` with sRGB relative luminance.
   `resolveTheme` warns for each pair under 4.5:1: `fg`/`bg`, `fg`/`selection`,

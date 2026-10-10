@@ -15,7 +15,7 @@ import { KeymapError, compileKeymap } from "./keymap.mjs";
 import { MODES, isMode } from "./modes.mjs";
 import { PANES_MAX_DEFAULT, PANES_MAX_LIMIT } from "./panes.mjs";
 import { MAIN_SIZE_DEFAULT } from "./layouts.mjs";
-import { PALETTE_KEYS, isHexColor, normalizeHex } from "./theme.mjs";
+import { BUILTIN_THEMES, PALETTE_KEYS, isHexColor, normalizeHex } from "./theme.mjs";
 import { resolveRoutes, validateRoutes } from "./routes.mjs";
 import { formatPath, locateKeys, parsePath, parseToml } from "./toml.mjs";
 import { OVERLAP_CHORDS, canonicalChord, isShortcutChord } from "./firefox-keys.mjs";
@@ -154,7 +154,8 @@ const TOP_KEYS = [
 ];
 const KEYMAP_SECTIONS = new Set(["keys", "modal", "unbind"]);
 const WORKSPACE_KEYS = ["color", "icon", "home", "autofill"];
-const THEME_KEYS = ["source", "font", "colors"];
+const THEME_KEYS = ["source", "name", "font", "colors"];
+const THEME_NAMES = Object.keys(BUILTIN_THEMES);
 const THEME_SOURCES = ["omarchy", "file"];
 const PANES_KEYS = ["max", "layout", "main_size"];
 /** `[panes] layout` (docs/specs/tiling-layouts.md): where a pane opened without a direction goes. */
@@ -175,6 +176,7 @@ const SCHEMA_2_KEYS = [
   "firefox",
   "modal.insert_editing",
   "bookmarks",
+  "theme.name",
 ];
 /** `[bookmarks]` (docs/specs/bookmarks.md, decision 2). */
 const BOOKMARKS_KEYS = ["root"];
@@ -481,6 +483,13 @@ function validate(raw, declared) {
         else if (!THEME_SOURCES.includes(v)) {
           fail(path, `must be "omarchy" or "file"`, closest(v, THEME_SOURCES));
         }
+      } else if (key === "name") {
+        if (gated(path)) continue;
+        if (typeof v !== "string") typeError(path, v, "a string");
+        else if (!THEME_NAMES.includes(v)) {
+          const names = THEME_NAMES.map((n) => `"${n}"`).join(" or ");
+          fail(path, `must be ${names}`, closest(v, THEME_NAMES));
+        }
       } else if (key === "font") {
         if (typeof v !== "string") typeError(path, v, "a string");
         else if (v.length < 1 || v.length > MAX_FONT)
@@ -571,6 +580,7 @@ export function mergeWithDefaults(user, workspaceOrder, siteOrder) {
     }),
     theme: {
       source: theme.source ?? defTheme.source,
+      name: theme.name ?? defTheme.name,
       font: theme.font ?? defTheme.font,
       colors,
     },

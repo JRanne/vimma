@@ -47,8 +47,9 @@ const CONTRACT = "@mozilla.org/network/protocol/about;1?what=vimma";
  * @property {{ path: string, file: "pending" | "missing" | "read", schema: number | null,
  *   errors: string[] }} config
  * @property {{ name: string, group: string, bindings: string[], overridden: boolean }[]} bindings
- * @property {{ source: string, path: string, state: string, mtime: number | null,
- *   lastError: string | null, warnings: string[], name: string | null }} theme
+ * @property {{ source: string, builtin: string, path: string, state: string,
+ *   mtime: number | null, lastError: string | null, warnings: string[], name: string | null }} theme
+ *   name: the Omarchy theme's, or the built-in palette's when that is shown
  * @property {{ count: number, window: { name: string, active: boolean, tabs: number,
  *   panes: number }[] }} workspaces
  * @property {{ enabled: boolean, port: number | null }} control
@@ -231,7 +232,10 @@ export const AboutVimma = {
       })),
       theme: {
         ...theme,
-        name: theme.source === "omarchy" ? await omarchyThemeName(theme.path) : null,
+        name:
+          theme.source === "omarchy" && theme.state !== "missing"
+            ? await omarchyThemeName(theme.path)
+            : `${theme.builtin} (built in)`,
       },
       workspaces: {
         count: WorkspaceStore.definitions.workspaces.length,

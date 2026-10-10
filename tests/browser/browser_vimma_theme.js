@@ -13,8 +13,9 @@ const { Subprocess } = ChromeUtils.importESModule("resource://gre/modules/Subpro
 
 const START = "chrome://browser/content/vimma/start/start.html";
 const POLL_MS = 100;
-/** Tokyo Night's dark_background: the built-in status bar colour. */
-const TOKYO_STATUSBAR = "#13141c";
+/** The built-in vimma palette's dark_background: its status bar colour, dark and light. */
+const VIMMA_STATUSBAR = "#070b0d";
+const VIMMA_LIGHT_STATUSBAR = "#eae9e2";
 
 /**
  * A colors.toml in Omarchy 4's format (as in tests/contract/theme/), written by hand: keys in
@@ -175,6 +176,9 @@ add_task(async function setup() {
       ["vimma.theme.pollMs", POLL_MS],
       ["vimma.theme.omarchyPath", currentTheme],
       ["vimma.theme.source", "omarchy"],
+      // A dark desktop, so the built-in vimma palette shows its dark variant until a task
+      // switches the scheme (prefers-color-scheme follows this in chrome without a theme).
+      ["ui.systemUsesDarkTheme", 1],
     ],
   });
   registerCleanupFunction(async () => {
@@ -260,17 +264,17 @@ add_task(async function overlays_and_prompts_follow_a_light_theme() {
   await assertSurfacesFollowTheTheme("light");
 });
 
-add_task(async function no_omarchy_dir_means_tokyo_night() {
+add_task(async function no_omarchy_dir_means_the_builtin_vimma() {
   await SpecialPowers.pushPrefEnv({
     set: [["vimma.theme.omarchyPath", PathUtils.join(root, "nowhere", "theme")]],
   });
-  await waitForBar(TOKYO_STATUSBAR, "no Omarchy theme: the built-in Tokyo Night");
+  await waitForBar(VIMMA_STATUSBAR, "no Omarchy theme: the built-in vimma palette");
   await SpecialPowers.popPrefEnv();
   await waitForBar("#e6e9ef", "the Omarchy theme again");
 });
 
 // Issue #66: a check that was reading the old path when the path changed went on to apply that
-// theme (and mark it loaded), so the new path's missing theme never brought Tokyo Night back.
+// theme (and mark it loaded), so the new path's missing theme never brought the built-in back.
 add_task(async function a_path_change_during_a_check_is_not_undone_by_it() {
   await waitForBar("#e6e9ef", "sanity: the light Omarchy theme");
   // No timer tick in flight: only the pref changes below start checks.
@@ -286,13 +290,47 @@ add_task(async function a_path_change_during_a_check_is_not_undone_by_it() {
   for (let i = 0; i < 3; i++) await Promise.resolve();
   // ...when the path moves to a missing theme.
   Services.prefs.setStringPref("vimma.theme.omarchyPath", PathUtils.join(root, "nowhere"));
-  await waitForBar(TOKYO_STATUSBAR, "the last path wins: no Omarchy theme, Tokyo Night");
+  await waitForBar(VIMMA_STATUSBAR, "the last path wins: no Omarchy theme, the built-in");
   await SpecialPowers.popPrefEnv();
   await waitForBar("#e6e9ef", "the Omarchy theme again");
 });
 
 add_task(async function builtin_source_ignores_omarchy() {
   await SpecialPowers.pushPrefEnv({ set: [["vimma.theme.source", "builtin"]] });
-  await waitForBar(TOKYO_STATUSBAR, "vimma.theme.source=builtin forces Tokyo Night");
+  await waitForBar(VIMMA_STATUSBAR, "vimma.theme.source=builtin forces the built-in vimma");
+  await SpecialPowers.popPrefEnv();
+});
+
+add_task(async function builtin_vimma_follows_the_colour_scheme_live() {
+  await SpecialPowers.pushPrefEnv({ set: [["vimma.theme.source", "builtin"]] });
+  await waitForBar(VIMMA_STATUSBAR, "a dark desktop: vimma dark");
+  Assert.equal(token("--vimma-color-scheme"), "dark", "dark tokens");
+  const loaded = BrowserTestUtils.waitForNewTab(gBrowser, START, true);
+  BrowserCommands.openTab();
+  const tab = await loaded;
+  const pageBg = () =>
+    SpecialPowers.spawn(
+      tab.linkedBrowser,
+      [],
+      () => content.getComputedStyle(content.document.documentElement).backgroundColor,
+    );
+  await TestUtils.waitForCondition(
+    async () => (await pageBg()) === rgb("#0a0f12"),
+    "the start page is vimma dark",
+  );
+
+  await SpecialPowers.pushPrefEnv({ set: [["ui.systemUsesDarkTheme", 0]] });
+  await waitForBar(VIMMA_LIGHT_STATUSBAR, "a light desktop: vimma light, without a reload");
+  Assert.equal(token("--vimma-color-scheme"), "light", "light tokens");
+  Assert.equal(token("--vimma-hint-bg"), "#1bf587", "the hints stay mint");
+  await TestUtils.waitForCondition(
+    async () => (await pageBg()) === rgb("#f5f4ef"),
+    "the open start page turns light too",
+  );
+  await assertSurfacesFollowTheTheme("vimma light");
+
+  await SpecialPowers.popPrefEnv();
+  await waitForBar(VIMMA_STATUSBAR, "dark again");
+  BrowserTestUtils.removeTab(tab);
   await SpecialPowers.popPrefEnv();
 });

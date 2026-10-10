@@ -4,13 +4,16 @@
 
 // The theme tokens for every window and start page (spec: docs/specs/m5-omarchy-theme.md).
 // One per app: imported with ChromeUtils.importESModule, so every window shares this module.
-// It starts on the built-in Tokyo Night and swaps in the user's Omarchy theme
-// (colors.toml, light.mode) once the async read completes, then polls the file (plan §3:
-// Firefox has no portable file watcher). vimma-core parses and validates (resolveTheme,
-// tokensToCss); this module only does the I/O and the injection. config.toml's `[theme]`
-// (source, font, colors) arrives through `setConfig` (spec m5-config-load).
+// It starts on the built-in palette (`[theme] name`, vimma by default) and swaps in the user's
+// Omarchy theme (colors.toml, light.mode) once the async read completes, then polls the file
+// (plan §3: Firefox has no portable file watcher). vimma-core parses and validates
+// (themeStylesheet); this module only does the I/O and the injection. config.toml's `[theme]`
+// (source, name, font, colors) arrives through `setConfig` (spec m5-config-load). The built-in
+// vimma palette's sheet carries its light variant under @media (prefers-color-scheme: light):
+// chrome documents match it by browser.theme.toolbar-theme and the system, the start pages by
+// the content scheme (layout/style/PreferenceSheet.cpp), and both switch live with no script.
 
-import { resolveTheme, tokensToCss } from "../core/theme.mjs";
+import { DEFAULT_THEME_NAME, themeStylesheet } from "../core/theme.mjs";
 
 const lazy = /** @type {any} */ ({});
 ChromeUtils.defineESModuleGetters(lazy, {
@@ -32,20 +35,23 @@ const ERROR_TOPIC = "vimma-theme-error";
  * config.toml's `[theme]` (core's resolved form); the defaults until ConfigHost has read it.
  * @type {ResolvedConfig["theme"]}
  */
-let configTheme = { source: "omarchy", font: "monospace", colors: {} };
+let configTheme = { source: "omarchy", name: DEFAULT_THEME_NAME, font: "monospace", colors: {} };
 
 /** @param {string | null} omarchy  colors.toml text; null: the built-in theme */
 function cssFor(omarchy, lightMode = false) {
   const source = omarchy === null ? "file" : "omarchy";
-  const r = resolveTheme({
+  return themeStylesheet({
     theme: { ...configTheme, source },
     omarchy,
     omarchyLightMode: lightMode,
+    selector: ":root",
   });
-  return { css: tokensToCss(r.tokens, ":root"), errors: r.errors, warnings: r.warnings };
 }
 
-/** Tokyo Night with config.toml's font and `[theme.colors]` (they overlay either source). */
+/**
+ * The built-in palette `[theme] name` with config.toml's font and `[theme.colors]` (they overlay
+ * either source).
+ */
 function builtinCss() {
   const r = cssFor(null);
   for (const e of r.errors) console.warn(`vimma: [theme.colors] ${e.path} ${e.message}`);
@@ -138,7 +144,7 @@ async function check() {
   const now = await stat(dir);
   if (started !== generation) return;
   if (now === null) {
-    // Omarchy absent: Tokyo Night. Once a theme is showing, a missing file is far more likely
+    // Omarchy absent: the built-in palette. Once a theme is showing, a missing file is far more likely
     // omarchy-theme-set between its rm and mv: keep the theme until the next one appears.
     signature = "missing";
     if (!loaded) apply(builtinCss());
@@ -223,7 +229,7 @@ function start() {
   Services.prefs.addObserver(PATH_PREF, onPref);
   Services.prefs.addObserver(POLL_PREF, onPref);
   startTimer();
-  // Never blocks startup: the windows already show Tokyo Night; this swaps when read.
+  // Never blocks startup: the windows already show the built-in palette; this swaps when read.
   poll();
 }
 
@@ -269,12 +275,18 @@ export const ThemeHost = {
   },
 
   /**
-   * config.toml's `[theme]` (m5-config-load): `source` "file" stops following Omarchy; `font` and
-   * `colors` overlay either source. Unchanged settings cost nothing.
+   * config.toml's `[theme]` (m5-config-load): `source` "file" stops following Omarchy; `name` is
+   * the built-in palette shown without one; `font` and `colors` overlay either source. Unchanged
+   * settings cost nothing.
    * @param {ResolvedConfig["theme"]} theme
    */
   setConfig(theme) {
-    const next = { source: theme.source, font: theme.font, colors: { ...theme.colors } };
+    const next = {
+      source: theme.source,
+      name: theme.name ?? DEFAULT_THEME_NAME,
+      font: theme.font,
+      colors: { ...theme.colors },
+    };
     if (JSON.stringify(next) === JSON.stringify(configTheme)) return;
     configTheme = next;
     recheck();
@@ -282,7 +294,7 @@ export const ThemeHost = {
 
   /**
    * What about:vimma shows: the source in force ("builtin": the pref, or config.toml's
-   * source = "file"), the Omarchy theme directory, what the last check found ("pending" before
+   * source = "file"), the built-in palette's name (`[theme] name`), the Omarchy theme directory, what the last check found ("pending" before
    * one, "builtin", "missing", "loaded", or "rejected" when that file's errors kept the theme
    * shown), the colors.toml mtime (ms) it saw, the last rejected file's errors, and the applied
    * theme's warnings.
@@ -295,6 +307,7 @@ export const ThemeHost = {
     const seen = parts.length > 1;
     return {
       source: builtin ? "builtin" : "omarchy",
+      builtin: configTheme.name ?? DEFAULT_THEME_NAME,
       path: themeDir(),
       state: signature === "" ? "pending" : seen ? (lastError ? "rejected" : "loaded") : signature,
       mtime: seen ? Number(parts[1]) : null,

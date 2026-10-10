@@ -8,9 +8,8 @@
 
 "use strict";
 
-const { validateMessage, MAX_LINE_LENGTH, TOKYO_NIGHT } = ChromeUtils.importESModule(
-  "chrome://browser/content/vimma/core/index.mjs",
-);
+const { validateMessage, MAX_LINE_LENGTH, TOKYO_NIGHT, BUILTIN_THEMES } =
+  ChromeUtils.importESModule("chrome://browser/content/vimma/core/index.mjs");
 const { VimmaControl } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/ctl/VimmaControl.sys.mjs",
 );
@@ -779,10 +778,12 @@ add_task(async function test_reload_theme() {
   client.close();
   await disable();
   await SpecialPowers.popPrefEnv();
-  await TestUtils.waitForCondition(
-    () => barBackground() === rgb(TOKYO_NIGHT.dark_background),
-    "back to the built-in theme",
-  );
+  await TestUtils.waitForCondition(() => {
+    // the built-in vimma palette, in the variant the window's colour scheme picks
+    const light = window.matchMedia("(prefers-color-scheme: light)").matches;
+    const { dark, light: lightPalette } = BUILTIN_THEMES.vimma;
+    return barBackground() === rgb((light ? lightPalette : dark).dark_background);
+  }, "back to the built-in theme");
   await IOUtils.remove(dir, { recursive: true });
 });
 

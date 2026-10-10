@@ -227,9 +227,12 @@ enable = []
 [workspaces]
 # work = { color = "blue", icon = "briefcase", home = "https://intranet.example" }
 
-# "omarchy" follows the current Omarchy theme (Tokyo Night without one); "file" is Tokyo Night.
+# "omarchy" follows the current Omarchy theme, and uses the built-in palette `name` without
+# one; "file" always uses `name`: "vimma" (vimma.dev's colours, light or dark as the browser
+# is) or "tokyo-night" (dark).
 [theme]
 source = "omarchy"
+name = "vimma"
 font = "monospace"
 
 # Overrides on top of the palette, with the keys of Omarchy's colors.toml.
