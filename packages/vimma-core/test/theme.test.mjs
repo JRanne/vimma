@@ -218,6 +218,14 @@ describe("untrusted input cannot inject CSS", () => {
     expect(r.tokens["--vimma-color-scheme"]).toBe("dark");
   });
 
+  test("a font with a long run of blanks is trimmed in linear time (CodeQL js/polynomial-redos)", () => {
+    const font = `x${" ".repeat(200_000)}y`;
+    const start = performance.now();
+    const r = resolveTheme({ theme: themeCfg({ source: "file", font }) });
+    expect(performance.now() - start).toBeLessThan(1000);
+    expect(r.tokens["--vimma-font"]).toBe(`"${font}", monospace`);
+  });
+
   test("a hostile font stays inside one quoted CSS string", () => {
     const font = 'x"; } * { background: url(http://evil/) } :root { --a: "\\\n';
     const r = resolveTheme({ theme: themeCfg({ source: "file", font }) });

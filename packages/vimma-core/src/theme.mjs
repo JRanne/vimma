@@ -6,6 +6,7 @@
  * Theme tokens: CSS custom properties from a palette in Omarchy's colors.toml vocabulary.
  * See docs/specs/m5-core-config-and-theme.md § Theme tokens. The host applies them.
  */
+import { trimBlanks } from "./strings.mjs";
 import { formatPath, locateKeys, parseToml } from "./toml.mjs";
 
 /** @typedef {Record<string, string>} Palette  PALETTE_KEYS → "#rrggbb", plus mode */
@@ -320,10 +321,7 @@ const GENERIC_FONTS = new Set([
  * @param {string} font
  */
 function cssFontFamily(font) {
-  const families = font
-    .split(",")
-    .map((f) => f.replace(/^[ \t]+|[ \t]+$/g, ""))
-    .filter(Boolean);
+  const families = font.split(",").map(trimBlanks).filter(Boolean);
   const out = families.map((f) => (GENERIC_FONTS.has(f) ? f : cssString(f)));
   if (!GENERIC_FONTS.has(/** @type {string} */ (families.at(-1)))) out.push("monospace");
   return out.join(", ");

@@ -7,6 +7,7 @@
  * with highlight ranges, and the picker's key handling as a pure state machine. The `prefix+w`
  * workspace picker (m3-workspaces 5) is the same machine over one item per workspace.
  */
+import { deleteWordBackward } from "./strings.mjs";
 import { displayLabel } from "./tablabels.mjs";
 import { graphemes } from "./textwidth.mjs";
 
@@ -550,7 +551,7 @@ export function pickerKey(state, key) {
     case "ctrl+u":
       return done(setQuery(state, ""));
     case "ctrl+w":
-      return done(setQuery(state, state.query.replace(/\S*\s*$/, "")));
+      return done(setQuery(state, deleteWordBackward(state.query)));
   }
   const ch = typed(key);
   return done(ch === null ? state : setQuery(state, state.query + ch));

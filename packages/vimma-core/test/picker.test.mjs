@@ -207,6 +207,15 @@ describe("picker state machine", () => {
     expect(press(s, ["q"]).effect).toEqual({ type: "close" });
   });
 
+  test("ctrl-w deletes the last word in linear time (CodeQL js/polynomial-redos)", () => {
+    const search = press(openPicker(items, {}), ["/"]).state;
+    const long = { ...search, query: `${" ".repeat(200_000)}x` };
+    const start = performance.now();
+    const r = press(long, ["ctrl+w"]).state;
+    expect(performance.now() - start).toBeLessThan(1000);
+    expect(r.query).toBe(" ".repeat(200_000));
+  });
+
   test("in search, j and k type; arrows and ctrl-n/p move", () => {
     const s = press(openPicker(items, {}), ["/", "j", "k"]).state;
     expect(s.query).toBe("jk");

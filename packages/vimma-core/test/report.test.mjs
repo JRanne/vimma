@@ -30,6 +30,14 @@ describe("redactReport", () => {
     );
   });
 
+  it("strips a home's trailing slashes in linear time (CodeQL js/polynomial-redos)", () => {
+    const start = performance.now();
+    const out = redactReport("/home/alice/x", `/${"/".repeat(200_000)}x`);
+    expect(performance.now() - start).toBeLessThan(1000);
+    expect(out).toBe("/home/alice/x");
+    expect(redactReport("/home/alice/x", "/home/alice///")).toBe("~/x");
+  });
+
   it("does nothing special without a home", () => {
     expect(redactReport("/home/alice/x", "")).toBe("/home/alice/x");
   });
