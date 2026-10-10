@@ -13,7 +13,7 @@
 // So: `await recordPageKeys(browser)` and `await focusContent(browser)`, then press, then
 // `await waitForPageKey(...)` or `await pageKeys(browser)`.
 
-/* exported focusContent, recordPageKeys, pageKeys, waitForPageKey */
+/* exported focusContent, recordPageKeys, pageKeys, waitForPageKey, bindUnbuiltPrefixKey */
 
 "use strict";
 
@@ -80,4 +80,22 @@ function waitForPageKey(browser, entries, ms = 5000) {
       return false;
     }
   });
+}
+
+/**
+ * Every default binding under ctrl+b runs since the side panel (m3-workspaces 6), so the tests
+ * of the "not implemented yet" notice bind one the host has not built: `ctrl+b o` to
+ * history_back ("Go back"), for the rest of the test file. Returns the notice text it gives.
+ * @returns {string}
+ */
+function bindUnbuiltPrefixKey() {
+  const { VimmaHost } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
+  );
+  const { compileKeymap } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/core/keymap.mjs",
+  );
+  VimmaHost.configure({ keymap: compileKeymap({ keys: { history_back: ["prefix+o"] } }) });
+  registerCleanupFunction(() => VimmaHost.configure({ keymap: compileKeymap() }));
+  return "Go back: not implemented yet";
 }

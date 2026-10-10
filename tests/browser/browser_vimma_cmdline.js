@@ -6,7 +6,10 @@
 
 "use strict";
 
-/* global focusContent, recordPageKeys, pageKeys, waitForPageKey -- from head.js */
+/* global focusContent, recordPageKeys, pageKeys, waitForPageKey, bindUnbuiltPrefixKey -- from head.js */
+
+// ctrl+b o: a key under the prefix the host has not built (head.js).
+bindUnbuiltPrefixKey();
 
 const { VimmaHost } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
@@ -301,14 +304,15 @@ add_task(async function open_loads_through_fixup() {
 
 add_task(async function unbuilt_and_pending_commands_say_so() {
   const tabs = await openTabs(1);
+  // Every command runs since the side panel (m3-workspaces 6): `:sidebar`, the last unbuilt
+  // one, opens it now. The notice path is the keys' (`_run`), tested with ctrl+b o.
   runCommand("sidebar");
   Assert.ok(!isOpen(), "the line closes");
-  Assert.ok(noticeShown(), ":sidebar shows the notice");
-  Assert.equal(
-    document.getElementById(NOTICE_ID).textContent,
-    "Open / close the side panel: not implemented yet",
-    "as the keys do",
+  await TestUtils.waitForCondition(
+    () => BrowserTestUtils.isVisible(document.getElementById("vimma-panel")),
+    ":sidebar opens the side panel",
   );
+  EventUtils.synthesizeKey("KEY_Escape");
   await focusContent(tabs[0].linkedBrowser);
   runCommand("workspace work");
   Assert.equal(
@@ -427,8 +431,8 @@ add_task(async function a_notice_does_not_cover_the_line() {
   const tabs = await openTabs(1);
   typeCommand("ta");
   EventUtils.synthesizeKey("b", { ctrlKey: true });
-  EventUtils.synthesizeKey("b");
-  Assert.ok(noticeShown(), "ctrl+b b from the line shows the notice");
+  EventUtils.synthesizeKey("o");
+  Assert.ok(noticeShown(), "ctrl+b o from the line shows the notice");
   Assert.ok(isOpen(), "and the line stays open");
   const gap = () =>
     document.getElementById(NOTICE_ID).getBoundingClientRect().bottom -

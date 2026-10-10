@@ -27,7 +27,8 @@ import { Notice } from "../ui/notice.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
 import { GotoPicker, WorkspacePicker } from "../ui/picker.mjs";
 import { RenamePrompt } from "../ui/rename-prompt.mjs";
-import { gotoItems, tabById } from "./goto.mjs";
+import { SidePanel } from "../ui/side-panel.mjs";
+import { gotoItems, pickerWorkspaces, tabById } from "./goto.mjs";
 import { getTabLabel, setTabLabel } from "./tab-labels.mjs";
 import { BLOCKED_URL_TEXT, closeTab, newTab, openUrl, selectTab } from "./tab-ops.mjs";
 import {
@@ -101,6 +102,7 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
  * @property {GotoPicker} picker  the prefix+g overlay (m2-picker-rename)
  * @property {WorkspacePicker} wsPicker  the prefix+w overlay (m3-workspaces 5)
  * @property {RenamePrompt} rename  the prefix+shift+t prompt (m2-picker-rename)
+ * @property {SidePanel} panel  `<leader>n` / prefix+b, `panel` mode while open (m3-workspaces 6)
  * @property {Find} find  `/`, `?`, `n`, `N` over Firefox's find bar (m1-find)
  * @property {boolean} resize  in resize mode (`prefix+r`, m4-split-panes sub-spec 5, ADR-014)
  */
@@ -302,6 +304,17 @@ export const RUNNERS = Object.freeze({
     );
     if (refused) s.notice.show(refused);
   },
+  // m3-workspaces 6: the side panel; its own keys run in `panel` mode while it is open.
+  "sidebar.toggle": (/** @type {WindowState} */ s) => {
+    s.notice.hide();
+    if (s.panel.isOpen) s.panel.close();
+    else if (!s.panel.open()) s.notice.show(NO_WORKSPACES);
+  },
+  "panel.down": (/** @type {WindowState} */ s, /** @type {Action} */ a) => s.panel.action(a),
+  "panel.up": (/** @type {WindowState} */ s, /** @type {Action} */ a) => s.panel.action(a),
+  "panel.open": (/** @type {WindowState} */ s, /** @type {Action} */ a) => s.panel.action(a),
+  "panel.select": (/** @type {WindowState} */ s, /** @type {Action} */ a) => s.panel.action(a),
+  "panel.close": (/** @type {WindowState} */ s, /** @type {Action} */ a) => s.panel.action(a),
   // `:source` (m5-config-load): ConfigHost reads config.toml now instead of at the next poll;
   // `:source <path>` passes the path as typed, which ConfigHost expands.
   "config.reload": (_s, _a, /** @type {string | undefined} */ text) =>
@@ -539,6 +552,30 @@ export const VimmaHost = {
         changed: () => this._emit(state),
       }),
       find: new Find(win, () => this._emit(state)),
+      panel: new SidePanel(win, {
+        model: () => (WindowWorkspaces.get(win)?.model ? pickerWorkspaces(win) : null),
+        info: (tabId) => {
+          const tab = /** @type {any} */ (tabById(win, tabId));
+          if (!tab) return undefined;
+          const browser = tab.linkedBrowser;
+          return {
+            title: browser?.contentTitle || tab.label,
+            url: browser?.currentURI?.spec ?? "",
+            label: getTabLabel(tab),
+            foreign: !!WindowWorkspaces.get(win)?.isForeign(tab),
+            playing: !!tab.soundPlaying,
+          };
+        },
+        color: () => WindowWorkspaces.get(win)?.status()?.color,
+        select: (tabId) => {
+          const tab = tabById(win, tabId);
+          if (!tab) return;
+          /** @type {{ gBrowser: { selectedTab: Element } }} */ (
+            /** @type {unknown} */ (win)
+          ).gBrowser.selectedTab = tab;
+        },
+        say: (text) => state.notice.show(text),
+      }),
     };
     states.set(win, state);
     windows.add(win);
@@ -569,7 +606,10 @@ export const VimmaHost = {
     // After the keys too: a failure costs the workspaces, not ctrl+b (m3-workspaces 2b).
     try {
       WindowWorkspaces.init(win, {
-        onChange: () => this._emit(state),
+        onChange: () => {
+          state.panel.refresh();
+          this._emit(state);
+        },
         notify: (text) => state.notice.show(text),
       });
     } catch (e) {
@@ -593,6 +633,7 @@ export const VimmaHost = {
     state.picker.destroy();
     state.wsPicker.destroy();
     state.rename.destroy();
+    state.panel.destroy();
     state.tabStrip?.uninit();
     WindowWorkspaces.uninit(win);
     state.statusBar?.uninit();
@@ -740,7 +781,8 @@ export const VimmaHost = {
 
   /**
    * `help` while the overlay or a picker (modal too) is open; `command` while the `:` line
-   * is; `resize` in resize mode (ADR-014); the focused page's mode;
+   * is; `panel` while the side panel is (modal: m3-workspaces 6); `resize` in resize mode
+   * (ADR-014); the focused page's mode;
    * `insert` in chrome, so chrome text fields keep their keys and only global chords are ours.
    * @param {WindowState} state
    * @returns {Mode}
@@ -748,6 +790,7 @@ export const VimmaHost = {
   _mode(state) {
     if (state.help.isOpen || state.picker.isOpen || state.wsPicker.isOpen) return "help";
     if (state.cmdline.isOpen) return "command";
+    if (state.panel.isOpen) return "panel";
     // Resize mode ends by itself when the window is down to one pane (a tab closed meanwhile).
     if (state.resize && !hasPanes(state.win)) state.resize = false;
     if (state.resize) return "resize";
@@ -843,8 +886,8 @@ export const VimmaHost = {
     if (!("replay" in result)) KeyLog.record(mode, chord, result); // about:vimma's last keys
     // The overlay is modal: in help mode every key is ours, handled or not, so nothing reaches
     // the browser underneath (ctrl+w would close the tab behind it). Hint mode too: every key
-    // is a label key or ignored, never the page's. Resize mode too (ADR-014).
-    const modal = mode === "help" || mode === "hint" || mode === "resize";
+    // is a label key or ignored, never the page's. Resize mode too (ADR-014), and the side panel.
+    const modal = mode === "help" || mode === "hint" || mode === "resize" || mode === "panel";
     switch (result.kind) {
       case "pass":
         if (modal) consume(e);
