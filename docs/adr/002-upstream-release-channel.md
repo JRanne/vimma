@@ -23,3 +23,6 @@ Release is what Zen tracks and what users expect. Security dot releases must shi
 ## Consequences
 
 Monthly rebase cost; mitigated by ADR-003 (minimal patch surface) and automation.
+
+Amended by [ADR-015](015-upstream-autopilot.md): the bump PR arrives rebased and tested, and the
+target for security dot releases is 3 days, enforced by a drift check.

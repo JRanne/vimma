@@ -1,0 +1,85 @@
+{
+  "releases": {
+    "firefox-155.0": {
+      "build_number": 1,
+      "category": "major",
+      "date": "2026-09-01",
+      "description": null,
+      "is_security_driven": false,
+      "product": "firefox",
+      "version": "155.0"
+    },
+    "firefox-155.0.1": {
+      "build_number": 1,
+      "category": "stability",
+      "date": "2026-09-04",
+      "description": null,
+      "is_security_driven": false,
+      "product": "firefox",
+      "version": "155.0.1"
+    },
+    "firefox-156.0": {
+      "build_number": 1,
+      "category": "major",
+      "date": "2026-09-15",
+      "description": null,
+      "is_security_driven": false,
+      "product": "firefox",
+      "version": "156.0"
+    },
+    "firefox-156.0.1": {
+      "build_number": 1,
+      "category": "stability",
+      "date": "2026-09-22",
+      "description": null,
+      "is_security_driven": false,
+      "product": "firefox",
+      "version": "156.0.1"
+    },
+    "firefox-157.0b5": {
+      "build_number": 1,
+      "category": "dev",
+      "date": "2026-09-23",
+      "description": null,
+      "is_security_driven": false,
+      "product": "firefox",
+      "version": "157.0b5"
+    },
+    "firefox-157.0": {
+      "build_number": 1,
+      "category": "major",
+      "date": "2026-09-29",
+      "description": null,
+      "is_security_driven": false,
+      "product": "firefox",
+      "version": "157.0"
+    },
+    "firefox-157.0.1": {
+      "build_number": 1,
+      "category": "stability",
+      "date": "2026-10-06",
+      "description": null,
+      "is_security_driven": false,
+      "product": "firefox",
+      "version": "157.0.1"
+    },
+    "firefox-153.4.0esr": {
+      "build_number": 3,
+      "category": "esr",
+      "date": "2026-09-29",
+      "description": null,
+      "is_security_driven": false,
+      "product": "firefox",
+      "version": "153.4.0"
+    },
+    "firefox-158.0b5": {
+      "build_number": 1,
+      "category": "dev",
+      "date": "2026-10-07",
+      "description": null,
+      "is_security_driven": false,
+      "product": "firefox",
+      "version": "158.0b5"
+    }
+  }
+}

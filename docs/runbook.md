@@ -301,7 +301,7 @@ Limits:
 | `ci.yml`             | push to `main`, PRs, manual      | `ubuntu-latest`           | nothing                                    |
 | `e2e.yml`            | PRs touching the browser, manual | `ubuntu-24.04`            | nothing (ADR-010)                          |
 | `nightly.yml`        | 03:00 UTC, manual                | self-hosted `vimma-build` | register the runner, set `NIGHTLY_ENABLED` |
-| `upstream.yml`       | every 6 h (`:17`), manual        | `ubuntu-latest`           | allow Actions to open PRs; optional token  |
+| `upstream.yml`       | every 4 h (`:17`), manual        | `ubuntu-latest` + e2e.yml | allow Actions to open PRs; optional token  |
 | `claude.yml`         | `@claude`, `spec`+`claude:go`    | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
 | `release-please.yml` | push to `main`, manual           | `ubuntu-latest`           | Actions may open PRs; optional token       |
 | `release.yml`        | release published, manual        | `vimma-build` + hosted    | see "Release packages" (gated off)         |
@@ -368,8 +368,9 @@ to approve the first run of a first-time contributor (Settings → Actions → G
 
 The free plan has a limited monthly budget of minutes for private repos, billed per job and rounded
 up to the minute. Rough use: CI ≈ 2 min per PR push, e2e ≈ 6 min per PR push that touches the
-browser (5.5 min wall, ADR-010); upstream 4 × 1 min a day (≈ 120 min a month), plus ≈ 3 min
-(patch check + PR job) when a release is found; claude.yml only
+browser (5.5 min wall, ADR-010); upstream 6 × 1 min a day (≈ 180 min a month), plus ≈ 16 min
+(issue, patch check, the e2e suites, PR) when a release is found, ≈ 270 a month in all (spec
+m7-upstream-autopilot); claude.yml only
 when triggered. `nightly.yml` uses the self-hosted runner, which costs no hosted minutes. Check usage in Settings → Billing → Usage. Once the repo is public,
 standard hosted runners are free and unlimited; the e2e paths filter can then go.
 
@@ -564,46 +565,46 @@ Browsing honestly off).
 script, then delete the old key in the console. Builds already shipped keep the old key and
 stop getting lists once it is deleted, so rotate before a release, not after.
 
-### Upstream bumps (`upstream.yml`)
+### Upstream bumps (`upstream.yml`, the upstream autopilot)
 
-**The procedure for a bump, from this PR to merge, is [docs/rebase.md](rebase.md)** (the rebase
-playbook: patch failures, builds and tests, the security fast path, rollback).
+**What it does and what you do with its PR: [docs/rebase.md](rebase.md)**, section 1 (the
+playbook also covers patch failures, builds, the security fast path and rollback). Spec
+[m7-upstream-autopilot](specs/m7-upstream-autopilot.md), ADR-015.
 
-`tools/upstream/check-release.py` prints `LATEST_FIREFOX_VERSION` from product-details when it
-is newer than `surfer.json`. The `check` job (read-only token) then streams that release's source
-tarball through `tools/upstream/patch-check.py`, which dry-runs every `src/**/*.patch` and writes
-a summary (clean / offset / fuzz / failed, with the failing hunks) plus a JSON report, uploaded as
-the run's `patch-check` artifact. It also checks the stream's SHA-512 against Mozilla's
-`SHA512SUMS`. A mismatch fails the job and opens no PR, and "did not run" is reported apart from
-"patches fail". The `pr` job (the only one with write permissions) runs
-`bump-surfer-json.py`, which rewrites only that version, and opens a draft PR
-`upstream: update to Firefox X.Y` on branch `upstream/firefox-X.Y`, with the summary in its body.
-If a PR for
-that branch is already open it does nothing; a branch left by a failed or closed run is rebuilt
-from `main` and force-pushed, so a failed run is retried 6 h later.
+In short: every 4 h `detect` (read-only, < 1 min, no secrets) reads product-details and the MFSA
+index. For a newer Firefox it opens a tracking issue labelled `upstream` (+ `security` with the
+advisory and severity, mentioning you), streams and SHA-512-verifies the source tarball, dry-runs
+our patches, runs `e2e.yml` on the new version (import, artifact build, `tests/browser/`,
+`tests/e2e/`), pushes `upstream/firefox-X.Y.Z` and opens `upstream: firefox X.Y.Z`. Each release
+is handled once (its branch exists); `gh workflow run upstream.yml -f rebuild=true` redoes it. If
+`main` is more than 3 days behind a security dot release (7 for a major, 14 otherwise), the
+`drift` job opens a `security` issue and the run fails until the bump is merged.
 
-Every bump PR: refresh the copy of `browser.newtabpage.activity-stream.asrouter.providers.cfr`
-in `src/browser/branding/vimma/pref/firefox-branding.js` from `engine/browser/app/profile/firefox.js`,
-keeping `"enabled":false` (spec m0-mozilla-services). A stale copy shadows upstream's provider.
-Likewise `browser.safebrowsing.provider.google{4,5}.lists`: upstream's value from
-`engine/modules/libpref/init/all.js` without `goog-badbinurl-proto` and `goog-downloadwhite-proto`
-(spec m0-safebrowsing-key), then run `tools/safebrowsing-smoke/safebrowsing-smoke.sh`.
-docs/rebase.md, step 6, has a one-line comparison.
+Permissions: the workflow grants nothing by default; `detect` reads contents and issues, `track`
+and `drift` write issues, `patch-check` and `test` read contents only, and only `publish` can
+push and open PRs. No job uses `pull_request_target`, and none gets `SAFEBROWSING_API_KEY`: the
+artifact build is keyless by design; the key is only for the nightly and release builds.
 
 One-time setup:
 
-1. Settings → Actions → General → Workflow permissions → tick "Allow GitHub Actions to create and
-   approve pull requests" (`gh pr create` with the default token fails without it).
-2. Optional: PRs opened with the default `GITHUB_TOKEN` do not trigger `ci.yml`. Either mark the
-   draft ready for review (that event is yours, so CI runs) or `gh workflow run ci.yml --ref
-<branch>`; or store a fine-grained token for this repo only (Contents + Pull requests:
-   read/write) as `gh secret set UPSTREAM_PR_TOKEN`, which the workflow uses when present.
+1. **Settings → Actions → General → Workflow permissions → tick "Allow GitHub Actions to create
+   and approve pull requests".** Until then `gh pr create` fails with "GitHub Actions is not
+   permitted to create or approve pull requests"; the autopilot detects that message, keeps the
+   pushed branch, and comments the full summary and a prefilled compare link on the tracking
+   issue instead (open the PR from there). The same setting serves release-please and claude.yml.
+2. Optional: a PR opened with the default `GITHUB_TOKEN` starts no workflows, so the autopilot
+   opens it as a draft: mark it ready for review (that event is yours, so `ci.yml` and `e2e.yml`
+   run). With a fine-grained token for this repo only (Contents + Pull requests: read/write)
+   stored as `gh secret set UPSTREAM_PR_TOKEN`, a bump that passed everything opens ready for
+   review and its CI runs at once.
 
-Before merging a bump, follow [docs/rebase.md](rebase.md): `npm run import && npx surfer build` on
-the build machine (the nightly does this once merged), `npm run mochitest -- tests/browser/` on the
-built engine (our patches change upstream behaviour, e.g. `tab-bar-visibility-js.patch`) and on an
-artifact build, the branding and cfr checks, then mark the PR ready for review. Its checklist is
-"8. Ready, CI, merge". Patch-size review (plan §4, Sunday): `python3 tools/upstream/patch-audit.py`.
+Every bump: the copies of `browser.newtabpage.activity-stream.asrouter.providers.cfr` and
+`browser.safebrowsing.provider.google{4,5}.lists` in
+`src/browser/branding/vimma/pref/firefox-branding.js` must match the new engine's (specs
+m0-mozilla-services, m0-safebrowsing-key). `tools/upstream/upstream-prefs.mjs` checks both in
+`e2e.yml` and prints the line to paste. Before a release, run
+`tools/safebrowsing-smoke/safebrowsing-smoke.sh` on a keyed full build. Patch-size review
+(plan §4, Sunday): `python3 tools/upstream/patch-audit.py`.
 
 ### Claude Code in GitHub (`claude.yml`)
 
@@ -614,7 +615,7 @@ all work with a notice.
    `claude setup-token` and `gh secret set CLAUDE_CODE_OAUTH_TOKEN`. The Claude GitHub app is
    not needed: the workflow passes the job's own `GITHUB_TOKEN` (`github_token` input).
 2. Create the labels: `gh label create spec`, `gh label create claude:go`
-   (`bot`, `upstream`, `nightly-failure` are created by the workflows).
+   (`bot`, `upstream`, `security`, `nightly-failure` are created by the workflows).
    Tick "Allow GitHub Actions to create and approve pull requests" (see Upstream bumps).
 3. Use `@claude` in an issue, comment or review (only from the owner, members or collaborators).
    Claude answers, reviews and comments; it cannot push in this mode.
@@ -667,8 +668,8 @@ or uploaded by release-please itself; `release.yml` does that (below, "Release p
   `upstream` and `revert` → Changed; `docs`, `test`, `build`, `ci`, `chore` and `refactor` are
   left out.
 - **The changelog line is the commit subject; the body explains why** (CLAUDE.md). release-please
-  writes subjects only. Firefox bumps are `upstream: update to Firefox X.Y` (upstream.yml), so a
-  security dot release alone still produces a release PR (plan §4: release within 7 days).
+  writes subjects only. Firefox bumps are `upstream: firefox X.Y.Z` (upstream.yml), so a
+  security dot release alone still produces a release PR (ADR-015: merged within 3 days).
 - **First release (one-time).** No `v0.1.0` tag exists, and release-please would treat the
   manifest's `0.1.0` as already released and propose `0.2.0`. So `release-please-config.json`
   pins `"release-as": "0.1.0"`: the first release PR, `chore(main): release 0.1.0` on branch
