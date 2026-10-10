@@ -144,7 +144,7 @@ add_task(async function config_errors_show_with_file_and_line() {
   const overridden = [...doc.querySelectorAll("#bindings tr.overridden")].map((r) => r.textContent);
   Assert.equal(overridden.length, 1, "one override");
   Assert.stringContains(overridden[0], "new_tab", "new_tab is the override");
-  Assert.stringContains(overridden[0], "prefix+y", "with its binding");
+  Assert.stringContains(overridden[0], "ctrl+b y", "with its binding, as keys to press");
   BrowserTestUtils.removeTab(again);
 
   await SpecialPowers.popPrefEnv();

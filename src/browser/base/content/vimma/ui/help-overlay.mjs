@@ -6,7 +6,7 @@
 // chrome document, so it sits above every page: about:preferences, pdf.js, remote content.
 // Keys reach it only through VimmaHost; it owns no key handling of its own.
 
-import { bindingTable, filterBindings } from "../core/help.mjs";
+import { bindingTable, filterBindings, keyLegend } from "../core/help.mjs";
 
 /** @import { Keymap } from "../core/keymap.mjs" */
 /** @import { BindingRow } from "../core/help.mjs" */
@@ -29,6 +29,8 @@ export class HelpOverlay {
     this.win = win;
     /** @type {BindingRow[]} */
     this.rows = bindingTable(keymap, { runnable });
+    /** What prefix and leader stand for in the rows: `prefix = ctrl+b · leader = space`. */
+    this.legend = keyLegend(keymap);
     this.runnable = runnable;
     /** @type {HTMLDialogElement | null} */
     this.dialog = null;
@@ -46,6 +48,7 @@ export class HelpOverlay {
   setKeymap(keymap) {
     this.destroy(); // the dialog is built from the rows once; the next open builds it anew
     this.rows = bindingTable(keymap, { runnable: this.runnable });
+    this.legend = keyLegend(keymap);
   }
 
   get isOpen() {
@@ -157,6 +160,7 @@ export class HelpOverlay {
     input.addEventListener("input", () => this.applyFilter());
     header.append(input);
     dialog.append(header);
+    dialog.append(el("p", "vimma-help-key-legend", this.legend));
     if (this.runnable) {
       dialog.append(el("p", "vimma-help-legend", "Dimmed rows: not implemented yet"));
     }

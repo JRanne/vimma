@@ -8,7 +8,14 @@
  */
 import { resolveActionName, suggestAction } from "./actions.mjs";
 import { DEFAULT_CONFIG } from "./defaults.mjs";
-import { KeyNotationError, formatKey, parseBinding, parseKey } from "./keys.mjs";
+import {
+  KeyNotationError,
+  displayBinding,
+  displayKey,
+  formatKey,
+  parseBinding,
+  parseKey,
+} from "./keys.mjs";
 import { MODES, isMode } from "./modes.mjs";
 
 /** @import { Chord } from "./keys.mjs" */
@@ -265,6 +272,24 @@ export function compileKeymap(user = {}) {
     perMode[mode] = [...seen.values()];
   }
 
+  /**
+   * @param {string} name
+   * @param {(text: string) => string} show
+   * @returns {string[]}
+   */
+  const listBindings = (name, show) => {
+    /** @type {string[]} */
+    const out = [];
+    for (const e of entries) {
+      if (e.action.name !== name || e.modes.size === 0) continue;
+      const mode = /** @type {Mode} */ ([...e.modes][0]);
+      const keys = show(e.text);
+      const text = e.layer === "modal" && mode !== "normal" ? `${keys} [${mode}]` : keys;
+      if (!out.includes(text)) out.push(text);
+    }
+    return out;
+  };
+
   return {
     prefix,
     leader,
@@ -275,20 +300,25 @@ export function compileKeymap(user = {}) {
     sequences: (mode) =>
       /** @type {Entry[]} */ (perMode[mode]).map((e) => ({ seq: e.seq, name: e.action.name })),
     /**
-     * Binding texts as written, for help. Modal bindings outside normal mode carry their mode.
+     * Binding texts as written in config. Modal bindings outside normal mode carry their mode.
      * @param {string} name
      */
-    bindingsFor(name) {
-      /** @type {string[]} */
-      const out = [];
-      for (const e of entries) {
-        if (e.action.name !== name || e.modes.size === 0) continue;
-        const mode = /** @type {Mode} */ ([...e.modes][0]);
-        const text = e.layer === "modal" && mode !== "normal" ? `${e.text} [${mode}]` : e.text;
-        if (!out.includes(text)) out.push(text);
-      }
-      return out;
-    },
+    bindingsFor: (name) => listBindings(name, (text) => text),
+    /**
+     * The keys a user presses for each binding, for help and listings: `prefix+b` shows as
+     * `ctrl+b b` with this keymap's prefix and leader (displayBinding). Modal bindings outside
+     * normal mode carry their mode: `esc [panel]`.
+     * @param {string} name
+     */
+    keysFor: (name) => listBindings(name, (text) => displayBinding(text, { prefix, leader })),
+    /**
+     * What prefix and leader stand for, e.g. `prefix = ctrl+b · leader = space`. The leader is
+     * named only when a live binding uses it: none of the defaults do.
+     */
+    legend: () =>
+      entries.some((e) => e.modes.size > 0 && e.labels.includes("leader"))
+        ? `prefix = ${displayKey(prefix)} · leader = ${displayKey(leader)}`
+        : `prefix = ${displayKey(prefix)}`,
     /** @param {string} name */
     isOverridden: (name) => overridden.has(name),
   };

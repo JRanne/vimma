@@ -144,8 +144,8 @@ add_task(async function the_help_overlay_marks_and_lists_an_override() {
   const row = (name) => help().querySelector(`[data-action="${name}"]`);
   const part = (name, cls) => row(name).querySelector(`.vimma-help-${cls}`).textContent;
   Assert.equal(part("new_tab", "override"), "*", "the overridden action is marked *");
-  Assert.stringContains(part("new_tab", "keys"), "prefix+t", "with the file's binding");
-  Assert.ok(!part("new_tab", "keys").includes("prefix+c"), "not the default one it replaced");
+  Assert.stringContains(part("new_tab", "keys"), "ctrl+b t", "with the file's binding");
+  Assert.ok(!part("new_tab", "keys").includes("ctrl+b c"), "not the default one it replaced");
   Assert.equal(part("close_tab", "override"), "", "a default binding is not marked");
   EventUtils.synthesizeKey("KEY_Escape");
   await until(() => !help()?.open, "Esc closes it");

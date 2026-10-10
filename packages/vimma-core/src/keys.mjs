@@ -243,6 +243,56 @@ export function parseBinding(text) {
 }
 
 /**
+ * A chord as a user reads it: canonical, except that a bare `-` or `+` shows as itself.
+ * @param {Chord} chord
+ * @returns {string}
+ */
+export function displayKey(chord) {
+  const text = formatKey(chord);
+  return text === "minus" ? "-" : text === "plus" ? "+" : text;
+}
+
+/**
+ * A binding as the keys a user presses, for help and listings (never for config): `prefix+b`
+ * shows as `ctrl+b b` and `<leader>n` as `space n` with the given prefix and leader, `<C-w>h`
+ * as `ctrl+w h`. Keys are separated by spaces, as the guide writes them, except that a run of
+ * plain characters stays as written (`gg`, `gT`, `G`). The binding must be valid notation.
+ * @param {string} text
+ * @param {{ prefix: Chord, leader: Chord }} keys
+ * @returns {string}
+ */
+export function displayBinding(text, { prefix, leader }) {
+  /** @type {string[]} */
+  const words = [];
+  for (const seg of text.trim().split(/\s+/).filter(Boolean)) {
+    if (seg.toLowerCase().startsWith("prefix+")) {
+      words.push(displayKey(prefix), displayKey(parseKey(seg.slice("prefix+".length))));
+      continue;
+    }
+    if (!seg.startsWith("<") && seg.length > 1 && (seg.includes("+") || normaliseKey(seg, false))) {
+      words.push(displayKey(parseKey(seg)));
+      continue;
+    }
+    let run = "";
+    for (let i = 0; i < seg.length; i++) {
+      const close = seg[i] === "<" ? seg.indexOf(">", i + 1) : -1;
+      if (close === -1) {
+        run += seg[i];
+        continue;
+      }
+      const el = parseAngle(seg.slice(i + 1, close));
+      if (!el) throw new KeyNotationError(`unknown key "${seg.slice(i, close + 1)}"`);
+      if (run) words.push(run);
+      run = "";
+      words.push(displayKey("special" in el ? leader : el));
+      i = close;
+    }
+    if (run) words.push(run);
+  }
+  return words.join(" ");
+}
+
+/**
  * Canonical, space-separated text for a binding. `prefix` followed by a chord prints as
  * `prefix+<chord>`; `leader` prints as `<leader>`.
  * @param {BindingElement[]} elements

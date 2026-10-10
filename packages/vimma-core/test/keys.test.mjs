@@ -4,6 +4,7 @@ import {
   formatKey,
   parseBinding,
   formatBinding,
+  displayBinding,
   chordFromEvent,
   KeyNotationError,
 } from "../src/keys.mjs";
@@ -115,6 +116,49 @@ describe("formatBinding", () => {
     ["<C-w>h", "ctrl+w h"],
   ])("%s formats canonically as %s", (input, out) => {
     expect(formatBinding(parseBinding(input))).toBe(out);
+  });
+});
+
+describe("displayBinding", () => {
+  const defaults = { prefix: parseKey("ctrl+b"), leader: parseKey("space") };
+  test.each([
+    ["prefix+b", "ctrl+b b"],
+    ["<leader>n", "space n"],
+    ["prefix+shift+x", "ctrl+b shift+x"],
+    ["prefix+?", "ctrl+b ?"],
+    ["prefix+minus", "ctrl+b -"],
+    ["prefix+-", "ctrl+b -"],
+    ["prefix+1", "ctrl+b 1"],
+    ["<C-w>h", "ctrl+w h"],
+    ["<C-w><", "ctrl+w <"],
+    ["<C-w>-", "ctrl+w -"],
+    ["<Esc>", "esc"],
+    ["<CR>", "enter"],
+    ["<lt>", "<"],
+    ["gg", "gg"],
+    ["gT", "gT"],
+    ["G", "G"],
+    ["$", "$"],
+    ["ctrl+i", "ctrl+i"],
+    ["Ctrl+Alt+c", "ctrl+alt+c"],
+    ["<leader>ff", "space ff"],
+    ["prefix+g prefix+x", "ctrl+b g ctrl+b x"],
+    ["g <leader>x", "g space x"],
+  ])("%s shows as %s with the default prefix and leader", (input, out) => {
+    expect(displayBinding(input, defaults)).toBe(out);
+  });
+
+  test.each([
+    ["prefix+b", "ctrl+a b"],
+    ["prefix+shift+x", "ctrl+a shift+x"],
+    ["<leader>n", ", n"],
+    ["<Leader>n", ", n"],
+  ])("%s follows a remapped prefix and leader as %s", (input, out) => {
+    expect(displayBinding(input, { prefix: parseKey("ctrl+a"), leader: parseKey(",") })).toBe(out);
+  });
+
+  test("a minus prefix or leader shows as the character", () => {
+    expect(displayBinding("<leader>n", { ...defaults, leader: parseKey("minus") })).toBe("- n");
   });
 });
 
