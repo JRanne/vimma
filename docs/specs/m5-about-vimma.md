@@ -1,6 +1,6 @@
 # Spec: m5-about-vimma
 
-Status: implemented, awaiting review · Milestone: M5 · Area: `src/browser/base/content/vimma/about/`
+Status: implemented · Milestone: M5 · Area: `src/browser/base/content/vimma/about/`
 (new), `config/ConfigHost.sys.mjs`, `ui/theme-host.mjs`, `host/VimmaHost.sys.mjs` (two lines),
 `core/cmdline.mjs`, `core/report.mjs` (new), `tools/version-files/`
 

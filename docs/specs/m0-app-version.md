@@ -1,6 +1,6 @@
 # Spec: m0-app-version
 
-Status: implemented, awaiting review · Milestone: M0 · Area: build config (`configs/common/mozconfig`,
+Status: implemented · Milestone: M0 · Area: build config (`configs/common/mozconfig`,
 `tools/version-files/`), two one-line upstream patches (`ClientEnvironment`, `Targeting`)
 Prerequisite: m0-branding, m0-user-agent and m0-mozilla-services merged.
 

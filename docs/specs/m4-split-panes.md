@@ -485,7 +485,7 @@ tested by `browser_vimma_pane_workspaces.js` (3 tasks).
   whole `tests/browser/` suite green (2504). Mutation check: not calling `#focusPane` after a
   switch fails "A's focused page has focus".
 
-**Handover (the rest of sub-spec 6):**
+**Handover (the rest of sub-spec 6, since done):**
 
 - **Adopting foreign splits:** listen for `SplitViewCreated`, `SplitViewRemoved` and
   `SplitViewTabChange` on `gBrowser.tabContainer` outside `reconcile`; a new wrapper becomes a

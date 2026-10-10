@@ -1,6 +1,6 @@
 # Spec: workspace-routing
 
-Status: implemented, awaiting review (see Settled) · Milestone: after M3 (m3-workspaces listed "URL-to-workspace
+Status: implemented (see Settled) · Milestone: after M3 (m3-workspaces listed "URL-to-workspace
 routing rules" as out of scope) · Area: `packages/vimma-core/src/routes.mjs` (new), `config.mjs`,
 `toml.mjs`, `cmdline.mjs`, `actions.mjs`; `src/browser/base/content/vimma/workspaces/`
 (`WorkspaceRouter.sys.mjs` new, `WorkspaceStore`, `WindowWorkspaces`), `host/route-ops.mjs`
@@ -31,7 +31,7 @@ installed here, `modules/zen/spacerouting/ZenSpaceRoutingManager.sys.mjs` and
 
 ## Research
 
-### Zen: Space Routing (the feature the user means)
+### Zen: Space Routing (the feature this spec is modelled on)
 
 - **Rules** (`ZenSpaceRoutingManager`, stored in `zen-space-routing.jsonlz4`): `{ reference,
 matchType: "contains" | "equal-to" | "regex", openIn }`, edited in a dialog; first match in list
@@ -318,7 +318,7 @@ WindowWorkspaces: TabOpen/TabSelect (switch or notice), location changes (hint)
 
 ## Review round 1 (PR #88)
 
-- **Decision 3b dropped** (the coordinator's decision): a page's opens are never routed; the
+- **Decision 3b dropped** (the maintainer's decision): a page's opens are never routed; the
   cookie threat is in decision 3. The router routes `openLinkIn` only for the system principal
   with no container given; the referrer stripping that (b) needed went with it. The hint now also
   fires when a tab is selected, so a link a page opened in the background is hinted when looked

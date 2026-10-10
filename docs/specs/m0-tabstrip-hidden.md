@@ -1,6 +1,6 @@
 # Spec: m0-tabstrip-hidden
 
-Status: implemented, awaiting review · Milestone: M0 · Area: UI (`src/browser/base/content/vimma/ui/`,
+Status: implemented · Milestone: M0 · Area: UI (`src/browser/base/content/vimma/ui/`,
 `src/browser/themes/shared/vimma/`)
 
 ## User story

@@ -327,14 +327,14 @@ These are the trade-offs the workspaces' design accepts on purpose
 - The about dialog's wordmark (`about-wordmark.svg`) is still the placeholder "VIMMA" in plain
   strokes; the logo and app icon are the real window+V mark ([m0-branding](specs/m0-branding.md)).
 - Windows and macOS assets (installer bitmaps, `.icns`, MSIX) are still Surfer's `unofficial`
-  copies until M7 ([m0-branding](specs/m0-branding.md), Out of scope).
+  copies until those platforms are built ([m0-branding](specs/m0-branding.md), Out of scope).
 - The default bookmarks are still Mozilla's links ([m0-branding](specs/m0-branding.md)).
 - `--screenshot` on a brand-new profile logs a bookmarks import error, and `--screenshot about:home`
   hangs. Both are upstream headless quirks ([m0-branding](specs/m0-branding.md), Settled).
 
 ## Platforms and packaging
 
-- Only Linux x86_64 is built and tested. aarch64 and macOS are later; Windows is M7, "when cheap"
+- Only Linux x86_64 is built and tested. aarch64, macOS and Windows ("when cheap") come later
   ([plan.md](../plan.md) §6).
 - No binaries, packages or releases: build from source. Tarball, AppImage, `.deb` and AUR are M6
   ([plan.md](../plan.md) §6).

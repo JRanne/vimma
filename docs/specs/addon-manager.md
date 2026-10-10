@@ -1,6 +1,6 @@
 # Spec: addon-manager
 
-Status: implemented, awaiting review · Area: core (`packages/vimma-core/src/addons.mjs`, `picker.mjs`,
+Status: implemented · Area: core (`packages/vimma-core/src/addons.mjs`, `picker.mjs`,
 `cmdline.mjs`, `actions.mjs`, `defaults.mjs`), host (`host/addon-ops.mjs`, `VimmaHost`), UI
 (`ui/picker.mjs`, `ui/cmdline.mjs`)
 

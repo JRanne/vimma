@@ -1,6 +1,6 @@
 # Spec: ci-quality-gates
 
-Status: implemented, awaiting review · Milestone: M0 (pipeline) · Area: CI (`.github/workflows/`,
+Status: implemented · Milestone: M0 (pipeline) · Area: CI (`.github/workflows/`,
 `tools/bench/`, `tools/mutation/`)
 
 ## User story
@@ -94,7 +94,7 @@ Two rows of plan §5 and issue #17:
   test helpers, and `std::env::args` in a CLI that reads its own arguments.
 - Details, licences and how to read the SARIF: docs/runbook.md, "Security scanning".
 
-## Handover
+## Follow-up
 
-Done. Follow-up: when the CI log of another runner CPU model prints "no baseline for machine",
+When the CI log of another runner CPU model prints "no baseline for machine",
 record it as in docs/runbook.md "Bench baseline".

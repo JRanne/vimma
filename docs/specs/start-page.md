@@ -1,6 +1,6 @@
 # Spec: start-page
 
-Status: implemented, awaiting review · Area: UI (`src/browser/base/content/vimma/start/`,
+Status: implemented · Area: UI (`src/browser/base/content/vimma/start/`,
 `src/browser/themes/shared/vimma/start.css`)
 
 ## User story

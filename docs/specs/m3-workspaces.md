@@ -1,12 +1,8 @@
 # Spec: m3-workspaces
 
-Status: research and plan; split into sub-specs (see Breakdown). Sub-specs 1 (store), 2a
-(routing) and 2b (switching) merged; sub-spec 3 (persistence) implemented, awaiting review;
-4a (lifecycle) and 4b (move) implemented together, awaiting review, with the open items in their
-Settled section; 5 (picker) implemented, awaiting review; 6 (side panel) implemented, awaiting
-review; 7 (e2e) restart scenario implemented, awaiting review, the 200-tab measurement still
-open; the 4a/4b/5 leftovers (container deleted outside Vimma, containers off at startup, lazy
-move, number-like names) implemented, awaiting review ·
+Status: done; split into sub-specs (see Breakdown). Sub-specs 1 (store), 2a (routing), 2b
+(switching), 3 (persistence), 4a (lifecycle), 4b (move), 5 (picker), 6 (side panel), 7 (e2e
+restart scenario) and the 4a/4b/5 leftovers are merged; the 200-tab measurement is still open ·
 Milestone: M3 · Area: host
 (`src/browser/base/content/vimma/workspaces/`, `ui/`), four upstream patch files (five hunks)
 
@@ -1003,7 +999,7 @@ dependency for 4b, 5 and parts of 4a.
   the panel's `order` fails "still the leftmost box".
 - **Left:** a mouse (clicking a row); a configurable width in `config.toml`; a web page in the
   panel stays out of scope.
-- **Later (2026-10-10):** the leader defaults were removed by user decision: `toggle_sidebar` is
+- **Later (2026-10-10):** the leader defaults were removed by maintainer decision: `toggle_sidebar` is
   `prefix+b` only, and `space n` does nothing by default. The leader option and `<leader>`
   bindings in `[keys]` stay (a user's `toggle_sidebar = ["prefix+b", "<leader>n"]` still opens
   and closes the panel, in `normal` and `panel` mode). The side-panel mochitest presses
@@ -1080,9 +1076,9 @@ dependency for 4b, 5 and parts of 4a.
   folded into the M4 e2e gate. It has the same blocker as M4's key-to-paint timing: a paint
   timestamp from the control socket (a protocol addition, its own spec with the perf gate).
 
-## Settled: workspace keys move to `prefix+(` / `prefix+)` (user decision, 2026-10-10)
+## Settled: workspace keys move to `prefix+(` / `prefix+)` (maintainer decision, 2026-10-10)
 
-- **Decision** (the user): "ctrl + d and ctrl + u keybinds from vim are not there yet" and "we
+- **Decision** (the maintainer): "ctrl + d and ctrl + u keybinds from vim are not there yet" and "we
   need to find other keys for switching workspaces as those are vim defaults". `next_workspace`
   is `prefix+)` and `previous_workspace` `prefix+(` (tmux's `switch-client -n` / `-p` keys),
   global like every `[keys]` binding, so they work from normal, insert, visual and panel mode as

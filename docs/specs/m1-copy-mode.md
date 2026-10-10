@@ -1,6 +1,6 @@
 # Spec: m1-copy-mode
 
-Status: implemented, awaiting review · Milestone: M1 · Area: actors
+Status: implemented · Milestone: M1 · Area: actors
 (`src/browser/base/content/vimma/actors/`), host (`host/`). Builds on
 [m1-actor-insert-scroll](m1-actor-insert-scroll.md) (the actor pair, focused-frame messages),
 [m1-core-logic](m1-core-logic.md) (`visual` mode, `escape.mjs`) and [m1-hints](m1-hints.md)

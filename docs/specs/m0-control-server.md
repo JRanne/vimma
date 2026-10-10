@@ -1,6 +1,6 @@
 # Spec: m0-control-server
 
-Status: implemented, awaiting review · Milestone: M0 · Area: `src/browser/base/content/vimma/ctl/`
+Status: implemented · Milestone: M0 · Area: `src/browser/base/content/vimma/ctl/`
 Prerequisites: ADR-007 (control socket), ADR-011 (vimma-ctl), spec
 [m0-control-protocol-and-vimma-ctl](m0-control-protocol-and-vimma-ctl.md) (the protocol, which
 is authoritative; this spec only adds what the browser side decides).

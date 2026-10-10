@@ -1,6 +1,6 @@
 # Spec: m5-omarchy-theme
 
-Status: implemented, awaiting review (instant reload: in review) · Area: UI (`src/browser/base/content/vimma/ui/theme-host.mjs`,
+Status: implemented, including instant reload · Area: UI (`src/browser/base/content/vimma/ui/theme-host.mjs`,
 `vimma.js`, `ui/statusbar.mjs`, `start/start.mjs`)
 
 The theme half of M5. `config.toml` loading and its `[theme]` table: [m5-config-load](m5-config-load.md).
