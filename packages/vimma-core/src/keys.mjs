@@ -48,6 +48,16 @@ export const NAMED_KEYS = Object.freeze([
 ]);
 const NAMED = new Set(NAMED_KEYS);
 
+/**
+ * `table[key]` among the table's own entries only. Key text is input (config.toml, the control
+ * socket): a plain lookup of "constructor" or "__proto__" would find Object's members.
+ * @template T
+ * @param {Record<string, T>} table
+ * @param {string} key
+ * @returns {T | undefined}
+ */
+const own = (table, key) => (Object.hasOwn(table, key) ? table[key] : undefined);
+
 /** Aliases (lowercase) → canonical key. Includes DOM `KeyboardEvent.key` names. */
 /** @type {Record<string, string>} */
 const KEY_ALIASES = {
@@ -110,7 +120,7 @@ function normaliseKey(raw, shift) {
     return { key: raw, shift: false };
   }
   const lower = raw.toLowerCase();
-  const aliased = KEY_ALIASES[lower] ?? lower;
+  const aliased = own(KEY_ALIASES, lower) ?? lower;
   if (aliased.length === 1) return normaliseKey(aliased, shift);
   if (NAMED.has(aliased)) return { key: aliased, shift };
   return null;
@@ -157,7 +167,7 @@ export function parseKey(text) {
   /** @type {Partial<Record<"ctrl" | "alt" | "shift" | "meta", boolean>>} */
   const mods = {};
   for (const p of plusKey && parts.length === 1 && parts[0] === "" ? [] : parts) {
-    const m = MODIFIERS[p.toLowerCase()];
+    const m = own(MODIFIERS, p.toLowerCase());
     if (!m) throw new KeyNotationError(`unknown modifier "${p}" in "${text}"`);
     if (mods[m]) throw new KeyNotationError(`modifier "${p}" repeated in "${text}"`);
     mods[m] = true;
@@ -176,7 +186,7 @@ export function formatKey(chord) {
   const norm = normaliseKey(chord.key, chord.shift) ?? { key: chord.key, shift: chord.shift };
   const c = { ...chord, ...norm };
   const mods = MOD_ORDER.filter((m) => c[m]);
-  return [...mods, FORMAT_NAMES[c.key] ?? c.key].join("+");
+  return [...mods, own(FORMAT_NAMES, c.key) ?? c.key].join("+");
 }
 
 /**
@@ -194,7 +204,7 @@ function parseAngle(inner) {
   /** @type {Partial<Record<"ctrl" | "alt" | "shift" | "meta", boolean>>} */
   const mods = {};
   for (const p of parts) {
-    const m = VIM_MODIFIERS[p.toLowerCase()];
+    const m = own(VIM_MODIFIERS, p.toLowerCase());
     if (!m || mods[m]) return null;
     mods[m] = true;
   }
@@ -356,7 +366,7 @@ const US_CODES = {
 function ownCharacter(key, code, shift) {
   const letter = code?.match(/^Key([A-Z])$/)?.[1];
   if (letter) return key.toLowerCase() === letter.toLowerCase();
-  const us = code ? US_CODES[code] : undefined;
+  const us = code ? own(US_CODES, code) : undefined;
   if (us) return key === us[shift ? 1 : 0];
   return /^[a-z0-9]$/i.test(key);
 }

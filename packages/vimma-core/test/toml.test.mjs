@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { formatPath, locateKeys, parsePath, parseToml } from "../src/toml.mjs";
+import { MAX_DEPTH, formatPath, locateKeys, parsePath, parseToml } from "../src/toml.mjs";
 
 describe("parseToml", () => {
   test("parses a TOML 1.0 document into plain values", () => {
@@ -20,6 +20,23 @@ describe("parseToml", () => {
     expect(r.error.column).toBeGreaterThan(0);
     expect(r.error.message).not.toMatch(/Invalid TOML document|\n/);
     expect(r.error.message.length).toBeGreaterThan(0);
+  });
+
+  test("nesting deeper than MAX_DEPTH, by dotted keys, headers or values, is refused at its line", () => {
+    const deep = (/** @type {number} */ n) => "a.".repeat(n - 1) + "a";
+    expect(parseToml(`x = 1\n${deep(MAX_DEPTH)} = 1\n`).ok).toBe(true);
+    for (const [text, line] of /** @type {const} */ ([
+      [`x = 1\n${deep(MAX_DEPTH + 1)} = 1\n`, 2],
+      [`x = 1\n[${deep(MAX_DEPTH + 1)}]\n`, 2],
+      [`x = 1\n[[${deep(MAX_DEPTH)}]]\n`, 2],
+      [`x = 1\n[${deep(MAX_DEPTH - 1)}]\nb = [[1]]\n`, 3],
+    ])) {
+      const r = parseToml(text);
+      expect(r.ok, text).toBe(false);
+      expect(!r.ok && r.error).toMatchObject({ line, message: expect.stringMatching(/deeper/) });
+    }
+    const inline = parseToml(`a = ${"[".repeat(MAX_DEPTH + 2)}${"]".repeat(MAX_DEPTH + 2)}`);
+    expect(inline.ok).toBe(false);
   });
 
   test("a duplicate key is a syntax error at the duplicate's line", () => {
