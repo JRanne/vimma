@@ -60,8 +60,6 @@ delete its line in the same PR.
   `omarchy-theme-set`'s swap), the colours stay until a theme is back; Tokyo Night only when no
   theme was found since startup or the last `vimma.theme.*` change
   ([m5-omarchy-theme](specs/m5-omarchy-theme.md)).
-- The overlay has legible defaults only: no theme tokens yet (M5)
-  ([m0-help-overlay](specs/m0-help-overlay.md)).
 - `about:vimma` is read when it opens: `r` or Refresh updates it, it does not follow changes
   live. It is registered when the first window opens, so a session that restores an
   `about:vimma` tab before that shows Firefox's error page until reloaded. Its key log keeps

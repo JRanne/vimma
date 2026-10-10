@@ -70,12 +70,23 @@ colours). Green: 11/11. Mutation check: dropping the `return` after a rejected f
 `broken_file_keeps_the_previous_colours` fail (`rgb(19, 20, 28)` instead of `rgb(24, 48, 24)`);
 reverted. Full `tests/browser/` in a lane: 1843 expected, 0 unexpected.
 
+Follow-up (2026-10-10, M5 polish): the `ctrl+b ?` overlay was the one surface still on system
+colours. `help-overlay.css` now uses the picker's tokens (`--vimma-bg-dark` surface and sticky
+header, `--vimma-fg` text, `--vimma-muted` border, `--vimma-accent` headings and focused filter,
+`--vimma-color-scheme`), each with the old system colour as fallback. Two tasks,
+`overlays_and_prompts_follow_a_{dark,light}_theme`, open the overlay, the `ctrl+b g` picker, the
+`:` line and the `ctrl+b T` rename prompt under a dark and a light fixture and compare their
+computed background and text with `--vimma-bg-dark` and `--vimma-fg`. Red: 8 failures, all the
+overlay's (`rgb(255, 255, 255)` instead of `rgb(48, 16, 48)`; the picker, line and prompt already
+passed). Green: 37/37. Mutation: the overlay's `color` back to `CanvasText` failed both text
+assertions (`rgb(251, 251, 254)` vs `rgb(169, 177, 214)`); reverted. The e2e help baseline is
+re-recorded from CI's image (the overlay is now Tokyo Night).
+
 ## Limits
 
 - Up to 2 s latency per theme change (polling). A `~/.config/omarchy/hooks/theme-set.d/` hook that
   pokes the control socket could make it instant; not done (docs/notes/omarchy-theming.md).
 - Font, `[theme.colors]` overrides and `[theme] source = "file"` come with `config.toml` loading.
-- The `ctrl+b ?` overlay does not use the tokens yet (m0-help-overlay, docs/limits.md).
 - Not covered: Hyprland's gaps, rounding and borders (docs/notes/omarchy-theming.md).
 
 ## Settled
