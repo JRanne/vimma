@@ -1,0 +1,928 @@
+{
+  "name": "m4-split-panes",
+  "description": "M4 gate (m4-split-panes sub-spec 7): two fixture sites side by side, keyboard only. prefix+v and prefix+- give an L shape; h/j/k/l move focus by geometry with MRU, and each pane keeps its own mode (b has a focused input: insert); z zooms and unzooms; shift+h swaps; resize mode l l gives 60/40; a screenshot of the result; Enter in b's input goes DOM fullscreen (b fills the 1280x800 window) and back to the same layout; x closes a pane and keeps its tab; a second workspace keeps its own split across ctrl+u/ctrl+i; and the zoomed layout survives ctrl+q and a start on the same profile. Each page titles itself with its width, so state's titles check the geometry. Prefs: Vimma's own browser.startup.page (resume the session); full-screen-api.ignore-widgets, since Xvfb has no window manager to make the window fullscreen (the window already fills the screen). The status bar shows the fixture server's port, a few digits that vary between runs, well inside the 0.5 % screenshot tolerance.",
+  "timeoutSeconds": 120,
+  "prefs": {
+    "browser.startup.page": null,
+    "full-screen-api.ignore-widgets": true
+  },
+  "steps": [
+    {
+      "wait-for-state": {
+        "workspace": "main"
+      },
+      "timeoutSeconds": 20
+    },
+    {
+      "open": "fixture:pane.html#a"
+    },
+    {
+      "wait-for-state": {
+        "tabs": [
+          {},
+          {
+            "title": "a 1280",
+            "selected": true
+          }
+        ]
+      }
+    },
+    {
+      "keys": "ctrl+b v"
+    },
+    {
+      "wait-for-state": {
+        "tabs": [
+          {},
+          {
+            "title": "a 639"
+          },
+          {
+            "selected": true
+          }
+        ],
+        "panes": {
+          "zoomed": false,
+          "root": {
+            "axis": "x",
+            "children": [
+              {
+                "index": 1
+              },
+              {
+                "index": 2
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "open": "fixture:pane.html#b.fs"
+    },
+    {
+      "wait-for-state": {
+        "mode": "insert",
+        "tabs": [
+          {},
+          {
+            "title": "a 639"
+          },
+          {
+            "title": "b 639",
+            "selected": true
+          },
+          {}
+        ],
+        "panes": {
+          "root": {
+            "axis": "x",
+            "children": [
+              {
+                "index": 1
+              },
+              {
+                "index": 2
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "keys": "ctrl+b h"
+    },
+    {
+      "wait-for-state": {
+        "mode": "normal",
+        "tabs": [
+          {},
+          {
+            "title": "a 639",
+            "selected": true
+          },
+          {
+            "title": "b 639",
+            "selected": false
+          },
+          {}
+        ]
+      }
+    },
+    {
+      "keys": "ctrl+b l"
+    },
+    {
+      "wait-for-state": {
+        "mode": "insert",
+        "tabs": [
+          {},
+          {
+            "title": "a 639",
+            "selected": false
+          },
+          {
+            "title": "b 639",
+            "selected": true
+          },
+          {}
+        ]
+      }
+    },
+    {
+      "keys": "ctrl+b -"
+    },
+    {
+      "wait-for-state": {
+        "tabs": [
+          {},
+          {},
+          {},
+          {
+            "selected": true
+          },
+          {}
+        ],
+        "panes": {
+          "root": {
+            "axis": "x",
+            "children": [
+              {
+                "index": 1
+              },
+              {
+                "axis": "y",
+                "children": [
+                  {
+                    "index": 2
+                  },
+                  {
+                    "index": 3
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "open": "fixture:pane.html#c"
+    },
+    {
+      "wait-for-state": {
+        "mode": "normal",
+        "tabs": [
+          {},
+          {
+            "title": "a 639"
+          },
+          {
+            "title": "b 639"
+          },
+          {
+            "title": "c 639",
+            "selected": true
+          },
+          {},
+          {}
+        ],
+        "panes": {
+          "zoomed": false,
+          "root": {
+            "axis": "x",
+            "children": [
+              {
+                "index": 1
+              },
+              {
+                "axis": "y",
+                "children": [
+                  {
+                    "index": 2
+                  },
+                  {
+                    "index": 3
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "keys": "ctrl+b k"
+    },
+    {
+      "wait-for-state": {
+        "mode": "insert",
+        "tabs": [
+          {},
+          {
+            "selected": false
+          },
+          {
+            "title": "b 639",
+            "selected": true
+          },
+          {
+            "selected": false
+          },
+          {},
+          {}
+        ]
+      }
+    },
+    {
+      "keys": "ctrl+b j"
+    },
+    {
+      "wait-for-state": {
+        "mode": "normal",
+        "tabs": [
+          {},
+          {
+            "selected": false
+          },
+          {
+            "selected": false
+          },
+          {
+            "title": "c 639",
+            "selected": true
+          },
+          {},
+          {}
+        ]
+      }
+    },
+    {
+      "keys": "ctrl+b h"
+    },
+    {
+      "wait-for-state": {
+        "tabs": [
+          {},
+          {
+            "title": "a 639",
+            "selected": true
+          },
+          {
+            "selected": false
+          },
+          {
+            "selected": false
+          },
+          {},
+          {}
+        ]
+      }
+    },
+    {
+      "keys": "ctrl+b l"
+    },
+    {
+      "wait-for-state": {
+        "tabs": [
+          {},
+          {
+            "selected": false
+          },
+          {
+            "selected": false
+          },
+          {
+            "title": "c 639",
+            "selected": true
+          },
+          {},
+          {}
+        ]
+      }
+    },
+    {
+      "keys": "ctrl+b z"
+    },
+    {
+      "wait-for-state": {
+        "tabs": [
+          {},
+          {},
+          {},
+          {
+            "title": "c 1280",
+            "selected": true
+          },
+          {},
+          {}
+        ],
+        "panes": {
+          "zoomed": true,
+          "root": {
+            "axis": "x",
+            "children": [
+              {
+                "index": 1
+              },
+              {
+                "axis": "y",
+                "children": [
+                  {
+                    "index": 2
+                  },
+                  {
+                    "index": 3
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "keys": "ctrl+b z"
+    },
+    {
+      "wait-for-state": {
+        "tabs": [
+          {},
+          {
+            "title": "a 639"
+          },
+          {
+            "title": "b 639"
+          },
+          {
+            "title": "c 639",
+            "selected": true
+          },
+          {},
+          {}
+        ],
+        "panes": {
+          "zoomed": false,
+          "root": {
+            "axis": "x",
+            "children": [
+              {
+                "index": 1
+              },
+              {
+                "axis": "y",
+                "children": [
+                  {
+                    "index": 2
+                  },
+                  {
+                    "index": 3
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "keys": "ctrl+b shift+h"
+    },
+    {
+      "wait-for-state": {
+        "tabs": [
+          {},
+          {
+            "title": "a 639"
+          },
+          {
+            "title": "b 639"
+          },
+          {
+            "title": "c 639",
+            "selected": true
+          },
+          {},
+          {}
+        ],
+        "panes": {
+          "root": {
+            "axis": "x",
+            "children": [
+              {
+                "index": 3
+              },
+              {
+                "axis": "y",
+                "children": [
+                  {
+                    "index": 2
+                  },
+                  {
+                    "index": 1
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "keys": "ctrl+b r"
+    },
+    {
+      "wait-for-state": {
+        "mode": "resize"
+      }
+    },
+    {
+      "keys": "l l"
+    },
+    {
+      "wait-for-state": {
+        "mode": "resize",
+        "tabs": [
+          {},
+          {
+            "title": "a 511"
+          },
+          {
+            "title": "b 511"
+          },
+          {
+            "title": "c 767",
+            "selected": true
+          },
+          {},
+          {}
+        ]
+      }
+    },
+    {
+      "keys": "escape"
+    },
+    {
+      "wait-for-state": {
+        "mode": "normal",
+        "tabs": [
+          {},
+          {
+            "title": "a 511"
+          },
+          {
+            "title": "b 511"
+          },
+          {
+            "title": "c 767",
+            "selected": true
+          },
+          {},
+          {}
+        ],
+        "panes": {
+          "zoomed": false,
+          "root": {
+            "axis": "x",
+            "children": [
+              {
+                "index": 3
+              },
+              {
+                "axis": "y",
+                "children": [
+                  {
+                    "index": 2
+                  },
+                  {
+                    "index": 1
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "screenshot": "m4-split-panes"
+    },
+    {
+      "keys": "ctrl+b l"
+    },
+    {
+      "wait-for-state": {
+        "tabs": [
+          {},
+          {
+            "title": "a 511",
+            "selected": true
+          },
+          {},
+          {},
+          {},
+          {}
+        ]
+      }
+    },
+    {
+      "keys": "ctrl+b k"
+    },
+    {
+      "wait-for-state": {
+        "mode": "insert",
+        "tabs": [
+          {},
+          {
+            "selected": false
+          },
+          {
+            "title": "b 511",
+            "selected": true
+          },
+          {},
+          {},
+          {}
+        ]
+      }
+    },
+    {
+      "keys": "enter"
+    },
+    {
+      "wait-for-state": {
+        "tabs": [
+          {},
+          {},
+          {
+            "title": "b 1280x800 fs",
+            "selected": true
+          },
+          {},
+          {},
+          {}
+        ],
+        "panes": {
+          "zoomed": false,
+          "root": {
+            "axis": "x",
+            "children": [
+              {
+                "index": 3
+              },
+              {
+                "axis": "y",
+                "children": [
+                  {
+                    "index": 2
+                  },
+                  {
+                    "index": 1
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "keys": "enter"
+    },
+    {
+      "wait-for-state": {
+        "mode": "insert",
+        "tabs": [
+          {},
+          {
+            "title": "a 511"
+          },
+          {
+            "title": "b 511",
+            "selected": true
+          },
+          {
+            "title": "c 767"
+          },
+          {},
+          {}
+        ],
+        "panes": {
+          "zoomed": false,
+          "root": {
+            "axis": "x",
+            "children": [
+              {
+                "index": 3
+              },
+              {
+                "axis": "y",
+                "children": [
+                  {
+                    "index": 2
+                  },
+                  {
+                    "index": 1
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "keys": "ctrl+b x"
+    },
+    {
+      "wait-for-state": {
+        "tabs": [
+          {},
+          {
+            "title": "b 511",
+            "selected": false
+          },
+          {
+            "title": "c 767",
+            "selected": false
+          },
+          {
+            "title": "a 511",
+            "selected": true
+          },
+          {},
+          {}
+        ],
+        "panes": {
+          "zoomed": false,
+          "root": {
+            "axis": "x",
+            "children": [
+              {
+                "index": 2
+              },
+              {
+                "index": 3
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "keys": "ctrl+b shift+n"
+    },
+    {
+      "wait-for-state": {
+        "mode": "command"
+      }
+    },
+    {
+      "keys": "w o r k enter"
+    },
+    {
+      "wait-for-state": {
+        "workspace": "work",
+        "tabs": [
+          {
+            "selected": true
+          }
+        ],
+        "panes": null
+      }
+    },
+    {
+      "keys": "ctrl+b -"
+    },
+    {
+      "wait-for-state": {
+        "workspace": "work",
+        "tabs": [
+          {},
+          {
+            "selected": true
+          }
+        ],
+        "panes": {
+          "root": {
+            "axis": "y",
+            "children": [
+              {
+                "index": 0
+              },
+              {
+                "index": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "keys": "ctrl+u"
+    },
+    {
+      "wait-for-state": {
+        "workspace": "main",
+        "tabs": [
+          {},
+          {
+            "title": "b 511"
+          },
+          {
+            "title": "c 767"
+          },
+          {
+            "title": "a 511",
+            "selected": true
+          },
+          {},
+          {}
+        ],
+        "panes": {
+          "zoomed": false,
+          "root": {
+            "axis": "x",
+            "children": [
+              {
+                "index": 2
+              },
+              {
+                "index": 3
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "keys": "ctrl+b z"
+    },
+    {
+      "wait-for-state": {
+        "tabs": [
+          {},
+          {},
+          {},
+          {
+            "title": "a 1280",
+            "selected": true
+          },
+          {},
+          {}
+        ],
+        "panes": {
+          "zoomed": true,
+          "root": {
+            "axis": "x",
+            "children": [
+              {
+                "index": 2
+              },
+              {
+                "index": 3
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "restart": "quit"
+    },
+    {
+      "wait-for-state": {
+        "workspace": "main",
+        "tabs": [
+          {},
+          {
+            "title": "b 511"
+          },
+          {},
+          {
+            "title": "a 1280",
+            "selected": true
+          },
+          {},
+          {}
+        ],
+        "panes": {
+          "zoomed": true,
+          "root": {
+            "axis": "x",
+            "children": [
+              {
+                "index": 2
+              },
+              {
+                "index": 3
+              }
+            ]
+          }
+        }
+      },
+      "timeoutSeconds": 20
+    },
+    {
+      "keys": "ctrl+b z"
+    },
+    {
+      "wait-for-state": {
+        "tabs": [
+          {},
+          {
+            "title": "b 511"
+          },
+          {
+            "title": "c 767"
+          },
+          {
+            "title": "a 511",
+            "selected": true
+          },
+          {},
+          {}
+        ],
+        "panes": {
+          "zoomed": false,
+          "root": {
+            "axis": "x",
+            "children": [
+              {
+                "index": 2
+              },
+              {
+                "index": 3
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "keys": "ctrl+i"
+    },
+    {
+      "wait-for-state": {
+        "workspace": "work",
+        "tabs": [
+          {},
+          {
+            "selected": true
+          }
+        ],
+        "panes": {
+          "zoomed": false,
+          "root": {
+            "axis": "y",
+            "children": [
+              {
+                "index": 0
+              },
+              {
+                "index": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "keys": "ctrl+i"
+    },
+    {
+      "wait-for-state": {
+        "workspace": "main",
+        "tabs": [
+          {},
+          {
+            "title": "b 511"
+          },
+          {
+            "title": "c 767"
+          },
+          {
+            "title": "a 511",
+            "selected": true
+          },
+          {},
+          {}
+        ],
+        "panes": {
+          "zoomed": false,
+          "root": {
+            "axis": "x",
+            "children": [
+              {
+                "index": 2
+              },
+              {
+                "index": 3
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
