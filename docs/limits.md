@@ -292,7 +292,8 @@ These are the trade-offs the workspaces' design accepts on purpose
 
 ## Branding
 
-- The logo is a placeholder "V" ([m0-branding](specs/m0-branding.md)).
+- The about dialog's wordmark (`about-wordmark.svg`) is still the placeholder "VIMMA" in plain
+  strokes; the logo and app icon are the real window+V mark ([m0-branding](specs/m0-branding.md)).
 - Windows and macOS assets (installer bitmaps, `.icns`, MSIX) are still Surfer's `unofficial`
   copies until M7 ([m0-branding](specs/m0-branding.md), Out of scope).
 - The default bookmarks are still Mozilla's links ([m0-branding](specs/m0-branding.md)).
