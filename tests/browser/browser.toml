@@ -86,6 +86,8 @@ support-files = [
 
 ["browser_vimma_pane_adopt.js"]
 
+["browser_vimma_pane_layouts.js"]
+
 ["browser_vimma_control.js"]
 
 ["browser_vimma_statusbar.js"]
@@ -157,3 +159,5 @@ support-files = ["file_vimma_addon_updates.json"]
 ["browser_vimma_security_invariants.js"]
 
 ["browser_vimma_perf.js"]
+
+["browser_vimma_a11y.js"]

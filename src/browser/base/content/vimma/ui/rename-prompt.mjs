@@ -75,7 +75,7 @@ export class RenamePrompt {
    * @param {() => void} yes  after the prompt has closed
    */
   ask(question, yes) {
-    if (!this.show(`${question} `, "", question)) return;
+    if (!this.show(`${question} `, "", question, "alertdialog")) return;
     this.yes = yes;
   }
 
@@ -102,9 +102,10 @@ export class RenamePrompt {
    * @param {string} label
    * @param {string} placeholder
    * @param {string} ariaLabel
+   * @param {"dialog" | "alertdialog"} [role]  a y/N question is an alertdialog (m7-a11y)
    * @returns {boolean} whether it opened (not over a page in DOM fullscreen)
    */
-  show(label, placeholder, ariaLabel) {
+  show(label, placeholder, ariaLabel, role = "dialog") {
     if (this.win.document.documentElement.hasAttribute("inDOMFullscreen")) return false;
     const input = this.input ?? this.build();
     if (!this.isOpen) this.opener = Services.focus.focusedElement;
@@ -114,6 +115,11 @@ export class RenamePrompt {
     /** @type {HTMLElement} */ (this.label).textContent = label;
     input.placeholder = placeholder;
     input.setAttribute("aria-label", ariaLabel);
+    // A non-modal dialog at the window's foot, named as its input: a screen reader says what
+    // is asked as focus lands in it.
+    const el = /** @type {HTMLElement} */ (this.el);
+    el.setAttribute("role", role);
+    el.setAttribute("aria-label", ariaLabel);
     input.value = "";
     /** @type {HTMLElement} */ (this.el).hidden = false;
     input.focus();

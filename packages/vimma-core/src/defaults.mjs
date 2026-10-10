@@ -9,6 +9,7 @@
 
 import { DEFAULT_HINT_CHARS } from "./hints.mjs";
 import { PANES_MAX_DEFAULT } from "./panes.mjs";
+import { MAIN_SIZE_DEFAULT } from "./layouts.mjs";
 import { OVERLAP_CHORDS } from "./firefox-keys.mjs";
 
 /**
@@ -19,7 +20,7 @@ import { OVERLAP_CHORDS } from "./firefox-keys.mjs";
  * @property {number} [schema]
  * @property {Record<string, WorkspaceInput>} [workspaces]
  * @property {ThemeInput} [theme]
- * @property {{ max?: number }} [panes]
+ * @property {{ max?: number, layout?: "dwindle" | "manual", main_size?: number }} [panes]
  * @property {Record<string, { insert?: import("./editable.mjs").InsertSiteMode }>} [sites]
  * @property {Record<string, string>[]} [routes]  `[[routes]]` (workspace-routing)
  * @property {{ disable?: "all" | readonly string[], enable?: readonly string[] }} [firefox]
@@ -66,6 +67,9 @@ const keys = {
   zoom: ["prefix+z"],
   close_pane: ["prefix+x"],
   resize_mode: ["prefix+r"],
+  // docs/specs/tiling-layouts.md: tmux's split-window on enter, next-layout on space.
+  new_pane: ["prefix+enter"],
+  next_layout: ["prefix+space"],
   next_workspace: ["prefix+)"],
   previous_workspace: ["prefix+("],
   // tmux's last session; prefix+ctrl+6 for layouts where ^ is a dead key (Finnish, German).
@@ -248,7 +252,11 @@ export const DEFAULT_CONFIG = Object.freeze({
   unbind: {},
   workspaces: {},
   theme,
-  panes: { max: PANES_MAX_DEFAULT },
+  panes: {
+    max: PANES_MAX_DEFAULT,
+    layout: /** @type {const} */ ("dwindle"),
+    main_size: MAIN_SIZE_DEFAULT * 100,
+  },
   sites: {},
   firefox: { disable: OVERLAP_CHORDS, enable: [] },
 });
@@ -321,6 +329,11 @@ export function formatDefaultsToml() {
     "# The most panes (live pages) one workspace shows at once, 1 to 16.",
     "[panes]",
     `max = ${PANES_MAX_DEFAULT}`,
+    '# Where ctrl+b enter puts a new pane: "dwindle" splits the focused pane along its longer side,',
+    '# "manual" splits right as ctrl+b v. ctrl+b v and ctrl+b - always keep their direction.',
+    'layout = "dwindle"',
+    "# The main pane's size in the main-vertical and main-horizontal layouts, 20 to 80 percent.",
+    `main_size = ${MAIN_SIZE_DEFAULT * 100}`,
     "",
     "# Per-site insert mode: auto (detect text fields), never (keys stay vimma's), always.",
     "# A host also covers its subdomains. None by default.",

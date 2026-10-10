@@ -20,3 +20,15 @@
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
   pointer-events: none;
 }
+
+/* The notice's live regions (spec m7-a11y): read by screen readers, never drawn. */
+.vimma-notice-live {
+  position: fixed;
+  inset: 0 auto auto 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  pointer-events: none;
+}

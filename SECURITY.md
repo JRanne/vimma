@@ -18,7 +18,9 @@ reproduce, and what an attacker gains.
 
 A flaw in Firefox itself (Gecko) that Vimma did not introduce belongs to Mozilla: report it
 through [Mozilla's process](https://www.mozilla.org/security/bug-bounty/). Vimma picks up the
-fix with the next Firefox release ([docs/rebase.md](docs/rebase.md)).
+fix with the next Firefox release: an automated, tested bump PR within hours of the release, and
+a security dot release merged within 3 days ([docs/rebase.md](docs/rebase.md),
+[docs/security.md](docs/security.md) §10).
 
 ## What to expect
 

@@ -1,0 +1,171 @@
+# Spec m7-fuzzing: nightly fuzzing of the parsers of outside input (control protocol, config.toml,
+# routing rules, key notation, the command line, the Omarchy theme reader, and vimma-ctl's JSON
+# and protocol decoders). Pull requests run the same properties with a fixed seed and few cases
+# (ci.yml, in npm run coverage and cargo test); this runs many more from a random seed.
+#
+# A failure uploads the seed and each failing case (artifact `fuzz-failures`) and opens, or
+# comments on, one issue labelled `fuzz-failure`. Reproducing a seed: docs/runbook.md,
+# "Fuzzing: reproducing a failing seed".
+#
+# Minutes (private repo): one job of about 4 minutes a night (each property stops after
+# VIMMA_FUZZ_TIME_MS; files run in parallel), plus a one-minute report job only on failure.
+# Two jobs, so the step running repository code never holds a token that can write issues.
+name: fuzz
+
+on:
+  schedule:
+    - cron: "41 2 * * *" # 02:41 UTC, nightly
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: Seed (digits; empty for a random one)
+        type: string
+        default: ""
+      runs:
+        description: fast-check cases per property, before each property's weight
+        type: string
+        default: "1000000"
+
+permissions: {}
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fuzz:
+    name: Fuzz the parsers
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      seed: ${{ steps.seed.outputs.seed }}
+    env:
+      VIMMA_FUZZ_OUT: ${{ github.workspace }}/fuzz-failures
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      # Chosen and saved before any fuzzing, so a hang or crash still leaves the seed behind.
+      - name: Seed
+        id: seed
+        env:
+          INPUT_SEED: ${{ inputs.seed }}
+          INPUT_RUNS: ${{ inputs.runs }}
+        run: |
+          seed="${INPUT_SEED:-$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')}"
+          runs="${INPUT_RUNS:-1000000}"
+          for v in "$seed" "$runs"; do
+            case "$v" in '' | *[!0-9]*) echo "::error::seed and runs must be digits"; exit 1 ;; esac
+          done
+          mkdir -p "$VIMMA_FUZZ_OUT"
+          echo "$seed" > "$VIMMA_FUZZ_OUT/seed.txt"
+          echo "seed=$seed" >> "$GITHUB_OUTPUT"
+          echo "runs=$runs" >> "$GITHUB_OUTPUT"
+          echo "Fuzzing with seed $seed, $runs runs per property." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: JavaScript parsers (fast-check)
+        env:
+          VIMMA_FUZZ_SEED: ${{ steps.seed.outputs.seed }}
+          VIMMA_FUZZ_RUNS: ${{ steps.seed.outputs.runs }}
+          VIMMA_FUZZ_TIME_MS: "15000" # per property; the runs above are a ceiling
+        run: timeout 600 npx vitest run packages/vimma-core/test/fuzz
+
+      # Runs even when the JavaScript step failed, so one night reports both.
+      - name: Rust toolchain (tools/vimma-ctl/rust-toolchain.toml)
+        if: ${{ !cancelled() && steps.seed.outcome == 'success' }}
+        working-directory: tools/vimma-ctl
+        run: rustup toolchain install
+
+      - name: vimma-ctl protocol parsing (proptest)
+        if: ${{ !cancelled() && steps.seed.outcome == 'success' }}
+        working-directory: tools/vimma-ctl
+        env:
+          PROPTEST_RNG_SEED: ${{ steps.seed.outputs.seed }}
+          PROPTEST_CASES: "200000"
+        run: timeout 600 cargo test --locked --release --test protocol_props
+
+      - name: Upload the seed and failing cases
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-failures
+          path: |
+            fuzz-failures/
+            tools/vimma-ctl/tests/*.proptest-regressions
+          if-no-files-found: ignore
+          retention-days: 30
+
+  report:
+    name: Open or update the fuzz-failure issue
+    needs: fuzz
+    if: ${{ failure() && needs.fuzz.outputs.seed != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write # create or comment on the one open `fuzz-failure` issue, and its label
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: fuzz-failures
+          path: fuzz-failures
+        continue-on-error: true # a hang before the first failure file still has the seed
+
+      - name: Issue
+        env:
+          SEED: ${{ needs.fuzz.outputs.seed }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          {
+            echo "The nightly fuzz run failed: ${RUN_URL} (\`${REF}\` at ${SHA})."
+            echo
+            echo "Seed: \`${SEED}\`. The failing cases are in the run's \`fuzz-failures\` artifact."
+            echo "Reproduce: docs/runbook.md, \"Fuzzing: reproducing a failing seed\"; for a"
+            echo "JavaScript property:"
+            echo
+            echo '```sh'
+            echo "VIMMA_FUZZ_SEED=${SEED} VIMMA_FUZZ_RUNS=1000000 npx vitest run packages/vimma-core/test/fuzz"
+            echo '```'
+            echo
+            echo "and for vimma-ctl:"
+            echo
+            echo '```sh'
+            echo "cd tools/vimma-ctl && PROPTEST_RNG_SEED=${SEED} PROPTEST_CASES=200000 cargo test --release --test protocol_props"
+            echo '```'
+            for f in fuzz-failures/fuzz-failures/*.json fuzz-failures/*.json; do
+              [ -f "$f" ] || continue
+              echo
+              echo "<details><summary>$(basename "$f")</summary>"
+              echo
+              echo '```json'
+              head -c 4000 "$f"
+              echo
+              echo '```'
+              echo "</details>"
+            done
+          } > issue.md
+          gh label create fuzz-failure --force --color B60205 \
+            --description "The nightly fuzz run (fuzz.yml) found a failing case"
+          issue=$(gh issue list --label fuzz-failure --state open --limit 1 \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body-file issue.md
+          else
+            gh issue create --title "Fuzzing found a failing case (seed ${SEED})" \
+              --label fuzz-failure --body-file issue.md
+          fi

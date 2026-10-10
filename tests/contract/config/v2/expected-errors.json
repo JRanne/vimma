@@ -4,13 +4,15 @@
     { "line": 5, "path": "modal.hint_chars", "suggestion": null },
     { "line": 8, "path": "panes.max", "suggestion": null },
     { "line": 9, "path": "panes.maks", "suggestion": "max" },
+    { "line": 10, "path": "panes.layout", "suggestion": "dwindle" },
+    { "line": 11, "path": "panes.main_size", "suggestion": null },
     {
-      "line": 11,
+      "line": 13,
       "path": "sites.\"https://docs.google.com/document\"",
       "suggestion": "docs.google.com"
     },
-    { "line": 15, "path": "sites.\"example.com\".insert", "suggestion": "always" },
-    { "line": 17, "path": "sites.\"EXAMPLE.com.\"", "suggestion": null }
+    { "line": 17, "path": "sites.\"example.com\".insert", "suggestion": "always" },
+    { "line": 19, "path": "sites.\"EXAMPLE.com.\"", "suggestion": null }
   ],
   "invalid-old-schema.toml": [
     { "line": 4, "path": "panes", "suggestion": null },

@@ -371,6 +371,8 @@ keys. A `[panel]` after a key means it works only in that mode.
 | `ctrl+b x`                     | Closes the pane; its tab stays open. With one pane it closes the tab, as `ctrl+b shift+x`.                                                                                                                                                                                                                                                                                                 |
 | `ctrl+b shift+h j k l`         | Swaps the pane with the one left / below / above / right; it keeps focus and its page. `ctrl+w H J K L` in normal mode.                                                                                                                                                                                                                                                                    |
 | `ctrl+b r`                     | Resize mode ([below](#resize-mode)): `h j k l` move the pane's divider, `Esc` leaves. `ctrl+w < > + -` resize directly in normal mode.                                                                                                                                                                                                                                                     |
+| `ctrl+b enter`                 | A new pane along the focused pane's longer side: side by side when it is wide, stacked when it is tall ([Layouts](#layouts)). `[panes] layout = "manual"`: as `ctrl+b v`.                                                                                                                                                                                                                  |
+| `ctrl+b space`                 | Cycles the layout presets, as tmux does; the status bar names the one you get ([Layouts](#layouts)). `:layout tiled` picks one.                                                                                                                                                                                                                                                            |
 | `ctrl+b shift+x`, `x`          | Closes the tab, as Firefox's `ctrl+w` did: on a pinned tab it selects the first unpinned tab instead; the last tab closes the window. `x` in normal mode.                                                                                                                                                                                                                                  |
 | `ctrl+b` then anything else    | Never leaks to the page. A binding that does not run yet shows "… not implemented yet" for 1.5 s; an unbound key does nothing. No more bookmarks sidebar.                                                                                                                                                                                                                                  |
 | Firefox's own keys             | Unchanged where they do not overlap Vimma's: `ctrl+t`, `ctrl+shift+t`, `ctrl+tab`, `ctrl+shift+tab`, `ctrl+pagedown`, `alt+1..9` (tab N on Linux), `ctrl+l`, `ctrl+f`, `ctrl+n`, `ctrl+q`, and so on. The ones on Vimma's keys (`ctrl+w`, `ctrl+u`, `ctrl+h`, `ctrl+d`, `ctrl+o`, `ctrl+i`, `ctrl+k`, `ctrl+b`) are off in every mode: [Firefox's own shortcuts](#firefoxs-own-shortcuts). |
@@ -416,6 +418,57 @@ nothing. `ctrl+b` keys still work in it. With one pane, `ctrl+b r` says so and d
 Without the mode, `ctrl+w >`, `ctrl+w <`, `ctrl+w +` and `ctrl+w -` resize by one step in
 normal mode (`3 ctrl+w >` by three), as in Vim. A config can rebind the mode's keys in
 `[modal.resize]`.
+
+### Layouts
+
+Panes tile as in tmux, with one idea from Hyprland. `ctrl+b enter` is tmux's `split-window`
+without a direction to choose: it splits the focused pane along its longer side, so a wide pane
+gets a neighbour on its right and a tall one a neighbour below. From one pane, three presses
+make a spiral: side by side, then the right half stacked, then its lower quarter side by side.
+The new pane opens the start page and has focus; past `[panes] max` it is refused with the usual
+notice. `ctrl+b v` and `ctrl+b -` still split right and down.
+
+`ctrl+b space` is tmux's `next-layout`: it rearranges the panes you have into the next preset,
+and the status bar shows its name for a moment (`layout: tiled`):
+
+| Preset            | The panes                                                             |
+| ----------------- | --------------------------------------------------------------------- |
+| `even-horizontal` | all side by side, equal widths                                        |
+| `even-vertical`   | all stacked, equal heights                                            |
+| `main-vertical`   | the focused pane large on the left, the others stacked on the right   |
+| `main-horizontal` | the focused pane large on top, the others side by side below          |
+| `tiled`           | a grid: 2×2 at four panes, two over one at three                      |
+| `dwindle`         | a spiral: each pane takes half of what is left, along the longer side |
+
+After `dwindle` it starts again at `even-horizontal`. Each workspace remembers the last preset it
+used, across a switch and a restart, so `ctrl+b space` goes on from there; splitting, closing,
+swapping or resizing panes afterwards keeps that name, as tmux does.
+
+- **Pages stay as they are.** A preset moves the pages you have into new places; none is
+  reloaded, and each keeps its scroll position, form text and history.
+- **Focus and zoom:** the focused pane keeps focus, and its page has the keys afterwards. A
+  zoomed pane is unzoomed first, as in tmux. The main pane of `main-*` is the focused one (tmux
+  uses the first): focus a pane and pick `main-vertical` to make it the big one. The other panes
+  keep their order after it.
+- **Sizes:** presets share space equally, except the main pane, which takes 60 %
+  (`[panes] main_size`). Resize mode and `ctrl+w < > + -` work on the result as on any split.
+- **By name:** `:layout tiled` picks a preset (Tab completes the names), and `:layout` alone is
+  `ctrl+b space`. Each preset is also an action to bind in `config.toml`, unbound by default:
+  `layout_even_horizontal`, `layout_even_vertical`, `layout_main_vertical`,
+  `layout_main_horizontal`, `layout_tiled`, `layout_dwindle`:
+
+  ```toml
+  [keys]
+  layout_tiled = ["prefix+alt+t"]
+  layout_main_vertical = ["prefix+alt+m"]
+  ```
+
+- **With one pane** there is nothing to arrange: `ctrl+b space` says so. With more than 10
+  panes (`[panes] max` up to 16) the even presets would make panes narrower than a tenth and are
+  refused with the reason; `tiled` and `dwindle` always fit.
+- **`[panes] layout`** sets what `ctrl+b enter` does: `"dwindle"` (the default) as above, or
+  `"manual"`, where it splits right like `ctrl+b v` and the tree changes only the way you say.
+  Presets work the same either way.
 
 ### Keyboard layouts
 
@@ -881,6 +934,7 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:tabrename [name]`                   | Renames the tab; without a name, opens the rename prompt.                                                                        |
 | `:ls`, `:b`                           | Opens the goto picker.                                                                                                           |
 | `:vsplit`/`:vs`, `:split`/`:sp`       | Splits the pane right / down, as `ctrl+b v` / `ctrl+b -`.                                                                        |
+| `:layout [name]`                      | Arranges the panes in the named preset ([Layouts](#layouts)); Tab completes the names. Without one, the next preset.             |
 | `:wsnext`/`:wn`, `:wsprev`/`:wp`      | Next / previous workspace, as `ctrl+b )` / `ctrl+b (`.                                                                           |
 | `:workspace name`, `:ws 2`, `:ws #`   | Switches to the workspace with that name, that number in workspace order, or the previous one (`ctrl+^`). `Tab` completes names. |
 | `:workspace`, `:ws`, `:workspaces`    | Opens the workspace picker.                                                                                                      |
@@ -984,7 +1038,8 @@ accent = "#ff9e64"
   message goes away at the next check.
 - **What applies live:** `[keys]`, `[modal]` (leader, `timeout_ms`, per-mode keys, `hint_chars`)
   and `[unbind]`; `[panes] max` (most panes in a workspace, 1 to 16, default 4; it limits new
-  splits); `[sites."<host>"] insert` (`auto`, `never` or `always`: whether a text field on that
+  splits), `[panes] layout` (`"dwindle"` or `"manual"`: where `ctrl+b enter` puts a new pane) and
+  `[panes] main_size` (the main-\* presets' main pane, 20 to 80 percent, default 60); `[sites."<host>"] insert` (`auto`, `never` or `always`: whether a text field on that
   site and its subdomains takes insert mode); `[theme]` `source` (`omarchy` or `file`, the
   built-in Tokyo Night), `font` and `[theme.colors]` (single colours over either source);
   `[workspaces]` (a new one gets its container at once; one removed from the file stays, as a
@@ -1129,6 +1184,38 @@ For workspaces ([m3-workspaces](specs/m3-workspaces.md)); each is a default you 
   back (`browser.startup.page` = `3`; Firefox's default `1` opens the home page).
 - **Firefox Sync leaves two settings alone**: `browser.startup.page` and
   `privacy.userContext.enabled` (turning containers off deletes every workspace's data).
+
+## Accessibility
+
+Vimma's own parts (the status bar, the `ctrl+b ?` overlay, the pickers, the side and bookmarks
+panels, the command line, prompts and notices, the start page and about:vimma) work with a
+screen reader on top of Firefox's own accessibility support. On Linux that is Orca.
+
+- **What each part says.** The overlay and the pickers are dialogs, their lists listboxes, and
+  the bookmarks a tree with levels and open or closed folders; `j`/`k` move the focused row, so
+  the screen reader reads each one as you move. The command line is a combobox with its
+  completions, and an error in it is read at once. A y/N question is an alert dialog that reads
+  the question; a rename prompt reads what it asks for.
+- **Focus.** Each overlay, picker, panel and prompt takes focus when it opens and gives it back
+  where it was when it closes (to the page you switched to, if you picked a tab).
+- **What it announces, and what not.** The status bar is a status bar: your screen reader's
+  "read status bar" command reads the mode, tab, title and URL, or move to it as a status
+  element. It never announces titles or URLs as they change. It says the mode when it
+  changes into normal, insert, visual, hint or resize mode; help, command and panel mode are
+  said by the dialog, line or list that takes focus. "Pattern not found" is said once after a
+  search. Notices are read politely; errors (a blocked URL, an add-on or bookmark that failed)
+  are read at once. The same notice twice in a row is read once.
+- **Link hints** are labels drawn over the page, hidden from screen readers; hint mode is
+  announced. On a page with a screen reader, its own link navigation may serve better.
+- **Contrast.** All text Vimma draws reaches WCAG AA (4.5:1) in the built-in Tokyo Night and in
+  light themes: secondary and coloured text is darkened or lightened just enough on the
+  theme's backgrounds, so a theme keeps its colours where they already read. A `[theme.colors]`
+  foreground you set yourself is used as is, with a warning in about:vimma when it falls short.
+- **Motion.** Nothing in Vimma's own UI animates, so there is nothing for
+  `prefers-reduced-motion` to turn off.
+- **Every key is remappable** for motor needs: the prefix, the leader and any binding, including
+  one-key bindings that avoid chords and the `ctrl+b` prefix altogether. See
+  [Every key is yours](#every-key-is-yours) and [config.toml](#configtoml).
 
 ## FAQ and troubleshooting
 

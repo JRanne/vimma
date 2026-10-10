@@ -10,6 +10,7 @@
 import {
   CONTROL_COMMANDS,
   CONTROL_PROTOCOL,
+  LineFramer,
   MAX_LINE_LENGTH,
   RESERVED_COMMANDS,
   tokensEqual,
@@ -52,7 +53,6 @@ const MAX_PENDING_OUT = 4 * 1024 * 1024;
 const MAX_CLOSING = 16;
 const BACKLOG = 16;
 const DISCOVERY_FILE = "vimma-control.json";
-const NEWLINE = 0x0a;
 /** After an error that ends the connection: how long to wait for the client to close first. */
 const DRAIN_MS = 1000;
 
@@ -328,9 +328,8 @@ class Connection {
     this.binary = Cc["@mozilla.org/binaryinputstream;1"].createInstance(Ci.nsIBinaryInputStream);
     this.binary.setInputStream(this.input);
     this.output = transport.openOutputStream(0, 0, 0).QueryInterface(Ci.nsIAsyncOutputStream);
-    /** @type {Uint8Array[]} bytes of the line being read */
-    this.chunks = [];
-    this.lineLength = 0;
+    /** Bytes in, lines out (core control.mjs; fuzzed in its tests). */
+    this.framer = new LineFramer();
     this.authenticated = false;
     /** Which handshake line comes next. @type {"hello" | "auth"} */
     this.stage = "hello";
@@ -394,37 +393,18 @@ class Connection {
 
   /** @param {Uint8Array} bytes */
   receive(bytes) {
-    let start = 0;
-    while (!this.closed && !this.draining && start < bytes.length) {
-      const nl = bytes.indexOf(NEWLINE, start);
-      const end = nl === -1 ? bytes.length : nl;
-      this.chunks.push(bytes.subarray(start, end));
-      this.lineLength += end - start;
-      // A line may end in \r\n: allow one byte over the limit for the \r.
-      if (this.lineLength > MAX_LINE_LENGTH + 1) {
-        this.fail(null, "bad-request", `line longer than ${MAX_LINE_LENGTH} bytes`);
-        return;
-      }
-      if (nl === -1) return;
-      const line = new Uint8Array(this.lineLength);
-      let at = 0;
-      for (const c of this.chunks) {
-        line.set(c, at);
-        at += c.length;
-      }
-      this.chunks = [];
-      this.lineLength = 0;
-      start = nl + 1;
-      this.onLine(line[line.length - 1] === 0x0d ? line.subarray(0, -1) : line);
+    for (const line of this.framer.push(bytes)) {
+      // A line that ended the connection drops the rest.
+      if (this.closed || this.draining) return;
+      this.onLine(line);
+    }
+    if (this.framer.overflow && !this.closed && !this.draining) {
+      this.fail(null, "bad-request", `line longer than ${MAX_LINE_LENGTH} bytes`);
     }
   }
 
-  /** @param {Uint8Array} bytes one line without its newline */
+  /** @param {Uint8Array} bytes one line without its newline, at most MAX_LINE_LENGTH bytes */
   onLine(bytes) {
-    if (bytes.length > MAX_LINE_LENGTH) {
-      this.fail(null, "bad-request", `line longer than ${MAX_LINE_LENGTH} bytes`);
-      return;
-    }
     /** @type {unknown} */
     let message;
     try {
@@ -523,7 +503,12 @@ class Connection {
     }
     if (!CONTROL_COMMANDS.includes(command)) {
       this.respond(id, {
-        error: { code: "unknown-command", message: `unknown command ${String(command)}` },
+        error: {
+          code: "unknown-command",
+          // Not String(command): a parsed object can carry a toString that is not a function.
+          message:
+            typeof command === "string" ? `unknown command ${command}` : "command must be a string",
+        },
       });
       return;
     }
@@ -576,7 +561,6 @@ class Connection {
   fail(id, code, message) {
     this.respond(id, { error: { code, message } });
     this.draining = true;
-    this.chunks = [];
     this.arm(DRAIN_MS, () => this.stop());
     this.waitForInput();
   }

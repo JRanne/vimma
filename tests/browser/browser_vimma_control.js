@@ -342,6 +342,10 @@ add_task(async function test_handshake() {
   Assert.equal((await right.read()).error.code, "bad-request", "not JSON");
   await right.send({ type: "request", id: 3, command: "frobnicate", args: {} });
   Assert.equal((await right.read()).error.code, "unknown-command", "an unknown command");
+  // Regression (fuzzing): naming a command that is not a string threw (String() of an object
+  // whose toString is 0), and every later request waited behind the rejected one.
+  await right.writeRaw('{"type":"request","id":7,"command":{"toString":0},"args":{}}\n');
+  Assert.equal((await right.read()).error.code, "unknown-command", "a command not a string");
   const reserved = await right.request(4, "screenshot");
   Assert.equal(reserved.error.code, "not-implemented", "a reserved command");
   const typo = await right.request(5, "state", { verbose: true });

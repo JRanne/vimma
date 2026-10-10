@@ -260,6 +260,14 @@ def open_tarball(source):
     return open(source, "rb")
 
 
+def source_revision(read):
+    """The 40-hex revision on sourcestamp.txt's `…/rev/<hash>` line, or None. upstream.yml asks
+    Taskcluster for Mozilla's build of it (the artifact preflight, spec m7-upstream-autopilot)."""
+    data = read(SOURCESTAMP)
+    m = re.search(rb"/rev/([0-9a-f]{40})\s*$", data or b"", re.M)
+    return m.group(1).decode("ascii") if m else None
+
+
 def firefox_version(read):
     data = read(MILESTONE)
     if data is None:
@@ -384,6 +392,7 @@ def build_report(src, read, source):
         "version": 1,
         "ran": True,
         "firefox": firefox_version(read),
+        "revision": source_revision(read),
         "source": source,
         "ok": all(r["imports"] for r in rows),
         "counts": counts,

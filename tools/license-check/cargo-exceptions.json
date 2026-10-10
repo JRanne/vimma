@@ -1,0 +1,17 @@
+{
+  "$comment": "Reviewed licence exceptions for the Rust crates, keyed by exact name@version so every upgrade is re-checked. All are test-only: proptest's dependency tree (tools/vimma-ctl dev-dependencies, docs/specs/m7-fuzzing.md); none is in the vimma-ctl binary.",
+  "exceptions": {
+    "unicode-ident@1.0.26": {
+      "license": "(MIT OR Apache-2.0) AND Unicode-3.0",
+      "reason": "MIT or Apache, plus the Unicode License v3 (OSI-approved, permissive) for its generated tables; compile-time only, via proptest > rand_chacha > ppv-lite86 > zerocopy-derive > syn"
+    },
+    "wasip2@1.0.1+wasi-0.2.4": {
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "reason": "MIT is one of the choices; the checker cannot parse WITH. A WASI-only dependency of getrandom, never built for Linux; via proptest > rand"
+    },
+    "wit-bindgen@0.46.0": {
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "reason": "MIT is one of the choices; the checker cannot parse WITH. A WASI-only dependency of getrandom (via wasip2), never built for Linux"
+    }
+  }
+}

@@ -369,7 +369,7 @@ describe("mergeWithDefaults", () => {
       unbind: {},
       workspaces: [],
       theme: { source: "omarchy", font: "monospace", colors: {} },
-      panes: { max: 4 },
+      panes: { max: 4, layout: "dwindle", mainSize: 0.6 },
       hintChars: "asdfghjkl",
       sites: [],
       routes: [],

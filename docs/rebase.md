@@ -1,51 +1,82 @@
 # Rebase playbook: moving to a new Firefox release
 
 We track Firefox **release**: every 4-weekly release and every dot release (ADR-002). Our upstream
-surface is the `.patch` files under `src/` (ADR-003 lists each one and why). Plan §6 budgets half
-a day for each of the first three bumps. After that the bump should be automatic. This page is the
-procedure, from the bot's PR to a merged bump, plus the fast path for security releases and how
-to roll back. Background: [ADR-002](adr/002-upstream-release-channel.md),
+surface is the `.patch` files under `src/` (ADR-003 lists each one and why). The **upstream
+autopilot** (`upstream.yml`, ADR-015) does the mechanical part on its own: it notices the release,
+rebases our patches onto it, runs the PR suites and opens the PR. This page is what it does, what
+you do with its PR, the manual procedure for when it cannot finish (a patch conflict, no
+artifacts, a failing suite), the fast path for security releases and how to roll back.
+Background: [ADR-002](adr/002-upstream-release-channel.md),
 [ADR-003](adr/003-own-files-minimal-patches.md), [ADR-010](adr/010-pr-artifact-builds.md),
-[runbook](runbook.md) (CI and automation). Spec: [m0-rebase-playbook](specs/m0-rebase-playbook.md).
+[ADR-015](adr/015-upstream-autopilot.md), [runbook](runbook.md) (CI and automation). Specs:
+[m7-upstream-autopilot](specs/m7-upstream-autopilot.md),
+[m0-rebase-playbook](specs/m0-rebase-playbook.md).
 
 ## At a glance
 
-| #   | Step                                     | Where                                | Time                    |
-| --- | ---------------------------------------- | ------------------------------------ | ----------------------- |
-| 1   | Bot opens the bump PR with a patch check | `upstream.yml`, hosted runner        | ≤ 6 h after the release |
-| 2   | Download the new source                  | build machine (self-hosted or yours) | 12.5 min                |
-| 3   | Import; fix any patch that fails         | build machine                        | 1 min, plus fixes       |
-| 4   | Full build + full mochitest suite        | build machine                        | 39 min cold + suite     |
-| 5   | Artifact build + suite (preflight first) | build machine, and `e2e.yml` on PR   | 5 min                   |
-| 6   | Version files, branding prefs, cfr, SB   | build machine                        | 5 min                   |
-| 7   | Split-view contract (M4 canary)          | both builds                          | part of the suite       |
-| 8   | Mark ready, CI, merge                    | GitHub                               | CI ≈ 8 min              |
+| #   | Step                                      | Where                                | Time                    |
+| --- | ----------------------------------------- | ------------------------------------ | ----------------------- |
+| 1   | Autopilot: issue, patch check, suites, PR | `upstream.yml`, hosted runners       | ≤ 6 h after the release |
+| 2   | Download the new source                   | build machine (self-hosted or yours) | 12.5 min                |
+| 3   | Import; fix any patch that fails          | build machine                        | 1 min, plus fixes       |
+| 4   | Full build + full mochitest suite         | build machine (or the nightly)       | 39 min cold + suite     |
+| 5   | Artifact build + suite (preflight first)  | autopilot, `e2e.yml` on the PR       | 5 min                   |
+| 6   | Version files, branding prefs, cfr, SB    | autopilot (prefs), build machine     | 5 min                   |
+| 7   | Split-view contract (M4 canary)           | both builds                          | part of the suite       |
+| 8   | Mark ready, CI, merge                     | GitHub                               | CI ≈ 8 min              |
 
+**When the autopilot's PR is green (the common case) you do only step 8.** Steps 2–7 are for a
+draft: a patch that does not apply, a failing suite, or a release without Mozilla artifacts.
 Decision points are marked **Decide**.
 
-## 1. Detection: the bump PR
+## 1. The autopilot: from release to PR
 
-`upstream.yml` runs every 6 h (`:17`) and on demand (`gh workflow run upstream.yml`):
+`upstream.yml` runs every 4 h (`:17`) and on demand (`gh workflow run upstream.yml`; add
+`-f rebuild=true` to redo a release whose branch already exists). Its jobs:
 
-1. **`check` job** (read-only token). `tools/upstream/check-release.py` reads
-   `LATEST_FIREFOX_VERSION` from product-details. If that is newer than `surfer.json`'s
-   `version.version`, it streams
-   `https://archive.mozilla.org/pub/firefox/releases/X.Y/source/firefox-X.Y.source.tar.xz`
-   (≈ 810 MB, the same file `surfer download` fetches) through
-   `tools/upstream/patch-check.py --tarball - --drain`. Only the patched files are extracted, so
+1. **`detect`** (read-only, < 1 min). `tools/upstream/detect.mjs` reads product-details
+   (`firefox_versions.json` for `LATEST_FIREFOX_VERSION`, `firefox.json` for release dates) and
+   Mozilla's [advisories index](https://www.mozilla.org/security/advisories/). It reports whether
+   the latest release is newer than `surfer.json`, whether it is a major (X.0) or dot release
+   (X.Y.Z), and whether an MFSA advisory names it (a **security release**, with the advisory's
+   severity). An unreadable advisories page means "unknown", which counts as security. It also
+   measures **drift** (step "Drift" below). The job summary shows all of it.
+2. **`track`** (`issues: write`). Opens the tracking issue **"Firefox X.Y.Z released"**, labelled
+   `upstream`, and `security` when it is (or may be) a security release, with the advisory links
+   and the merge deadline. A security release mentions you. If Mozilla publishes the advisory
+   after the release, a later run adds `security` and mentions you then.
+3. **`patch-check`** (read-only). Streams
+   `https://archive.mozilla.org/pub/firefox/releases/X.Y.Z/source/firefox-X.Y.Z.source.tar.xz`
+   (≈ 810 MB, the file `surfer download` fetches) through
+   `tools/upstream/patch-check.py --tarball - --drain`: only the patched files are extracted, so
    the disk is barely touched; about 1–2 min. The same stream goes through `tee` into
-   `sha512sum`. `tools/upstream/verify-sha512.py` compares the result with the
-   `source/firefox-X.Y.source.tar.xz` line of `https://archive.mozilla.org/pub/firefox/releases/X.Y/SHA512SUMS`.
-   **A mismatch fails the job** with both hashes in the log, and no PR is opened. We do not check
-   the GPG signature on `SHA512SUMS` (`SHA512SUMS.asc`): HTTPS from archive.mozilla.org is the
-   trust anchor, and the tarball only feeds a report. The build itself uses `surfer download`'s own
-   copy.
-2. **`pr` job** (the only one that can write). `bump-surfer-json.py` bumps the pin, and the job
-   pushes `upstream/firefox-X.Y` and opens a draft PR `upstream: update to Firefox X.Y`, labelled
-   `upstream`. Its body carries the patch-check summary. The JSON report is the run's
-   `patch-check` artifact (30 days).
+   `sha512sum`, and `tools/upstream/verify-sha512.py` compares it with the
+   `source/firefox-X.Y.Z.source.tar.xz` line of `SHA512SUMS` next to it. **A mismatch fails the
+   run**: no PR. We do not check the GPG signature on `SHA512SUMS`: HTTPS from
+   archive.mozilla.org is the trust anchor. Then `patch-audit.py` (ADR-003 register) and the
+   artifact preflight (`artifact-preflight.mjs`: is Mozilla's build of the tarball's revision in
+   the Taskcluster index?). The reports are the run's `patch-check` artifact (30 days).
+4. **`test`** (read-only). Only when every patch applies and the artifacts exist: `e2e.yml`, called
+   with the new version. It bumps `surfer.json` in its own checkout and does what PR CI does:
+   `surfer download` (SHA-512 checked again), `npm run import`, the branding prefs test, the
+   upstream-prefs check (cfr provider and Safe Browsing lists, step 6), the artifact build,
+   `tests/browser/` and `tests/e2e/`. Without artifacts the suites are skipped and the PR says
+   so: run steps 2–4 on the build machine (the full-build path).
+5. **`publish`** (the only job that can push). Pushes `upstream/firefox-X.Y.Z` with one commit,
+   `upstream: firefox X.Y.Z`, and opens the PR of that title, labelled like the issue, which
+   closes the issue on merge. Older open bump PRs and tracking issues are closed as superseded.
+   The PR is a **draft** unless every patch applies, the suites passed and `UPSTREAM_PR_TOKEN` is
+   set (runbook): a PR opened with `GITHUB_TOKEN` starts no CI until you mark it ready.
+   **If Actions may not open PRs** (the repository setting is off), the branch is still pushed
+   and the tracking issue gets the whole summary plus a compare link with the title and
+   `Closes #N` filled in: open the PR from it.
 
-The summary is a table, one row per patch:
+The PR body (`tools/upstream/autopilot-body.mjs`) is a table (tarball hash, patches, register,
+artifacts, suites), the advisories, a **Conflicts** section when a patch does not apply (the
+upstream files, and each failing hunk by header), what you do next, and the full patch check,
+collapsed.
+
+The patch check has one row per patch:
 
 | Result    | Meaning                                                 | `surfer import`               |
 | --------- | ------------------------------------------------------- | ----------------------------- |
@@ -57,22 +88,38 @@ The summary is a table, one row per patch:
 
 Each `fuzz` or `failed` hunk is listed under the table, collapsed, as the hunk from our patch.
 
-**Decide:**
+**Decide (what you do with the PR):**
 
-- All rows import → go to step 2; expect a mechanical bump.
-- "Patch check: **did not run**" → no verdict at all: not "patches fail". The cause is in the
-  summary: the tarball was not readable (not published yet, or a network error), or a patch is
-  malformed or unsupported (e.g. a rename, which `surfer export` never writes). Run the check
-  yourself after step 2.
-- The job failed with "SHA-512 mismatch" and no PR → do not trust that download. Re-run later
-  (`gh workflow run upstream.yml`); if it persists, compare by hand with
-  `sha512sum .surfer/engine/firefox-X.Y.source.tar.xz` after step 2.
-- Any `fuzz` or `failed` → step 3 will fail at that patch; plan the fix before building.
-- A PR for the branch is already open → the workflow does nothing. Closing the PR is the way to get
-  a fresh one: the branch is rebuilt from `main` on the next run.
+- **Green, ready for review** (a token is set) → review the diff (`surfer.json` only) and merge.
+- **Green draft** ("mark it ready") → `gh pr ready <n>`: CI and e2e run as you; merge when green.
+- **Draft, "some patches do not apply"** → steps 2–3 on the PR's branch (`gh pr checkout <n>`),
+  push the re-exported patches; PR CI runs the suites. Or hand it to Claude: comment `@claude`
+  on the PR with the Conflicts section.
+- **Draft, "the suites did not pass"** → read the run's `mochitest (artifact build)` job.
+  `upstream-prefs` failing prints the pref line to paste (step 6); anything else is a real
+  regression: hold the bump, fix it on the branch.
+- **"No Mozilla artifacts for this revision"** → steps 2–4 on the build machine; e2e.yml on the PR
+  will stay red until Mozilla indexes the build (it never has not, so far; check `surfer.json`).
+- **"Patch check: did not run"** → no verdict at all, not "patches fail": the tarball was not
+  readable (not published yet, or a network error) or a patch is malformed. Rerun with
+  `gh workflow run upstream.yml -f rebuild=true`, or run the check yourself after step 2.
+- **The run failed with "SHA-512 mismatch"** and no PR → do not trust that download. Rerun later;
+  if it persists, compare by hand with `sha512sum .surfer/engine/firefox-X.Y.Z.source.tar.xz`.
+- **A comment with a compare link instead of a PR** → open the PR from the link, then as above;
+  enable the setting (runbook) so the next one is a PR.
 
-Nothing happens in the bump PR until you act. A PR opened with `GITHUB_TOKEN` runs no CI until it
-is marked ready for review (runbook, Upstream bumps).
+A release is handled once its branch exists: later runs only keep the tracking issue's labels
+current. To start over, close the PR with its branch (`gh pr close <n> --delete-branch`) or run
+with `-f rebuild=true`.
+
+### Drift: the deadline
+
+Every run also compares the Firefox on `main` with every newer release. A release must be merged
+within **3 days** of its release date if it is a security dot release, **7 days** for a major
+release, **14 days** for a dot release without an advisory (docs/security.md, G2). Past that the
+`drift` job opens one issue labelled `security`, "Vimma's Firefox X is past the security drift
+limit", that mentions you, and **fails every run** until `surfer.json` on `main` moves. Merging
+the bump is the fix; close the drift issue then.
 
 ## 2. Download the new source
 
@@ -238,6 +285,10 @@ vitest still exits 0. A skip prints `branding-prefs: skipped, … is absent (run
 first)` and reports `1 skipped` instead of `1 passed`. Run it after `npm run import`, in the
 checkout that has the new `engine/`.
 
+**Upstream pref copies, checked.** `node tools/upstream/upstream-prefs.mjs` (after the import)
+compares both copies below with the engine's and prints the line to paste for a stale one; exit
+1 then. `e2e.yml` runs it, so the autopilot's suites and PR CI catch a stale copy. The details:
+
 **cfr provider (spec m0-mozilla-services).** We carry a full copy of upstream's
 `browser.newtabpage.activity-stream.asrouter.providers.cfr` with `"enabled":false`. A stale copy
 shadows upstream's provider. Compare:
@@ -286,45 +337,56 @@ change.
 
 ## 8. Ready, CI, merge
 
+For an autopilot PR that came out green, the autopilot already did steps 3, 5 and the prefs part
+of 6 on the new release (its run is linked from the PR); the nightly does step 4 after the merge.
+For a draft you fixed by hand, tick the rest:
+
 - [ ] patch-check: every patch `clean`/`offset` on the new tree; re-exported patches committed
 - [ ] `npm run import` completes
 - [ ] full build: `--version` and `application.ini` as above; `npm run mochitest -- tests/browser/`
       green (paste counts in the PR, as the PR template asks)
 - [ ] artifact build: preflight OK; `npm run mochitest -- --artifact tests/browser/` green
-- [ ] `npx vitest run tools/branding/` green; cfr provider up to date
+- [ ] `npx vitest run tools/branding/` green; `node tools/upstream/upstream-prefs.mjs` up to date
 - [ ] split-view contract green on both builds
 
 Then `gh pr ready <n>`, which starts `ci.yml` and `e2e.yml`. Merge when green. The nightly
 re-downloads Firefox because `surfer.json` changed, and builds it at 03:00 UTC. release-please
-then lists `upstream: update to Firefox X.Y` under Changed in the next release PR.
+then lists `upstream: firefox X.Y.Z` under Changed in the next release PR (the `upstream` type is
+listed; `chore` would be hidden, which is why the autopilot does not use it).
 
 ## Security dot release: the fast path
 
-Target: **released within 7 days** of Mozilla's release (ADR-002, plan §4). A dot release
-(`X.Y.Z`, e.g. 157.0.2) is a few backported fixes; our front-end patches nearly always stay
-`clean`. Mozilla's advisories: <https://www.mozilla.org/security/advisories/>.
+Target: **merged within 3 days** of Mozilla's release, enforced by the drift check
+(docs/security.md, G2; ADR-015). A dot release (`X.Y.Z`, e.g. 157.0.2) is a few backported
+fixes; our front-end patches nearly always stay `clean`. Mozilla's advisories:
+<https://www.mozilla.org/security/advisories/>.
 
-| Day | Do                                                                                     |
-| --- | -------------------------------------------------------------------------------------- |
-| 0   | The bump PR arrives. Its summary should read all `clean`; if not, steps 3 first.       |
-| 0–1 | Steps 2–6 (download, import, full build + suite, artifact build + suite, prefs checks) |
-| 1   | Ready for review, CI green, merge                                                      |
-| 1–2 | Merge the release-please PR (a dot release alone produces one), run `release.yml`      |
+| When         | What happens                                                                   |
+| ------------ | ------------------------------------------------------------------------------ |
+| 0–4 h        | `detect` sees it; tracking issue labelled `security` mentions you              |
+| + ≈ 25 min   | Patch check, suites on the artifact build, PR (or a draft naming the conflict) |
+| day 0–1      | You: mark ready (or review), CI green, merge                                   |
+| day 1–2      | Merge the release-please PR (a dot release alone produces one), `release.yml`  |
+| day 3, 00:00 | Not merged yet: `upstream.yml` fails every run, `security` drift issue opened  |
 
-Skip nothing in the checklist, but there is no need to wait for a nightly: the local full-build
-suite is the same test. Releases skipped in between need nothing extra: `check-release.py`
-reports only the latest, so the bump goes straight to it. Auto-approval for `security` bumps
-(plan §4) is not built yet; today a person merges.
+If the PR is a draft, steps 2–7 as usual, but there is no need to wait for a nightly: the local
+full-build suite is the same test. Releases skipped in between need nothing extra: the autopilot
+bumps straight to the latest and closes the older PR and issue as superseded; the drift check
+still counts from the oldest unshipped security release. Auto-merge of `security` bumps (plan §4)
+is deliberately not built; a person merges.
 
 ## Rolling back
 
-- **Before merge:** keep the PR as a draft, and **do not close it** while you hold the bump. An
-  open PR for the branch is what stops `upstream.yml` from opening a new one every 6 h.
+- **Before merge:** keep the PR as a draft while you hold the bump. Its branch existing is what
+  stops `upstream.yml` from redoing the release every 4 h; closing the PR without deleting the
+  branch keeps it quiet too. The drift check still fails after the deadline: holding a security
+  release is a decision to write down in the drift issue.
 - **After merge, before a release:** revert on `main` through a PR (`git revert <merge commit>`,
   `revert:` with a body saying why). That restores `surfer.json` and any re-exported patches. The
   nightly re-downloads the old version by itself (`engine/.vimma-firefox-version` differs).
-  Locally: `npx surfer download --force && npm run import && npx surfer build`. The next
-  `upstream.yml` run opens the bump again; keep that PR as a draft until the cause is fixed.
+  Locally: `npx surfer download --force && npm run import && npx surfer build`. The release's
+  branch still exists, so the autopilot does not reopen it; delete the branch (or run with
+  `-f rebuild=true`) once the cause is fixed.
 - **After a release:** do not ship an older Firefox (it reintroduces the fixed security bugs). Fix
   forward with a patch release. To pull a bad release: `gh release edit vX.Y.Z --draft` (runbook,
   Release packages).
@@ -343,10 +405,25 @@ Total: 6 patches, 6 hunks, +10 -5
 Register matches src/ (6 patches).
 ```
 
-Exit 1 means a patch is not in the ADR-003 register, or a register line has no patch (both are
-listed). `npm run test:py` runs the same check on every push. Review: a patch that grew (more
-hunks or lines than last month, or `large`, Surfer's 8,000-character warning) is a candidate for
-moving code into our own files (ADR-003). Propose that in a spec, not in a bump PR.
+Exit 1 means a patch is not in the ADR-003 register, a register line has no patch, a patch is
+over its budget (the register's Hunks and Lines columns, lines being added plus removed), or a
+line has no budget or Reviewed date (all are listed). `npm run test:py` runs the same check on
+every push. Review: a patch that grew (more hunks or lines than last month, or `large`, Surfer's
+8,000-character warning) is a candidate for moving code into our own files (ADR-003). Propose
+that in a spec, not in a bump PR. Raising a budget is a change to the register table, with the
+reason in its Why cell.
+
+**Quarterly** (`.github/workflows/patch-audit.yml`, security rule G8): on the first day of
+January, April, July and October, and on manual dispatch, the audit runs and opens an issue
+"Patch audit YYYY-Qn" labelled `upstream` and `audit` with the Markdown report (`--markdown`):
+every patch with used / budget, its review date and age, and the reviews over 92 days old
+(`--max-age-days`; due reviews are listed but do not fail the audit). Work through it: review
+each patch, set its Reviewed date in the register (even when nothing changed), and close the
+issue in the same PR. A failing audit also fails the run. Locally, the same report:
+
+```sh
+python3 tools/upstream/patch-audit.py --markdown /dev/stdout --today 2027-01-01
+```
 
 ## Reference: measurements (Firefox 157.0.1, 2026-10-09)
 

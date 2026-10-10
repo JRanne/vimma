@@ -9,6 +9,15 @@ enforce it, as `test name` links into the test file. CI fails if a link stops re
 (`tools/security/check-doc-links.mjs`), so a renamed or deleted test cannot leave a rule
 unguarded. **⚠ gap** marks a rule the code does not meet yet, with its issue.
 
+**Fuzzing.** Every parser of outside input (the control protocol, vimma-ctl's JSON, `config.toml`,
+routing rules, key notation, the command line, a theme's `colors.toml`) is fuzzed with
+property-based tests: a fixed seed on every PR, a random seed and many more cases nightly
+(`.github/workflows/fuzz.yml`, spec [m7-fuzzing](specs/m7-fuzzing.md)). Rules S11, U7, R6, F5 and
+O7 rest on them.
+[`parseKey and parseBinding throw nothing but KeyNotationError, on any text`](../packages/vimma-core/test/fuzz/keys.fuzz.test.mjs),
+[`json_parse_never_panics`](../tools/vimma-ctl/tests/protocol_props.rs),
+[`decoders_never_panic_and_accept_only_the_schema`](../tools/vimma-ctl/tests/protocol_props.rs)
+
 **Who can reach what.** _You_ means the local user Vimma runs as. _Other local users_ are other
 accounts on the same machine. _Pages_ are web content, which runs in sandboxed content
 processes. _Extensions_ are installed WebExtensions. _Local apps_ are other programs running as
@@ -58,6 +67,15 @@ keyboard can.
   the server itself, never only by the client.
   [`test_server_checks_the_scheme_itself`](../tests/browser/browser_vimma_control.js),
   [`test_open`](../tests/browser/browser_vimma_control.js)
+- S11. Whatever bytes a client sends, the server's framing and validator **never** throw, hang
+  or change a built-in prototype; the framing gives back exactly the lines sent and refuses a
+  line over 1 MiB, and a message outside the protocol is refused.
+  [`LineFramer gives back the lines sent, however the bytes are chunked`](../packages/vimma-core/test/fuzz/control.fuzz.test.mjs),
+  [`any line a client sends, decoded as the server does, validates without throwing`](../packages/vimma-core/test/fuzz/control.fuzz.test.mjs),
+  [`every valid message validates; one changed or added field makes it invalid`](../packages/vimma-core/test/fuzz/control.fuzz.test.mjs),
+  [`send-keys passes only keys the server can parse; open only short http(s), file and about URLs`](../packages/vimma-core/test/fuzz/control.fuzz.test.mjs),
+  [`a type that is not a string is an error, never a throw`](../packages/vimma-core/test/control.test.mjs),
+  [`test_handshake`](../tests/browser/browser_vimma_control.js)
 
 ## 2. Workspace routing (`workspaces/WorkspaceRouter.sys.mjs`)
 
@@ -86,6 +104,11 @@ Sends a URL to the workspace (container, so cookies) that a `[[routes]]` rule na
 - R5. `VIMMA_FROM` **must** be read once and cleared, so it never reaches a later window or a
   process Vimma starts.
   [`a_new_windows_first_tab_is_routed_with_the_startup_app`](../tests/browser/browser_vimma_workspace_routes.js)
+- R6. A domain rule **never** matches a host outside its domain: not a lookalike
+  (`evil-github.com`, `github.com.evil`, letters from another script), nor a disguise
+  (`github.com@evil`, a path, query or fragment, `\`, `%2e`, the ideographic full stop).
+  [`a domain rule never matches a URL whose host is outside its domain`](../packages/vimma-core/test/fuzz/routes.fuzz.test.mjs),
+  [`a domain rule matches its own host and subdomains, however written`](../packages/vimma-core/test/fuzz/routes.fuzz.test.mjs)
 
 ## 3. Workspace deletion and containers (`workspaces/WorkspaceStore.sys.mjs`)
 
@@ -147,6 +170,10 @@ link targets for hints, which chrome must treat as untrusted.
   copied field by field before chrome uses them.
   [`the caps are 5,000 targets, 64 frames and 8 KiB hrefs`](../packages/vimma-core/test/hints.test.mjs),
   [`a well-formed reply → a fresh copy with only the known fields`](../packages/vimma-core/test/hints.test.mjs)
+- U7. Text pasted on the command line **must** be read in bounded time: a megabyte never
+  freezes the window.
+  [`a pasted megabyte is parsed and completed in bounded time`](../packages/vimma-core/test/fuzz/cmdline.fuzz.test.mjs),
+  [`parseCommandLine never throws, and a run names a real action`](../packages/vimma-core/test/fuzz/cmdline.fuzz.test.mjs)
 
 ## 5. Add-ons (`host/addon-ops.mjs`)
 
@@ -211,6 +238,11 @@ desktop entry's launcher (`vimma-open %u`): it finds which app opened a link, fo
   [`never passes a name that is not a simple token`](../tools/package/test/vimma-open.test.mjs),
   [`refuses a name with a newline in it`](../tools/package/test/vimma-open.test.mjs),
   [`never passes a VIMMA_FROM it did not set`](../tools/package/test/vimma-open.test.mjs)
+- O7. A theme's `colors.toml` (anyone can publish a theme) **must** give only `#rrggbb` colours
+  and one CSS rule, and be read in bounded time however deep or large it is.
+  [`parseOmarchyColors never throws; a palette has every key, as #rrggbb or a mode`](../packages/vimma-core/test/fuzz/theme.fuzz.test.mjs),
+  [`any theme file and any accepted font give CSS that tokensToCss accepts`](../packages/vimma-core/test/fuzz/theme.fuzz.test.mjs),
+  [`a hostile theme file is read in bounded time: deep, huge, many keys`](../packages/vimma-core/test/fuzz/theme.fuzz.test.mjs)
 
 Allowed: two or more arguments pass through unchanged; a local app that runs `vimma-open` with
 its own flags could run `vimma` with them directly.
@@ -237,6 +269,16 @@ A local file you trust and edit. Spec: [m5-config-load](specs/m5-config-load.md)
   [`appendRouteText quotes a workspace name as a TOML string`](../packages/vimma-core/test/routes.test.mjs),
   [`appendRouteText refuses what would not parse, and says why`](../packages/vimma-core/test/routes.test.mjs),
   [`route_add_creates_a_private_config_toml`](../tests/browser/browser_vimma_security_invariants.js)
+- F5. Reading `config.toml` **never** throws, hangs or changes a built-in prototype; nesting
+  deeper than 32 levels is refused; a key, colour or modifier named like an `Object` member
+  (`constructor`, `__proto__`) is unknown, never looked up; an accepted config holds only values
+  its schema allows.
+  [`parseConfig never throws, on any text, and its result is well-formed`](../packages/vimma-core/test/fuzz/config.fuzz.test.mjs),
+  [`an accepted config holds only what the schema allows`](../packages/vimma-core/test/fuzz/config.fuzz.test.mjs),
+  [`huge and deeply nested files are refused or read in bounded time`](../packages/vimma-core/test/fuzz/config.fuzz.test.mjs),
+  [`a workspace colour named after an Object member is an error, not a value`](../packages/vimma-core/test/fuzz/config.fuzz.test.mjs),
+  [`a prototype member name is never a key or a modifier: constructor, toString, __proto__`](../packages/vimma-core/test/fuzz/keys.fuzz.test.mjs),
+  [`nesting deeper than MAX_DEPTH, by dotted keys, headers or values, is refused at its line`](../packages/vimma-core/test/toml.test.mjs)
 
 ## 9. Privacy defaults
 
@@ -259,11 +301,75 @@ Spec: [m0-mozilla-services](specs/m0-mozilla-services.md),
   [`test_keyed_build_fetches_google_lists`](../tests/browser/browser_vimma_safebrowsing.js),
   [`test_keyless_build_is_honestly_off`](../tests/browser/browser_vimma_safebrowsing.js)
 
-## 10. Out of scope and trust boundaries
+## 10. Firefox updates (the upstream autopilot, `upstream.yml`)
+
+Vimma is only as safe as the Firefox release under it. The autopilot finds each new release,
+rebases our patches onto it, runs the suites and opens the PR; a person reviews and merges. Spec:
+[m7-upstream-autopilot](specs/m7-upstream-autopilot.md), [ADR-015](adr/015-upstream-autopilot.md),
+playbook: [docs/rebase.md](rebase.md).
+
+**Reach:** Mozilla's public feeds (product-details, the MFSA index, archive.mozilla.org, the
+Taskcluster index) and this repository. Nothing here runs code from a pull request.
+
+- G1. A newer Firefox release **must** produce a tested bump PR within 6 hours of
+  product-details listing it (detection every 4 h, the rebase and suites ≈ 25 min), or, when
+  Actions may not open PRs, a pushed branch and a prefilled compare link on its tracking issue.
+  [`detects every 4 hours, so a release has a PR within 6 hours`](../tools/test/upstream-workflow.test.mjs),
+  [`finds 157.0.2 as a critical security dot release, 3 days to merge`](../tools/upstream/test/autopilot.test.mjs),
+  [`falls back to a compare link when Actions may not open PRs`](../tools/test/upstream-workflow.test.mjs),
+  [`the fallback comment links a prefilled compare page and keeps the summary`](../tools/upstream/test/autopilot.test.mjs)
+- G2. `upstream.yml` **must** fail, and open a `security` issue that mentions the owner, once the
+  Firefox on `main` is more than 3 days behind a security dot release (7 days for a major
+  release, 14 for a dot release without an advisory), counted from the release date.
+  [`limits: 3 days for a security dot release, 7 for a major, 14 otherwise`](../tools/upstream/test/releases.test.mjs),
+  [`a security dot release is behind for 3 days, then overdue`](../tools/upstream/test/releases.test.mjs),
+  [`the earliest deadline wins: a skipped security release still counts`](../tools/upstream/test/releases.test.mjs),
+  [`the drift job fails the run`](../tools/test/upstream-workflow.test.mjs),
+  [`the drift issue tables every unshipped release and mentions the owner`](../tools/upstream/test/autopilot.test.mjs)
+- G3. A release whose advisories cannot be read **must** count as a security release (label and
+  limit), never as one without.
+  [`unreadable advisories make security unknown (null), never false`](../tools/upstream/test/releases.test.mjs),
+  [`unknown security status (advisories unreadable) uses the security limit`](../tools/upstream/test/releases.test.mjs),
+  [`an unreachable advisories page: security unknown, labelled security, a warning`](../tools/upstream/test/autopilot.test.mjs)
+- G4. Nothing is **ever** reported on or built from a Firefox source tarball whose SHA-512
+  differs from Mozilla's `SHA512SUMS`.
+  [`nothing is built from a tarball whose SHA-512 Mozilla did not publish`](../tools/test/upstream-workflow.test.mjs),
+  [`test_mismatch_exits_one_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py)
+- G5. A bump PR is **never** opened ready for review unless every patch applies and the suites
+  passed on the new release; otherwise it is a draft that names the conflicting files and hunks.
+  [`a ready PR only when patches apply, suites pass and a token starts CI`](../tools/upstream/test/autopilot.test.mjs),
+  [`a conflicting bump is a draft that lists the conflicts`](../tools/upstream/test/autopilot.test.mjs),
+  [`lists the conflicting files and hunks, fuzz included`](../tools/upstream/test/autopilot.test.mjs)
+- G6. The autopilot's jobs **must** run with least privilege: nothing by default, write access
+  only in the job that publishes, no secret in detection, the patch check or the suites, no
+  `pull_request_target`, every action pinned by commit SHA.
+  [`grants nothing by default and each job only what it needs`](../tools/test/upstream-workflow.test.mjs),
+  [`no secret reaches detection, the patch check or the suites`](../tools/test/upstream-workflow.test.mjs),
+  [`no workflow runs on pull_request_target`](../tools/test/upstream-workflow.test.mjs),
+  [`every action it uses is pinned by a full commit SHA`](../tools/test/upstream-workflow.test.mjs)
+- G7. The prefs we copy from upstream (the cfr provider, the Safe Browsing lists) **must** match
+  the release under test, or the suites fail with the line to paste.
+  [`our branding prefs match Firefox 157.0.1's`](../tools/upstream/test/upstream-prefs.test.mjs),
+  [`a new upstream cfr field is reported with the line to paste`](../tools/upstream/test/upstream-prefs.test.mjs),
+  [`a pref upstream renamed or removed is its own problem, not a silent pass`](../tools/upstream/test/upstream-prefs.test.mjs)
+- G8. Every upstream file Vimma patches **must** have a line in the ADR-003 register with a hunk
+  and line budget it stays within, and a person **must** review each patch at least once a
+  quarter: `patch-audit.yml` opens an `upstream` `audit` issue on the first day of each quarter,
+  listing reviews over 92 days old, with `issues: write` only in the job that runs no repository
+  code.
+  [`test_a_patch_over_its_hunk_or_line_budget_fails_the_audit`](../tools/upstream/test_patch_audit.py),
+  [`test_a_register_line_without_a_budget_or_review_date_fails_the_audit`](../tools/upstream/test_patch_audit.py),
+  [`test_within_budget_passes_and_reviews_over_92_days_old_are_due`](../tools/upstream/test_patch_audit.py),
+  [`test_every_patch_has_a_budget_and_review_date_and_stays_within_it`](../tools/upstream/test_patch_audit.py),
+  [`runs on the first day of each quarter, and by hand`](../tools/test/patch-audit-workflow.test.mjs),
+  [`grants nothing by default; issues: write only in the report job`](../tools/test/patch-audit-workflow.test.mjs),
+  [`the job holding the issue token never checks out or runs repository code`](../tools/test/patch-audit-workflow.test.mjs)
+
+## 11. Out of scope and trust boundaries
 
 - **Gecko itself.** Page isolation, the sandbox, TLS and the JavaScript engine are Firefox's.
   Vimma is only as safe as the Firefox release under it, so security comes from shipping each
-  Firefox release, and each security dot release, quickly:
+  Firefox release, and each security dot release, quickly: §10 above and
   [docs/rebase.md](rebase.md) ("Security dot release: the fast path"). Vimma has no built-in
   updater ([`updater_is_not_built`](../tests/browser/browser_vimma_updater.js)); updates come
   with your package.

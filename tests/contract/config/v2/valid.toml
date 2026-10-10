@@ -30,6 +30,8 @@ accent = "#7aa2f7"
 
 [panes]
 max = 6
+layout = "manual"
+main_size = 70
 
 [sites."docs.google.com"]
 insert = "always"

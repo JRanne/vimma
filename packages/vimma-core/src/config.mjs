@@ -14,6 +14,7 @@ import { DEFAULT_HINT_CHARS, hintLabels } from "./hints.mjs";
 import { KeymapError, compileKeymap } from "./keymap.mjs";
 import { MODES, isMode } from "./modes.mjs";
 import { PANES_MAX_DEFAULT, PANES_MAX_LIMIT } from "./panes.mjs";
+import { MAIN_SIZE_DEFAULT } from "./layouts.mjs";
 import { PALETTE_KEYS, isHexColor, normalizeHex } from "./theme.mjs";
 import { resolveRoutes, validateRoutes } from "./routes.mjs";
 import { formatPath, locateKeys, parsePath, parseToml } from "./toml.mjs";
@@ -53,7 +54,8 @@ import { KeyNotationError, parseKey } from "./keys.mjs";
  * @property {Record<string, string[]>} unbind
  * @property {Workspace[]} workspaces                     file order = workspace order
  * @property {ThemeConfig} theme
- * @property {{ max: number }} panes                     `[panes]` (schema 2)
+ * @property {{ max: number, layout: "dwindle" | "manual", mainSize: number }} panes
+ *   `[panes]` (schema 2); `mainSize` is `main_size` as a share (0.6), docs/specs/tiling-layouts.md
  * @property {string} hintChars                          `[modal] hint_chars` (schema 2)
  * @property {InsertSiteRule[]} sites                    `[sites."<host>"]` in file order (schema 2)
  * @property {Route[]} routes                            `[[routes]]` in file order (schema 2)
@@ -150,7 +152,12 @@ const KEYMAP_SECTIONS = new Set(["keys", "modal", "unbind"]);
 const WORKSPACE_KEYS = ["color", "icon", "home", "autofill"];
 const THEME_KEYS = ["source", "font", "colors"];
 const THEME_SOURCES = ["omarchy", "file"];
-const PANES_KEYS = ["max"];
+const PANES_KEYS = ["max", "layout", "main_size"];
+/** `[panes] layout` (docs/specs/tiling-layouts.md): where a pane opened without a direction goes. */
+export const PANES_LAYOUT_MODES = Object.freeze(["dwindle", "manual"]);
+/** `[panes] main_size` bounds, in percent. */
+export const MAIN_SIZE_MIN = 20;
+export const MAIN_SIZE_MAX = 80;
 const SITE_KEYS = ["insert"];
 const MODAL_KEYS = ["leader", "timeout_ms", "hint_chars", "insert_editing"];
 const FIREFOX_KEYS = ["disable", "enable"];
@@ -167,7 +174,9 @@ const SCHEMA_2_KEYS = [
 const NEEDS_SCHEMA_2 = "is new in schema 2: put schema = 2 at the top of the file";
 const LABEL = "[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?";
 const DOMAIN = new RegExp(`^(?=.{1,253}$)${LABEL}(?:\\.${LABEL})*\\.?$`, "i");
-const IPV6 = /^(?:\[[0-9a-f:.]*:[0-9a-f:.]*\]|[0-9a-f.]*:[0-9a-f:.]*)$/i;
+// Hex digits, dots and colons, bracketed or not; with a colon (tested apart: a pattern placing
+// the colon inside the run backtracks quadratically on a long key).
+const IPV6 = /^(?:\[[0-9a-f:.]*\]|[0-9a-f:.]*)$/i;
 const BAD_HOST = 'must be a hostname like "docs.google.com", without scheme, port, path or *';
 const MAX_TIMEOUT_MS = 10000;
 export const MAX_WORKSPACE_NAME = 32;
@@ -204,7 +213,7 @@ const isTable = (v) =>
  * an IPv6 address, bracketed or not), optionally with a trailing dot.
  * @param {string} host
  */
-const isSiteHost = (host) => DOMAIN.test(host) || IPV6.test(host);
+const isSiteHost = (host) => DOMAIN.test(host) || (host.includes(":") && IPV6.test(host));
 
 /**
  * The same host as matchSiteRule compares it: case, a trailing dot and IPv6 brackets ignored.
@@ -374,7 +383,7 @@ function validate(raw, declared) {
         const at = [...path, key];
         if (key === "color") {
           if (typeof v !== "string") typeError(at, v, "a string");
-          else if (!CONTAINER_COLORS.includes(v) && !(v in COLOR_ALIASES)) {
+          else if (!CONTAINER_COLORS.includes(v) && !Object.hasOwn(COLOR_ALIASES, v)) {
             fail(
               at,
               `unknown colour "${v}"`,
@@ -401,7 +410,17 @@ function validate(raw, declared) {
   if (declared >= 2 && isTable(raw.panes)) {
     for (const [key, v] of Object.entries(raw.panes)) {
       const path = ["panes", key];
-      if (key !== "max") unknownKey(path, key, PANES_KEYS);
+      if (key === "layout") {
+        if (typeof v !== "string") typeError(path, v, "a string");
+        else if (!PANES_LAYOUT_MODES.includes(v)) {
+          fail(path, `must be "dwindle" or "manual"`, closest(v, PANES_LAYOUT_MODES));
+        }
+      } else if (key === "main_size") {
+        if (typeof v !== "bigint") typeError(path, v, "an integer");
+        else if (v < BigInt(MAIN_SIZE_MIN) || v > BigInt(MAIN_SIZE_MAX)) {
+          fail(path, `must be an integer between ${MAIN_SIZE_MIN} and ${MAIN_SIZE_MAX} (percent)`);
+        }
+      } else if (key !== "max") unknownKey(path, key, PANES_KEYS);
       else if (typeof v !== "bigint") typeError(path, v, "an integer");
       else if (v < 1n || v > BigInt(PANES_MAX_LIMIT)) {
         fail(path, `must be an integer between 1 and ${PANES_MAX_LIMIT}`);
@@ -526,7 +545,7 @@ export function mergeWithDefaults(user, workspaceOrder, siteOrder) {
       const color = w.color ?? WORKSPACE_DEFAULTS.color;
       return {
         name,
-        color: COLOR_ALIASES[color] ?? color,
+        color: (Object.hasOwn(COLOR_ALIASES, color) && COLOR_ALIASES[color]) || color,
         icon: w.icon ?? WORKSPACE_DEFAULTS.icon,
         ...(w.home === undefined ? {} : { home: w.home }),
         autofill: w.autofill ?? WORKSPACE_DEFAULTS.autofill,
@@ -537,7 +556,11 @@ export function mergeWithDefaults(user, workspaceOrder, siteOrder) {
       font: theme.font ?? defTheme.font,
       colors,
     },
-    panes: { max: user.panes?.max ?? PANES_MAX_DEFAULT },
+    panes: {
+      max: user.panes?.max ?? PANES_MAX_DEFAULT,
+      layout: user.panes?.layout ?? "dwindle",
+      mainSize: (user.panes?.main_size ?? MAIN_SIZE_DEFAULT * 100) / 100,
+    },
     hintChars: /** @type {string | undefined} */ (user.modal?.hint_chars) ?? DEFAULT_HINT_CHARS,
     sites: (siteOrder ?? Object.keys(user.sites ?? {})).map((match) => ({
       match,

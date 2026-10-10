@@ -74,7 +74,7 @@ describe("status bar find segment", () => {
     const nf = statusSegments({ mode: "normal", find: { query: "x", notFound: true } });
     expect(nf.find((s) => s.id === "find")).toMatchObject({
       text: "/x not found",
-      fg: "--vimma-error",
+      fg: "--vimma-text-error",
     });
   });
 });

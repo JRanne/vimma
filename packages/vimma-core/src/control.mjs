@@ -253,6 +253,17 @@ function checkResponse(m, command, errors) {
 }
 
 /**
+ * A value for an error message, without calling anything on it: an object from JSON.parse can
+ * carry a `toString` that is not a function, and String() would throw.
+ * @param {unknown} v
+ */
+function describe(v) {
+  if (typeof v === "string") return JSON.stringify(v);
+  if (v === null || typeof v !== "object") return String(v);
+  return Array.isArray(v) ? "(an array)" : "(an object)";
+}
+
+/**
  * Validate one decoded protocol message (or the discovery file, `kind: "discovery"`).
  * Without `kind`, it is taken from the message's `type`. For responses, `command` names the
  * request's command so the result shape can be checked; without it only the envelope is.
@@ -299,9 +310,68 @@ export function validateMessage(message, { kind, command } = {}) {
       checkResponse(message, command, errors);
       break;
     default:
-      errors.push(`unknown message type "${String(effective)}"`);
+      errors.push(`unknown message type ${describe(effective)}`);
   }
   return { valid: errors.length === 0, errors };
+}
+
+/**
+ * The server's framing (spec m0-control-server): bytes in, lines out. `\n` ends a line, one
+ * `\r` before it is dropped, and a line over `max` bytes (`\r` not counted) is an overflow,
+ * after which no more lines come out. A partial line is kept for the next push, at most
+ * `max + 1` bytes of it. Pure, so the fuzzer can drive it (docs/specs/m7-fuzzing.md).
+ */
+export class LineFramer {
+  /** @param {number} [max] */
+  constructor(max = MAX_LINE_LENGTH) {
+    this.max = max;
+    /** @type {Uint8Array[]} the partial line, as pushed */
+    this.chunks = [];
+    this.length = 0;
+    this.overflow = false;
+  }
+
+  /**
+   * @param {Uint8Array} bytes  kept by reference until its partial line completes
+   * @returns {Uint8Array[]} the lines `bytes` completed, in order, without their line ends
+   */
+  push(bytes) {
+    /** @type {Uint8Array[]} */
+    const lines = [];
+    let start = 0;
+    while (!this.overflow && start < bytes.length) {
+      const nl = bytes.indexOf(0x0a, start);
+      const end = nl === -1 ? bytes.length : nl;
+      this.chunks.push(bytes.subarray(start, end));
+      this.length += end - start;
+      // One byte over the limit may be the \r of a \r\n.
+      if (this.length > this.max + 1) {
+        this.overflow = true;
+        break;
+      }
+      if (nl === -1) break;
+      let line = new Uint8Array(this.length);
+      let at = 0;
+      for (const c of this.chunks) {
+        line.set(c, at);
+        at += c.length;
+      }
+      this.chunks = [];
+      this.length = 0;
+      start = nl + 1;
+      if (line[line.length - 1] === 0x0d) line = line.subarray(0, -1);
+      if (line.length > this.max) {
+        this.overflow = true;
+        break;
+      }
+      lines.push(line);
+    }
+    if (this.overflow) {
+      this.chunks = [];
+      this.length = 0;
+    }
+    return lines;
+  }
 }
 
 /**

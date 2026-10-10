@@ -50,6 +50,8 @@ import {
   closePane,
   focusPane,
   hasPanes,
+  layoutPanes,
+  newPane,
   resizePane,
   splitPane,
   swapPane,
@@ -174,7 +176,7 @@ function renameTab(s, text) {
  * @param {"current" | "tab"} where
  */
 function openOrSay(s, text, where) {
-  if (!openUrl(s.win, text, where)) s.notice.show(BLOCKED_URL_TEXT);
+  if (!openUrl(s.win, text, where)) s.notice.show(BLOCKED_URL_TEXT, { error: true });
 }
 
 /**
@@ -188,6 +190,17 @@ function paneRunner(op) {
     if (refused) s.notice.show(refused);
     VimmaHost._emit(s);
   };
+}
+
+/**
+ * A layout preset (pane-ops.mjs `layoutPanes`): its notice is the preset's name or the refusal.
+ * @param {WindowState} s
+ * @param {Action} a
+ * @param {string} [text]
+ */
+function layoutRunner(s, a, text) {
+  s.notice.show(layoutPanes(s.win, a, text));
+  VimmaHost._emit(s);
 }
 
 /**
@@ -295,7 +308,7 @@ function sayAddon(s, op) {
     },
     (e) => {
       console.error("vimma: add-on", e);
-      s.notice.show(`add-on: ${e?.message ?? e}`);
+      s.notice.show(`add-on: ${e?.message ?? e}`, { error: true });
     },
   );
 }
@@ -412,6 +425,18 @@ export const RUNNERS = Object.freeze({
   "pane.resize_wider": paneRunner(resizePane),
   "pane.resize_taller": paneRunner(resizePane),
   "pane.resize_shorter": paneRunner(resizePane),
+  // docs/specs/tiling-layouts.md: dwindle's new pane, tmux's presets; the notice names the preset.
+  "pane.new": paneRunner(newPane),
+  "pane.next_layout": layoutRunner,
+  "pane.layout_even_horizontal": layoutRunner,
+  "pane.layout_even_vertical": layoutRunner,
+  "pane.layout_main_vertical": layoutRunner,
+  "pane.layout_main_horizontal": layoutRunner,
+  "pane.layout_tiled": layoutRunner,
+  "pane.layout_dwindle": layoutRunner,
+  // A key bound to select_layout asks for the name on the command line.
+  "pane.select_layout": (/** @type {WindowState} */ s, /** @type {Action} */ a, text) =>
+    text ? layoutRunner(s, a, text) : s.cmdline.open("layout "),
   // Resize mode (ADR-014): modal, window-wide, while the window shows two panes or more.
   "pane.resize_mode": (/** @type {WindowState} */ s, /** @type {Action} */ a) => {
     if (!hasPanes(s.win)) {
@@ -504,7 +529,7 @@ export const RUNNERS = Object.freeze({
   "bookmark.add": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) => {
     quickAdd(bookmarkContext(s), text).catch((e) => {
       console.error("vimma: bookmark failed", e);
-      s.notice.show(`bookmark: ${e?.message ?? e}`);
+      s.notice.show(`bookmark: ${e?.message ?? e}`, { error: true });
     });
   },
   "bookmarks.collapse": bookmarksAction,

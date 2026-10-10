@@ -75,7 +75,13 @@ describe("CLI", () => {
     const dir = mkdtempSync(join(tmpdir(), "cargo-license-"));
     const file = join(dir, "metadata.json");
     writeFileSync(file, JSON.stringify(meta));
-    return spawnSync(process.execPath, [script, "--metadata", file], { encoding: "utf8" });
+    // No exceptions: the repo's own (cargo-exceptions.json) name real crates, which this
+    // metadata leaves out, so they would be reported unused.
+    const exceptions = join(dir, "exceptions.json");
+    writeFileSync(exceptions, JSON.stringify({ exceptions: {} }));
+    return spawnSync(process.execPath, [script, "--metadata", file, "--exceptions", exceptions], {
+      encoding: "utf8",
+    });
   };
 
   it("checks the crates the repo builds", () => {

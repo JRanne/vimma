@@ -315,7 +315,8 @@ impl Value {
             // Integral and in range, so its decimal form has no point or exponent; going through
             // it avoids a lossy `as` cast.
             Value::Number(n) if n.fract() == 0.0 && (0.0..=MAX_EXACT).contains(n) => {
-                format!("{n}").parse().ok()
+                // -0 is in the range but prints as "-0", which u64 does not parse.
+                format!("{}", n.abs()).parse().ok()
             }
             _ => None,
         }
@@ -516,6 +517,10 @@ mod tests {
         assert_eq!(n("-1"), None);
         assert_eq!(n("1.5"), None);
         assert_eq!(n("\"1\""), None);
+        // Regression (property test, seed 20261010): -0 is the integer 0, as Number.isInteger
+        // says in vimma-core's validator; it read as no number at all.
+        assert_eq!(n("-0"), Some(0));
+        assert_eq!(n("-0.0e5"), Some(0));
     }
 
     #[test]
