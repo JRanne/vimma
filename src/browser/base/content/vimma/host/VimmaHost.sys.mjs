@@ -71,9 +71,25 @@ import {
   newWorkspace,
   renameWorkspace,
   workspaceNames,
-  workspacePickerItems,
   workspaceRef,
 } from "./workspace-ops.mjs";
+import {
+  MOVE_OUT_REFUSED,
+  PRIVATE_WORKSPACE_ID,
+  closePrivate,
+  cycleOutOfPrivate,
+  isPrivateWindow,
+  leavePrivate,
+  pickerItemsWithPrivate,
+  pickerMove,
+  pickerSelect,
+  privatePanel,
+  privateStatus,
+  switchFromPrivate,
+  togglePrivate,
+} from "./private-ops.mjs";
+import { parsePrivateCommand } from "../core/privatews.mjs";
+import { findWorkspace } from "../core/workspaces.mjs";
 import { KeyLog } from "../about/key-log.mjs";
 import {
   addonNames,
@@ -217,6 +233,15 @@ function switchWorkspace(s, text) {
     s.cmdline.open("workspace ");
     return;
   }
+  // docs/specs/private-workspace.md: from private, `:ws name` is the normal window's workspace.
+  if (isPrivateWindow(s.win)) {
+    const back = text === "#";
+    const refused = back
+      ? leavePrivate()
+      : switchFromPrivate((m) => findWorkspace(m, workspaceRef(text, m))?.id ?? null, text);
+    if (refused) s.notice.show(refused);
+    return;
+  }
   const ww = WindowWorkspaces.get(s.win);
   const alternate = text === "#" && !ww?.model?.workspaces.some((w) => w.name === "#");
   // null is success, not "no model": `?? NO_WORKSPACES` would show it after every switch.
@@ -245,6 +270,9 @@ function workspaceRunner(op, prompt) {
   };
 }
 
+/** `workspace.move_tab` in a normal window: `:wsmove name`, or its key asks. */
+const moveTab = workspaceRunner(moveTabToWorkspace, () => "wsmove ");
+
 /**
  * A workspace step (ctrl+b ) / ctrl+b (, ]w / [w, ctrl+^); shows its refusal, if any.
  * @param {"next" | "previous" | "last"} step
@@ -252,6 +280,14 @@ function workspaceRunner(op, prompt) {
  */
 function workspaceStep(step) {
   return (s) => {
+    // docs/specs/private-workspace.md decision 5: from private, ) and ( go to the first and
+    // last normal workspace, ctrl+^ back to the one left; in a normal window private is never
+    // a target.
+    if (isPrivateWindow(s.win)) {
+      const refused = step === "last" ? leavePrivate() : cycleOutOfPrivate(step);
+      if (refused) s.notice.show(refused);
+      return;
+    }
     const ww = WindowWorkspaces.get(s.win);
     const refused = ww ? ww[step]() : NO_WORKSPACES;
     if (refused) s.notice.show(refused);
@@ -466,7 +502,8 @@ export const RUNNERS = Object.freeze({
   // m3-workspaces 5: prefix+w (and `:workspace` without a name).
   "workspace.picker": (/** @type {WindowState} */ s) => {
     s.notice.hide();
-    if (WindowWorkspaces.get(s.win)?.model) s.wsPicker.open();
+    // The private workspace lists the normal ones too (private-workspace decision 5).
+    if (WindowWorkspaces.get(s.win)?.model || isPrivateWindow(s.win)) s.wsPicker.open();
     else s.notice.show(NO_WORKSPACES);
   },
   // m3-workspaces 2b: one workspace's tabs visible at a time (WindowWorkspaces).
@@ -482,7 +519,27 @@ export const RUNNERS = Object.freeze({
     renameWorkspace,
     (win) => `wsrename ${activeWorkspaceName(win) ?? ""}`,
   ),
-  "workspace.move_tab": workspaceRunner(moveTabToWorkspace, () => "wsmove "),
+  "workspace.move_tab": (/** @type {WindowState} */ s, /** @type {Action} */ a, text) => {
+    // private-workspace decision 5: a private tab never leaves the private workspace.
+    if (isPrivateWindow(s.win)) s.notice.show(MOVE_OUT_REFUSED);
+    else moveTab(s, a, text);
+  },
+  // docs/specs/private-workspace.md: toggles; `:private close` closes it after y/N.
+  "workspace.private": (
+    /** @type {WindowState} */ s,
+    _a,
+    /** @type {string | undefined} */ text,
+  ) => {
+    s.notice.hide();
+    const command = parsePrivateCommand(text);
+    const said =
+      command.kind === "refuse"
+        ? command.text
+        : command.kind === "close"
+          ? closePrivate((q, yes) => s.rename.ask(q, yes))
+          : togglePrivate(s.win);
+    if (said) s.notice.show(said);
+  },
   // workspace-routing: `:route` lists the rules (about:vimma); `add [workspace]`, `move`.
   "workspace.route": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) => {
     s.notice.hide();
@@ -491,6 +548,12 @@ export const RUNNERS = Object.freeze({
   },
   "workspace.close": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) => {
     s.notice.hide();
+    // In private, ctrl+b shift+d and `:wd` close the private workspace (decision 3).
+    if (!text && isPrivateWindow(s.win)) {
+      const refused = closePrivate((q, yes) => s.rename.ask(q, yes));
+      if (refused) s.notice.show(refused);
+      return;
+    }
     const refused = closeWorkspace(
       s.win,
       text,
@@ -835,14 +898,26 @@ export const VimmaHost = {
           ).gBrowser.selectedTab = tab;
         },
       }),
+      // The private workspace is the last row (docs/specs/private-workspace.md decision 5).
       wsPicker: new WorkspacePicker(win, {
-        items: () => workspacePickerItems(win),
-        activeId: () => WindowWorkspaces.get(win)?.model?.active ?? null,
+        items: () => pickerItemsWithPrivate(win),
+        activeId: () =>
+          isPrivateWindow(win)
+            ? PRIVATE_WORKSPACE_ID
+            : (WindowWorkspaces.get(win)?.model?.active ?? null),
         select: (id) => {
-          const refused = WindowWorkspaces.get(win)?.switchTo({ id });
+          const said = pickerSelect(win, id);
+          const refused = said === undefined ? WindowWorkspaces.get(win)?.switchTo({ id }) : said;
           if (refused) state.notice.show(refused);
         },
         move: (id) => {
+          const ask = (/** @type {string} */ q, /** @type {() => void} */ yes) =>
+            state.rename.ask(q, yes);
+          const said = pickerMove(win, id, ask, (text) => state.notice.show(text));
+          if (said !== undefined) {
+            if (said) state.notice.show(said);
+            return;
+          }
           const refused = moveTabFromPicker(
             win,
             id,
@@ -866,7 +941,13 @@ export const VimmaHost = {
       }),
       find: new Find(win, () => this._emit(state)),
       panel: new SidePanel(win, {
-        model: () => (WindowWorkspaces.get(win)?.model ? pickerWorkspaces(win) : null),
+        // A private window lists its tabs as the private workspace (private-workspace 6).
+        model: () => {
+          if (isPrivateWindow(win)) return privatePanel(pickerWorkspaces(win)).model;
+          return WindowWorkspaces.get(win)?.model ? pickerWorkspaces(win) : null;
+        },
+        where: () =>
+          isPrivateWindow(win) ? privatePanel(pickerWorkspaces(win)).options : undefined,
         info: (tabId) => {
           const tab = /** @type {any} */ (tabById(win, tabId));
           if (!tab) return undefined;
@@ -1002,7 +1083,7 @@ export const VimmaHost = {
    * @returns {{ mode: Mode, pending: string[], find?: FindStatus | null,
    *   pane?: { index: number, count: number } | null, configErrors?: readonly ConfigError[],
    *   configFile?: string, alerts?: readonly string[],
-   *   workspace?: { name: string, index: number, color?: string } | null }}
+   *   workspace?: { name: string, index: number, color?: string, private?: boolean } | null }}
    */
   status(win) {
     const state = states.get(win);
@@ -1013,7 +1094,7 @@ export const VimmaHost = {
       pending: state.dispatcher.pending(),
       find: browser ? state.find.status(browser) : null,
       pane: paneStatus(win),
-      workspace: WindowWorkspaces.get(win)?.status() ?? null,
+      workspace: privateStatus(win) ?? WindowWorkspaces.get(win)?.status() ?? null,
       configErrors: settings.configErrors,
       configFile: settings.configFile,
       // Persistent, unlike a notice: containers off at startup (m3-workspaces).

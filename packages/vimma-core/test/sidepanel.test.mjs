@@ -112,6 +112,30 @@ describe("openPanel", () => {
     expect([s.previous, s.next]).toEqual([null, null]);
   });
 
+  test("Given the private workspace, then its head says so and its neighbours are the host's", () => {
+    const priv = {
+      active: "◆ private",
+      next: 1,
+      workspaces: [
+        {
+          id: "◆ private",
+          name: "private",
+          container: "",
+          tabs: ["t1", "t2"],
+          activeTab: "t2",
+          panes: null,
+        },
+      ],
+    };
+    const s = openPanel(priv, info, { private: true, neighbours: ["home", "work"] });
+    expect(s.workspace).toMatchObject({ id: "◆ private", name: "private", private: true });
+    expect([s.previous, s.next]).toEqual(["home", "work"]);
+    expect(s.rows.map((r) => r.tabId)).toEqual(["t1", "t2"]);
+    const again = refreshPanel(s, priv, info, { private: true, neighbours: ["home", "work"] });
+    expect(again.workspace.private).toBe(true);
+    expect([again.previous, again.next]).toEqual(["home", "work"]);
+  });
+
   test("Given a tab the host no longer knows, then its row still says something", () => {
     const s = openPanel({ ...model, active: "w1" }, () => undefined);
     expect(s.rows[0]).toMatchObject({ display: "New Tab", host: "" });

@@ -62,6 +62,7 @@ Workspaces
   close_workspace         ctrl+b shift+d                                    Close workspace
   move_to_workspace       (unbound)                                         Move the tab to another workspace (reopens it there)
   route_rules             (unbound)                                         Routing rules: list them; :route add [workspace], :route move
+  private_workspace       ctrl+b shift+p, ctrl+shift+p                      Private workspace (a private window); again goes back
 
 Navigation
   goto_picker             ctrl+b g, b                                       Goto picker: every tab in every workspace

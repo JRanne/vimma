@@ -99,6 +99,10 @@ export const COMMANDS = Object.freeze([
   cmd("wsmove", "optional", "workspace.move_tab", "Move the tab to a workspace (name or number)"),
   // workspace-routing: without text, the rules (about:vimma); `add [workspace]`, `move`.
   cmd("route", "optional", "workspace.route", "Routing rules (add [workspace] | move)"),
+  // docs/specs/private-workspace.md: toggles; `:private close` closes it (asks y/N).
+  cmd("private", "optional", "workspace.private", "Private workspace; again goes back (close)", {
+    aliases: ["priv"],
+  }),
   cmd("ls", "none", "goto.picker", "Goto picker: every tab in every workspace"),
   cmd("sidebar", "none", "sidebar.toggle", "Open / close the side panel"),
   // docs/specs/bookmarks.md: with a path, files the page without the prompt.
@@ -302,6 +306,7 @@ const CANDIDATES = [
 const ARGUMENT_KINDS = Object.freeze({
   addon: { names: "addon", kind: "add-on" },
   layout: { names: "layout", kind: "layout", fixed: LAYOUTS },
+  private: { names: "private", kind: "private workspace", fixed: ["close"] },
   workspace: { names: "workspace", kind: "workspace" },
   wsdelete: { names: "workspace", kind: "workspace" },
   wsmove: { names: "workspace", kind: "workspace" },

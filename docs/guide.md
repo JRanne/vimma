@@ -528,7 +528,10 @@ shortcuts are off in every mode: in insert mode, in the URL bar, and when Vimma 
 `ctrl+e` and `ctrl+y` (scroll a step) are on the list too; Firefox binds neither on Linux (its
 second web-search key is `ctrl+j` there, and downloads is `ctrl+shift+y`), so nothing changes.
 Every other Firefox shortcut works as before: `ctrl+t`, `ctrl+shift+t`, `ctrl+n`, `ctrl+l`,
-`ctrl+f`, `ctrl+tab`, `alt+1..9`, `ctrl+plus`, `ctrl+q`, `F5`, and so on.
+`ctrl+f`, `ctrl+tab`, `alt+1..9`, `ctrl+plus`, `ctrl+q`, `F5`, and so on. One is Vimma's with the
+same meaning: `ctrl+shift+p`, Firefox's "New Private Window", goes to the
+[private workspace](#private-workspace) (and opens it if it is not open) instead of a new private
+window on every press. Unbind `private_workspace`'s `ctrl+shift+p` to give it back to Firefox.
 
 Vimma turns them off at startup by disabling Firefox's own `<key>` elements (`#mainKeyset`), with
 no change to Firefox's code; `about:vimma` lists each one that is off (key, Firefox's id and
@@ -642,6 +645,8 @@ If you think of a workspace as a Vim buffer, the keys are the ones your fingers 
 | `ctrl+b shift+w` | `:wsrename market`               | Rename the current workspace (and its container).                   |
 | `ctrl+b shift+d` | `:wsdelete [shop]`, `:wd [shop]` | Close the current (or the named) workspace, after a `y/N` question. |
 |                  | `:wsmove work` / `:wsmove 2`     | Move the current tab to another workspace, by name or number.       |
+| `ctrl+b shift+p` | `:private`, `:priv`              | Go to the [private workspace](#private-workspace); again goes back. |
+|                  | `:private close`                 | Close the private workspace and discard its data, after `y/N`.      |
 
 - The keys open the command line with the command typed for you (`ctrl+b shift+w` with the
   current name to edit).
@@ -674,7 +679,9 @@ If you think of a workspace as a Vim buffer, the keys are the ones your fingers 
 ### Workspace picker
 
 `ctrl+b w` lists the window's workspaces over the page, in workspace order: each with its number,
-its name and how many tabs it has here; the one you are in says `current` and is selected.
+its name and how many tabs it has here; the one you are in says `current` and is selected. The
+last row is the [private workspace](#private-workspace): `◆ private` with its tab count, or
+`new` while it is not open. It shows a count only, never a title or an address.
 
 | Key               | What it does                                                 |
 | ----------------- | ------------------------------------------------------------ |
@@ -690,6 +697,12 @@ reopened and loses its back/forward history and form data (see
 the workspace changes before your `y` (another tab selected, the workspace renamed or closed),
 nothing is moved. `m` on the workspace the tab is already in says so and asks nothing. To create,
 rename or close a workspace, use `ctrl+b shift+n`, `shift+w` and `shift+d`.
+
+`m` on the private row reopens the tab in the private workspace, after
+`Reopen this tab in the private workspace? … y/N`. The page is already in your normal history, so
+nothing new is recorded; it is Firefox's "Open Link in New Private Window" as a move. A private
+tab never moves out: `m` on a normal row from the private workspace, and `:wsmove` there, say
+`a private tab cannot leave the private workspace`.
 
 ### Side panel
 
@@ -827,6 +840,64 @@ is called, run `vimma-open https://example.com` from it, or look at its process 
 
 `:route add` refuses a site an earlier rule already routes (it names the rule), a `config.toml`
 that has errors, and a file without `schema = 2`. It only ever appends to the file.
+
+### Private workspace
+
+The private workspace is a Firefox private window that Vimma treats as a workspace. Everything
+a private window promises, it keeps, because it is one: nothing you do there stays on disk.
+History, cookies and site storage, the cache, form history, the downloads list and session
+restore all forget it, and so do Vimma's own files. Spec:
+[private-workspace](specs/private-workspace.md).
+
+| Keys                             | Command          | What it does                                                               |
+| -------------------------------- | ---------------- | -------------------------------------------------------------------------- |
+| `ctrl+b shift+p`, `ctrl+shift+p` | `:private`       | Go to the private workspace, opening it if it is not open; in it, go back. |
+| `ctrl+b shift+d` (in it)         | `:private close` | Close it after `y/N`; its history, cookies and site data are discarded.    |
+| `ctrl+^`, `ctrl+b ^` (in it)     |                  | Back to the workspace you came from, in the window you came from.          |
+| `ctrl+b )` / `ctrl+b (` (in it)  |                  | Leave it for your first / last workspace.                                  |
+| `ctrl+b w`                       | `:workspaces`    | The picker; the private workspace is its last row.                         |
+
+- **Its own key only.** The private workspace is never a stop on `ctrl+b (` / `ctrl+b )`,
+  `]w` / `[w`, `:wn` / `:wp`, nor the `ctrl+^` of a normal window, so cycling never drops you
+  into it by accident. From inside it, those keys take you out.
+- **In it**, the status bar says `◆ private` (in the theme's magenta), and `ctrl+b b` lists its
+  tabs under a `◆ private` head. Splits, hints, find, copy mode, marks in the side panel and the
+  command line work as in any workspace; the command line's history there is its own and is
+  never written.
+- **There is one private workspace.** Every private window is part of it: `ctrl+n` in it, or
+  Firefox's "Open Link in New Private Window", makes another, and the key takes you to the most
+  recent one. They share one cookie jar, as Firefox's private windows do.
+- **Closing it** (`ctrl+b shift+d` or `:wd` in it, or `:private close` anywhere) asks
+  `Close the private workspace (5 tabs)? Its history, cookies and site data are discarded. y/N`,
+  then closes every private window, and Firefox discards their data. Closing a private window
+  with your window manager or `ctrl+shift+w` asks nothing; the data goes once the last private
+  window has closed.
+- **Add-ons** run there only if you allowed them in private windows (`ctrl+b e`, then `P`).
+  Searches use Firefox's private search engine if you set one. Vimma's own keys and pages need
+  no add-on.
+- **Links from other apps** open in your normal window, as Firefox does, so the window manager
+  takes you out of the private workspace. Routing rules never send a page into or out of it.
+- **Scripts:** `vimma-ctl state` in the private workspace says `"private": true` and
+  `"workspace": "private"`, and gives every tab's `url` and `title` as `null`.
+- **What a private window does not hide:** the clipboard (copy mode's `y` copies to the system
+  clipboard, as in Firefox), and the window title, which your window manager and screen sharing
+  see (Firefox adds its private-browsing suffix).
+- **Permanent private browsing** (`browser.privatebrowsing.autostart`) makes every window
+  private; the key then says `every window is private (permanent private browsing)`. A policy
+  that turns private browsing off makes it say `private browsing is turned off by policy`.
+
+**It is a second window.** Firefox keeps privacy per window, so the private workspace is a
+window of its own for your window manager. Vimma opens it at the current window's size (and, on
+X11 and floating window managers, its position) and focuses it when you switch. On Hyprland,
+Vimma cannot place it and runs no window-manager commands, so how it appears is up to Hyprland:
+
+- **Grouped (recommended):** press `SUPER+G` on the Vimma window to make it a group (Omarchy's
+  binding for `togglegroup`). With `group:auto_group` on, which is the default, the private
+  workspace then opens as a second tab of the same frame, and switching swaps what the frame
+  shows. The group bar shows both titles.
+- **Not grouped:** it tiles beside Vimma, and switching moves the focus between the two.
+- Switching relies on `misc:focus_on_activate = true` (Omarchy's default). Without it Hyprland
+  only marks the other window urgent.
 
 ## Bookmarks
 
@@ -1028,6 +1099,7 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:workspace name`, `:ws 2`, `:ws #`   | Switches to the workspace with that name, that number in workspace order, or the previous one (`ctrl+^`). `Tab` completes names. |
 | `:workspace`, `:ws`, `:workspaces`    | Opens the workspace picker.                                                                                                      |
 | `:wa name`, `:wd [name]`              | `:wsnew`, `:wsdelete` ([Workspaces as Vim buffers](#workspaces-as-vim-buffers)).                                                 |
+| `:private`, `:priv`, `:private close` | Goes to the [private workspace](#private-workspace) and back, as `ctrl+b shift+p`; `close` closes it (asks `y/N`).               |
 | `:sidebar`                            | Opens or closes the side panel, as `ctrl+b b`.                                                                                   |
 | `:route`, `:route add`, `:route move` | Workspace routing rules: list them, add one for this site, move this tab ([Routing](#routing-which-workspace-a-link-opens-in)).  |
 | `:bookmarks`                          | Opens or closes the [bookmarks panel](#bookmarks), as `ctrl+b shift+b`.                                                          |

@@ -129,6 +129,13 @@ support-files = ["file_vimma_cookie.html"]
 
 ["browser_vimma_workspace_buffer_keys.js"]
 
+["browser_vimma_private_workspace.js"]
+support-files = [
+  "file_vimma_private_form.html",
+  "file_vimma_private_download.txt",
+  "file_vimma_private_download.txt^headers^",
+]
+
 ["browser_vimma_side_panel.js"]
 
 ["browser_vimma_side_panel_marks.js"]

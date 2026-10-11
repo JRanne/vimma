@@ -25,7 +25,10 @@ import { displayLabel } from "./tablabels.mjs";
  * `previous` / `next`: the workspaces ctrl+b ( / ctrl+b ) go to, null with one workspace.
  * `marked`: the marked rows' tabs, in row order; `anchor`: the tab an open `V` range started on,
  * else null (docs/specs/m4-side-panel-multiselect.md).
- * @typedef {{ readonly workspace: { id: string, name: string, index: number, color?: string },
+ * `workspace.private`: the private workspace (docs/specs/private-workspace.md decision 6), whose
+ * neighbours are the host's (the first and last normal workspaces), not the model's.
+ * @typedef {{ readonly workspace: { id: string, name: string, index: number, color?: string,
+ *     private?: boolean },
  *   readonly previous: string | null, readonly next: string | null,
  *   readonly rows: readonly PanelRow[], readonly selected: number,
  *   readonly marked: readonly string[], readonly anchor: string | null }} PanelState
@@ -37,6 +40,13 @@ import { displayLabel } from "./tablabels.mjs";
  * @typedef {{ type: "select", id: string } | { type: "close" }
  *   | { type: "refuse", text: string } | { type: "closeTab", id: string }
  *   | { type: "together", ids: string[], focus: string }} PanelEffect
+ */
+
+/**
+ * `color`: the workspace's colour name. `private` and `neighbours` (`[previous, next]`): the
+ * private workspace, whose ctrl+b ( / ctrl+b ) targets the host knows (private-workspace).
+ * @typedef {{ color?: string, private?: boolean,
+ *   neighbours?: readonly [string | null, string | null] }} PanelOptions
  */
 
 /** What `x` says on a pinned tab. */
@@ -61,15 +71,19 @@ function hostOf(url) {
  * them in window order), the highlight on `selectedId` when listed, else on the active tab.
  * @param {Workspaces} model
  * @param {(tabId: string) => PanelTabInfo | undefined} info
- * @param {{ color?: string, selectedId?: string | null }} [options]
+ * @param {PanelOptions & { selectedId?: string | null }} [options]
  * @returns {PanelState}
  */
-export function openPanel(model, info, { color, selectedId = null } = {}) {
+export function openPanel(model, info, { color, selectedId = null, ...where } = {}) {
   const w = activeWorkspace(model);
   const at = model.workspaces.indexOf(w);
   const n = model.workspaces.length;
-  const neighbour = (/** @type {number} */ step) =>
-    n > 1 ? /** @type {{ name: string }} */ (model.workspaces[(at + step + n) % n]).name : null;
+  const neighbour = (/** @type {number} */ step) => {
+    if (where.neighbours) return where.neighbours[step < 0 ? 0 : 1];
+    return n > 1
+      ? /** @type {{ name: string }} */ (model.workspaces[(at + step + n) % n]).name
+      : null;
+  };
   const rows = w.tabs.map((tabId, i) => {
     const t = info(tabId) ?? {};
     return Object.freeze({
@@ -91,6 +105,7 @@ export function openPanel(model, info, { color, selectedId = null } = {}) {
       name: w.name,
       index: at + 1,
       ...(color ? { color } : {}),
+      ...(where.private ? { private: true } : {}),
     }),
     previous: neighbour(-1),
     next: neighbour(1),
@@ -108,13 +123,13 @@ export function openPanel(model, info, { color, selectedId = null } = {}) {
  * @param {PanelState} state
  * @param {Workspaces} model
  * @param {(tabId: string) => PanelTabInfo | undefined} info
- * @param {{ color?: string }} [options]
+ * @param {PanelOptions} [options]
  * @returns {PanelState}
  */
-export function refreshPanel(state, model, info, { color } = {}) {
+export function refreshPanel(state, model, info, options = {}) {
   const same = activeWorkspace(model).id === state.workspace.id;
   const selectedId = same ? (state.rows[state.selected]?.tabId ?? null) : null;
-  const next = openPanel(model, info, { color, selectedId });
+  const next = openPanel(model, info, { ...options, selectedId });
   if (!same) return next;
   const listed = new Set(next.rows.map((r) => r.tabId));
   return Object.freeze({
