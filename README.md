@@ -130,9 +130,12 @@ is BSD-3-Clause ([ADR-012](docs/adr/012-toml-parser-smol-toml.md)); its notice i
 
 ## Acknowledgements
 
+- [Vim](https://www.vim.org/) and [tmux](https://github.com/tmux/tmux), the two programs Vimma is
+  modelled on: Vim for the modes, tmux for the `ctrl+b` prefix, panes, layouts and sessions.
 - [Firefox](https://www.mozilla.org/firefox/) and Mozilla, for the browser underneath.
 - [Surfer](https://github.com/zen-browser/surfer) and [Zen Browser](https://zen-browser.app/),
   for the build toolchain and for showing how to run a Firefox fork this way.
-- [Herdr](https://herdr.dev/), the source of the default prefix keymap.
+- [Herdr](https://herdr.dev/), whose `[keys]` syntax (`action = [chords]`) and action names
+  `config.toml` follows.
 - [Omarchy](https://omarchy.org/), whose themes Vimma follows.
 - [Tridactyl](https://github.com/tridactyl/tridactyl) and [Vimium](https://github.com/philc/vimium), prior art for Vim keys in a browser.
