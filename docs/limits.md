@@ -68,8 +68,8 @@ the same PR.
   the moment between Vimma's start and its first window opens a window
   ([m5-omarchy-theme](specs/m5-omarchy-theme.md), Limits and "Instant reload by default").
 - If the Omarchy theme directory disappears after a theme was shown (as during
-  `omarchy-theme-set`'s swap), the colours stay until a theme is back; Tokyo Night only when no
-  theme was found since startup or the last `vimma.theme.*` change
+  `omarchy-theme-set`'s swap), the colours stay until a theme is back; the built-in palette only
+  when no theme was found since startup or the last `vimma.theme.*` change
   ([m5-omarchy-theme](specs/m5-omarchy-theme.md)).
 - `about:vimma` is read when it opens: `r` or Refresh updates it, it does not follow changes
   live. It is registered when the first window opens, so a session that restores an

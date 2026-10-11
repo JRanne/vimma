@@ -156,10 +156,12 @@ add_task(async function split_right_then_down_puts_three_live_panes_at_core_rect
     "one wrapper holds all three",
   );
   Assert.ok(tabpanels().hasAttribute("vimma-panes"), "our layout is on");
-  // m5-omarchy-theme: the gaps between panes show the theme's --vimma-muted (builtin here).
+  // m5-omarchy-theme: the gaps between panes show the theme's --vimma-muted (builtin here: the
+  // vimma palette, its light variant when the window's colour scheme is light).
+  const light = window.matchMedia("(prefers-color-scheme: light)").matches;
   Assert.equal(
     getComputedStyle(tabpanels()).backgroundColor,
-    "rgb(65, 72, 104)",
+    light ? "rgb(163, 176, 169)" : "rgb(42, 61, 54)",
     "the pane border is the theme's muted colour",
   );
   assertRects(expected(state, tabs), "L shape");

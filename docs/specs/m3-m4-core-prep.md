@@ -65,6 +65,7 @@ refusal and registers no tab, so the host checks `splitRefusal` before it create
 | `[modal] hint_chars`      | string  | `"asdfghjkl"` | `hintLabels`' charset rule: ≥ 2 distinct characters, none uppercase or whitespace                                                                                                                                                     |
 | `[sites."<host>"]`        | table   | none          | host as `URL.hostname` gives it (domain, IPv4, IPv6 with or without brackets, optional trailing dot); no scheme, port, path or `*` (suggestion: the hostname); the same host twice (case, trailing dot, brackets ignored) is an error |
 | `[sites."<host>"] insert` | string  | `"auto"`      | `auto`, `never` or `always` (suggestion)                                                                                                                                                                                              |
+| `[theme] name`            | string  | `"vimma"`     | `"vimma"` or `"tokyo-night"` (suggestion): the built-in palette (added later, as `[bookmarks]` was)                                                                                                                                   |
 
 Resolved config gains `panes: { max }`, `hintChars` and `sites: [{ match, insert }]` in file
 order (`match` as written; `matchSiteRule` normalises). `modal` stays as written, so it may hold

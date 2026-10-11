@@ -63,7 +63,77 @@ export const PALETTE_KEYS = Object.freeze([
 /** Keys some stock Omarchy themes leave out, and the key standing in for each. */
 const FALLBACKS = Object.freeze({ orange: "yellow", brown: "dark_foreground" });
 
-/** The built-in palette: Omarchy's stock tokyo-night colors.toml. */
+/**
+ * Vimma's own palette, dark: vimma.dev's colours (assets/css/site.css in JRanne/vimma-site).
+ * Mint is the accent (the normal-mode badge, focus) and the link hints; body text stays the
+ * site's grey-green. Keys marked "derived" have no colour on the site: each is picked to sit with
+ * the site's yellow, red and greens at about their lightness and saturation.
+ * @type {Readonly<Palette>}
+ */
+export const VIMMA_DARK = Object.freeze({
+  mode: "dark",
+  accent: "#1bf587", // --accent, the mint
+  selection: "#163327", // --selection
+  muted: "#2a3d36", // --border
+  background: "#0a0f12", // --bg
+  dark_background: "#070b0d", // --bg-dark
+  darker_background: "#040708", // --bg-darker
+  lighter_background: "#111a1b", // --bg-light
+  foreground: "#c4cec8", // --fg, the grey-green body text
+  dark_foreground: "#849690", // --fg-muted
+  light_foreground: "#e0e4df", // derived: halfway from --fg to --fg-bright
+  bright_foreground: "#fcfbf7", // --fg-bright, the wordmark
+  red: "#ff6b6b", // --red
+  yellow: "#f2c94c", // --yellow
+  orange: "#f59e5b", // derived: between --yellow and --red
+  green: "#8eeeb8", // --green
+  cyan: "#5fd7c9", // derived: a sea-green teal next to the mint
+  blue: "#6cb4ee", // derived: a soft sky blue
+  magenta: "#c79bf0", // derived: a soft violet
+  brown: "#a67c52", // derived: a warm tan, for the resize badge
+  bright_red: "#ff8f8f", // derived: --red, lighter
+  bright_yellow: "#ffdd7a", // derived: --yellow, lighter
+  bright_green: "#1bf587", // --mint: the link hints
+  bright_cyan: "#8af0e2", // derived: cyan, lighter
+  bright_blue: "#9ccdff", // derived: blue, lighter
+  bright_magenta: "#dcb8ff", // derived: magenta, lighter
+});
+
+/**
+ * Vimma's own palette, light: vimma.dev under prefers-color-scheme: light. The accent is the
+ * site's deep green; the hints keep the mint, with dark text on it.
+ * @type {Readonly<Palette>}
+ */
+export const VIMMA_LIGHT = Object.freeze({
+  mode: "light",
+  accent: "#056a39", // --accent
+  selection: "#c6efd8", // --selection
+  muted: "#a3b0a9", // --border
+  background: "#f5f4ef", // --bg
+  dark_background: "#eae9e2", // --bg-dark
+  darker_background: "#e1e0d8", // --bg-darker
+  lighter_background: "#fcfbf7", // --bg-light
+  foreground: "#1d2924", // --fg
+  dark_foreground: "#4b5a53", // --fg-muted
+  light_foreground: "#34413b", // derived: halfway from --fg to --fg-muted
+  bright_foreground: "#0a0f12", // --fg-bright
+  red: "#a1232d", // --red
+  yellow: "#7a5200", // --yellow
+  orange: "#9a4500", // derived: between --yellow and --red
+  green: "#2a5a40", // --green
+  cyan: "#0b5c4e", // --accent-2, the site's teal
+  blue: "#1f5f99", // derived: a deep blue at --green's depth
+  magenta: "#7b3f99", // derived: a deep violet
+  brown: "#6b4a2b", // derived: a dark tan
+  bright_red: "#c2303b", // derived: --red, brighter
+  bright_yellow: "#946400", // derived: --yellow, brighter
+  bright_green: "#1bf587", // --mint: the link hints
+  bright_cyan: "#0e7666", // derived: cyan, brighter
+  bright_blue: "#2b70b5", // derived: blue, brighter
+  bright_magenta: "#9150b3", // derived: magenta, brighter
+});
+
+/** Omarchy's stock tokyo-night colors.toml: the built-in palette until vimma had its own. */
 /** @type {Readonly<Palette>} */
 export const TOKYO_NIGHT = Object.freeze({
   mode: "dark",
@@ -92,6 +162,35 @@ export const TOKYO_NIGHT = Object.freeze({
   bright_cyan: "#0db9d7",
   bright_blue: "#7da6ff",
   bright_magenta: "#bb9af7",
+});
+
+/**
+ * @typedef {object} BuiltinTheme
+ * @property {Readonly<Palette>} dark
+ * @property {Readonly<Palette>} [light]  with one, the theme follows prefers-color-scheme
+ */
+
+/** The built-in palettes, by `[theme] name`. */
+/** @type {Readonly<Record<string, Readonly<BuiltinTheme>>>} */
+export const BUILTIN_THEMES = Object.freeze({
+  vimma: Object.freeze({ dark: VIMMA_DARK, light: VIMMA_LIGHT }),
+  "tokyo-night": Object.freeze({ dark: TOKYO_NIGHT }),
+});
+
+/** `[theme] name` by default. */
+export const DEFAULT_THEME_NAME = "vimma";
+
+/** How the warnings name each built-in. */
+/** @type {Readonly<Record<string, string>>} */
+const BUILTIN_TITLES = Object.freeze({ vimma: "vimma", "tokyo-night": "Tokyo Night" });
+
+/**
+ * Tokens a built-in takes from another palette key than THEME_TOKENS says: vimma's link hints
+ * are the mint (bright_green), as on vimma.dev, where an Omarchy theme's are its yellow.
+ * @type {Readonly<Record<string, Readonly<Record<string, string>>>>}
+ */
+const BUILTIN_ROLES = Object.freeze({
+  vimma: Object.freeze({ "--vimma-hint-bg": "bright_green" }),
 });
 
 /** Status-bar badge colour per mode, plus the pending prefix. */
@@ -364,14 +463,16 @@ function textOn(bg, palette) {
 /**
  * @param {Palette} palette  complete: every PALETTE_KEYS entry
  * @param {string} font
+ * @param {Readonly<Record<string, string>>} [roles]  token → palette key, over THEME_TOKENS' from
  * @returns {Tokens}
  */
-function paletteToTokens(palette, font) {
+function paletteToTokens(palette, font, roles = {}) {
   /** @type {Tokens} */
   const tokens = {};
   for (const t of THEME_TOKENS) {
+    const from = Object.hasOwn(roles, t.name) ? roles[t.name] : t.from;
     if (t.textOn) tokens[t.name] = textOn(/** @type {string} */ (tokens[t.textOn]), palette);
-    else if (t.from) tokens[t.name] = /** @type {string} */ (palette[t.from]);
+    else if (from) tokens[t.name] = /** @type {string} */ (palette[from]);
     else tokens[t.name] = cssFontFamily(font);
   }
   // Once every surface has its value.
@@ -421,31 +522,58 @@ function mix(a, b, t) {
 /**
  * @typedef {object} ThemeConfig
  * @property {"omarchy" | "file"} source
+ * @property {string} [name]   the built-in palette (BUILTIN_THEMES); DEFAULT_THEME_NAME without
  * @property {string} font
  * @property {Record<string, string>} colors   [theme.colors], validated
  */
 
 /**
- * Tokens for the configured theme. On errors the tokens are Tokyo Night's (overlaid by
- * [theme.colors]); a host that already shows a theme keeps it, as for config.
- * @param {{ theme: ThemeConfig, omarchy?: string | null, omarchyLightMode?: boolean }} input
- *   omarchy: the text of the current Omarchy colors.toml, or null when there is none
- * @returns {{ tokens: Tokens, mode: "dark" | "light", errors: ThemeError[], warnings: string[] }}
+ * @typedef {object} ResolvedTheme
+ * @property {Tokens} tokens
+ * @property {"dark" | "light"} mode
+ * @property {ThemeError[]} errors
+ * @property {string[]} warnings
+ * @property {boolean} adaptive  the tokens are a built-in's with a light variant, and no
+ *   `[theme.colors] mode` pins one: they change with `scheme`
  */
-export function resolveTheme({ theme, omarchy = null, omarchyLightMode = false }) {
-  /** @type {Palette} */
-  let base = { ...TOKYO_NIGHT };
+
+/**
+ * Tokens for the configured theme. Without an Omarchy theme (source "file", or none found) they
+ * are the built-in palette `theme.name`, in the variant for `scheme` when it has a light one. On
+ * errors the tokens are that built-in's (overlaid by [theme.colors]); a host that already shows
+ * a theme keeps it, as for config.
+ * @param {{ theme: ThemeConfig, omarchy?: string | null, omarchyLightMode?: boolean,
+ *   scheme?: "dark" | "light" }} input
+ *   omarchy: the text of the current Omarchy colors.toml, or null when there is none;
+ *   scheme: the colour scheme the browser prefers (prefers-color-scheme), "dark" by default
+ * @returns {ResolvedTheme}
+ */
+export function resolveTheme({ theme, omarchy = null, omarchyLightMode = false, scheme = "dark" }) {
   /** @type {ThemeError[]} */
   let errors = [];
   /** @type {string[]} */
   const warnings = [];
+  let name = theme.name ?? DEFAULT_THEME_NAME;
+  if (!Object.hasOwn(BUILTIN_THEMES, name)) {
+    errors.push({ path: "theme.name", message: `unknown theme ${describe(name)}` });
+    name = DEFAULT_THEME_NAME;
+  }
+  const builtin = /** @type {BuiltinTheme} */ (BUILTIN_THEMES[name]);
+  const pinned = theme.colors.mode === "dark" || theme.colors.mode === "light";
+  const variant = pinned ? theme.colors.mode : scheme;
+  /** @type {Palette} */
+  let base = { ...(variant === "light" && builtin.light ? builtin.light : builtin.dark) };
+  let fromBuiltin = true;
   if (theme.source === "omarchy") {
     if (omarchy === null) {
-      warnings.push("Omarchy theme not found; using the built-in Tokyo Night");
+      warnings.push(`Omarchy theme not found; using the built-in ${BUILTIN_TITLES[name]}`);
     } else {
       const r = parseOmarchyColors(omarchy, { lightMode: omarchyLightMode });
-      if (r.palette) base = r.palette;
-      errors = r.errors;
+      if (r.palette) {
+        base = r.palette;
+        fromBuiltin = false;
+      }
+      errors = [...errors, ...r.errors];
     }
   }
   /** @type {Palette} */
@@ -464,7 +592,8 @@ export function resolveTheme({ theme, omarchy = null, omarchyLightMode = false }
       errors.push({ path, message: `must be a hex colour like "#7aa2f7", got ${describe(v)}` });
     }
   }
-  const tokens = paletteToTokens(palette, theme.font);
+  const roles = fromBuiltin ? BUILTIN_ROLES[name] : undefined;
+  const tokens = paletteToTokens(palette, theme.font, roles);
   for (const [fg, bg] of CONTRAST_PAIRS) {
     const ratio = contrastRatio(
       /** @type {string} */ (tokens[/** @type {string} */ (fg)]),
@@ -476,7 +605,29 @@ export function resolveTheme({ theme, omarchy = null, omarchyLightMode = false }
     }
   }
   const mode = palette.mode === "light" ? "light" : "dark";
-  return { tokens, mode, errors, warnings };
+  const adaptive = fromBuiltin && !pinned && builtin.light !== undefined;
+  return { tokens, mode, errors, warnings, adaptive };
+}
+
+/**
+ * The stylesheet for the configured theme. A built-in with a light variant (vimma) gives its
+ * dark tokens, then its light ones under `@media (prefers-color-scheme: light)`, so the page
+ * switches with the browser's colour scheme, live, with no script. Anything else is one block.
+ * Warnings only the light variant has start with "light: ".
+ * @param {{ theme: ThemeConfig, omarchy?: string | null, omarchyLightMode?: boolean,
+ *   selector?: string }} input  as resolveTheme; selector as tokensToCss
+ * @returns {{ css: string, errors: ThemeError[], warnings: string[] }}
+ */
+export function themeStylesheet({ selector = ":root", ...input }) {
+  const dark = resolveTheme({ ...input, scheme: "dark" });
+  let css = tokensToCss(dark.tokens, selector);
+  const warnings = [...dark.warnings];
+  if (dark.adaptive) {
+    const light = resolveTheme({ ...input, scheme: "light" });
+    css += `@media (prefers-color-scheme: light) {\n${tokensToCss(light.tokens, selector)}}\n`;
+    for (const w of light.warnings) if (!dark.warnings.includes(w)) warnings.push(`light: ${w}`);
+  }
+  return { css, errors: dark.errors, warnings };
 }
 
 const CSS_STRING = String.raw`"(?:[^"\\\n]|\\.)*"`;

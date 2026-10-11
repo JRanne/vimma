@@ -11,6 +11,7 @@ import { DEFAULT_HINT_CHARS } from "./hints.mjs";
 import { PANES_MAX_DEFAULT } from "./panes.mjs";
 import { MAIN_SIZE_DEFAULT } from "./layouts.mjs";
 import { OVERLAP_CHORDS } from "./firefox-keys.mjs";
+import { DEFAULT_THEME_NAME } from "./theme.mjs";
 
 /**
  * @typedef {object} UserConfig
@@ -40,6 +41,7 @@ import { OVERLAP_CHORDS } from "./firefox-keys.mjs";
 /**
  * @typedef {object} ThemeInput
  * @property {"omarchy" | "file"} [source]
+ * @property {string} [name]   a built-in palette: "vimma" or "tokyo-night" (schema 2)
  * @property {string} [font]
  * @property {Record<string, string>} [colors]
  */
@@ -248,7 +250,12 @@ const modal = {
 /** Values a `[workspaces.<name>]` table takes for keys it leaves out. */
 export const WORKSPACE_DEFAULTS = Object.freeze({ color: "gray", icon: "circle", autofill: true });
 
-const theme = { source: /** @type {const} */ ("omarchy"), font: "monospace", colors: {} };
+const theme = {
+  source: /** @type {const} */ ("omarchy"),
+  name: DEFAULT_THEME_NAME,
+  font: "monospace",
+  colors: {},
+};
 
 /** @type {Readonly<UserConfig>} */
 export const DEFAULT_CONFIG = Object.freeze({
@@ -323,9 +330,12 @@ export function formatDefaultsToml() {
     "[workspaces]",
     '# work = { color = "blue", icon = "briefcase", home = "https://intranet.example" }',
     "",
-    '# "omarchy" follows the current Omarchy theme (Tokyo Night without one); "file" is Tokyo Night.',
+    '# "omarchy" follows the current Omarchy theme, and uses the built-in palette `name` without',
+    '# one; "file" always uses `name`: "vimma" (vimma.dev\'s colours, light or dark as the browser',
+    '# is) or "tokyo-night" (dark).',
     "[theme]",
     `source = ${tomlString(theme.source)}`,
+    `name = ${tomlString(theme.name)}`,
     `font = ${tomlString(theme.font)}`,
     "",
     "# Overrides on top of the palette, with the keys of Omarchy's colors.toml.",

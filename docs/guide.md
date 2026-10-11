@@ -295,10 +295,29 @@ notices, pane borders and the start page take their colours from your current [O
 set up: Vimma reads `~/.local/state/omarchy/current/theme/colors.toml` (and `light.mode`, for a
 light theme) and checks it every 2 seconds, so `omarchy-theme-set` (or picking a theme from the
 Omarchy menu) recolours every open window and start page within 2 seconds, without a restart.
-Without Omarchy, or with `vimma.theme.source` set to `builtin`, the colours are Vimma's built-in
-Tokyo Night. A `colors.toml` Vimma cannot read (a value that is not a `#rrggbb` colour, a
-missing key) is ignored: the colours stay as they were, and the Browser Console
-(`ctrl+shift+j`) says which line is wrong.
+Without Omarchy, or with `vimma.theme.source` set to `builtin`, the colours are Vimma's own,
+the palette of [vimma.dev](https://vimma.dev): near-black surfaces, grey-green text, and mint
+for the accent, the normal-mode badge and link hints. It has a dark and a light variant and
+follows your system's or Firefox's light or dark setting (`prefers-color-scheme`), switching
+the moment that changes, without a reload. A `colors.toml` Vimma cannot read (a value that is
+not a `#rrggbb` colour, a missing key) is ignored: the colours stay as they were, and the
+Browser Console (`ctrl+shift+j`) says which line is wrong.
+
+**Picking the built-in palette.** `[theme] name` in [config.toml](#configtoml) chooses it:
+`"vimma"` (the default) or `"tokyo-night"`, the Tokyo Night Vimma used before, dark only.
+`source = "file"` always shows that palette; with the default `source = "omarchy"` it is what
+you see without an Omarchy theme. With an Omarchy theme, nothing changes: Vimma follows it.
+
+```toml
+schema = 2
+
+[theme]
+source = "file"        # ignore Omarchy; always the palette below
+name = "tokyo-night"   # or "vimma", the default
+```
+
+To keep the vimma palette dark (or light) whatever the system says, set
+`[theme.colors] mode = "dark"` (or `"light"`).
 
 **Instant theme changes.** On Omarchy, Vimma recolours as soon as `omarchy-theme-set` finishes,
 not within 2 seconds, with nothing to set up. When Vimma starts and finds
@@ -1033,8 +1052,9 @@ Refresh for the current state. It is an ordinary page, so `j` / `k` scroll it.
   the command line show as `·`, so nothing you type is kept.
 - **Config:** the `config.toml` path, whether it was read, its `schema`, every error with its
   line, and the full binding table with the keys your file changes marked `*`.
-- **Theme:** the colour source, the Omarchy theme directory, the theme's name and its
-  `colors.toml` time, and why the last theme file was rejected, if one was.
+- **Theme:** the colour source, the Omarchy theme directory, the theme's name (the Omarchy
+  theme's, or the built-in palette's, e.g. `vimma (built in)`) and its `colors.toml` time, and
+  why the last theme file was rejected, if one was.
 - **Workspaces:** how many there are, and this window's with their tab and pane counts.
 - **Control socket:** on or off, and its port. The token is never shown.
 
@@ -1055,7 +1075,7 @@ Vimma's own preferences today:
 | `vimma.debug.keys`         | unset                                  | Create it as a boolean set to `true` to log every key Vimma sees (`{ key, mods, mode }`) to the Browser Console (`ctrl+shift+j`; enable its Debug filter). |
 | `vimma.startpage.newtab`   | `true`                                 | New tabs open Vimma's start page (see [The start page](#the-start-page)). Set `false` for Firefox's new tab page; it applies at once, no restart.          |
 | `vimma.control.enabled`    | `false`                                | Turns on the control socket for `vimma-ctl` and scripts (see [Scripting with vimma-ctl](#scripting-with-vimma-ctl)). Applies at once, no restart.          |
-| `vimma.theme.source`       | `omarchy`                              | `omarchy` follows your Omarchy theme (see [Colours](#colours-your-omarchy-theme)); `builtin` forces the built-in Tokyo Night. Applies at once.             |
+| `vimma.theme.source`       | `omarchy`                              | `omarchy` follows your Omarchy theme (see [Colours](#colours-your-omarchy-theme)); `builtin` forces `[theme] name`'s palette. Applies at once.             |
 | `vimma.theme.omarchyPath`  | `~/.local/state/omarchy/current/theme` | The Omarchy theme directory to read `colors.toml` and `light.mode` from. Applies at once.                                                                  |
 | `vimma.theme.omarchyHook`  | `true`                                 | Installs the Omarchy theme-set hook for instant theme changes (see [Colours](#colours-your-omarchy-theme)). `false` removes Vimma's unedited hook at once. |
 | `vimma.config.path`        | unset                                  | A different config file than `$XDG_CONFIG_HOME/vimma/config.toml` (tests use it). Applies at once.                                                         |
@@ -1083,7 +1103,7 @@ new_tab = ["prefix+t"]        # replaces ctrl+b c
 max = 2
 
 [theme]
-source = "file"               # Tokyo Night instead of your Omarchy theme
+source = "file"               # the built-in vimma palette instead of your Omarchy theme
 [theme.colors]
 accent = "#ff9e64"
 ```
@@ -1110,7 +1130,8 @@ accent = "#ff9e64"
   splits), `[panes] layout` (`"dwindle"` or `"manual"`: where `ctrl+b enter` puts a new pane) and
   `[panes] main_size` (the main-\* presets' main pane, 20 to 80 percent, default 60); `[sites."<host>"] insert` (`auto`, `never` or `always`: whether a text field on that
   site and its subdomains takes insert mode); `[theme]` `source` (`omarchy` or `file`, the
-  built-in Tokyo Night), `font` and `[theme.colors]` (single colours over either source);
+  built-in palette), `name` (`vimma`, the default, or `tokyo-night`: the built-in palette),
+  `font` and `[theme.colors]` (single colours over either source);
   `[workspaces]` (a new one gets its container at once; one removed from the file stays, as a
   workspace you can close yourself); `[firefox] disable` and `enable` (which of Firefox's own
   shortcuts are off, [above](#firefoxs-own-shortcuts)); `[modal] insert_editing` (`ctrl+w`,
@@ -1118,7 +1139,7 @@ accent = "#ff9e64"
   default: the current workspace's folder; `"toolbar"`; or `"all"`: what the
   [bookmarks panel](#bookmarks) lists and where paths start).
 - **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]`, `[firefox]`, `[bookmarks]`,
-  `hint_chars` and `insert_editing`; every key,
+  `hint_chars`, `insert_editing` and `[theme] name`; every key,
   its type and default are in [m5-core-config-and-theme](specs/m5-core-config-and-theme.md#schema-v1)
   and [m3-m4-core-prep](specs/m3-m4-core-prep.md#config-schema-2), and
   `packages/vimma-core/defaults.toml` lists them with their defaults.
@@ -1279,8 +1300,8 @@ screen reader on top of Firefox's own accessibility support. On Linux that is Or
   are read at once. The same notice twice in a row is read once.
 - **Link hints** are labels drawn over the page, hidden from screen readers; hint mode is
   announced. On a page with a screen reader, its own link navigation may serve better.
-- **Contrast.** All text Vimma draws reaches WCAG AA (4.5:1) in the built-in Tokyo Night and in
-  light themes: secondary and coloured text is darkened or lightened just enough on the
+- **Contrast.** All text Vimma draws reaches WCAG AA (4.5:1) in both variants of the built-in
+  vimma palette, in the built-in Tokyo Night and in light themes: secondary and coloured text is darkened or lightened just enough on the
   theme's backgrounds, so a theme keeps its colours where they already read. A `[theme.colors]`
   foreground you set yourself is used as is, with a warning in about:vimma when it falls short.
 - **Motion.** Nothing in Vimma's own UI animates, so there is nothing for

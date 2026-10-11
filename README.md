@@ -70,8 +70,8 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
 - `~/.config/vimma/config.toml` sets options, key bindings and workspaces, and applies on save.
   `about:vimma` shows the version and what is in force.
 - Theming: the bars, pickers, hints and start page take their colours from your desktop theme
-  and switch at once when it changes, or from your own colours in `config.toml` (Tokyo Night
-  by default).
+  and switch at once when it changes, or from your own colours in `config.toml` (by default
+  Vimma's own vimma.dev palette, light or dark as your system is; Tokyo Night by name).
 - Accessible: Vimma's own UI works with a screen reader, keeps focus where you left it, and its
   text meets WCAG AA contrast in dark and light themes
   ([guide](docs/guide.md#accessibility)).

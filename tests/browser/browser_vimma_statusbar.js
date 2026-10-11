@@ -86,14 +86,23 @@ add_task(async function bar_is_visible_at_the_window_bottom() {
 });
 
 add_task(async function bar_uses_theme_tokens() {
+  // a dark desktop: the built-in vimma palette's dark variant
+  await SpecialPowers.pushPrefEnv({ set: [["ui.systemUsesDarkTheme", 1]] });
+  await TestUtils.waitForCondition(
+    () =>
+      getComputedStyle(document.documentElement).getPropertyValue("--vimma-color-scheme").trim() ===
+      "dark",
+    "the dark scheme applies",
+  );
   const style = getComputedStyle(document.documentElement);
   Assert.equal(
     style.getPropertyValue("--vimma-statusbar-bg").trim(),
-    "#13141c",
-    "Tokyo Night tokens are defined on the window root",
+    "#070b0d",
+    "the built-in vimma tokens are defined on the window root",
   );
   const b = getComputedStyle(bar());
-  Assert.equal(b.backgroundColor, "rgb(19, 20, 28)", "the bar's background is the token");
+  Assert.equal(b.backgroundColor, "rgb(7, 11, 13)", "the bar's background is the token");
+  await SpecialPowers.popPrefEnv();
 });
 
 add_task(async function mode_follows_the_host_and_help() {

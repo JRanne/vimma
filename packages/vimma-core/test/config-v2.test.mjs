@@ -421,3 +421,44 @@ describe("[bookmarks] root", () => {
     ]);
   });
 });
+
+// The built-in palette by name: vimma (vimma.dev's colours) by default, Tokyo Night on request.
+describe("[theme] name", () => {
+  test('defaults to "vimma"', () => {
+    expect(ok(v2()).theme.name).toBe("vimma");
+    expect(DEFAULT_CONFIG.theme?.name).toBe("vimma");
+    expect(formatDefaultsToml()).toMatch(/^\[theme\]\nsource = "omarchy"\nname = "vimma"$/m);
+  });
+
+  test.each([["vimma"], ["tokyo-night"]])('name = "%s" is accepted', (name) => {
+    expect(ok(v2("[theme]", `name = "${name}"`)).theme.name).toBe(name);
+  });
+
+  test("an unknown name is an error, with the nearest name when one is close", () => {
+    expect(errors(v2("[theme]", 'name = "gruvbox"'))).toEqual([
+      { line: 3, path: "theme.name", message: 'must be "vimma" or "tokyo-night"' },
+    ]);
+    expect(errors(v2("[theme]", 'name = "tokyonight"'))).toEqual([
+      {
+        line: 3,
+        path: "theme.name",
+        message: 'must be "vimma" or "tokyo-night"',
+        suggestion: "tokyo-night",
+      },
+    ]);
+    expect(errors(v2("[theme]", "name = 1"))).toEqual([
+      { line: 3, path: "theme.name", message: "expected a string, got an integer" },
+    ]);
+  });
+
+  test("is new in schema 2; the rest of [theme] is not", () => {
+    expect(errors(toml("schema = 1", "[theme]", 'name = "tokyo-night"'))).toEqual([
+      {
+        line: 3,
+        path: "theme.name",
+        message: "is new in schema 2: put schema = 2 at the top of the file",
+      },
+    ]);
+    expect(ok(toml("schema = 1", "[theme]", 'source = "file"')).theme.name).toBe("vimma");
+  });
+});

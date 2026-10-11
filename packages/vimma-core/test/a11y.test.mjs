@@ -13,8 +13,8 @@ import {
 } from "../src/theme.mjs";
 
 // Spec docs/specs/m7-a11y.md: what the status bar speaks, and WCAG AA contrast of every text
-// token Vimma's chrome draws, on every surface it draws it on, in the built-in Tokyo Night and
-// a light theme.
+// token Vimma's chrome draws, on every surface it draws it on, in both variants of the built-in
+// vimma palette, the built-in Tokyo Night and a light theme.
 
 /** @import { Announced } from "../src/statusbar.mjs" */
 
@@ -24,7 +24,11 @@ const fixture = (name) =>
 const theme = mergeWithDefaults({}).theme;
 
 const THEMES = {
-  "Tokyo Night (built in)": resolveTheme({ theme: { ...theme, source: "file" } }),
+  "vimma dark (built in)": resolveTheme({ theme: { ...theme, source: "file" } }),
+  "vimma light (built in)": resolveTheme({ theme: { ...theme, source: "file" }, scheme: "light" }),
+  "Tokyo Night (built in)": resolveTheme({
+    theme: { ...theme, source: "file", name: "tokyo-night" },
+  }),
   "Tokyo Night (Omarchy)": resolveTheme({ theme, omarchy: fixture("tokyo-night.colors.toml") }),
   "a light theme (Catppuccin Latte)": resolveTheme({
     theme,
@@ -111,6 +115,12 @@ describe("statusAnnouncement: the mode, said once, and only where nothing else s
 });
 
 describe("contrast (WCAG 2.x AA, 4.5:1)", () => {
+  test("the built-in vimma's two variants are the light and the dark one", () => {
+    expect(THEMES["vimma dark (built in)"].mode).toBe("dark");
+    expect(THEMES["vimma light (built in)"].mode).toBe("light");
+    expect(THEMES["Tokyo Night (built in)"].tokens["--vimma-bg"]).toBe("#1a1b26");
+  });
+
   test("the text tokens and surfaces checked are theme tokens", () => {
     const tokens = THEMES["Tokyo Night (built in)"].tokens;
     for (const t of [...TEXT_TOKENS, ...SURFACE_TOKENS]) expect(tokens[t], t).toMatch(/^#/);

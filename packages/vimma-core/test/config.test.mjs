@@ -113,6 +113,7 @@ describe("parseConfig: valid input", () => {
     expect(r.errors).toEqual([]);
     expect(r.config?.theme).toEqual({
       source: "file",
+      name: "vimma",
       font: "CaskaydiaMono Nerd Font",
       colors: { accent: "#aabbcc", mode: "light" },
     });
@@ -368,7 +369,7 @@ describe("mergeWithDefaults", () => {
       modal: {},
       unbind: {},
       workspaces: [],
-      theme: { source: "omarchy", font: "monospace", colors: {} },
+      theme: { source: "omarchy", name: "vimma", font: "monospace", colors: {} },
       panes: { max: 4, layout: "dwindle", mainSize: 0.6 },
       hintChars: "asdfghjkl",
       sites: [],

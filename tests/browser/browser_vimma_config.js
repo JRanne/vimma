@@ -18,13 +18,13 @@ const { PaneViews } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/split/PaneView.mjs",
 );
 const { leaves } = ChromeUtils.importESModule("chrome://browser/content/vimma/core/panes.mjs");
-const { TOKYO_NIGHT } = ChromeUtils.importESModule("chrome://browser/content/vimma/core/theme.mjs");
+const { TOKYO_NIGHT, VIMMA_DARK } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/core/theme.mjs",
+);
 
 const PAGE = "https://example.com/";
 const START = "chrome://browser/content/vimma/start/start.html";
 const NOTICE_ID = "vimma-notice";
-/** Tokyo Night's dark_background: the built-in status bar colour. */
-const TOKYO_STATUSBAR = "#13141c";
 
 const dir = PathUtils.join(PathUtils.tempDir, `vimma-config-${Date.now()}`);
 const file = PathUtils.join(dir, "config.toml");
@@ -313,12 +313,29 @@ add_task(async function theme_source_and_colors_feed_the_theme() {
       ["vimma.theme.source", "omarchy"],
       ["vimma.theme.omarchyPath", themeDir],
       ["vimma.theme.pollMs", 100],
+      // a dark desktop: the built-in vimma palette's dark variant
+      ["ui.systemUsesDarkTheme", 1],
     ],
   });
   await until(() => barBackground() === rgb("#405060"), "the Omarchy theme is followed");
 
   await writeConfig(`[theme]\nsource = "file"`);
-  await until(() => barBackground() === rgb(TOKYO_STATUSBAR), '"file": Tokyo Night');
+  await until(
+    () => barBackground() === rgb(VIMMA_DARK.dark_background),
+    '"file": the built-in vimma',
+  );
+
+  await writeConfig(`schema = 2\n[theme]\nsource = "file"\nname = "tokyo-night"`);
+  await until(
+    () => barBackground() === rgb(TOKYO_NIGHT.dark_background),
+    'name = "tokyo-night": Tokyo Night',
+  );
+
+  await writeConfig(`schema = 2\n[theme]\nname = "tokyo-night"`);
+  await until(
+    () => barBackground() === rgb("#405060"),
+    "an Omarchy theme wins over the name: Omarchy users see no change",
+  );
 
   await writeConfig(`[theme]\nsource = "file"\n[theme.colors]\ndark_background = "#203040"`);
   await until(() => barBackground() === rgb("#203040"), "[theme.colors] overrides it");
