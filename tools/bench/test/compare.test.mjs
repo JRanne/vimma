@@ -61,17 +61,28 @@ describe("median and minOfMedians", () => {
 });
 
 describe("combine", () => {
-  it("keeps, per case, the lowest µs and the lowest ratio over the processes", () => {
+  it("keeps, per case, the lowest µs and the median ratio over the processes", () => {
     const combined = combine([
-      result({ a: { us: 2, ratio: 1.2 }, b: { us: 5, ratio: 3 } }),
-      result({ a: { us: 1, ratio: 1.4 }, b: { us: 6, ratio: 2.5 } }),
+      { ...result({ a: { us: 2, ratio: 1.2 }, b: { us: 5, ratio: 3 } }), referenceUs: 0.5 },
+      { ...result({ a: { us: 1, ratio: 1.4 }, b: { us: 6, ratio: 2.5 } }), referenceUs: 0.52 },
+      { ...result({ a: { us: 3, ratio: 1.3 }, b: { us: 7, ratio: 2.8 } }), referenceUs: 0.51 },
     ]);
     expect(combined).toEqual({
       machine: MACHINE,
       referenceUs: 0.5,
-      processes: 2,
-      cases: { a: { us: 1, ratio: 1.2 }, b: { us: 5, ratio: 2.5 } },
+      referenceSpread: expect.closeTo(0.04, 9),
+      processes: 3,
+      cases: { a: { us: 1, ratio: 1.3 }, b: { us: 5, ratio: 2.8 } },
     });
+  });
+
+  it("does not let one process with a slow reference set the ratios (issue #125)", () => {
+    // A slower reference in one process lowers every ratio of that process. The lowest ratio
+    // would pick exactly that process, and the next run, without one, would read as a regression.
+    const steady = { a: { us: 1, ratio: 2 }, b: { us: 10, ratio: 20 } };
+    const slowRef = { a: { us: 1, ratio: 1.6 }, b: { us: 10, ratio: 16 } };
+    const runs = [steady, steady, slowRef, steady, steady].map((cases) => result(cases));
+    expect(combine(runs).cases).toEqual(steady);
   });
 
   it("refuses results from different machines or with different cases", () => {

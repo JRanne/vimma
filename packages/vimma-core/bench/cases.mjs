@@ -71,19 +71,23 @@ export const CASES = [
   },
 ];
 
-const KEYS = Array.from({ length: 64 }, (_, i) => `key-${i}`);
+const KEYS = Array.from({ length: 64 }, (_, i) => i * 7919);
 const TABLE = new Map(KEYS.map((k, i) => [k, i]));
 
 /**
- * A fixed workload that no Vimma change can speed up or slow down: string-keyed Map lookups, as
- * the dispatcher's trie does, and integer arithmetic. No allocation, so it optimises the same way
- * in every process. Cases are gated on their ratio to it, so a faster or slower runner of the same
- * CPU model moves both and the ratio stays put.
+ * A fixed workload that no Vimma change can speed up or slow down: Map lookups, as the
+ * dispatcher's trie does, and integer arithmetic. Cases are gated on their ratio to it, so a
+ * faster or slower runner of the same CPU model moves both and the ratio stays put.
+ *
+ * It must cost the same in every process. The keys are small integers, which V8 hashes without
+ * the per-process random hash seed; string keys (as here before issue #125) are hashed with it, so
+ * each process got a different bucket layout for the table and a reference up to 22 % slower or
+ * faster (AMD EPYC 7763), which moved every ratio of that process together. No allocation either.
  */
 export function reference() {
   let x = 1;
   for (let i = 0; i < 64; i++) {
-    x = (x * 31 + (TABLE.get(KEYS[(i * 7) & 63] ?? "") ?? 0)) | 0;
+    x = (x * 31 + (TABLE.get(KEYS[(i * 7) & 63] ?? 0) ?? 0)) | 0;
   }
   return x === 0 ? 1 : Math.abs(x);
 }

@@ -12,7 +12,11 @@
  *   - a round takes SAMPLES samples of every case, in an order that rotates per round, and keeps
  *     their medians; noise from GC or a neighbour on the runner lands in some rounds, not all;
  *   - per case: µs is the minimum of the round medians (noise only adds time), checked against
- *     the 50 µs budget; the ratio is the median of the round medians, gated against baseline.json.
+ *     the 50 µs budget; the ratio is the median of the round medians, gated against baseline.json;
+ *   - PROCESSES fresh processes, each with its own fixed V8 hash seed (childArgs), combined by
+ *     compare.mjs: the lowest µs and the median ratio. The seed decides the bucket layout of every
+ *     string-keyed Map (the dispatcher's trie), which moves a case by a few per cent from one
+ *     process to the next; fixed seeds measure the same layouts on every run (issue #125).
  *
  * Usage: node tools/bench/bench.mjs [--json out.json] [--check [baseline.json]]
  *                                   [--record "machine notes" [baseline.json]]
@@ -40,11 +44,19 @@ const WARMUP_MS = 200;
 const SAMPLE_NS = 100_000;
 const SAMPLES = 51;
 const ROUNDS = 5;
-// Fresh processes per run; the result keeps the lowest of each (compare.mjs, combine()).
-const PROCESSES = 15;
+// Fresh processes per run, combined by compare.mjs's combine().
+export const PROCESSES = 15;
 
 /** @type {unknown} */
 let sink;
+
+/**
+ * Node arguments for bench process `p` (0-based): this script as a child, with hash seed p + 1.
+ * @param {number} p
+ */
+export function childArgs(p) {
+  return [`--hash-seed=${p + 1}`, fileURLToPath(import.meta.url), "--child"];
+}
 
 /**
  * One key per runner class: CPU model, arch and the exact Node version (pinned in .nvmrc), since
@@ -177,9 +189,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   /** @type {import("./compare.mjs").Result[]} */
   const results = [];
   for (let p = 0; p < PROCESSES; p++) {
-    const child = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--child"], {
-      encoding: "utf8",
-    });
+    const child = spawnSync(process.execPath, childArgs(p), { encoding: "utf8" });
     if (child.status !== 0) {
       console.error(`bench: process ${p + 1} failed\n${child.stderr}`);
       process.exit(2);
@@ -188,8 +198,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
   const result = combine(results);
   const date = new Date().toISOString().slice(0, 10);
+  // e.g. "ci.yml run 123": the workflow file from GITHUB_WORKFLOW_REF (owner/repo/path@ref)
+  const workflow = /([^/@]+)@/.exec(process.env.GITHUB_WORKFLOW_REF ?? "")?.[1] ?? "ci.yml";
   const source = process.env.GITHUB_RUN_ID
-    ? `ci.yml run ${process.env.GITHUB_RUN_ID}`
+    ? `${workflow} run ${process.env.GITHUB_RUN_ID}`
     : `local, ${date}`;
   const json = valueOf("--json");
   if (json) writeFileSync(json, `${JSON.stringify(result, null, 2)}\n`);
@@ -213,7 +225,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const baselinePath = valueOf("--check") ?? DEFAULT_BASELINE;
   const baseline = JSON.parse(readFileSync(baselinePath, "utf8"));
   const r = compare(result, baseline);
-  console.log(`machine: ${result.machine} (reference ${result.referenceUs.toFixed(3)} µs)`);
+  console.log(
+    `machine: ${result.machine} (reference ${result.referenceUs.toFixed(3)} µs, ` +
+      `+${(result.referenceSpread * 100).toFixed(1)} % from fastest to slowest process)`,
+  );
   console.log(formatTable(r));
   for (const note of r.notes) console.log(`note: ${note}`);
   for (const warning of r.warnings) console.log(`warning: ${warning}`);
