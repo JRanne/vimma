@@ -468,6 +468,21 @@ add_task(async function nothing_private_reaches_the_normal_profile() {
   );
   await FormHistory.update({ op: "remove", fieldname: "vimmaprivatefield" });
   await PlacesUtils.history.remove(`${FORM}?control`);
+  // The control page signed in to example.com in the normal workspace: later files count that
+  // host's cookies (browser_vimma_workspace_ops.js), so nothing of it may stay.
+  await SpecialPowers.spawn(control.linkedBrowser, [], () =>
+    content.localStorage.removeItem("vimmaprivate"),
+  );
+  Services.cookies.remove("example.com", MARK, "/", {
+    userContextId: control.userContextId,
+  });
+  Assert.equal(
+    Services.cookies
+      .getCookiesFromHost("example.com", { userContextId: control.userContextId })
+      .filter((c) => c.name === MARK).length,
+    0,
+    "the control's cookie is removed",
+  );
   BrowserTestUtils.removeTab(control);
   await SpecialPowers.popPrefEnv();
 });
