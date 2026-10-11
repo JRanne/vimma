@@ -231,7 +231,7 @@ What it would take, at minimum:
 Verdict: the engine core could do it, and that is the encouraging part. The front end is the
 problem: the patch set is large, spread out and silent when it fails. A missed call site leaks
 private data without any error. No fork does this, and Mozilla never planned it. Rejected; see
-open question 7 for what would change this.
+decided question 7 for what would change this.
 
 ### B. A throwaway container workspace: rejected as "private"
 
@@ -258,7 +258,7 @@ attribute only counts when the context is created.
 Verdict: it keeps the user's "same window" and fails most of the guarantees. Calling it
 "private" would mislead, which is a security problem in itself. Rejected as the private
 workspace. A "scratch workspace" whose data is wiped on close could be its own feature under its
-own name, if wanted (open question 5).
+own name, if wanted. The user does not want one now (decided question 5).
 
 ### A. The private window presented as a workspace: chosen
 
@@ -345,12 +345,15 @@ UX, honestly:
    private window (`BrowserWindowTracker.getTopWindow({ private: true })`). The picker counts
    the tabs of all private windows. `ctrl+n` in a private window and Firefox's "Open Link in New
    Private Window" make more of them. They share one cookie jar anyway.
-5. **Switching.** The workspace order is the normal workspaces, then `private` while it is open.
-   - `ctrl+b )` on the last workspace goes to private. In private, `ctrl+b )` goes to the first
-     workspace and `ctrl+b (` to the last, in the most recent normal window. `]w` / `[w`,
-     `:wn` / `:wp` do the same. When the private workspace is closed, the cycle is today's.
-   - `ctrl+^` crosses windows: from private it goes back to the workspace you left, in the
-     window you left. From that workspace it goes back to private while private is open.
+5. **Switching.** The private workspace is reached only by its own key (`workspace.private`),
+   `:private` and the picker. It is never a cycle or alternate target (user, 2026-10-11: "own
+   key only"), so cycling never drops you into it by accident.
+   - `ctrl+b (` / `ctrl+b )`, `]w` / `[w`, `:wn` / `:wp` in a normal window cycle the normal
+     workspaces only, whether or not private is open: today's cycle, unchanged.
+   - In private, `ctrl+b )` goes to the first workspace and `ctrl+b (` to the last, in the most
+     recent normal window. Cycling leaves private but never enters it.
+   - `ctrl+^` from private goes back to the workspace you left, in the window you left. In a
+     normal window `ctrl+^` ignores private: its alternate is the last normal workspace.
    - Going to the other window is `win.focus()`, plus a workspace switch in the normal window
      when the target is not its current workspace. The normal window is left as it is.
    - Workspace picker (`ctrl+b w`, both kinds of window): the normal workspaces, then a last row
@@ -369,7 +372,7 @@ UX, honestly:
    panel get their data from a small private-window adapter in the host.
 7. **Window placement.** Vimma opens the private window at the current window's size and, where
    the platform allows (X11, floating WMs), its position. On Wayland it does not try, because
-   Hyprland decides. Vimma does not run `hyprctl` or any other WM command (open question 1). The
+   Hyprland decides. Vimma does not run `hyprctl` or any other WM command (user, 2026-10-11). The
    guide gives the Hyprland recipe: put Vimma in a group (`SUPER+G`) and the private workspace
    opens inside it.
 8. **Leak protections in Vimma's own code** (the private window's own guarantees are Firefox's):
@@ -384,25 +387,25 @@ UX, honestly:
      the WM focuses it, so you leave the private workspace.
    - d. `vimma-ctl state` of a private window reports `"private": true` and `"workspace":
 "private"`, with each tab's `url` and `title` as `null`. Pane structure and ids are kept, so
-     scripts can still drive it. Open question 2 asks whether to make this configurable.
+     scripts can still drive it. No config switch (user, 2026-10-11).
    - e. No status-bar notice in a normal window names a page of the private workspace.
 9. **Add-ons, search and protections** are Firefox's, per private window. Add-ons need "Run in
    Private Windows" (`ctrl+b e`, `shift+p`), and Vimma's start page and its own UI need no
    add-on. The private default engine applies when
    `browser.search.separatePrivateDefault.enabled` is on. Vimma's `:open @alias` follows the
    search-engines spec's decision 12 (PR #137).
-10. **Core** (pure, Vitest): `privatews.mjs` holds the cycle with a trailing optional `private`
-    entry (`cycleTarget(order, current, { privateOpen, dir })`), the `ctrl+^` target across
-    windows, the picker's private row, the toggle rule for `workspace.private`, and the
+10. **Core** (pure, Vitest): `privatews.mjs` holds the cycle targets seen from the private window
+    (`cycleFromPrivate(order, dir)`: first or last normal workspace), the `ctrl+^` target from
+    private, the picker's private row, the toggle rule for `workspace.private`, and the
     refusals (`move-out-of-private`, `permanent-private`, `policy-disabled`). The host owns window
     lookup, `OpenBrowserWindow`, focus, sizing and the ctl redaction.
 11. **Never "private" for anything else.** No Vimma feature other than this one uses the word
-    for something short of Firefox's private browsing (option B, open question 5).
+    for something short of Firefox's private browsing (option B, decided question 5).
 
 ## Test plan
 
-- **Vitest** `privatews.test.mjs`: the cycle with private closed and open, in both directions
-  and from both ends; `ctrl+^` across windows; the toggle; the picker row (count, `new`); the
+- **Vitest** `privatews.test.mjs`: cycling from private in both directions; normal cycling and
+  the normal `ctrl+^` never return private; `ctrl+^` from private; the toggle; the picker row (count, `new`); the
   refusals. `actions.test.mjs` / `defaults.test.mjs`: `private_workspace` on `prefix+shift+p`
   and `ctrl+shift+p` reaches `workspace.private` in every mode. `cmdline.test.mjs`: `:private`,
   `:priv`, `:private close`. Snapshots (`help.test.mjs.snap`, `defaults.test.mjs.snap`) gain the
@@ -411,9 +414,9 @@ UX, honestly:
   - `ctrl+b shift+p` opens exactly one private window and focuses it. Pressing it again there
     focuses the normal window back. `ctrl+shift+p` opens no second private window (Firefox's
     `<key>` did not run).
-  - `ctrl+b )` from the last workspace reaches private; in private `ctrl+b )` / `(` reach the
-    first and last workspaces; `ctrl+^` both ways; a closed private workspace is not in the
-    cycle.
+  - With private open, `ctrl+b )` from the last workspace wraps to the first, not to private;
+    in private `ctrl+b )` / `(` reach the first and last workspaces; `ctrl+^` from private
+    returns to the workspace left, and `ctrl+^` in the normal window does not enter private.
   - The status bar segment `◆ private`, and the side panel listing the private tabs.
   - **No leaks:** the test visits a page in the private workspace, sets a cookie and
     localStorage, types into a form and submits it, starts a download, and adds a tab label.
@@ -460,32 +463,18 @@ C++ patch to `nsFrameLoader.cpp` and many front-end hunks. Option B would have n
 ## Out of scope
 
 Per-tab private browsing in a normal window (option C); a throwaway container workspace
-(option B, open question 5); several separate private workspaces (Firefox has one private cookie
+(option B, decided question 5); several separate private workspaces (Firefox has one private cookie
 jar); Vimma running WM commands; restoring a private workspace after a restart (that would break
 the guarantee).
 
-## Open questions
+## Decided questions (user, 2026-10-11)
 
-1. **Should Vimma group the windows on Hyprland itself?** Vimma could run a Hyprland command
-   when it opens the private window, so the private workspace always shares the frame without
-   the user setting up a group. It would only work on Hyprland, it means Vimma calling an
-   outside program, and it could fight the user's own window rules. The proposal: no, document
-   the `SUPER+G` recipe, and revisit if daily use shows the tiled window is annoying.
-2. **Should scripts see private pages?** `vimma-ctl state` is proposed to hide the URLs and titles
-   of private tabs, because a script might log them to a file. The other option is to show them,
-   since only your own user can reach the socket. A config switch is possible either way.
-3. **`ctrl+shift+p`:** OK to make Firefox's "New Private Window" key mean "go to the private
-   workspace" (one private place, not a new window each time)? The alternative is to leave
-   Firefox's key alone and use only `ctrl+b shift+p`.
-4. **The private workspace in the `ctrl+b (` / `)` cycle:** you asked to switch to it "like any
-   workspace", so it is in the cycle while open. The risk: cycling past the last workspace drops
-   you into private (and back out). Keep it in the cycle, or reach it only with its own key and
-   the picker?
-5. **A "scratch" workspace:** do you also want a workspace in the same window whose cookies are
-   wiped when you close it? It is weaker than private: history, downloads and add-ons see it
-   (option B). It would get its own name, never "private".
-6. **Moving a tab into private:** `m` on the private row reopens the current tab there. Useful, or
-   should moves into private be refused too?
-7. **Per-tab private browsing later?** If Mozilla ever lets a `<browser>` be private on its own
-   and audits the front end for it, option C becomes cheap. Until then it is rejected. The
-   upstream-autopilot could watch for it.
+1. **Hyprland grouping:** Vimma runs no WM command; the guide documents the `SUPER+G` recipe.
+2. **Scripts and private pages:** `vimma-ctl state` hides private URLs and titles. No switch.
+3. **`ctrl+shift+p`:** goes to the private workspace (toggles back from it), same as
+   `ctrl+b shift+p`. Firefox's "New Private Window" key no longer runs.
+4. **Cycle:** own key only. Private is not in the `(` / `)` cycle or the `ctrl+^` alternate of a
+   normal window (decision 5).
+5. **Scratch workspace:** not wanted now. Out of scope.
+6. **Moving a tab into private:** allowed after the `y/N` prompt (decision 5).
+7. **Per-tab private browsing:** rejected until Mozilla supports it upstream.
