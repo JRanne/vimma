@@ -21,6 +21,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
   setInterval: "resource://gre/modules/Timer.sys.mjs",
 });
 
+/** Points Firefox's focus colour at --vimma-focus (focus rings, the focused pane's outline). */
+const FOCUS_SHEET = "chrome://browser/skin/vimma/focus.css";
 const SOURCE_PREF = "vimma.theme.source";
 const PATH_PREF = "vimma.theme.omarchyPath";
 const POLL_PREF = "vimma.theme.pollMs";
@@ -244,13 +246,15 @@ function stopIfIdle() {
 export const ThemeHost = {
   /**
    * Once per browser window (vimma.js), before its UI is built: the current tokens as an author
-   * sheet, swapped in place on every theme change.
+   * sheet, swapped in place on every theme change, and focus.css, which gives Firefox's focus
+   * colour the tokens' --vimma-focus.
    * @param {Window} win
    */
   init(win) {
     if (windows.has(win)) return;
     const uri = sheetUri(css);
     win.windowUtils.loadSheetUsingURIString(uri, win.windowUtils.AUTHOR_SHEET);
+    win.windowUtils.loadSheetUsingURIString(FOCUS_SHEET, win.windowUtils.AUTHOR_SHEET);
     windows.set(win, uri);
     win.addEventListener(
       "unload",

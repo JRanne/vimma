@@ -5,7 +5,9 @@ import { MODES } from "../src/modes.mjs";
 import { WORKSPACE_COLOR_TOKENS, statusAnnouncement, statusSegments } from "../src/statusbar.mjs";
 import {
   BADGES,
+  FOCUS_SURFACE_TOKENS,
   MIN_CONTRAST,
+  MIN_FOCUS_CONTRAST,
   SURFACE_TOKENS,
   TEXT_TOKENS,
   contrastRatio,
@@ -14,7 +16,8 @@ import {
 
 // Spec docs/specs/m7-a11y.md: what the status bar speaks, and WCAG AA contrast of every text
 // token Vimma's chrome draws, on every surface it draws it on, in both variants of the built-in
-// vimma palette, the built-in Tokyo Night and a light theme.
+// vimma palette, the built-in Tokyo Night and a light theme; and WCAG non-text contrast (3:1) of
+// the focus colour (focus rings, the focused pane's outline) on every surface it touches.
 
 /** @import { Announced } from "../src/statusbar.mjs" */
 
@@ -150,6 +153,38 @@ describe("contrast (WCAG 2.x AA, 4.5:1)", () => {
       }
     });
   }
+
+  for (const [name, r] of Object.entries(THEMES)) {
+    test(`${name}: the focus colour reaches ${MIN_FOCUS_CONTRAST}:1 on every surface it touches`, () => {
+      const failures = [];
+      for (const bg of FOCUS_SURFACE_TOKENS) {
+        const ratio = contrastRatio(String(r.tokens["--vimma-focus"]), String(r.tokens[bg]));
+        if (ratio < MIN_FOCUS_CONTRAST)
+          failures.push(`--vimma-focus on ${bg}: ${ratio.toFixed(2)}`);
+      }
+      expect(failures).toEqual([]);
+    });
+  }
+
+  test("the focus surfaces are the text surfaces plus the pane gap (--vimma-muted)", () => {
+    expect(FOCUS_SURFACE_TOKENS).toEqual([...SURFACE_TOKENS, "--vimma-muted"]);
+    expect(MIN_FOCUS_CONTRAST).toBe(3);
+  });
+
+  test("the focus colour is the accent wherever the accent already reaches 3:1", () => {
+    for (const name of [
+      "vimma dark (built in)",
+      "Tokyo Night (built in)",
+      "Tokyo Night (Omarchy)",
+    ]) {
+      const t = /** @type {any} */ (THEMES)[name].tokens;
+      expect(t["--vimma-focus"], name).toBe(t["--vimma-accent"]);
+    }
+    // vimma light's #056a39 is 2.99:1 on its pane gap (#a3b0a9): one 5% step toward black.
+    const light = THEMES["vimma light (built in)"].tokens;
+    expect(light["--vimma-accent"]).toBe("#056a39");
+    expect(light["--vimma-focus"]).toBe("#056536");
+  });
 
   test("every status bar segment without a badge draws in a checked text token", () => {
     const text = new Set(TEXT_TOKENS);

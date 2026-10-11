@@ -1,0 +1,22 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* Firefox's focus colour is the theme's (docs/specs/m7-a11y.md, "Focus colour"), loaded by
+ * ui/theme-host.mjs into every window next to the token sheet. Two of Firefox's tokens carry it:
+ * --focus-outline-color draws the chrome's focus rings and, through --focus-outline, the focused
+ * pane's outline in a split (content-area.css, .deck-selected > .browserContainer);
+ * --toolbar-field-border-color-focus is the address bar's focus ring, which Firefox sets to
+ * --focus-outline-color or, without Nova, half of it, so it is set here too. Both are
+ * --vimma-focus: the accent, moved just far enough to reach 3:1 on what it touches.
+ * Under prefers-contrast and forced colours, Firefox's own high-contrast tokens stay. */
+
+@media not ((prefers-contrast) or (forced-colors)) {
+  :root {
+    /* !important: Firefox sets both for an add-on theme on a more specific selector
+     * (browser-colors.css, :root[lwtheme]:not([theme-in-app])) and inline (LightweightThemeConsumer),
+     * and Vimma's theme colours the chrome whichever Firefox theme is on. */
+    --focus-outline-color: var(--vimma-focus, var(--color-accent-primary)) !important;
+    --toolbar-field-border-color-focus: var(--vimma-focus, var(--color-accent-primary)) !important;
+  }
+}

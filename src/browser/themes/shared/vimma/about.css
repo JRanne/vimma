@@ -52,7 +52,7 @@ button {
 }
 
 button:focus-visible {
-  outline: 2px solid var(--vimma-accent, #1bf587);
+  outline: 2px solid var(--vimma-focus, #1bf587);
 }
 
 #status {
