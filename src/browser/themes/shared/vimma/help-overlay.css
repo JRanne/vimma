@@ -28,6 +28,13 @@
     display: none !important;
   }
 
+  /* Vimma's focus ring (docs/specs/m7-a11y.md, "Focus rings in Vimma's UI"), on the overlay while
+     it has focus and on its filter. */
+  &:focus-visible {
+    outline: 2px solid var(--vimma-focus, AccentColor);
+    outline-offset: -2px;
+  }
+
   & header {
     position: sticky;
     top: 0;
@@ -55,8 +62,9 @@
     font-family: var(--vimma-font, monospace);
     outline: none;
 
-    &:focus {
-      border-color: var(--vimma-accent, AccentColor);
+    &:focus-visible {
+      outline: 2px solid var(--vimma-focus, AccentColor);
+      outline-offset: -1px;
     }
 
     &::placeholder {

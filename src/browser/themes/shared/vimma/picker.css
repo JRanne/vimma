@@ -29,6 +29,15 @@
     display: none !important;
   }
 
+  /* Vimma's focus ring (docs/specs/m7-a11y.md, "Focus rings in Vimma's UI"): without it, the UA's
+     `outline: 1px auto` paints a native ring in the system accent, a blue. Inset, so the dialog's
+     overflow does not clip it. */
+  &:focus-visible,
+  & ul:focus-visible {
+    outline: 2px solid var(--vimma-focus, AccentColor);
+    outline-offset: -2px;
+  }
+
   & header {
     position: sticky;
     top: 0;
