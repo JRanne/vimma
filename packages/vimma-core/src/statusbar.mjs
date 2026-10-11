@@ -10,6 +10,7 @@ import { formatConfigError } from "./config.mjs";
 import { findStatusText } from "./find.mjs";
 import { displayLabel } from "./tablabels.mjs";
 import { clusterWidth, graphemes, textWidth } from "./textwidth.mjs";
+import { PRIVATE_COLOR_TOKEN, PRIVATE_GLYPH, PRIVATE_NAME } from "./privatews.mjs";
 
 export { textWidth };
 
@@ -33,7 +34,8 @@ export { textWidth };
  * @typedef {object} StatusInput
  * @property {Mode} mode
  * @property {readonly string[]} [pending]      dispatcher.pending()
- * @property {{ name: string, index: number, color?: string } | null} [workspace]
+ * @property {{ name: string, index: number, color?: string, private?: boolean } | null} [workspace]
+ *   `private`: the private workspace (docs/specs/private-workspace.md), `◆ private`
  * @property {{ index: number, count: number, title?: string | null, url?: string | null,
  *   label?: string | null } | null} [tab]
  * @property {{ index: number, count: number } | null} [pane]
@@ -175,7 +177,19 @@ export function statusSegments(input) {
       }),
     );
   }
-  if (workspace) {
+  if (workspace?.private) {
+    // The glyph and the word carry it without colour (private-workspace decision 6).
+    left.push(
+      seg({
+        id: "workspace",
+        text: `${PRIVATE_GLYPH} ${PRIVATE_NAME}`,
+        fg: PRIVATE_COLOR_TOKEN,
+        priority: 3,
+        min: 6,
+        cut: "end",
+      }),
+    );
+  } else if (workspace) {
     const tokens = /** @type {Record<string, string>} */ (WORKSPACE_COLOR_TOKENS);
     left.push(
       seg({

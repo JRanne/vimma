@@ -171,7 +171,11 @@ are sent.
 - `mode`: one of vimma-core's `MODES`.
 - `pending`: the pending key sequence as the status bar shows it (`formatBinding`), or `null`.
 - `workspace`: the active workspace's name, `null` until workspaces exist (filled since M3) or in a
-  window without them (a private window).
+  window without them. A private window is the private workspace: `"private"`
+  ([private-workspace](private-workspace.md)).
+- `private`: `true` in a private window, absent otherwise. Its tabs' `url` and `title` are then
+  `null`, withheld so that scripts never see private pages (private-workspace decision 8d); `id`,
+  `selected` and `panes` are kept.
 - `tabs`: the window's visible tabs in strip order. `id` is an opaque string, stable for the tab's
   lifetime (the server uses `browser.browserId`); exactly one tab is `selected` when there are any.
 - `panes`: the pane tree once split view exists (M3), `null` before. Its shape is that spec's to

@@ -129,6 +129,14 @@ describe("status bar segments", () => {
     expect(s[1]).toMatchObject({ text: "● 2:x", fg: "--vimma-text-accent" });
   });
 
+  test("the private workspace shows ◆ private in the theme's magenta, with no number", () => {
+    const s = statusSegments({
+      mode: "normal",
+      workspace: { name: "private", index: 0, private: true, color: "blue" },
+    });
+    expect(s[1]).toMatchObject({ id: "workspace", text: "◆ private", fg: "--vimma-text-magenta" });
+  });
+
   test("displayUrl drops http(s) and a lone trailing slash", () => {
     expect(displayUrl("https://github.com/")).toBe("github.com");
     expect(displayUrl("http://a.org/b/")).toBe("a.org/b/");

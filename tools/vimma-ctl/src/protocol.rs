@@ -88,12 +88,12 @@ pub enum Response {
     Err { id: Option<u64>, error: ErrorBody },
 }
 
-/// One tab in `state`.
+/// One tab in `state`. `url` and `title` are `None` in a private window, which withholds them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tab {
     pub id: String,
-    pub url: String,
-    pub title: String,
+    pub url: Option<String>,
+    pub title: Option<String>,
     pub selected: bool,
 }
 
@@ -310,6 +310,12 @@ fn decode_state(map: &BTreeMap<String, Value>, raw: &Value) -> Result<State, Dec
     };
     let pending = nullable("pending")?;
     let workspace = nullable("workspace")?;
+    // A private window's state withholds every url and title (private-workspace 8d).
+    let private = match map.get("private") {
+        None => false,
+        Some(Value::Bool(private)) => *private,
+        Some(_) => return Err(fail("result.private must be a boolean")),
+    };
     let Some(Value::Array(items)) = map.get("tabs") else {
         return Err(fail("result.tabs must be an array"));
     };
@@ -321,6 +327,13 @@ fn decode_state(map: &BTreeMap<String, Value>, raw: &Value) -> Result<State, Dec
                 .map(String::from)
                 .map_err(|_| fail(&format!("result.tabs[{i}].{key} must be a string")))
         };
+        let withheld = |key: &str| match tab.get(key) {
+            Some(Value::Null) if private => Ok(None),
+            _ if private => Err(fail(&format!(
+                "result.tabs[{i}].{key} must be null in a private window"
+            ))),
+            _ => field(key).map(Some),
+        };
         let Some(Value::Bool(selected)) = tab.get("selected") else {
             return Err(fail(&format!(
                 "result.tabs[{i}].selected must be a boolean"
@@ -328,8 +341,8 @@ fn decode_state(map: &BTreeMap<String, Value>, raw: &Value) -> Result<State, Dec
         };
         tabs.push(Tab {
             id: field("id")?,
-            url: field("url")?,
-            title: field("title")?,
+            url: withheld("url")?,
+            title: withheld("title")?,
             selected: *selected,
         });
     }
@@ -792,6 +805,20 @@ mod tests {
     }
 
     #[test]
+    fn decode_private_state_has_no_urls_or_titles() {
+        let raw = parse(
+            r#"{"mode":"normal","pending":null,"workspace":"private","private":true,"tabs":[{"id":"1","url":null,"title":null,"selected":true}],"panes":null}"#,
+        )
+        .unwrap();
+        let Ok(CommandResult::State(state)) = decode_result(&Command::State, &raw) else {
+            panic!()
+        };
+        assert_eq!(state.workspace.as_deref(), Some("private"));
+        assert_eq!(state.tabs[0].url, None);
+        assert_eq!(state.tabs[0].title, None);
+    }
+
+    #[test]
     fn decode_state_rejects_broken_fields() {
         for bad in [
             r#"{"mode":"normal","pending":null,"workspace":null,"tabs":[]}"#,
@@ -799,6 +826,8 @@ mod tests {
             r#"{"mode":"normal","pending":null,"workspace":null,"tabs":{},"panes":null}"#,
             r#"{"mode":"normal","pending":null,"workspace":null,"tabs":[1],"panes":null}"#,
             r#"{"mode":"normal","pending":null,"workspace":null,"tabs":[{"id":"1","url":"u","title":"t","selected":1}],"panes":null}"#,
+            r#"{"mode":"normal","pending":null,"workspace":null,"tabs":[{"id":"1","url":null,"title":null,"selected":true}],"panes":null}"#,
+            r#"{"mode":"normal","pending":null,"workspace":null,"private":true,"tabs":[{"id":"1","url":"u","title":null,"selected":true}],"panes":null}"#,
             r#"{"pending":null,"workspace":null,"tabs":[],"panes":null}"#,
             r#""state""#,
         ] {

@@ -156,7 +156,13 @@ pub fn format_state(state: &State) -> String {
     );
     out.extend(state.tabs.iter().map(|tab| {
         let mark = if tab.selected { '*' } else { ' ' };
-        format!("{mark} {}  {}  {}\n", tab.id, or_dash(&tab.title), tab.url)
+        // A private window withholds them (private-workspace 8d).
+        let title = tab
+            .title
+            .as_deref()
+            .map_or_else(|| "(private)".to_string(), or_dash);
+        let url = tab.url.as_deref().unwrap_or("(private)");
+        format!("{mark} {}  {title}  {url}\n", tab.id)
     }));
     out
 }
@@ -349,14 +355,20 @@ mod tests {
             tabs: vec![
                 Tab {
                     id: "12".into(),
-                    url: "https://example.com/".into(),
-                    title: "Example".into(),
+                    url: Some("https://example.com/".into()),
+                    title: Some("Example".into()),
                     selected: true,
                 },
                 Tab {
                     id: "13".into(),
-                    url: "about:blank".into(),
-                    title: String::new(),
+                    url: Some("about:blank".into()),
+                    title: Some(String::new()),
+                    selected: false,
+                },
+                Tab {
+                    id: "14".into(),
+                    url: None,
+                    title: None,
                     selected: false,
                 },
             ],
@@ -364,8 +376,8 @@ mod tests {
         };
         assert_eq!(
             format_state(&state),
-            "mode: normal\npending: ctrl+b\nworkspace: -\ntabs: 2\n\
-             * 12  Example  https://example.com/\n  13  -  about:blank\n"
+            "mode: normal\npending: ctrl+b\nworkspace: -\ntabs: 3\n\
+             * 12  Example  https://example.com/\n  13  -  about:blank\n  14  (private)  (private)\n"
         );
     }
 

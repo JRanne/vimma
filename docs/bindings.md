@@ -80,6 +80,7 @@ shows as `space n` ([guide](guide.md#configtoml)).
 | Close workspace                                                   | `close_workspace`    | `ctrl+b shift+d`                                |
 | Move the tab to another workspace (reopens it there)              | `move_to_workspace`  | —                                               |
 | Routing rules: list them; :route add [workspace], :route move     | `route_rules`        | —                                               |
+| Private workspace (a private window); again goes back             | `private_workspace`  | `ctrl+b shift+p`, `ctrl+shift+p`                |
 
 ## Navigation
 

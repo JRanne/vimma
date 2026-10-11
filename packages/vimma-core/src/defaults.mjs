@@ -82,6 +82,9 @@ const keys = {
   new_workspace: ["prefix+shift+n"],
   rename_workspace: ["prefix+shift+w"],
   close_workspace: ["prefix+shift+d"],
+  // docs/specs/private-workspace.md: ctrl+shift+p is Firefox's "New Private Window", done
+  // Vimma's way (go to the one private workspace, or open it).
+  private_workspace: ["prefix+shift+p", "ctrl+shift+p"],
   goto_picker: ["prefix+g"],
   toggle_sidebar: ["prefix+b"],
   toggle_bookmarks: ["prefix+shift+b"],

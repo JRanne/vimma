@@ -1,0 +1,66 @@
+{
+  "name": "m3-private-workspace",
+  "description": "docs/specs/private-workspace.md: the private workspace is Firefox's private window, reached by keys only. ctrl+b shift+p opens it (state: private, workspace private, no urls or titles); a screenshot of its status bar (◆ private); ctrl+b ) leaves it for the first normal workspace; ctrl+shift+p goes back to the same window (no second one); ctrl+b shift+d then y closes it and the normal window is left. Xvfb has no window manager, so this is the X11 path: the private window opens over the Vimma window at its size and position.",
+  "timeoutSeconds": 60,
+  "steps": [
+    {
+      "wait-for-state": {
+        "workspace": "main"
+      },
+      "timeoutSeconds": 20
+    },
+    {
+      "keys": "ctrl+b shift+p"
+    },
+    {
+      "wait-for-state": {
+        "workspace": "private",
+        "private": true,
+        "tabs": [
+          {
+            "url": null,
+            "title": null,
+            "selected": true
+          }
+        ]
+      },
+      "timeoutSeconds": 20
+    },
+    {
+      "screenshot": "m3-private-workspace"
+    },
+    {
+      "keys": "ctrl+b )"
+    },
+    {
+      "wait-for-state": {
+        "workspace": "main"
+      }
+    },
+    {
+      "keys": "ctrl+shift+p"
+    },
+    {
+      "wait-for-state": {
+        "workspace": "private",
+        "private": true,
+        "tabs": [
+          {
+            "selected": true
+          }
+        ]
+      }
+    },
+    {
+      "keys": "ctrl+b shift+d"
+    },
+    {
+      "keys": "y"
+    },
+    {
+      "wait-for-state": {
+        "workspace": "main"
+      }
+    }
+  ]
+}

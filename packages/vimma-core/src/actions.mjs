@@ -124,6 +124,12 @@ group("Workspaces", [
     "workspace.route",
     "Routing rules: list them; :route add [workspace], :route move",
   ],
+  // docs/specs/private-workspace.md: Firefox's private window, as a workspace.
+  [
+    "private_workspace",
+    "workspace.private",
+    "Private workspace (a private window); again goes back",
+  ],
 ]);
 
 group("Navigation", [

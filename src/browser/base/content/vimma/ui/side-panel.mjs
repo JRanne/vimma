@@ -9,8 +9,9 @@
 
 import { WORKSPACE_COLOR_TOKENS } from "../core/statusbar.mjs";
 import { inRange, markSummary, openPanel, panelKey, refreshPanel } from "../core/sidepanel.mjs";
+import { PRIVATE_COLOR_TOKEN, PRIVATE_GLYPH } from "../core/privatews.mjs";
 
-/** @import { PanelState, PanelTabInfo } from "../core/sidepanel.mjs" */
+/** @import { PanelOptions, PanelState, PanelTabInfo } from "../core/sidepanel.mjs" */
 /** @import { Workspaces } from "../core/workspaces.mjs" */
 
 export const PANEL_ID = "vimma-panel";
@@ -26,6 +27,8 @@ const TAB_EVENTS = ["TabOpen", "TabClose", "TabSelect", "TabAttrModified", "TabM
  * @property {() => Workspaces | null} model  the window's workspaces, tabs in window order
  * @property {(tabId: string) => PanelTabInfo | undefined} info
  * @property {() => string | undefined} color  the active workspace's colour name
+ * @property {() => PanelOptions | undefined} [where]  the private workspace's head and
+ *   neighbours (docs/specs/private-workspace.md decision 6)
  * @property {(tabId: string) => void} select  a row was picked; the panel closes right after
  * @property {(text: string) => void} say  a refusal for the notice
  * @property {(tabId: string) => void} closeTab  `x`: close that tab; the panel stays open
@@ -73,7 +76,7 @@ export class SidePanel {
     if (!model) return false;
     const box = this.box ?? this.build();
     this.opener = rememberFocus(this.win);
-    this.state = openPanel(model, this.host.info, { color: this.host.color() });
+    this.state = openPanel(model, this.host.info, this.#options());
     this.render();
     box.hidden = false;
     const tabs = this.#tabContainer();
@@ -143,7 +146,7 @@ export class SidePanel {
       this.close();
       return;
     }
-    this.state = refreshPanel(this.state, model, this.host.info, { color: this.host.color() });
+    this.state = refreshPanel(this.state, model, this.host.info, this.#options());
     this.render();
   }
 
@@ -152,6 +155,11 @@ export class SidePanel {
     this.close();
     this.box?.remove();
     this.box = this.list = this.count = null;
+  }
+
+  /** @returns {PanelOptions} */
+  #options() {
+    return { color: this.host.color(), ...this.host.where?.() };
   }
 
   #tabContainer() {
@@ -179,16 +187,20 @@ export class SidePanel {
     const header = /** @type {HTMLElement} */ (box.querySelector(".vimma-panel-header"));
     const { workspace: w } = state;
     const tokens = /** @type {Record<string, string>} */ (WORKSPACE_COLOR_TOKENS);
-    const dot = el("span", "vimma-panel-dot", "●");
+    // The private workspace: ◆ in the theme's magenta, no number (private-workspace 6).
+    const dot = el("span", "vimma-panel-dot", w.private ? PRIVATE_GLYPH : "●");
     dot.setAttribute("aria-hidden", "true"); // the workspace's colour, nothing to read
-    dot.style.color = `var(${(w.color && tokens[w.color]) || "--vimma-accent"})`;
+    const colour = w.private
+      ? PRIVATE_COLOR_TOKEN
+      : (w.color && tokens[w.color]) || "--vimma-accent";
+    dot.style.color = `var(${colour})`;
     const neighbours =
       state.previous === null
         ? ""
         : `ctrl+b ( ${state.previous} · ctrl+b ) ${/** @type {string} */ (state.next)}`;
     header.replaceChildren(
       dot,
-      el("span", "vimma-panel-name", `${w.index}:${w.name}`),
+      el("span", "vimma-panel-name", w.private ? w.name : `${w.index}:${w.name}`),
       el("span", "vimma-panel-neighbours", neighbours),
     );
 

@@ -30,6 +30,7 @@ const lazy = /** @type {any} */ ({});
 ChromeUtils.defineESModuleGetters(lazy, {
   AppConstants: "resource://gre/modules/AppConstants.sys.mjs",
   BrowserWindowTracker: "resource:///modules/BrowserWindowTracker.sys.mjs",
+  PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
 });
 
 export const ABOUT_URL = "about:vimma";
@@ -203,7 +204,10 @@ export const AboutVimma = {
     const keymap = ConfigHost.keymap ?? compileKeymap();
     const configPath = ConfigHost.path;
     const theme = ThemeHost.status;
-    const windows = /** @type {Window[]} */ (lazy.BrowserWindowTracker.orderedWindows);
+    // A normal window's page lists no private window (private-workspace decision 8b).
+    const windows = /** @type {Window[]} */ (lazy.BrowserWindowTracker.orderedWindows).filter(
+      (w) => w === win || !lazy.PrivateBrowsingUtils.isWindowPrivate(w),
+    );
     return {
       version: {
         vimma: app.MOZ_APP_VERSION_DISPLAY,

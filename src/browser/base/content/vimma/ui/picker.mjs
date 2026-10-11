@@ -56,7 +56,11 @@ const WORKSPACES = {
   title: "Workspaces",
   listLabel: "Workspaces",
   hint: "j/k move · / search · Enter switch · m move tab here · Esc close",
-  cells: (/** @type {WorkspaceItem} */ item) => {
+  cells: (/** @type {WorkspaceItem & { countText?: string }} */ item) => {
+    // The private workspace's row: its count only, `new` while closed (private-workspace 5).
+    if (item.countText !== undefined) {
+      return ["", `${item.countText}${item.active ? " · current" : ""}`];
+    }
     const tabs = `${item.tabCount} ${item.tabCount === 1 ? "tab" : "tabs"}`;
     const foreign = item.foreignCount ? `, ${item.foreignCount} foreign` : "";
     return [String(item.workspaceIndex), `${tabs}${foreign}${item.active ? " · current" : ""}`];
