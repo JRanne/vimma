@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { KeyTrack, cssWindow, parseGeometry, parseProbeTitle, promoPrefs } from "../promo.mjs";
+import { parseConfig } from "../../../packages/vimma-core/src/config.mjs";
+import {
+  KeyTrack,
+  cssWindow,
+  parseGeometry,
+  parseProbeTitle,
+  promoConfig,
+  promoPrefs,
+  supportsThemeName,
+} from "../promo.mjs";
 
 describe("parseGeometry", () => {
   it("reads WIDTHxHEIGHT", () => {
@@ -29,6 +38,65 @@ describe("promoPrefs", () => {
     expect(prefs["vimma.theme.source"]).toBe("omarchy");
     expect(prefs["vimma.theme.omarchyHook"]).toBe(false);
     expect(prefs["layout.css.devPixelsPerPx"]).toBe("1.5");
+  });
+  it("reads config.toml from the given path, never ~/.config, and picks up edits quickly", () => {
+    const prefs = promoPrefs({
+      port: 4321,
+      themeDir: "/tmp/t",
+      configPath: "/tmp/c/config.toml",
+      scale: 1.5,
+    });
+    expect(prefs["vimma.config.path"]).toBe("/tmp/c/config.toml");
+    expect(prefs["vimma.config.pollMs"]).toBeLessThanOrEqual(250);
+  });
+  it("sends HTTPS to the fixture server too, so no page reaches the network", () => {
+    const prefs = promoPrefs({ port: 4321, themeDir: "/tmp/t", configPath: "/c", scale: 1.5 });
+    expect(prefs["network.proxy.ssl"]).toBe("127.0.0.1");
+    expect(prefs["network.proxy.ssl_port"]).toBe(4321);
+    // about:addons opens on the installed extensions, not on recommendations from the web
+    expect(prefs["extensions.getAddons.showPane"]).toBe(false);
+    expect(prefs["extensions.htmlaboutaddons.recommendations.enabled"]).toBe(false);
+    expect(prefs["extensions.ui.lastCategory"]).toBe("addons://list/extension");
+  });
+});
+
+describe("promoConfig", () => {
+  it("names the built-in palette when the build knows [theme] name", () => {
+    expect(promoConfig({ source: "file", name: "vimma" })).toBe(
+      'schema = 2\n\n[theme]\nsource = "file"\nname = "vimma"\n',
+    );
+  });
+  it("leaves the name out for a build without it: its default built-in shows", () => {
+    expect(promoConfig({ source: "omarchy", name: null })).toBe(
+      'schema = 2\n\n[theme]\nsource = "omarchy"\n',
+    );
+  });
+});
+
+describe("supportsThemeName", () => {
+  it("is true when the build's parseConfig takes [theme] name without errors", () => {
+    expect(supportsThemeName(() => ({ errors: [] }), "vimma")).toBe(true);
+  });
+  it("is false when it reports an error, such as an unknown key", () => {
+    const parse = () => ({ errors: [{ path: "theme.name", message: 'unknown key "name"' }] });
+    expect(supportsThemeName(parse, "vimma")).toBe(false);
+  });
+  it("is false when it throws", () => {
+    const parse = () => {
+      throw new Error("boom");
+    };
+    expect(supportsThemeName(parse, "vimma")).toBe(false);
+  });
+  it("with vimma-core's own parser: the config without a name is valid, a bad name is not", () => {
+    expect(parseConfig(promoConfig({ source: "file", name: null })).errors).toEqual([]);
+    expect(parseConfig(promoConfig({ source: "omarchy", name: null })).errors).toEqual([]);
+    expect(supportsThemeName(parseConfig, "no-such-palette")).toBe(false);
+  });
+  it("asks about exactly the config the recorder writes", () => {
+    /** @type {string[]} */
+    const seen = [];
+    supportsThemeName((/** @type {string} */ text) => (seen.push(text), { errors: [] }), "vimma");
+    expect(seen).toEqual([promoConfig({ source: "file", name: "vimma" })]);
   });
 });
 

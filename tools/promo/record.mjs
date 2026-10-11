@@ -4,11 +4,14 @@
  * gets a fresh throwaway profile (the e2e harness's, plus promoPrefs), runs under its own Xvfb
  * and is driven through vimma-ctl, while ffmpeg's x11grab records the screen. The pages are the
  * fictional sites in tools/promo/fixtures, served by the harness's page server acting as an
- * HTTP proxy: no real website and no network. The video itself is composited elsewhere
+ * HTTP proxy: no real website and no network. Colours: Vimma's built-in palette, set by a temp
+ * config.toml (`[theme] source = "file"`, and `name = "vimma"` when the build knows the key), so
+ * the recording machine's Omarchy theme never shows; the theme shot sets its Omarchy themes from
+ * tools/promo/themes. The video itself is composited elsewhere
  * (vimma-site: npm run video); this writes the raw clips and what happened in them.
  *
  *   node tools/promo/record.mjs --out DIR                       # every shot, 1920x1080
- *   node tools/promo/record.mjs --out DIR --geometry 1080x1920 --shots keys,panes,theme
+ *   node tools/promo/record.mjs --out DIR --geometry 1080x1920 --shots keys,tiling,marks,theme
  *   node tools/promo/record.mjs --out DIR --pace 800            # slower: ms per beat
  *
  * Options: --scale (device pixels per CSS pixel, default 1.5), --fps (default 30), --build
@@ -26,19 +29,29 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { Ctl, findVimmaCtl } from "../e2e/driver.mjs";
 import { findBuild, launch, quitBrowser, startXvfb } from "../e2e/launcher.mjs";
 import { startPageServer } from "../e2e/pages.mjs";
 import { READ_PATH_PREF, devPrefs } from "../start.mjs";
-import { KeyTrack, cssWindow, parseGeometry, parseProbeTitle, promoPrefs } from "./promo.mjs";
+import {
+  KeyTrack,
+  cssWindow,
+  parseGeometry,
+  parseProbeTitle,
+  promoConfig,
+  promoPrefs,
+  supportsThemeName,
+} from "./promo.mjs";
 import { SHOTS } from "./shots.mjs";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
@@ -84,6 +97,46 @@ function writeTheme(dir, name) {
 }
 
 /**
+ * Replace config.toml whole (write, then rename), so Vimma's poll never reads half a file.
+ * @param {string} path
+ * @param {string} text
+ */
+function writeConfig(path, text) {
+  writeFileSync(`${path}.tmp`, text);
+  renameSync(`${path}.tmp`, path);
+}
+
+/**
+ * The checkout a local build was made from (`<checkout>/engine/obj-*\/dist/bin/vimma`), or
+ * null for a build elsewhere.
+ * @param {string} binary
+ */
+function buildCheckout(binary) {
+  const m = /^(.*)\/engine\/obj-[^/]+\/dist\/bin\/[^/]+$/.exec(binary);
+  return m?.[1] && existsSync(join(m[1], "src")) ? m[1] : null;
+}
+
+/**
+ * Which built-in palette to name in `[theme] name`: "vimma" when the build's own vimma-core
+ * (the copy its chrome files use, synced into its checkout's src/) takes the key, else null,
+ * and the build's default built-in shows (Tokyo Night before the vimma palette landed). A build
+ * whose checkout cannot be found gets no name either.
+ * @param {string} binary
+ * @returns {Promise<string | null>}
+ */
+async function builtinThemeName(binary) {
+  const checkout = buildCheckout(binary);
+  const config = checkout && join(checkout, "src/browser/base/content/vimma/core/config.mjs");
+  if (!config || !existsSync(config)) return null;
+  try {
+    const { parseConfig } = await import(pathToFileURL(config).href);
+    return supportsThemeName(parseConfig, "vimma") ? "vimma" : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * A local build's chrome files lead into its checkout's src/ (tools/start.mjs), which the
  * content sandbox must be allowed to read. The harness allows this checkout's; a build from
  * another checkout (--build ../vimma/engine/...) needs that one's too, or the content actors
@@ -92,9 +145,9 @@ function writeTheme(dir, name) {
  * @returns {Record<string, string>}
  */
 function sandboxPrefs(binary) {
-  const m = /^(.*)\/engine\/obj-[^/]+\/dist\/bin\/[^/]+$/.exec(binary);
-  if (!m?.[1] || !existsSync(join(m[1], "src"))) return {};
-  const paths = new Set([...devPrefs(REPO), ...devPrefs(m[1])].map(([, v]) => String(v)));
+  const checkout = buildCheckout(binary);
+  if (!checkout) return {};
+  const paths = new Set([...devPrefs(REPO), ...devPrefs(checkout)].map(([, v]) => String(v)));
   return { [READ_PATH_PREF]: [...paths].join(",") };
 }
 
@@ -205,13 +258,16 @@ async function finishClip(raw, clip) {
  */
 export class Director {
   /**
-   * @param {{ ctl: Ctl, pace: number, themeDir: string, track: KeyTrack }} o
+   * @param {{ ctl: Ctl, pace: number, themeDir: string, track: KeyTrack,
+   *   configPath?: string, themeName?: string | null }} o
    */
-  constructor({ ctl, pace, themeDir, track }) {
+  constructor({ ctl, pace, themeDir, track, configPath = "", themeName = null }) {
     this.ctl = ctl;
     this.pace = pace;
     this.themeDir = themeDir;
     this.track = track;
+    this.configPath = configPath;
+    this.themeName = themeName;
     /** @type {Record<string, string>} hint labels worked out in setup */
     this.labels = {};
     /** @type {Record<string, { x: number, y: number }>} screen points for the video's zoom */
@@ -298,6 +354,17 @@ export class Director {
   }
 
   /**
+   * Back to the built-in palette: config.toml's `[theme] source = "file"`, as a user who stops
+   * following Omarchy writes it. Vimma polls config.toml (every 200 ms in the promo profile);
+   * nothing in the state shows the colours, so the shot's next hold covers the poll. Marked as
+   * `theme:builtin`.
+   */
+  async builtinTheme() {
+    writeConfig(this.configPath, promoConfig({ source: "file", name: this.themeName }));
+    this.mark("theme:builtin");
+  }
+
+  /**
    * The hint label Vimma will give the page's target link: load `url#probe` (fixtures/probe.js
    * titles it with the label, worked out with vimma-core's hints.mjs), then close that tab.
    * @param {string} url
@@ -378,6 +445,15 @@ async function main() {
     cleanups.push(() => display.stop());
     const themeDir = mkdtempSync(join(tmpdir(), "vimma-promo-theme-"));
     cleanups.push(async () => rmSync(themeDir, { recursive: true, force: true }));
+    const configDir = mkdtempSync(join(tmpdir(), "vimma-promo-config-"));
+    cleanups.push(async () => rmSync(configDir, { recursive: true, force: true }));
+    const configPath = join(configDir, "config.toml");
+    const themeName = await builtinThemeName(build.binary);
+    console.log(
+      themeName
+        ? `promo: built-in palette "${themeName}" ([theme] name)`
+        : "promo: this build has no [theme] name: its default built-in palette",
+    );
     // our own Xvfb at the full screen size, with the window in CSS pixels: launch()'s own
     // Xvfb would be the window's size, which is smaller once devPixelsPerPx is over 1
     const baseEnv = { ...process.env, DISPLAY: display.display };
@@ -394,7 +470,9 @@ async function main() {
     };
     for (const shot of shots) {
       console.log(`promo: ${shot.name}`);
-      writeTheme(themeDir, "tokyo-night");
+      // no Omarchy theme until a shot sets one; config.toml picks the source
+      for (const f of readdirSync(themeDir)) rmSync(join(themeDir, f), { force: true });
+      writeConfig(configPath, promoConfig({ source: shot.theme ?? "file", name: themeName }));
       /** @type {() => Promise<void>} */
       let teardown = async () => {};
       const session = await launch({
@@ -403,7 +481,10 @@ async function main() {
         baseEnv,
         window,
         keep: values.keep,
-        prefs: { ...promoPrefs({ port, themeDir, scale }), ...sandboxPrefs(build.binary) },
+        prefs: {
+          ...promoPrefs({ port, themeDir, configPath, scale }),
+          ...sandboxPrefs(build.binary),
+        },
         onTeardown: (t) => {
           teardown = t;
           cleanups.push(t);
@@ -413,7 +494,7 @@ async function main() {
       const ctl = new Ctl({ bin: ctlBin, profile: session.profile });
       await ctl.ready();
       const track = new KeyTrack();
-      const director = new Director({ ctl, pace, themeDir, track });
+      const director = new Director({ ctl, pace, themeDir, track, configPath, themeName });
       await director.until((s) => s.workspace === "main", "the first window", 20_000);
       await shot.setup(director);
       const raw = join(out, `${shot.name}.raw.mkv`);

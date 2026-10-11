@@ -37,17 +37,23 @@ export function cssWindow(screen, scale) {
  * Prefs over the e2e harness's throwaway profile (tools/e2e/launcher.mjs PROFILE_PREFS, which
  * already turns the control socket on): the fixture server as the HTTP proxy, so the address
  * bar shows handbook.example rather than a port; dark chrome and content; larger pixels for a
- * video; smooth scrolling; and the theme read from `themeDir` (a temp copy of a colors.toml),
- * never the user's ~/.local/state/omarchy. Theme changes are applied by `vimma-ctl
- * reload-theme`, so the 2 s poll is slowed right down to keep it from racing the recorder.
- * @param {{ port: number, themeDir: string, scale: number }} options
+ * video; smooth scrolling; the theme read from `themeDir` (a temp copy of a colors.toml),
+ * never the user's ~/.local/state/omarchy; and config.toml read from `configPath`, never
+ * ~/.config/vimma. Theme changes are applied by `vimma-ctl reload-theme`, so the 2 s theme poll
+ * is slowed right down to keep it from racing the recorder; config.toml is polled quickly, so a
+ * shot that edits it (the theme shot's way back to the built-in palette) shows the change soon.
+ * HTTPS goes to the fixture server too, which refuses it: nothing in a shot reaches the network
+ * (about:addons would otherwise fetch its recommendations from addons.mozilla.org).
+ * @param {{ port: number, themeDir: string, configPath?: string, scale: number }} options
  * @returns {Record<string, boolean | number | string | null>}
  */
-export function promoPrefs({ port, themeDir, scale }) {
+export function promoPrefs({ port, themeDir, configPath, scale }) {
   return {
     "network.proxy.type": 1,
     "network.proxy.http": "127.0.0.1",
     "network.proxy.http_port": port,
+    "network.proxy.ssl": "127.0.0.1",
+    "network.proxy.ssl_port": port,
     "network.proxy.no_proxies_on": "",
     "network.proxy.allow_hijacking_localhost": true,
     "dom.security.https_first": false,
@@ -65,7 +71,41 @@ export function promoPrefs({ port, themeDir, scale }) {
     "vimma.theme.omarchyPath": themeDir,
     "vimma.theme.pollMs": 3_600_000,
     "vimma.theme.omarchyHook": false,
+    ...(configPath ? { "vimma.config.path": configPath } : {}),
+    "vimma.config.pollMs": 200,
+    "extensions.getAddons.showPane": false,
+    "extensions.ui.lastCategory": "addons://list/extension",
+    "extensions.htmlaboutaddons.recommendations.enabled": false,
   };
+}
+
+/**
+ * The config.toml a shot runs with: `[theme] source` ("file": the built-in palette, whatever
+ * Omarchy theme the recording machine has; "omarchy": the theme directory the prefs name) and,
+ * when the build knows the key, `name` (which built-in palette). Without `name` the build's
+ * default built-in shows. `schema = 2`: `[theme] name` is a schema-2 key.
+ * @param {{ source: "file" | "omarchy", name: string | null }} options
+ */
+export function promoConfig({ source, name }) {
+  const lines = ["schema = 2", "", "[theme]", `source = "${source}"`];
+  if (name) lines.push(`name = "${name}"`);
+  return `${lines.join("\n")}\n`;
+}
+
+/**
+ * Whether a build takes `[theme] name = "<name>"`: its own vimma-core `parseConfig` reads the
+ * config the recorder would write without an error. A build from before the key reports it as
+ * unknown, and a config.toml with an error is not applied at all, so the recorder leaves the
+ * key out for such a build.
+ * @param {(text: string) => { errors: unknown[] }} parseConfig
+ * @param {string} name
+ */
+export function supportsThemeName(parseConfig, name) {
+  try {
+    return parseConfig(promoConfig({ source: "file", name })).errors.length === 0;
+  } catch {
+    return false;
+  }
 }
 
 /**
