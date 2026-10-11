@@ -46,11 +46,23 @@ const NO_NORMAL = "no normal window is open";
 let left = null;
 
 /**
- * A private browser window (a pop-up is not a workspace).
+ * Any private window, permanent private browsing too: what Vimma's own diagnostics leave out
+ * (about:vimma's window modes and key log; decision 8b).
  * @param {Window} win
  */
-export function isPrivateWindow(win) {
+export function isPrivateBrowsing(win) {
   return lazy.PrivateBrowsingUtils.isWindowPrivate(win);
+}
+const isPrivate = isPrivateBrowsing;
+
+/**
+ * Whether `win` is (part of) the private workspace: a private window, pop-ups included, unless
+ * every window is private (`browser.privatebrowsing.autostart`): then there is no private
+ * workspace, and private windows behave as before it existed (decision 3).
+ * @param {Window} win
+ */
+export function isPrivateWorkspace(win) {
+  return isPrivate(win) && !lazy.PrivateBrowsingUtils.permanentPrivateBrowsing;
 }
 
 /** @param {any} w */
@@ -62,8 +74,18 @@ const isBrowserWindow = (w) => !w.closed && w.toolbar?.visible !== false;
  * @returns {Window[]}
  */
 export function privateWindows() {
+  return allPrivateWindows().filter(isBrowserWindow);
+}
+
+/**
+ * Every open private window, pop-ups included, most recent first. A private pop-up (an OAuth
+ * sign-in) holds the private cookie jar as much as a browser window: closing the private
+ * workspace closes it too, or Firefox would never discard the data.
+ * @returns {Window[]}
+ */
+function allPrivateWindows() {
   return /** @type {any[]} */ (lazy.BrowserWindowTracker.orderedWindows).filter(
-    (w) => isBrowserWindow(w) && isPrivateWindow(w),
+    (w) => !w.closed && isPrivateWorkspace(w),
   );
 }
 
@@ -71,15 +93,15 @@ export function privateWindows() {
 function normalWindow() {
   const recent = /** @type {Window | null} */ (
     lazy.BrowserWindowTracker.orderedWindows.find(
-      (/** @type {any} */ w) => isBrowserWindow(w) && !isPrivateWindow(w),
+      (/** @type {any} */ w) => isBrowserWindow(w) && !isPrivate(w),
     ) ?? null
   );
   return recent;
 }
 
-/** Tabs in every private window. */
+/** Tabs in every private window, pop-ups included. */
 export function privateTabCount() {
-  return privateWindows().reduce(
+  return allPrivateWindows().reduce(
     (n, w) =>
       n + /** @type {any} */ (w).gBrowser.tabs.filter((/** @type {any} */ t) => !t.closing).length,
     0,
@@ -91,12 +113,12 @@ export function privateTabCount() {
  * @param {Window} win
  */
 export function privateStatus(win) {
-  return isPrivateWindow(win) ? { name: PRIVATE_NAME, index: 0, private: true } : null;
+  return isPrivateWorkspace(win) ? { name: PRIVATE_NAME, index: 0, private: true } : null;
 }
 
 /** @param {Window} win */
 function remember(win) {
-  if (isPrivateWindow(win)) return;
+  if (isPrivateWorkspace(win)) return;
   left = { win: new WeakRef(win), workspace: WindowWorkspaces.get(win)?.model?.active ?? null };
 }
 
@@ -183,7 +205,7 @@ export function togglePrivate(win) {
   const t = privateToggle({
     enabled: lazy.PrivateBrowsingUtils.enabled,
     permanent: lazy.PrivateBrowsingUtils.permanentPrivateBrowsing,
-    inPrivate: isPrivateWindow(win),
+    inPrivate: isPrivateWorkspace(win),
     open: privateWindows().length > 0,
   });
   switch (t.kind) {
@@ -232,9 +254,13 @@ export function switchFromPrivate(pick, text) {
  * @returns {string | null} a refusal
  */
 export function closePrivate(ask) {
-  if (!privateWindows().length) return NO_PRIVATE;
+  // Permanent private browsing: closing "it" would close every window and quit.
+  const refused = refusal();
+  if (refused) return refused;
+  if (!allPrivateWindows().length) return NO_PRIVATE;
   ask(closePrivateQuestion(privateTabCount()), () => {
-    for (const w of privateWindows()) w.close();
+    // As a script closes a window, without Firefox's own warnings: the y/N was the question.
+    for (const w of allPrivateWindows()) w.close();
   });
   return null;
 }
@@ -246,7 +272,7 @@ export function closePrivate(ask) {
  * @returns {WorkspaceItem[]}
  */
 export function pickerItemsWithPrivate(win) {
-  const inPrivate = isPrivateWindow(win);
+  const inPrivate = isPrivateWorkspace(win);
   const from = inPrivate ? normalWindow() : win;
   const normal = from ? normalItems(from, inPrivate) : [];
   return [
@@ -274,13 +300,13 @@ function normalItems(win, inPrivate) {
  */
 export function pickerSelect(win, id) {
   if (id === PRIVATE_WORKSPACE_ID) {
-    if (isPrivateWindow(win)) return null;
+    if (isPrivateWorkspace(win)) return null;
     const refused = refusal();
     if (refused) return refused;
     enterPrivate(win);
     return null;
   }
-  if (!isPrivateWindow(win)) return undefined;
+  if (!isPrivateWorkspace(win)) return undefined;
   return switchFromPrivate((model) => (model.workspaces.some((w) => w.id === id) ? id : null), id);
 }
 
@@ -295,7 +321,7 @@ export function pickerSelect(win, id) {
  * @returns {string | null | undefined} a refusal; undefined for a normal move (the caller's)
  */
 export function pickerMove(win, id, ask, say) {
-  if (isPrivateWindow(win)) {
+  if (isPrivateWorkspace(win)) {
     return id === PRIVATE_WORKSPACE_ID
       ? `already in "${PRIVATE_NAME}"`
       : PRIVATE_REFUSALS["move-out-of-private"];

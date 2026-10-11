@@ -869,21 +869,29 @@ restore all forget it, and so do Vimma's own files. Spec:
   recent one. They share one cookie jar, as Firefox's private windows do.
 - **Closing it** (`ctrl+b shift+d` or `:wd` in it, or `:private close` anywhere) asks
   `Close the private workspace (5 tabs)? Its history, cookies and site data are discarded. y/N`,
-  then closes every private window, and Firefox discards their data. Closing a private window
-  with your window manager or `ctrl+shift+w` asks nothing; the data goes once the last private
-  window has closed.
+  then closes every private window, pop-ups included (an open sign-in pop-up would otherwise
+  keep the data alive), and Firefox discards their data. The windows close as a script closes
+  them: your `y` was the question, so Firefox's own warnings do not follow, and a private
+  download still in progress is cancelled. Closing a private window with your window manager
+  or `ctrl+shift+w` asks nothing; the data goes once the last private window has closed.
 - **Add-ons** run there only if you allowed them in private windows (`ctrl+b e`, then `P`).
   Searches use Firefox's private search engine if you set one. Vimma's own keys and pages need
   no add-on.
 - **Links from other apps** open in your normal window, as Firefox does, so the window manager
   takes you out of the private workspace. Routing rules never send a page into or out of it.
 - **Scripts:** `vimma-ctl state` in the private workspace says `"private": true` and
-  `"workspace": "private"`, and gives every tab's `url` and `title` as `null`.
+  `"workspace": "private"`, and gives every tab's `url` and `title` as `null`. `vimma-ctl open`
+  and `send-keys` act on the focused window, so with the private workspace focused they load
+  into it and type there.
+- **Diagnostics:** `about:vimma` and `:bug` in a normal window leave private windows out, and
+  keys typed in a private window are never added to their key log.
 - **What a private window does not hide:** the clipboard (copy mode's `y` copies to the system
   clipboard, as in Firefox), and the window title, which your window manager and screen sharing
   see (Firefox adds its private-browsing suffix).
 - **Permanent private browsing** (`browser.privatebrowsing.autostart`) makes every window
-  private; the key then says `every window is private (permanent private browsing)`. A policy
+  private, so there is no private workspace: the key and `:private close` say
+  `every window is private (permanent private browsing)` and do nothing, and private windows
+  behave as before (no workspaces, no `◆ private`). A policy
   that turns private browsing off makes it say `private browsing is turned off by policy`.
 
 **It is a second window.** Firefox keeps privacy per window, so the private workspace is a

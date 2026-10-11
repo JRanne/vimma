@@ -21,7 +21,7 @@ const { WindowWorkspaces, WINDOW_KEY } = ChromeUtils.importESModule(
 const { VimmaControl } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/ctl/VimmaControl.sys.mjs",
 );
-const { validateMessage } = ChromeUtils.importESModule(
+const { validateMessage, PRIVATE_WORKSPACE_ID } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/core/index.mjs",
 );
 const { getTabLabel, setTabLabel } = ChromeUtils.importESModule(
@@ -79,11 +79,35 @@ function until(cond, msg) {
   return TestUtils.waitForCondition(cond, msg, 50, 100);
 }
 
-/** Every open private browser window (popups excluded). */
+/** Every open private window, pop-ups included: all of them hold the private jar. */
 function privateWindows() {
   return [...Services.wm.getEnumerator("navigator:browser")].filter(
-    (w) => !w.closed && w.toolbar.visible && PrivateBrowsingUtils.isWindowPrivate(w),
+    (w) => !w.closed && PrivateBrowsingUtils.isWindowPrivate(w),
   );
+}
+
+/** The on-disk vimma-workspaces.json, or "" before the store first saved it. */
+async function definitionsFile() {
+  const path = PathUtils.join(PathUtils.profileDir, "vimma-workspaces.json");
+  return (await IOUtils.exists(path)) ? IOUtils.readUTF8(path) : "";
+}
+
+/** The private page's address, its tab label and the text typed into its form. */
+const LEAK = `${MARK}-leak`;
+const LABEL = `${MARK}-label`;
+const SECRET = "vimma-secret";
+
+/**
+ * What must never name the private workspace or a private page (decision 8a). The fixture's
+ * cookie and field are called vimmaprivate in the normal window's control page too, so the
+ * check is for what only the private page has.
+ * @param {string} text
+ * @param {string} what
+ * @param {{ vimma?: boolean }} [options]  Vimma's own data: no workspace called "private"
+ */
+function namesNothingPrivate(text, what, { vimma = false } = {}) {
+  const words = [LEAK, LABEL, SECRET, PRIVATE_WORKSPACE_ID, ...(vimma ? ['"private"'] : [])];
+  for (const word of words) Assert.ok(!text.includes(word), `${what} does not contain ${word}`);
 }
 
 /** ctrl+b, then `key` with `mods`, in `win`. */
@@ -166,18 +190,28 @@ function pickerRows(win, id) {
   );
 }
 
-/** Types into the fixture's field and submits its form. @param {XULBrowserElement} browser */
-function submitForm(browser) {
-  return SpecialPowers.spawn(browser, [], async () => {
+/**
+ * Types `value` into the fixture's field and submits its form.
+ * @param {XULBrowserElement} browser
+ * @param {string} value
+ */
+function submitForm(browser, value) {
+  return SpecialPowers.spawn(browser, [value], async (text) => {
     const field = content.document.getElementById("field");
     field.focus();
-    field.setUserInput("vimma-secret");
+    field.setUserInput(text);
     content.document.getElementById("submit").click();
   });
 }
 
+/** The URL the fixture's form submits `value` to. */
+const submittedUrl = (value) => `${FORM}?vimmaprivatefield=${value}`;
+
 add_task(async function prefix_shift_p_opens_one_private_window_and_toggles_back() {
   Assert.equal(privateWindows().length, 0, "no private window yet");
+  // Before the first ctrl+b shift+p: going to private and back must write nothing anywhere.
+  const normalValue = SessionStore.getCustomWindowValue(window, WINDOW_KEY);
+  const definitions = JSON.stringify(WorkspaceStore.definitions);
   const priv = await openPrivate();
   Assert.ok(PrivateBrowsingUtils.isWindowPrivate(priv), "it is a private window");
   Assert.equal(privateWindows().length, 1, "exactly one");
@@ -198,6 +232,17 @@ add_task(async function prefix_shift_p_opens_one_private_window_and_toggles_back
   await BrowserTestUtils.openNewForegroundTab(priv.gBrowser, `${FORM}?first`);
   await runCommand("priv", priv);
   await until(() => isActive(window), ":priv in private goes back");
+
+  Assert.equal(
+    SessionStore.getCustomWindowValue(window, WINDOW_KEY),
+    normalValue,
+    "the normal window's vimma-workspaces value is unchanged by the toggles",
+  );
+  Assert.equal(
+    JSON.stringify(WorkspaceStore.definitions),
+    definitions,
+    "the workspace definitions are unchanged",
+  );
 });
 
 add_task(async function cycling_never_enters_private_and_leaves_to_the_ends() {
@@ -379,12 +424,12 @@ add_task(async function nothing_private_reaches_the_normal_profile() {
     ],
   });
   const [priv] = privateWindows();
-  const normalValue = SessionStore.getCustomWindowValue(window, WINDOW_KEY);
-  const definitions = JSON.stringify(WorkspaceStore.definitions);
   const publicDownloads = (await (await Downloads.getList(Downloads.PUBLIC)).getAll()).length;
+  const CONTROL = "vimma-control";
 
   await SimpleTest.promiseFocus(priv);
-  const tab = await BrowserTestUtils.openNewForegroundTab(priv.gBrowser, `${FORM}?leak`);
+  const leakUrl = `${FORM}?${LEAK}`;
+  const tab = await BrowserTestUtils.openNewForegroundTab(priv.gBrowser, leakUrl);
   const browser = tab.linkedBrowser;
   await SpecialPowers.spawn(browser, [], async () => {
     Assert.ok(content.document.cookie.includes("vimmaprivate=1"), "the page set its cookie");
@@ -394,7 +439,7 @@ add_task(async function nothing_private_reaches_the_normal_profile() {
   const submitted = BrowserTestUtils.browserLoaded(browser, false, (url) =>
     url.includes("vimmaprivatefield"),
   );
-  await submitForm(browser);
+  await submitForm(browser, SECRET);
   await submitted;
   // A download.
   const privateList = await Downloads.getList(Downloads.PRIVATE);
@@ -411,17 +456,37 @@ add_task(async function nothing_private_reaches_the_normal_profile() {
   const download = await added;
   await download.whenSucceeded().catch(() => {});
   // A tab label.
-  setTabLabel(tab, "vimma-private-label");
-  Assert.equal(getTabLabel(tab), "vimma-private-label", "the label is set");
+  setTabLabel(tab, LABEL);
+  Assert.equal(getTabLabel(tab), LABEL, "the label is set");
 
+  // The control, after the private steps: the same steps in the normal window do reach history
+  // and form history. Once they have, writes the private steps made before them would have
+  // landed too, so the negatives below can fail.
+  await SimpleTest.promiseFocus(window);
+  const control = await BrowserTestUtils.openNewForegroundTab(gBrowser, `${FORM}?control`);
+  const sent = BrowserTestUtils.browserLoaded(control.linkedBrowser, false, (url) =>
+    url.includes("vimmaprivatefield"),
+  );
+  await submitForm(control.linkedBrowser, CONTROL);
+  await sent;
+  await TestUtils.waitForCondition(
+    () => PlacesUtils.history.hasVisits(submittedUrl(CONTROL)),
+    "the normal submission is in history",
+  );
+  await TestUtils.waitForCondition(
+    async () => (await FormHistory.count({ fieldname: "vimmaprivatefield", value: CONTROL })) > 0,
+    "the normal form is in form history",
+  );
+
+  Assert.ok(!(await PlacesUtils.history.hasVisits(leakUrl)), "the private page is not in history");
   Assert.ok(
-    !(await PlacesUtils.history.hasVisits(`${FORM}?leak`)),
-    "the private page is not in history",
+    !(await PlacesUtils.history.hasVisits(submittedUrl(SECRET))),
+    "nor the private form's submission",
   );
   Assert.equal(
-    await FormHistory.count({ fieldname: "vimmaprivatefield" }),
+    await FormHistory.count({ fieldname: "vimmaprivatefield", value: SECRET }),
     0,
-    "no form history entry",
+    "no form history entry for the private form",
   );
   Assert.equal(
     (await (await Downloads.getList(Downloads.PUBLIC)).getAll()).length,
@@ -430,44 +495,28 @@ add_task(async function nothing_private_reaches_the_normal_profile() {
   );
   await SessionSaver.run();
   const saved = await IOUtils.readJSON(SessionFile.Paths.recovery, { decompress: true });
-  Assert.ok(
-    saved.windows.every((w) => !w.isPrivate),
-    "the session file written by SessionSaver holds no private window",
+  const normalWindows = [...Services.wm.getEnumerator("navigator:browser")].filter(
+    (w) => !w.closed && !PrivateBrowsingUtils.isWindowPrivate(w),
   );
-  Assert.ok(!JSON.stringify(saved).includes(MARK), "nor any private page");
   Assert.equal(
+    saved.windows.length,
+    normalWindows.length,
+    "the session file written by SessionSaver holds the normal windows only",
+  );
+  namesNothingPrivate(JSON.stringify(saved), "the session file");
+  namesNothingPrivate(
     SessionStore.getCustomWindowValue(window, WINDOW_KEY),
-    normalValue,
-    "the normal window's vimma-workspaces value is unchanged",
+    "the normal window's vimma-workspaces value",
+    { vimma: true },
   );
-  Assert.ok(!normalValue.includes("private"), "and does not name the private workspace");
-  Assert.equal(
-    JSON.stringify(WorkspaceStore.definitions),
-    definitions,
-    "vimma-workspaces.json's definitions are unchanged",
-  );
-  Assert.ok(!definitions.includes("private"), "and do not name it");
+  namesNothingPrivate(JSON.stringify(WorkspaceStore.definitions), "the workspace definitions", {
+    vimma: true,
+  });
+  namesNothingPrivate(await definitionsFile(), "vimma-workspaces.json", { vimma: true });
   await IOUtils.remove(download.target.path, { ignoreAbsent: true });
 
-  // The control: the same steps in the normal window do reach history and form history, so
-  // the checks above can fail.
-  await SimpleTest.promiseFocus(window);
-  const control = await BrowserTestUtils.openNewForegroundTab(gBrowser, `${FORM}?control`);
-  const sent = BrowserTestUtils.browserLoaded(control.linkedBrowser, false, (url) =>
-    url.includes("vimmaprivatefield"),
-  );
-  await submitForm(control.linkedBrowser);
-  await sent;
-  await until(
-    async () => await PlacesUtils.history.hasVisits(`${FORM}?control`),
-    "a normal page is in history",
-  );
-  await TestUtils.waitForCondition(
-    async () => (await FormHistory.count({ fieldname: "vimmaprivatefield" })) > 0,
-    "a normal form is in form history",
-  );
   await FormHistory.update({ op: "remove", fieldname: "vimmaprivatefield" });
-  await PlacesUtils.history.remove(`${FORM}?control`);
+  await PlacesUtils.history.remove([`${FORM}?control`, submittedUrl(CONTROL)]);
   // The control page signed in to example.com in the normal workspace: later files count that
   // host's cookies (browser_vimma_workspace_ops.js), so nothing of it may stay.
   await SpecialPowers.spawn(control.linkedBrowser, [], () =>
@@ -487,8 +536,47 @@ add_task(async function nothing_private_reaches_the_normal_profile() {
   await SpecialPowers.popPrefEnv();
 });
 
+add_task(async function about_vimma_and_its_key_log_leave_private_windows_out() {
+  const { AboutVimma } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/about/AboutVimma.sys.mjs",
+  );
+  const { KeyLog } = ChromeUtils.importESModule("chrome://browser/content/vimma/about/key-log.mjs");
+  const { VimmaHost } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
+  );
+  const [priv] = privateWindows();
+  await SimpleTest.promiseFocus(priv);
+  const keys = JSON.stringify(KeyLog.entries());
+  const chords = VimmaHost._lastChords.length;
+  prefix("?", { shiftKey: true }, priv); // the bindings overlay: a help-mode key
+  EventUtils.synthesizeKey("KEY_Escape", {}, priv);
+  Assert.equal(JSON.stringify(KeyLog.entries()), keys, "keys in private are not logged");
+  Assert.equal(VimmaHost._lastChords.length, chords, "nor recorded");
+  await SimpleTest.promiseFocus(window);
+  const data = await AboutVimma.collect(window);
+  Assert.equal(
+    data.modes.length,
+    [...Services.wm.getEnumerator("navigator:browser")].filter(
+      (w) => !w.closed && !PrivateBrowsingUtils.isWindowPrivate(w),
+    ).length,
+    "about:vimma in a normal window lists the normal windows' modes only",
+  );
+});
+
 add_task(async function closing_discards_the_private_data() {
   const [priv] = privateWindows();
+  // A private pop-up (an OAuth sign-in, say) holds the private jar too: closing the private
+  // workspace closes it, or the data would survive.
+  await SpecialPowers.pushPrefEnv({ set: [["dom.disable_open_during_load", false]] });
+  const opened = BrowserTestUtils.waitForNewWindow();
+  await SpecialPowers.spawn(priv.gBrowser.selectedBrowser, [PAGE], (url) => {
+    content.open(url, "vimma-popup", "popup,width=320,height=240");
+  });
+  const popup = await opened;
+  await SpecialPowers.popPrefEnv();
+  Assert.ok(PrivateBrowsingUtils.isWindowPrivate(popup), "the pop-up is private");
+  Assert.ok(!popup.toolbar.visible, "and a pop-up");
+  const popupClosed = BrowserTestUtils.domWindowClosed(popup);
   Assert.equal(
     Services.cookies.getCookiesFromHost("example.com", { privateBrowsingId: 1 }).length > 0,
     true,
@@ -505,8 +593,14 @@ add_task(async function closing_discards_the_private_data() {
     ),
     `it asks to close the private workspace and says what is discarded: ${promptText(priv)}`,
   );
+  const tabs = privateWindows().reduce((n, w) => n + w.gBrowser.tabs.length, 0);
+  Assert.ok(
+    promptText(priv).startsWith(`Close the private workspace (${tabs} tabs)?`),
+    "the count includes the pop-up's tab",
+  );
   EventUtils.synthesizeKey("y", {}, priv);
   await closed;
+  await popupClosed;
   await exited;
   Assert.equal(privateWindows().length, 0, "every private window is closed");
   Assert.equal(
@@ -514,6 +608,17 @@ add_task(async function closing_discards_the_private_data() {
     0,
     "the private cookie is gone",
   );
+  // And its storage: a new private window sees none of it.
+  const again = await BrowserTestUtils.openNewBrowserWindow({ private: true });
+  const fresh = await BrowserTestUtils.openNewForegroundTab(again.gBrowser, PAGE);
+  Assert.equal(
+    await SpecialPowers.spawn(fresh.linkedBrowser, [], () =>
+      content.localStorage.getItem("vimmaprivate"),
+    ),
+    null,
+    "the private localStorage is gone",
+  );
+  await BrowserTestUtils.closeWindow(again);
   await SimpleTest.promiseFocus(window);
   await runCommand("private close");
   await until(
@@ -524,14 +629,39 @@ add_task(async function closing_discards_the_private_data() {
 
 add_task(async function permanent_private_browsing_and_the_policy_refuse() {
   await SpecialPowers.pushPrefEnv({ set: [["browser.privatebrowsing.autostart", true]] });
+  const PERMANENT = "every window is private (permanent private browsing)";
   await SimpleTest.promiseFocus(window);
   prefix("P", { shiftKey: true });
-  await until(
-    () => noticeText(window) === "every window is private (permanent private browsing)",
-    "permanent private browsing says so",
-  );
-  await SpecialPowers.popPrefEnv();
+  await until(() => noticeText(window) === PERMANENT, "permanent private browsing says so");
   Assert.equal(privateWindows().length, 0, "and opened nothing");
+  await runCommand("private close");
+  await until(() => noticeText(window) === PERMANENT, ":private close is refused too");
+
+  // Every window is private in that mode: none is "the private workspace" (decision 3), so a
+  // private window behaves as before this feature, and closing never closes them all.
+  const win = await BrowserTestUtils.openNewBrowserWindow({ private: true });
+  await BrowserTestUtils.openNewForegroundTab(win.gBrowser, `${FORM}?permanent`);
+  await SimpleTest.promiseFocus(win);
+  Assert.notEqual(segText(win, "workspace"), "◆ private", "no ◆ private in the status bar");
+  prefix("D", { shiftKey: true }, win);
+  await until(
+    () => noticeText(win) === "no workspaces in this window",
+    "ctrl+b shift+d says what it said before, and closes nothing",
+  );
+  Assert.ok(!promptOpen(win), "it asks nothing");
+  prefix(")", { shiftKey: true }, win);
+  await until(
+    () => noticeText(win) === "no workspaces in this window",
+    "ctrl+b ) says what it said before",
+  );
+  await runCommand("wsmove 1", win);
+  await until(
+    () => noticeText(win) === "no workspaces in this window",
+    ":wsmove says what it said before",
+  );
+  Assert.ok(!win.closed, "the window is still open");
+  await BrowserTestUtils.closeWindow(win);
+  await SpecialPowers.popPrefEnv();
 
   const { EnterprisePolicyTesting } = ChromeUtils.importESModule(
     "resource://testing-common/EnterprisePolicyTesting.sys.mjs",

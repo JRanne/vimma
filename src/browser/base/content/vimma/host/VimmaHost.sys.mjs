@@ -78,7 +78,8 @@ import {
   PRIVATE_WORKSPACE_ID,
   closePrivate,
   cycleOutOfPrivate,
-  isPrivateWindow,
+  isPrivateBrowsing,
+  isPrivateWorkspace,
   leavePrivate,
   pickerItemsWithPrivate,
   pickerMove,
@@ -168,6 +169,7 @@ const SYSTEM_GROUP = /** @type {AddEventListenerOptions} */ ({ mozSystemGroup: t
  * @property {BookmarksPanel} bookmarks  prefix+shift+b, in the side panel's slot
  *   and `panel` mode (docs/specs/bookmarks.md)
  * @property {Find} find  `/`, `?`, `n`, `N` over Firefox's find bar (m1-find)
+ * @property {boolean} private  a private window: its keys are not logged (private-workspace)
  * @property {boolean} resize  in resize mode (`prefix+r`, m4-split-panes sub-spec 5, ADR-014)
  */
 
@@ -234,7 +236,7 @@ function switchWorkspace(s, text) {
     return;
   }
   // docs/specs/private-workspace.md: from private, `:ws name` is the normal window's workspace.
-  if (isPrivateWindow(s.win)) {
+  if (isPrivateWorkspace(s.win)) {
     const back = text === "#";
     const refused = back
       ? leavePrivate()
@@ -283,7 +285,7 @@ function workspaceStep(step) {
     // docs/specs/private-workspace.md decision 5: from private, ) and ( go to the first and
     // last normal workspace, ctrl+^ back to the one left; in a normal window private is never
     // a target.
-    if (isPrivateWindow(s.win)) {
+    if (isPrivateWorkspace(s.win)) {
       const refused = step === "last" ? leavePrivate() : cycleOutOfPrivate(step);
       if (refused) s.notice.show(refused);
       return;
@@ -503,7 +505,7 @@ export const RUNNERS = Object.freeze({
   "workspace.picker": (/** @type {WindowState} */ s) => {
     s.notice.hide();
     // The private workspace lists the normal ones too (private-workspace decision 5).
-    if (WindowWorkspaces.get(s.win)?.model || isPrivateWindow(s.win)) s.wsPicker.open();
+    if (WindowWorkspaces.get(s.win)?.model || isPrivateWorkspace(s.win)) s.wsPicker.open();
     else s.notice.show(NO_WORKSPACES);
   },
   // m3-workspaces 2b: one workspace's tabs visible at a time (WindowWorkspaces).
@@ -521,7 +523,7 @@ export const RUNNERS = Object.freeze({
   ),
   "workspace.move_tab": (/** @type {WindowState} */ s, /** @type {Action} */ a, text) => {
     // private-workspace decision 5: a private tab never leaves the private workspace.
-    if (isPrivateWindow(s.win)) s.notice.show(MOVE_OUT_REFUSED);
+    if (isPrivateWorkspace(s.win)) s.notice.show(MOVE_OUT_REFUSED);
     else moveTab(s, a, text);
   },
   // docs/specs/private-workspace.md: toggles; `:private close` closes it after y/N.
@@ -549,7 +551,7 @@ export const RUNNERS = Object.freeze({
   "workspace.close": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) => {
     s.notice.hide();
     // In private, ctrl+b shift+d and `:wd` close the private workspace (decision 3).
-    if (!text && isPrivateWindow(s.win)) {
+    if (!text && isPrivateWorkspace(s.win)) {
       const refused = closePrivate((q, yes) => s.rename.ask(q, yes));
       if (refused) s.notice.show(refused);
       return;
@@ -856,6 +858,7 @@ export const VimmaHost = {
       onKeyDown: (e) => this._onKeyDown(win, state, e),
       onKeyDownAfter: (e) => this._onKeyDownAfter(state, e),
       firefoxKeys: null,
+      private: isPrivateBrowsing(win),
       // The overlay is modal, but tabs can still change underneath it (a script closes the
       // selected tab): close it and focus the newly selected browser.
       onTabSelect: () => {
@@ -902,7 +905,7 @@ export const VimmaHost = {
       wsPicker: new WorkspacePicker(win, {
         items: () => pickerItemsWithPrivate(win),
         activeId: () =>
-          isPrivateWindow(win)
+          isPrivateWorkspace(win)
             ? PRIVATE_WORKSPACE_ID
             : (WindowWorkspaces.get(win)?.model?.active ?? null),
         select: (id) => {
@@ -943,11 +946,11 @@ export const VimmaHost = {
       panel: new SidePanel(win, {
         // A private window lists its tabs as the private workspace (private-workspace 6).
         model: () => {
-          if (isPrivateWindow(win)) return privatePanel(pickerWorkspaces(win)).model;
+          if (isPrivateWorkspace(win)) return privatePanel(pickerWorkspaces(win)).model;
           return WindowWorkspaces.get(win)?.model ? pickerWorkspaces(win) : null;
         },
         where: () =>
-          isPrivateWindow(win) ? privatePanel(pickerWorkspaces(win)).options : undefined,
+          isPrivateWorkspace(win) ? privatePanel(pickerWorkspaces(win)).options : undefined,
         info: (tabId) => {
           const tab = /** @type {any} */ (tabById(win, tabId));
           if (!tab) return undefined;
@@ -1315,8 +1318,11 @@ export const VimmaHost = {
     // Focus left the page the hints are on (URL bar, another pane): they no longer apply.
     if (state.hint && state.hint.browser !== this._focusedBrowser(win)) this._cancelHints(state);
     const mode = this._mode(state);
-    this._lastChords.push(key);
-    if (this._lastChords.length > MAX_RECORDED) this._lastChords.shift();
+    // Keys typed in a private window are never kept (private-workspace decision 8b).
+    if (!state.private) {
+      this._lastChords.push(key);
+      if (this._lastChords.length > MAX_RECORDED) this._lastChords.shift();
+    }
     if (Services.prefs.getBoolPref(DEBUG_PREF, false)) {
       const mods = MODIFIERS.filter((m) => chord[m]);
       console.debug("vimma key", { key, mods, mode });
@@ -1354,7 +1360,8 @@ export const VimmaHost = {
     const first = state.dispatcher.pending().length === 0;
     this._clearTimer(win, state);
     const result = state.dispatcher.dispatch(mode, chord);
-    if (!("replay" in result)) KeyLog.record(mode, chord, result); // about:vimma's last keys
+    // about:vimma's last keys; never a private window's (private-workspace decision 8b).
+    if (!("replay" in result) && !state.private) KeyLog.record(mode, chord, result);
     // The overlay is modal: in help mode every key is ours, handled or not, so nothing reaches
     // the browser underneath (ctrl+w would close the tab behind it). Hint mode too: every key
     // is a label key or ignored, never the page's. Resize mode too (ADR-014), and the side panel.
