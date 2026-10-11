@@ -293,10 +293,9 @@ Per-workspace defaults (decision 13); a separate private default key; a table fo
 Firefox's existing engines into `config.toml`; hiding or removing app-provided engines from the
 file (the policy's `Remove`).
 
-## Open questions for the user
+## Answered by the user (2026-10-11)
 
-1. **File wins at every start** (decision 7), or only when the `default` line changes (as the
-   enterprise policy does, so a choice in Settings sticks until you edit the file)? The spec
-   picks "file wins"; the other is a one-line change in `planSearch`.
-2. **A separate default for private windows** (`[search] private = "DuckDuckGo"`): wanted now,
-   or later with per-workspace defaults?
+1. **The file wins at every start** (decision 7): "config always wins".
+2. **Private browsing's default** is not a separate `[search] private` key. The user wants a
+   private workspace in place of private windows (spec in progress, private-workspace); its
+   search default is decided there. Until then decision 12 stands.
