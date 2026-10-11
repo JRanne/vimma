@@ -254,6 +254,24 @@ describe("resolveTheme", () => {
     expect(r.mode).toBe("light");
   });
 
+  test("[theme.colors] accent is the focus colour when it reaches 3:1, nudged when not", () => {
+    const keep = resolveTheme({
+      theme: themeCfg({ source: "file", colors: { accent: "#ff79c6" } }),
+    });
+    expect(keep.tokens["--vimma-accent"]).toBe("#ff79c6");
+    expect(keep.tokens["--vimma-focus"]).toBe("#ff79c6");
+    // A dark accent on vimma dark's near-black surfaces: moved toward white until it shows.
+    const dim = resolveTheme({
+      theme: themeCfg({ source: "file", colors: { accent: "#203040" } }),
+    });
+    expect(dim.tokens["--vimma-accent"]).toBe("#203040");
+    const focus = String(dim.tokens["--vimma-focus"]);
+    expect(focus).not.toBe("#203040");
+    for (const bg of ["--vimma-bg", "--vimma-bg-dark", "--vimma-muted", "--vimma-selection"]) {
+      expect(contrastRatio(focus, String(dim.tokens[bg])), bg).toBeGreaterThanOrEqual(3);
+    }
+  });
+
   test("low fg/bg contrast warns, naming both tokens and the ratio", () => {
     const r = resolveTheme({
       theme: themeCfg({ source: "file", colors: { foreground: "#777777", background: "#ffffff" } }),

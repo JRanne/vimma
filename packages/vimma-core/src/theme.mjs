@@ -27,6 +27,8 @@ import { formatPath, locateKeys, parseToml } from "./toml.mjs";
  * @property {string} [textOn]      token this one is text on: the value is picked for contrast
  * @property {boolean} [readable]   text on every SURFACE_TOKENS: `from`, moved toward black or
  *   white just far enough to reach MIN_CONTRAST on each (spec m7-a11y)
+ * @property {boolean} [focus]      a focus indicator: `from`, moved toward black or white just
+ *   far enough to reach MIN_FOCUS_CONTRAST on every FOCUS_SURFACE_TOKENS
  * @property {string} description
  */
 
@@ -229,7 +231,13 @@ export const THEME_TOKENS = Object.freeze([
   },
   { name: "--vimma-fg-light", from: "light_foreground", description: "light text" },
   { name: "--vimma-fg-bright", from: "bright_foreground", description: "emphasised text" },
-  { name: "--vimma-accent", from: "accent", description: "accent, focus" },
+  { name: "--vimma-accent", from: "accent", description: "accent" },
+  {
+    name: "--vimma-focus",
+    from: "accent",
+    focus: true,
+    description: "focus rings and the focused pane's outline: the accent, at 3:1 where it touches",
+  },
   { name: "--vimma-muted", from: "muted", description: "borders, inactive" },
   { name: "--vimma-selection", from: "selection", description: "selected row background" },
   ...ANSI.map((c) => ({ name: `--vimma-${c}`, from: c, description: `${c}` })),
@@ -303,6 +311,13 @@ export const TEXT_TOKENS = Object.freeze([
   ...THEME_TOKENS.filter((t) => t.name.startsWith("--vimma-text-")).map((t) => t.name),
 ]);
 
+/**
+ * What a focus ring or the focused pane's outline touches: the surfaces above, and the pane gap
+ * (split.css paints it --vimma-muted), which shows at the outline's rounded corners and where a
+ * split edge meets it.
+ */
+export const FOCUS_SURFACE_TOKENS = Object.freeze([...SURFACE_TOKENS, "--vimma-muted"]);
+
 /** Pairs (text, background) checked against WCAG AA. Badge text is picked to pass already. */
 const CONTRAST_PAIRS = [
   ["--vimma-fg", "--vimma-bg"],
@@ -315,6 +330,9 @@ const CONTRAST_PAIRS = [
 
 /** WCAG 2.x AA minimum for normal text. */
 export const MIN_CONTRAST = 4.5;
+
+/** WCAG 2.x minimum for non-text contrast (1.4.11), focus indicators included. */
+export const MIN_FOCUS_CONTRAST = 3;
 
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
@@ -476,28 +494,34 @@ function paletteToTokens(palette, font, roles = {}) {
     else tokens[t.name] = cssFontFamily(font);
   }
   // Once every surface has its value.
-  const surfaces = SURFACE_TOKENS.map((s) => /** @type {string} */ (tokens[s]));
+  /** @param {readonly string[]} names */
+  const values = (names) => names.map((s) => /** @type {string} */ (tokens[s]));
+  const surfaces = values(SURFACE_TOKENS);
+  const focusSurfaces = values(FOCUS_SURFACE_TOKENS);
   for (const t of THEME_TOKENS) {
-    if (t.readable) tokens[t.name] = readable(/** @type {string} */ (tokens[t.name]), surfaces);
+    const value = /** @type {string} */ (tokens[t.name]);
+    if (t.readable) tokens[t.name] = readable(value, surfaces, MIN_CONTRAST);
+    else if (t.focus) tokens[t.name] = readable(value, focusSurfaces, MIN_FOCUS_CONTRAST);
   }
   return tokens;
 }
 
 /**
  * `color`, or the first step of 5% toward black or white (whichever contrasts more with the
- * surfaces) that reaches MIN_CONTRAST on every one of them: the hue stays, the text reads.
+ * surfaces) that reaches `min` on every one of them: the hue stays, the text (or ring) shows.
  * @param {string} color  #rrggbb
  * @param {readonly string[]} surfaces  #rrggbb
+ * @param {number} min  contrast ratio to reach
  * @returns {string} #rrggbb
  */
-function readable(color, surfaces) {
+function readable(color, surfaces, min) {
   /** @param {string} c */
   const worst = (c) => Math.min(...surfaces.map((s) => contrastRatio(c, s)));
-  if (worst(color) >= MIN_CONTRAST) return color;
+  if (worst(color) >= min) return color;
   const target = worst("#000000") >= worst("#ffffff") ? "#000000" : "#ffffff";
   for (let step = 1; step < 20; step++) {
     const c = mix(color, target, step / 20);
-    if (worst(c) >= MIN_CONTRAST) return c;
+    if (worst(c) >= min) return c;
   }
   return target;
 }
