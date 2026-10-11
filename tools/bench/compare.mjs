@@ -68,33 +68,41 @@ export function minOfMedians(rounds) {
 }
 
 /**
- * One result from several bench processes. A sub-microsecond case lands in one of a few JIT
- * "modes" per process (inlining, code layout), 20-30 % apart; the lowest over several fresh
- * processes is the fast mode, which a fresh run finds again.
+ * One result from several bench processes (each with its own fixed hash seed, bench.mjs).
+ *   - µs, for the budget: the lowest over the processes, since noise only adds time.
+ *   - ratio, for the regression gate: the median over the processes. Not the lowest: noise in
+ *     the reference's time lowers a ratio, so the lowest ratio picks the process whose reference
+ *     ran slowest, and the gate then compares that outlier with the next run's (issue #125).
+ * `referenceSpread` is (slowest − fastest) / fastest of the processes' reference times, printed so
+ * a reference that stops being steady shows in the log.
  * @param {Result[]} results
- * @returns {Result & { processes: number }}
+ * @returns {Result & { processes: number, referenceSpread: number }}
  */
 export function combine(results) {
   const [first] = results;
   if (!first) throw new RangeError("combine: no results");
-  const names = Object.keys(first.cases).sort().join("\n");
-  /** @type {Record<string, CaseResult>} */
-  const cases = {};
+  const names = Object.keys(first.cases).sort();
   for (const r of results) {
     if (r.machine !== first.machine) throw new Error("combine: results from another machine");
-    if (Object.keys(r.cases).sort().join("\n") !== names) {
+    if (Object.keys(r.cases).sort().join("\n") !== names.join("\n")) {
       throw new Error("combine: results with different cases");
     }
-    for (const [name, c] of Object.entries(r.cases)) {
-      const best = cases[name];
-      cases[name] = best
-        ? { us: Math.min(best.us, c.us), ratio: Math.min(best.ratio, c.ratio) }
-        : { ...c };
-    }
   }
+  /** @type {Record<string, CaseResult>} */
+  const cases = {};
+  for (const name of Object.keys(first.cases)) {
+    const of = results.map((r) => /** @type {CaseResult} */ (r.cases[name]));
+    cases[name] = {
+      us: Math.min(...of.map((c) => c.us)),
+      ratio: median(of.map((c) => c.ratio)),
+    };
+  }
+  const refs = results.map((r) => r.referenceUs);
+  const referenceUs = Math.min(...refs);
   return {
     machine: first.machine,
-    referenceUs: Math.min(...results.map((r) => r.referenceUs)),
+    referenceUs,
+    referenceSpread: Math.max(...refs) / referenceUs - 1,
     processes: results.length,
     cases,
   };

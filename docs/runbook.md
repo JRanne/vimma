@@ -550,22 +550,41 @@ Why it does not flake (plan §5: no retries; flaky means quarantine):
 
 - **Ratios, not raw times.** Each sample times a case and then a fixed reference workload; the
   gate compares the case/reference ratio. A faster or slower VM, or a clock change mid-run, moves
-  both.
+  both. (The AMD EPYC 9V74 runners come in two speeds, about 30 % apart in raw µs; their ratios
+  agree.)
+- **A reference that costs the same in every process.** The reference looks up integer keys in a
+  `Map`. V8 hashes strings with a hash seed it picks at random per process, so a string-keyed
+  table gets a different bucket layout in each process; the old string-keyed reference was up to
+  22 % slower or faster from one process to the next on an AMD EPYC 7763, and every ratio of that
+  process moved with it (issue #125). Integer keys are hashed without the seed: the reference now
+  varies by under 1 % between processes on most runner classes. Each bench prints the spread
+  (`reference 0.480 µs, +0.2 % from fastest to slowest process`); a large one says the reference
+  stopped being steady.
+- **The same hash seeds on every run.** The cases do use string keys (the dispatcher's trie), so
+  each of the 15 processes runs with its own fixed `--hash-seed` (1 to 15): every run measures the
+  same set of table layouts, not 15 new random ones.
 - **Robust statistics.** Warm-up, batches of ≥ 100 µs, the median of 51 samples per round, the
-  median over rounds; then the lowest over 15 fresh processes. One process lands in a JIT mode
-  that can be 20–30 % off for sub-microsecond code; the lowest of 15 is the fast mode, and a fresh
-  run finds it again.
+  median over 5 rounds, per process. Over the 15 processes: the **lowest µs** for the budget
+  (noise only adds time) and the **median ratio** for the gate. Not the lowest ratio: noise in
+  the reference's time lowers a ratio, so the lowest ratio picked whichever process had the
+  slowest reference, and the gate compared one run's outlier with the next run's. That is what
+  failed PR #121 (+10.9 % suite with the same raw µs as main).
 - **One baseline per runner class.** Entries are keyed by `CPU model | arch | node X.Y.Z`;
-  GitHub's pool mixes CPU models (we have seen Intel Xeon Platinum 8573C and AMD EPYC 9V74), and
-  ratios do not carry exactly across microarchitectures or V8 versions.
+  GitHub's pool mixes CPU models (AMD EPYC 7763, 9V74 and 9V45, Intel Xeon Platinum 8573C and
+  8370C, Intel Xeon 6973P-C so far), and ratios do not carry exactly across microarchitectures
+  or V8 versions.
 - **Several samples per entry.** An entry's `cases` are the per-case median of its `samples`, one
-  per CI run, so one unlucky recording run does not set the bar. Currently: AMD EPYC 9V74 has 2
-  samples, Intel Xeon 8573C 1 and AMD EPYC 7763 1 (add later runs' numbers, see below).
-- **Suite-level 10 %.** Measured noise between whole runs on a 2-CPU-pinned laptop: the suite's
-  geometric mean within 6 % (max−min over 8 runs), single cases up to 14 %. So 10 % on the suite
-  and 25 % per case leave a margin of about two on the worst pair. Two CI runs on the same AMD
-  runner class differed by 1 % on the suite.
-- **The budget has headroom.** The slowest case is about 13 µs on CI, the key cases under 0.5 µs.
+  per CI job, so one unlucky recording does not set the bar. Keep at least three per class
+  where the pool allows: re-recorded for issue #125 from 60 hosted jobs, AMD EPYC 7763 has 30
+  samples, 9V74 12, 9V45 11, Xeon 8573C 5 and Xeon 8370C 2 (rare in the pool); the Xeon 6973P-C
+  did not come up and uses the fallback.
+- **Suite-level 10 %.** Measured with this method, 30 hosted jobs on the same commit: the suite
+  of one runner class stays within about 1 % from job to job (AMD EPYC 7763: 15 jobs, 0.7 %
+  max−min; 9V74: 6 jobs, 1 %); single cases within a few per cent. With the old method the same
+  class moved from −18 % to +11 % against its baseline on unchanged code. So 10 % on the suite
+  and 25 % per case are a wide margin over the noise, and a 20 % slower dispatcher fails the gate
+  (`tools/bench/test/bench.test.mjs`).
+- **The budget has headroom.** The slowest case is about 17 µs on CI, the key cases under 1 µs.
 
 If the step does fail without a slowing change, that is a flake: quarantine per plan §5 (open an
 issue with the log; do not re-run to green), and look at the numbers before touching thresholds.
@@ -584,10 +603,15 @@ saying why):
    case, a Node bump or a new runner CPU model are the reasons to re-record.
 2. Take the numbers from CI, not a laptop. Every bench step prints `baseline entry:` for the
    runner it ran on: a new entry, or the existing one with this run added as a sample (medians
-   recomputed). Copy it into `packages/vimma-core/bench/baseline.json`. To replace an entry
-   because the code changed on purpose, delete the entry first so the old samples go. On a
-   machine of the class itself, `npm run bench -- --record "<notes>"` does the same in place.
-3. Keep the notes (runner image, why), and prefer two or more samples per entry.
+   recomputed). `gh run view <run id> --log | node tools/bench/collect.mjs` adds the sample of
+   every bench job in that run to `packages/vimma-core/bench/baseline.json`; with `--replace` it
+   first drops the earlier samples of those machines (the code or the method changed on purpose),
+   and `--notes "<notes>"` sets the notes. On a machine of the class itself,
+   `npm run bench -- --record "<notes>"` adds a sample in place.
+3. Keep the notes (runner image, why), and at least three samples per class. One CI run lands on
+   one random runner class; to sample several classes at once, push a throwaway branch with a
+   workflow that runs `node tools/bench/bench.mjs` in a matrix of about 30 jobs (as for issue
+   #125: about half land on an AMD EPYC 7763), collect its run, and delete the branch.
 4. The commit body carries a changelog line naming the cases and the change, e.g.
    `bench baseline: prefix + key +12 % from per-mode leader lookup (intended)`.
 
