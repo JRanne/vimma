@@ -58,16 +58,15 @@ describe("the gate on a real measurement", () => {
       },
     };
 
-    // Size the injected work to make a single key's dispatch about 20 % slower, measured here:
-    // start from a guess and rescale until the measured change is in range.
+    // Size the injected work to make a single key's dispatch at least 17 % slower, measured here.
+    // The search only grows the work: a noisy measurement can then cost an extra doubling, but can
+    // never shrink the work back to nothing, which a rescale up and down could (issue #125's test
+    // once ended at 1.0002x after overshooting).
     const keyRatio = (/** @type {typeof before} */ r) => r.cases[KEY_CASE]?.ratio ?? NaN;
     let slower = before;
-    slow.iterations = 4;
-    for (let tries = 0; tries < 6; tries++) {
+    for (slow.iterations = 4; slow.iterations <= 1 << 20; slow.iterations *= 2) {
       slower = asResult(measure(CASES, reference));
-      const change = keyRatio(slower) / keyRatio(before) - 1;
-      if (change >= 0.17 && change <= 0.3) break;
-      slow.iterations = Math.max(1, Math.round((slow.iterations * 0.2) / Math.max(change, 0.01)));
+      if (keyRatio(slower) / keyRatio(before) - 1 >= 0.17) break;
     }
     slow.iterations = 0;
     const again = asResult(measure(CASES, reference));
