@@ -25,6 +25,15 @@
     display: none !important;
   }
 
+  /* Vimma's focus ring (docs/specs/m7-a11y.md, "Focus rings in Vimma's UI"): without it, the UA's
+     `outline: 1px auto` paints a native ring in the system accent, a blue. Inset, so the panel's
+     overflow does not clip it. */
+  &:focus-visible,
+  & ul:focus-visible {
+    outline: 2px solid var(--vimma-focus, AccentColor);
+    outline-offset: -2px;
+  }
+
   & .vimma-panel-header {
     display: flex;
     flex-wrap: wrap;
@@ -211,6 +220,11 @@
     background: var(--vimma-bg, Field);
     color: var(--vimma-fg, FieldText);
     font: inherit;
+
+    &:focus-visible {
+      outline: 2px solid var(--vimma-focus, AccentColor);
+      outline-offset: -1px;
+    }
 
     &[hidden] {
       display: none;

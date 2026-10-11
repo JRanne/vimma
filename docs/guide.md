@@ -302,7 +302,8 @@ follows your system's or Firefox's light or dark setting (`prefers-color-scheme`
 the moment that changes, without a reload. Firefox's own focus rings follow the theme too:
 the address bar's focus ring and the outline of the focused pane in a split are the theme's
 accent (made a shade darker or lighter if it would not stand out at 3:1 against the colours
-around it). A `colors.toml` Vimma cannot read (a value that is
+around it), and so are the focus rings of Vimma's own side panel, bookmarks panel, pickers and
+help overlay. A `colors.toml` Vimma cannot read (a value that is
 not a `#rrggbb` colour, a missing key) is ignored: the colours stay as they were, and the
 Browser Console (`ctrl+shift+j`) says which line is wrong.
 
