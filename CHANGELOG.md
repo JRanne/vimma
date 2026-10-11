@@ -6,6 +6,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
+- Vimma's own palette from vimma.dev, mint on green-black, is the built-in theme, light or dark as the system is, and switches live. Omarchy themes are unchanged; `[theme] name = "tokyo-night"` brings back the old palette. The e2e baselines `m0-happy-path-help` and `m4-split-panes` and the `defaults.toml` snapshot changed for it.
+- Side panel: mark tabs with `space` or a `V` range, and `Enter` shows them together as panes in the workspace's layout (dwindle by default) without reloading them; past `[panes] max` it refuses and changes nothing. The help-text and `defaults.toml` snapshots gained the two new keys.
 - `about:license` lists the smol-toml TOML parser's BSD-3-Clause notice under Vimma, so release builds carry it (#16).
 - Bookmarks per workspace: each workspace has its own folder in the Bookmarks Toolbar, and the bookmarks panel shows only the current workspace's bookmarks, following you as you switch. `ctrl+b a` and `:bookmark` file there, `@name/` targets another workspace, and renaming or deleting a workspace renames its folder or asks what to do with its bookmarks. `[bookmarks] root = "workspace" | "toolbar" | "all"` picks the view.
 - Accessibility: pickers and panels expose the selected row to screen readers, bookmarks are a tree, prompts are dialogs, notices are announced once, and panels give focus back when they close. Text colours meet WCAG AA in the built-in dark and light themes. The help-overlay screenshot baseline was re-recorded for the new colours.
