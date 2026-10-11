@@ -6,6 +6,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
+- Private workspace: `ctrl+b shift+p` (or `ctrl+shift+p`, `:private`) goes to Firefox's private window as if it were one more workspace, and back. It is never a stop on `ctrl+b (` / `)`; the workspace picker lists it last with a tab count only; `m` moves a tab in after y/N; `ctrl+b shift+d` there closes every private window, pop-ups included, and discards its data. `vimma-ctl state` withholds its URLs and titles. The help-text and `defaults.toml` snapshots gained the key, and the e2e baseline `m3-private-workspace` is new.
 - Vimma's own palette from vimma.dev, mint on green-black, is the built-in theme, light or dark as the system is, and switches live. Omarchy themes are unchanged; `[theme] name = "tokyo-night"` brings back the old palette. The e2e baselines `m0-happy-path-help` and `m4-split-panes` and the `defaults.toml` snapshot changed for it.
 - Side panel: mark tabs with `space` or a `V` range, and `Enter` shows them together as panes in the workspace's layout (dwindle by default) without reloading them; past `[panes] max` it refuses and changes nothing. The help-text and `defaults.toml` snapshots gained the two new keys.
 - `about:license` lists the smol-toml TOML parser's BSD-3-Clause notice under Vimma, so release builds carry it (#16).
