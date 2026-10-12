@@ -500,12 +500,16 @@ A manual run: `gh workflow run fuzz.yml` (random seed), or `-f seed=123 -f runs=
 #### Fuzzing: reproducing a failing seed
 
 JavaScript. The issue and the failure file give the seed and, per property, the replay path
-(`counterexamplePath`). One property, one case, at once:
+(`counterexamplePath`). One property, one case, at once (the failure file's `replay` line is this
+command, filled in):
 
 ```sh
 VIMMA_FUZZ_SEED=<seed> VIMMA_FUZZ_PATH=<path> npx vitest run packages/vimma-core/test/fuzz \
-  -t "<test name>"
+  -t '<test title>'
 ```
+
+`-t` takes the test's title as written in `test(...)`, not the failure file's name
+(`config-no-throw`), which matches nothing and so runs no test.
 
 Without `VIMMA_FUZZ_PATH`, the same seed and `VIMMA_FUZZ_RUNS` repeat the whole search (the
 nightly used `VIMMA_FUZZ_RUNS=1000000` with a 15 s limit per property, so a late failure can
