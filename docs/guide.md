@@ -735,7 +735,8 @@ normal mode's, which closes the tab. In the bookmarks panel `x` does nothing;
 
 While it is open, every other plain key is the panel's and never reaches the page; `ctrl+b`
 keys and `:` commands still work, and a tab you open meanwhile shows up in the list. The panel
-follows your Omarchy theme as the status bar does. Change its keys under `[modal.panel]` in
+follows your Omarchy theme as the status bar does, scrollbar included (the theme's muted
+colour on the panel's background), and recolours the moment the theme changes. Change its keys under `[modal.panel]` in
 `config.toml`; `[keys] toggle_sidebar` changes the keys that open it, and a `<leader>` binding
 you add there (`toggle_sidebar = ["prefix+b", "<leader>n"]`) closes it too.
 
