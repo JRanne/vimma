@@ -1,6 +1,7 @@
 # Plan §4 step 6 / §7: release-please keeps one release PR open with the next version and its
 # CHANGELOG.md entry, built from the Conventional Commits on main. Merging that PR is the
-# release: release-please tags vX.Y.Z and creates the GitHub Release. Config:
+# release: release-please tags vX.Y.Z and creates the GitHub Release (a draft until the release
+# gate opens; spec release-versioning). Config:
 # release-please-config.json, .release-please-manifest.json; setup in docs/runbook.md (Releases).
 # The version's single source of truth is surfer.json brands.vimma.release.displayVersion,
 # bumped through extra-files; the Firefox pin (version.version) is never touched.

@@ -1,0 +1,23 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Fixture for browser_vimma_find.js (#164): a search box that holds the query, as YouTube's
+   - and DuckDuckGo's do, before two matches in the page's text. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vimma find in a field</title>
+    <style>
+      body {
+        margin: 0;
+        font: 16px/1.5 sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <input id="box" type="search" value="needle" />
+    <p id="p1">first needle here</p>
+    <p id="p2">second needle here</p>
+  </body>
+</html>

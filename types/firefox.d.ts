@@ -220,6 +220,8 @@ interface Window {
     readonly AUTHOR_SHEET: number;
     loadSheetUsingURIString(sheetURI: string, type: number): void;
     removeSheetUsingURIString(sheetURI: string, type: number): void;
+    /** True while an event the user caused (a key, a click) is being handled. */
+    readonly isHandlingUserInput: boolean;
     nodesFromRect(
       x: number,
       y: number,

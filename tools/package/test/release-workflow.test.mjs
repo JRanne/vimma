@@ -54,4 +54,46 @@ describe("release.yml", () => {
     const on = text.slice(text.indexOf("\non:\n"), text.indexOf("\npermissions:"));
     expect(on).not.toMatch(/pull_request|push:/);
   });
+
+  // A draft release fires no `published` (spec release-versioning): only that type may start it.
+  it("runs on a published release only, so a draft starts nothing", () => {
+    const on = text.slice(text.indexOf("\non:\n"), text.indexOf("\npermissions:"));
+    expect(on).toMatch(/^ {2}release:\n {4}types: \[published\]\n/m);
+  });
+});
+
+// release-please's bumps and the release gate (spec release-versioning).
+describe("release-please-config.json", () => {
+  /** @param {string} path */
+  const json = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
+  const config = json("../../../release-please-config.json");
+  const manifest = json("../../../.release-please-manifest.json");
+  const surfer = json("../../../surfer.json");
+
+  // The user's decision (2026-10-12): every release bumps the patch, breaking changes too; the
+  // move to 0.2.0 or 1.0.0 is theirs, by a Release-As footer (runbook "Releases").
+  it("bumps only the patch, whatever the commits say", () => {
+    expect(config.versioning).toBe("always-bump-patch");
+    expect(config.packages["."].versioning).toBeUndefined();
+  });
+
+  it("has no pre-1.0 bump rules that always-bump-patch would silently override", () => {
+    expect(config["bump-minor-pre-major"]).toBeUndefined();
+    expect(config["bump-patch-for-minor-pre-major"]).toBeUndefined();
+  });
+
+  it("pins no version for every release", () => {
+    expect(config["release-as"]).toBeUndefined();
+    expect(config.packages["."]["release-as"]).toBeUndefined();
+  });
+
+  it("creates draft releases, with their tag, until the release gate opens", () => {
+    expect(config.draft).toBe(true);
+    expect(config["force-tag-creation"]).toBe(true);
+    expect(config.prerelease).toBeUndefined();
+  });
+
+  it("keeps the manifest at surfer.json's displayVersion", () => {
+    expect(manifest["."]).toBe(surfer.brands.vimma.release.displayVersion);
+  });
 });

@@ -220,6 +220,9 @@ is on screen), as Vim's starts at the cursor.
   After a search that found nothing they do nothing.
 - **`?`** searches backward: it shows matches as you type, as `/` does, and `Enter` lands on the
   last match before where you were. After `?`, `n` goes on backward and `N` forward.
+- **A match in a text field** (a site's search box that holds your query) is selected there,
+  but the field does not keep the focus: you stay in normal mode and `n` / `N` go on to the
+  next match. `i` or a click puts you in the field.
 
 `ctrl+f` still opens Firefox's own find bar, where `Enter` goes to the next match.
 

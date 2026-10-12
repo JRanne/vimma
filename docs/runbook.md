@@ -282,6 +282,36 @@ comes from CI the same way: `gh run download <run-id> -n e2e-output`. Baselines 
   `rm -rf /tmp/vimma-e2e-*`. Normally SIGINT/SIGTERM kill the browser's process group, stop Xvfb
   and remove the profile.
 
+### Site compatibility (`npm run sites`, spec site-compat)
+
+`npm run sites` loads each site of `tools/sites/sites.json` once in a real build, one fresh
+profile per site under the harness's own Xvfb, and runs the same checks on each: hints and
+following one, scrolling (main and inner scrollers), find, `yy`, insert and Esc on the search
+field, `ctrl+b` never reaching the page, the site's own shortcuts (info only), errors from
+Vimma's code and the status bar's mode after each step. Keys go through `vimma-ctl`; the page is
+read over the DevTools protocol on a Unix socket in the profile's temp dir (not WebDriver, which
+sets `navigator.webdriver` and draws more bot checks). It writes `site-compat-output/`:
+`results.json`, `report.md`, `report.html` and `screenshots/`.
+
+```sh
+npm run sites                                  # every site, the default build
+npm run sites -- --filter github,mdn           # ids or names containing either term
+npm run sites -- --artifact                    # engine/obj-artifact
+npm run sites -- --pref name=value             # an extra profile pref (repeatable)
+```
+
+- Takes 20-40 s per site, about 10 min for the list. It exits 0 whenever it wrote a report:
+  failures are findings, not a broken build.
+- "blocked (bot check)" and "consent" are the site's doing (a Cloudflare or Google check, a
+  consent wall it could not reject), not Vimma's. They depend on the network: run it from home
+  when the nightly shows many.
+- Adding a site: an entry in `sites.json` (`id`, `name`, an https `url`; optional `search`, a CSS
+  selector for its search field, and `find`, a word on the page). `npm test` checks the file.
+- Running it from a worktree against the main checkout's build: pass
+  `--build <main>/engine/obj-x86_64-pc-linux-gnu/dist/bin` and
+  `--pref security.sandbox.content.read_path_whitelist=<main>/src/`, or the content actor
+  cannot load.
+
 ## Parallel browser lanes
 
 A lane is a git worktree (e.g. an agent's under `.claude/worktrees/`) with its own `engine/` and
@@ -442,6 +472,12 @@ cost: a full run (first Sunday of the month) is estimated at 60–90 min on the 
 week a few minutes plus one for the report job: roughly 100 min a month, free now. If the full
 run gets too slow, narrow `mutate` in `stryker.config.mjs` or drop the monthly full run.
 
+`sites.yml` (spec site-compat) runs one job a night at 04:30 UTC, and by hand: about 3.6 min of
+setup (e2e.yml's steps up to the artifact build) plus the site list, about 15-20 min in all
+(≈ 600 min a month, free on a standard runner). It never runs on pull requests and is not a
+required check. To make it lighter, shorten `tools/sites/sites.json` or move its `cron` to fewer
+nights.
+
 `fuzz.yml` runs one job of about 5 min a night (≈ 150 min a month), plus a one-minute report job
 on a failure. To halve it, run it on fewer nights (its `cron`) or lower `VIMMA_FUZZ_TIME_MS`.
 The seeded fuzz properties add a few seconds to each CI run, and compiling proptest about 10 s.
@@ -500,12 +536,16 @@ A manual run: `gh workflow run fuzz.yml` (random seed), or `-f seed=123 -f runs=
 #### Fuzzing: reproducing a failing seed
 
 JavaScript. The issue and the failure file give the seed and, per property, the replay path
-(`counterexamplePath`). One property, one case, at once:
+(`counterexamplePath`). One property, one case, at once (the failure file's `replay` line is this
+command, filled in):
 
 ```sh
 VIMMA_FUZZ_SEED=<seed> VIMMA_FUZZ_PATH=<path> npx vitest run packages/vimma-core/test/fuzz \
-  -t "<test name>"
+  -t '<test title>'
 ```
+
+`-t` takes the test's title as written in `test(...)`, not the failure file's name
+(`config-no-throw`), which matches nothing and so runs no test.
 
 Without `VIMMA_FUZZ_PATH`, the same seed and `VIMMA_FUZZ_RUNS` repeat the whole search (the
 nightly used `VIMMA_FUZZ_RUNS=1000000` with a 15 s limit per property, so a late failure can
@@ -832,33 +872,59 @@ push runs of CI, Semgrep and release-please wait for the next ordinary push to `
 Plan §4/§7: [release-please](https://github.com/googleapis/release-please-action) (v5.0.0, pinned
 by SHA) keeps one release PR open, `chore(main): release X.Y.Z`, updated on every push to `main`.
 It holds the next version and that release's `CHANGELOG.md` entry. **Merging it is the release**:
-release-please tags `vX.Y.Z` and creates the GitHub Release with the same notes. Nothing is built
-or uploaded by release-please itself; `release.yml` does that (below, "Release packages").
+release-please tags `vX.Y.Z` and creates the GitHub Release with the same notes, **as a draft**
+while the release gate is closed (below). Nothing is built or uploaded by release-please itself;
+`release.yml` does that (below, "Release packages").
 
 - **Version source:** `surfer.json` `brands.vimma.release.displayVersion`, the version
-  `vimma --version` and the About dialog show (spec m0-app-version). The release PR bumps it
-  through `extra-files` (jsonpath `$.brands.vimma.release.displayVersion`), plus
-  `.release-please-manifest.json`, which must always match it. The Firefox pin
-  `version.version` is never touched; `upstream.yml` owns it. Release type `simple`: there is no
-  root `version.txt`, so nothing else is written.
-- **Bumps** (`release-please-config.json`): `0.x` until M6 (plan §7), so `feat` bumps the minor
-  version, `fix` the patch, and a breaking change (`!`, `BREAKING CHANGE:`) the minor
-  (`bump-minor-pre-major`). Changelog sections: `feat` → Added, `fix` → Fixed; `perf`, `deps`,
-  `upstream` and `revert` → Changed; `docs`, `test`, `build`, `ci`, `chore` and `refactor` are
-  left out.
+  `vimma --version` and the About dialog show (spec m0-app-version). The release
+  PR bumps it through `extra-files` (jsonpath `$.brands.vimma.release.displayVersion`), plus
+  `.release-please-manifest.json`, which must always match it (tested in
+  `tools/package/test/release-workflow.test.mjs`). The Firefox pin `version.version` is never
+  touched; `upstream.yml` owns it. Release type `simple`: there is no root `version.txt`, so
+  nothing else is written.
+- **Bumps** (`release-please-config.json`, spec release-versioning): every release bumps the
+  patch, whatever its commits are, breaking changes included (`"versioning":
+"always-bump-patch"`): 0.1.1 → 0.1.2 → 0.1.3. The maintainer decides when to move to 0.2.0 or
+  1.0.0 (below). Changelog sections: `feat` → Added, `fix` → Fixed; `perf`, `deps`, `upstream`
+  and `revert` → Changed; `docs`, `test`, `build`, `ci`, `chore` and `refactor` are left out. A
+  breaking change still gets its "BREAKING CHANGES" heading in the notes.
+- **Moving to 0.2.0 (or 1.0.0), when you decide:** merge a PR whose squash commit ends with the
+  footer `Release-As: 0.2.0`. Squash merges use the PR body as the commit body, so make that line
+  the last paragraph of the PR body, on its own line, after the generated-by lines (any PR will
+  do, such as the next small docs fix). release-please reads the footer before the versioning strategy, so the
+  open release PR becomes `chore(main): release 0.2.0`; merge that. The footer applies once: the
+  next release PR starts after the `v0.2.0` tag (which `force-tag-creation` creates even for a
+  draft), so it no longer sees that commit, and patch bumps go on: 0.2.1, 0.2.2. **Use the
+  footer, not `"release-as"` in the config.** The config option is applied before any commit is
+  read, so it pins every later release PR to 0.2.0 until a second PR removes it; forget that,
+  and every later release PR proposes 0.2.0 again. If the footer was not picked up (the release
+  PR still shows the old next version), look at the squash commit's message on `main`:
+  `Release-As:` must be in its last paragraph.
+- **Drafts keep the release gate** (no public release until the maintainer has daily-driven
+  Vimma). `"draft": true` makes each GitHub Release a draft: only collaborators see it, and
+  `release.yml` does not run (it starts on `release: published`, which a draft never fires).
+  GitHub creates no tag for a draft, so `"force-tag-creation": true` makes release-please create
+  `vX.Y.Z` first; without the tag, the next release PR would not find this release and would list
+  every commit since the first one. To ship one draft: Releases → the draft → Edit → "Publish
+  release" (published from your account, it starts `release.yml` when `RELEASE_ENABLED` is
+  `true`).
+- **When the gate opens:** in a PR, remove `"draft"` from `release-please-config.json` (keep
+  `force-tag-creation`; it is harmless for a published release), and drop that test line in
+  `release-workflow.test.mjs`. Publish any drafts still waiting, oldest first. Then turn on
+  packaging (below, "Release packages", step 7).
 - **The changelog line is the commit subject; the body explains why** (CLAUDE.md). release-please
   writes subjects only. Firefox bumps are `upstream: firefox X.Y.Z` (upstream.yml), so a
   security dot release alone still produces a release PR (ADR-015: merged within 3 days).
-- **First release (one-time).** No `v0.1.0` tag exists, and release-please would treat the
-  manifest's `0.1.0` as already released and propose `0.2.0`. So `release-please-config.json`
-  pins `"release-as": "0.1.0"`: the first release PR, `chore(main): release 0.1.0` on branch
-  `release-please--branches--main`, lists every `feat`/`fix` since the first commit and puts its
-  entry above the hand-written `## [Unreleased]` section. Just before merging it, edit
-  `CHANGELOG.md` on that branch: replace the generated `0.1.0` list with the `[Unreleased]`
-  sections and delete that heading. The generated list also has a false "BREAKING CHANGES" item
-  (cd70146's body has a line starting `BREAKING CHANGE:`). release-please rewrites the branch on
-  every push to `main`, so make the edit last. After the merge, **remove `release-as`** in a follow-up PR, or every
-  later release PR proposes `0.1.0` again. From then on every entry is generated.
+- **First release (one-time).** No `v0.1.0` tag exists, and the manifest's `0.1.0` (what every
+  build so far shows) counts as released, so the first release is **0.1.1**: the release PR
+  `chore(main): release 0.1.1` on branch `release-please--branches--main` lists every
+  `feat`/`fix` since the first commit and puts its entry above the hand-written
+  `## [Unreleased]` section. Just before merging it, edit `CHANGELOG.md` on that branch: replace
+  the generated `0.1.1` list with the `[Unreleased]` sections and delete that heading. The
+  generated list also has a false "BREAKING CHANGES" item (cd70146's body has a line starting
+  `BREAKING CHANGE:`). release-please rewrites the branch on every push to `main`, so make the
+  edit last. From then on every entry is generated.
 - **Names.** `include-component-in-tag` is off, so tags are `vX.Y.Z`, the branch is
   `release-please--branches--main` and the PR title `chore(main): release X.Y.Z`.
 

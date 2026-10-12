@@ -17,6 +17,8 @@ const ROOT = getRootDirectory(gTestPath).replace(
   "https://example.com",
 );
 const PAGE = ROOT + "file_vimma_find.html";
+/** A search box that holds the query (#164). */
+const FIELD_PAGE = ROOT + "file_vimma_find_field.html";
 
 /** A bare key with no binding in normal mode: it reaches the page and flushes earlier events. */
 const UNBOUND = "z";
@@ -24,10 +26,11 @@ const UNBOUND = "z";
 /**
  * Opens the fixture with content focus in normal mode, recording the page's keydowns.
  * @param {(browser: XULBrowserElement) => Promise<void>} fn
+ * @param {string} [page]
  */
-async function withPage(fn) {
+async function withPage(fn, page = PAGE) {
   await SpecialPowers.pushPrefEnv({ set: [["general.smoothScroll", false]] });
-  await BrowserTestUtils.withNewTab(PAGE, async (browser) => {
+  await BrowserTestUtils.withNewTab(page, async (browser) => {
     await recordPageKeys(browser);
     await focusContent(browser);
     await TestUtils.waitForCondition(
@@ -326,4 +329,99 @@ add_task(async function slash_and_n_in_the_pdf_viewer() {
     gBrowser.getCachedFindBar(tab)?.close(true);
     BrowserTestUtils.removeTab(tab);
   }
+});
+
+/**
+ * The fixture's search box: its value, whether it has focus, and its selected text.
+ * @param {XULBrowserElement} browser
+ */
+function box(browser) {
+  return SpecialPowers.spawn(browser, [], () => {
+    const el = content.document.getElementById("box");
+    return {
+      value: el.value,
+      focused: content.document.activeElement === el,
+      selected: el.value.slice(el.selectionStart, el.selectionEnd),
+    };
+  });
+}
+
+/**
+ * Waits until the find has selected the match in the search box, and checks the box let the
+ * focus go and the tab stayed in normal mode (#164).
+ * @param {XULBrowserElement} browser
+ * @param {string} what
+ */
+async function assertMatchInBox(browser, what) {
+  await TestUtils.waitForCondition(async () => {
+    const now = await box(browser);
+    return now.selected === "needle" || now.focused;
+  }, `${what}: the find reached the search box`);
+  // Focus reports follow the selection: the unbound key flushes them (and must not land in
+  // the box).
+  await pageKeysThenUnbound(browser);
+  const now = await box(browser);
+  Assert.equal(VimmaHost.status(window).mode, "normal", `${what}: still normal mode`);
+  Assert.ok(!now.focused, `${what}: the box does not keep the focus`);
+  Assert.equal(now.selected, "needle", `${what}: the match stays selected`);
+  Assert.equal(now.value, "needle", `${what}: nothing was typed into the box`);
+}
+
+add_task(async function a_match_in_a_text_field_stays_in_normal_mode() {
+  await withPage(async (browser) => {
+    type("/needle");
+    EventUtils.synthesizeKey("KEY_Enter");
+    await TestUtils.waitForCondition(() => findBarHidden(), "Enter closes the find bar");
+    await assertMatchInBox(browser, "/needle Enter");
+
+    EventUtils.synthesizeKey("n");
+    await waitForSelection(browser, "p1:needle", "n steps from the box to the next match");
+    EventUtils.synthesizeKey("n");
+    await waitForSelection(browser, "p2:needle", "n: the next match");
+    // From the page back into the box: here the finder focuses the box itself (typeaheadfind).
+    EventUtils.synthesizeKey("n");
+    await assertMatchInBox(browser, "n wrapping into the box");
+    EventUtils.synthesizeKey("N");
+    await waitForSelection(browser, "p2:needle", "N steps back out of the box");
+
+    Assert.deepEqual(
+      await pageKeysThenUnbound(browser),
+      [UNBOUND, UNBOUND, UNBOUND],
+      "no key of /needle, Enter, n or N reached the page",
+    );
+  }, FIELD_PAGE);
+});
+
+add_task(async function the_text_field_a_find_matched_still_takes_i_and_a_click() {
+  await withPage(async (browser) => {
+    type("/needle");
+    EventUtils.synthesizeKey("KEY_Enter");
+    await TestUtils.waitForCondition(() => findBarHidden(), "Enter closes the find bar");
+    await assertMatchInBox(browser, "/needle Enter");
+
+    EventUtils.synthesizeKey("i");
+    await TestUtils.waitForCondition(
+      async () => VimmaHost.status(window).mode === "insert" && (await box(browser)).focused,
+      "i focuses the box in insert mode",
+    );
+    // And keeps it: a key typed now goes into the box.
+    EventUtils.synthesizeKey(UNBOUND);
+    await TestUtils.waitForCondition(
+      async () => (await box(browser)).value.includes(UNBOUND),
+      "a key after i is typed into the box",
+    );
+    Assert.ok((await box(browser)).focused, "the box keeps the focus i gave it");
+    Assert.equal(VimmaHost.status(window).mode, "insert", "still insert mode");
+    EventUtils.synthesizeKey("KEY_Escape");
+    await TestUtils.waitForCondition(
+      async () => VimmaHost.status(window).mode === "normal" && !(await box(browser)).focused,
+      "Esc: back to normal",
+    );
+
+    await BrowserTestUtils.synthesizeMouseAtCenter("#box", {}, browser);
+    await TestUtils.waitForCondition(
+      async () => VimmaHost.status(window).mode === "insert" && (await box(browser)).focused,
+      "a click into the box enters insert mode",
+    );
+  }, FIELD_PAGE);
 });
