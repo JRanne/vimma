@@ -1561,7 +1561,7 @@
         },
         {
           "name": "panel_open",
-          "description": "Open the selected row, or show the marked tabs as panes",
+          "description": "Apply the marks (the marked tabs become the panes), then go to the selected row",
           "keys": [
             {
               "keys": "enter",
@@ -1572,7 +1572,7 @@
         },
         {
           "name": "panel_close",
-          "description": "End the range, clear the marks, or close the side panel",
+          "description": "End the range, clear or restore the marks, or close the side panel",
           "keys": [
             {
               "keys": "esc",
