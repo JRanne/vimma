@@ -153,7 +153,7 @@ Side panel
   panel_select_9          9 [panel]                                         Select row 9
   panel_down              j [panel]                                         Next row
   panel_up                k [panel]                                         Previous row
-  panel_open              enter [panel]                                     Open the selected row, or make the marked tabs the panes (one or none ends the split)
+  panel_open              enter [panel]                                     Apply the marks (the marked tabs become the panes), then go to the selected row
   panel_close             esc [panel]                                       End the range, clear or restore the marks, or close the side panel
   panel_close_tab         x [panel]                                         Close the selected tab; the panel stays open
   panel_mark              space [panel]                                     Mark or unmark the selected tab and move down

@@ -266,7 +266,7 @@ add_task(async function unmarking_a_pane_keeps_the_others_shape_and_the_tab_afte
   await until(() => shape() === shape(want), `the rest keep their shape: ${shape(want)}`);
   Assert.deepEqual(ratios(view().panes.root), ratios(want.root), "and their sizes");
   Assert.equal(view().panes.layout, before.layout, "the stored preset is kept");
-  Assert.equal(focusedName(), "a", "the focused pane keeps focus");
+  Assert.equal(focusedName(), "d", "Enter goes to the highlighted row: d, below c, a pane");
   Assert.ok(tab("c").isConnected && !tab("c").closing, "c is still open");
   Assert.ok(!tab("c").splitview, "c left the split");
   const order = gBrowser.tabs;
@@ -274,7 +274,7 @@ add_task(async function unmarking_a_pane_keeps_the_others_shape_and_the_tab_afte
   const firstPane = Math.min(...["a", "b", "d"].map((n) => order.indexOf(tab(n))));
   Assert.equal(lastPane - firstPane, 2, "the panes' tabs sit together");
   Assert.equal(order.indexOf(tab("c")), lastPane + 1, "c sits right after the split");
-  Assert.equal(gBrowser.selectedTab, tab("a"), "a is selected");
+  Assert.equal(gBrowser.selectedTab, tab(focusedName()), "its tab is selected");
   await assertNotReloaded(all, kept, "unmark one");
 });
 
@@ -305,7 +305,7 @@ add_task(async function marking_a_tab_adds_it_and_the_set_is_arranged_afresh() {
   await enter();
   const want = `x[${p},y[${q},x[${r},${s}]]]`;
   await until(() => shape() === want, `a dwindle of four, in row order: ${want}`);
-  Assert.equal(focusedName(), "a", "the focused pane keeps focus");
+  Assert.equal(focusedName(), "d", "the highlighted row (d, below c) has focus");
   await assertNotReloaded(all, kept, "add one");
 });
 
@@ -333,7 +333,7 @@ add_task(async function remove_one_and_add_another_in_one_enter() {
   const [p, q, r] = markedTitles();
   await enter();
   await until(() => shape() === `x[${p},y[${q},${r}]]`, "b, c and e as a dwindle");
-  Assert.equal(focusedName(), "b", "b keeps focus");
+  Assert.equal(focusedName(), "e", "the highlighted row (e, the last) has focus");
   Assert.ok(!tab("a").splitview && tab("a").isConnected, "a left and stays open");
   await reset();
 });
@@ -362,6 +362,92 @@ add_task(async function unmarking_every_pane_shows_the_highlighted_tab_alone() {
   await enter();
   await until(() => !view().panes, "no split");
   Assert.equal(gBrowser.selectedTab, tab("e"), "e, the highlighted row, is shown alone");
+  await reset();
+});
+
+// Revision (decisions 20-27): a split kept as a hidden view.
+const hiddenView = () => view().panes?.hidden === true;
+const segText = (id) =>
+  document.getElementById("vimma-statusbar")?.querySelector(`[data-segment="${id}"]`)
+    ?.textContent ?? null;
+
+add_task(async function the_users_flow_space_on_c_enter_on_c_shows_c_alone() {
+  await split(["a", "b", "c"], "a");
+  Assert.ok(view().resize("wider", 0.1).ok, "a is made wider by hand");
+  const want = Panes.closePane(view().panes, Panes.paneOfTab(view().panes, tab("c").linkedPanel));
+  await openPanel();
+  await toggle("c");
+  await goTo("c");
+  await enter();
+  await until(() => gBrowser.selectedTab === tab("c"), "c is selected");
+  Assert.ok(hiddenView(), "a and b stay a view, hidden");
+  Assert.equal(shape(), shape(want), "the view is a | b");
+  Assert.deepEqual(ratios(view().panes.root), ratios(want.root), "at their sizes");
+  Assert.ok(!tab("c").splitview, "c is out of the split, alone");
+  await until(() => document.activeElement === tab("c").linkedBrowser, "c's page has focus");
+  await until(() => segText("pane") === "split 2 hidden", "the status bar says so");
+  for (const n of ["a", "b"]) {
+    const panel = document.getElementById(tab(n).linkedPanel);
+    Assert.ok(
+      !panel.classList.contains("split-view-panel-active"),
+      `${n}'s panel is suspended, not drawn over c`,
+    );
+  }
+  Assert.equal(
+    document.elementFromPoint(100, 300)?.closest?.(".browserSidebarContainer")?.id,
+    tab("c").linkedPanel,
+    "what shows on the left is c",
+  );
+
+  await openPanel();
+  Assert.equal(count().textContent, "split: 2 panes (hidden)", "the panel header says so");
+  Assert.deepEqual([...markedTitles()].sort(), ["a", "b"], "with the view's tabs marked");
+  EventUtils.synthesizeKey("KEY_Escape", {});
+  await until(() => !isOpen(), "one Esc closes the panel");
+});
+
+add_task(async function picking_a_tab_of_the_hidden_view_brings_it_back_whole() {
+  const before = ratios(view().panes.root);
+  await openPanel();
+  await goTo("b");
+  await enter();
+  await until(() => !hiddenView(), "the view shows again");
+  Assert.equal(focusedName(), "b", "focused on b's pane");
+  Assert.deepEqual(ratios(view().panes.root), before, "at its sizes");
+  await until(() => segText("pane") === "pane 2/2", "the status bar is back to pane 2/2");
+});
+
+add_task(async function every_route_to_an_outside_tab_shows_it_alone() {
+  // The panel's Enter on an unmarked row, marks unchanged.
+  await openPanel();
+  await goTo("d");
+  await enter();
+  await until(() => gBrowser.selectedTab === tab("d") && hiddenView(), "Enter: d alone");
+  gBrowser.selectedTab = tab("a");
+  Assert.ok(!hiddenView(), "a brings the view back");
+
+  // ctrl+b n / p step through the tab order: a view's tab shows the view, any other alone.
+  const order = gBrowser.visibleTabs;
+  const next = order[order.indexOf(gBrowser.selectedTab) + 1];
+  await focusContent(gBrowser.selectedBrowser);
+  prefix("n");
+  await until(() => gBrowser.selectedTab === next, "ctrl+b n moves on");
+  Assert.equal(hiddenView(), !Panes.paneOfTab(view().panes, next.linkedPanel), "per its tab");
+
+  // The goto picker.
+  gBrowser.selectedTab = tab("a");
+  await focusContent(gBrowser.selectedBrowser);
+  prefix("g");
+  await until(() => document.getElementById("vimma-picker")?.open, "the picker opens");
+  for (const ch of "/e") EventUtils.synthesizeKey(ch);
+  EventUtils.synthesizeKey("KEY_Enter");
+  await until(() => gBrowser.selectedTab === tab("e"), "the picker selects e");
+  Assert.ok(hiddenView(), "e alone, the view hidden");
+  Assert.deepEqual(
+    Panes.leaves(view().panes).map((l) => nameOf(tabOf(l.tab))),
+    ["a", "b"],
+    "the view is unchanged",
+  );
   await reset();
 });
 

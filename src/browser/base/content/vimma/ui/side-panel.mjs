@@ -39,11 +39,14 @@ const TAB_EVENTS = ["TabOpen", "TabClose", "TabSelect", "TabAttrModified", "TabM
  * @property {(tabId: string) => void} select  a row was picked; the panel closes right after
  * @property {(text: string) => void} say  a refusal for the notice
  * @property {(tabId: string) => void} closeTab  `x`: close that tab; the panel stays open
- * @property {(tabIds: string[], focus: string) => string | null} together  `Enter` with marks:
- *   show those tabs as the workspace's panes (docs/specs/m4-side-panel-multiselect.md); a
- *   refusal's text, or null once done (the panel then closes)
- * @property {() => { panes: string[], focus: string | null } | null} [split]  the active
- *   workspace's split, its tabs (row ids) and focused pane's tab; null without one
+ * @property {(tabIds: string[], focus: string, alone?: string) => string | null} together
+ *   `Enter` with marks: show those tabs as the workspace's panes
+ *   (docs/specs/m4-side-panel-multiselect.md), or with `alone` keep them as a hidden view and show
+ *   that tab by itself (side-panel-unsplit decision 25); a refusal's text, or null once done (the
+ *   panel then closes)
+ * @property {() => { panes: string[], focus: string | null, hidden?: boolean } | null} [split]
+ *   the active workspace's split, its tabs (row ids), focused pane's tab and whether it is a
+ *   hidden view; null without one
  *   (docs/specs/side-panel-unsplit.md)
  * @property {(tabId: string) => void} [alone]  `Enter` down to one mark or none: end the split
  *   and show that tab alone (side-panel-unsplit); the panel then closes
@@ -149,7 +152,7 @@ export class SidePanel {
     }
     // Refused (past [panes] max): nothing changed, so the panel stays open with its marks.
     if (effect?.type === "together") {
-      const refused = this.host.together(effect.ids, effect.focus);
+      const refused = this.host.together(effect.ids, effect.focus, effect.alone);
       if (refused) this.host.say(refused);
       else this.close();
     }
@@ -180,7 +183,7 @@ export class SidePanel {
     return {
       color: this.host.color(),
       ...this.host.where?.(),
-      ...(split ? { panes: split.panes, paneFocus: split.focus } : {}),
+      ...(split ? { panes: split.panes, paneFocus: split.focus, paneHidden: !!split.hidden } : {}),
     };
   }
 

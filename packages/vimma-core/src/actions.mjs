@@ -246,7 +246,7 @@ group("Side panel", [
   [
     "panel_open",
     "panel.open",
-    "Open the selected row, or make the marked tabs the panes (one or none ends the split)",
+    "Apply the marks (the marked tabs become the panes), then go to the selected row",
   ],
   [
     "panel_close",

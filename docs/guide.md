@@ -274,6 +274,9 @@ with `F11` keeps it. From the left:
 - the **pending keys**, e.g. `prefix` after `ctrl+b`;
 - the **workspace**: `● 2:work`, its number in workspace order and its name;
 - `tab 2/5`: the selected tab and how many the workspace shows;
+- in a split, `pane 2/3`: the focused pane and how many there are; `split 3 hidden` (dim) when
+  the workspace's split is kept out of sight while another tab shows alone
+  ([below](#picking-a-tab-during-a-split));
 - the page **title**, or your rename (`ctrl+b shift+t`);
 - on the right, the **search** in this page: `/word [2/5]` (match 2 of 5), or
   `/zzz not found` in red;
@@ -410,10 +413,22 @@ the current workspace, as `:tabnew`'s does. Page zoom has no Vimma keys: `ctrl+p
 
 Clicking into a pane focuses it, as `ctrl+b h/j/k/l` would. So does selecting a pane's tab any
 other way (the `ctrl+b g` picker, `ctrl+tab`, `alt+1..9`): the status bar's `pane n/m` and the
-URL bar follow, and a zoom ends, as it does when a pane key moves. Selecting a tab that no pane
-shows (the picker, `ctrl+tab`, `alt+1..9`, `ctrl+t`, a link opened in a new foreground tab)
-shows it in the focused pane: the split stays, and the tab that pane showed stays open in the
-workspace. A pinned tab shows alone; selecting a pane's tab brings the split back.
+URL bar follow, and a zoom ends, as it does when a pane key moves.
+
+#### Picking a tab during a split
+
+Going to a tab that is not in the split (the `ctrl+b g` picker, `ctrl+tab`, `alt+1..9`,
+`ctrl+b 1..9`, `ctrl+b n` / `p`, `gt` / `gT`, a click on a tab, the side panel) shows that tab
+alone in the whole window, as Firefox's own split view does. The split is not lost: it waits,
+hidden, with its panes, sizes and focused pane, and the status bar says `split 3 hidden`. Go to
+any of its tabs, by any of the same routes, and the whole split comes back, with that tab's pane
+focused. A pinned tab works the same way. While the split is hidden the pane keys act on the tab
+you see as on a single pane, and `ctrl+b v` / `-` / `enter` say "the split is hidden: go to one
+of its tabs first". The hidden split survives a workspace switch and a restart.
+
+A new tab you open while the split shows (`ctrl+t`, `ctrl+b c`, `t`, `:tabnew`, `P`, a link
+opened in a new foreground tab, also with `f`, or a link from another app) opens in the focused
+pane instead: the split stays, and the tab that pane showed stays open in the workspace.
 
 A split made outside Vimma (Firefox's own split-view command, an extension, or a restored
 Firefox session) becomes the workspace's panes: its tabs side by side in its order, at the
@@ -777,16 +792,23 @@ which tabs they are, and the head says `split: 3 panes`. Change the marks as abo
   ordinary tab right after the split in the tab order. Its row shows a dim `○` until you press
   `Enter`, and the head says `split: 3 → 2`. The other panes keep their places and sizes, as
   after `ctrl+b x`.
-- **Unmark down to one** (`split: 3 → 1 (unsplit)`) and the split ends: that tab is shown alone.
-  Unmark every pane and the split ends too, showing the highlighted tab.
+- **Unmark down to one** (`split: 3 → 1 (unsplit)`) and the split ends: that tab is shown alone
+  (or, with the highlight on a pane you just unmarked, that one). Unmark every pane and the split
+  ends too, showing the highlighted tab.
 - **Mark another tab** and it joins as a pane; the panes are then arranged afresh in the
   workspace's layout, as in [Showing tabs together](#showing-tabs-together). You can unmark one
   and mark another in one go. `[panes] max` still applies.
-- **Focus** stays on the pane you were in if you kept it; otherwise it goes to the highlighted
-  row if it is marked, else the first marked one.
-- **Nothing changed?** `Enter` then just goes to the highlighted tab (into the focused pane, or
-  focusing its pane if it is one), and one `Esc` closes the panel. After a change, the first
-  `Esc` puts the split's marks back and the second closes.
+- **Then `Enter` goes to the highlighted row.** If its tab is in the split, the split shows with
+  that pane focused. If it is the pane you just unmarked, that tab shows alone and the rest stay
+  a hidden split: three panes, `space` on C, `k` back to C, `Enter`, and C fills the window
+  while A and B wait. On any other row the split shows, focused on the pane you were in if you
+  kept it, else the first marked one.
+- **Nothing changed?** `Enter` just goes to the highlighted tab: a pane's tab shows the split
+  focused there; any other tab shows alone and the split waits hidden
+  ([Picking a tab during a split](#picking-a-tab-during-a-split)). One `Esc` closes the panel.
+  After a change, the first `Esc` puts the split's marks back and the second closes.
+- **A hidden split** is listed the same way, its tabs marked, and the head says
+  `split: 2 panes (hidden)`.
 
 `ctrl+b )` / `ctrl+b (` with the panel open list the other workspace with its own split marked.
 No page reloads.

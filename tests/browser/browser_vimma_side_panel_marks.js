@@ -350,7 +350,7 @@ add_task(async function five_marks_past_the_max_are_refused_and_nothing_changes(
   await reset();
 });
 
-add_task(async function a_stored_preset_arranges_them_and_enter_on_a_row_just_goes_there() {
+add_task(async function a_stored_preset_arranges_them_and_enter_on_another_row_shows_it_alone() {
   if (gBrowser.selectedTab !== byName.get("a")) {
     await BrowserTestUtils.switchTab(gBrowser, byName.get("a"));
   }
@@ -364,11 +364,13 @@ add_task(async function a_stored_preset_arranges_them_and_enter_on_a_row_just_go
   await until(() => shape() === "y[d,x[c,e]]", "main-horizontal, the focused d as main");
   Assert.equal(view().panes.layout, "main-horizontal", "the preset stays stored");
 
-  // With the split's marks unchanged, Enter goes to the row (side-panel-unsplit decision 12).
+  // With the split's marks unchanged, Enter goes to the row (side-panel-unsplit decision 12): a
+  // tab outside the split shows alone, the split kept as a hidden view (decision 21).
   await openPanel();
   await goTo("b");
   await enter();
   await until(() => gBrowser.selectedTab === byName.get("b"), "Enter goes to that tab");
-  Assert.equal(shape(), "y[b,x[c,e]]", "shown in the focused pane, as Enter on its row does");
+  Assert.equal(view().panes.hidden, true, "shown alone, the split hidden");
+  Assert.equal(shape(), "y[d,x[c,e]]", "the split itself is unchanged");
   await reset();
 });

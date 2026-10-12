@@ -64,6 +64,9 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
 - Side panel: `ctrl+b b` lists the workspace's tabs; pick one with `j`/`k`, or mark several
   with `space` / `V` and `Enter` shows them together as panes in the current layout. With a
   split, its panes start marked: unmark one to take it out, or down to one to end the split.
+- Going to a tab outside a split shows it alone and keeps the split, hidden, until you go to one
+  of its tabs again (`split 3 hidden` in the status bar); a new tab still opens in the focused
+  pane.
 - `ctrl+b ?` lists every binding, searchable.
 
 **Yours to configure**
