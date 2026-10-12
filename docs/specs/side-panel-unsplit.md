@@ -1,6 +1,6 @@
 # Spec: side-panel-unsplit
 
-Status: draft, waiting on the open questions · Milestone: after M4 (builds on
+Status: ready (questions answered 2026-10-12) · Milestone: after M4 (builds on
 [m4-side-panel-multiselect](m4-side-panel-multiselect.md), [m4-split-panes](m4-split-panes.md) and
 [tiling-layouts](tiling-layouts.md)) · Area: `packages/vimma-core/src/sidepanel.mjs`,
 `layouts.mjs` (or `panes.mjs`), `actions.mjs`; `ui/side-panel.mjs`, `split/PaneView.mjs`,
@@ -24,8 +24,8 @@ for split in a first place" (2026-10-12)
   `[panes] max`.
 - As a user, I can add and remove in one go: unmark one pane, mark another tab, apply once.
 - As a user, opening the panel only to jump to a tab (`j`/`k`, `Enter`, or a digit) still works
-  while a split exists; the pre-marked panes do not get in the way (see open question 1).
-- As a user, I can back out of my changes without touching the split (see open question 2).
+  while a split exists; the pre-marked panes do not get in the way (decision 12).
+- As a user, I can back out of my changes without touching the split (decision 13).
 - As a screen-reader user, I hear the pane rows as checked when the panel opens on a split, and
   the header tells me how the split will change.
 
@@ -128,8 +128,8 @@ then focuses that pane if the tab is a pane, or **replaces the focused pane's ta
 
 ## Decisions
 
-These follow the user's core idea. Anything that shapes what the user sees and is not settled by
-it is under [Open questions](#open-questions-for-the-user) instead.
+Decisions 1–11 follow the user's core idea. Decisions 12–19 are the answers to the open questions
+([Decided questions](#decided-questions-user-2026-10-12)): every recommendation was taken.
 
 1. **Pre-marked panes.** When the panel opens, or lists another workspace after `ctrl+b )`, and
    that workspace has a split, every pane's tab starts marked, with the same marks, gutter `●`,
@@ -157,27 +157,52 @@ it is under [Open questions](#open-questions-for-the-user) instead.
    marked tab, so the host ends the split before selecting (a plain `select` would replace the
    focused pane's tab, see Research). `PaneView` gains `showAlone(tab)`: `#set(null)` then select
    the tab.
-9. **Removals-only layout hook.** Whatever open question 4 decides, core gets one pure function
-   that turns "this tree, these tabs wanted" into the new tree, so the host does not combine
-   `closePane` calls itself: either `showTogether` (re-arrange, today's behaviour) or a new
-   `withoutTabs(panes, ids)` that composes `closePane` (keep the shape).
+9. **One pure function for the new tree.** Core gets `repane(panes, ids, options)` in
+   `layouts.mjs`, so the host does not combine `closePane` calls itself: removals only keep the
+   shape (`closePane` per removed pane, decision 15), any addition re-arranges with
+   `showTogether` (decision 15).
 10. **Private workspace.** Works the same: the private window has its own `PaneView`
     (private-workspace.md, "Split view and PaneView"), and its panel model goes through the same
     `SidePanel`.
 11. **Help and bindings.** `panel_open`'s and `panel_close`'s help text change to say what they
     now do with a split; `help.test.mjs.snap` and `docs/bindings.md` are regenerated with a
-    changelog line. No new default key unless open question 1 picks one.
+    changelog line. No new default key (decision 12).
+
+12. **Applying is `Enter` (question 1a).** `Enter` applies when the marks differ from the
+    split's panes. With the marks unchanged it goes to the highlighted row's tab as today (a pane:
+    that pane gets focus; another tab: it replaces the focused pane's tab). Digits still go to
+    their row. No new key.
+13. **`Esc` (question 2a).** An open range ends first, as today. Then: marks unchanged from the
+    split, `Esc` closes the panel at once; changed, the first `Esc` puts the marks back to the
+    split's panes and the second closes. Without a split `Esc` is as today (clear, then close).
+14. **Zero marks (question 3a).** Unmarking every pane of a split and pressing `Enter` ends the
+    split and shows the highlighted row's tab alone (the `alone` effect).
+15. **Layout (question 4).** Removals only: each removed pane closes as `prefix+x` closes it (the
+    neighbour takes its space, the other sizes stay, the stored preset name is kept, a zoom ends).
+    Any addition, with or without removals: the whole set is re-arranged as multiselect does
+    (stored preset, else `[panes] layout`).
+16. **What the panel shows (question 5b).** The header reads "split: 3 panes" while the marks
+    match the split, "split: 3 → 2" after a change, and "split: 3 → 1 (unsplit)" or
+    "split: 3 → 0 (unsplit)" when applying would end it; an open range is added as today
+    ("range: 2 · split: 3 → 4"). A pane row that is unmarked shows `○` in the gutter (a pane that
+    will leave) instead of a blank; marked rows keep `●`.
+17. **Focus (question 6b).** After applying, the pane that had focus keeps it if it is still
+    marked; else the highlighted row if it is marked; else the first marked row.
+18. **The removed tab's place (question 7a).** It stays where Firefox's rebuild leaves it, right
+    after the split; Vimma moves no tab.
+19. **One kind of mark (question 8a).** Pre-marks are ordinary marks; a future feature that uses
+    marks decides then how it treats them.
 
 ## Sub-PRs
 
-1. **core: pre-marks and the split diff** (`sidepanel.mjs`, `layouts.mjs` or `panes.mjs`,
+1. **core: pre-marks and the split diff** (`sidepanel.mjs`, `layouts.mjs`,
    `actions.mjs` help text; Vitest only). `PanelState.panes`; `openPanel` / `refreshPanel` with
-   `panes`; `panel.open` / `panel.close` per the answers to questions 1–3; the `alone` effect;
-   `markSummary` text per question 5; `withoutTabs` if question 4 picks "keep the shape".
+   `panes`; `panel.open` / `panel.close` per decisions 12–14; the `alone` effect;
+   `markSummary` text per decision 16; `repane` per decision 15.
 2. **host + UI: show and apply** (`ui/side-panel.mjs`, `side-panel.css`, `PaneView.mjs`,
    `pane-ops.mjs`, `VimmaHost.sys.mjs`; mochitest; guide, README, footer hint). The host passes the
    split's tabs, wires `alone`, and `PaneView.showTabs` keeps or re-arranges the tree per
-   question 4.
+   decision 15.
 
 Sub-PR 2 depends on 1. If the answers leave the change small, the two can land as one PR.
 
@@ -191,41 +216,41 @@ TDD as CLAUDE.md: each test is written first, run red, and its red output pasted
   - `openPanel` with `panes: [a, c]` marks `a` and `c` (row order), `anchor` null; without
     `panes` (or `[]`) no marks, as today.
   - `space` on a pre-marked row unmarks it and moves down; on another row marks it.
-  - `Enter` with marks equal to the panes: per question 1's answer (recommended: go to the
-    highlighted row, the `select` effect).
+  - `Enter` with marks equal to the panes: go to the highlighted row, the `select` effect
+    (decision 12).
   - `Enter` after unmarking one of three: `together` with the two left, in row order, focus per
-    question 6.
+    decision 17.
   - `Enter` after unmarking two of three: `alone` with the one left.
-  - `Enter` after unmarking all: per question 3's answer.
+  - `Enter` after unmarking all: `alone` with the highlighted row (decision 14).
   - `Enter` after marking an extra tab: `together` with four; after unmarking one and marking
     another: `together` with the new set.
-  - `Esc` with changed marks / unchanged marks: per question 2's answer.
+  - `Esc` with changed marks / unchanged marks: decision 13.
   - `refreshPanel`: a pane tab closed while open leaves both `panes` and `marked`; a user's unmark
     survives a refresh; a workspace switch resets marks to the new workspace's `panes`.
-  - `markSummary` with a split, unchanged and changed, per question 5.
+  - `markSummary` with a split, unchanged and changed, per decision 16.
   - A range (`V`) over pre-marked and unmarked rows unions as today.
-- `layouts.test.mjs` (or `panes.test.mjs`): if question 4 picks "keep the shape",
-  `withoutTabs` on a dwindle of four minus one keeps the other ratios and the preset name, ends the
-  zoom, moves focus as `closePane`; minus all but one gives one leaf.
+- `layouts.test.mjs`: `repane` on a dwindle of four minus one keeps the other ratios and the
+  preset name, ends the zoom, moves focus as `closePane`; with an added tab it equals
+  `showTogether`.
 - Default keys still reach the actions through the dispatcher; snapshots of help and defaults
   regenerated, with a changelog line in the PR.
 
 ### Mochitest (`tests/browser/browser_vimma_side_panel_unsplit.js`, new)
 
 - Three panes; `ctrl+b b` shows those three rows with `●` and `aria-checked="true"`, the others
-  `aria-checked="false"`, and the header text per question 5.
+  `aria-checked="false"`, and the header text per decision 16.
 - No split: the panel opens with no marks and no `aria-checked`, as
   `browser_vimma_side_panel.js` and the a11y test already expect.
 - Unmark one, apply: two panes left, the removed tab still open, not hidden, in the workspace,
-  at the position question 7 decides; no reload (same `<browser>`, `outerWindowID`, a JS marker,
+  right after the split (decision 18); no reload (same `<browser>`, `outerWindowID`, a JS marker,
   a typed field value and scroll position kept, as `browser_vimma_side_panel_marks.js` measures).
 - Unmark down to one, apply: `PaneViews.get(win).panes` is null, that tab is selected and has
   focus, the other tabs are open.
 - Mark an extra tab, apply: four panes; past `[panes] max` refused, nothing changed, panel open.
 - Remove one and add one in a single apply.
-- The layout of the panes that remain, per question 4 (tree shape and ratios asserted).
-- Focus after apply, per question 6.
-- `Esc` and plain `Enter` behaviour with the pre-marks, per questions 1 and 2.
+- The layout of the panes that remain, per decision 15 (tree shape and ratios asserted).
+- Focus after apply, per decision 17.
+- `Esc` and plain `Enter` behaviour with the pre-marks, per decisions 12 and 13.
 - `ctrl+b )` inside the panel to a workspace with its own split shows that split's marks.
 - The private workspace: one case with two private panes, unmark one, apply.
 - Existing suites stay green unchanged: `browser_vimma_side_panel.js`,
@@ -252,9 +277,11 @@ TDD as CLAUDE.md: each test is written first, run red, and its red output pasted
 - Keeping marks after the panel closes.
 - Showing parked splits of other workspaces anywhere but when the panel lists that workspace.
 
-## Open questions for the user
+## Decided questions (user, 2026-10-12)
 
-Each of these changes what you see. The spec recommends an answer but does not decide it.
+Each of these changes what the user sees. The user, through the coordinator, answered "deliver that
+spec, it's important feature" without answering them one by one, so every recommendation was
+taken (decisions 12–19).
 
 1. **What key applies the change, and what does plain `Enter` do while the panes are pre-marked?**
    Today `Enter` with marks shows the marked tabs together, and without marks goes to the
@@ -271,6 +298,8 @@ Each of these changes what you see. The spec recommends an answer but does not d
    Recommendation: (a). It is the key you used to make the split, as you asked, and it keeps
    `Enter` as "go" when you only opened the panel to move.
 
+   Answered 2026-10-12: recommendation taken (user: 'deliver that spec').
+
 2. **What does `Esc` do with pre-marked panes?** Today `Esc` clears all marks first and closes the
    panel on a second press, so with a split you would need `Esc Esc` every time.
    - (a) Unchanged marks: `Esc` closes at once. Changed marks: the first `Esc` puts the marks back
@@ -280,6 +309,8 @@ Each of these changes what you see. The spec recommends an answer but does not d
 
    Recommendation: (a). One `Esc` to leave when nothing changed, and an undo when something did.
 
+   Answered 2026-10-12: recommendation taken (user: 'deliver that spec').
+
 3. **Unmarking every pane (zero marks), then applying.** Is that "end the split" too, and which
    tab is then shown?
    - (a) End the split and show the highlighted row's tab alone.
@@ -288,6 +319,8 @@ Each of these changes what you see. The spec recommends an answer but does not d
      no-marks `Enter`).
 
    Recommendation: (a): you are on that row when you press the key.
+
+   Answered 2026-10-12: recommendation taken (user: 'deliver that spec').
 
 4. **The layout of the panes that remain after removing one.**
    - (a) Keep the shape: each removed pane closes as `prefix+x` closes it (its neighbour takes its
@@ -302,6 +335,8 @@ Each of these changes what you see. The spec recommends an answer but does not d
    Recommendation: (a) for removals only, (b) whenever a tab is added. Removing should not undo
    sizes you set; adding has no obvious place without a layout.
 
+   Answered 2026-10-12: recommendation taken (user: 'deliver that spec').
+
 5. **What the panel shows for the split.** The marks are the same `●` as multiselect. The header
    could read:
    - (a) "3 marked" as today, nothing split-specific.
@@ -311,11 +346,15 @@ Each of these changes what you see. The spec recommends an answer but does not d
 
    Recommendation: (b). You see which tabs are panes now and what applying will do, without colour.
 
+   Answered 2026-10-12: recommendation taken (user: 'deliver that spec').
+
 6. **Which pane has focus after the change.**
    - (a) As multiselect: the highlighted row if it is marked, else the first marked row.
    - (b) The pane that had focus, if it is still marked; else (a).
 
    Recommendation: (b). Removing a background pane should not move you.
+
+   Answered 2026-10-12: recommendation taken (user: 'deliver that spec').
 
 7. **Where the removed tab goes in the tab order.**
    - (a) Right after the split, where Firefox's rebuild leaves it (no extra move).
@@ -324,6 +363,8 @@ Each of these changes what you see. The spec recommends an answer but does not d
 
    Recommendation: (a). It needs no extra state, and in the panel the removed tab is the row just
    below the split's rows.
+
+   Answered 2026-10-12: recommendation taken (user: 'deliver that spec').
 
 8. **Do split marks mix with marks made for another purpose?** Today the panel's marks exist only
    to make a split, so pre-marked panes and your own marks are one set. If a later feature uses
@@ -336,3 +377,5 @@ Each of these changes what you see. The spec recommends an answer but does not d
 
    Recommendation: (a). It is what you asked for ("similarly to how they were selected"), and
    there is no other mark use today.
+
+   Answered 2026-10-12: recommendation taken (user: 'deliver that spec').
