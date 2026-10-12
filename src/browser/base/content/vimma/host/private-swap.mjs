@@ -86,6 +86,8 @@ const records = new Map();
 const windows = new Set();
 /** @type {{ close: () => void } | null} */
 let events = null;
+/** The listener was wanted after it opened: if it turns out dropped, listen again at once. */
+let relisten = false;
 /** @type {Pair} */
 let pair = null;
 /** Swaps run one after another. */
@@ -183,15 +185,38 @@ function wanted() {
   return configured && placement === "swap" && !failed && !(wm.state === "none" && !wm.retry);
 }
 
+/**
+ * Holds the event socket while swap placement applies. Hyprland's drop reaches us as a later
+ * main-thread event, so a caller can find a listener that is already dead (#163): it is then
+ * marked, and its close handler listens again once. One extra connection per call at most, so
+ * a socket that keeps hanging up is not retried in a loop.
+ */
 function ensureEvents() {
-  if (events || wm.state !== "ok" || placement !== "swap") return;
+  if (wm.state !== "ok" || placement !== "swap") return;
+  if (events) {
+    relisten = true;
+    return;
+  }
+  relisten = false;
   try {
-    events = HyprIpc.listen(onLine, () => {
+    /** @type {{ close: () => void }} */
+    const mine = HyprIpc.listen(onLine, () => {
+      // Our own close (placement "window", tests) has already let go of it.
+      if (events !== mine) return;
       events = null;
+      if (relisten) ensureEvents();
     });
+    events = mine;
   } catch {
     events = null;
   }
+}
+
+/** Stops listening; its close handler then does nothing. */
+function stopEvents() {
+  const old = events;
+  events = null;
+  old?.close();
 }
 
 /** @param {string} line  never logged: it can hold any window's title (decision 8) */
@@ -486,8 +511,7 @@ export const PrivateSwap = {
     failed = false;
     skipped = null;
     if (next === "window") {
-      events?.close();
-      events = null;
+      stopEvents();
       return;
     }
     ensureEvents();
@@ -578,8 +602,7 @@ export const PrivateSwap = {
    * @param {{ request: string, events: string } | null | undefined} sockets
    */
   _resetForTests(sockets, { configured: read = true } = {}) {
-    events?.close();
-    events = null;
+    stopEvents();
     HyprIpc._setSocketsForTests(sockets);
     forced = sockets !== undefined;
     wm = { state: "unknown" };

@@ -807,6 +807,19 @@ add_task(async function the_event_socket_reconnects() {
   await until(() => f.evAccepts > dropped, "a switch after Hyprland dropped it listens again");
 });
 
+// #163: the drop reaches Vimma as a later main-thread event; a switch that runs before it still
+// found the dead listener, and nothing listened again until the switch after.
+add_task(async function a_switch_before_the_drop_is_read_still_listens_again() {
+  const f = await start();
+  await enter();
+  const priv = privateWindows()[0];
+  await SimpleTest.promiseFocus(priv);
+  const before = f.evAccepts;
+  f.dropEvents();
+  prefix("P", { shiftKey: true }, priv);
+  await until(() => f.evAccepts > before, "listens again once the drop is read");
+});
+
 add_task(async function a_new_tab_in_the_parked_private_window_shows_nothing_private() {
   const f = await start();
   const priv = await enter();
