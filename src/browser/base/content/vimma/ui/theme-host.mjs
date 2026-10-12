@@ -269,9 +269,34 @@ function stopIfIdle() {
 }
 
 /**
+ * A XUL <tree> (the bookmarks sidebar's) draws its vertical scrollbar as a <scrollbar> element in
+ * its shadow root, which the UA sheet resets to initial values (scrollbars.css, `all: initial`,
+ * for its style cache): it inherits neither scrollbar-color nor color-scheme, so it shows a white
+ * track on any theme, and no document sheet reaches into the shadow root. Custom properties
+ * survive `all`, so one rule adopted into each tree's shadow root gives it the side panel's colours
+ * (side-panel.css), following the tokens on a theme change.
+ */
+const TREE_SCROLLBAR_RULE =
+  "scrollbar { scrollbar-color: var(--vimma-muted) var(--vimma-bg-dark) !important; }";
+
+/** @param {Document} doc  a sidebar document, once parsed */
+function colourTreeScrollbars(doc) {
+  const win = /** @type {any} */ (doc.defaultView);
+  if (!win) return;
+  for (const tree of doc.querySelectorAll("tree")) {
+    const root = tree.shadowRoot;
+    if (!root) continue;
+    const sheet = new win.CSSStyleSheet();
+    sheet.replaceSync(TREE_SCROLLBAR_RULE);
+    root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
+  }
+}
+
+/**
  * A document in Firefox's sidebar (history, bookmarks, ...): a separate chrome document the
  * window's sheets do not reach, and whose CSP refuses a data: <style>. It gets the tokens,
- * focus.css and firefox-sidebar-page.css as author sheets, which its CSP does not apply to.
+ * focus.css and firefox-sidebar-page.css as author sheets, which its CSP does not apply to, and
+ * its trees' scrollbars their colour once it is parsed.
  * @param {Document | null | undefined} doc
  */
 function attachSidebarPage(doc) {
@@ -283,6 +308,11 @@ function attachSidebarPage(doc) {
   win.windowUtils.loadSheetUsingURIString(SIDEBAR_PAGE_SHEET, win.windowUtils.AUTHOR_SHEET);
   pages.set(doc, uri);
   win.addEventListener("unload", () => pages.delete(doc), { once: true });
+  if (doc.readyState === "loading") {
+    doc.addEventListener("DOMContentLoaded", () => colourTreeScrollbars(doc), { once: true });
+  } else {
+    colourTreeScrollbars(doc);
+  }
 }
 
 /**

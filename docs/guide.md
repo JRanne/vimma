@@ -305,7 +305,8 @@ accent (made a shade darker or lighter if it would not stand out at 3:1 against 
 around it), and so are the focus rings of Vimma's own side panel, bookmarks panel, pickers and
 help overlay. Firefox's own sidebar (history, bookmarks and synced tabs, opened from the toolbar's
 sidebar button or the View menu) follows the theme as well: its launcher strip and panel
-are on the same surface as Vimma's side panel, with the theme's text, edge and focus colours, and
+are on the same surface as Vimma's side panel, with the theme's text, edge and focus colours (the
+search box, the open panel's button in the launcher and the lists' scrollbars included), and
 an open sidebar recolours with the rest of the window. A `colors.toml` Vimma cannot read (a value that is
 not a `#rrggbb` colour, a missing key) is ignored: the colours stay as they were, and the
 Browser Console (`ctrl+shift+j`) says which line is wrong.

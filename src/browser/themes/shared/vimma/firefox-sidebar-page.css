@@ -20,4 +20,40 @@
   --text-color-deemphasized: var(--vimma-fg-dim) !important;
   /* Instead of the theme's lwt-sidebar attribute or the system's scheme. */
   color-scheme: var(--vimma-color-scheme) !important;
+
+  /* The search box (moz-input-search, in its own shadow root): Firefox fills it with Field (a
+   * grey #2b2a33, or white) and rings it with the UA's `outline: auto`, which the non-native
+   * theme paints in the input's accent-color, --color-accent-primary: the system blue #0060df.
+   * The field takes the window's background, a step off the panel's --vimma-bg-dark, the ring
+   * Vimma's focus colour (Gecko keeps its 1px halo in the accent's contrasting colour, white or
+   * dark, around it); checkboxes and primary buttons in these documents follow the accent. */
+  --color-accent-primary: var(--vimma-focus) !important;
+  --color-accent-primary-hover: color-mix(
+    in srgb,
+    var(--vimma-focus) 85%,
+    var(--vimma-fg)
+  ) !important;
+  --color-accent-primary-active: color-mix(
+    in srgb,
+    var(--vimma-focus) 70%,
+    var(--vimma-fg)
+  ) !important;
+  --input-text-background-color: var(--vimma-bg) !important;
+  /* The design system's box surface (white or #171519; the synced tabs' rows and badges). */
+  --background-color-box: var(--vimma-bg) !important;
+  --input-text-color: var(--vimma-fg) !important;
+  --input-text-border-color: var(--vimma-muted) !important;
+  --icon-color: var(--vimma-fg) !important;
+
+  /* Buttons (the panel's close and "..." buttons, the rows' delete buttons): Nova hovers and
+   * presses a non-ghost button with AccentColor, the system blue; a selected one is a selected row
+   * (--vimma-selection), as in firefox-sidebar.css. */
+  --button-background-color-selected: var(--vimma-selection) !important;
+  --button-text-color-selected: var(--vimma-fg-bright) !important;
+  --button-background-color-hover: color-mix(in srgb, currentColor 17%, transparent) !important;
+  --button-background-color-active: color-mix(in srgb, currentColor 30%, transparent) !important;
+
+  /* The lists' scrollbars (inherited by the history list and the bookmarks tree), as in Vimma's
+   * side panel (side-panel.css): without it the toolkit draws a white track on any theme. */
+  scrollbar-color: var(--vimma-muted) var(--vimma-bg-dark) !important;
 }

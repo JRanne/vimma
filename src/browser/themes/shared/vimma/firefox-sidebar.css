@@ -26,6 +26,22 @@
   --sidebar-launcher-surface-color: var(--vimma-bg-dark) !important;
   --toolbarbutton-icon-fill: var(--vimma-fg);
   --button-text-color-ghost: var(--vimma-fg);
+  /* The open panel's button is a pressed moz-button: Firefox fills it with the system accent
+   * (AccentColor at 30%, Nova's --button-background-color-active, a dark blue) and hovers a
+   * non-ghost button with AccentColor at 20%. The pressed button is a selected row in Vimma's
+   * terms (side-panel.css): --vimma-selection; hover and press tint the text colour as Firefox's
+   * ghost buttons do. */
+  --button-background-color-selected: var(--vimma-selection) !important;
+  --button-text-color-selected: var(--vimma-fg-bright) !important;
+  --button-background-color-hover: color-mix(in srgb, currentColor 17%, transparent) !important;
+  --button-background-color-active: color-mix(in srgb, currentColor 30%, transparent) !important;
+  /* Nova also borders a non-ghost button in --color-accent-primary, resolved on the root, so
+   * the button's own border tokens are reset here: the fill alone marks the open panel. */
+  --button-border-color: transparent !important;
+  --button-border-color-hover: transparent !important;
+  --button-border-color-active: transparent !important;
+  --button-border-color-selected: transparent !important;
+  scrollbar-color: var(--vimma-muted) var(--vimma-bg-dark);
   background-color: var(--vimma-bg-dark) !important;
   color: var(--vimma-fg) !important;
   color-scheme: var(--vimma-color-scheme) !important;

@@ -132,6 +132,37 @@ function waitForTheme(/** @type {string} */ hex, /** @type {string} */ msg) {
   return TestUtils.waitForCondition(() => token("--vimma-bg-dark") === hex, msg, 50, 100);
 }
 
+/** The first element under `root` (shadow roots included) matching `selector`. */
+function deepQuery(/** @type {Document | ShadowRoot} */ root, /** @type {string} */ selector) {
+  /** @type {Element | null} */
+  const found = root.querySelector(selector);
+  if (found) return found;
+  for (const el of root.querySelectorAll("*")) {
+    const inner = el.shadowRoot && deepQuery(el.shadowRoot, selector);
+    if (inner) return inner;
+  }
+  return null;
+}
+
+/**
+ * The colour a focused element's ring is painted in: `outline: auto` (the UA's ring on a
+ * focused <input>) is drawn by the non-native theme in the element's accent-color, any other
+ * style in outline-color.
+ * @param {Element} el
+ */
+function ringColour(el) {
+  const style = el.ownerDocument.defaultView.getComputedStyle(el);
+  if (style.outlineStyle === "none") return "no ring";
+  return style.outlineStyle === "auto" ? style.accentColor : style.outlineColor;
+}
+
+/** The launcher's button for the open panel, or undefined. */
+function pressedLauncherButton() {
+  return [...document.querySelector("sidebar-main").shadowRoot.querySelectorAll("moz-button")].find(
+    (b) => b.shadowRoot?.querySelector('button[aria-pressed="true"]'),
+  );
+}
+
 /** Opens a Firefox sidebar panel and waits for its document to finish loading. */
 async function showSidebar(/** @type {string} */ command) {
   await SidebarController.show(command);
@@ -140,7 +171,8 @@ async function showSidebar(/** @type {string} */ command) {
   await TestUtils.waitForCondition(
     () =>
       browser.contentDocument?.location.href === url &&
-      browser.contentDocument.readyState === "complete",
+      browser.contentDocument.readyState === "complete" &&
+      pressedLauncherButton()?.getAttribute("view") === command,
     `${command} loads`,
   );
   return browser.contentDocument;
@@ -203,6 +235,31 @@ function assertSidebarFollowsTheTheme(label, doc) {
     `${label}: the window's focus ring (launcher, splitter) is --vimma-focus`,
   );
 
+  // The open panel's launcher button (aria-pressed, which moz-button moves to its inner
+  // <button>): Firefox paints it in the system accent (AccentColor at 30%, a dark blue); Vimma's
+  // selected row is --vimma-selection.
+  const pressed = pressedLauncherButton();
+  Assert.ok(pressed, `${label}: the open panel's launcher button is pressed`);
+  const pressedFace = /** @type {Element} */ (
+    pressed.shadowRoot.querySelector(".button-background")
+  );
+  Assert.equal(
+    style(pressedFace).backgroundColor,
+    rgb(token("--vimma-selection")),
+    `${label}: the pressed launcher button is on --vimma-selection, not the system accent`,
+  );
+  Assert.equal(
+    style(pressedFace).color,
+    rgb(token("--vimma-fg-bright")),
+    `${label}: the pressed launcher button's icon is --vimma-fg-bright`,
+  );
+  // Nova rings a non-ghost button in --color-accent-primary, resolved on the window's root.
+  Assert.equal(
+    style(pressedFace).borderTopColor,
+    "rgba(0, 0, 0, 0)",
+    `${label}: the pressed launcher button has no system-accent border`,
+  );
+
   const page = doc.documentElement;
   // The places sidebars (bookmarks) are XUL documents: no <body>, the root is the surface.
   const body = doc.body ?? page;
@@ -222,6 +279,46 @@ function assertSidebarFollowsTheTheme(label, doc) {
     colourVar(page, "--focus-outline-color"),
     focus,
     `${label}: ${doc.location.href} focus ring is --vimma-focus, not the system blue`,
+  );
+
+  // The search box, focused: Firefox draws it on Field (grey #2b2a33 or white) with a ring in
+  // the system accent (#0060df).
+  const search = /** @type {HTMLElement} */ (deepQuery(doc, "moz-input-search"));
+  Assert.ok(search, `${label}: ${doc.location.href} has a search box`);
+  search.focus();
+  const field = /** @type {HTMLInputElement} */ (search.shadowRoot.querySelector("input"));
+  Assert.ok(field.matches(":focus"), `${label}: the search field has focus`);
+  Assert.equal(
+    ringColour(field),
+    focus,
+    `${label}: ${doc.location.href} the focused search field's ring is --vimma-focus`,
+  );
+  Assert.equal(
+    style(field).backgroundColor,
+    rgb(token("--vimma-bg")),
+    `${label}: ${doc.location.href} the search field is on --vimma-bg`,
+  );
+  Assert.equal(style(field).color, text, `${label}: the search field's text is --vimma-fg`);
+  Assert.equal(
+    style(field).borderTopColor,
+    border,
+    `${label}: ${doc.location.href} the search field's border is --vimma-muted`,
+  );
+
+  // The list's scrollbar: without a colour, the toolkit draws a white track on any theme. A XUL
+  // tree (bookmarks) draws its own <scrollbar> element from its shadow root, which the UA sheet
+  // resets to initial values (scrollbars.css): that element's colour is the one painted.
+  const tree = doc.getElementById("bookmarks-view");
+  const scroller = /** @type {Element} */ (
+    tree
+      ? tree.shadowRoot.querySelector("scrollbar")
+      : deepQuery(doc, ".sidebar-panel-scrollable-content")
+  );
+  Assert.ok(scroller, `${label}: ${doc.location.href} has a scrolling list`);
+  Assert.equal(
+    style(scroller).scrollbarColor,
+    `${border} ${surface}`,
+    `${label}: ${doc.location.href} the list's scrollbar is --vimma-muted on --vimma-bg-dark`,
   );
 }
 
@@ -279,6 +376,11 @@ add_task(async function the_sidebar_follows_a_light_theme() {
   Assert.equal(token("--vimma-color-scheme"), "light", "light.mode makes the tokens light");
   const doc = await showSidebar("viewHistorySidebar");
   assertSidebarFollowsTheTheme("light", doc);
+});
+
+add_task(async function the_bookmarks_sidebar_follows_a_light_theme() {
+  const doc = await showSidebar("viewBookmarksSidebar");
+  assertSidebarFollowsTheTheme("light bookmarks", doc);
 });
 
 // The built-in vimma palette carries its light variant under prefers-color-scheme: an open

@@ -1,6 +1,6 @@
 # Spec: firefox-sidebar-theme
 
-Status: implemented (PR pending review) · Milestone: after M5 (builds on [m5-omarchy-theme](m5-omarchy-theme.md) and
+Status: implemented, follow-up from review screenshots (PR #148) · Milestone: after M5 (builds on [m5-omarchy-theme](m5-omarchy-theme.md) and
 the focus colour of [m7-a11y](m7-a11y.md)) · Area: `ui/theme-host.mjs`,
 `browser/themes/shared/vimma/firefox-sidebar.css` (new),
 `browser/themes/shared/vimma/firefox-sidebar-page.css` (new),
@@ -152,6 +152,60 @@ opened after the switch; the history sidebar under the light theme.
 Also run: `npm test`, `npm run typecheck`, `npm run lint`, `browser_vimma_theme.js`,
 `browser_vimma_side_panel.js`, `browser_vimma_focus_rings.js`, `browser_vimma_focus_accent.js`,
 and the e2e. No screenshot baseline shows Firefox's sidebar, so none should change.
+
+## Results
+
+### Follow-up: what the first fix missed (PR #148 review, screenshots)
+
+Screenshots under the user's Omarchy themes (Ristretto, dark; Catppuccin Latte, light) found
+three places still in Firefox's colours, which the first test did not see because it checked
+variables, not the elements that paint:
+
+1. **The search box** (`moz-input-search`, its `<input>` in a shadow root): filled with `Field`
+   (`#2b2a33` dark, white light), text `FieldText`, and focused with the UA's `outline: auto`,
+   which the non-native theme paints in the input's `accent-color`, `--color-accent-primary`
+   (`moz-input-common.css`): the system accent, `#0060df`. Fix (`firefox-sidebar-page.css`):
+   `--color-accent-primary` (and its hover and active shades) is `--vimma-focus`;
+   `--input-text-background-color` and `--background-color-box` are `--vimma-bg`,
+   `--input-text-color` `--vimma-fg`, `--input-text-border-color` `--vimma-muted`, `--icon-color`
+   `--vimma-fg`. Gecko still draws its 1px halo around the ring in the accent's contrasting
+   colour (`Theme.cpp`, `PaintAutoStyleOutline`): white around Latte's dark blue, a dark tint
+   around Ristretto's peach. It is derived from the theme's focus colour, not Firefox's palette.
+2. **The open panel's launcher button** (`<sidebar-main>`, a pressed non-ghost `moz-button`):
+   Nova's `--button-background-color-active` is `AccentColor` at 30% (`#172f55` on Ristretto),
+   and Nova borders a non-ghost button in `--color-accent-primary`, which is resolved on the
+   window's root, so pointing that variable at a Vimma token on `#sidebar-container` would not
+   reach it. Fix (`firefox-sidebar.css`): `--button-background-color-selected` is
+   `--vimma-selection` and `--button-text-color-selected` `--vimma-fg-bright`, as Vimma's own
+   side panel shows its selected row; the four `--button-border-color*` are transparent; hover and
+   press are the text colour at 17% and 30%, as Firefox's ghost buttons are, instead of
+   `AccentColor`. The same button variables are set in the panel documents.
+3. **The lists' scrollbars**: a white track under both themes. The history list
+   (`.sidebar-panel-scrollable-content`) inherits `scrollbar-color`, so the page sheet sets
+   `--vimma-muted` on `--vimma-bg-dark` on its root, as `side-panel.css` does. The bookmarks
+   `<tree>` draws its own `<scrollbar>` element in its shadow root, which `scrollbars.css` resets
+   with `all: initial` (for its style cache), so nothing inherited reaches it, Firefox's own themed
+   `.sidebar-panel[lwt-sidebar]` rule included. `ThemeHost` adopts one constructed sheet into each
+   tree's shadow root once the document is parsed (`scrollbar { scrollbar-color: var(--vimma-muted)
+var(--vimma-bg-dark) }`; custom properties survive `all`, so it follows a theme switch).
+
+The mochitest now checks the rendered values on those elements, under the dark, switched, light
+and built-in themes, for history and bookmarks: the focused search field's ring colour
+(`accent-color` for `outline: auto`), background, text and border; the pressed launcher button's
+background, text and border; the computed `scrollbar-color` of the history list and of the
+bookmarks tree's `<scrollbar>`. Red before the fix: 49 failed assertions (seven per
+case); then 7 for the launcher's border and 2 for the tree's
+scrollbar as those gaps were found; 215 pass after.
+
+Screenshots (a temporary mochitest, not committed; 28 history entries, 40 bookmarks filtered to
+overflow the tree, search box focused): before, the ring was `#0060df`, the field `#2b2a33` or
+white, the launcher button `#172f55` with a `#0060df` edge, the scrollbar tracks `#ffffff`; after,
+on Ristretto the ring is `#f7b5a2` (`--vimma-focus`), the field `#2c2525`, the launcher button
+`#403e41`, the tracks `#211b1b` with a `#72696a` thumb, and no Firefox blue, grey or white pixel
+is left in the sidebar; on Latte the same with Latte's colours (ring `#1852c4`, tracks `#e3e4e8`).
+
+Not covered: the tree's inline rename field (`.tree-input`, in the tree's shadow root, shown only
+while renaming in place) keeps `Field` colours.
 
 ## Open questions
 
