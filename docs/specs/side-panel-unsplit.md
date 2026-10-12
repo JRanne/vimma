@@ -268,7 +268,14 @@ Decisions 1–11 follow the user's core idea. Decisions 12–19 are the answers 
     and the header says `split: 3 panes (hidden)` while the marks match it.
 27. **The status bar** shows `split 3 hidden` where `pane n/m` would be, while the workspace has a
     hidden view (dim, cut first when space is short).
-28. **`vimma-ctl state`** gives `panes.hidden: true` for a hidden view.
+28. **`vimma-ctl state`** gives `panes.hidden: true` for a hidden view (`false` otherwise; the
+    control protocol spec says so).
+29. **Pane keys while a view is hidden** act on the tab shown alone as on a single pane: the
+    `<C-w>` family is not runnable (so `ctrl+w` passes to Firefox), `ctrl+b x` / `:q` close the
+    tab, `ctrl+b space` says "only one pane". `ctrl+b v` / `-` / `enter` are refused with "the
+    split is hidden: go to one of its tabs first", so a second split never replaces the hidden
+    one. **Flagged for the user:** the alternative would be to split the shown tab and drop or
+    merge the hidden view; refusing loses nothing.
 
 ### Behaviour changes (option B)
 
@@ -288,6 +295,11 @@ Decisions 1–11 follow the user's core idea. Decisions 12–19 are the answers 
    17 revised).
 6. New: the status bar's `split N hidden`, the panel's `(hidden)`, `vimma-ctl state`'s
    `panes.hidden`, and the snapshot's `panes.hidden` / `alone`.
+7. While a view is hidden, `ctrl+b v` / `-` / `enter` are refused (decision 29); before, the
+   pinned-tab case split the hidden tree.
+8. The side panel's `Enter` on an unchanged split with the highlight on an unmarked row no
+   longer puts that tab in the focused pane (3 above); the multiselect mochitest's last task
+   changed with it.
 
 Unchanged: new foreground tabs open in the focused pane (decision 22); new panes (`ctrl+b v`,
 `-`, `enter`); a tab of another workspace switches workspaces; the address bar loads into the
