@@ -3,7 +3,9 @@
   "release-type": "simple",
   "include-v-in-tag": true,
   "include-component-in-tag": false,
-  "bump-minor-pre-major": true,
+  "versioning": "always-bump-patch",
+  "draft": true,
+  "force-tag-creation": true,
   "changelog-sections": [
     { "type": "feat", "section": "Added" },
     { "type": "fix", "section": "Fixed" },
@@ -20,7 +22,6 @@
   ],
   "packages": {
     ".": {
-      "release-as": "0.1.0",
       "extra-files": [
         {
           "type": "json",

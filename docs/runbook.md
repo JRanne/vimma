@@ -832,33 +832,59 @@ push runs of CI, Semgrep and release-please wait for the next ordinary push to `
 Plan §4/§7: [release-please](https://github.com/googleapis/release-please-action) (v5.0.0, pinned
 by SHA) keeps one release PR open, `chore(main): release X.Y.Z`, updated on every push to `main`.
 It holds the next version and that release's `CHANGELOG.md` entry. **Merging it is the release**:
-release-please tags `vX.Y.Z` and creates the GitHub Release with the same notes. Nothing is built
-or uploaded by release-please itself; `release.yml` does that (below, "Release packages").
+release-please tags `vX.Y.Z` and creates the GitHub Release with the same notes, **as a draft**
+while the release gate is closed (below). Nothing is built or uploaded by release-please itself;
+`release.yml` does that (below, "Release packages").
 
 - **Version source:** `surfer.json` `brands.vimma.release.displayVersion`, the version
-  `vimma --version` and the About dialog show (spec m0-app-version). The release PR bumps it
-  through `extra-files` (jsonpath `$.brands.vimma.release.displayVersion`), plus
-  `.release-please-manifest.json`, which must always match it. The Firefox pin
-  `version.version` is never touched; `upstream.yml` owns it. Release type `simple`: there is no
-  root `version.txt`, so nothing else is written.
-- **Bumps** (`release-please-config.json`): `0.x` until M6 (plan §7), so `feat` bumps the minor
-  version, `fix` the patch, and a breaking change (`!`, `BREAKING CHANGE:`) the minor
-  (`bump-minor-pre-major`). Changelog sections: `feat` → Added, `fix` → Fixed; `perf`, `deps`,
-  `upstream` and `revert` → Changed; `docs`, `test`, `build`, `ci`, `chore` and `refactor` are
-  left out.
+  `vimma --version` and the About dialog show (spec m0-app-version). The release
+  PR bumps it through `extra-files` (jsonpath `$.brands.vimma.release.displayVersion`), plus
+  `.release-please-manifest.json`, which must always match it (tested in
+  `tools/package/test/release-workflow.test.mjs`). The Firefox pin `version.version` is never
+  touched; `upstream.yml` owns it. Release type `simple`: there is no root `version.txt`, so
+  nothing else is written.
+- **Bumps** (`release-please-config.json`, spec release-versioning): every release bumps the
+  patch, whatever its commits are, breaking changes included (`"versioning":
+"always-bump-patch"`): 0.1.1 → 0.1.2 → 0.1.3. The maintainer decides when to move to 0.2.0 or
+  1.0.0 (below). Changelog sections: `feat` → Added, `fix` → Fixed; `perf`, `deps`, `upstream`
+  and `revert` → Changed; `docs`, `test`, `build`, `ci`, `chore` and `refactor` are left out. A
+  breaking change still gets its "BREAKING CHANGES" heading in the notes.
+- **Moving to 0.2.0 (or 1.0.0), when you decide:** merge a PR whose squash commit ends with the
+  footer `Release-As: 0.2.0`. Squash merges use the PR body as the commit body, so make that line
+  the last paragraph of the PR body, on its own line, after the generated-by lines (any PR will
+  do, such as the next small docs fix). release-please reads the footer before the versioning strategy, so the
+  open release PR becomes `chore(main): release 0.2.0`; merge that. The footer applies once: the
+  next release PR starts after the `v0.2.0` tag (which `force-tag-creation` creates even for a
+  draft), so it no longer sees that commit, and patch bumps go on: 0.2.1, 0.2.2. **Use the
+  footer, not `"release-as"` in the config.** The config option is applied before any commit is
+  read, so it pins every later release PR to 0.2.0 until a second PR removes it; forget that,
+  and every later release PR proposes 0.2.0 again. If the footer was not picked up (the release
+  PR still shows the old next version), look at the squash commit's message on `main`:
+  `Release-As:` must be in its last paragraph.
+- **Drafts keep the release gate** (no public release until the maintainer has daily-driven
+  Vimma). `"draft": true` makes each GitHub Release a draft: only collaborators see it, and
+  `release.yml` does not run (it starts on `release: published`, which a draft never fires).
+  GitHub creates no tag for a draft, so `"force-tag-creation": true` makes release-please create
+  `vX.Y.Z` first; without the tag, the next release PR would not find this release and would list
+  every commit since the first one. To ship one draft: Releases → the draft → Edit → "Publish
+  release" (published from your account, it starts `release.yml` when `RELEASE_ENABLED` is
+  `true`).
+- **When the gate opens:** in a PR, remove `"draft"` from `release-please-config.json` (keep
+  `force-tag-creation`; it is harmless for a published release), and drop that test line in
+  `release-workflow.test.mjs`. Publish any drafts still waiting, oldest first. Then turn on
+  packaging (below, "Release packages", step 7).
 - **The changelog line is the commit subject; the body explains why** (CLAUDE.md). release-please
   writes subjects only. Firefox bumps are `upstream: firefox X.Y.Z` (upstream.yml), so a
   security dot release alone still produces a release PR (ADR-015: merged within 3 days).
-- **First release (one-time).** No `v0.1.0` tag exists, and release-please would treat the
-  manifest's `0.1.0` as already released and propose `0.2.0`. So `release-please-config.json`
-  pins `"release-as": "0.1.0"`: the first release PR, `chore(main): release 0.1.0` on branch
-  `release-please--branches--main`, lists every `feat`/`fix` since the first commit and puts its
-  entry above the hand-written `## [Unreleased]` section. Just before merging it, edit
-  `CHANGELOG.md` on that branch: replace the generated `0.1.0` list with the `[Unreleased]`
-  sections and delete that heading. The generated list also has a false "BREAKING CHANGES" item
-  (cd70146's body has a line starting `BREAKING CHANGE:`). release-please rewrites the branch on
-  every push to `main`, so make the edit last. After the merge, **remove `release-as`** in a follow-up PR, or every
-  later release PR proposes `0.1.0` again. From then on every entry is generated.
+- **First release (one-time).** No `v0.1.0` tag exists, and the manifest's `0.1.0` (what every
+  build so far shows) counts as released, so the first release is **0.1.1**: the release PR
+  `chore(main): release 0.1.1` on branch `release-please--branches--main` lists every
+  `feat`/`fix` since the first commit and puts its entry above the hand-written
+  `## [Unreleased]` section. Just before merging it, edit `CHANGELOG.md` on that branch: replace
+  the generated `0.1.1` list with the `[Unreleased]` sections and delete that heading. The
+  generated list also has a false "BREAKING CHANGES" item (cd70146's body has a line starting
+  `BREAKING CHANGE:`). release-please rewrites the branch on every push to `main`, so make the
+  edit last. From then on every entry is generated.
 - **Names.** `include-component-in-tag` is off, so tags are `vX.Y.Z`, the branch is
   `release-please--branches--main` and the PR title `chore(main): release X.Y.Z`.
 
