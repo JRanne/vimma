@@ -6,6 +6,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
+- The start page shows Vimma's version and the Firefox release it is built on, read from the build (#159).
 - Private workspace on Hyprland: going to it puts the private window exactly where the Vimma window was (same workspace, tile, size, fullscreen or floating) and hides the normal window in `special:vimma` until you switch back, close the private window, or a link from another app arrives. Vimma talks to Hyprland's socket with a fixed command set and sends no titles or URLs; `[private] placement = "window"` keeps it a separate window. Private windows' titles no longer include the page title (`privacy.exposeContentTitleInWindow.pbm` = `false`). The `defaults.toml` snapshot gained the `[private]` section.
 - Side panel: with a split, the panel opens with the panes' tabs marked. Unmark one and `Enter` takes it out of the split (it stays open, right after the split) while the other panes keep their sizes; unmark down to one to end the split; mark another tab to add it. `Enter` then goes to the highlighted row: unmark pane C and press `Enter` on C, and C shows alone while the others wait as a hidden split. Going to any tab outside a split (the picker, `ctrl+tab`, `alt+1..9`, `ctrl+b n`/`p`, a click, the panel) now shows it alone and keeps the split hidden, as Firefox's split view does, instead of putting it in the focused pane; going to one of the split's tabs brings it back whole, also after a workspace switch or a restart, and the status bar says `split 3 hidden` meanwhile. A new tab (`ctrl+t`, a link) still opens in the focused pane. The help-text snapshot changed with the new `Enter` and `Esc` descriptions.
 - Private workspace: `ctrl+b shift+p` (or `ctrl+shift+p`, `:private`) goes to Firefox's private window as if it were one more workspace, and back. It is never a stop on `ctrl+b (` / `)`; the workspace picker lists it last with a tab count only; `m` moves a tab in after y/N; `ctrl+b shift+d` there closes every private window, pop-ups included, and discards its data. `vimma-ctl state` withholds its URLs and titles. The help-text and `defaults.toml` snapshots gained the key, and the e2e baseline `m3-private-workspace` is new.
@@ -66,6 +67,9 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Fixed
 
+- A playing video keeps the screen awake on Wayland: Vimma sets Firefox's own `MOZ_WAKE_LOCK_TYPE=WaylandIdleInhibit` at startup on Linux unless one is exported, since the portal path inhibited nothing on Hyprland (#153).
+- The side panel's scrollbar takes the theme's colours instead of Firefox's white track; the bookmarks panel's too (#146).
+- Firefox's own sidebar (history, bookmarks, synced tabs and the launcher strip) follows the theme, live, with the theme's focus ring instead of Firefox's blue (#148).
 - The address bar's focus ring, the focused pane's outline in a split and other focus rings in the browser's own UI take the theme's accent instead of Firefox's blue, a shade darker or lighter where the accent would miss 3:1 contrast.
 - `npm run import` no longer fails after a patch changes: it restores the Firefox files our patches touch before re-applying them. `tools/relocate-checkout.mjs` repairs a checkout that was moved.
 - Switching workspaces with `ctrl+b (`, `ctrl+b )` or `:workspace` no longer shows "no workspaces in this window" after a successful switch.
