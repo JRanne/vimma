@@ -24,6 +24,8 @@ import {
   layoutOfAction,
   layoutRefusal,
   nextLayout,
+  repane,
+  repaneRefusal,
   showTogether,
   togetherRefusal,
 } from "../src/layouts.mjs";
@@ -596,6 +598,79 @@ describe("showTogether", () => {
     expect(() => showTogether(["a"])).toThrow();
     expect(() => showTogether([])).toThrow();
     expect(() => showTogether(["a", "a"])).toThrow();
+  });
+});
+
+// docs/specs/side-panel-unsplit.md decision 15: removals keep the shape, an addition re-arranges.
+describe("repane", () => {
+  /** @param {any} node @returns {string} the tree with each leaf's tab */
+  const tabsOf = (node) =>
+    node.type === "leaf" ? node.tab : `${node.axis}[${node.children.map(tabsOf).join(",")}]`;
+  const focusTab = (/** @type {any} */ s) => leaves(s).find((l) => l.pane === s.focus)?.tab;
+  /** A dwindle of t1..t4, resized by hand, layout "dwindle" stored, focus on t2's pane. */
+  const resized = () => {
+    let s = arrange(row(4), "dwindle", { area: WIDE });
+    s = resize(s, "wider", 0.1);
+    return focusPane(s, "p2");
+  };
+
+  test("removals only: each removed pane closes as prefix+x, the other sizes stay", () => {
+    const before = resized();
+    const want = closePane(before, "p3");
+    const s = repane(before, ["t1", "t2", "t4"], { focus: "t2", area: WIDE });
+    expect(tabsOf(s.root)).toBe(tabsOf(want.root));
+    close(ratios(s.root), ratios(want.root));
+    expect(s.layout).toBe("dwindle");
+    expect(focusTab(s)).toBe("t2");
+  });
+
+  test("removing two keeps the rest and moves focus to the given tab", () => {
+    const s = repane(resized(), ["t1", "t4"], { focus: "t4" });
+    expect(tabsOf(s.root)).toBe("x[t1,t4]");
+    expect(focusTab(s)).toBe("t4");
+    expect(s.mru[0]).toBe(s.focus);
+  });
+
+  test("a removal ends a zoom", () => {
+    const zoomed = toggleZoom(resized());
+    expect(zoomed.zoom).not.toBeNull();
+    expect(repane(zoomed, ["t1", "t2", "t3"], { focus: "t2" }).zoom).toBeNull();
+  });
+
+  test("an added tab re-arranges the whole set, as showTogether", () => {
+    const options = { focus: "t2", area: WIDE, mode: /** @type {const} */ ("dwindle") };
+    const s = repane(resized(), ["t1", "t2", "t5"], options);
+    const want = showTogether(["t1", "t2", "t5"], { ...options, preset: "dwindle" });
+    expect(tabsOf(s.root)).toBe(tabsOf(want.root));
+    close(ratios(s.root), ratios(want.root));
+    expect(focusTab(s)).toBe("t2");
+    expect(s.layout).toBe("dwindle");
+  });
+
+  test("without a tree it is showTogether", () => {
+    const s = repane(null, ["a", "b", "c"], { focus: "b", area: WIDE });
+    expect(tabsOf(s.root)).toBe("x[a,y[b,c]]");
+    expect(focusTab(s)).toBe("b");
+  });
+
+  test("the same tabs: the tree is kept, focus moves to the given tab", () => {
+    const before = resized();
+    const s = repane(before, ["t4", "t3", "t2", "t1"], { focus: "t4" });
+    expect(s.root).toBe(before.root);
+    expect(focusTab(s)).toBe("t4");
+  });
+
+  test("repaneRefusal: removals never refuse; an addition past max does", () => {
+    expect(repaneRefusal(resized(), ["t1", "t2"], { max: 1 })).toBeNull();
+    expect(repaneRefusal(resized(), ["t1", "t2", "t3", "t4", "t5"], { max: 4 })).toEqual({
+      code: "max-panes",
+      message: "at most 4 panes",
+    });
+    expect(repaneRefusal(null, ["a", "b", "c"], { max: 2 })?.code).toBe("max-panes");
+  });
+
+  test("fewer than two tabs is a programming error", () => {
+    expect(() => repane(resized(), ["t1"], {})).toThrow();
   });
 });
 

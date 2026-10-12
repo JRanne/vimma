@@ -53,7 +53,9 @@ import {
   layoutPanes,
   newPane,
   resizePane,
+  showAlone,
   showTabs,
+  shownSplit,
   splitPane,
   swapPane,
   zoomPane,
@@ -811,7 +813,12 @@ function paneStatus(win) {
   const panes = PaneViews.get(win)?.panes;
   if (!panes) return null;
   const order = leaves(panes);
-  return { index: order.findIndex((l) => l.pane === panes.focus) + 1, count: order.length };
+  return {
+    index: order.findIndex((l) => l.pane === panes.focus) + 1,
+    count: order.length,
+    // A split kept as a hidden view (docs/specs/side-panel-unsplit.md decision 27).
+    ...(panes.hidden ? { hidden: true } : {}),
+  };
 }
 
 /** @param {Event} e */
@@ -977,7 +984,10 @@ export const VimmaHost = {
           ).gBrowser.selectedTab = tab;
         },
         say: (text) => state.notice.show(text),
-        together: (tabIds, focus) => showTabs(win, tabIds, focus),
+        together: (tabIds, focus, alone) => showTabs(win, tabIds, focus, alone),
+        // docs/specs/side-panel-unsplit.md: the split's panes start marked.
+        split: () => shownSplit(win),
+        alone: (tabId) => showAlone(win, tabId),
       }),
       bookmarks: new BookmarksPanel(win, {
         load: () => loadTree(win),

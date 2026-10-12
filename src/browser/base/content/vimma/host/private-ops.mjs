@@ -20,7 +20,7 @@ import {
   privateToggle,
 } from "../core/privatews.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
-import { PrivateSwap } from "./private-swap.mjs";
+import { PrivateSwap, startedUp } from "./private-swap.mjs";
 import { workspacePickerItems } from "./workspace-ops.mjs";
 
 /** @import { WorkspaceItem } from "../core/picker.mjs" */
@@ -375,7 +375,7 @@ async function moveIntoPrivate(win, tab) {
       : page;
   const [existing] = privateWindows();
   const priv = /** @type {any} */ (existing ?? openPrivate(win));
-  if (!existing) await priv.delayedStartupPromise;
+  if (!existing) await startedUp(priv);
   if (priv.closed) return "the private workspace closed meanwhile";
   const fresh = priv.gBrowser.addTab(url, { triggeringPrincipal: principal, skipAnimation: true });
   priv.gBrowser.selectedTab = fresh;

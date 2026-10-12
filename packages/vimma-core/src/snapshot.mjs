@@ -108,14 +108,23 @@ export function toSnapshot(s, { tabLabels } = {}) {
     schema: SCHEMA_VERSION,
     active: s.active,
     next: s.next,
-    workspaces: s.workspaces.map((w) => ({
-      id: w.id,
-      name: w.name,
-      container: w.container,
-      tabs: w.tabs.slice(),
-      activeTab: w.activeTab,
-      panes: w.panes && JSON.parse(JSON.stringify(w.panes)),
-    })),
+    workspaces: s.workspaces.map((w) => {
+      // A hidden view (side-panel-unsplit decision 24): the file keeps activeTab on the focused
+      // pane's tab, so an older Vimma restores the split shown; `alone` is the tab shown alone.
+      const alone =
+        w.panes?.hidden && w.activeTab !== null && !hasTab(w.panes, w.activeTab)
+          ? w.activeTab
+          : null;
+      return {
+        id: w.id,
+        name: w.name,
+        container: w.container,
+        tabs: w.tabs.slice(),
+        activeTab: alone && w.panes ? findTab(w.panes.root, w.panes.focus) : w.activeTab,
+        panes: w.panes && JSON.parse(JSON.stringify(w.panes)),
+        ...(alone ? { alone } : {}),
+      };
+    }),
     ...(s.alternate !== undefined ? { alternate: s.alternate } : {}),
     ...(labels ? { tabLabels: labels } : {}),
   };
@@ -257,6 +266,17 @@ function readPanes(raw, path, tabs) {
 }
 
 /**
+ * Whether a tree shows `tabId` in one of its panes.
+ * @param {Panes} panes
+ * @param {string | null} tabId
+ */
+function hasTab(panes, tabId) {
+  /** @param {PaneNode} n @returns {boolean} */
+  const walk = (n) => (n.type === "leaf" ? n.tab === tabId : n.children.some(walk));
+  return walk(panes.root);
+}
+
+/**
  * Parses, migrates and validates a snapshot (object or JSON text).
  * @param {unknown} input
  * @param {{ migrations?: Readonly<Record<number, SnapshotMigration>> }} [options]
@@ -325,12 +345,26 @@ export function readSnapshot(input, { migrations } = {}) {
         fail(`${at}.activeTab`, "must be the focused pane's tab");
       }
     }
+    // A hidden view (side-panel-unsplit decision 24), read leniently: kept hidden only with a
+    // split and an `alone` tab of the workspace outside it, else the split reads as shown.
+    let activeTab = w.activeTab;
+    if (
+      panes &&
+      w.panes.hidden === true &&
+      panes.root.type === "split" &&
+      typeof w.alone === "string" &&
+      w.tabs.includes(w.alone) &&
+      !hasTab(panes, w.alone)
+    ) {
+      panes = Object.freeze({ ...panes, hidden: /** @type {const} */ (true) });
+      activeTab = w.alone;
+    }
     return Object.freeze({
       id: w.id,
       name: w.name,
       container: w.container,
       tabs: Object.freeze(w.tabs.slice()),
-      activeTab: w.activeTab,
+      activeTab,
       panes,
     });
   });
