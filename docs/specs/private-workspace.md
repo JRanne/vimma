@@ -372,9 +372,10 @@ UX, honestly:
    panel get their data from a small private-window adapter in the host.
 7. **Window placement.** Vimma opens the private window at the current window's size and, where
    the platform allows (X11, floating WMs), its position. On Wayland it does not try, because
-   Hyprland decides. Vimma does not run `hyprctl` or any other WM command (user, 2026-10-11). The
-   guide gives the Hyprland recipe: put Vimma in a group (`SUPER+G`) and the private workspace
-   opens inside it.
+   Hyprland decides. ~~Vimma does not run `hyprctl` or any other WM command.~~ **Superseded
+   (user, 2026-10-12):** on Hyprland the private window swaps into the Vimma window's place, over
+   Hyprland's socket. See [private-swap](private-swap.md) and ADR-017. Off Hyprland, or with
+   `[private] placement = "window"`, this decision stands as written.
 8. **Leak protections in Vimma's own code** (the private window's own guarantees are Firefox's):
    - a. Nothing about the private workspace is written to disk. That covers
      `vimma-workspaces.json` (no `lastActive`), SessionStore window and tab values of normal
@@ -464,12 +465,14 @@ C++ patch to `nsFrameLoader.cpp` and many front-end hunks. Option B would have n
 
 Per-tab private browsing in a normal window (option C); a throwaway container workspace
 (option B, decided question 5); several separate private workspaces (Firefox has one private cookie
-jar); Vimma running WM commands; restoring a private workspace after a restart (that would break
-the guarantee).
+jar); Vimma running WM commands (since reversed on Hyprland: [private-swap](private-swap.md));
+restoring a private workspace after a restart (that would break the guarantee).
 
 ## Decided questions (user, 2026-10-11)
 
-1. **Hyprland grouping:** Vimma runs no WM command; the guide documents the `SUPER+G` recipe.
+1. **Hyprland grouping:** ~~Vimma runs no WM command; the guide documents the `SUPER+G`
+   recipe.~~ This was the coordinator's proposal, not asked of the user. **Reversed (user,
+   2026-10-12): "Swap in place"** on Hyprland, in [private-swap](private-swap.md).
 2. **Scripts and private pages:** `vimma-ctl state` hides private URLs and titles. No switch.
 3. **`ctrl+shift+p`:** goes to the private workspace (toggles back from it), same as
    `ctrl+b shift+p`. Firefox's "New Private Window" key no longer runs.
