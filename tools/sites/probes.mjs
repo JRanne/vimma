@@ -12,7 +12,26 @@
  * @param {unknown} [arg]
  */
 export function probe(fn, arg = null) {
-  return `(() => JSON.stringify((${fn.toString()})(${JSON.stringify(arg)})))()`;
+  return `(() => JSON.stringify((${fn.toString()})(${jsonLiteral(arg)})))()`;
+}
+
+/** @type {Record<string, string>} */
+const LITERAL_ESCAPES = {
+  "<": "\\u003C",
+  ">": "\\u003E",
+  "/": "\\u002F",
+  "\u2028": "\\u2028",
+  "\u2029": "\\u2029",
+};
+
+/**
+ * `arg` as a JSON literal that is also safe to embed in code: the characters that could close
+ * a surrounding script or comment, or end a line, become \u escapes, which decode to the same
+ * value. In JSON text they occur only inside strings, so the escapes stay valid.
+ * @param {unknown} arg
+ */
+export function jsonLiteral(arg) {
+  return JSON.stringify(arg).replace(/[<>/\u2028\u2029]/g, (ch) => LITERAL_ESCAPES[ch] ?? ch);
 }
 
 // ---------------------------------------------------------------------------------------------
