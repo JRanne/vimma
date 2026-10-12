@@ -22,6 +22,7 @@
     "start": "node tools/start.mjs",
     "mochitest": "node tools/mochitest.mjs",
     "e2e": "node tools/e2e/e2e.mjs",
+    "sites": "node tools/sites/sites.mjs",
     "lane:setup": "node tools/lanes/lane-setup.mjs",
     "lane:teardown": "node tools/lanes/lane-teardown.mjs",
     "test:py": "python3 -m unittest discover -s tools/upstream",

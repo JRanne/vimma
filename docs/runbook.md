@@ -282,6 +282,36 @@ comes from CI the same way: `gh run download <run-id> -n e2e-output`. Baselines 
   `rm -rf /tmp/vimma-e2e-*`. Normally SIGINT/SIGTERM kill the browser's process group, stop Xvfb
   and remove the profile.
 
+### Site compatibility (`npm run sites`, spec site-compat)
+
+`npm run sites` loads each site of `tools/sites/sites.json` once in a real build, one fresh
+profile per site under the harness's own Xvfb, and runs the same checks on each: hints and
+following one, scrolling (main and inner scrollers), find, `yy`, insert and Esc on the search
+field, `ctrl+b` never reaching the page, the site's own shortcuts (info only), errors from
+Vimma's code and the status bar's mode after each step. Keys go through `vimma-ctl`; the page is
+read over the DevTools protocol on a Unix socket in the profile's temp dir (not WebDriver, which
+sets `navigator.webdriver` and draws more bot checks). It writes `site-compat-output/`:
+`results.json`, `report.md`, `report.html` and `screenshots/`.
+
+```sh
+npm run sites                                  # every site, the default build
+npm run sites -- --filter github,mdn           # ids or names containing either term
+npm run sites -- --artifact                    # engine/obj-artifact
+npm run sites -- --pref name=value             # an extra profile pref (repeatable)
+```
+
+- Takes 20-40 s per site, about 10 min for the list. It exits 0 whenever it wrote a report:
+  failures are findings, not a broken build.
+- "blocked (bot check)" and "consent" are the site's doing (a Cloudflare or Google check, a
+  consent wall it could not reject), not Vimma's. They depend on the network: run it from home
+  when the nightly shows many.
+- Adding a site: an entry in `sites.json` (`id`, `name`, an https `url`; optional `search`, a CSS
+  selector for its search field, and `find`, a word on the page). `npm test` checks the file.
+- Running it from a worktree against the main checkout's build: pass
+  `--build <main>/engine/obj-x86_64-pc-linux-gnu/dist/bin` and
+  `--pref security.sandbox.content.read_path_whitelist=<main>/src/`, or the content actor
+  cannot load.
+
 ## Parallel browser lanes
 
 A lane is a git worktree (e.g. an agent's under `.claude/worktrees/`) with its own `engine/` and
@@ -440,6 +470,12 @@ cost: a full run (first Sunday of the month) is estimated at 60–90 min on the 
 (4 916 mutants; 22 min with 12 workers locally, about 0.6 s per mutant per CPU), an incremental
 week a few minutes plus one for the report job: roughly 100 min a month, free now. If the full
 run gets too slow, narrow `mutate` in `stryker.config.mjs` or drop the monthly full run.
+
+`sites.yml` (spec site-compat) runs one job a night at 04:30 UTC, and by hand: about 3.6 min of
+setup (e2e.yml's steps up to the artifact build) plus the site list, about 15-20 min in all
+(≈ 600 min a month, free on a standard runner). It never runs on pull requests and is not a
+required check. To make it lighter, shorten `tools/sites/sites.json` or move its `cron` to fewer
+nights.
 
 `fuzz.yml` runs one job of about 5 min a night (≈ 150 min a month), plus a one-minute report job
 on a failure. To halve it, run it on fewer nights (its `cron`) or lower `VIMMA_FUZZ_TIME_MS`.
