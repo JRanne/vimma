@@ -20,6 +20,10 @@
   font-size: 13px;
   outline: none;
   color-scheme: var(--vimma-color-scheme, light dark);
+  /* The list's scrollbar (inherited by the tabs list and the bookmarks tree): without it, the
+     toolkit draws its own, a light track on a dark theme, as nothing else in the panel is. */
+  scrollbar-color: var(--vimma-muted, color-mix(in srgb, CanvasText 25%, transparent))
+    var(--vimma-bg-dark, Canvas);
 
   &[hidden] {
     display: none !important;
