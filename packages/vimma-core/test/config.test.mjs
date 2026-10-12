@@ -391,6 +391,7 @@ describe("mergeWithDefaults", () => {
       },
       insertEditing: true,
       bookmarks: { root: "workspace" },
+      private: { placement: "swap" },
     });
   });
 });

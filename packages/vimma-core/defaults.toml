@@ -254,6 +254,12 @@ main_size = 60
 [bookmarks]
 root = "workspace"
 
+# The private workspace (ctrl+b shift+p): "swap" shows it in place of the Vimma window on
+# Hyprland, which hides the other one until you switch back; "window" opens it as a window
+# of its own beside it, as on every other window manager.
+[private]
+placement = "swap"
+
 # Per-site insert mode: auto (detect text fields), never (keys stay vimma's), always.
 # A host also covers its subdomains. None by default.
 # [sites."docs.google.com"]

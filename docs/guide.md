@@ -92,8 +92,10 @@ every binding.
 
 New windows and new tabs open Vimma's start page: the logo, and under it the three keys to start
 from (`ctrl+b ?` keys, `:` commands, `f` hints). The URL bar is empty and focused, so you can type an
-address straight away; click the page to use `:` and the other keys there. It is a local page
-(`chrome://browser/content/vimma/start/start.html`); nothing loads from the network.
+address straight away; click the page to use `:` and the other keys there. At the bottom, a small
+line shows which Vimma you run and the Firefox release it is built on (`Vimma 0.1.0 · Firefox
+157.0.1`). It is a local page (`chrome://browser/content/vimma/start/start.html`); nothing loads
+from the network.
 
 To change it back:
 
@@ -739,7 +741,8 @@ normal mode's, which closes the tab. In the bookmarks panel `x` does nothing;
 
 While it is open, every other plain key is the panel's and never reaches the page; `ctrl+b`
 keys and `:` commands still work, and a tab you open meanwhile shows up in the list. The panel
-follows your Omarchy theme as the status bar does. Change its keys under `[modal.panel]` in
+follows your Omarchy theme as the status bar does, scrollbar included (the theme's muted
+colour on the panel's background), and recolours the moment the theme changes. Change its keys under `[modal.panel]` in
 `config.toml`; `[keys] toggle_sidebar` changes the keys that open it, and a `<leader>` binding
 you add there (`toggle_sidebar = ["prefix+b", "<leader>n"]`) closes it too.
 
@@ -881,8 +884,9 @@ restore all forget it, and so do Vimma's own files. Spec:
 - **Add-ons** run there only if you allowed them in private windows (`ctrl+b e`, then `P`).
   Searches use Firefox's private search engine if you set one. Vimma's own keys and pages need
   no add-on.
-- **Links from other apps** open in your normal window, as Firefox does, so the window manager
-  takes you out of the private workspace. Routing rules never send a page into or out of it.
+- **Links from other apps** open in your normal window, as Firefox does, so you leave the
+  private workspace to see them (on Hyprland the normal window swaps back into place; the
+  private workspace stays one key away). Routing rules never send a page into or out of it.
 - **Scripts:** `vimma-ctl state` in the private workspace says `"private": true` and
   `"workspace": "private"`, and gives every tab's `url` and `title` as `null`. `vimma-ctl open`
   and `send-keys` act on the focused window, so with the private workspace focused they load
@@ -890,26 +894,47 @@ restore all forget it, and so do Vimma's own files. Spec:
 - **Diagnostics:** `about:vimma` and `:bug` in a normal window leave private windows out, and
   keys typed in a private window are never added to their key log.
 - **What a private window does not hide:** the clipboard (copy mode's `y` copies to the system
-  clipboard, as in Firefox), and the window title, which your window manager and screen sharing
-  see (Firefox adds its private-browsing suffix).
+  clipboard, as in Firefox). Its window title, which your window manager, its bar and screen
+  sharing see, is only `Vimma Private Browsing`, never the page's title (see
+  [Privacy defaults](#privacy-defaults)).
 - **Permanent private browsing** (`browser.privatebrowsing.autostart`) makes every window
   private, so there is no private workspace: the key and `:private close` say
   `every window is private (permanent private browsing)` and do nothing, and private windows
   behave as before (no workspaces, no `◆ private`). A policy
   that turns private browsing off makes it say `private browsing is turned off by policy`.
 
-**It is a second window.** Firefox keeps privacy per window, so the private workspace is a
-window of its own for your window manager. Vimma opens it at the current window's size (and, on
-X11 and floating window managers, its position) and focuses it when you switch. On Hyprland,
-Vimma cannot place it and runs no window-manager commands, so how it appears is up to Hyprland:
+**On Hyprland it takes your Vimma window's place.** Firefox keeps privacy per window, so the
+private workspace is a window of its own, but you never see the two side by side: going to it
+puts the private window exactly where your Vimma window was (same workspace, same tile, same
+size, fullscreen or floating if it was), and the other tiles keep their sizes. Your normal window
+waits in a hidden special workspace, `special:vimma`, and comes back in the same place when you
+switch back (any of the keys above), when the private window closes (`ctrl+b shift+d`,
+`ctrl+shift+w`, `SUPER+W`), or when a link from another app arrives. If Vimma quits or crashes
+meanwhile, the next start shows your normal window as usual: nothing about the swap is written
+to disk.
 
-- **Grouped (recommended):** press `SUPER+G` on the Vimma window to make it a group (Omarchy's
-  binding for `togglegroup`). With `group:auto_group` on, which is the default, the private
-  workspace then opens as a second tab of the same frame, and switching swaps what the frame
-  shows. The group bar shows both titles.
-- **Not grouped:** it tiles beside Vimma, and switching moves the focus between the two.
-- Switching relies on `misc:focus_on_activate = true` (Omarchy's default). Without it Hyprland
-  only marks the other window urgent.
+- **How:** Vimma talks to Hyprland over Hyprland's own socket (`$XDG_RUNTIME_DIR/hypr/…`), from
+  the browser process only, with a fixed set of commands: move, swap, focus, fullscreen state,
+  float or tile, exact size and position. They carry only window addresses, workspace numbers
+  and sizes, never a page title or URL, and Vimma runs no `hyprctl` and no other program. To
+  learn which window is which, a new Vimma window carries a random title (`vimma-` and 32 hex
+  digits) for a moment when it opens. Checked with Hyprland 0.56.2 and a Lua config, as
+  Omarchy has; older configs use the legacy command names, which Vimma also speaks.
+- **Grouped or pinned:** a grouped (`SUPER+G`) or pinned Vimma window is not swapped. The private
+  workspace opens beside it in the group, as a group tab, and switching moves the focus.
+- **If Hyprland refuses a swap**, Vimma shows your normal window, says
+  `private: the window manager refused the swap; showing it as a window`, and opens the private
+  workspace as a window of its own until the config is next reloaded. `about:vimma` shows the
+  Hyprland version and which placement is in force, or why it is not swapping.
+- **Never stuck:** if a swap cannot be done, for example because you moved the private window
+  to a scratchpad, going back brings your normal window out of `special:vimma` to the
+  workspace you are on.
+- **Opting out:** `[private] placement = "window"` in `config.toml` (below) opens it as a second
+  window, as on other systems.
+
+**Elsewhere** (other window managers, X11, or `placement = "window"`) it is a second window:
+Vimma opens it at the current window's size (and, on X11 and floating window managers, its
+position) and focuses it when you switch.
 
 ## Bookmarks
 
@@ -1225,8 +1250,11 @@ accent = "#ff9e64"
   shortcuts are off, [above](#firefoxs-own-shortcuts)); `[modal] insert_editing` (`ctrl+w`,
   `ctrl+u`, `ctrl+h` in text fields, default `true`); `[bookmarks] root` (`"workspace"`, the
   default: the current workspace's folder; `"toolbar"`; or `"all"`: what the
-  [bookmarks panel](#bookmarks) lists and where paths start).
+  [bookmarks panel](#bookmarks) lists and where paths start); `[private] placement` (`"swap"`, the
+  default: on Hyprland the [private workspace](#private-workspace) takes the Vimma window's place;
+  `"window"`: it is a window of its own beside it).
 - **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]`, `[firefox]`, `[bookmarks]`,
+  `[private]`,
   `hint_chars`, `insert_editing` and `[theme] name`; every key,
   its type and default are in [m5-core-config-and-theme](specs/m5-core-config-and-theme.md#schema-v1)
   and [m3-m4-core-prep](specs/m3-m4-core-prep.md#config-schema-2), and
@@ -1314,6 +1342,7 @@ name, then toggle or edit it). Spec:
 | Feature and add-on recommendations       | `browser.newtabpage.activity-stream.asrouter.providers.cfr`: change `"enabled":false` to `true` in its JSON value; then `…asrouter.userprefs.cfr.addons`, `…cfr.features` = `true`                    |
 | Mozilla promos (VPN, Relay, Pin, mobile) | `browser.vpn_promo.enabled`, `browser.promo.relay.enabled`, `browser.promo.pin.enabled`, `browser.preferences.moreFromMozilla`                                                                        |
 | Crash reporter                           | Not built in. A crash leaves a local core dump (`coredumpctl list vimma`). Opt-in reporting to Vimma's own server is planned for M6.                                                                  |
+| Page titles in a private window's title  | `privacy.exposeContentTitleInWindow.pbm` = `true` (Vimma's default is `false`: the window manager, its bar and screen sharing see only `Vimma Private Browsing`)                                      |
 | Telemetry upload                         | Not built in (no official telemetry). The data-collection switches in Settings are off to match.                                                                                                      |
 
 Kept as in Firefox: Remote Settings (CRLite certificate revocation, intermediate certificates),
@@ -1323,8 +1352,8 @@ updates are off, so neither asks Mozilla's update server. The one remaining requ
 the OpenH264 and Widevine plugins, which video calls and DRM video need.
 
 Sites see Firefox 157's user agent, with no Vimma token, and add-ons see Firefox's version
-(`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. `vimma --version` and the About
-dialog show Vimma's own version (`0.1.0`).
+(`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. `vimma --version`, the About
+dialog and the start page show Vimma's own version (`0.1.0`).
 
 ### Safe Browsing
 
@@ -1430,6 +1459,13 @@ Firefox's Library (`ctrl+shift+o`) still works for the rest.
 
 **A binding says "not implemented yet".** Every default binding runs now. The message is for a
 binding whose command is not built yet, and the overlay dims such a binding too.
+
+**Does a playing video keep the screen awake?** Yes, while the video's window is visible. On
+Linux, Vimma asks the Wayland compositor directly (its idle-inhibit protocol) instead of
+Firefox's D-Bus route, which on Hyprland (Omarchy) reports success without stopping the
+screensaver. On Hyprland, `hyprctl -j clients | jq '.[] | select(.class|test("vimma")) |
+.inhibitingIdle'` prints `true` while it holds. A `MOZ_WAKE_LOCK_TYPE` you export yourself wins
+over Vimma's choice.
 
 **Where are crash reports?** Nothing is sent anywhere. Use `coredumpctl list vimma`, then
 `coredumpctl info` on the entry.

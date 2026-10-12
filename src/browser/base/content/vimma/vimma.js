@@ -10,6 +10,12 @@
   );
   MozillaServices.init();
 
+  // Video keeps the screen awake on Wayland (wake-lock): set before any page plays.
+  const { WakeLock } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/services/WakeLock.sys.mjs",
+  );
+  WakeLock.init();
+
   // The start page as the new-tab page, before this window opens its first tab (start-page).
   const { StartPage } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/start/StartPage.sys.mjs",
@@ -80,5 +86,12 @@
     "chrome://browser/content/vimma/ctl/VimmaControl.sys.mjs",
   );
   VimmaControl.init(window);
+
+  // The private workspace in place of this window on Hyprland (spec private-swap): learns the
+  // window's address while `[private] placement = "swap"` applies. Nothing without Hyprland.
+  const { PrivateSwap } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/host/private-swap.mjs",
+  );
+  PrivateSwap.init(window);
   window.addEventListener("unload", () => VimmaHost.uninit(window), { once: true });
 }
