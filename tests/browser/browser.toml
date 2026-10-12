@@ -45,6 +45,8 @@ support-files = ["file_vimma_copy_motions.html"]
 
 ["browser_vimma_safebrowsing.js"]
 
+["browser_vimma_wake_lock.js"]
+
 ["browser_vimma_crash_reporter.js"]
 # Artifact builds run Mozilla's libxul, built with the crash reporter (ADR-010).
 skip-if = ["artifact"]
@@ -143,6 +145,8 @@ support-files = ["file_vimma_title.html"]
 
 ["browser_vimma_side_panel_marks.js"]
 
+["browser_vimma_side_panel_unsplit.js"]
+
 ["browser_vimma_firefox_keys.js"]
 support-files = ["file_vimma_plain.html"]
 
@@ -161,6 +165,9 @@ support-files = ["file_vimma_insert_scroll.html"]
 ["browser_vimma_config_first_run.js"]
 
 ["browser_vimma_theme.js"]
+run-if = ["os == 'linux'"] # ln -s for the omarchy-theme-set symlink swap
+
+["browser_vimma_sidebar_theme.js"]
 run-if = ["os == 'linux'"] # ln -s for the omarchy-theme-set symlink swap
 
 ["browser_vimma_about.js"]

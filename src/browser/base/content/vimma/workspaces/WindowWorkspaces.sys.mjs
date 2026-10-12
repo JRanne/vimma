@@ -16,7 +16,7 @@
 
 import { planWorkspaceSwitch } from "../core/switchplan.mjs";
 import { canWrite, readSnapshot, toSnapshot } from "../core/snapshot.mjs";
-import { closePane, leaves } from "../core/panes.mjs";
+import { closePane, leaves, showView } from "../core/panes.mjs";
 import {
   activeWorkspace,
   addWorkspace,
@@ -953,8 +953,13 @@ export class WindowWorkspacesImpl {
           return id && w.tabs.includes(id) ? id : undefined;
         });
       if (!tree) return w;
+      // A hidden view keeps the tab shown alone as the selected one; core's snapshot writes it
+      // as `alone` (docs/specs/side-panel-unsplit.md decision 24).
+      const alone = tree.hidden && w.activeTab && !leaves(tree).some((l) => l.tab === w.activeTab);
+      if (alone) return { ...w, panes: tree };
+      const shown = showView(tree);
       const focus = leaves(tree).find((l) => l.pane === tree.focus)?.tab;
-      return focus ? { ...w, panes: tree, activeTab: focus } : w;
+      return focus ? { ...w, panes: shown, activeTab: focus } : w;
     });
     return { ...model, workspaces };
   }

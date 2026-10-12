@@ -387,6 +387,27 @@ add_task(async function a_tab_moves_in_after_y_and_never_out() {
   await until(() => !tab.isConnected, "and leaves the normal window");
 });
 
+add_task(async function a_tab_moved_in_with_no_private_window_open_opens_one() {
+  // The window OpenBrowserWindow returns still shows about:blank: the move waits for its
+  // browser document instead of reaching for a gBrowser that is not there yet.
+  for (const w of privateWindows()) await BrowserTestUtils.closeWindow(w);
+  await SimpleTest.promiseFocus(window);
+  const tab = await BrowserTestUtils.openNewForegroundTab(gBrowser, `${PAGE}&movefresh`);
+  const opened = BrowserTestUtils.waitForNewWindow();
+  prefix("w");
+  await until(() => pickerRows(window, PICKER_ID).length, "the workspace picker is open");
+  for (let i = 0; i < pickerRows(window, PICKER_ID).length; i++) EventUtils.synthesizeKey("j");
+  EventUtils.synthesizeKey("m");
+  await answer(window, "y");
+  const priv = await opened;
+  await until(
+    () => priv.gBrowser.selectedBrowser.currentURI.spec === `${PAGE}&movefresh`,
+    "the new private window shows the moved tab",
+  );
+  Assert.equal(priv.gBrowser.tabs.length, 1, "in place of its start page");
+  await until(() => !tab.isConnected, "and the tab leaves the normal window");
+});
+
 add_task(async function vimma_ctl_state_withholds_private_urls_and_titles() {
   const [priv] = privateWindows();
   await SimpleTest.promiseFocus(priv);

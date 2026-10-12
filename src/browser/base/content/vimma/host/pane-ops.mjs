@@ -8,6 +8,7 @@
 
 import { closest, describeAction } from "../core/actions.mjs";
 import { LAYOUTS, isLayoutName, layoutOfAction } from "../core/layouts.mjs";
+import { leaves } from "../core/panes.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { closeTab } from "./tab-ops.mjs";
 import { tabById } from "./goto.mjs";
@@ -35,7 +36,18 @@ function gBrowserOf(win) {
  * @param {Window} win
  */
 export function hasPanes(win) {
-  return !!PaneViews.get(win)?.panes;
+  return !!shownPanes(win);
+}
+
+/**
+ * The window's PaneView while it shows two panes or more; null with one pane or while the split
+ * is a hidden view (docs/specs/side-panel-unsplit.md decision 20): the pane keys then act on the
+ * tab shown alone, as with one pane.
+ * @param {Window} win
+ */
+function shownPanes(win) {
+  const view = PaneViews.get(win);
+  return view?.panes && !view.hidden ? view : null;
 }
 
 /**
@@ -94,7 +106,7 @@ export function newPane(win, action) {
  * @returns {string}
  */
 export function layoutPanes(win, action, text) {
-  const view = PaneViews.get(win);
+  const view = shownPanes(win);
   if (!view?.panes) return `${describeAction(action)}: only one pane`;
   /** @type {import("../core/layouts.mjs").LayoutName | undefined} */
   let name = layoutOfAction(action.id);
@@ -117,24 +129,63 @@ export function layoutPanes(win, action, text) {
  * that order, become the panes, focus on `focusId`'s, whose page then has keyboard focus. A tab
  * never selected (lazy) gets its browser first, as Firefox's split view does for its panels.
  * @param {Window} win
+ * With `aloneId`, that tab then shows by itself and the new split waits as a hidden view
+ * (docs/specs/side-panel-unsplit.md decision 25).
  * @param {string[]} tabIds  the panel's row ids (a panel id, or a lazy tab's uuid)
  * @param {string} focusId
+ * @param {string} [aloneId]
  * @returns {string | null} the refusal for the notice, or null once shown
  */
-export function showTabs(win, tabIds, focusId) {
+export function showTabs(win, tabIds, focusId, aloneId) {
   const view = PaneViews.get(win);
   const gBrowser = /** @type {{ insertBrowser(tab: Element): void }} */ (
     /** @type {unknown} */ (gBrowserOf(win))
   );
   const tabs = tabIds.map((id) => tabById(win, id));
   const focus = tabById(win, focusId);
-  if (!view || !focus || tabs.some((t) => !t)) return `${TOGETHER}: a tab is gone`;
+  const alone = aloneId ? tabById(win, aloneId) : undefined;
+  if (!view || !focus || tabs.some((t) => !t) || alone === null) {
+    return `${TOGETHER}: a tab is gone`;
+  }
   const list = /** @type {any[]} */ (tabs);
   for (const t of list) if (!t.linkedPanel) gBrowser.insertBrowser(t);
-  const result = view.showTabs(list, /** @type {any} */ (focus));
+  const result = view.showTabs(list, /** @type {any} */ (focus), {
+    alone: /** @type {any} */ (alone ?? undefined),
+  });
   if (!result.ok) return `${TOGETHER}: ${result.reason}`;
   focusPage(win);
   return null;
+}
+
+/**
+ * The side panel's `Enter` down to one mark or none (docs/specs/side-panel-unsplit.md): the
+ * split ends, `tabId`'s tab is shown alone and its page has keyboard focus.
+ * @param {Window} win
+ * @param {string} tabId  the panel's row id
+ */
+export function showAlone(win, tabId) {
+  const view = PaneViews.get(win);
+  const tab = tabById(win, tabId);
+  if (!view || !tab) return;
+  view.showAlone(/** @type {any} */ (tab));
+  focusPage(win);
+}
+
+/**
+ * The split the side panel pre-marks (docs/specs/side-panel-unsplit.md): the shown tree's tabs
+ * and its focused pane's tab, as panel ids, and whether it is a hidden view; null without one.
+ * @param {Window} win
+ * @returns {{ panes: string[], focus: string | null, hidden: boolean } | null}
+ */
+export function shownSplit(win) {
+  const panes = PaneViews.get(win)?.panes;
+  if (!panes) return null;
+  const order = leaves(panes);
+  return {
+    panes: order.map((l) => l.tab),
+    focus: order.find((l) => l.pane === panes.focus)?.tab ?? null,
+    hidden: panes.hidden === true,
+  };
 }
 
 /**
@@ -144,7 +195,7 @@ export function showTabs(win, tabIds, focusId) {
  * @param {Action} action
  */
 export function focusPane(win, action) {
-  const view = PaneViews.get(win);
+  const view = shownPanes(win);
   if (!view?.panes) return null;
   const direction = /** @type {Direction} */ (action.id.slice("pane.focus_".length));
   const result = view.focus(direction);
@@ -158,7 +209,7 @@ export function focusPane(win, action) {
  * @param {Action} action
  */
 export function zoomPane(win, action) {
-  const view = PaneViews.get(win);
+  const view = shownPanes(win);
   if (!view?.panes) return null;
   return refusal(action, view.zoom());
 }
@@ -170,7 +221,7 @@ export function zoomPane(win, action) {
  * @param {Action} action
  */
 export function closePane(win, action) {
-  const view = PaneViews.get(win);
+  const view = shownPanes(win);
   if (!view?.panes) {
     closeTab(win);
     return null;
@@ -187,7 +238,7 @@ export function closePane(win, action) {
  * @param {Action} action
  */
 export function swapPane(win, action) {
-  const view = PaneViews.get(win);
+  const view = shownPanes(win);
   if (!view?.panes) return null;
   const direction = /** @type {Direction} */ (action.id.slice("pane.swap_".length));
   const result = view.swapPane(direction);
@@ -202,7 +253,7 @@ export function swapPane(win, action) {
  * @param {Action} action
  */
 export function resizePane(win, action) {
-  const view = PaneViews.get(win);
+  const view = shownPanes(win);
   if (!view?.panes) return null;
   const direction = /** @type {ResizeDirection} */ (action.id.slice("pane.resize_".length));
   return refusal(action, view.resize(direction, RESIZE_STEP * (action.count ?? 1)));

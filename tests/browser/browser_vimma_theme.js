@@ -138,7 +138,51 @@ async function assertSurfacesFollowTheTheme(label) {
     EventUtils.synthesizeKey("KEY_Escape");
     await TestUtils.waitForCondition(() => !shown(s.el()), `${label}: ${s.what} closes`);
   }
+  await assertSidePanelFollowsTheTheme(label);
   BrowserTestUtils.removeTab(tab);
+}
+
+/**
+ * Opens the side panel (ctrl+b b) and checks every part of it against the current tokens:
+ * surface, text, border, header, selected row, active number, key hint and the list's scrollbar.
+ * @param {string} label  which theme, for the messages
+ */
+async function assertSidePanelFollowsTheTheme(label) {
+  const panel = () => document.getElementById("vimma-panel");
+  EventUtils.synthesizeKey("b", { ctrlKey: true });
+  EventUtils.synthesizeKey("b");
+  await TestUtils.waitForCondition(
+    () => !!panel() && BrowserTestUtils.isVisible(panel()),
+    `${label}: the side panel opens`,
+  );
+  const box = /** @type {Element} */ (panel());
+  const style = (/** @type {string} */ sel) =>
+    getComputedStyle(/** @type {Element} */ (sel ? box.querySelector(sel) : box));
+  const t = (/** @type {string} */ name) => rgb(token(name));
+  const panelStyle = style("");
+  Assert.equal(panelStyle.backgroundColor, t("--vimma-bg-dark"), `${label}: panel surface`);
+  Assert.equal(panelStyle.color, t("--vimma-fg"), `${label}: panel text`);
+  Assert.equal(panelStyle.borderInlineEndColor, t("--vimma-muted"), `${label}: panel border`);
+  Assert.equal(style(".vimma-panel-name").color, t("--vimma-fg"), `${label}: header name`);
+  Assert.equal(style(".vimma-panel-hint").color, t("--vimma-fg-dim"), `${label}: key hint`);
+  const row = style("[role=option][aria-selected=true]");
+  Assert.equal(row.backgroundColor, t("--vimma-selection"), `${label}: selected row surface`);
+  Assert.equal(row.color, t("--vimma-fg-bright"), `${label}: selected row text`);
+  Assert.equal(
+    style(".vimma-panel-active .vimma-panel-number").color,
+    t("--vimma-text-accent"),
+    `${label}: the active tab's number`,
+  );
+  Assert.equal(
+    style("ul").scrollbarColor,
+    `${t("--vimma-muted")} ${t("--vimma-bg-dark")}`,
+    `${label}: the list's scrollbar is the theme's, not the toolkit's`,
+  );
+  EventUtils.synthesizeKey("KEY_Escape");
+  await TestUtils.waitForCondition(
+    () => !BrowserTestUtils.isVisible(box),
+    `${label}: the side panel closes`,
+  );
 }
 
 async function ln(target, link) {

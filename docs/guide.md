@@ -92,8 +92,10 @@ every binding.
 
 New windows and new tabs open Vimma's start page: the logo, and under it the three keys to start
 from (`ctrl+b ?` keys, `:` commands, `f` hints). The URL bar is empty and focused, so you can type an
-address straight away; click the page to use `:` and the other keys there. It is a local page
-(`chrome://browser/content/vimma/start/start.html`); nothing loads from the network.
+address straight away; click the page to use `:` and the other keys there. At the bottom, a small
+line shows which Vimma you run and the Firefox release it is built on (`Vimma 0.1.0 · Firefox
+157.0.1`). It is a local page (`chrome://browser/content/vimma/start/start.html`); nothing loads
+from the network.
 
 To change it back:
 
@@ -274,6 +276,9 @@ with `F11` keeps it. From the left:
 - the **pending keys**, e.g. `prefix` after `ctrl+b`;
 - the **workspace**: `● 2:work`, its number in workspace order and its name;
 - `tab 2/5`: the selected tab and how many the workspace shows;
+- in a split, `pane 2/3`: the focused pane and how many there are; `split 3 hidden` (dim) when
+  the workspace's split is kept out of sight while another tab shows alone
+  ([below](#picking-a-tab-during-a-split));
 - the page **title**, or your rename (`ctrl+b shift+t`);
 - on the right, the **search** in this page: `/word [2/5]` (match 2 of 5), or
   `/zzz not found` in red;
@@ -303,7 +308,11 @@ the moment that changes, without a reload. Firefox's own focus rings follow the 
 the address bar's focus ring and the outline of the focused pane in a split are the theme's
 accent (made a shade darker or lighter if it would not stand out at 3:1 against the colours
 around it), and so are the focus rings of Vimma's own side panel, bookmarks panel, pickers and
-help overlay. A `colors.toml` Vimma cannot read (a value that is
+help overlay. Firefox's own sidebar (history, bookmarks and synced tabs, opened from the toolbar's
+sidebar button or the View menu) follows the theme as well: its launcher strip and panel
+are on the same surface as Vimma's side panel, with the theme's text, edge and focus colours (the
+search box, the open panel's button in the launcher and the lists' scrollbars included), and
+an open sidebar recolours with the rest of the window. A `colors.toml` Vimma cannot read (a value that is
 not a `#rrggbb` colour, a missing key) is ignored: the colours stay as they were, and the
 Browser Console (`ctrl+shift+j`) says which line is wrong.
 
@@ -410,10 +419,22 @@ the current workspace, as `:tabnew`'s does. Page zoom has no Vimma keys: `ctrl+p
 
 Clicking into a pane focuses it, as `ctrl+b h/j/k/l` would. So does selecting a pane's tab any
 other way (the `ctrl+b g` picker, `ctrl+tab`, `alt+1..9`): the status bar's `pane n/m` and the
-URL bar follow, and a zoom ends, as it does when a pane key moves. Selecting a tab that no pane
-shows (the picker, `ctrl+tab`, `alt+1..9`, `ctrl+t`, a link opened in a new foreground tab)
-shows it in the focused pane: the split stays, and the tab that pane showed stays open in the
-workspace. A pinned tab shows alone; selecting a pane's tab brings the split back.
+URL bar follow, and a zoom ends, as it does when a pane key moves.
+
+#### Picking a tab during a split
+
+Going to a tab that is not in the split (the `ctrl+b g` picker, `ctrl+tab`, `alt+1..9`,
+`ctrl+b 1..9`, `ctrl+b n` / `p`, `gt` / `gT`, a click on a tab, the side panel) shows that tab
+alone in the whole window, as Firefox's own split view does. The split is not lost: it waits,
+hidden, with its panes, sizes and focused pane, and the status bar says `split 3 hidden`. Go to
+any of its tabs, by any of the same routes, and the whole split comes back, with that tab's pane
+focused. A pinned tab works the same way. While the split is hidden the pane keys act on the tab
+you see as on a single pane, and `ctrl+b v` / `-` / `enter` say "the split is hidden: go to one
+of its tabs first". The hidden split survives a workspace switch and a restart.
+
+A new tab you open while the split shows (`ctrl+t`, `ctrl+b c`, `t`, `:tabnew`, `P`, a link
+opened in a new foreground tab, also with `f`, or a link from another app) opens in the focused
+pane instead: the split stays, and the tab that pane showed stays open in the workspace.
 
 A split made outside Vimma (Firefox's own split-view command, an extension, or a restored
 Firefox session) becomes the workspace's panes: its tabs side by side in its order, at the
@@ -713,19 +734,19 @@ the workspace's tabs, numbered, each with its name (or title) and its site. The 
 highlighted and its number coloured; a tab playing sound shows `♪`, one from another container
 `foreign`.
 
-| Key                     | What it does                                                                                                                |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `j` / `k`               | Move the highlight down / up.                                                                                               |
-| `Enter`                 | Go to the highlighted tab and close the panel. With marks, show the marked tabs together ([below](#showing-tabs-together)). |
-| `1` … `9`               | Go to that row's tab and close the panel.                                                                                   |
-| `space`                 | Mark the highlighted tab (or unmark it) and move down.                                                                      |
-| `V`                     | Start a range: `j` / `k` stretch it, and `V` or `space` marks every row in it.                                              |
-| `x`                     | Close the highlighted tab; the highlight moves to the next row and the panel stays open, so `x x x` closes three.           |
-| `ctrl+shift+t`          | Reopen the last closed tab, as in Firefox.                                                                                  |
-| `ctrl+b )` / `ctrl+b (` | Switch workspace; the panel stays open and lists that one (its marks are dropped).                                          |
-| `I`                     | Close the panel and focus the address bar.                                                                                  |
-| `Esc`                   | End a range; else clear the marks; else close the panel, and the page has the keys again.                                   |
-| `ctrl+b b`              | Close the panel.                                                                                                            |
+| Key                     | What it does                                                                                                                                                                                               |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `j` / `k`               | Move the highlight down / up.                                                                                                                                                                              |
+| `Enter`                 | Go to the highlighted tab and close the panel. With marks, show the marked tabs together ([below](#showing-tabs-together)); with a split, apply your changes to it ([below](#changing-or-ending-a-split)). |
+| `1` … `9`               | Go to that row's tab and close the panel.                                                                                                                                                                  |
+| `space`                 | Mark the highlighted tab (or unmark it) and move down.                                                                                                                                                     |
+| `V`                     | Start a range: `j` / `k` stretch it, and `V` or `space` marks every row in it.                                                                                                                             |
+| `x`                     | Close the highlighted tab; the highlight moves to the next row and the panel stays open, so `x x x` closes three.                                                                                          |
+| `ctrl+shift+t`          | Reopen the last closed tab, as in Firefox.                                                                                                                                                                 |
+| `ctrl+b )` / `ctrl+b (` | Switch workspace; the panel stays open and lists that one (its marks are dropped).                                                                                                                         |
+| `I`                     | Close the panel and focus the address bar.                                                                                                                                                                 |
+| `Esc`                   | End a range; else clear the marks (with a split: put its marks back); else close the panel, and the page has the keys again.                                                                               |
+| `ctrl+b b`              | Close the panel.                                                                                                                                                                                           |
 
 Pinned tabs belong to no workspace, so the panel never lists them and `x` never closes one (a
 row pinned since it was drawn says "pinned tab: unpin it to close it"). The panel takes no
@@ -735,7 +756,8 @@ normal mode's, which closes the tab. In the bookmarks panel `x` does nothing;
 
 While it is open, every other plain key is the panel's and never reaches the page; `ctrl+b`
 keys and `:` commands still work, and a tab you open meanwhile shows up in the list. The panel
-follows your Omarchy theme as the status bar does. Change its keys under `[modal.panel]` in
+follows your Omarchy theme as the status bar does, scrollbar included (the theme's muted
+colour on the panel's background), and recolours the moment the theme changes. Change its keys under `[modal.panel]` in
 `config.toml`; `[keys] toggle_sidebar` changes the keys that open it, and a `<leader>` binding
 you add there (`toggle_sidebar = ["prefix+b", "<leader>n"]`) closes it too.
 
@@ -760,12 +782,43 @@ preview at once: `ctrl+b b`, `space` on each of the three, `Enter`.
   with `"manual"` they sit in a row. A main-* preset makes the focused tab the big pane.
 - **What changes.** Tabs that were in the old split and are not marked leave it and stay open as
   ordinary tabs. No page reloads: each keeps its scroll, what you typed and its history.
-- **Limits.** One mark is just `Enter` on that row. More marks than `[panes] max` (4 by default)
+- **Limits.** Without a split, one mark is just `Enter` on that row. More marks than `[panes] max` (4 by default)
   says `Show together: at most 4 panes` and changes nothing; the panel stays open with your
   marks so you can drop some. A pinned row cannot be marked.
 - **Keys.** Rebind them under `[modal.panel]` with the actions `panel_mark` and
   `panel_visual`, e.g. `m = "panel_mark"`. If you give the leader (`space`) a binding, `space`
   in the panel waits `timeout_ms` for the rest of it before it marks.
+
+#### Changing or ending a split
+
+When the workspace has a split, the panel opens with its panes' tabs already marked, so you see
+which tabs they are, and the head says `split: 3 panes`. Change the marks as above and press
+`Enter`:
+
+- **Unmark a pane** (`space` on its row) and it leaves the split: the tab stays open, as an
+  ordinary tab right after the split in the tab order. Its row shows a dim `○` until you press
+  `Enter`, and the head says `split: 3 → 2`. The other panes keep their places and sizes, as
+  after `ctrl+b x`.
+- **Unmark down to one** (`split: 3 → 1 (unsplit)`) and the split ends: that tab is shown alone
+  (or, with the highlight on a pane you just unmarked, that one). Unmark every pane and the split
+  ends too, showing the highlighted tab.
+- **Mark another tab** and it joins as a pane; the panes are then arranged afresh in the
+  workspace's layout, as in [Showing tabs together](#showing-tabs-together). You can unmark one
+  and mark another in one go. `[panes] max` still applies.
+- **Then `Enter` goes to the highlighted row.** If its tab is in the split, the split shows with
+  that pane focused. If it is the pane you just unmarked, that tab shows alone and the rest stay
+  a hidden split: three panes, `space` on C, `k` back to C, `Enter`, and C fills the window
+  while A and B wait. On any other row the split shows, focused on the pane you were in if you
+  kept it, else the first marked one.
+- **Nothing changed?** `Enter` just goes to the highlighted tab: a pane's tab shows the split
+  focused there; any other tab shows alone and the split waits hidden
+  ([Picking a tab during a split](#picking-a-tab-during-a-split)). One `Esc` closes the panel.
+  After a change, the first `Esc` puts the split's marks back and the second closes.
+- **A hidden split** is listed the same way, its tabs marked, and the head says
+  `split: 2 panes (hidden)`.
+
+`ctrl+b )` / `ctrl+b (` with the panel open list the other workspace with its own split marked.
+No page reloads.
 
 ### Routing: which workspace a link opens in
 
@@ -919,6 +972,10 @@ to disk.
   `private: the window manager refused the swap; showing it as a window`, and opens the private
   workspace as a window of its own until the config is next reloaded. `about:vimma` shows the
   Hyprland version and which placement is in force, or why it is not swapping.
+- **If Hyprland never names a Vimma window** (its random title does not show up), that switch
+  shows the private workspace as a window of its own, the browser console says
+  `private: Hyprland did not name the Vimma window; showing it as a window` once, and
+  `about:vimma` adds `(last switch: window not named)`. The next switch tries again.
 - **Never stuck:** if a swap cannot be done, for example because you moved the private window
   to a scratchpad, going back brings your normal window out of `special:vimma` to the
   workspace you are on.
@@ -1345,8 +1402,8 @@ updates are off, so neither asks Mozilla's update server. The one remaining requ
 the OpenH264 and Widevine plugins, which video calls and DRM video need.
 
 Sites see Firefox 157's user agent, with no Vimma token, and add-ons see Firefox's version
-(`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. `vimma --version` and the About
-dialog show Vimma's own version (`0.1.0`).
+(`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. `vimma --version`, the About
+dialog and the start page show Vimma's own version (`0.1.0`).
 
 ### Safe Browsing
 
@@ -1452,6 +1509,13 @@ Firefox's Library (`ctrl+shift+o`) still works for the rest.
 
 **A binding says "not implemented yet".** Every default binding runs now. The message is for a
 binding whose command is not built yet, and the overlay dims such a binding too.
+
+**Does a playing video keep the screen awake?** Yes, while the video's window is visible. On
+Linux, Vimma asks the Wayland compositor directly (its idle-inhibit protocol) instead of
+Firefox's D-Bus route, which on Hyprland (Omarchy) reports success without stopping the
+screensaver. On Hyprland, `hyprctl -j clients | jq '.[] | select(.class|test("vimma")) |
+.inhibitingIdle'` prints `true` while it holds. A `MOZ_WAKE_LOCK_TYPE` you export yourself wins
+over Vimma's choice.
 
 **Where are crash reports?** Nothing is sent anywhere. Use `coredumpctl list vimma`, then
 `coredumpctl info` on the entry.
