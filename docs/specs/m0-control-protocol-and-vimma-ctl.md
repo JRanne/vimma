@@ -185,7 +185,8 @@ are sent.
   `{ "axis": "x" | "y", "ratios": [0.5, 0.5], "children": [<node>, …] }` (`x` left to right,
   `y` top to bottom, one ratio per child) or a leaf `{ "tab": "<tab id>", "index": 1 }`: the
   tab's id as in `tabs` and its place there (`-1` if it is not visible). Read-only, like the
-  rest of `state`.
+  rest of `state`. Since side-panel-unsplit (decision 28) it also has `"hidden": true | false`:
+  true while the split is kept as a hidden view and another tab shows alone.
 
 **`open`.** `url` is an absolute URL whose scheme is `http`, `https`, `file` or `about`; anything
 else (notably `javascript:` and `data:`) is `invalid-args`. At most 65536 characters. `where`

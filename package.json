@@ -15,7 +15,7 @@
     "typecheck": "npm run sync-core && tsc -p tsconfig.json",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "gen-docs": "node tools/gen-docs.mjs && prettier --log-level warn --write docs/bindings.md",
+    "gen-docs": "node tools/gen-docs.mjs && prettier --log-level warn --write docs/bindings.md docs/bindings.json",
     "sync-core": "node tools/sync-core.mjs",
     "version-files": "node tools/version-files/version-files.mjs",
     "import": "npm run sync-core && npm run version-files && node tools/import/restore-patched.mjs && surfer config brand vimma && surfer import && SURFER_MOZCONFIG_ONLY=1 surfer build",
