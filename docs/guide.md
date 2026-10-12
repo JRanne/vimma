@@ -713,19 +713,19 @@ the workspace's tabs, numbered, each with its name (or title) and its site. The 
 highlighted and its number coloured; a tab playing sound shows `♪`, one from another container
 `foreign`.
 
-| Key                     | What it does                                                                                                                |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `j` / `k`               | Move the highlight down / up.                                                                                               |
-| `Enter`                 | Go to the highlighted tab and close the panel. With marks, show the marked tabs together ([below](#showing-tabs-together)). |
-| `1` … `9`               | Go to that row's tab and close the panel.                                                                                   |
-| `space`                 | Mark the highlighted tab (or unmark it) and move down.                                                                      |
-| `V`                     | Start a range: `j` / `k` stretch it, and `V` or `space` marks every row in it.                                              |
-| `x`                     | Close the highlighted tab; the highlight moves to the next row and the panel stays open, so `x x x` closes three.           |
-| `ctrl+shift+t`          | Reopen the last closed tab, as in Firefox.                                                                                  |
-| `ctrl+b )` / `ctrl+b (` | Switch workspace; the panel stays open and lists that one (its marks are dropped).                                          |
-| `I`                     | Close the panel and focus the address bar.                                                                                  |
-| `Esc`                   | End a range; else clear the marks; else close the panel, and the page has the keys again.                                   |
-| `ctrl+b b`              | Close the panel.                                                                                                            |
+| Key                     | What it does                                                                                                                                                                                               |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `j` / `k`               | Move the highlight down / up.                                                                                                                                                                              |
+| `Enter`                 | Go to the highlighted tab and close the panel. With marks, show the marked tabs together ([below](#showing-tabs-together)); with a split, apply your changes to it ([below](#changing-or-ending-a-split)). |
+| `1` … `9`               | Go to that row's tab and close the panel.                                                                                                                                                                  |
+| `space`                 | Mark the highlighted tab (or unmark it) and move down.                                                                                                                                                     |
+| `V`                     | Start a range: `j` / `k` stretch it, and `V` or `space` marks every row in it.                                                                                                                             |
+| `x`                     | Close the highlighted tab; the highlight moves to the next row and the panel stays open, so `x x x` closes three.                                                                                          |
+| `ctrl+shift+t`          | Reopen the last closed tab, as in Firefox.                                                                                                                                                                 |
+| `ctrl+b )` / `ctrl+b (` | Switch workspace; the panel stays open and lists that one (its marks are dropped).                                                                                                                         |
+| `I`                     | Close the panel and focus the address bar.                                                                                                                                                                 |
+| `Esc`                   | End a range; else clear the marks (with a split: put its marks back); else close the panel, and the page has the keys again.                                                                               |
+| `ctrl+b b`              | Close the panel.                                                                                                                                                                                           |
 
 Pinned tabs belong to no workspace, so the panel never lists them and `x` never closes one (a
 row pinned since it was drawn says "pinned tab: unpin it to close it"). The panel takes no
@@ -760,12 +760,36 @@ preview at once: `ctrl+b b`, `space` on each of the three, `Enter`.
   with `"manual"` they sit in a row. A main-* preset makes the focused tab the big pane.
 - **What changes.** Tabs that were in the old split and are not marked leave it and stay open as
   ordinary tabs. No page reloads: each keeps its scroll, what you typed and its history.
-- **Limits.** One mark is just `Enter` on that row. More marks than `[panes] max` (4 by default)
+- **Limits.** Without a split, one mark is just `Enter` on that row. More marks than `[panes] max` (4 by default)
   says `Show together: at most 4 panes` and changes nothing; the panel stays open with your
   marks so you can drop some. A pinned row cannot be marked.
 - **Keys.** Rebind them under `[modal.panel]` with the actions `panel_mark` and
   `panel_visual`, e.g. `m = "panel_mark"`. If you give the leader (`space`) a binding, `space`
   in the panel waits `timeout_ms` for the rest of it before it marks.
+
+#### Changing or ending a split
+
+When the workspace has a split, the panel opens with its panes' tabs already marked, so you see
+which tabs they are, and the head says `split: 3 panes`. Change the marks as above and press
+`Enter`:
+
+- **Unmark a pane** (`space` on its row) and it leaves the split: the tab stays open, as an
+  ordinary tab right after the split in the tab order. Its row shows a dim `○` until you press
+  `Enter`, and the head says `split: 3 → 2`. The other panes keep their places and sizes, as
+  after `ctrl+b x`.
+- **Unmark down to one** (`split: 3 → 1 (unsplit)`) and the split ends: that tab is shown alone.
+  Unmark every pane and the split ends too, showing the highlighted tab.
+- **Mark another tab** and it joins as a pane; the panes are then arranged afresh in the
+  workspace's layout, as in [Showing tabs together](#showing-tabs-together). You can unmark one
+  and mark another in one go. `[panes] max` still applies.
+- **Focus** stays on the pane you were in if you kept it; otherwise it goes to the highlighted
+  row if it is marked, else the first marked one.
+- **Nothing changed?** `Enter` then just goes to the highlighted tab (into the focused pane, or
+  focusing its pane if it is one), and one `Esc` closes the panel. After a change, the first
+  `Esc` puts the split's marks back and the second closes.
+
+`ctrl+b )` / `ctrl+b (` with the panel open list the other workspace with its own split marked.
+No page reloads.
 
 ### Routing: which workspace a link opens in
 

@@ -53,7 +53,9 @@ import {
   layoutPanes,
   newPane,
   resizePane,
+  showAlone,
   showTabs,
+  shownSplit,
   splitPane,
   swapPane,
   zoomPane,
@@ -978,6 +980,9 @@ export const VimmaHost = {
         },
         say: (text) => state.notice.show(text),
         together: (tabIds, focus) => showTabs(win, tabIds, focus),
+        // docs/specs/side-panel-unsplit.md: the split's panes start marked.
+        split: () => shownSplit(win),
+        alone: (tabId) => showAlone(win, tabId),
       }),
       bookmarks: new BookmarksPanel(win, {
         load: () => loadTree(win),

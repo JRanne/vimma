@@ -6,6 +6,8 @@
 // down, `V` starts a range that `space` / `V` marks, `Esc` ends the range, then clears the marks,
 // then closes; `Enter` with marks shows the marked tabs together as the workspace's panes, in the
 // workspace's layout, without reloading a page. Past `[panes] max` it is refused.
+// With a split the panel opens with its panes marked (docs/specs/side-panel-unsplit.md, tested in
+// browser_vimma_side_panel_unsplit.js); these tasks unmark them first to choose a whole new set.
 
 "use strict";
 
@@ -161,6 +163,18 @@ async function mark(...names) {
   }
 }
 
+/**
+ * Unmarks the split's panes, which the panel marks as it opens (docs/specs/side-panel-unsplit.md),
+ * so the marks that follow are the whole new set, as these tasks were written.
+ */
+async function unmarkPanes() {
+  for (const n of markedTitles()) {
+    await goTo(n);
+    EventUtils.synthesizeKey(" ", {});
+    await until(() => !markedTitles().includes(n), `${n} is unmarked`);
+  }
+}
+
 async function enter() {
   EventUtils.synthesizeKey("KEY_Enter", {});
   await until(() => !isOpen(), "Enter closes the panel");
@@ -289,6 +303,7 @@ add_task(async function three_marks_replace_the_split_and_the_unmarked_tab_stays
   const tabs = ["a", "c", "e"].map((n) => byName.get(n));
   const before = identity(tabs);
   await openPanel();
+  await unmarkPanes();
   await mark("a", "c", "e");
   await goTo("b");
   await enter();
@@ -306,6 +321,7 @@ add_task(async function four_marks_make_the_dwindle_spiral() {
   const tabs = ["a", "b", "c", "d"].map((n) => byName.get(n));
   const before = identity(tabs);
   await openPanel();
+  await unmarkPanes();
   await mark("a", "b", "c", "d");
   // Row order is tab order, and Firefox's split view keeps a split's tabs together in the tab
   // strip: the last split (a, c, e) moved c before b.
@@ -322,6 +338,7 @@ add_task(async function five_marks_past_the_max_are_refused_and_nothing_changes(
   const was = shape();
   const selectedTab = gBrowser.selectedTab;
   await openPanel();
+  await unmarkPanes();
   await mark("a", "b", "c", "d", "e");
   EventUtils.synthesizeKey("KEY_Enter", {});
   await until(() => notice() !== null, "a notice");
@@ -333,24 +350,25 @@ add_task(async function five_marks_past_the_max_are_refused_and_nothing_changes(
   await reset();
 });
 
-add_task(async function a_stored_preset_arranges_them_and_one_mark_just_goes_there() {
+add_task(async function a_stored_preset_arranges_them_and_enter_on_a_row_just_goes_there() {
   if (gBrowser.selectedTab !== byName.get("a")) {
     await BrowserTestUtils.switchTab(gBrowser, byName.get("a"));
   }
   Assert.ok(view().split("vertical", { tab: byName.get("b") }).ok, "a | b");
   Assert.ok(view().arrange("main-horizontal").ok, "main-horizontal stored");
   await openPanel();
+  await unmarkPanes();
   await mark("c", "d", "e");
   await goTo("d");
   await enter();
   await until(() => shape() === "y[d,x[c,e]]", "main-horizontal, the focused d as main");
   Assert.equal(view().panes.layout, "main-horizontal", "the preset stays stored");
 
+  // With the split's marks unchanged, Enter goes to the row (side-panel-unsplit decision 12).
   await openPanel();
-  await mark("b");
-  await goTo("e");
+  await goTo("b");
   await enter();
-  await until(() => gBrowser.selectedTab === byName.get("b"), "one mark goes to that tab");
+  await until(() => gBrowser.selectedTab === byName.get("b"), "Enter goes to that tab");
   Assert.equal(shape(), "y[b,x[c,e]]", "shown in the focused pane, as Enter on its row does");
   await reset();
 });

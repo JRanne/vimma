@@ -8,6 +8,7 @@
 
 import { closest, describeAction } from "../core/actions.mjs";
 import { LAYOUTS, isLayoutName, layoutOfAction } from "../core/layouts.mjs";
+import { leaves } from "../core/panes.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { closeTab } from "./tab-ops.mjs";
 import { tabById } from "./goto.mjs";
@@ -135,6 +136,36 @@ export function showTabs(win, tabIds, focusId) {
   if (!result.ok) return `${TOGETHER}: ${result.reason}`;
   focusPage(win);
   return null;
+}
+
+/**
+ * The side panel's `Enter` down to one mark or none (docs/specs/side-panel-unsplit.md): the
+ * split ends, `tabId`'s tab is shown alone and its page has keyboard focus.
+ * @param {Window} win
+ * @param {string} tabId  the panel's row id
+ */
+export function showAlone(win, tabId) {
+  const view = PaneViews.get(win);
+  const tab = tabById(win, tabId);
+  if (!view || !tab) return;
+  view.showAlone(/** @type {any} */ (tab));
+  focusPage(win);
+}
+
+/**
+ * The split the side panel pre-marks (docs/specs/side-panel-unsplit.md): the shown tree's tabs
+ * and its focused pane's tab, as panel ids; null without a split.
+ * @param {Window} win
+ * @returns {{ panes: string[], focus: string | null } | null}
+ */
+export function shownSplit(win) {
+  const panes = PaneViews.get(win)?.panes;
+  if (!panes) return null;
+  const order = leaves(panes);
+  return {
+    panes: order.map((l) => l.tab),
+    focus: order.find((l) => l.pane === panes.focus)?.tab ?? null,
+  };
 }
 
 /**

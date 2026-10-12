@@ -36,8 +36,8 @@ import {
   dwindleDirection,
   layoutRefusal,
   nextLayout,
-  showTogether,
-  togetherRefusal,
+  repane,
+  repaneRefusal,
 } from "../core/layouts.mjs";
 import { planSplit } from "../core/splitplan.mjs";
 import {
@@ -423,8 +423,9 @@ export class PaneView {
    * Shows `tabs` (reading order) as the panes, replacing the split
    * (docs/specs/m4-side-panel-multiselect.md): arranged as the stored preset, else
    * `[panes] layout`; focus on `focus`. Tabs of the old split that are not listed leave it and
-   * stay open; pages move, never reload. Past `[panes] max`, or with no space: refused, nothing
-   * changes.
+   * stay open; pages move, never reload. When none joins, the panes left keep their shape and
+   * sizes, each removed one closed as `close` would (docs/specs/side-panel-unsplit.md decision
+   * 15). Past `[panes] max`, or with no space: refused, nothing changes.
    * @param {Tab[]} tabs  two or more, each with its panel
    * @param {Tab} focus
    * @returns {PaneResult}
@@ -439,9 +440,21 @@ export class PaneView {
       mainSize: this.mainSize,
       max: this.#max,
     };
-    const refusal = togetherRefusal(ids, options);
+    const refusal = repaneRefusal(this.#panes, ids, options);
     if (refusal) return { ok: false, reason: refusal.message };
-    this.#set(showTogether(ids, options));
+    this.#set(repane(this.#panes, ids, options));
+    return { ok: true };
+  }
+
+  /**
+   * Ends the split and shows `tab` alone, selected (docs/specs/side-panel-unsplit.md): every
+   * other pane's tab stays open. Without a split it only selects `tab`.
+   * @param {Tab} tab
+   * @returns {PaneResult}
+   */
+  showAlone(tab) {
+    if (this.#panes) this.#set(null);
+    this.#select(tab);
     return { ok: true };
   }
 

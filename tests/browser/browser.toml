@@ -143,6 +143,8 @@ support-files = ["file_vimma_title.html"]
 
 ["browser_vimma_side_panel_marks.js"]
 
+["browser_vimma_side_panel_unsplit.js"]
+
 ["browser_vimma_firefox_keys.js"]
 support-files = ["file_vimma_plain.html"]
 
