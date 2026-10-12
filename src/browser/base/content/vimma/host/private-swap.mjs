@@ -13,6 +13,7 @@
 import {
   PARK,
   PROBE_LUA,
+  QUERY_ACTIVE_WORKSPACE,
   QUERY_CLIENTS,
   QUERY_VERSION,
   detectDialect,
@@ -21,15 +22,16 @@ import {
   nonceTitle,
   pairStep,
   parkedWindow,
+  parseActiveWorkspace,
   parseClients,
   parseEvent,
+  planRescue,
   planShow,
   repliesOk,
-  workspaceTarget,
 } from "../core/hyprswap.mjs";
 import { HyprIpc, REPLY_MS } from "./hypr/HyprIpc.sys.mjs";
 
-/** @import { Client, Dialect, Pair, PairEvent, ShowOp } from "../core/hyprswap.mjs" */
+/** @import { Client, Command, Dialect, Pair, PairEvent, ShowOp } from "../core/hyprswap.mjs" */
 /** @import { PrivatePlacement } from "../core/config.mjs" */
 
 const lazy = /** @type {any} */ ({});
@@ -43,6 +45,16 @@ export const SWAP_REFUSED = "private: the window manager refused the swap; showi
 
 /** @type {PrivatePlacement} */
 let placement = "swap";
+/** config.toml was read: until then nothing is sent, whatever it says (review of PR #151). */
+let configured = false;
+/** GTK's activate for a window a batch just focused or parked comes late: it is the swap's. */
+const SETTLE_MS = 400;
+let settleUntil = 0;
+/** movewindowv2 events our own batches will cause, per window: not the user's moves. */
+/** @type {Map<string, number>} */
+const ownMoves = new Map();
+/** Bumped when the pair is forgotten: swaps queued before that are dropped. */
+let epoch = 0;
 /** A swap failed: "window" placement until the next config reload (decision 7). */
 let failed = false;
 /**
@@ -135,11 +147,11 @@ function detect() {
 
 /** Whether a switch tries the swap at all. */
 function wanted() {
-  return placement === "swap" && !failed && !(wm.state === "none" && !wm.retry);
+  return configured && placement === "swap" && !failed && !(wm.state === "none" && !wm.retry);
 }
 
 function ensureEvents() {
-  if (events) return;
+  if (events || wm.state !== "ok" || placement !== "swap") return;
   try {
     events = HyprIpc.listen(onLine, () => {
       events = null;
@@ -168,9 +180,18 @@ function onLine(line) {
       records.delete(ev.address);
       return;
     }
-    case "move":
+    case "move": {
+      // Our own batches' moves can arrive after their reply, even after the next swap began.
+      const own = ownMoves.get(ev.address) ?? 0;
+      if (own > 0) {
+        if (own === 1) ownMoves.delete(ev.address);
+        else ownMoves.set(ev.address, own - 1);
+        return;
+      }
+      if (running) return;
       step({ type: "moved", window: ev.address, workspace: ev.workspace });
       return;
+    }
     default:
   }
 }
@@ -241,31 +262,61 @@ async function clients() {
 }
 
 /**
- * The swap could not be done: the parked window is shown where the other one is, the pair is
- * forgotten, and switches show windows until the next config reload (decision 7).
+ * Sends `commands` as one batch, counting the moves it will cause as our own.
+ * @param {Dialect} dialect
+ * @param {Command[]} commands
+ * @returns {Promise<boolean>} every command succeeded
+ */
+async function send(dialect, commands) {
+  const batch = encodeBatch(dialect, commands);
+  if (!batch) return false;
+  for (const c of commands) {
+    if (c.verb === "move") ownMoves.set(c.window, (ownMoves.get(c.window) ?? 0) + 1);
+  }
+  let reply = "";
+  try {
+    reply = await HyprIpc.request(batch.text);
+  } catch {
+    // no reply: a failure
+  }
+  settleUntil = Date.now() + SETTLE_MS;
+  return repliesOk(reply, batch.count);
+}
+
+/** The pair is forgotten: swaps queued for it are dropped. */
+function forget() {
+  pair = null;
+  epoch++;
+}
+
+/**
+ * The swap could not be done: whatever is in special:vimma comes out (to the other window's
+ * workspace, else the active one), the pair is forgotten, and the window to show is focused.
+ * A window is never left parked (review of PR #151). A refusal by Hyprland itself also turns
+ * the swap off until the next config reload, and says so once (decision 7).
  * @param {Dialect} dialect
  * @param {string} show  the window to show
  * @param {string} place
- * @param {boolean} closing  the slot window was closing: not a refusal, nothing said
+ * @param {boolean} refused  Hyprland refused a batch (not: a slot Vimma cannot swap into)
  */
-async function rescue(dialect, show, place, closing) {
-  pair = null;
-  if (!closing) failed = true;
+async function rescue(dialect, show, place, refused) {
+  forget();
+  ownMoves.clear();
+  if (refused) failed = true;
   const list = await clients();
   const x = list?.find((c) => c.address === show) ?? records.get(show);
   const y = list?.find((c) => c.address === place) ?? records.get(place);
-  // A batch is not a transaction: either window may have reached special:vimma.
-  const stuck = [x, y].find((c) => c?.workspace.name === PARK);
-  const other = stuck === x ? y : x;
-  const ws = workspaceTarget(other?.workspace);
-  /** @type {import("../core/hyprswap.mjs").Command[]} */
-  const commands = [];
-  if (stuck && ws !== null) commands.push({ verb: "move", window: stuck.address, workspace: ws });
-  if (x && x.workspace.name !== PARK) commands.push({ verb: "focus", window: show });
-  else if (stuck && ws !== null) commands.push({ verb: "focus", window: stuck.address });
-  const batch = commands.length ? encodeBatch(dialect, commands) : null;
-  if (batch) await HyprIpc.request(batch.text).catch(() => {});
-  if (closing) return;
+  let active = null;
+  if ([x, y].some((c) => c?.workspace.name === PARK)) {
+    try {
+      active = parseActiveWorkspace(await HyprIpc.request(QUERY_ACTIVE_WORKSPACE));
+    } catch {
+      active = null;
+    }
+  }
+  const commands = planRescue(x, y, active);
+  if (commands.length) await send(dialect, commands);
+  if (!refused) return;
   logOnce(SWAP_REFUSED);
   const win = byAddress.get(show)?.deref();
   if (win && !win.closed) lazy.VimmaHost.say(win, SWAP_REFUSED);
@@ -284,25 +335,17 @@ async function showInPlace(op, { cached = false }) {
   const x = list?.find((c) => c.address === op.show) ?? (cached ? records.get(op.show) : null);
   const y = list?.find((c) => c.address === op.place) ?? (cached ? records.get(op.place) : null);
   if (!x || !y) {
-    await rescue(dialect, op.show, op.place, cached);
+    await rescue(dialect, op.show, op.place, false);
     return false;
   }
   const plan = planShow(dialect, x, y);
   if (plan.kind === "refuse") {
-    await rescue(dialect, op.show, op.place, cached);
+    await rescue(dialect, op.show, op.place, false);
     return false;
   }
-  const batch = /** @type {{ text: string, count: number }} */ (
-    encodeBatch(dialect, plan.commands)
-  );
-  let reply = "";
-  try {
-    reply = await HyprIpc.request(batch.text);
-  } catch {
-    // no reply: the check below treats it as a failure
-  }
-  if (!repliesOk(reply, batch.count)) {
-    await rescue(dialect, op.show, op.place, cached);
+  if (!(await send(dialect, plan.commands))) {
+    // The slot window closing can make Hyprland's swap fail: not a refusal.
+    await rescue(dialect, op.show, op.place, !cached);
     return false;
   }
   // A grouped or pinned slot: shown beside, nothing parked.
@@ -326,12 +369,19 @@ async function showInPlace(op, { cached = false }) {
 function step(event, options = {}) {
   if (/** @type {any} */ (Services).startup.shuttingDown) return Promise.resolve(false);
   const { state, ops } = pairStep(pair, event);
-  pair = state;
+  if (pair && !state && (event.type === "moved" || event.type === "failed")) forget();
+  else pair = state;
+  ensureEvents();
   if (!ops.length) return Promise.resolve(true);
+  const at = epoch;
   running++;
   chain = chain.then(async () => {
     try {
-      for (const op of ops) if (!(await showInPlace(op, options))) return false;
+      for (const op of ops) {
+        // The pair was forgotten meanwhile: parking now would strand a window.
+        if (at !== epoch) return false;
+        if (!(await showInPlace(op, options))) return false;
+      }
       return true;
     } catch (e) {
       console.error("vimma: private swap failed", e);
@@ -346,7 +396,18 @@ function step(event, options = {}) {
 /** @param {Window} win */
 function onActivated(win) {
   const a = addresses.get(win);
-  if (!a || running || parkedWindow(pair) !== a) return;
+  if (!a || running || Date.now() < settleUntil || parkedWindow(pair) !== a) return;
+  step({ type: "activated", window: a });
+}
+
+/**
+ * A new tab in the parked normal window (a link from another app, decided question 2) brings
+ * it back. Never the parked private window's: that would show private content in the slot.
+ * @param {Window} win
+ */
+function onTabOpen(win) {
+  const a = addresses.get(win);
+  if (!a || pair?.parked !== "normal" || pair.normal !== a) return;
   step({ type: "activated", window: a });
 }
 
@@ -360,7 +421,7 @@ function onUnload(win) {
 
 /** @param {Window} win */
 function track(win) {
-  if (placement !== "swap" || failed || win.closed) return;
+  if (!configured || placement !== "swap" || failed || win.closed) return;
   addressOf(win).then((a) => {
     if (a) clients();
   });
@@ -377,9 +438,8 @@ export const PrivateSwap = {
     windows.add(win);
     win.addEventListener("unload", () => onUnload(win), { once: true });
     win.addEventListener("activate", () => onActivated(win));
-    /** @type {any} */ (win).gBrowser?.tabContainer.addEventListener("TabOpen", () =>
-      onActivated(win),
-    );
+    // TabOpen bubbles from the tab; gBrowser does not exist yet when vimma.js runs.
+    win.addEventListener("TabOpen", () => onTabOpen(win));
     track(win);
   },
 
@@ -389,12 +449,14 @@ export const PrivateSwap = {
    */
   configure(next) {
     placement = next;
+    configured = true;
     failed = false;
     if (next === "window") {
       events?.close();
       events = null;
       return;
     }
+    ensureEvents();
     for (const win of windows) track(win);
   },
 
@@ -470,7 +532,7 @@ export const PrivateSwap = {
    * from now on; undefined: back to the environment.
    * @param {{ request: string, events: string } | null | undefined} sockets
    */
-  _resetForTests(sockets) {
+  _resetForTests(sockets, { configured: read = true } = {}) {
     events?.close();
     events = null;
     HyprIpc._setSocketsForTests(sockets);
@@ -480,6 +542,10 @@ export const PrivateSwap = {
     failed = false;
     logged = false;
     placement = "swap";
+    configured = read;
+    settleUntil = 0;
+    ownMoves.clear();
+    epoch++;
     nonces.clear();
     byAddress.clear();
     records.clear();

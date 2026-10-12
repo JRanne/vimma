@@ -97,13 +97,26 @@ function readAvailable(input, binary) {
 }
 
 export const HyprIpc = {
-  /** The instance's two sockets, or null when the environment names none (decision 3). */
+  /**
+   * The instance's two sockets, or null when the environment names none (decision 3), or when
+   * their folder is writable by others: then they may not be the user's Hyprland.
+   */
   get sockets() {
-    if (override !== undefined) return override;
-    return hyprSockets({
-      signature: Services.env.get("HYPRLAND_INSTANCE_SIGNATURE") || undefined,
-      runtimeDir: Services.env.get("XDG_RUNTIME_DIR") || undefined,
-    });
+    const found =
+      override !== undefined
+        ? override
+        : hyprSockets({
+            signature: Services.env.get("HYPRLAND_INSTANCE_SIGNATURE") || undefined,
+            runtimeDir: Services.env.get("XDG_RUNTIME_DIR") || undefined,
+          });
+    if (!found) return null;
+    try {
+      const dir = fileOf(found.request).parent;
+      if (dir && dir.exists() && dir.permissions & 0o022) return null;
+    } catch {
+      // unreadable: connecting will fail and say so
+    }
+    return found;
   },
 
   /**
@@ -157,8 +170,8 @@ export const HyprIpc = {
         if (done) return;
         const bytes = readAvailable(input, binary);
         if (!bytes) {
-          // Nothing before the close: the connection was refused or reset.
-          finish(size ? null : new Error("no reply"));
+          // Closed with nothing said: refused or reset, not slow (no retry, review of #151).
+          finish(size ? null : new Error("refused"));
           return;
         }
         if (bytes.length) {

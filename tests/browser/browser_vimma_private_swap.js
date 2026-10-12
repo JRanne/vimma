@@ -20,6 +20,9 @@ const { PARK, encodeBatch, parseClients, planShow, isAllowedRequest } = ChromeUt
 const { AboutVimma } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/about/AboutVimma.sys.mjs",
 );
+const { togglePrivate } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/host/private-ops.mjs",
+);
 const { PrivateBrowsingUtils } = ChromeUtils.importESModule(
   "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
 );
@@ -83,9 +86,19 @@ function shortDir() {
  * window's title changes, `movewindowv2` on moves and `closewindow` when one closes.
  */
 class FakeHypr {
-  /** @param {{ mode?: "lua" | "silent" | "errors" }} [options] */
-  constructor({ mode = "lua" } = {}) {
+  /**
+   * @param {{ mode?: "lua" | "silent" | "errors" | "hangup" | "open-on-nonce",
+   *   delayMoves?: number }} [options]  hangup: closes every request unanswered;
+   *   open-on-nonce: a window is announced only by openwindow, with its nonce title, and
+   *   j/clients never shows that title; delayMoves: movewindowv2 comes this many ms late
+   */
+  constructor({ mode = "lua", delayMoves = 0 } = {}) {
     this.mode = mode;
+    this.delayMoves = delayMoves;
+    this.reqAccepts = 0;
+    this.evAccepts = 0;
+    /** What j/activeworkspace answers. */
+    this.active = { id: 7, name: "7" };
     this.dir = shortDir();
     /** Every request, as received. @type {string[]} */
     this.received = [];
@@ -117,6 +130,7 @@ class FakeHypr {
     this.evServer = unixServer(ev);
     this.evServer.asyncListen({
       onSocketAccepted: (_s, t) => {
+        this.evAccepts++;
         this.events.push({ t, out: t.openOutputStream(Ci.nsITransport.OPEN_UNBUFFERED, 0, 0) });
       },
       onStopListening() {},
@@ -127,7 +141,12 @@ class FakeHypr {
 
   /** @param {any} t */
   accept(t) {
+    this.reqAccepts++;
     this.held.push(t);
+    if (this.mode === "hangup") {
+      t.close(Cr.NS_OK);
+      return;
+    }
     const flags = Ci.nsITransport.OPEN_UNBUFFERED;
     const input = t.openInputStream(flags, 0, 0).QueryInterface(Ci.nsIAsyncInputStream);
     const out = t.openOutputStream(flags, 0, 0);
@@ -185,6 +204,18 @@ class FakeHypr {
     }
   }
 
+  /** A movewindowv2, late with `delayMoves` as Hyprland's can be after its reply. */
+  emitMove(line) {
+    if (this.delayMoves) setTimeout(() => this.emit(line), this.delayMoves);
+    else this.emit(line);
+  }
+
+  /** Hyprland restarting its event socket: every listener is cut off. */
+  dropEvents() {
+    for (const e of this.events) e.t.close(Cr.NS_OK);
+    this.events = [];
+  }
+
   /** @param {Window} win */
   rec(win) {
     return this.clients.get(this.addr.get(win));
@@ -212,13 +243,18 @@ class FakeHypr {
           at: first ? [...SLOT.at] : [647, 43],
           size: first ? [...SLOT.size] : [621, 745],
         });
-        this.emit(`openwindow>>${a.slice(2)},3,vimma-vimma,${EVENT_TITLE}`);
+        if (this.mode !== "open-on-nonce") {
+          this.emit(`openwindow>>${a.slice(2)},3,vimma-vimma,${EVENT_TITLE}`);
+        }
       }
       open.add(a);
       const title = win.document.title;
       if (this.titles.get(a) !== title) {
         this.titles.set(a, title);
-        this.emit(`windowtitlev2>>${a.slice(2)},${title}`);
+        if (this.mode !== "open-on-nonce") this.emit(`windowtitlev2>>${a.slice(2)},${title}`);
+        else if (/^vimma-[0-9a-f]{32}$/.test(title)) {
+          this.emit(`openwindow>>${a.slice(2)},3,vimma-vimma,${title}`);
+        }
       }
     }
     for (const a of [...this.clients.keys()]) {
@@ -233,6 +269,7 @@ class FakeHypr {
   handle(text) {
     if (this.mode === "errors") return "error: nope";
     if (text === "j/version") return JSON.stringify({ version: "0.56.2", tag: "v0.56.2" });
+    if (text === "j/activeworkspace") return JSON.stringify(this.active);
     if (text === "j/clients") {
       this.poll();
       // An unrelated app's window, whose title must never travel further.
@@ -248,7 +285,7 @@ class FakeHypr {
         ...[...this.clients.values()].map((c) => ({
           ...c,
           win: undefined,
-          title: this.titles.get(c.address) ?? "",
+          title: this.mode === "open-on-nonce" ? "Vimma" : (this.titles.get(c.address) ?? ""),
         })),
         other,
       ]);
@@ -290,7 +327,7 @@ class FakeHypr {
       const c = get(m[2]);
       if (!c) return "warning: window not found";
       c.workspace = this.ws(m[1]);
-      this.emit(`movewindowv2>>${m[2].slice(2)},${c.workspace.id},${c.workspace.name}`);
+      this.emitMove(`movewindowv2>>${m[2].slice(2)},${c.workspace.id},${c.workspace.name}`);
       return "ok";
     }
     if (
@@ -351,10 +388,10 @@ class FakeHypr {
   }
 
   /** The user moving a window with their own key (decision 7). */
-  userMove(win, id) {
+  userMove(win, id, name = String(id)) {
     const c = this.rec(win);
-    c.workspace = { id, name: String(id) };
-    this.emit(`movewindowv2>>${c.address.slice(2)},${id},${id}`);
+    c.workspace = { id, name };
+    this.emit(`movewindowv2>>${c.address.slice(2)},${id},${name}`);
   }
 
   stop() {
@@ -375,10 +412,10 @@ class FakeHypr {
 let fake = null;
 
 /** A fresh fake (or `sockets` for the no-Hyprland cases) and a fresh PrivateSwap. */
-async function start(options = {}, sockets) {
+async function start(options = {}, sockets, reset = {}) {
   await teardown();
   fake = sockets === undefined ? new FakeHypr(options) : null;
-  PrivateSwap._resetForTests(fake ? fake.sockets : sockets);
+  PrivateSwap._resetForTests(fake ? fake.sockets : sockets, reset);
   return fake;
 }
 
@@ -697,4 +734,122 @@ add_task(async function placement_window_sends_nothing() {
   await PrivateSwap._settled();
   Assert.deepEqual(f.received, [], "not even an address lookup");
   Assert.ok(!parked(window));
+});
+
+// Review of PR #151. The user (2026-10-12): "it should be possible to get back to [the normal
+// window] instantly": it is never left in special:vimma.
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+add_task(async function a_private_window_moved_to_a_scratchpad_still_gives_normal_back() {
+  const f = await start();
+  const priv = await enter();
+  // The user sends the private window to Omarchy's scratchpad: it has no slot to swap into.
+  f.userMove(priv, -97, "special:scratchpad");
+  await wait(100);
+  await SimpleTest.promiseFocus(priv);
+  prefix("P", { shiftKey: true }, priv);
+  await until(() => !parked(window), "normal is out of special:vimma");
+  Assert.equal(f.rec(window).workspace.id, 7, "on the active workspace");
+  await PrivateSwap._settled();
+  Assert.equal(PrivateSwap._pair, null, "the pair is forgotten");
+  Assert.ok(PrivateSwap.status.endsWith("private placement: swap"), "swap is still on");
+});
+
+add_task(async function fast_toggling_with_late_move_events_keeps_the_pair() {
+  await start({ delayMoves: 80 });
+  const priv = await enter();
+  await wait(200);
+  // Back and there again at once: the first swap's move events arrive after both replies.
+  togglePrivate(priv);
+  togglePrivate(window);
+  await PrivateSwap._settled();
+  await wait(300);
+  await PrivateSwap._settled();
+  Assert.equal(PrivateSwap._pair?.parked, "normal", "our own moves did not end the pair");
+  Assert.ok(parked(window) && inSlot(priv), "private is shown, normal parked");
+  togglePrivate(priv);
+  await until(() => !parked(window) && inSlot(window), "and normal comes back in its slot");
+});
+
+add_task(async function nothing_is_sent_before_the_config_says_where() {
+  const f = await start({}, undefined, { configured: false });
+  const win = await BrowserTestUtils.openNewBrowserWindow();
+  await wait(700);
+  Assert.deepEqual(f.received, [], "no probe and no nonce title before the config is read");
+  PrivateSwap.configure("window");
+  await wait(300);
+  Assert.deepEqual(f.received, [], "nor with placement = window");
+  PrivateSwap.configure("swap");
+  await until(() => f.received.includes("j/version"), "the config says swap: Hyprland is asked");
+  await BrowserTestUtils.closeWindow(win);
+});
+
+add_task(async function the_event_socket_reconnects() {
+  const f = await start();
+  await enter();
+  const before = f.evAccepts;
+  PrivateSwap.configure("window");
+  PrivateSwap.configure("swap");
+  await until(() => f.evAccepts > before, "placement window then swap listens again");
+  f.dropEvents();
+  const dropped = f.evAccepts;
+  const priv = privateWindows()[0];
+  await SimpleTest.promiseFocus(priv);
+  prefix("P", { shiftKey: true }, priv);
+  await until(() => f.evAccepts > dropped, "a switch after Hyprland dropped it listens again");
+});
+
+add_task(async function a_new_tab_in_the_parked_private_window_shows_nothing_private() {
+  const f = await start();
+  const priv = await enter();
+  await SimpleTest.promiseFocus(priv);
+  prefix("P", { shiftKey: true }, priv);
+  await until(() => parked(priv) && inSlot(window), "private is parked");
+  await PrivateSwap._settled();
+  const batches = f.batches.length;
+  BrowserTestUtils.addTab(priv.gBrowser, "about:blank");
+  await wait(300);
+  await PrivateSwap._settled();
+  Assert.ok(parked(priv), "the private window stays parked");
+  Assert.equal(f.batches.length, batches, "no swap");
+});
+
+add_task(async function an_activation_right_after_a_swap_is_the_swap_own() {
+  const f = await start();
+  await enter();
+  // As GTK's late activate for the window just parked (legacy fullscreen focuses it first).
+  window.dispatchEvent(new Event("activate"));
+  await wait(50);
+  await PrivateSwap._settled();
+  Assert.ok(parked(window), "a late activation does not undo the swap");
+  await wait(500);
+  window.dispatchEvent(new Event("activate"));
+  await until(() => !parked(window) && inSlot(window), "a later one brings normal back");
+  Assert.equal(PrivateSwap._pair?.parked, "private");
+  Assert.ok(f.batches.length >= 2);
+});
+
+add_task(async function a_refused_connection_is_not_retried() {
+  const f = await start({ mode: "hangup" });
+  await SimpleTest.promiseFocus(window);
+  const opened = BrowserTestUtils.waitForNewWindow();
+  prefix("P", { shiftKey: true });
+  const priv = await opened;
+  await until(() => Services.focus.activeWindow === priv, "the private window, as a window");
+  await SimpleTest.promiseFocus(priv);
+  prefix("P", { shiftKey: true }, priv);
+  await until(() => Services.focus.activeWindow === window, "back");
+  await SimpleTest.promiseFocus(window);
+  prefix("P", { shiftKey: true });
+  await until(() => Services.focus.activeWindow === priv, "there again");
+  await wait(100);
+  Assert.equal(f.reqAccepts, 1, "Hyprland is asked once, not at every switch");
+});
+
+add_task(async function a_window_named_only_by_openwindow_is_found() {
+  const f = await start({ mode: "open-on-nonce" });
+  const priv = await enter();
+  Assert.ok(inSlot(priv) && parked(window), "the swap ran with addresses from openwindow");
+  Assert.ok(f.batches.length >= 1);
 });
