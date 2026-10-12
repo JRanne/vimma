@@ -182,8 +182,11 @@ These are the trade-offs the workspaces' design accepts on purpose
   changes made by pages (tabs they opened), as in Firefox.
 - Pop-ups have no workspaces. Private windows have no normal workspaces: together they are the
   one [private workspace](guide.md#private-workspace), a second window-manager window (Firefox
-  keeps privacy per window), not a part of the Vimma window. There is one private workspace, not
-  several; all private windows share one cookie jar. Links from other apps never open in it.
+  keeps privacy per window), not a part of the Vimma window. On Hyprland, Vimma hides the one you
+  are not using in `special:vimma`, but Hyprland's event stream and other tools (`hyprctl
+clients`) still see both windows; elsewhere both are visible windows. There is one private
+  workspace, not several; all private windows share one cookie jar. Links from other apps never
+  open in it.
 - Firefox's sidebar keys (`ctrl+alt+x`, `ctrl+alt+u`, `ctrl+alt+z`; `ctrl+h` is off) still open its own
   sidebar beside Vimma's side panel; Firefox's four default containers stay in Settings.
 - Extensions that hide or show tabs (`tabs.hide`) conflict with workspace visibility.

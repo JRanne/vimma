@@ -1,6 +1,6 @@
 # Spec: private-swap
 
-Status: proposed (research done, design chosen; not implemented) · Milestone: after
+Status: implemented (hand checks on Hyprland pending) · Milestone: after
 [private-workspace](private-workspace.md) (merged, #142) · Area: `packages/vimma-core/src/`
 (`hyprswap.mjs` new, `config.mjs`, `defaults.mjs`); `host/hypr/HyprIpc.sys.mjs` (new),
 `host/private-swap.mjs` (new), `host/private-ops.mjs`, `about/AboutVimma.sys.mjs`,
