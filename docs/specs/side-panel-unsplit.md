@@ -1,16 +1,32 @@
 # Spec: side-panel-unsplit
 
-Status: ready (questions answered 2026-10-12) · Milestone: after M4 (builds on
+Status: ready (revised 2026-10-12 after the user tested it: hidden views, option B) · Milestone: after M4 (builds on
 [m4-side-panel-multiselect](m4-side-panel-multiselect.md), [m4-split-panes](m4-split-panes.md) and
 [tiling-layouts](tiling-layouts.md)) · Area: `packages/vimma-core/src/sidepanel.mjs`,
-`layouts.mjs` (or `panes.mjs`), `actions.mjs`; `ui/side-panel.mjs`, `split/PaneView.mjs`,
-`host/pane-ops.mjs`, `host/VimmaHost.sys.mjs`, `side-panel.css`. No upstream patch.
+`layouts.mjs`, `panes.mjs`, `snapshot.mjs`, `statusbar.mjs`, `actions.mjs`; `ui/side-panel.mjs`,
+`split/PaneView.mjs`, `host/pane-ops.mjs`, `host/VimmaHost.sys.mjs`,
+`workspaces/WindowWorkspaces.sys.mjs`, `ctl/VimmaControl.sys.mjs`, `side-panel.css`. No upstream
+patch.
 
 ## The user's words
 
 "we also need feature that allows unsplitting split view. when opening sidebar in split view show
 which windows were selected and then allow unselecting them similarly to how they were selected
 for split in a first place" (2026-10-12)
+
+After testing the first version (2026-10-12; their build was `main` without the panel's marks):
+
+"selecting one individual page and pressing enter from sidebar does not change the whole view. so
+flow should be select 1-many panes, it creates a view, when opening sidebar and selecting pane
+that is not in the view show only that. so we need more logic into how to unsplit when needed"
+
+Asked whether a tab picked outside the split keeps the split or ends it: "Kept as a view" (kept in
+the background, as Firefox's own split view does; picking any of its tabs brings it back whole).
+Asked about `Enter` on a tab that is in the split: "if we have for exmaple three panes selected,
+when sidebar is opened i should see them as marked, then pressin space unselects pane currently
+under so it does not show in split anymore, then pressin enter on top of that allows switching
+view to it". Asked whether a new tab (a link, `ctrl+t`) should still open in the focused pane:
+option B, yes; only picking an existing tab outside the view shows it alone.
 
 ## User stories
 
@@ -24,7 +40,14 @@ for split in a first place" (2026-10-12)
   `[panes] max`.
 - As a user, I can add and remove in one go: unmark one pane, mark another tab, apply once.
 - As a user, opening the panel only to jump to a tab (`j`/`k`, `Enter`, or a digit) still works
-  while a split exists; the pre-marked panes do not get in the way (decision 12).
+  while a split exists; the pre-marked panes do not get in the way (decision 12). A tab outside
+  the split then shows alone, and the split waits as a hidden view (decision 21).
+- As a user with panes A, B and C, I unmark C with `space` and press `Enter` on C: A and B stay a
+  view (hidden), and C shows alone in the whole window (decision 25).
+- As a user, picking any tab of a hidden view, by any route, brings the whole view back with its
+  sizes and its focused pane (decision 23). The status bar tells me a hidden view exists.
+- As a user, a link I open in a new foreground tab from a pane, or `ctrl+t`, still opens in that
+  pane (decision 22, m4-split-panes' user story).
 - As a user, I can back out of my changes without touching the split (decision 13).
 - As a screen-reader user, I hear the pane rows as checked when the panel opens on a split, and
   the header tells me how the split will change.
@@ -169,14 +192,14 @@ Decisions 1–11 follow the user's core idea. Decisions 12–19 are the answers 
     changelog line. No new default key (decision 12).
 
 12. **Applying is `Enter` (question 1a).** `Enter` applies when the marks differ from the
-    split's panes. With the marks unchanged it goes to the highlighted row's tab as today (a pane:
-    that pane gets focus; another tab: it replaces the focused pane's tab). Digits still go to
-    their row. No new key.
+    split's panes. With the marks unchanged it goes to the highlighted row's tab (a pane: that
+    pane gets focus; another tab: it shows alone and the split is hidden, decision 21, replacing
+    "it replaces the focused pane's tab"). Digits still go to their row. No new key.
 13. **`Esc` (question 2a).** An open range ends first, as today. Then: marks unchanged from the
     split, `Esc` closes the panel at once; changed, the first `Esc` puts the marks back to the
     split's panes and the second closes. Without a split `Esc` is as today (clear, then close).
 14. **Zero marks (question 3a).** Unmarking every pane of a split and pressing `Enter` ends the
-    split and shows the highlighted row's tab alone (the `alone` effect).
+    split and shows the highlighted row's tab alone (the `alone` effect). One mark left: decision 25.
 15. **Layout (question 4).** Removals only: each removed pane closes as `prefix+x` closes it (the
     neighbour takes its space, the other sizes stay, the stored preset name is kept, a zoom ends).
     Any addition, with or without removals: the whole set is re-arranged as multiselect does
@@ -186,16 +209,94 @@ Decisions 1–11 follow the user's core idea. Decisions 12–19 are the answers 
     "split: 3 → 0 (unsplit)" when applying would end it; an open range is added as today
     ("range: 2 · split: 3 → 4"). A pane row that is unmarked shows `○` in the gutter (a pane that
     will leave) instead of a blank; marked rows keep `●`.
-17. **Focus (question 6b).** After applying, the pane that had focus keeps it if it is still
-    marked; else the highlighted row if it is marked; else the first marked row.
+17. **Focus (question 6b), revised by decision 25.** After applying, the highlighted row's pane
+    has focus when that row is marked; else the pane that had focus, if it is still marked; else
+    the first marked row. (The first version put the kept pane before the highlighted row; the
+    user's "Enter on top of that allows switching view to it" puts the row first.)
 18. **The removed tab's place (question 7a).** It stays where Firefox's rebuild leaves it, right
     after the split; Vimma moves no tab.
 19. **One kind of mark (question 8a).** Pre-marks are ordinary marks; a future feature that uses
     marks decides then how it treats them.
 
+### Revision after testing: hidden views (option B, 2026-10-12)
+
+20. **A hidden view.** A split can be kept while not shown: its tree (panes, sizes, focused pane,
+    zoom, preset) stays, and another tab of the workspace shows alone in the whole window. Core:
+    `Panes.hidden: true` (optional, like `layout`; every pane operation keeps it), `hideView`,
+    `showView`. This is how Firefox's own split view behaves: selecting a tab outside it suspends
+    it (`tabsplitview.mjs` `#suspend`), selecting one of its tabs activates it again with its
+    widths (`#activate`). Vimma used to override that (`PaneView.#onTabSelect`'s `setPaneTab`);
+    now it follows it for picks.
+21. **Picking an existing tab outside the view shows it alone; the view is hidden.** Every route:
+    the side panel's `Enter` and digits, the `ctrl+b g` picker, `ctrl+tab`, `alt+1..9`,
+    `ctrl+b 1..9`, `ctrl+b n` / `p`, `gt` / `gT`, a click on a tab, the URL bar's switch-to-tab.
+    A pinned tab did this already ("the tree waits"); it is now the same hidden state.
+22. **A new foreground tab still opens in the focused pane** while the view shows (m4-split-panes'
+    user story): `ctrl+t`, `ctrl+b c`, `t`, `:tabnew`, `P`, a link opened in a new foreground tab
+    (also `f` on a `target=_blank` link), `vimma-ctl open` and routed links. A new tab is told from
+    a pick by its `TabOpen` coming just before its `TabSelect`, in the same task (as
+    WindowWorkspaces' `#adopt` already relies on). While the view is hidden a new tab shows alone
+    and the view stays hidden.
+23. **A hidden view comes back whole** when any of its tabs is selected, by any route: the same
+    tree, sizes and zoom, focus on that tab's pane. If something else selects a view's tab while
+    it is hidden (Firefox picking the next tab after a close), the view shows again on the next
+    reconcile.
+24. **Kept across switches and restarts.** A workspace switch parks the tree with its `hidden`
+    flag. The session snapshot writes `panes.hidden: true` and the workspace's `alone` (the tab
+    shown alone). `activeTab` stays the focused pane's tab, so an older Vimma reading the file
+    restores the split shown instead of failing; this Vimma restores the view hidden with `alone`
+    selected.
+25. **The side panel's `Enter`** (replaces the first version's 3 "one marked: that tab is shown
+    alone" and 12 where they differ). It applies the mark changes, then goes to the highlighted
+    row:
+    - marks unchanged: the highlighted row's tab (decision 12, with 21 and 23);
+    - two or more marked: the marked tabs become the view; the highlighted row's pane gets focus
+      when it is marked; when the highlighted row is a pane the change just removed (the user's
+      "space on C, Enter on C"), that tab shows alone and the new view is hidden; any other
+      highlighted row: the new view shows, focus per decision 17;
+    - one or no mark with a split: the split ends; the highlighted row's tab shows alone when it
+      was one of the removed panes or nothing is marked, else the one marked tab;
+    - without a split, one mark goes to that tab (multiselect decision 5).
+
+    **Flagged for the user:** the coordinator's rule was "then it goes to the highlighted row" in
+    every case. Taken literally, multiselect's documented flow (`space` on each of three tabs,
+    `Enter`) would show the row below the last mark alone and hide the new view, because `space`
+    moves down; and the user said "select 1-many panes, it creates a view". So an unrelated
+    unmarked row under the highlight does not hide a view the marks just created or changed.
+
+26. **The panel and a hidden view.** The panel lists a hidden view's tabs marked, as a shown one's,
+    and the header says `split: 3 panes (hidden)` while the marks match it.
+27. **The status bar** shows `split 3 hidden` where `pane n/m` would be, while the workspace has a
+    hidden view (dim, cut first when space is short).
+28. **`vimma-ctl state`** gives `panes.hidden: true` for a hidden view.
+
+### Behaviour changes (option B)
+
+1. Picking an existing tab outside a split (decision 21's routes) used to show it in the focused
+   pane, the split staying on screen and the pane's old tab staying open. Now it shows alone and
+   the split is hidden until one of its tabs is selected. There is no longer a way to put an
+   existing tab into a pane by picking it; mark it in the side panel instead.
+2. A pinned tab selected during a split looks the same as before (alone); the split is now marked
+   hidden, so the status bar shows it and a later reconcile (a resize, a closed tab) no longer
+   brings the split back on its own.
+3. The side panel's `Enter` or digit on an unmarked row with unchanged marks shows that tab alone
+   (it used to replace the focused pane's tab).
+4. The side panel's `Enter` on a pane just unmarked shows it alone and keeps the rest as a hidden
+   view (decision 25); with one mark left and the highlight on a removed pane, the highlighted
+   tab shows alone instead of the marked one.
+5. Focus after a changed `Enter`: the highlighted row first, then the kept focused pane (decision
+   17 revised).
+6. New: the status bar's `split N hidden`, the panel's `(hidden)`, `vimma-ctl state`'s
+   `panes.hidden`, and the snapshot's `panes.hidden` / `alone`.
+
+Unchanged: new foreground tabs open in the focused pane (decision 22); new panes (`ctrl+b v`,
+`-`, `enter`); a tab of another workspace switches workspaces; the address bar loads into the
+focused pane.
+
 ## Sub-PRs
 
-1. **core: pre-marks and the split diff** (`sidepanel.mjs`, `layouts.mjs`,
+1. **core: pre-marks, the split diff and hidden views** (`sidepanel.mjs`, `layouts.mjs`,
+   `panes.mjs` `hideView` / `showView` / `pickTab`, `snapshot.mjs`, `statusbar.mjs`,
    `actions.mjs` help text; Vitest only). `PanelState.panes`; `openPanel` / `refreshPanel` with
    `panes`; `panel.open` / `panel.close` per decisions 12–14; the `alone` effect;
    `markSummary` text per decision 16; `repane` per decision 15.
@@ -256,9 +357,27 @@ TDD as CLAUDE.md: each test is written first, run red, and its red output pasted
 - Existing suites stay green unchanged: `browser_vimma_side_panel.js`,
   `browser_vimma_side_panel_marks.js`, `browser_vimma_a11y.js`, the pane suites.
 
+### Tests for the revision (hidden views)
+
+- Vitest `panes.test.mjs`: `hideView` / `showView`; `pickTab` for a pane (focus; a hidden view
+  shown), an outside pick (hidden), a new tab (replaces the focused pane's tab; while hidden,
+  nothing), a pinned tab (hidden); every pane operation keeps `hidden`.
+- Vitest `snapshot.test.mjs`: a hidden view round-trips with `alone`; `activeTab` stays the
+  focused pane's tab in the file; a file without `alone` or with a bad one restores it shown.
+- Vitest `sidepanel.test.mjs`: decision 25's cases, `(hidden)` in the header; `statusbar.test.mjs`:
+  `split 3 hidden`.
+- Mochitest `browser_vimma_side_panel_unsplit.js`: the user's flow (three panes, `space` on C,
+  `Enter` on C: C alone, A and B a hidden view), a pick of each route kind (`selectedTab =`, the
+  picker, `ctrl+b n`), the view back whole with its ratios and focus, a new foreground tab in the
+  focused pane, the status bar marker, the panel's `(hidden)`, a workspace switch and back, and a
+  session restore (`setWindowState`) keeping the view hidden.
+- `browser_vimma_pane_workspaces.js`'s "selected from outside the split" task follows decision 21.
+- e2e: `m4-split-panes` and `m3-crash-restore` open pages with `vimma-ctl open` (new tabs,
+  decision 22), so their flows stay; rerun both.
+
 ## Docs to update
 
-- `docs/guide.md`, "Side panel" table (`Enter`, `Esc`, `space` rows) and "Showing tabs together":
+- `docs/guide.md`'s paragraph on picking a tab during a split (decision 21), and its "Side panel" table (`Enter`, `Esc`, `space` rows) and "Showing tabs together":
   a paragraph on changing or ending a split from the panel, with an example.
 - `README.md` feature list, the "Side panel" line: mention that the panel shows the split and can
   shrink or end it.
