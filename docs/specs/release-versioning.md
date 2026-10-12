@@ -74,5 +74,5 @@ every `feat`/`fix` since the first commit (as #127 does today). The open release
 
 - Answered 2026-10-12: breaking changes bump the patch like everything else ("yes allow me to
   choose when to go to 0.2.0"); the user moves to 0.2.0 or 1.0.0 with a `Release-As` footer.
-- First release 0.1.1 (recommended: 0.1.0 is what the dev builds already say) or 0.1.0 (push a
-  commit with a `Release-As: 0.1.0` footer before merging the release PR; it applies once).
+- Answered 2026-10-12: the first release is 0.1.1 ("yes first release should be 0.1.1"), which is
+  what release-please proposes on its own, since the dev builds already say 0.1.0. No footer needed.
