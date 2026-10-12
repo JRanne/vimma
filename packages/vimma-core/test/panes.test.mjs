@@ -7,6 +7,10 @@ import {
   closePane,
   focus,
   focusPane,
+  hideView,
+  isHidden,
+  pickTab,
+  showView,
   swap,
   toggleZoom,
   resize,
@@ -750,5 +754,84 @@ describe("pane tree properties", () => {
         else expect(t.focus).toBe(s.mru.find((p) => touching.includes(p)));
       }),
     );
+  });
+});
+
+// docs/specs/side-panel-unsplit.md decisions 20-23: a split kept as a hidden view.
+describe("hidden views and pickTab", () => {
+  /** t1 | (t2 / t3), focus on t2's pane, t1 made wider. */
+  const view = () => {
+    let s = createPanes("t1");
+    s = split(s, "p1", "vertical", "t2");
+    s = split(s, "p2", "horizontal", "t3");
+    s = focusPane(s, "p1");
+    s = resize(s, "wider", 0.1);
+    return focusPane(s, "p2");
+  };
+
+  test("hideView keeps the whole tree and marks it hidden; showView clears it", () => {
+    const s = view();
+    const h = hideView(s);
+    expect(h.hidden).toBe(true);
+    expect(h.root).toBe(s.root);
+    expect(h.focus).toBe(s.focus);
+    expect(isHidden(h)).toBe(true);
+    expect(isHidden(s)).toBe(false);
+    const back = showView(h);
+    expect("hidden" in back).toBe(false);
+    expect(back.root).toBe(s.root);
+    expect(showView(s)).toBe(s);
+    expect(hideView(h)).toBe(h);
+  });
+
+  test("pane operations keep the hidden flag", () => {
+    const h = hideView(view());
+    expect(closePane(h, "p3").hidden).toBe(true);
+    expect(resize(h, "taller", 0.05).hidden).toBe(true);
+  });
+
+  test("picking a pane's tab focuses it", () => {
+    const r = pickTab(view(), "t3");
+    expect(r.change).toBe("focus");
+    expect(r.panes.focus).toBe("p3");
+  });
+
+  test("picking the focused pane's tab changes nothing", () => {
+    const s = view();
+    expect(pickTab(s, "t2")).toEqual({ panes: s, change: "none" });
+  });
+
+  test("picking a tab of a hidden view shows the view, focused on that tab's pane", () => {
+    const s = view();
+    const r = pickTab(hideView(s), "t1");
+    expect(r.change).toBe("show");
+    expect(isHidden(r.panes)).toBe(false);
+    expect(r.panes.root).toBe(s.root);
+    expect(r.panes.focus).toBe("p1");
+    expect(pickTab(hideView(s), "t2").panes).toEqual(s);
+  });
+
+  test("picking an existing tab outside the view hides it, sizes and focus kept", () => {
+    const s = view();
+    const r = pickTab(s, "t9");
+    expect(r.change).toBe("hide");
+    expect(r.panes).toEqual(hideView(s));
+  });
+
+  test("a new foreground tab replaces the focused pane's tab while the view shows", () => {
+    const s = view();
+    const r = pickTab(s, "t9", { opened: true });
+    expect(r.change).toBe("replace");
+    expect(r.panes).toEqual(setPaneTab(s, "p2", "t9"));
+  });
+
+  test("a new tab that cannot join (pinned) hides the view instead", () => {
+    expect(pickTab(view(), "t9", { opened: true, canJoin: false }).change).toBe("hide");
+  });
+
+  test("anything outside a hidden view leaves it hidden", () => {
+    const h = hideView(view());
+    expect(pickTab(h, "t9")).toEqual({ panes: h, change: "none" });
+    expect(pickTab(h, "t9", { opened: true })).toEqual({ panes: h, change: "none" });
   });
 });

@@ -413,6 +413,20 @@ window })` (exact position) and `fullscreen_state({ internal, client, window })`
 - Not checked: the legacy dialect (this config is Lua), the master and scrolling layouts, and
   everything in the hand-check list below that needs a real Vimma window.
 
+### Fix: the first swap never ran on a real desktop (2026-10-12)
+
+`OpenBrowserWindow` returns the new window while it still shows the initial `about:blank`,
+which has no `delayedStartupPromise`, so `enter()` did not wait and set the nonce title on that
+document. On Wayland the title never reaches Hyprland. The private window's own `init` then
+reused the same pending lookup, the lookup timed out, and `enter()` gave up without a word,
+leaving the private window tiled beside the normal one. The fake Hyprland saw every window,
+`about:blank` included, so the tests passed. Now the lookup waits for the window's
+`browser-delayed-startup-finished` (or its close), the fake only sees a window once its browser
+document is up, and a window Hyprland never names is logged once and shown in `about:vimma`.
+Checked with a throwaway profile on Hyprland 0.56.2: enter, back, enter again and
+`ctrl+b shift+d` each left the windows where the design says (normal in `special:vimma` while
+private holds its slot, and the other way round).
+
 ## Out of scope
 
 Other window managers (Sway, niri, KWin and GNOME have no comparable socket or need a different
