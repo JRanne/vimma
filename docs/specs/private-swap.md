@@ -1,6 +1,6 @@
 # Spec: private-swap
 
-Status: proposed (research done, design chosen; not implemented) · Milestone: after
+Status: implemented (hand checks on Hyprland pending) · Milestone: after
 [private-workspace](private-workspace.md) (merged, #142) · Area: `packages/vimma-core/src/`
 (`hyprswap.mjs` new, `config.mjs`, `defaults.mjs`); `host/hypr/HyprIpc.sys.mjs` (new),
 `host/private-swap.mjs` (new), `host/private-ops.mjs`, `about/AboutVimma.sys.mjs`,
@@ -384,6 +384,34 @@ all usable from our own files. ADR-017 records the decision to talk to the windo
    mochitest.
 4. The pref default (decided question 1), `about:vimma`, docs, and the manual
    checks.
+
+## Results
+
+### Step 1: the Lua swap argument, checked live (2026-10-12)
+
+On this machine (Hyprland 0.56.2, Lua config), with four throwaway `foot` terminals that the
+check launched itself into two hidden special workspaces (`special:vimmatest` and
+`special:vimmapark`, via `hl.dsp.exec_cmd(cmd, { workspace = "special:… silent" })`). The
+user's windows, focus and visible workspace were never touched; the terminals were killed by
+PID afterwards, and both special workspaces closed with them.
+
+- `hl.dsp.window.swap({ window = "address:X", other = "address:Y" })` replies `ok` and swaps
+  the two windows **without focusing either**. The `window` key works on swap, so the Lua plan
+  needs no focus before the swap (the legacy `swapwindow` still acts on the focused window, so
+  the legacy encoding focuses first).
+- `hl.dsp.window.move({ workspace = "special:…", follow = false, window = … })`, `float({ action
+= "enable" | "disable", window })`, `resize({ x, y, window })` (exact size), `move({ x, y,
+window })` (exact position) and `fullscreen_state({ internal, client, window })` all reply `ok`
+  and act on the named window.
+- **Tiles keep their boxes** (dwindle, `preserve_split`): with two tiles and with three, the
+  window moved in, swapped into a tile, and that tile's window parked: the new window had the
+  parked one's exact `at`/`size`, and every other tile's box was the same as before. Swapping
+  back left `j/clients` identical to the start, for each of the three slots.
+- Batch replies are `ok` joined by `\n\n\n`. A swap with a missing window replies
+  `warning: hl.window.swap: target window not found`, not `error:`; Vimma treats anything but
+  `ok` as a failure.
+- Not checked: the legacy dialect (this config is Lua), the master and scrolling layouts, and
+  everything in the hand-check list below that needs a real Vimma window.
 
 ## Out of scope
 

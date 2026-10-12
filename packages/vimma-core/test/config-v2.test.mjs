@@ -462,3 +462,54 @@ describe("[theme] name", () => {
     expect(ok(toml("schema = 1", "[theme]", 'source = "file"')).theme.name).toBe("vimma");
   });
 });
+
+// docs/specs/private-swap.md, decision 1 (user decision, 2026-10-12).
+describe("[private] placement", () => {
+  test('defaults to "swap"', () => {
+    expect(ok(v2()).private).toEqual({ placement: "swap" });
+    expect(DEFAULT_CONFIG.private).toEqual({ placement: "swap" });
+    expect(formatDefaultsToml()).toMatch(/^\[private\]\n(#.*\n)*placement = "swap"$/m);
+  });
+
+  test.each([["swap"], ["window"]])('placement = "%s" is accepted', (placement) => {
+    expect(ok(v2("[private]", `placement = "${placement}"`)).private.placement).toBe(placement);
+  });
+
+  test("an unknown placement is an error, with the nearest name when one is close", () => {
+    expect(errors(v2("[private]", 'placement = "tab"'))).toEqual([
+      { line: 3, path: "private.placement", message: 'must be "swap" or "window"' },
+    ]);
+    expect(errors(v2("[private]", 'placement = "windows"'))).toEqual([
+      {
+        line: 3,
+        path: "private.placement",
+        message: 'must be "swap" or "window"',
+        suggestion: "window",
+      },
+    ]);
+    expect(errors(v2("[private]", "placement = false"))).toEqual([
+      { line: 3, path: "private.placement", message: "expected a string, got a boolean" },
+    ]);
+  });
+
+  test("an unknown key suggests placement; the section is a table, new in schema 2", () => {
+    expect(errors(v2("[private]", 'placment = "window"'))).toEqual([
+      {
+        line: 3,
+        path: "private.placment",
+        message: 'unknown key "placment"',
+        suggestion: "placement",
+      },
+    ]);
+    expect(errors(v2("private = 1"))).toEqual([
+      { line: 2, path: "private", message: "expected a table, got an integer" },
+    ]);
+    expect(errors(toml("schema = 1", "[private]", 'placement = "window"'))).toEqual([
+      {
+        line: 2,
+        path: "private",
+        message: "is new in schema 2: put schema = 2 at the top of the file",
+      },
+    ]);
+  });
+});

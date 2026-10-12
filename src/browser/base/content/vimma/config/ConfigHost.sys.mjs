@@ -21,6 +21,7 @@ import {
 import { formatConfigTemplate } from "../core/defaults.mjs";
 import { CONFIG_EDIT_TOPIC, CONFIG_RELOAD_TOPIC, VimmaHost } from "../host/VimmaHost.sys.mjs";
 import { openUrl } from "../host/tab-ops.mjs";
+import { PrivateSwap } from "../host/private-swap.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
 import { WorkspaceRouter } from "../workspaces/WorkspaceRouter.sys.mjs";
@@ -118,6 +119,7 @@ function apply(next) {
   });
   for (const win of windows) applyToWindow(win, config);
   ThemeHost.setConfig(config.theme);
+  PrivateSwap.configure(config.private.placement);
   WorkspaceRouter.setRoutes(config.routes);
   WorkspaceStore.setConfig(config.workspaces).catch((e) =>
     console.error("vimma: [workspaces] not applied", e),

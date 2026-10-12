@@ -13,6 +13,8 @@ browser.jar:
         content/browser/vimma/host/pane-ops.mjs           (host/pane-ops.mjs)
         content/browser/vimma/host/workspace-ops.mjs      (host/workspace-ops.mjs)
         content/browser/vimma/host/private-ops.mjs        (host/private-ops.mjs)
+        content/browser/vimma/host/private-swap.mjs       (host/private-swap.mjs)
+        content/browser/vimma/host/hypr/HyprIpc.sys.mjs   (host/hypr/HyprIpc.sys.mjs)
         content/browser/vimma/host/find.mjs               (host/find.mjs)
         content/browser/vimma/host/copy-mode.mjs          (host/copy-mode.mjs)
         content/browser/vimma/host/page-ops.mjs           (host/page-ops.mjs)

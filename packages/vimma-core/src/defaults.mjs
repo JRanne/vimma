@@ -28,6 +28,8 @@ import { DEFAULT_THEME_NAME } from "./theme.mjs";
  *   Firefox's own shortcuts that are off (docs/specs/key-handling-batch.md)
  * @property {{ root?: "workspace" | "toolbar" | "all" }} [bookmarks]  the bookmarks panel's root
  *   (docs/specs/bookmarks.md)
+ * @property {{ placement?: "swap" | "window" }} [private]  where the private workspace is shown
+ *   (docs/specs/private-swap.md)
  */
 
 /**
@@ -275,6 +277,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   sites: {},
   firefox: { disable: OVERLAP_CHORDS, enable: [] },
   bookmarks: { root: /** @type {const} */ ("workspace") },
+  private: { placement: /** @type {const} */ ("swap") },
 });
 
 /** @param {string} s */
@@ -358,6 +361,12 @@ export function formatDefaultsToml() {
     '# folder in the Bookmarks Toolbar; "toolbar" the whole toolbar; "all" every bookmark.',
     "[bookmarks]",
     `root = ${tomlString(DEFAULT_CONFIG.bookmarks?.root ?? "workspace")}`,
+    "",
+    '# The private workspace (ctrl+b shift+p): "swap" shows it in place of the Vimma window on',
+    '# Hyprland, which hides the other one until you switch back; "window" opens it as a window',
+    "# of its own beside it, as on every other window manager.",
+    "[private]",
+    `placement = ${tomlString(DEFAULT_CONFIG.private?.placement ?? "swap")}`,
     "",
     "# Per-site insert mode: auto (detect text fields), never (keys stay vimma's), always.",
     "# A host also covers its subdomains. None by default.",

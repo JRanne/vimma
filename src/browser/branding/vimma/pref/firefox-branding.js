@@ -132,6 +132,11 @@ pref("browser.tabs.closeWindowWithLastTab", false);
 // working. split.css hides the URL bar button.
 pref("browser.tabs.splitView.enabled", false);
 
+// The private workspace (spec private-swap, decided question 1): a private window's title is
+// "Vimma Private Browsing" without the page's title, which the window manager, its bar, screen-
+// sharing pickers and Hyprland's event stream would otherwise see. true shows page titles again.
+pref("privacy.exposeContentTitleInWindow.pbm", false);
+
 // Workspaces (spec m3-workspaces, decision 9): a restart restores the session, so each window's
 // workspaces, tabs, pane layouts and scroll positions come back. Firefox Sync must not turn that
 // off, nor containers (turning them off deletes every workspace's data), from another device.

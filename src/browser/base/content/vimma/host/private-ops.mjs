@@ -20,6 +20,7 @@ import {
   privateToggle,
 } from "../core/privatews.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
+import { PrivateSwap } from "./private-swap.mjs";
 import { workspacePickerItems } from "./workspace-ops.mjs";
 
 /** @import { WorkspaceItem } from "../core/picker.mjs" */
@@ -123,7 +124,9 @@ function remember(win) {
 }
 
 /**
- * Shows workspace `id` in normal window `win` (unless it shows it already) and focuses it.
+ * Shows workspace `id` in normal window `win` (unless it shows it already) and focuses it. On
+ * Hyprland a parked window comes back in the private window's slot instead (private-swap):
+ * focusing a parked window would open its special workspace.
  * @param {Window} win
  * @param {string | null} id
  * @returns {string | null} a refusal
@@ -133,7 +136,7 @@ function showNormal(win, id) {
   /** @type {string | null} */
   let refused = null;
   if (id && ww?.model && ww.model.active !== id) refused = ww.switchTo({ id });
-  win.focus();
+  if (!PrivateSwap.show(win)) win.focus();
   return refused;
 }
 
@@ -160,14 +163,14 @@ function openPrivate(from) {
 
 /**
  * Going to the private workspace from a normal window: the most recent private window, or a
- * new one.
+ * new one. On Hyprland it takes `from`'s place (private-swap); elsewhere it is focused.
  * @param {Window} from
  */
 function enterPrivate(from) {
-  const [priv] = privateWindows();
-  if (!priv) return openPrivate(from);
-  remember(from);
-  priv.focus();
+  const [existing] = privateWindows();
+  const priv = existing ?? openPrivate(from);
+  if (existing) remember(from);
+  if (!PrivateSwap.enter(from, priv, !existing) && existing) priv.focus();
   return priv;
 }
 
@@ -259,8 +262,11 @@ export function closePrivate(ask) {
   if (refused) return refused;
   if (!allPrivateWindows().length) return NO_PRIVATE;
   ask(closePrivateQuestion(privateTabCount()), () => {
+    // On Hyprland the parked normal window is shown in the slot first (private-swap decision 7).
     // As a script closes a window, without Firefox's own warnings: the y/N was the question.
-    for (const w of allPrivateWindows()) w.close();
+    PrivateSwap.beforeClose().then(() => {
+      for (const w of allPrivateWindows()) w.close();
+    });
   });
   return null;
 }
@@ -378,9 +384,9 @@ async function moveIntoPrivate(win, tab) {
     for (const t of priv.gBrowser.tabs) if (t !== fresh) priv.gBrowser.removeTab(t);
   }
   remember(win);
-  priv.focus();
   const gBrowser = /** @type {any} */ (win).gBrowser;
   // The workspace keeps a tab: a start page, as a workspace left empty gets (WindowWorkspaces).
+  // Before the swap: a new tab in a parked window brings it back (private-swap decision 7).
   const others = gBrowser.visibleTabs.filter((/** @type {any} */ t) => t !== tab && !t.pinned);
   if (!others.length) {
     gBrowser.addTrustedTab(/** @type {any} */ (win).BROWSER_NEW_TAB_URL, {
@@ -389,6 +395,7 @@ async function moveIntoPrivate(win, tab) {
     });
   }
   if (tab.isConnected) gBrowser.removeTab(tab, { animate: false });
+  if (!PrivateSwap.enter(win, priv, !existing)) priv.focus();
   return null;
 }
 
