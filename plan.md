@@ -234,7 +234,7 @@ Rules: test names are sentences from the spec; `vimma-core` imports nothing from
 
 ## 6. Roadmap
 
-Weeks are evenings-and-weekends ordering estimates, not dates. Each milestone ends with a nightly you use daily. Order from here: M7's security work first, then M6 once Vimma has been daily-driven; macOS and Windows come later.
+Weeks are evenings-and-weekends ordering estimates, not dates. Each milestone ends with a nightly you use daily. Order from here: M7's security work first, then M6 once Vimma has been daily-driven; macOS comes later, and Windows is not planned.
 
 | | Milestone | Status | Scope | Gate |
 | --- | --- | --- | --- | --- |
@@ -247,7 +247,7 @@ Weeks are evenings-and-weekends ordering estimates, not dates. Each milestone en
 | M7 | **Security hardening** (ongoing) | Done | Automatic Firefox security updates (detect a release, rebase, test, open a PR with no manual steps); fuzzing of the control protocol, `config.toml` and routing parsers; accessibility pass on Vimma's own UI; a scheduled quarterly patch audit; security release SLA proven twice | Two consecutive Firefox releases rebased and shipped with zero manual steps |
 | M6a | **Updater** (top priority) | Next | Updates reach every user without them noticing: a signed update manifest on vimma.dev per channel (release, nightly), security releases marked urgent; Firefox's updater back on (it is compiled out by m0-updater) for the tarball and AppImage, pointed at our manifest, verifying MARs against Vimma's own key, never calling Mozilla's update server; AUR and `.deb` left to pacman/apt with a status-bar hint; `release.yml` and every upstream security bump build, sign and publish MARs and the manifest with no manual steps | e2e: install N, serve N+1 from a local server, the update applies on restart and the profile survives; a Firefox security release reaches an installed Vimma with no manual step |
 | M6 | **Daily driver + release** (4 wks) | After M6a | Quickmarks + history in `prefix+g`; per-workspace autofill stance; download/permission UX reviewed for keyboard use; tarball/AppImage/`.deb`; cosign + SBOM; AUR `vimma-bin`; opt-in crash reporting. The packaging tooling exists and is switched off (`docs/specs/m6-packaging.md`) | Firefox (stock) uninstalled for a week; a stranger installs from AUR and updates |
-| Later | **More platforms** | Later | macOS build + notarisation; Windows when cheap; aarch64 | Same gates as Linux |
+| Later | **More platforms** | Later | macOS build + notarisation (`docs/specs/macos-build.md`); aarch64; Windows: not planned (user, 2026-10-12: "i don't think Windows users are our target") | Same gates as Linux |
 
 Recurring every 4 weeks from M0: the upstream rebase. Budget half a day for the first three, then it should be automatic.
 
