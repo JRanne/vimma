@@ -1,7 +1,9 @@
-// Regenerates packages/vimma-core/defaults.toml and docs/bindings.md from vimma-core.
+// Regenerates packages/vimma-core/defaults.toml, docs/bindings.md and docs/bindings.json (which
+// vimma.dev mirrors: docs/specs/site-keys-mirror.md) from vimma-core.
 import { writeFileSync } from "node:fs";
 import {
   bindingTable,
+  bindingsJson,
   compileKeymap,
   formatDefaultsToml,
   keyLegend,
@@ -40,4 +42,8 @@ for (const r of rows) {
   lines.push(`| ${cell(r.description)} | \`${r.name}\` | ${keys} |`);
 }
 writeFileSync(new URL("docs/bindings.md", root), lines.join("\n") + "\n");
-console.log("wrote packages/vimma-core/defaults.toml, docs/bindings.md");
+writeFileSync(
+  new URL("docs/bindings.json", root),
+  JSON.stringify(bindingsJson(keymap), null, 2) + "\n",
+);
+console.log("wrote packages/vimma-core/defaults.toml, docs/bindings.md, docs/bindings.json");

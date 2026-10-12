@@ -44,6 +44,7 @@ const PAGE_TITLE = "Vimma status bar test page";
 const EVENT_TITLE = "vimmaswap-event-title-secret";
 const NOTICE_ID = "vimma-notice";
 const PROMPT_ID = "vimma-rename";
+const BROWSER_DOC = "chrome://browser/content/browser.xhtml";
 /** The normal window's slot before any switch. */
 const SLOT = { workspace: { id: 3, name: "3" }, at: [12, 43], size: [1256, 745] };
 
@@ -87,10 +88,11 @@ function shortDir() {
  */
 class FakeHypr {
   /**
-   * @param {{ mode?: "lua" | "silent" | "errors" | "hangup" | "open-on-nonce",
+   * @param {{ mode?: "lua" | "silent" | "errors" | "hangup" | "open-on-nonce" | "nameless",
    *   delayMoves?: number }} [options]  hangup: closes every request unanswered;
    *   open-on-nonce: a window is announced only by openwindow, with its nonce title, and
-   *   j/clients never shows that title; delayMoves: movewindowv2 comes this many ms late
+   *   j/clients never shows that title; nameless: a nonce title never reaches Hyprland (its
+   *   events and j/clients show "Vimma" instead); delayMoves: movewindowv2 comes this many ms late
    */
   constructor({ mode = "lua", delayMoves = 0 } = {}) {
     this.mode = mode;
@@ -225,6 +227,9 @@ class FakeHypr {
     const open = new Set();
     for (const win of Services.wm.getEnumerator("navigator:browser")) {
       if (win.closed) continue;
+      // As on Wayland, Hyprland has the window once its browser document is up: a title set on
+      // the initial about:blank that OpenBrowserWindow returns never reaches it.
+      if (win.document.documentURI !== BROWSER_DOC) continue;
       let a = this.addr.get(win);
       if (!a) {
         a = `0x${(this.next++).toString(16)}`;
@@ -248,7 +253,9 @@ class FakeHypr {
         }
       }
       open.add(a);
-      const title = win.document.title;
+      const real = win.document.title;
+      const nameless = this.mode === "nameless" && /^vimma-[0-9a-f]{32}$/.test(real);
+      const title = nameless ? "Vimma" : real;
       if (this.titles.get(a) !== title) {
         this.titles.set(a, title);
         if (this.mode !== "open-on-nonce") this.emit(`windowtitlev2>>${a.slice(2)},${title}`);
@@ -852,4 +859,56 @@ add_task(async function a_window_named_only_by_openwindow_is_found() {
   const priv = await enter();
   Assert.ok(inSlot(priv) && parked(window), "the swap ran with addresses from openwindow");
   Assert.ok(f.batches.length >= 1);
+});
+
+add_task(async function a_fresh_private_window_is_named_once_its_document_is_up() {
+  // As at a real start: Hyprland was found and the normal window named before the first switch,
+  // so nothing waits on the socket while OpenBrowserWindow's window still shows about:blank.
+  const f = await start();
+  PrivateSwap.configure("swap");
+  await until(() => f.received.includes("j/clients"), "the normal window is named at start");
+  await PrivateSwap._settled();
+  const priv = await enter();
+  Assert.ok(parked(window) && inSlot(priv), "the first switch swaps in place");
+});
+
+add_task(async function a_window_hyprland_never_names_is_shown_as_a_window_and_said_once() {
+  // console.warn from a module goes to the console API storage, not nsIConsoleService.
+  const lines = [];
+  const storage = Cc["@mozilla.org/consoleAPI-storage;1"].getService(Ci.nsIConsoleAPIStorage);
+  const onLog = (/** @type {any} */ m) => lines.push((m.arguments ?? []).map(String).join(" "));
+  storage.addLogEventListener(onLog, Services.scriptSecurityManager.getSystemPrincipal());
+  const f = await start({ mode: "nameless" });
+  await SimpleTest.promiseFocus(window);
+  const opened = BrowserTestUtils.waitForNewWindow();
+  prefix("P", { shiftKey: true });
+  const priv = await opened;
+  await until(() => Services.focus.activeWindow === priv, "the private window, as a window");
+  await until(
+    () => lines.some((l) => l.includes("vimma: private: Hyprland did not name")),
+    "the give-up is logged (decision 7)",
+  );
+  await until(
+    () => /window not named/.test(PrivateSwap.status),
+    "and about:vimma says why the swap did not run",
+  );
+  await SimpleTest.promiseFocus(priv);
+  prefix("P", { shiftKey: true }, priv);
+  await until(() => Services.focus.activeWindow === window, "back as a window");
+  await SimpleTest.promiseFocus(window);
+  prefix("P", { shiftKey: true });
+  await until(() => Services.focus.activeWindow === priv, "and there again");
+  await wait(700); // past REPLY_MS: a late second nonce would have timed out by now
+  storage.removeLogEventListener(onLog);
+  Assert.equal(
+    lines.filter((l) => l.includes("vimma: private: Hyprland did not name")).length,
+    1,
+    "one console line a session",
+  );
+  Assert.deepEqual(
+    f.received.filter((r) => r.startsWith("[[BATCH]]")),
+    [],
+    "nothing is moved",
+  );
+  Assert.ok(!lines.some((l) => l.includes(EVENT_TITLE)), "no event title in the console");
 });
