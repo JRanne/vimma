@@ -21,11 +21,14 @@ import {
   createRow,
   focus as focusToward,
   focusPane,
+  hideView,
+  isHidden as isHiddenView,
   layout,
   leaves,
   paneOfTab,
+  pickTab,
+  showView,
   resize,
-  setPaneTab,
   split,
   splitRefusal,
   swap as swapToward,
@@ -36,8 +39,8 @@ import {
   dwindleDirection,
   layoutRefusal,
   nextLayout,
-  showTogether,
-  togetherRefusal,
+  repane,
+  repaneRefusal,
 } from "../core/layouts.mjs";
 import { planSplit } from "../core/splitplan.mjs";
 import {
@@ -82,11 +85,15 @@ export const SECOND_SPLIT = "split undone: one split per workspace";
 const SPLIT_EVENTS = ["SplitViewCreated", "SplitViewTabChange", "SplitViewRemoved"];
 /** Every window event a PaneView listens to (the split contract test turns them off). */
 export const PANE_VIEW_EVENTS = Object.freeze([
+  "TabOpen",
   "TabClose",
   "TabSplitViewActivate",
   "TabSelect",
   ...SPLIT_EVENTS,
 ]);
+
+/** Why a new pane is refused while the workspace's split is a hidden view (side-panel-unsplit). */
+export const HIDDEN_REASON = "the split is hidden: go to one of its tabs first";
 
 /** Dwindle's area while the content area has no size yet: wide, as most windows are. */
 const WIDE = Object.freeze({ x: 0, y: 0, width: 16, height: 9 });
@@ -124,6 +131,12 @@ export class PaneView {
   #laidOut = new Set();
   /** @type {Map<string, { panes: Panes, wrapper: Wrapper | null, laidOut: Set<Tab> }>} */
   #parked = new Map();
+  /**
+   * The tab whose TabOpen came in this task: its TabSelect is a new foreground tab, not a pick
+   * (docs/specs/side-panel-unsplit.md decision 22); cleared in a microtask.
+   * @type {Tab | null}
+   */
+  #opened = null;
   /** Told after every reconcile (WindowWorkspaces saves the window's snapshot, m3 sub-spec 3). */
   /** @type {(() => void) | null} */
   onChange = null;
@@ -153,6 +166,9 @@ export class PaneView {
     loadSheet(win);
     // On the window: this runs before gBrowser exists (vimma.js), and tab events bubble to it.
     win.addEventListener("TabClose", this);
+    // A new foreground tab's TabOpen comes just before its TabSelect, in the same task (addTab
+    // selects it right away; WindowWorkspaces' #adopt relies on the same order).
+    win.addEventListener("TabOpen", this);
     // Firefox re-runs showSplitViewPanels (every member active) whenever the split activates
     // again, e.g. after a TabSelect; reconcile then deactivates the zoomed-away ones again.
     win.addEventListener("TabSplitViewActivate", this);
@@ -173,7 +189,8 @@ export class PaneView {
 
   /** @param {Event} e */
   handleEvent(e) {
-    if (e.type === "TabClose") this.#onTabClose(/** @type {Tab} */ (e.target));
+    if (e.type === "TabOpen") this.#onTabOpen(/** @type {Tab} */ (e.target));
+    else if (e.type === "TabClose") this.#onTabClose(/** @type {Tab} */ (e.target));
     else if (e.type === "TabSelect") this.#onTabSelect(/** @type {CustomEvent} */ (e));
     // TabSplitViewDeactivate is not listened to: the old wrapper's arrives late after a rebuild
     // and lists the kept members too (sub-spec 1), so it carries nothing to act on.
@@ -186,6 +203,14 @@ export class PaneView {
   /** The window's pane tree, null with a single pane (for tests and sub-spec 3). */
   get panes() {
     return this.#panes;
+  }
+
+  /**
+   * Whether the tree is kept as a hidden view while another tab shows alone
+   * (docs/specs/side-panel-unsplit.md decision 20).
+   */
+  get hidden() {
+    return !!this.#panes && isHiddenView(this.#panes);
   }
 
   /** @param {number} max  config `[panes] max` */
@@ -374,6 +399,7 @@ export class PaneView {
    * @returns {PaneResult}
    */
   split(direction, { tab } = {}) {
+    if (this.hidden) return { ok: false, reason: HIDDEN_REASON };
     const gBrowser = gBrowserOf(this.#win);
     const current = this.#panes ?? createPanes(gBrowser.selectedTab.linkedPanel);
     const refusal = /** @type {SplitRefusal | null} */ (
@@ -398,6 +424,7 @@ export class PaneView {
    * @returns {PaneResult}
    */
   newPane(options = {}) {
+    if (this.hidden) return { ok: false, reason: HIDDEN_REASON };
     const current = this.#panes ?? createPanes(gBrowserOf(this.#win).selectedTab.linkedPanel);
     const direction =
       this.mode === "manual" ? "vertical" : dwindleDirection(current, this.#area() ?? WIDE);
@@ -423,13 +450,16 @@ export class PaneView {
    * Shows `tabs` (reading order) as the panes, replacing the split
    * (docs/specs/m4-side-panel-multiselect.md): arranged as the stored preset, else
    * `[panes] layout`; focus on `focus`. Tabs of the old split that are not listed leave it and
-   * stay open; pages move, never reload. Past `[panes] max`, or with no space: refused, nothing
-   * changes.
+   * stay open; pages move, never reload. When none joins, the panes left keep their shape and
+   * sizes, each removed one closed as `close` would (docs/specs/side-panel-unsplit.md decision
+   * 15). Past `[panes] max`, or with no space: refused, nothing changes. With `alone`, the new
+   * tree is kept as a hidden view and that tab shows by itself (side-panel-unsplit decision 25).
    * @param {Tab[]} tabs  two or more, each with its panel
    * @param {Tab} focus
+   * @param {{ alone?: Tab }} [options]
    * @returns {PaneResult}
    */
-  showTabs(tabs, focus) {
+  showTabs(tabs, focus, { alone } = {}) {
     const ids = tabs.map((t) => t.linkedPanel);
     const options = {
       preset: this.#panes?.layout,
@@ -439,9 +469,34 @@ export class PaneView {
       mainSize: this.mainSize,
       max: this.#max,
     };
-    const refusal = togetherRefusal(ids, options);
+    const refusal = repaneRefusal(this.#panes, ids, options);
     if (refusal) return { ok: false, reason: refusal.message };
-    this.#set(showTogether(ids, options));
+    const next = repane(this.#panes, ids, options);
+    if (!alone) {
+      this.#set(showView(next));
+      return { ok: true };
+    }
+    // Select first, unseen by #onTabSelect, then reconcile: the rebuilt wrapper never shows.
+    this.#panes = hideView(next);
+    this.#reconciling = true;
+    try {
+      this.#select(alone);
+    } finally {
+      this.#reconciling = false;
+    }
+    this.reconcile();
+    return { ok: true };
+  }
+
+  /**
+   * Ends the split and shows `tab` alone, selected (docs/specs/side-panel-unsplit.md): every
+   * other pane's tab stays open. Without a split it only selects `tab`.
+   * @param {Tab} tab
+   * @returns {PaneResult}
+   */
+  showAlone(tab) {
+    if (this.#panes) this.#set(null);
+    this.#select(tab);
     return { ok: true };
   }
 
@@ -535,6 +590,14 @@ export class PaneView {
   }
 
   /** @param {Tab} tab */
+  #onTabOpen(tab) {
+    this.#opened = tab;
+    this.#win.queueMicrotask(() => {
+      if (this.#opened === tab) this.#opened = null;
+    });
+  }
+
+  /** @param {Tab} tab */
   #onTabClose(tab) {
     const panes = this.#panes;
     const pane = panes && paneOfTab(panes, tab.linkedPanel);
@@ -545,26 +608,34 @@ export class PaneView {
   }
 
   /**
-   * A tab was selected from outside Vimma's pane ops. A pane's tab: focus that pane (core updates
-   * the MRU and ends any zoom, as a pane move does). Any other tab the workspace may show (the
-   * picker, ctrl+tab, a new foreground tab): it replaces the focused pane's tab (core's
-   * `setPaneTab`), the split rebuilt around it in this same task, so no paint sees Firefox's
-   * suspended split; the old tab stays open. Then reconcile. Not from our own selection (the
-   * re-entry flag), not when the selected tab is already the focused pane's (a no-op, so
-   * reconcile's own select never loops back), and not while Firefox picks a successor for a
-   * closing tab: the TabClose reconcile selects core's choice instead.
+   * A tab was selected from outside Vimma's pane ops (core's `pickTab`,
+   * docs/specs/side-panel-unsplit.md decisions 21-23). A pane's tab: focus that pane (core
+   * updates the MRU and ends any zoom, as a pane move does), and a hidden view shows again, whole.
+   * A new foreground tab (its TabOpen came in this task) the workspace may show, while the view
+   * shows: it replaces the focused pane's tab (core's `setPaneTab`), the split rebuilt around it
+   * in this same task, so no paint sees Firefox's suspended split; the old tab stays open. Any
+   * other tab (a pick: the picker, ctrl+tab, alt+N, ctrl+b n, a click, a pinned tab): it shows
+   * alone, as Firefox's split view does, and the tree is kept as a hidden view. Then reconcile.
+   * Not from our own selection (the re-entry flag), not for a tab of another workspace or while
+   * WindowWorkspaces switches (`accepts`: the switch parks the tree as it is), and not while
+   * Firefox picks a successor for a closing tab: the TabClose reconcile settles it.
    * @param {CustomEvent} e
    */
   #onTabSelect(e) {
+    const tab = /** @type {Tab} */ (e.target);
+    const opened = this.#opened === tab;
+    this.#opened = null;
     const panes = this.#panes;
     if (!panes || this.#reconciling) return;
     if (/** @type {Tab | undefined} */ (e.detail?.previousTab)?.closing) return;
-    const tab = /** @type {Tab} */ (e.target);
-    const pane = paneOfTab(panes, tab.linkedPanel);
-    if (pane === panes.focus) return;
-    if (pane) this.#panes = focusPane(panes, pane);
-    else if (this.#canShow(tab)) this.#panes = setPaneTab(panes, panes.focus, tab.linkedPanel);
-    else return;
+    const inTree = !!tab.linkedPanel && paneOfTab(panes, tab.linkedPanel) !== undefined;
+    if (!inTree && !tab.pinned && this.accepts && !this.accepts(tab)) return;
+    const { panes: next, change } = pickTab(panes, tab.linkedPanel || "", {
+      opened,
+      canJoin: this.#canShow(tab),
+    });
+    if (change === "none") return;
+    this.#panes = next;
     this.reconcile();
   }
 
@@ -637,7 +708,15 @@ export class PaneView {
       if (!panes || this.#tab(leaf.tab)) continue;
       panes = leaves(panes).length > 2 ? closePane(panes, leaf.pane) : null;
     }
+    // A hidden view whose tab got selected some other way (Firefox's successor for a closed tab)
+    // shows again, focused there (side-panel-unsplit decision 23).
+    const selected = gBrowser.selectedTab;
+    const selectedPane = panes && selected && paneOfTab(panes, selected.linkedPanel);
+    if (panes && isHiddenView(panes) && selectedPane) {
+      panes = focusPane(showView(panes), selectedPane);
+    }
     this.#panes = panes;
+    const hidden = !!panes && isHiddenView(panes);
 
     const members = this.#members();
     const managed = new Set([...members, ...this.#laidOut]);
@@ -654,8 +733,9 @@ export class PaneView {
         hidden: ids([...managed].filter((t) => isHidden(win, t))),
       },
     );
+    // Hidden: another tab shows alone; nothing here may select a pane's tab.
     const focusTab =
-      panes && this.#tab(leaves(panes).find((l) => l.pane === panes.focus)?.tab ?? "");
+      panes && !hidden && this.#tab(leaves(panes).find((l) => l.pane === panes.focus)?.tab ?? "");
     // Select the focused pane's tab before membership changes when it is already a member, so
     // the split never suspends to show a tab that is about to leave; else after joining.
     const memberIds = new Set(ids(members));
@@ -663,9 +743,30 @@ export class PaneView {
     this.#membership(plan, members);
     this.#order(plan);
     if (focusTab) this.#select(focusTab);
-    this.#apply(plan);
-    this.#geometry();
+    if (hidden) this.#sleep(/** @type {Panes} */ (panes));
+    else {
+      this.#apply(plan);
+      this.#geometry();
+    }
     this.#label();
+  }
+
+  /**
+   * A hidden view's pages stop painting: their docshells go inactive (the one shown alone stays).
+   * Firefox's split view suspends the panels; the geometry stays on them for when it comes back.
+   * @param {Panes} panes
+   */
+  #sleep(panes) {
+    const tabs = /** @type {Tab[]} */ (
+      leaves(panes)
+        .map((l) => this.#tab(l.tab))
+        .filter((t) => t && !t.selected)
+    );
+    // Firefox suspends a split when a tab outside it is selected; a wrapper rebuilt while that tab
+    // was already selected (the side panel's Enter) missed that TabSelect, so suspend it here
+    // the same way (tabbox.js suspendSplitViewPanels: the panels keep their split-view class).
+    /** @type {any} */ (gBrowserOf(this.#win)).tabpanels?.suspendSplitViewPanels?.(tabs);
+    for (const t of tabs) if (t.linkedBrowser) t.linkedBrowser.docShellIsActive = false;
   }
 
   /** @param {Tab} tab */
@@ -778,7 +879,7 @@ export class PaneView {
     if (!this.#resize) {
       const RO = /** @type {typeof ResizeObserver} */ (/** @type {any} */ (win).ResizeObserver);
       const observer = new RO(() => {
-        if (this.#panes) this.#geometry();
+        if (this.#panes && !this.hidden) this.#geometry();
       });
       observer.observe(tabpanels);
       this.#resize = observer;

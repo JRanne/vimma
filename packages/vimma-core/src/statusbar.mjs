@@ -38,7 +38,8 @@ export { textWidth };
  *   `private`: the private workspace (docs/specs/private-workspace.md), `◆ private`
  * @property {{ index: number, count: number, title?: string | null, url?: string | null,
  *   label?: string | null } | null} [tab]
- * @property {{ index: number, count: number } | null} [pane]
+ * @property {{ index: number, count: number, hidden?: boolean } | null} [pane]  `hidden`: the
+ *   split is kept as a view that is not shown (docs/specs/side-panel-unsplit.md decision 27)
  * @property {boolean} [loading]
  * @property {number | null} [progress]          0..1
  * @property {readonly ConfigError[]} [configErrors]
@@ -217,8 +218,8 @@ export function statusSegments(input) {
     left.push(
       seg({
         id: "pane",
-        text: `pane ${pane.index}/${pane.count}`,
-        fg: "--vimma-statusbar-fg",
+        text: pane.hidden ? `split ${pane.count} hidden` : `pane ${pane.index}/${pane.count}`,
+        fg: pane.hidden ? "--vimma-fg-dim" : "--vimma-statusbar-fg",
         priority: 7,
       }),
     );

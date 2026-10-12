@@ -244,6 +244,8 @@ function paneState(win, visible) {
   return {
     focus: idOf(tabOf(focused(panes.root)?.tab)),
     zoomed: panes.zoom !== null,
+    // docs/specs/side-panel-unsplit.md decision 28: a split kept as a hidden view.
+    hidden: panes.hidden === true,
     root: node(panes.root),
   };
 }

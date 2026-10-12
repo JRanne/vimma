@@ -110,6 +110,55 @@ add_task(async function vimma_keys_work_on_the_start_page() {
   BrowserTestUtils.removeTab(tab);
 });
 
+add_task(async function the_page_shows_the_vimma_and_firefox_versions() {
+  const { AppConstants } = ChromeUtils.importESModule(
+    "resource://gre/modules/AppConstants.sys.mjs",
+  );
+  const tab = await openStartTab();
+  const state = await SpecialPowers.spawn(tab.linkedBrowser, [], async () => {
+    const doc = content.document;
+    // start.mjs fills it in; it is a module, so it may run just after the load event.
+    await ContentTaskUtils.waitForCondition(
+      () => doc.getElementById("vimma-version")?.textContent,
+      "start.mjs has filled in the version",
+    );
+    const footer = doc.querySelector("footer");
+    const vimma = doc.getElementById("vimma-version");
+    const firefox = doc.getElementById("firefox-version");
+    const style = (el) => content.getComputedStyle(el);
+    const logo = doc.querySelector("img").getBoundingClientRect();
+    const box = footer.getBoundingClientRect();
+    return {
+      footer: footer.textContent.replace(/\s+/g, " ").trim(),
+      vimma: vimma.textContent,
+      firefox: firefox.textContent,
+      vimmaSize: parseFloat(style(vimma).fontSize),
+      firefoxSize: parseFloat(style(firefox).fontSize),
+      hintSize: parseFloat(style(doc.querySelector(".hint")).fontSize),
+      color: style(doc.querySelector(".version")).color,
+      dim: style(doc.querySelector(".hint")).color,
+      belowLogo: box.top > logo.bottom,
+      inView: box.bottom <= content.innerHeight && box.height > 0,
+      scrolls: doc.documentElement.scrollHeight > content.innerHeight,
+    };
+  });
+  const display = AppConstants.MOZ_APP_VERSION_DISPLAY;
+  Assert.equal(state.vimma, `Vimma ${display}`, "Vimma's own version, read from the app");
+  Assert.equal(
+    state.firefox,
+    `Firefox ${Services.appinfo.version}`,
+    "the Firefox version it is built on",
+  );
+  Assert.notEqual(display, Services.appinfo.version, "two different versions (m0-app-version)");
+  Assert.equal(state.footer, `Vimma ${display} · Firefox ${Services.appinfo.version}`);
+  Assert.equal(state.color, state.dim, "in the hint's secondary-text colour");
+  Assert.less(state.vimmaSize, state.hintSize, "smaller than the key hint");
+  Assert.less(state.firefoxSize, state.vimmaSize, "the Firefox version quieter still");
+  Assert.ok(state.belowLogo && state.inView, "at the bottom of the page, in view");
+  Assert.ok(!state.scrolls, "the page still has nothing to scroll");
+  BrowserTestUtils.removeTab(tab);
+});
+
 add_task(async function the_logo_is_transparent_with_a_tile_only_under_a_light_theme() {
   const tab = await openStartTab();
   const state = await SpecialPowers.spawn(tab.linkedBrowser, [], async () => {

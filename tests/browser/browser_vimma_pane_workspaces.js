@@ -5,8 +5,9 @@
 // Panes per workspace and restore (docs/specs/m4-split-panes.md, sub-spec 6): each workspace keeps
 // its own pane layout and focused pane across ctrl+b ) / ctrl+b (, and a switch leaves the other
 // workspace's layout alone; a session restore brings back every workspace's layout (the shown
-// one and the parked ones) and focus; a tab selected from outside the split while split shows in
-// the focused pane (core's setPaneTab), and the split stays.
+// one and the parked ones) and focus. A tab picked from outside the split shows alone and the
+// split waits as a hidden view until one of its tabs is picked; a new foreground tab still opens in
+// the focused pane (docs/specs/side-panel-unsplit.md decisions 20-24).
 
 "use strict";
 
@@ -258,7 +259,10 @@ add_task(async function a_session_restore_brings_back_every_workspaces_layout_an
   await BrowserTestUtils.closeWindow(w2);
 });
 
-add_task(async function a_tab_selected_from_outside_the_split_shows_in_the_focused_pane() {
+/** The view's tree is kept but not shown (side-panel-unsplit decision 20). */
+const isHiddenView = (/** @type {Window} */ win) => PaneViews.get(win).panes?.hidden === true;
+
+add_task(async function a_tab_picked_from_outside_the_split_shows_alone_and_the_split_waits() {
   const A = workspace("pw-sa");
   const B = workspace("pw-sb");
   const win = await openWindow();
@@ -277,19 +281,42 @@ add_task(async function a_tab_selected_from_outside_the_split_shows_in_the_focus
 
   // As the picker, ctrl+tab or switch-to-tab would: a tab of A that no pane shows.
   gB.selectedTab = a2;
-  Assert.deepEqual(names(shown(win).tabs), names([a0, a2]), "a2 replaces a1 in the focused pane");
-  Assert.equal(shown(win).focus, a2, "which keeps focus");
-  Assert.ok(a2.splitview && a2.splitview === a0.splitview, "the split stays, a2 in it");
-  Assert.ok(!a1.splitview, "a1 left the split");
+  Assert.ok(isHiddenView(win), "the split is kept as a hidden view");
+  Assert.deepEqual(names(shown(win).tabs), names([a0, a1]), "with its panes");
+  Assert.equal(shown(win).focus, a1, "and its focused pane");
   Assert.equal(gB.selectedTab, a2, "a2 is selected");
-  Assert.ok(!a1.hidden, "a1 stays a tab of A");
-  await assertLive(win, [a0, a2], "after the replace");
-  await until(() => !a1.linkedBrowser.docShellIsActive, "a1's docshell goes inactive");
-  await until(() => near(rects(win, [a0, a2]), before), "a2 takes a1's rectangle (±1 px)");
+  Assert.ok(!a2.splitview, "a2 joined no split");
+  Assert.ok(a1.splitview && a1.splitview === a0.splitview, "the split's tabs stay together");
+  await until(
+    () => !a0.linkedBrowser.docShellIsActive && !a1.linkedBrowser.docShellIsActive,
+    "the hidden panes' docshells go inactive",
+  );
+  await until(() => rect(win, a2).width > rect(win, a1).width, "a2 fills the content area");
 
-  // Back to a1 the same way: it replaces a2 in the focused pane again.
-  gB.selectedTab = a1;
-  Assert.deepEqual(names(shown(win).tabs), names([a0, a1]), "a1 is back in the focused pane");
+  // Picking a pane's tab brings the whole view back, focused there, at its sizes.
+  gB.selectedTab = a0;
+  Assert.ok(!isHiddenView(win), "the view shows again");
+  Assert.equal(shown(win).focus, a0, "focused on a0's pane");
+  await assertLive(win, [a0, a1], "the view back");
+  // Across: Firefox shows the bookmarks toolbar over a new-tab page (a0), which moves the top.
+  await until(
+    () =>
+      rects(win, [a0, a1]).every(
+        (r, i) =>
+          Math.abs(r.left - before[i].left) <= 1 && Math.abs(r.width - before[i].width) <= 1,
+      ),
+    "at its sizes (±1 px across)",
+  );
+
+  // A new foreground tab (a link, ctrl+t) still opens in the focused pane (decision 22).
+  const fresh = await BrowserTestUtils.openNewForegroundTab(gB, `${PAGE}?fresh`);
+  Assert.ok(!isHiddenView(win), "the view stays shown");
+  Assert.deepEqual(names(shown(win).tabs), names([fresh, a1]), "fresh takes a0's pane");
+  Assert.ok(!a0.hidden && !a0.closing, "a0 stays a tab of A");
+  gB.selectedTab = a0;
+  Assert.ok(isHiddenView(win), "picking a0, now outside the view, shows it alone");
+  gB.selectedTab = fresh;
+  Assert.ok(!isHiddenView(win), "and fresh brings the view back");
 
   // Another workspace's tab switches workspaces (m3 2b); A's tree is left as it was.
   gB.selectedTab = b0;
@@ -297,16 +324,77 @@ add_task(async function a_tab_selected_from_outside_the_split_shows_in_the_focus
   Assert.equal(view.panes, null, "B shows one pane");
   Assert.ok(!b0.splitview, "b0 joined no split");
   await press(win, "(", A);
-  Assert.deepEqual(names(shown(win).tabs), names([a0, a1]), "A's panes are untouched");
+  Assert.deepEqual(names(shown(win).tabs), names([fresh, a1]), "A's panes are untouched");
+  Assert.ok(!isHiddenView(win), "and shown");
 
-  // A pinned tab is in every workspace and cannot join a split: the tree stays.
+  // A hidden view survives a workspace switch: A comes back with a2 alone, the view hidden.
+  gB.selectedTab = a2;
+  Assert.ok(isHiddenView(win), "a2 alone, the view hidden");
+  await press(win, ")", B);
+  await press(win, "(", A);
+  Assert.equal(gB.selectedTab, a2, "A comes back on a2");
+  Assert.ok(isHiddenView(win), "with its view still hidden");
+  gB.selectedTab = a1;
+  Assert.ok(!isHiddenView(win), "a1 brings it back");
+  await assertLive(win, [fresh, a1], "the view after the switch");
+
+  // A pinned tab is in every workspace and cannot join a split: it shows alone, the view waits.
   const pinned = await page(win, "pinned");
   gB.pinTab(pinned);
   gB.selectedTab = pinned;
   Assert.ok(pinned.pinned && !pinned.splitview, "the pinned tab stays pinned, out of the split");
-  Assert.deepEqual(names(shown(win).tabs), names([a0, a1]), "and the panes are unchanged");
+  Assert.ok(isHiddenView(win), "the view is hidden");
   gB.selectedTab = a1;
-  await assertLive(win, [a0, a1], "selecting a pane again");
+  await assertLive(win, [fresh, a1], "selecting a pane again");
 
   await BrowserTestUtils.closeWindow(win);
+});
+
+add_task(async function a_session_restore_keeps_a_hidden_view_hidden() {
+  const A = workspace("pw-ha");
+  const w1 = await openWindow();
+  WindowWorkspaces.get(w1).switchTo({ id: A.id });
+  const a0 = await startTab(w1, A);
+  const a1 = await page(w1, "ha1");
+  const a2 = await page(w1, "ha2");
+  Assert.ok(PaneViews.get(w1).split("vertical", { tab: a1 }).ok, "A: start | ha1");
+  await until(() => rect(w1, a1).width > 100, "laid out");
+  const before = rects(w1, [a0, a1]);
+  w1.gBrowser.selectedTab = a2;
+  Assert.ok(isHiddenView(w1), "ha2 alone, the view hidden");
+
+  const uuid = (/** @type {Element} */ t) => SessionStore.getCustomTabValue(t, "vimma-tab");
+  const ids = [a0, a1, a2].map(uuid);
+  await TabStateFlusher.flushWindow(w1);
+  await TestUtils.waitForTick();
+  const state = JSON.parse(SessionStore.getBrowserState());
+  const winState = state.windows.find((w) =>
+    w.tabs.some((t) => t.entries.some((e) => e.url === `${PAGE}?ha2`)),
+  );
+  Assert.ok(winState, "the window is in the browser state");
+  await BrowserTestUtils.closeWindow(w1);
+
+  const w2 = await openWindow();
+  const restored = BrowserTestUtils.waitForEvent(w2, "SSWindowRestored");
+  SessionStore.setWindowState(w2, JSON.stringify({ windows: [winState] }), true);
+  await restored;
+  await TestUtils.waitForTick();
+  const byUuid = (/** @type {string} */ u) => w2.gBrowser.tabs.find((t) => uuid(t) === u);
+  const [r0, r1, r2] = ids.map(byUuid);
+  await until(() => !!PaneViews.get(w2).panes, "the tree is restored");
+  Assert.equal(w2.gBrowser.selectedTab, r2, "ha2 is selected, alone");
+  Assert.ok(isHiddenView(w2), "the view is restored hidden");
+  Assert.deepEqual(names(shown(w2).tabs), names([r0, r1]), "with its panes");
+  w2.gBrowser.selectedTab = r1;
+  Assert.ok(!isHiddenView(w2), "picking ha1 shows it");
+  await assertLive(w2, [r0, r1], "the restored view");
+  await until(
+    () =>
+      rects(w2, [r0, r1]).every(
+        (r, i) =>
+          Math.abs(r.left - before[i].left) <= 1 && Math.abs(r.width - before[i].width) <= 1,
+      ),
+    "at its sizes (±1 px across)",
+  );
+  await BrowserTestUtils.closeWindow(w2);
 });

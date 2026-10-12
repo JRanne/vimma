@@ -22,8 +22,11 @@
  * `mru` lists every pane, most recently focused first (`mru[0] === focus`); `next` mints pane ids.
  * `layout`, when set, is the last preset applied (layouts.mjs, docs/specs/tiling-layouts.md);
  * every operation here keeps it, as tmux keeps a window's last layout across manual changes.
+ * `hidden`, when true, keeps the tree as a view that is not shown: another tab of the workspace
+ * shows alone (docs/specs/side-panel-unsplit.md decision 20); every operation keeps it too.
  * @typedef {{ readonly root: PaneNode, readonly focus: string, readonly mru: readonly string[],
- *   readonly zoom: string | null, readonly next: number, readonly layout?: string }} Panes
+ *   readonly zoom: string | null, readonly next: number, readonly layout?: string,
+ *   readonly hidden?: true }} Panes
  */
 /** @typedef {"left" | "down" | "up" | "right"} Direction */
 /** @typedef {"vertical" | "horizontal"} SplitDirection */
@@ -617,4 +620,56 @@ export function setPaneTab(s, paneId, tabId) {
     throw new PaneError("tab-shown", `tab "${tabId}" is already shown in a pane`);
   }
   return update(s, { root: replaceAt(s.root, path, leafNode(paneId, tabId)) });
+}
+
+/**
+ * Whether `s` is a hidden view (docs/specs/side-panel-unsplit.md decision 20).
+ * @param {Panes} s
+ */
+export function isHidden(s) {
+  return s.hidden === true;
+}
+
+/**
+ * The same tree kept as a view that is not shown: panes, sizes, focus, zoom and preset stay.
+ * @param {Panes} s
+ * @returns {Panes}
+ */
+export function hideView(s) {
+  return isHidden(s) ? s : Object.freeze({ ...s, hidden: /** @type {const} */ (true) });
+}
+
+/**
+ * The view shown again, as it was.
+ * @param {Panes} s
+ * @returns {Panes}
+ */
+export function showView(s) {
+  if (!isHidden(s)) return s;
+  const shown = { ...s };
+  delete shown.hidden;
+  return Object.freeze(shown);
+}
+
+/**
+ * What selecting `tabId` does to the view (docs/specs/side-panel-unsplit.md decisions 21-23).
+ * A pane's tab: that pane gets focus, and a hidden view shows again ("show"). Any other tab: a
+ * new foreground tab (`opened`) that may join takes the focused pane's place while the view
+ * shows ("replace", m4-split-panes' user story); anything else hides the view ("hide") and shows
+ * alone. Outside a hidden view nothing changes.
+ * @param {Panes} s
+ * @param {string} tabId
+ * @param {{ opened?: boolean, canJoin?: boolean }} [options]
+ * @returns {{ panes: Panes, change: "none" | "focus" | "show" | "replace" | "hide" }}
+ */
+export function pickTab(s, tabId, { opened = false, canJoin = true } = {}) {
+  const pane = paneOfTab(s, tabId);
+  if (pane !== undefined) {
+    if (isHidden(s)) return { panes: focusPane(showView(s), pane), change: "show" };
+    if (pane === s.focus) return { panes: s, change: "none" };
+    return { panes: focusPane(s, pane), change: "focus" };
+  }
+  if (isHidden(s)) return { panes: s, change: "none" };
+  if (opened && canJoin) return { panes: setPaneTab(s, s.focus, tabId), change: "replace" };
+  return { panes: hideView(s), change: "hide" };
 }

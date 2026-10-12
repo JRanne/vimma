@@ -9,7 +9,16 @@
  * recreates a page.
  */
 
-import { MIN_RATIO, PaneError, createRow, layout, leaves, makeSplit } from "./panes.mjs";
+import {
+  MIN_RATIO,
+  PaneError,
+  closePane,
+  createRow,
+  focusPane,
+  layout,
+  leaves,
+  makeSplit,
+} from "./panes.mjs";
 
 /** @import { Leaf, LayoutRect, PaneNode, Panes, SplitDirection, SplitRefusal } from "./panes.mjs" */
 /**
@@ -289,4 +298,51 @@ export function showTogether(ids, options = {}) {
   const { root, focus, mru, zoom, next } = arrange(row, togetherName(options), options);
   const tree = { root, focus, mru, zoom, next };
   return Object.freeze(isLayoutName(options.preset) ? { ...tree, layout: options.preset } : tree);
+}
+
+/**
+ * Whether `ids` only drops tabs from `s` (or keeps them all): no tab joins.
+ * @param {Panes | null} s
+ * @param {readonly string[]} ids
+ */
+function removalsOnly(s, ids) {
+  if (!s) return false;
+  const shown = new Set(leaves(s).map((l) => l.tab));
+  return ids.every((id) => shown.has(id));
+}
+
+/**
+ * Why the split `s` cannot become `ids`, or null (docs/specs/side-panel-unsplit.md): removals
+ * never refuse; with a tab joining, `togetherRefusal` with the stored preset.
+ * @param {Panes | null} s
+ * @param {readonly string[]} ids  two tabs or more
+ * @param {TogetherOptions} [options]
+ * @returns {SplitRefusal | null}
+ */
+export function repaneRefusal(s, ids, options = {}) {
+  if (removalsOnly(s, ids)) return null;
+  return togetherRefusal(ids, { ...options, preset: options.preset ?? s?.layout });
+}
+
+/**
+ * The split `s` changed to show `ids` (docs/specs/side-panel-unsplit.md decision 15). When no tab
+ * joins, each pane whose tab is not in `ids` closes as `prefix+x` closes it, so the other panes
+ * keep their shape and sizes and the stored preset stays; with a tab joining (or no tree) the set
+ * is arranged afresh by `showTogether`, with `s`'s stored preset unless `preset` is given. Focus
+ * on `focus`'s pane when it is shown. A refusal (`repaneRefusal`) throws: check it first.
+ * @param {Panes | null} s
+ * @param {readonly string[]} ids  two tabs or more
+ * @param {TogetherOptions} [options]
+ * @returns {Panes}
+ */
+export function repane(s, ids, options = {}) {
+  if (ids.length < 2) throw new PaneError("bad-tabs", "a split needs two tabs");
+  if (!s || !removalsOnly(s, ids)) {
+    return showTogether(ids, { ...options, preset: options.preset ?? s?.layout });
+  }
+  const wanted = new Set(ids);
+  let next = s;
+  for (const leaf of leaves(s)) if (!wanted.has(leaf.tab)) next = closePane(next, leaf.pane);
+  const target = leaves(next).find((l) => l.tab === options.focus);
+  return target ? focusPane(next, target.pane) : next;
 }
