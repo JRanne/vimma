@@ -91,6 +91,15 @@ describe("status bar segments", () => {
     expect(texts(statusSegments({ ...base, pane: { index: 1, count: 2 } })).pane).toBe("pane 1/2");
   });
 
+  test("a hidden view (side-panel-unsplit decision 27): split N hidden, dim, cut first", () => {
+    const segs = statusSegments({ ...base, pane: { index: 2, count: 3, hidden: true } });
+    expect(texts(segs).pane).toBe("split 3 hidden");
+    const pane = segs.find((s) => s.id === "pane");
+    expect(pane?.fg).toBe("--vimma-fg-dim");
+    const title = segs.find((s) => s.id === "title");
+    expect(/** @type {any} */ (pane).priority).toBeGreaterThan(/** @type {any} */ (title).priority);
+  });
+
   test("config errors show file:line, and the count when there are more", () => {
     const one = [
       {
