@@ -63,8 +63,11 @@ let failed = false;
  *   | { state: "none", reason: string, retry: boolean }}
  */
 let wm = { state: "unknown" };
-/** The one console line a session gets (decision 3). */
-let logged = false;
+/** Each kind of console line once a session (decisions 3 and 7). @type {Set<string>} */
+const logged = new Set();
+/** Why the last switch was shown as a window although Hyprland was found, for about:vimma. */
+/** @type {string | null} */
+let skipped = null;
 /** Tests: a fake Hyprland, so the headless and Wayland checks do not apply. */
 let forced = false;
 
@@ -90,11 +93,41 @@ let chain = Promise.resolve(true);
 /** A swap is running: activations meanwhile are the swap's own. */
 let running = 0;
 
-/** @param {string} text */
-function logOnce(text) {
-  if (logged) return;
-  logged = true;
+/** @param {string} text @param {string} [kind]  lines of one kind share their once */
+function logOnce(text, kind = text) {
+  if (logged.has(kind)) return;
+  logged.add(kind);
   console.warn(`vimma: ${text}`);
+}
+
+/** What a switch says when Hyprland never named a Vimma window (decision 7). */
+const NOT_NAMED = "private: Hyprland did not name the Vimma window; showing it as a window";
+
+/**
+ * Resolves once `win`'s browser document has finished its delayed startup: true, or false when
+ * it closed first. The window OpenBrowserWindow returns still shows the initial about:blank,
+ * without browser-init.js's delayedStartupPromise, and a title set on that document never
+ * reaches the window manager.
+ * @param {Window} win
+ * @returns {Promise<boolean>}
+ */
+export function startedUp(win) {
+  const w = /** @type {any} */ (win);
+  if (w.closed) return Promise.resolve(false);
+  if (w.gBrowserInit?.delayedStartupFinished) return Promise.resolve(true);
+  const READY = "browser-delayed-startup-finished";
+  const CLOSED = "domwindowclosed";
+  return new Promise((resolve) => {
+    /** @param {unknown} subject @param {string} topic */
+    const observer = (subject, topic) => {
+      if (subject !== win) return;
+      Services.obs.removeObserver(observer, READY);
+      Services.obs.removeObserver(observer, CLOSED);
+      resolve(topic === READY);
+    };
+    Services.obs.addObserver(observer, READY);
+    Services.obs.addObserver(observer, CLOSED);
+  });
 }
 
 /** Why Hyprland is not even tried, or null. */
@@ -119,7 +152,7 @@ function detect() {
   const none = (reason, retry) => {
     wm = { state: "none", reason, retry };
     if (reason !== "not on Hyprland" && reason !== "not on Wayland" && reason !== "headless") {
-      logOnce(`private workspace shown as a window: ${reason}`);
+      logOnce(`private workspace shown as a window: ${reason}`, "detect");
     }
     return false;
   };
@@ -208,7 +241,7 @@ function addressOf(win) {
   const running_ = resolving.get(win);
   if (running_) return running_;
   const promise = (async () => {
-    if (win.closed || !(await detect())) return null;
+    if (!(await startedUp(win)) || !(await detect())) return null;
     ensureEvents();
     const nonce = nonceTitle(crypto.getRandomValues(new Uint8Array(16)));
     /** @type {Promise<string | null>} */
@@ -451,6 +484,7 @@ export const PrivateSwap = {
     placement = next;
     configured = true;
     failed = false;
+    skipped = null;
     if (next === "window") {
       events?.close();
       events = null;
@@ -471,11 +505,20 @@ export const PrivateSwap = {
   enter(from, priv, fresh) {
     if (!wanted()) return false;
     (async () => {
-      if (fresh) await /** @type {any} */ (priv).delayedStartupPromise;
       const [normal, p] = await Promise.all([addressOf(from), addressOf(priv)]);
+      if (!normal || !p) {
+        // Hyprland is there but did not name a window: never silent (decision 7).
+        if (wm.state === "ok" && !from.closed && !priv.closed) {
+          skipped = "window not named";
+          logOnce(NOT_NAMED);
+        }
+        if (!priv.closed) priv.focus();
+        return;
+      }
+      skipped = null;
       // A private window shown somewhere else (a second one from ctrl+n): focus it, as today.
-      if (!normal || !p || (!fresh && p !== pair?.private)) {
-        if (!fresh && !priv.closed) priv.focus();
+      if (!fresh && p !== pair?.private) {
+        if (!priv.closed) priv.focus();
         return;
       }
       if (!(await step({ type: "enter", normal, private: p })) && !priv.closed) priv.focus();
@@ -513,8 +556,10 @@ export const PrivateSwap = {
   get status() {
     const how = placement === "window" ? "window (config)" : failed ? "window (swap failed)" : "";
     switch (wm.state) {
-      case "ok":
-        return `Hyprland ${wm.version} (${wm.dialect}), private placement: ${how || "swap"}`;
+      case "ok": {
+        const last = !how && skipped ? ` (last switch: ${skipped})` : "";
+        return `Hyprland ${wm.version} (${wm.dialect}), private placement: ${how || "swap"}${last}`;
+      }
       case "none":
         return `none (${wm.reason}), private placement: window`;
       default:
@@ -540,7 +585,8 @@ export const PrivateSwap = {
     wm = { state: "unknown" };
     pair = null;
     failed = false;
-    logged = false;
+    logged.clear();
+    skipped = null;
     placement = "swap";
     configured = read;
     settleUntil = 0;

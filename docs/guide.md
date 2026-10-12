@@ -919,6 +919,10 @@ to disk.
   `private: the window manager refused the swap; showing it as a window`, and opens the private
   workspace as a window of its own until the config is next reloaded. `about:vimma` shows the
   Hyprland version and which placement is in force, or why it is not swapping.
+- **If Hyprland never names a Vimma window** (its random title does not show up), that switch
+  shows the private workspace as a window of its own, the browser console says
+  `private: Hyprland did not name the Vimma window; showing it as a window` once, and
+  `about:vimma` adds `(last switch: window not named)`. The next switch tries again.
 - **Never stuck:** if a swap cannot be done, for example because you moved the private window
   to a scratchpad, going back brings your normal window out of `special:vimma` to the
   workspace you are on.
