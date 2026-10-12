@@ -3,8 +3,7 @@
   "release-type": "simple",
   "include-v-in-tag": true,
   "include-component-in-tag": false,
-  "bump-minor-pre-major": true,
-  "bump-patch-for-minor-pre-major": true,
+  "versioning": "always-bump-patch",
   "draft": true,
   "force-tag-creation": true,
   "changelog-sections": [

@@ -842,14 +842,24 @@ while the release gate is closed (below). Nothing is built or uploaded by releas
   `tools/package/test/release-workflow.test.mjs`). The Firefox pin `version.version` is never
   touched; `upstream.yml` owns it. Release type `simple`: there is no root `version.txt`, so
   nothing else is written.
-- **Bumps** (`release-please-config.json`, spec release-versioning): `0.x` until M6 (plan §7),
-  and every release bumps the patch, `feat` (`bump-patch-for-minor-pre-major`) and `fix` alike:
-  0.1.1 → 0.1.2 → 0.1.3. A breaking change (`!`, `BREAKING CHANGE:`) bumps the minor, 0.1.x →
-  0.2.0 (`bump-minor-pre-major`). To force a version once, push a commit with a
-  `Release-As: X.Y.Z` footer; never set `release-as` in the config, which pins every later
-  release PR to that version. Changelog sections: `feat` → Added, `fix` → Fixed; `perf`, `deps`,
-  `upstream` and `revert` → Changed; `docs`, `test`, `build`, `ci`, `chore` and `refactor` are
-  left out.
+- **Bumps** (`release-please-config.json`, spec release-versioning): every release bumps the
+  patch, whatever its commits are, breaking changes included (`"versioning":
+"always-bump-patch"`): 0.1.1 → 0.1.2 → 0.1.3. The maintainer decides when to move to 0.2.0 or
+  1.0.0 (below). Changelog sections: `feat` → Added, `fix` → Fixed; `perf`, `deps`, `upstream`
+  and `revert` → Changed; `docs`, `test`, `build`, `ci`, `chore` and `refactor` are left out. A
+  breaking change still gets its "BREAKING CHANGES" heading in the notes.
+- **Moving to 0.2.0 (or 1.0.0), when you decide:** merge a PR whose squash commit ends with the
+  footer `Release-As: 0.2.0`. Squash merges use the PR body as the commit body, so make that line
+  the last paragraph of the PR body, on its own line, after the generated-by lines (any PR will
+  do, such as the next small docs fix). release-please reads the footer before the versioning strategy, so the
+  open release PR becomes `chore(main): release 0.2.0`; merge that. The footer applies once: the
+  next release PR starts after the `v0.2.0` tag (which `force-tag-creation` creates even for a
+  draft), so it no longer sees that commit, and patch bumps go on: 0.2.1, 0.2.2. **Use the
+  footer, not `"release-as"` in the config.** The config option is applied before any commit is
+  read, so it pins every later release PR to 0.2.0 until a second PR removes it; forget that,
+  and every later release PR proposes 0.2.0 again. If the footer was not picked up (the release
+  PR still shows the old next version), look at the squash commit's message on `main`:
+  `Release-As:` must be in its last paragraph.
 - **Drafts keep the release gate** (no public release until the maintainer has daily-driven
   Vimma). `"draft": true` makes each GitHub Release a draft: only collaborators see it, and
   `release.yml` does not run (it starts on `release: published`, which a draft never fires).

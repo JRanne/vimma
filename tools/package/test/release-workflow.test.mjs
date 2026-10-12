@@ -70,9 +70,16 @@ describe("release-please-config.json", () => {
   const manifest = json("../../../.release-please-manifest.json");
   const surfer = json("../../../surfer.json");
 
-  it("bumps the patch for feat and fix, the minor for a breaking change, before 1.0", () => {
-    expect(config["bump-patch-for-minor-pre-major"]).toBe(true);
-    expect(config["bump-minor-pre-major"]).toBe(true);
+  // The user's decision (2026-10-12): every release bumps the patch, breaking changes too; the
+  // move to 0.2.0 or 1.0.0 is theirs, by a Release-As footer (runbook "Releases").
+  it("bumps only the patch, whatever the commits say", () => {
+    expect(config.versioning).toBe("always-bump-patch");
+    expect(config.packages["."].versioning).toBeUndefined();
+  });
+
+  it("has no pre-1.0 bump rules that always-bump-patch would silently override", () => {
+    expect(config["bump-minor-pre-major"]).toBeUndefined();
+    expect(config["bump-patch-for-minor-pre-major"]).toBeUndefined();
   });
 
   it("pins no version for every release", () => {

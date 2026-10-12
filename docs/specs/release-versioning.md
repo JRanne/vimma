@@ -9,9 +9,10 @@ Status: implemented · Area: CI (`release-please-config.json`, `docs/runbook.md`
 
 ## User stories
 
-- As the maintainer, every release before 1.0 bumps the patch version, whether it brings `feat`
-  or only `fix` commits: 0.1.1 → 0.1.2 → 0.1.3. A breaking change (`!`, `BREAKING CHANGE:`)
-  still bumps the minor version (0.1.x → 0.2.0), so it stands out.
+- As the maintainer, every release bumps the patch version, whatever its commits are, breaking
+  changes included: 0.1.1 → 0.1.2 → 0.1.3. I move to 0.2.0 (or 1.0.0) myself when I choose,
+  with one `Release-As` footer; patch bumps go on from there (0.2.1, 0.2.2). The user's words,
+  2026-10-12: "yes allow me to choose when to go to 0.2.0".
 - As the maintainer, merging a release PR before I have daily-driven Vimma publishes nothing:
   release-please makes a **draft** GitHub Release that only collaborators see, and the tag
   `vX.Y.Z`. `release.yml` does not run for a draft. When the release gate opens, I publish the
@@ -20,7 +21,12 @@ Status: implemented · Area: CI (`release-please-config.json`, `docs/runbook.md`
 
 ## Research (release-please 17.6.0, bundled in release-please-action v5.0.0, pinned by SHA)
 
-- `bump-patch-for-minor-pre-major` is in the v17 schema ("Feature changes only bump semver patch
+- `"versioning": "always-bump-patch"` (schema: "Versioning strategy"; `customizing.md` lists
+  `always-bump-patch`) is in 17.6.0's `versioningTypes`. `AlwaysBumpPatch.determineReleaseType`
+  returns a patch bump for any commits, breaking ones too. It replaces the pair below, which it
+  would override anyway. A `Release-As` footer still wins: `BaseStrategy.buildNewVersion` checks
+  for it before calling the versioning strategy.
+- (First draft, before the user's answer.) `bump-patch-for-minor-pre-major` is in the v17 schema ("Feature changes only bump semver patch
   if version < 1.0.0"). In `DefaultVersioningStrategy.determineReleaseType`: breaking →
   minor when `bump-minor-pre-major` and pre-1.0; else `feat` → patch when
   `bump-patch-for-minor-pre-major` and pre-1.0; else patch. So with both on, `feat` and `fix`
@@ -39,13 +45,22 @@ Status: implemented · Area: CI (`release-please-config.json`, `docs/runbook.md`
 
 ## Scope
 
-- `release-please-config.json`: add `bump-patch-for-minor-pre-major`, `draft` and
-  `force-tag-creation` (all `true`); keep `bump-minor-pre-major`; remove `"release-as"`.
-- Tests (vitest, `tools/package/test/release-workflow.test.mjs`): the config has those options
-  and no `release-as`; the manifest matches `surfer.json`'s `displayVersion`; `release.yml` has
+- `release-please-config.json`: `"versioning": "always-bump-patch"` in place of
+  `bump-minor-pre-major`; add `draft` and `force-tag-creation` (both `true`); remove
+  `"release-as"`.
+- Tests (vitest, `tools/package/test/release-workflow.test.mjs`): the config has those options,
+  no `bump-*-pre-major` and no `release-as`; the manifest matches `surfer.json`'s `displayVersion`; `release.yml` has
   only the `published` release type.
-- Runbook "Releases": bumps, drafts, the first release, and how to switch drafts off when the
-  gate opens.
+- Runbook "Releases": bumps, moving to 0.2.0, drafts, the first release, and how to switch drafts
+  off when the gate opens.
+
+## Moving to 0.2.0
+
+A commit on `main` with the footer `Release-As: 0.2.0` (squash merges take the PR body, so it is
+the last paragraph of a PR body). It applies once: after the `v0.2.0` tag, release PRs no longer
+see that commit. A one-off `"release-as"` in the config would also work, but it pins every later
+release PR until a second PR removes it, so the footer is the safer of the two. The footer
+depends on the tag existing, which `force-tag-creation` guarantees for drafts too.
 
 ## The first release
 
@@ -57,8 +72,7 @@ every `feat`/`fix` since the first commit (as #127 does today). The open release
 
 ## Open questions
 
-- Breaking changes before 1.0: keep 0.1.x → 0.2.0 (recommended: a breaking change, such as a
-  renamed config key, should stand out in the number). release-please has no option to bump the
-  patch for a breaking change; without `bump-minor-pre-major` it would bump to 1.0.0.
+- Answered 2026-10-12: breaking changes bump the patch like everything else ("yes allow me to
+  choose when to go to 0.2.0"); the user moves to 0.2.0 or 1.0.0 with a `Release-As` footer.
 - First release 0.1.1 (recommended: 0.1.0 is what the dev builds already say) or 0.1.0 (push a
   commit with a `Release-As: 0.1.0` footer before merging the release PR; it applies once).
