@@ -92,8 +92,10 @@ every binding.
 
 New windows and new tabs open Vimma's start page: the logo, and under it the three keys to start
 from (`ctrl+b ?` keys, `:` commands, `f` hints). The URL bar is empty and focused, so you can type an
-address straight away; click the page to use `:` and the other keys there. It is a local page
-(`chrome://browser/content/vimma/start/start.html`); nothing loads from the network.
+address straight away; click the page to use `:` and the other keys there. At the bottom, a small
+line shows which Vimma you run and the Firefox release it is built on (`Vimma 0.1.0 · Firefox
+157.0.1`). It is a local page (`chrome://browser/content/vimma/start/start.html`); nothing loads
+from the network.
 
 To change it back:
 
@@ -1345,8 +1347,8 @@ updates are off, so neither asks Mozilla's update server. The one remaining requ
 the OpenH264 and Widevine plugins, which video calls and DRM video need.
 
 Sites see Firefox 157's user agent, with no Vimma token, and add-ons see Firefox's version
-(`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. `vimma --version` and the About
-dialog show Vimma's own version (`0.1.0`).
+(`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. `vimma --version`, the About
+dialog and the start page show Vimma's own version (`0.1.0`).
 
 ### Safe Browsing
 
