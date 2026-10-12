@@ -59,6 +59,9 @@ describe("finding Hyprland (decision 3)", () => {
     expect(hyprSockets({ signature, runtimeDir: "/run/user/1000/" })?.request).toBe(
       `/run/user/1000/hypr/${signature}/.socket.sock`,
     );
+    expect(hyprSockets({ signature, runtimeDir: `/run${"/".repeat(50000)}` })?.request).toBe(
+      `/run/hypr/${signature}/.socket.sock`,
+    );
   });
 
   test.each([

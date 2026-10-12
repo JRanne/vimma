@@ -71,7 +71,10 @@ export function hyprSockets({ signature, runtimeDir }) {
   if (typeof signature !== "string" || !SIGNATURE.test(signature)) return null;
   if (typeof runtimeDir !== "string" || !runtimeDir.startsWith("/")) return null;
   if (runtimeDir.split("/").some((part) => part === "." || part === "..")) return null;
-  const dir = `${runtimeDir.replace(/\/+$/, "")}/hypr/${signature}`;
+  // Trailing slashes trimmed without a regex (a `/+$` pattern backtracks on many slashes).
+  let end = runtimeDir.length;
+  while (end > 1 && runtimeDir[end - 1] === "/") end--;
+  const dir = `${runtimeDir.slice(0, end)}/hypr/${signature}`;
   return { request: `${dir}/.socket.sock`, events: `${dir}/.socket2.sock` };
 }
 
