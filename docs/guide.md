@@ -1455,5 +1455,12 @@ Firefox's Library (`ctrl+shift+o`) still works for the rest.
 **A binding says "not implemented yet".** Every default binding runs now. The message is for a
 binding whose command is not built yet, and the overlay dims such a binding too.
 
+**Does a playing video keep the screen awake?** Yes, while the video's window is visible. On
+Linux, Vimma asks the Wayland compositor directly (its idle-inhibit protocol) instead of
+Firefox's D-Bus route, which on Hyprland (Omarchy) reports success without stopping the
+screensaver. On Hyprland, `hyprctl -j clients | jq '.[] | select(.class|test("vimma")) |
+.inhibitingIdle'` prints `true` while it holds. A `MOZ_WAKE_LOCK_TYPE` you export yourself wins
+over Vimma's choice.
+
 **Where are crash reports?** Nothing is sent anywhere. Use `coredumpctl list vimma`, then
 `coredumpctl info` on the entry.
