@@ -20,6 +20,9 @@ ctrl + b ? all keyboard configurations should show up there"
 "firefox own shortcuts should be disabled and all the shortcuts should be configurable through
 Vimma"
 
+"dev tools keys should be exactly as they are in normal firefox, however we could probably still
+set them with config.toml?" (2026-10-12, answering open question 5)
+
 ## User stories
 
 - As a user, `ctrl+b ?` answers "how do I go back": `H`, `ctrl+o`, `alt+left` and `ctrl+[` under
@@ -533,6 +536,8 @@ Firefox `<command>` (the c keys stay reachable through `:firefox`).
    keep it? toolbar-toggle's spec currently says "alt still shows it".
 4. **`F7`**: Vimma's copy mode (this spec), or Firefox's caret browsing toggle (a sticky mode some
    keyboard users rely on), reachable then as a new `caret_browsing` action?
-5. **DevTools keys**: all 12 actions bound by default (this spec, for developers' muscle memory), or only
-   `F12` / `ctrl+shift+i`, leaving the panel keys (`ctrl+shift+c`, `k`, `e`, `z`, `m`, `j`,
-   `shift+F5/F7/F9/F12`) free for your own bindings?
+5. ~~**DevTools keys**~~ Answered 2026-10-12: exactly as in Firefox. All 12 actions are bound
+   by default on Firefox's chords, and each one can be rebound or unbound by name in `[keys]` in
+   config.toml, like any other action. The DOM panel's `ctrl+shift+w` stays unbound, as it is in
+   Firefox, where the reserved close-window key wins. The profiler and tracer keys stay
+   conditional and can be reached through `:firefox`.
