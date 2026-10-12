@@ -68,6 +68,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Fixed
 
+- Private workspace on Hyprland: Vimma listens to Hyprland's events again even when a switch happens just as Hyprland closes the event socket (#163).
 - On Hyprland the private workspace now really takes the Vimma window's place (a new private window used to be shown beside it); a swap that cannot name the window says so once in the console and in `about:vimma` (#160).
 - A key name with a bracket or a quote in `config.toml` is reported as an error instead of crashing the config reload (#134).
 - Find: a match in a page's search box (YouTube, DuckDuckGo) no longer switches the tab to insert mode; `n` / `N` keep stepping through matches (#164).
