@@ -136,6 +136,9 @@ support-files = [
   "file_vimma_private_download.txt^headers^",
 ]
 
+["browser_vimma_private_swap.js"]
+support-files = ["file_vimma_title.html"]
+
 ["browser_vimma_side_panel.js"]
 
 ["browser_vimma_side_panel_marks.js"]

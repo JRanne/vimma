@@ -80,5 +80,12 @@
     "chrome://browser/content/vimma/ctl/VimmaControl.sys.mjs",
   );
   VimmaControl.init(window);
+
+  // The private workspace in place of this window on Hyprland (spec private-swap): learns the
+  // window's address while `[private] placement = "swap"` applies. Nothing without Hyprland.
+  const { PrivateSwap } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/host/private-swap.mjs",
+  );
+  PrivateSwap.init(window);
   window.addEventListener("unload", () => VimmaHost.uninit(window), { once: true });
 }

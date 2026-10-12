@@ -23,10 +23,10 @@ export const QUERY_VERSION = "j/version";
 export const PROBE_LUA = "dispatch hl.dsp.no_op()";
 
 /** @typedef {"lua" | "legacy"} Dialect */
-/** @typedef {number | { name: string } | typeof PARK} WorkspaceRef */
+/** @typedef {number | { name: string } | typeof PARK} HyprWorkspace */
 
 /**
- * @typedef {{ verb: "move", window: string, workspace: WorkspaceRef }
+ * @typedef {{ verb: "move", window: string, workspace: HyprWorkspace }
  *   | { verb: "focus", window: string }
  *   | { verb: "swap", window: string, other: string }
  *   | { verb: "fullscreen", window: string, internal: number, client: number }
@@ -142,7 +142,7 @@ function workspaceText(ws) {
  * by name. Null for a special workspace (the user's scratchpad) or a name outside the safe set:
  * that switch is shown as a window instead.
  * @param {{ id: number, name: string } | null | undefined} ws
- * @returns {WorkspaceRef | null}
+ * @returns {HyprWorkspace | null}
  */
 export function workspaceTarget(ws) {
   if (!ws) return null;

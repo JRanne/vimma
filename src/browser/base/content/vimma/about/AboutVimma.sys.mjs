@@ -19,6 +19,7 @@ import { redactReport } from "../core/report.mjs";
 import { ConfigHost } from "../config/ConfigHost.sys.mjs";
 import { ENABLED_PREF, VimmaControl } from "../ctl/VimmaControl.sys.mjs";
 import { VimmaHost } from "../host/VimmaHost.sys.mjs";
+import { PrivateSwap } from "../host/private-swap.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
@@ -54,6 +55,7 @@ const CONTRACT = "@mozilla.org/network/protocol/about;1?what=vimma";
  * @property {{ count: number, window: { name: string, active: boolean, tabs: number,
  *   panes: number }[] }} workspaces
  * @property {{ enabled: boolean, port: number | null }} control
+ * @property {string} windowManager  Hyprland and the private placement (private-swap)
  * @property {{ off: { chord: string, id: string, command: string }[], unmatched: string[] }}
  *   firefoxKeys  Firefox's own shortcuts that are off (docs/specs/key-handling-batch.md)
  * @property {RoutesData} routes
@@ -251,6 +253,7 @@ export const AboutVimma = {
       },
       routes: routesOf(win, tab),
       firefoxKeys: VimmaHost.firefoxKeys(win),
+      windowManager: PrivateSwap.status,
     };
   },
 
@@ -288,6 +291,7 @@ export const AboutVimma = {
       `Routes: ${data.routes.rules.length}` +
         ` (${data.routes.rules.filter((r) => r.skipped).length} skipped)`,
       `Control socket: ${data.control.enabled ? `enabled, port ${data.control.port ?? "-"}` : "off"}`,
+      `Window manager: ${data.windowManager}`,
       `Firefox shortcuts off: ${data.firefoxKeys.off.map((k) => k.chord).join(" ") || "none"}`,
     ];
     const home = Services.dirsvc.get("Home", Ci.nsIFile).path;
