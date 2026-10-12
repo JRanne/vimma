@@ -1,6 +1,6 @@
 # Spec: side-panel-unsplit
 
-Status: ready (revised 2026-10-12 after the user tested it: hidden views, option B) · Milestone: after M4 (builds on
+Status: done (revised 2026-10-12 after the user tested it: hidden views, option B) · Milestone: after M4 (builds on
 [m4-side-panel-multiselect](m4-side-panel-multiselect.md), [m4-split-panes](m4-split-panes.md) and
 [tiling-layouts](tiling-layouts.md)) · Area: `packages/vimma-core/src/sidepanel.mjs`,
 `layouts.mjs`, `panes.mjs`, `snapshot.mjs`, `statusbar.mjs`, `actions.mjs`; `ui/side-panel.mjs`,
@@ -407,6 +407,33 @@ TDD as CLAUDE.md: each test is written first, run red, and its red output pasted
 - Marks across workspaces; marks in the bookmarks panel; mouse selection.
 - Keeping marks after the panel closes.
 - Showing parked splits of other workspaces anywhere but when the panel lists that workspace.
+
+## Results
+
+Two stacked PRs on this spec: core (pre-marks and the split diff; then `hideView` / `showView` /
+`pickTab`, the snapshot's `hidden` / `alone`, the panel's decision 25 and `(hidden)`, the status
+bar's `split N hidden`) and host + UI (`PaneView` picks, `#sleep`, `showTabs` with `alone`,
+`showAlone`, the panel, `vimma-ctl state`, the workspace snapshot, docs). The help text moved from
+the core PR to the host PR, so the only snapshot change sits with its CHANGELOG line.
+
+- **Red/green, first version:** Vitest 26 red, then green; the mochitest
+  `browser_vimma_side_panel_unsplit.js` 21 red, then green.
+- **Red/green, revision:** Vitest 17 red (`hideView`, `pickTab`, the snapshot's `alone`, the panel's
+  decision 25, `split 3 hidden`), green after (2807 passed). Mochitests 15 red (the user's flow, every
+  route, the restore, the pane_workspaces rewrite), green after; one more red found by the screenshot
+  (below), green after. The whole `tests/browser/` suite: 5104 passed, 0 failed.
+- **Found by the screenshot:** after the panel's `Enter` on C, the rebuilt wrapper kept A's and B's
+  panels active (Firefox's suspend runs on a TabSelect, and C was already selected), so A's blank
+  panel covered C's left half. `#sleep` now suspends them as Firefox does
+  (`suspendSplitViewPanels`); the mochitest asserts the panels are suspended and C is what shows.
+- **Confirmed in the browser:** the removed tab sits right after the split (decision 18); a pick
+  hides the view and any of its tabs brings it back at its widths and focus; a new foreground tab
+  still lands in the focused pane; the hidden view survives a workspace switch and a session
+  restore (`setWindowState`).
+- **e2e:** `m4-split-panes` and `m3-crash-restore` needed no change: they open pages with
+  `vimma-ctl open`, a new tab (decision 22). Locally their state steps pass; the screenshot steps
+  differ by font rendering exactly as on `main` (same percentages), so CI is the reference.
+- **Not covered by a mochitest:** the private workspace (same `SidePanel` and `PaneView` code).
 
 ## Decided questions (user, 2026-10-12)
 
