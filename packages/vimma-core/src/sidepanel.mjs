@@ -34,27 +34,30 @@ import { displayLabel } from "./tablabels.mjs";
  *   readonly previous: string | null, readonly next: string | null,
  *   readonly rows: readonly PanelRow[], readonly selected: number,
  *   readonly marked: readonly string[], readonly anchor: string | null,
- *   readonly panes: readonly string[], readonly paneFocus: string | null }} PanelState
+ *   readonly panes: readonly string[], readonly paneFocus: string | null,
+ *   readonly hidden: boolean }} PanelState
  */
 /**
  * `closeTab`: close that tab and keep the panel open (`x`, docs/specs/key-handling-batch.md).
  * `together`: show `ids` (row order) as the workspace's panes, focus on `focus`
  * (docs/specs/m4-side-panel-multiselect.md).
  * `alone`: end the workspace's split and show `id` alone (docs/specs/side-panel-unsplit.md).
+ * `together` with `alone`: make `ids` the view, then show the `alone` tab by itself with the view
+ * kept hidden (side-panel-unsplit decision 25).
  * @typedef {{ type: "select", id: string } | { type: "close" }
  *   | { type: "refuse", text: string } | { type: "closeTab", id: string }
- *   | { type: "together", ids: string[], focus: string } | { type: "alone", id: string }
- *   } PanelEffect
+ *   | { type: "together", ids: string[], focus: string, alone?: string }
+ *   | { type: "alone", id: string }} PanelEffect
  */
 
 /**
  * `color`: the workspace's colour name. `private` and `neighbours` (`[previous, next]`): the
  * private workspace, whose ctrl+b ( / ctrl+b ) targets the host knows (private-workspace).
  * `panes` / `paneFocus`: the active workspace's split, its tabs and its focused pane's tab
- * (side-panel-unsplit); none or [] without a split.
+ * (side-panel-unsplit); none or [] without a split. `paneHidden`: the split is a hidden view.
  * @typedef {{ color?: string, private?: boolean,
  *   neighbours?: readonly [string | null, string | null],
- *   panes?: readonly string[], paneFocus?: string | null }} PanelOptions
+ *   panes?: readonly string[], paneFocus?: string | null, paneHidden?: boolean }} PanelOptions
  */
 
 /** What `x` says on a pinned tab. */
@@ -85,7 +88,7 @@ function hostOf(url) {
 export function openPanel(
   model,
   info,
-  { color, selectedId = null, panes = [], paneFocus = null, ...where } = {},
+  { color, selectedId = null, panes = [], paneFocus = null, paneHidden = false, ...where } = {},
 ) {
   const w = activeWorkspace(model);
   const at = model.workspaces.indexOf(w);
@@ -129,6 +132,7 @@ export function openPanel(
     anchor: null,
     panes: split,
     paneFocus: paneFocus && split.includes(paneFocus) ? paneFocus : null,
+    hidden: paneHidden && split.length > 1,
   });
 }
 
@@ -225,7 +229,7 @@ export function markSummary(state) {
   const m = state.marked.length;
   const split = changed(state)
     ? `split: ${n} → ${m}${m < 2 ? " (unsplit)" : ""}`
-    : `split: ${n} panes`;
+    : `split: ${n} panes${state.hidden ? " (hidden)" : ""}`;
   const parts = [
     ...(range ? [`range: ${range}`] : []),
     ...(n ? [split] : m ? [`${m} marked`] : []),
@@ -247,25 +251,31 @@ function markRange(state) {
 }
 
 /**
- * Enter with changed marks (after a range is marked). Without a split: one goes to its tab. With
- * one: one mark or none ends it, showing that tab (none: the highlighted one) alone. Two or more
- * are shown together; focus on the focused pane's tab when it stays marked, else the highlighted
- * row when it is marked, else the first marked (side-panel-unsplit decision 17).
+ * Enter with changed marks (after a range is marked): the marks are applied, then Enter goes to
+ * the highlighted row (side-panel-unsplit decision 25). Without a split one mark goes to its tab.
+ * With a split, one mark or none ends it: the highlighted row's tab shows alone when it was a
+ * pane just unmarked or nothing is marked, else the marked one. Two or more are the view: the
+ * highlighted row's pane has focus when it is marked; a pane just unmarked under the highlight
+ * shows alone over the view, now hidden ("space on C, Enter on C"); any other row leaves the view
+ * shown, focus on the kept focused pane, else the first marked (decision 17).
  * @param {PanelState} state
  * @returns {{ state: PanelState, effect: PanelEffect | null }}
  */
 function openMarked(state) {
   const ids = [...state.marked];
   const here = state.rows[state.selected]?.tabId;
+  const removed = !!here && state.panes.includes(here) && !ids.includes(here);
   if (ids.length < 2 && state.panes.length) {
-    const id = ids[0] ?? here;
+    const id = removed || !ids.length ? here : ids[0];
     return { state, effect: id ? { type: "alone", id } : null };
   }
   if (ids.length === 1)
     return { state, effect: { type: "select", id: /** @type {string} */ (ids[0]) } };
   const kept = state.paneFocus && ids.includes(state.paneFocus) ? state.paneFocus : null;
-  const focus = kept ?? (here && ids.includes(here) ? here : /** @type {string} */ (ids[0]));
-  return { state, effect: { type: "together", ids, focus } };
+  const focus = here && ids.includes(here) ? here : (kept ?? /** @type {string} */ (ids[0]));
+  /** @type {PanelEffect} */
+  const effect = { type: "together", ids, focus };
+  return { state, effect: removed && here ? { ...effect, alone: here } : effect };
 }
 
 /**

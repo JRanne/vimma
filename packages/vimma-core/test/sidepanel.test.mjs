@@ -613,6 +613,31 @@ describe("a split in the panel", () => {
     expect(effect).toEqual({ type: "alone", id: "t3" });
   });
 
+  // Revision (decision 25): Enter applies the marks, then goes to the highlighted row.
+  test("the user's flow: space on pane C, Enter on C: C alone, the rest a hidden view", () => {
+    const { effect } = press(open(), [J, SPACE, K, ENTER]);
+    expect(effect).toEqual({ type: "together", ids: ["t2", "t3"], focus: "t3", alone: "t4" });
+  });
+
+  test("one mark left with the highlight on a removed pane: that pane shows alone", () => {
+    const { effect } = press(open(), [K, SPACE, J, SPACE, K, ENTER]);
+    expect(effect).toEqual({ type: "alone", id: "t4" });
+  });
+
+  test("the highlighted row has focus when it is marked, before the kept focused pane", () => {
+    const { effect } = press(open(), [J, J, SPACE, K, ENTER]);
+    expect(effect).toEqual({ type: "together", ids: ["t2", "t3", "t4", "t5"], focus: "t5" });
+  });
+
+  test("a hidden view's panes are marked, and the header says it is hidden", () => {
+    const s = openPanel(five, info5, { ...split, paneHidden: true });
+    expect(s.marked).toEqual(["t2", "t3", "t4"]);
+    expect(s.hidden).toBe(true);
+    expect(markSummary(s)).toBe("split: 3 panes (hidden)");
+    expect(markSummary(press(s, [SPACE]).state)).toBe("split: 3 → 2");
+    expect(open().hidden).toBe(false);
+  });
+
   test("Enter with no mark left ends the split and shows the highlighted tab alone", () => {
     const { effect } = press(open(), [K, SPACE, SPACE, SPACE, J, ENTER]);
     expect(effect).toEqual({ type: "alone", id: "t6" });
@@ -623,7 +648,7 @@ describe("a split in the panel", () => {
     expect(press(open(), [J, J, V, ENTER]).effect).toEqual({
       type: "together",
       ids: ["t2", "t3", "t4", "t5"],
-      focus: "t3",
+      focus: "t5",
     });
   });
 
