@@ -55,6 +55,13 @@ What Vimma adds (`host/find.mjs`, class `Find`, one per window, created by `Vimm
 - **`n` / `N`**: `browser.finder.findAgain(query, backward)` with `caseSensitive` set by
   smartcase; in pdf.js, `findbar.onFindAgainCommand()` (its `findagain` event). After a search
   that found nothing in this page they do nothing (Firefox's F3 would reopen the bar).
+- **A match in a text field** (#164): Firefox's finder focuses the field it matched in (the
+  find bar's close, `Finder.focusContent`; and `n` while the page has focus, nsTypeAheadFind
+  itself). The child actor recognises that focus (no user input is being handled and the
+  frame's finder has the field as `foundEditable`; not one the actor gives itself for `i` or a
+  hint), sends no focus report, and after the finder's task blurs the field, restores the match
+  as its selection (the close collapses it) and shows it as the find's ATTENTION selection. So
+  the tab stays in normal mode, no key types into the field, and `n` goes on from the match.
 - **Status**: a finder result listener per tab records `{ query, backward, current, total,
 limit, notFound }`; `VimmaHost.status(win).find` returns it for the selected tab while its
   URL is the one searched, and `mode: "command"` while a search is typed (Vim's command-line
