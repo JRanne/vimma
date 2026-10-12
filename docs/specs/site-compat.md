@@ -1,6 +1,6 @@
 # Spec: site-compat
 
-Status: proposed (sub-PR 1 in review) · Milestone: after private-swap (testing infrastructure, no
+Status: sub-PR 1 implemented (in review); sub-PRs 2 and 3 open · Milestone: after private-swap (testing infrastructure, no
 user-visible change) · Area: `tools/sites/` (new), `tools/e2e/launcher.mjs` (one option),
 `.github/workflows/sites.yml` (new), `package.json` (one script). No upstream patch, no product
 code, no new dependency.
@@ -138,9 +138,9 @@ needs no dependency.
   `chrome://browser/content/vimma/` and, through `console-api-log-event`, Vimma's own
   `console.error`. GitHub alone logs dozens of the site's own errors and warnings (the
   prototype saw referrer-policy warnings); those are ignored.
-- **Site shortcuts.** In insert mode with no field focused (`i`), keys reach the page. A key the
-  site handles shows as `defaultPrevented`, a focus change, a URL change, a scroll or a new
-  dialog. On GitHub, `s` focused the search field (and Vimma went to insert mode, correctly).
+- **Site shortcuts.** A key the site handles shows as `defaultPrevented`, a focus change, a URL
+  change, a scroll or a new dialog. On GitHub, `s` focused the search field (and Vimma went to
+  insert mode, correctly). How the key reaches the page is settled in the implementation log.
 
 ### Bot checks, consent walls and IP reputation
 
@@ -176,13 +176,13 @@ needs no dependency.
 
 ## Cost and runtime
 
-| Part                                               | Time                   | Source                                  |
-| -------------------------------------------------- | ---------------------- | --------------------------------------- |
-| Checkout, Node, `npm ci`, `vimma-ctl`              | ≈ 0.4 min              | e2e run 38229657690                     |
-| Firefox source, import, artifact build             | ≈ 3.1 min              | same                                    |
-| 22 site entries × ≈ 40-50 s (launch, load, checks) | ≈ 15-18 min (estimate) | prototype; replaced by the measured run |
-| Report, upload                                     | < 0.5 min              |                                         |
-| **Total per night**                                | **≈ 20 min**           |                                         |
+| Part                                               | Time            | Source                                                            |
+| -------------------------------------------------- | --------------- | ----------------------------------------------------------------- |
+| Checkout, Node, `npm ci`, `vimma-ctl`              | ≈ 0.4 min       | e2e run 38229657690                                               |
+| Firefox source, import, artifact build             | ≈ 3.1 min       | same                                                              |
+| 22 site entries × ≈ 15-35 s (launch, load, checks) | ≈ 9-13 min      | measured 8.6 min locally (sub-PR 1); up to 1.5× on a 4-CPU runner |
+| Report, upload                                     | < 0.5 min       |                                                                   |
+| **Total per night**                                | **≈ 13-17 min** | budgeted as 20 min                                                |
 
 - About 600 runner-minutes a month, free (public repo, standard runner). The job takes 1 of the
   free plan's 20 concurrent hosted jobs, at 04:30 UTC, when no PR is waiting on e2e.
@@ -207,8 +207,10 @@ needs no dependency.
    the artifact build (copied, with the tarball's SHA-512 check). It does not touch
    `nightly.yml`.
 2. **Drive with `vimma-ctl`, observe with RDP** (Research, option 4). The probes only read,
-   except three narrow writes: the clipboard sentinel, a keydown recorder on the page's window
-   for the `ctrl+b` and shortcut checks, and a "Reject all" click on a consent wall.
+   except a few narrow writes: the clipboard sentinel, a keydown recorder on the page's window
+   for the `ctrl+b` check, focusing the search field, synthetic key events for the shortcut
+   check (and a synthetic Escape and blur after each), and a "Reject all" click on a consent
+   wall.
 3. **One fresh profile and browser per site**, as e2e does per scenario: no cookies or state
    carry over, and a crash costs one site. The launcher gains an `args` option for
    `--start-debugger-server`, and the profile gets the three DevTools prefs on top of e2e's.
@@ -230,8 +232,10 @@ needs no dependency.
       `skip` when the page has no such field.
    6. `prefix`: `ctrl+b` in normal mode and in a focused field gives `pending: "prefix"`, and the
       page sees no `ctrl+b` keydown.
-   7. `shortcuts` (`info`): Vimma's single normal-mode keys, pressed in pass-through insert mode;
-      the ones the site reacts to are listed. Stops at the first key that navigates.
+   7. `shortcuts` (`info`): Vimma's single normal-mode keys, dispatched to the page as synthetic
+      key events (Vimma does not see them); the ones the site reacts to are listed. Stops at the
+      first key that navigates. (Changed in sub-PR 1 from "pressed in pass-through insert
+      mode": see the implementation log.)
    8. `hints`: `f` shows labels (count and the visible links/buttons are recorded); typing the
       label of a same-tab link navigates. Last, because it leaves the page.
    9. `errors`: no uncaught error and no `console.error` from Vimma's code during the visit.
@@ -316,7 +320,7 @@ selected pages, and fail the PR when a check that passed on the recording fails.
 
 ## Docs to update
 
-- `docs/runbook.md`, "Actions minutes budget": one paragraph for `sites.yml` (≈ 20 min a
+- `docs/runbook.md`, "Actions minutes budget": one paragraph for `sites.yml` (≈ 15-20 min a
   night, free, never on PRs).
 - `CONTRIBUTING.md`: `npm run sites` under the test commands.
 - No guide, README or changelog change: nothing user-visible changes.
@@ -343,3 +347,58 @@ selected pages, and fail the PR when a check that passed on the recording fails.
    for the config (a feature of its own)?
 5. **The site list.** Add the user's daily sites beyond the 19 in the request (Hacker News
    comments page, a GitLab project, crates.io)?
+
+## Implementation log (2026-10-12, sub-PR 1)
+
+What changed from the plan above, and why:
+
+- **The shortcut check sends synthetic key events to the page, not keys in pass-through mode.**
+  Vimma's `i` is no clean pass-through: `mode.insert` also sends `Vimma:FocusInput`, which
+  focuses the page's first text field (`host/VimmaHost.sys.mjs:700-703`). On GitHub that is the
+  "Go to file" box, so the "shortcut" keys were typed into it. When the page then moves focus
+  itself (GitHub's file list, YouTube's consent dialog), the focus report puts the tab back in
+  normal mode (`onFocusReport`, `VimmaHost.sys.mjs:1194-1202`). The keys that followed then ran
+  as Vimma commands (`t` opened tabs). Synthetic `keydown`/`keypress`/`keyup` at the focused
+  element never reach Vimma and trigger no Firefox default action. The cost is that sites that
+  ignore untrusted events are under-reported, and this check is `info` only. After the probe,
+  the page is reloaded (`r`), or `H` after a navigation, when a key opened something (MDN's `/`
+  search, regex101's `?` help), so the hints check sees the page as it loaded.
+- **Waiting for a load** also waits for the tab's busy state to end, after the settle delay too.
+  Stack Overflow's first `complete` document was replaced by the real page while the checks
+  ran.
+- **Long strings.** A probe result over the DevTools server's long-string limit (Hacker News'
+  hint links) comes back as a `longString` actor and is fetched with `substring`.
+- **Consent text.** Google's consent dialog arrives in the IP's language ("Ennen kuin jatkat
+  Googleen" from Finland), often at the end of the body. The pattern covers English, Finnish,
+  German and French and searches the whole text (up to 30 000 characters). YouTube's lightbox
+  is matched by its element (`ytd-consent-bump-v2-lightbox tp-yt-paper-dialog`). "Reject all"
+  / "Hylkää kaikki" are clicked. In the last run the YouTube click worked.
+- **Hint counts** are read once the labels stop changing (subframes answer late).
+
+Local live run (this machine's network, the main checkout's full build, 22 entries, 8.6 min):
+18 ok, 2 fail, 2 blocked (bot check). Reddit (reCAPTCHA) and Google search (`/sorry/`) were
+blocked from a home IP after a few runs that day. Both loaded fine in earlier runs, so one IP's
+repeated visits are enough to trigger them.
+
+Problems found (each one becomes its own issue or spec; none is fixed here):
+
+1. **Find leaves you in insert mode when the match is in a text field.** On YouTube and
+   DuckDuckGo, `/neovim` Enter matches the query in the page's search box. Closing the find bar
+   focuses the match, so the tab goes to insert mode, and `n` would type into the box.
+2. **A Firefox error during a hint click on YouTube.** `PictureInPictureChild.sys.mjs:1627`
+   throws `shadowRoot is null`. The stack runs through `VimmaChild.sys.mjs:428`, the synthetic
+   `click()` of a hint. The follow still navigates. To check: whether a user's click does the
+   same, and whether the actor should skip the synthetic mouse events on `<video>` overlays.
+3. **`i` focuses the first text field** (above). That is intended, but it means Vimma has no
+   pure pass-through mode for sites with their own single-key shortcuts. The shortcut report
+   lists 15 of 22 sites where that matters, mostly `/` (13 sites) and `?` (7).
+4. **Insert check skips.** GitHub PR pages, MDN, doc.rust-lang.org and Vercel docs show search
+   as a button that opens a dialog, so the suite finds no field to focus, and Excalidraw has no
+   text field at all. Not a Vimma problem, but insert mode goes unchecked on those five; a later
+   version could open the search dialog first.
+
+Everything else passed on every site that loaded: hints (21-150 labels; the follow navigated in
+12-470 ms), `j`/`k`/`gg`/`G`/`ctrl+d`/`ctrl+u` (the main scroller everywhere except regex101, where Vimma correctly scrolled its inner app pane; CodePen and Excalidraw have nothing to scroll), `yy`, `ctrl+b`
+never reaching the page (normal mode and in a field), and the status bar agreeing with the mode
+after every step. Key-to-effect: `j` 7-17 ms, `f` 16-27 ms, `yy` 4-8 ms, including `vimma-ctl`'s
+start.
