@@ -35,6 +35,9 @@ Sources: the engine tree (Firefox 157.0.1, read-only); zen-browser/desktop at `1
   shows that workspace's panes, and a restart restores them.
 - As a user, a link I open in a new foreground tab from a pane shows in that pane, and the split
   stays (core: activating a tab shows it in the focused pane).
+  (Since [side-panel-unsplit](side-panel-unsplit.md) decisions 20–23, 2026-10-12: only a new
+  foreground tab does this. Picking an existing tab outside the split shows it alone and keeps the
+  split as a hidden view, as Firefox's own split view does; picking one of its tabs brings it back.)
 - As the maintainer, a Firefox rebase that changes the split-view behaviour we rely on fails a
   named mochitest. It does not break panes silently.
 
@@ -476,7 +479,9 @@ tested by `browser_vimma_pane_workspaces.js` (3 tasks).
   `PaneView.accepts`, any tab while `WindowWorkspaces` switches or restores and any tab of
   another workspace (decision 14: `#onSelect` switches instead, and the tree is parked as is).
   `ctrl+t` and a link in a new foreground tab therefore open in the focused pane (the user
-  story). Sub-spec 3's "its tab is hidden in sub-spec 6" for a closed pane is settled the
+  story). (Changed 2026-10-12 by side-panel-unsplit decision 21: a selected tab that is not new
+  shows alone and the tree is kept hidden; only a tab opened in the same task is shown in the
+  focused pane.) Sub-spec 3's "its tab is hidden in sub-spec 6" for a closed pane is settled the
   same way: the tab stays visible.
 - **Also fixed:** `ui/theme-host.mjs` had a race that failed `browser_vimma_theme.js` in the full
   suite (2 of 7 runs here, with the new test before it): a check in flight when a pref changed
