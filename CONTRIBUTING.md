@@ -60,6 +60,7 @@ npm run typecheck        # tsc --checkJs
 npm run lint             # eslint + prettier --check
 npm run mochitest -- tests/browser/                       # browser tests on your full build
 npm run mochitest -- tests/browser/browser_vimma_tabstrip.js
+npm run sites -- --filter github                          # live sites, a report (docs/runbook.md)
 ```
 
 You can also test the front end without a full build. An artifact build puts our front end on

@@ -205,10 +205,12 @@ export function unpackTarball(tarball, dir) {
 /**
  * @param {string} profile
  * @param {{ width: number, height: number }} window
- * @param {{ url?: string | null }} [options] the page to open; null on a restart, where a URL
- *   would open beside the restored session, which a user's plain restart never does
+ * @param {{ url?: string | null, extra?: readonly string[] }} [options] `url`: the page to open;
+ *   null on a restart, where a URL would open beside the restored session, which a user's plain
+ *   restart never does. `extra`: more switches, before the URL (the site suite's
+ *   --start-debugger-server, docs/specs/site-compat.md)
  */
-export function browserArgs(profile, { width, height }, { url = "about:blank" } = {}) {
+export function browserArgs(profile, { width, height }, { url = "about:blank", extra = [] } = {}) {
   return [
     "-no-remote",
     "-profile",
@@ -222,6 +224,7 @@ export function browserArgs(profile, { width, height }, { url = "about:blank" } 
     "0",
     "-top",
     "0",
+    ...extra,
     ...(url === null ? [] : [url]),
   ];
 }
@@ -647,6 +650,7 @@ export async function quitBrowser({ ctl, child, timeoutMs = 10_000, pollMs = 50 
  *   tmpRoot?: string,
  *   prefs?: Record<string, boolean | number | string | null>,
  *   keep?: boolean,
+ *   args?: readonly string[],
  *   discoveryTimeoutMs?: number,
  *   graceMs?: number,
  *   baseEnv?: Record<string, string | undefined>,
@@ -666,6 +670,7 @@ export async function launch({
   tmpRoot = tmpdir(),
   prefs = {},
   keep = false,
+  args = [],
   discoveryTimeoutMs = DEFAULT_DISCOVERY_TIMEOUT_MS,
   graceMs = 5000,
   baseEnv = process.env,
@@ -710,7 +715,7 @@ export async function launch({
   /** Spawn the browser on the profile (with `url` on the command line) and wait for its socket. */
   const start = async (/** @type {string | null} */ url, stalePid = null) => {
     const env = browserEnv(baseEnv, { display: display?.display, home, tmp, extra: build.env });
-    const spawned = spawn(build.binary, browserArgs(profile, window, { url }), {
+    const spawned = spawn(build.binary, browserArgs(profile, window, { url, extra: args }), {
       env,
       detached: true,
       stdio: ["ignore", "ignore", "pipe"],

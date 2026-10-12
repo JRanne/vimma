@@ -1,0 +1,96 @@
+# Spec site-compat (docs/specs/site-compat.md): the live site-compatibility suite. Each site of
+# tools/sites/sites.json is loaded once in an artifact build under Xvfb, driven with vimma-ctl and
+# read over the DevTools protocol; the report goes to the job summary and an artifact.
+#
+# A report, never a gate: it runs on a schedule and by hand only, never on pull requests, and is
+# not a required check. Live sites change and bot checks come and go, so its results must not
+# block anyone. A standard hosted runner (free on a public repo; larger runners are not, see the
+# spec's "Cost and runtime"), a read-only token and no secret. The steps up to the artifact build are
+# e2e.yml's (ADR-010), copied, with the same tarball checksum check.
+name: sites
+
+on:
+  schedule:
+    - cron: "30 4 * * *"
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: Sites whose id or name contains this (comma-separated terms); empty for all
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sites
+  cancel-in-progress: false
+
+jobs:
+  sites:
+    name: site compatibility (live)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Build vimma-ctl (tools/vimma-ctl/rust-toolchain.toml)
+        working-directory: tools/vimma-ctl
+        run: rustup toolchain install && cargo build --locked
+
+      - name: Disk guard (download and unpack need ~6 GB)
+        run: |
+          df -h . | tail -1
+          free=$(df --output=avail -BG . | tail -1 | tr -dc 0-9)
+          if [ "$free" -lt 8 ]; then
+            echo "::error::Only ${free} GB free; the Firefox source needs ~6 GB (ADR-010)."
+            exit 1
+          fi
+
+      - name: Firefox source tarball (surfer.json), unpacked without history
+        env:
+          CI_SKIP_INIT: "1"
+        run: |
+          npx surfer download
+          version=$(node -p 'require("./surfer.json").version.version')
+          base="https://archive.mozilla.org/pub/firefox/releases/$version"
+          name="source/firefox-$version.source.tar.xz"
+          sha512sum ".surfer/engine/firefox-$version.source.tar.xz" > "$RUNNER_TEMP/tarball.sha512"
+          curl -fsSL --retry 3 "$base/SHA512SUMS" -o "$RUNNER_TEMP/SHA512SUMS"
+          python3 tools/upstream/verify-sha512.py --sums "$RUNNER_TEMP/SHA512SUMS" --name "$name" \
+            --actual "$RUNNER_TEMP/tarball.sha512"
+          git init -q engine
+          rm -f .surfer/engine/firefox-*.source.tar.xz
+
+      - name: Import our patches and sources
+        run: npm run import
+
+      - name: Artifact build (tools/artifact-build)
+        run: node tools/artifact-build/artifact-build.mjs
+
+      # Exits 0 whenever it wrote a report, whatever the sites did; 1 only when the harness
+      # itself failed. It appends the Markdown report to the job summary.
+      - name: Site compatibility (npm run sites -- --artifact)
+        env:
+          FILTER: ${{ inputs.filter }}
+        run: npm run sites -- --artifact ${FILTER:+--filter "$FILTER"}
+
+      - name: Upload the report (results.json, report.md, report.html, screenshots/)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site-compat
+          path: site-compat-output/
+          if-no-files-found: warn
+          retention-days: 14

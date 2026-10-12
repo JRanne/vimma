@@ -116,6 +116,21 @@ export default [
     languageOptions: { sourceType: "script" },
   },
   {
+    // The site suite's probes: functions sent over the DevTools protocol and run in a page
+    // (content*) or in the browser window (chrome*), never in Node (docs/specs/site-compat.md).
+    files: ["tools/sites/probes.mjs"],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ChromeUtils: "readonly",
+        Services: "readonly",
+        Cc: "readonly",
+        Ci: "readonly",
+        gBrowser: "readonly",
+      },
+    },
+  },
+  {
     // The promo video's fixture pages' script: a web page (a module), in Firefox.
     files: ["tools/promo/fixtures/*.js"],
     languageOptions: {
