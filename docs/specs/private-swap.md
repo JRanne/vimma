@@ -4,7 +4,7 @@ Status: proposed (research done, design chosen; not implemented) · Milestone: a
 [private-workspace](private-workspace.md) (merged, #142) · Area: `packages/vimma-core/src/`
 (`hyprswap.mjs` new, `config.mjs`, `defaults.mjs`); `host/hypr/HyprIpc.sys.mjs` (new),
 `host/private-swap.mjs` (new), `host/private-ops.mjs`, `about/AboutVimma.sys.mjs`,
-`config/ConfigHost.sys.mjs`, `branding/vimma/pref/firefox-branding.js` (one pref, open
+`config/ConfigHost.sys.mjs`, `branding/vimma/pref/firefox-branding.js` (one pref, decided
 question 1). No upstream patch. ADR: [017-window-manager-ipc](../adr/017-window-manager-ipc.md).
 
 Engine paths are relative to `engine/` (Firefox 157.0.1). Hyprland facts were checked on this
@@ -36,7 +36,7 @@ stays a private window. This spec changes where that window is shown.
   size, and the split layout does not change.
 - As a user, if I close the private window in any way (`ctrl+b shift+d`, `ctrl+shift+w`,
   `SUPER+W`), my normal window comes back in its place. It is never left hidden.
-- As a user, a link I click in another app opens in my normal window, and I see it (open
+- As a user, a link I click in another app opens in my normal window, and I see it (decided
   question 2).
 - As a user, if Vimma quits or crashes while the private workspace is shown, the next start
   shows my normal window as usual. Nothing about the private workspace or the swap was written
@@ -248,8 +248,8 @@ hand check records how long that lasts (a frame or two plus Hyprland's open anim
      window in its place. If that arrives too late, `closewindow>>ADDR` moves the normal window
      into the slot window's last workspace and focuses it (best effort: a new tile).
      `ctrl+b shift+d` swaps first, waits for the reply, then closes.
-   - **A link or activation reaches the parked normal window:** see open question 2. Proposed:
-     a `TabOpen` in the parked window, or its `activate` event, swaps it back in place, as
+   - **A link or activation reaches the parked normal window** (decided question 2): a
+     `TabOpen` in the parked window, or its `activate` event, swaps it back in place, as
      Firefox's own focus would have taken you there. The `TabOpen` hook runs before Firefox's
      `win.focus()` (`BrowserDOMWindow.sys.mjs:124`), so the batch usually lands before the
      activation request, and the special workspace never opens.
@@ -276,7 +276,7 @@ hand check records how long that lasts (a frame or two plus Hyprland's open anim
    - The event stream's titles stay in memory only as long as it takes to compare them with
      the nonce. They are never logged, and error messages quote no event text (a test checks).
    - Nothing about the pair, the parked state or addresses is written to disk or to SessionStore.
-   - The window title Hyprland sees (open question 1): proposed, Vimma defaults
+   - The window title Hyprland sees (decided question 1): Vimma defaults
      `privacy.exposeContentTitleInWindow.pbm` to `false`, so the private window's title is
      `Vimma Private Browsing`, without the page title, in Hyprland's clients, the bar,
      screen-sharing pickers and the event stream. The user can turn it back in `about:config`.
@@ -322,7 +322,8 @@ placement: swap`, or the reason it is `window`. It shows no addresses or titles.
   - Closing the slot window three ways (`ctrl+shift+w`, `window.close()`, `ctrl+b shift+d`):
     normal is shown in its place, and the swap reply comes before the close for `ctrl+b shift+d`.
   - An external link (`BrowserContentHandler`'s `handURIToExistingBrowser` path, through
-    `nsIBrowserDOMWindow.openURI` with `OPEN_EXTERNAL`) to the parked window swaps it back.
+    `nsIBrowserDOMWindow.openURI` with `OPEN_EXTERNAL`) to the parked window swaps it back into
+    the slot and parks the private window (decided question 2).
   - The fake moving the parked window away (`movewindowv2`) clears the pair, and the next entry
     starts fresh.
   - No Hyprland (no socket, a refused connection, a silent server, a server that errors on both
@@ -330,6 +331,9 @@ placement: swap`, or the reason it is `window`. It shows no addresses or titles.
   - **No leaks:** every byte the fake received matches the whitelist and contains none of the
     private test page's title, URL or host. The profile directory holds no new file. The
     console has no line containing a fake event's title.
+  - **Neutral title** (decided question 1): `privacy.exposeContentTitleInWindow.pbm` defaults
+    to `false`, and a private window showing a page with a known title has the chrome
+    `document.title` `Vimma Private Browsing`; with the pref set to `true`, the page title is back.
   - `[private] placement = "window"` with the fake present: no command is sent apart from the
     address resolution, which also stops.
 - **e2e:** not in CI. Xvfb has no Hyprland, and the e2e harness's screenshot baselines assume
@@ -356,8 +360,8 @@ placement: swap`, or the reason it is `window`. It shows no addresses or titles.
   compositors, X11, or `[private] placement = "window"`), it is a second window, as before. A
   grouped Vimma window keeps the group behaviour. Explain that Vimma talks to Hyprland over its
   socket with a fixed set of commands and sends no page titles or URLs. `config.toml`: the
-  `[private] placement` key. "Privacy defaults": the private window's title, if open
-  question 1 is accepted.
+  `[private] placement` key. "Privacy defaults": a row for the private window's title
+  (`privacy.exposeContentTitleInWindow.pbm` = `false`; set it to `true` to show page titles).
 - `docs/limits.md`: the private workspace is still a second window for the window manager. On
   Hyprland, Vimma hides the one you are not using. Hyprland's event stream and other tools
   still see both windows (`hyprctl clients`).
@@ -378,7 +382,7 @@ all usable from our own files. ADR-017 records the decision to talk to the windo
 3. `HyprIpc.sys.mjs` and the fake Hyprland. Then `private-swap.mjs` wired into
    `private-ops.mjs`'s `enterPrivate`, `leavePrivate`, `showNormal` and `closePrivate`, with the
    mochitest.
-4. The pref default (if open question 1 is accepted), `about:vimma`, docs, and the manual
+4. The pref default (decided question 1), `about:vimma`, docs, and the manual
    checks.
 
 ## Out of scope
@@ -388,15 +392,12 @@ design); per-tab private browsing (private-workspace.md option C); changing the 
 config or adding window rules; showing both windows side by side on purpose (that is
 `placement = "window"`); remembering the pair across a restart.
 
-## Open questions
+## Decided questions (user, 2026-10-12)
 
-1. **Neutral private window title.** With the swap, the private window sits where the Vimma
-   window was, so the bar, screen-sharing pickers and Hyprland's event stream show its title.
-   Proposed: Vimma defaults `privacy.exposeContentTitleInWindow.pbm` to `false`, so the title is
-   only `Vimma Private Browsing`, never the page title. It stays changeable in `about:config`,
-   and the guide's "Privacy defaults" table lists it.
-2. **A link from another app while the private workspace is shown.** Firefox opens it in the
-   normal window, which is parked. Proposed: Vimma swaps the normal window back into place, so
-   you see the link at once. This is what happens today, when Hyprland focuses the normal
-   window. The alternative keeps the private workspace on screen and says
-   `link opened in your normal window (ctrl+^)`.
+1. **Neutral private window title:** yes. Vimma defaults `privacy.exposeContentTitleInWindow.pbm`
+   to `false`, so the private window's title is only `Vimma Private Browsing`, never the page
+   title, in the bar, screen-sharing pickers and Hyprland's event stream. It stays changeable in
+   `about:config`, and the guide's "Privacy defaults" table lists it.
+2. **A link from another app while the private workspace is shown:** Vimma swaps the normal
+   window back into place, so you see the link at once, as Firefox's own focus would have done
+   (decision 7). The private workspace stays parked and one key away.
