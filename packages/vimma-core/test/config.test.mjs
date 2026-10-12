@@ -163,6 +163,19 @@ describe("parseConfig: errors carry line numbers", () => {
     );
   });
 
+  // Regression (found by the fuzzer, seed 1027517388, issue #134): an action name with a `[`
+  // made parseConfig throw "RangeError: Invalid array length" instead of reporting it.
+  test("an unknown action whose name is not a bare key is an error, not a throw", () => {
+    const e = oneError(toml("schema = 1", "[keys]", '"c[mmand" = "/"'));
+    expect(e).toMatchObject({ line: 3, path: 'keys."c[mmand"' });
+  });
+
+  // The same crash from the issue's own seed (2487349044): the name reached through dotted keys.
+  test("an unknown action named through dotted keys with a `[` is an error, not a throw", () => {
+    const r = parseConfig(toml("schema = 1", `'keys'.'mod['."github.com" = "github.com"`));
+    expect(r.errors).toEqual([{ line: 2, path: 'keys."mod["', message: 'unknown action "mod["' }]);
+  });
+
   test("a TOML syntax error has line and column, and no config", () => {
     const e = oneError(toml("schema = 1", "", "[keys]", "new_tab = prefix+c"));
     expect(e.line).toBe(4);
