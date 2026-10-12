@@ -365,6 +365,7 @@ Limits:
 | `semgrep.yml`              | push to `main`, PRs, Mon, manual | `ubuntu-latest`           | nothing                                    |
 | `codeql.yml`               | push to `main`, PRs, Mon, manual | `ubuntu-latest`           | nothing; skipped while the repo is private |
 | `dependabot-automerge.yml` | Dependabot's PRs                 | `ubuntu-latest`           | nothing (Dependabot, below)                |
+| `site-dispatch.yml`        | `docs/bindings.json` on `main`   | `ubuntu-latest`           | a token secret (vimma.dev, below)          |
 
 Locally, before pushing: `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:py`,
 `npm run license-check`, `npx surfer license-check`, `npx commitlint --from main`.
@@ -963,6 +964,15 @@ manifest and changelog past it, and the release notes stay valid. If the fix cha
 built, release a patch version instead. To pull a bad release: `gh release edit vX.Y.Z --draft`
 (hides it); the AUR package cannot go back a version without an `epoch`, so ship a fixed
 release instead.
+
+### vimma.dev's keys (`site-dispatch.yml`, spec site-keys-mirror)
+
+`npm run gen-docs` writes `docs/bindings.json`, which vimma.dev mirrors on its keys page and in
+its `?` overlay. A push to `main` that changes it sends a `repository_dispatch`
+(`vimma-bindings`) to JRanne/vimma-site, whose workflow fetches the file at that commit and opens
+a pull request. Until the secret exists the job skips with a notice. To set it up: create a
+fine-grained token with access to JRanne/vimma-site only and "Contents: read and write", then
+`gh secret set SITE_DISPATCH_TOKEN`. Re-send by hand with `gh workflow run site-dispatch.yml`.
 
 ### Security scanning (`semgrep.yml`, `codeql.yml`)
 

@@ -1,6 +1,13 @@
 import { describe, test, expect } from "vitest";
 import { compileKeymap } from "../src/keymap.mjs";
-import { bindingTable, filterBindings, keyLegend, renderHelpText } from "../src/help.mjs";
+import {
+  bindingTable,
+  bindingsJson,
+  filterBindings,
+  keyLegend,
+  renderHelpText,
+} from "../src/help.mjs";
+import { MODES } from "../src/modes.mjs";
 import { ACTIONS } from "../src/actions.mjs";
 import { DEFAULT_CONFIG } from "../src/defaults.mjs";
 
@@ -104,5 +111,48 @@ describe("help table", () => {
   test("help text marks overrides with an asterisk", () => {
     const txt = renderHelpText(bindingTable(compileKeymap({ keys: { new_tab: ["ctrl+alt+c"] } })));
     expect(txt).toMatch(/\* new_tab/);
+  });
+});
+
+describe("bindingsJson (docs/bindings.json, mirrored by vimma.dev)", () => {
+  test("groups and actions keep ACTIONS order, one entry per action", () => {
+    const data = bindingsJson(compileKeymap());
+    expect(data.version).toBe(1);
+    expect(data.groups.flatMap((g) => g.actions.map((a) => a.name))).toEqual(
+      ACTIONS.map((a) => a.name),
+    );
+    expect(data.groups.map((g) => g.name)).toEqual([...new Set(ACTIONS.map((a) => a.group))]);
+    const help = ACTIONS.find((a) => a.name === "help_close");
+    const row = data.groups.flatMap((g) => g.actions).find((a) => a.name === "help_close");
+    expect(row?.description).toBe(help?.description);
+  });
+
+  test("keys are the overlay's, with the mode split off and chords split on spaces", () => {
+    const km = compileKeymap();
+    const data = bindingsJson(km);
+    const table = bindingTable(km);
+    for (const a of data.groups.flatMap((g) => g.actions)) {
+      const shown = a.keys.map((k) => (k.mode ? `${k.keys} [${k.mode}]` : k.keys));
+      expect(shown, a.name).toEqual(table.find((r) => r.name === a.name)?.bindings);
+      for (const k of a.keys) {
+        expect(k.chords).toEqual(k.keys.split(" "));
+        if (k.mode) expect(MODES).toContain(k.mode);
+      }
+    }
+    const keysOf = (name) =>
+      data.groups.flatMap((g) => g.actions).find((a) => a.name === name)?.keys;
+    expect(keysOf("help_close")).toContainEqual({ keys: "esc", chords: ["esc"], mode: "help" });
+    expect(keysOf("rename_tab")).toEqual([
+      { keys: "ctrl+b shift+t", chords: ["ctrl+b", "shift+t"] },
+    ]);
+  });
+
+  test("names the prefix, the legend and the modes", () => {
+    const data = bindingsJson(compileKeymap({ keys: { prefix: "ctrl+a" } }));
+    expect(data.prefix).toBe("ctrl+a");
+    expect(data.legend).toMatch(/^prefix = ctrl\+a\b/);
+    expect(data.modes).toEqual([...MODES]);
+    const all = data.groups.flatMap((g) => g.actions).flatMap((a) => a.keys);
+    expect(all.map((k) => k.keys)).toContain("ctrl+a ?");
   });
 });

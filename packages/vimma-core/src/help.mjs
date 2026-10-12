@@ -7,6 +7,8 @@
  * compiled keymap the dispatcher uses, so help cannot drift from behaviour.
  */
 import { ACTIONS, isRunnable } from "./actions.mjs";
+import { displayKey } from "./keys.mjs";
+import { MODES, isMode } from "./modes.mjs";
 
 /** @import { Keymap } from "./keymap.mjs" */
 /**
@@ -45,6 +47,66 @@ export function bindingTable(keymap, { runnable } = {}) {
  */
 export function keyLegend(keymap) {
   return keymap.legend();
+}
+
+/**
+ * @typedef {object} JsonKey
+ * @property {string} keys      as pressed, e.g. `ctrl+b shift+t`
+ * @property {string[]} chords  `keys` split on spaces: `["ctrl+b", "shift+t"]`; `gt` stays one
+ * @property {string} [mode]    only on a binding limited to one mode (`esc [help]`)
+ */
+/**
+ * @typedef {object} JsonAction
+ * @property {string} name         the config.toml and `:` command name
+ * @property {string} description
+ * @property {JsonKey[]} keys      empty when the action has no default key
+ */
+/**
+ * @typedef {object} BindingsJson
+ * @property {1} version  bumped only when the shape changes
+ * @property {string} generated
+ * @property {string} prefix
+ * @property {string} legend
+ * @property {string[]} modes
+ * @property {{ name: string, actions: JsonAction[] }[]} groups
+ */
+
+/**
+ * docs/bindings.json, the machine-readable twin of docs/bindings.md that vimma.dev mirrors
+ * (docs/specs/site-keys-mirror.md). Built from bindingTable, so groups and actions keep the
+ * overlay's order and keys cannot disagree with it.
+ * @param {Keymap} keymap
+ * @returns {BindingsJson}
+ */
+export function bindingsJson(keymap) {
+  /** @type {BindingsJson["groups"]} */
+  const groups = [];
+  for (const r of bindingTable(keymap)) {
+    let group = groups.at(-1);
+    if (group?.name !== r.group) {
+      group = { name: r.group, actions: [] };
+      groups.push(group);
+    }
+    const keys = r.bindings.map((text) => {
+      const m = / \[([a-z]+)\]$/.exec(text);
+      const mode = m?.[1] && isMode(m[1]) ? m[1] : undefined;
+      const pressed = mode ? text.slice(0, -` [${mode}]`.length) : text;
+      /** @type {JsonKey} */
+      const key = { keys: pressed, chords: pressed.split(" ") };
+      if (mode) key.mode = mode;
+      return key;
+    });
+    group.actions.push({ name: r.name, description: r.description, keys });
+  }
+  return {
+    version: 1,
+    generated:
+      "Generated from packages/vimma-core/src/actions.mjs and defaults.mjs by npm run gen-docs; do not edit.",
+    prefix: displayKey(keymap.prefix),
+    legend: keyLegend(keymap),
+    modes: [...MODES],
+    groups,
+  };
 }
 
 /**
