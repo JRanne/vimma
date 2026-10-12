@@ -3,6 +3,7 @@ import fc from "fast-check";
 import {
   PARK,
   PROBE_LUA,
+  QUERY_ACTIVE_WORKSPACE,
   QUERY_CLIENTS,
   QUERY_VERSION,
   detectDialect,
@@ -16,8 +17,10 @@ import {
   nonceTitle,
   pairStep,
   parkedWindow,
+  parseActiveWorkspace,
   parseClients,
   parseEvent,
+  planRescue,
   planShow,
   repliesOk,
   splitReplies,
@@ -88,6 +91,14 @@ describe("the dialect probe (decision 3)", () => {
   });
   test("a version but an error to the Lua probe is the legacy dialect", () => {
     expect(detectDialect(version, "Invalid dispatcher")).toEqual({
+      dialect: "legacy",
+      version: "0.56.2",
+    });
+  });
+  test("a probe reply that is neither dialect's is no Hyprland (review, PR #151)", () => {
+    expect(detectDialect(version, "error: nope")).toEqual({ error: "neither dialect" });
+    expect(detectDialect(version, "")).toEqual({ error: "neither dialect" });
+    expect(detectDialect(version, 'Invalid dispatcher, requested "hl.dsp.no_op()"')).toEqual({
       dialect: "legacy",
       version: "0.56.2",
     });
@@ -253,6 +264,7 @@ describe("the encoder (decision 4)", () => {
   test("the whitelist accepts what the encoder makes and the queries, nothing else", () => {
     expect(isAllowedRequest(QUERY_CLIENTS)).toBe(true);
     expect(isAllowedRequest(QUERY_VERSION)).toBe(true);
+    expect(isAllowedRequest(QUERY_ACTIVE_WORKSPACE)).toBe(true);
     expect(isAllowedRequest(PROBE_LUA)).toBe(true);
     const batch = encodeBatch("lua", [
       { verb: "move", window: A, workspace: PARK },
@@ -286,6 +298,60 @@ describe("workspaceTarget: where a window's slot is", () => {
     expect(workspaceTarget({ id: -1337, name: 'a"b' })).toBeNull();
     expect(workspaceTarget({ id: 0, name: "" })).toBeNull();
     expect(workspaceTarget(/** @type {any} */ (null))).toBeNull();
+  });
+});
+
+describe("parseActiveWorkspace", () => {
+  test("the active workspace's id when it is a numbered one, else null", () => {
+    expect(QUERY_ACTIVE_WORKSPACE).toBe("j/activeworkspace");
+    expect(parseActiveWorkspace(JSON.stringify({ id: 4, name: "4", monitor: "eDP-1" }))).toBe(4);
+    expect(parseActiveWorkspace(JSON.stringify({ id: -1337, name: "web" }))).toEqual({
+      name: "web",
+    });
+    expect(parseActiveWorkspace(JSON.stringify({ id: -98, name: "special:x" }))).toBeNull();
+    expect(parseActiveWorkspace("nope")).toBeNull();
+    expect(parseActiveWorkspace("null")).toBeNull();
+  });
+});
+
+// Review of PR #151, major A: the normal window must never stay in special:vimma.
+describe("planRescue: whatever is stuck in special:vimma comes out", () => {
+  const normal = client({ workspace: { id: -98, name: PARK } });
+  test("to the other window's workspace", () => {
+    const priv = client({ address: B, workspace: { id: 5, name: "5" } });
+    expect(planRescue(normal, priv, null)).toEqual([
+      { verb: "move", window: A, workspace: 5 },
+      { verb: "focus", window: A },
+    ]);
+  });
+  test("to the active workspace when the other is on a special workspace (a scratchpad)", () => {
+    const priv = client({ address: B, workspace: { id: -97, name: "special:scratchpad" } });
+    expect(planRescue(normal, priv, 2)).toEqual([
+      { verb: "move", window: A, workspace: 2 },
+      { verb: "focus", window: A },
+    ]);
+    expect(planRescue(normal, priv, { name: "web" })[0]).toEqual({
+      verb: "move",
+      window: A,
+      workspace: { name: "web" },
+    });
+  });
+  test("to workspace 1 when nothing else is known; the other window may be gone", () => {
+    expect(planRescue(normal, undefined, null)).toEqual([
+      { verb: "move", window: A, workspace: 1 },
+      { verb: "focus", window: A },
+    ]);
+  });
+  test("the slot window stuck instead: it comes out, and the shown one keeps the focus", () => {
+    const shown = client({ address: B, workspace: { id: 3, name: "3" } });
+    expect(planRescue(shown, normal, null)).toEqual([
+      { verb: "move", window: A, workspace: 3 },
+      { verb: "focus", window: B },
+    ]);
+  });
+  test("nothing stuck: just the focus", () => {
+    expect(planRescue(client(), undefined, null)).toEqual([{ verb: "focus", window: A }]);
+    expect(planRescue(undefined, undefined, null)).toEqual([]);
   });
 });
 
@@ -406,6 +472,11 @@ describe("the event parser (decision 5, 8)", () => {
       type: "move",
       address: A,
       workspace: "a,b",
+    });
+    expect(parseEvent(`openwindow>>${A.slice(2)},3,vimma-vimma,${nonce}`, pending)).toEqual({
+      type: "nonce",
+      address: A,
+      nonce,
     });
     expect(parseEvent(`openwindow>>${A.slice(2)},3,vimma-vimma,Secret`, pending)).toEqual({
       type: "open",
@@ -579,6 +650,44 @@ describe("planShow: show X in Y's place (Design: the mechanism)", () => {
         const commands = batch.text.replace(/^\[\[BATCH\]\]/, "").split(";");
         return isAllowedRequest(batch.text) && commands.every((c) => SAFE.test(c));
       }),
+      { numRuns: 2000 },
+    );
+  });
+
+  test("property: valid windows always plan, and the plan is whitelisted", () => {
+    const hex = fc.integer({ min: 1, max: 0xffffffffff }).map((n) => `0x${n.toString(16)}`);
+    const coord = fc.integer({ min: -4000, max: 4000 });
+    const size = fc.integer({ min: 1, max: 8000 });
+    const rec = (/** @type {any} */ ws) =>
+      fc.record({
+        address: hex,
+        pid: fc.nat(),
+        workspace: ws,
+        floating: fc.boolean(),
+        fullscreen: fc.integer({ min: 0, max: 3 }),
+        fullscreenClient: fc.integer({ min: 0, max: 3 }),
+        grouped: fc.boolean(),
+        pinned: fc.boolean(),
+        at: fc.tuple(coord, coord),
+        size: fc.tuple(size, size),
+      });
+    const slotWs = fc.oneof(
+      fc.integer({ min: 1, max: 99 }).map((id) => ({ id, name: String(id) })),
+      fc.stringMatching(/^[a-z0-9_.-]{1,20}$/).map((name) => ({ id: -1337, name })),
+    );
+    fc.assert(
+      fc.property(
+        fc.constantFrom("lua", "legacy"),
+        rec(fc.constant({ id: -98, name: PARK })),
+        rec(slotWs),
+        (dialect, show, place) => {
+          if (show.address === place.address) return true;
+          const plan = planShow(/** @type {any} */ (dialect), show, place);
+          if (plan.kind === "refuse") return false;
+          const batch = encodeBatch(/** @type {any} */ (dialect), plan.commands);
+          return !!batch && isAllowedRequest(batch.text);
+        },
+      ),
       { numRuns: 2000 },
     );
   });

@@ -17,6 +17,8 @@
 export const PARK = "special:vimma";
 /** The JSON client list. */
 export const QUERY_CLIENTS = "j/clients";
+/** The active workspace, where a stranded window is brought back to. */
+export const QUERY_ACTIVE_WORKSPACE = "j/activeworkspace";
 /** The JSON version, also the first half of the probe. */
 export const QUERY_VERSION = "j/version";
 /** The Lua dialect's no-op: `ok` with a Lua config, an error with a legacy one. */
@@ -94,7 +96,11 @@ export function detectDialect(versionReply, probeReply) {
   if (!info || typeof info !== "object" || Array.isArray(info) || typeof info.version !== "string")
     return { error: "no version reply" };
   const version = /^\d+(?:\.\d+){0,3}$/.test(info.version) ? info.version : "unknown";
-  return { dialect: probeReply.trim() === "ok" ? "lua" : "legacy", version };
+  const probe = probeReply.trim();
+  // A legacy config rejects the Lua no-op by name; any other reply is neither dialect.
+  if (probe === "ok") return { dialect: "lua", version };
+  if (probe.startsWith("Invalid dispatcher")) return { dialect: "legacy", version };
+  return { error: "neither dialect" };
 }
 
 /**
@@ -266,7 +272,8 @@ const COMMAND = new RegExp(
  * @param {string} text
  */
 export function isAllowedRequest(text) {
-  if (text === QUERY_CLIENTS || text === QUERY_VERSION) return true;
+  if (text === QUERY_CLIENTS || text === QUERY_VERSION || text === QUERY_ACTIVE_WORKSPACE)
+    return true;
   const body = text.startsWith("[[BATCH]]") ? text.slice("[[BATCH]]".length) : text;
   return body !== "" && body.split(";").every((c) => COMMAND.test(c));
 }
@@ -380,8 +387,13 @@ export function parseEvent(line, nonces) {
       return rest !== null && nonces.has(rest) ? { type: "nonce", address, nonce: rest } : null;
     case "closewindow":
       return { type: "close", address };
-    case "openwindow":
+    case "openwindow": {
+      // ADDR,WORKSPACE,CLASS,TITLE: a window can open with its nonce already set.
+      const parts = rest === null ? [] : rest.split(",");
+      const title = parts.length >= 3 ? parts.slice(2).join(",") : null;
+      if (title !== null && nonces.has(title)) return { type: "nonce", address, nonce: title };
       return { type: "open", address };
+    }
     case "movewindowv2": {
       if (rest === null) return null;
       const c = rest.indexOf(",");
@@ -390,6 +402,43 @@ export function parseEvent(line, nonces) {
     default:
       return null;
   }
+}
+
+/**
+ * `j/activeworkspace` as a target the encoder takes, or null.
+ * @param {string} json
+ * @returns {HyprWorkspace | null}
+ */
+export function parseActiveWorkspace(json) {
+  try {
+    const ws = JSON.parse(json);
+    return ws && typeof ws === "object" ? workspaceTarget(ws) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * After a swap could not be done (review of PR #151): whichever window is in PARK comes out, to
+ * the other window's workspace, else the active one, else workspace 1, and the window to show
+ * is focused. A window is never left in special:vimma.
+ * @param {Client | undefined} show
+ * @param {Client | undefined} place
+ * @param {HyprWorkspace | null} active  from parseActiveWorkspace
+ * @returns {Command[]}
+ */
+export function planRescue(show, place, active) {
+  const stuck = [show, place].find((c) => c?.workspace.name === PARK);
+  const other = stuck === show ? place : show;
+  const otherWs = other && other.workspace.name !== PARK ? workspaceTarget(other.workspace) : null;
+  /** @type {Command[]} */
+  const commands = [];
+  if (stuck) {
+    commands.push({ verb: "move", window: stuck.address, workspace: otherWs ?? active ?? 1 });
+  }
+  const focus = show?.address ?? stuck?.address ?? null;
+  if (focus) commands.push({ verb: "focus", window: focus });
+  return commands;
 }
 
 /**
