@@ -33,6 +33,7 @@ declare const Services: {
   focus: {
     readonly focusedElement: Element | null;
     readonly focusedContentBrowsingContext: any;
+    clearFocus(window: Window): void;
   };
   // engine/caps/nsIScriptSecurityManager.idl
   scriptSecurityManager: {

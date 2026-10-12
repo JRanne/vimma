@@ -39,6 +39,7 @@ const ROOT = getRootDirectory(gTestPath).replace(
 );
 const LONG = `${ROOT}file_vimma_insert_scroll.html`;
 const PAGE = "https://example.com/";
+const START = "chrome://browser/content/vimma/start/start.html";
 const WINDOW_KEY = "vimma-workspaces";
 const TAB_KEY = "vimma-tab";
 
@@ -197,6 +198,79 @@ add_task(async function gate_2_workspaces_tabs_panes_labels_and_scroll_come_back
   await TestUtils.waitForCondition(async () => (await scrollY()) === 1200, "scroll restores");
   Assert.equal(await scrollY(), 1200, "scrollY is 1200 again");
 
+  await BrowserTestUtils.closeWindow(w2);
+});
+
+// Issue #140 (e2e m3-crash-restore flaked): switching to a workspace after a restore selects its
+// lazy tabs, and Firefox's tab switch focuses the selected one at once, here a split's start page
+// that SessionStore is still restoring. The start page loads in the parent process, and until its
+// layout starts Gecko drops every key aimed at it (PresShell::EventHandler::
+// GetFrameForHandlingEventWith finds no frame), so not even the window's capture listener saw the
+// next ctrl+b ). Focus stays in the window until the page has restored, then goes to the page.
+add_task(async function keys_reach_vimma_while_a_restored_start_page_pane_loads() {
+  const C = workspace("rs-c");
+  const D = workspace("rs-d");
+  const w1 = await openWindow();
+  const ww1 = WindowWorkspaces.get(w1);
+  ww1.switchTo({ id: D.id });
+  await until(() => w1.gBrowser.selectedTab.userContextId === D.userContextId, "D's start tab");
+  const d1 = await openIn(w1, `${PAGE}?d1`);
+  Assert.ok(PaneViews.get(w1).split("vertical").ok, "D is split, a new start page on the right");
+  await until(() => w1.gBrowser.selectedTab !== d1, "the new pane is focused");
+  const d2 = w1.gBrowser.selectedTab;
+  await until(() => d2.linkedBrowser.currentURI.spec === START, "it shows the start page");
+  ww1.switchTo({ id: C.id });
+  await until(() => ww1.model.active === C.id, "C is shown");
+  await TabStateFlusher.flushWindow(w1);
+  await TestUtils.waitForTick();
+  const state = JSON.parse(SessionStore.getBrowserState());
+  const winState = state.windows.find((w) =>
+    w.tabs.some((t) => t.entries.some((e) => e.url === `${PAGE}?d1`)),
+  );
+  await BrowserTestUtils.closeWindow(w1);
+
+  const w2 = await openWindow();
+  await restoreInto(w2, winState);
+  const ww2 = WindowWorkspaces.get(w2);
+  await until(() => ww2.model.active === C.id, "C is shown after the restore");
+  const parked = PaneViews.get(w2).parked(D.id);
+  const right = leaves(parked).find((l) => l.pane === parked.focus);
+  const page = w2.gBrowser.tabs.find((t) => t.linkedPanel === right?.tab);
+  Assert.ok(page && SessionStore.isTabRestoring(page), "D's start page waits to be restored");
+
+  /** @type {string[]} */
+  const seen = [];
+  const onKey = (/** @type {KeyboardEvent} */ e) => seen.push(e.key);
+  w2.addEventListener("keydown", onKey, true);
+  const tip = Cc["@mozilla.org/text-input-processor;1"].createInstance(Ci.nsITextInputProcessor);
+  Assert.ok(
+    tip.beginInputTransaction(w2, () => true),
+    "keys can be typed into the window",
+  );
+  // F20 is bound to nothing: what matters is whether the window's capture phase sees it.
+  const key = new w2.KeyboardEvent("", { key: "F20", code: "F20" });
+  let pressed = 0;
+  let lost = 0;
+  ww2.switchTo({ id: D.id });
+  Assert.equal(w2.gBrowser.selectedTab, page, "the switch selects D's focused pane");
+  for (let i = 0; i < 200 && SessionStore.isTabRestoring(page); i++) {
+    const doc = page.linkedBrowser.contentDocument;
+    if (doc?.documentURI === START && doc.readyState === "loading") {
+      seen.length = 0;
+      tip.keydown(key);
+      tip.keyup(key);
+      pressed++;
+      if (!seen.length) lost++;
+    }
+    await new Promise((r) => Services.tm.dispatchToMainThread(r));
+  }
+  w2.removeEventListener("keydown", onKey, true);
+  Assert.greater(pressed, 0, "keys were typed while the start page was loading");
+  Assert.equal(lost, 0, "none of them was lost");
+  await until(
+    () => Services.focus.focusedWindow === page.linkedBrowser.contentWindow,
+    "the start page has focus once it has restored",
+  );
   await BrowserTestUtils.closeWindow(w2);
 });
 
