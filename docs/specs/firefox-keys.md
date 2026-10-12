@@ -30,7 +30,7 @@ set them with config.toml?" (2026-10-12, answering open question 5)
   but no list shows it.
 - As a user, every key that does something in the window is in `ctrl+b ?`, `:map` and
   [bindings.md](../bindings.md): Vimma's own keys and the Firefox keys I already know (`ctrl+t`,
-  `ctrl+shift+t`, `ctrl+l`, `ctrl+f`, `F5`, `ctrl+plus`, `alt+1..9`, `F12`). No key does
+  `ctrl+shift+t`, `ctrl+l`, `F5`, `ctrl+plus`, `alt+1..9`, `F12`). No key does
   something the overlay does not list.
 - As a user, I can rebind or remove any of them in `[keys]` / `[modal.*]` like any Vimma key:
   `keys.new_tab = ["prefix+c", "t"]` takes `ctrl+t` away from "New tab"; `unbind` removes one.
@@ -171,7 +171,7 @@ Chords are written as Vimma canonicalises them: `shift` folds into the character
 | `shift+backspace`          | → `cmd_handleShiftBackspace`                           | nothing (same pref)                      | d    | the editor's                                                              | —     |
 | `alt+left`                 | `goBackKb` → `Browser:Back`                            | back                                     | a    | `history_back` (all)                                                      | P     |
 | `alt+right`                | `goForwardKb` → `Browser:Forward`                      | forward                                  | a    | `history_forward` (all)                                                   | P     |
-| `ctrl+[`                   | `goBackKb2` → `Browser:Back`                           | back (Unix)                              | a    | `history_back` (n); `normal_mode` (i), see Q2                             | P     |
+| `ctrl+[`                   | `goBackKb2` → `Browser:Back`                           | back (Unix)                              | a    | `history_back` (n); nothing in a text field (Q2)                          | P     |
 | `ctrl+]`                   | `goForwardKb2` → `Browser:Forward`                     | forward (Unix)                           | a    | `history_forward` (n)                                                     | P     |
 | `alt+home`                 | `goHome` (browser-sets.js)                             | home page                                | b    | `go_home` (all)                                                           | P     |
 | `f5`                       | `key_reload2` → `Browser:Reload`                       | reload                                   | a    | `reload` (all)                                                            | P     |
@@ -187,7 +187,7 @@ Chords are written as Vimma canonicalises them: `shift` folds into the character
 | `shift+esc`                | `key_aboutProcesses` → `View:AboutProcesses`           | about:processes                          | c    | —                                                                         | —     |
 | `ctrl+u`                   | `key_viewSource` → `View:PageSource`                   | view source                              | a    | half page up (n) / delete to line start (i); source is `gf`               | V     |
 | `ctrl+i`                   | `key_viewInfo` → `View:PageInfo`                       | Page Info                                | a    | `history_forward` (n)                                                     | V     |
-| `ctrl+f`                   | `key_find` → `cmd_find`                                | find in page                             | a    | `find_forward` (all), see Q1                                              | P     |
+| `ctrl+f`                   | `key_find` → `cmd_find`                                | find in page                             | c    | — (unbound, Q1)                                                           | —     |
 | `ctrl+g`                   | `key_findAgain` → `cmd_findAgain`                      | next match                               | a    | `find_next` (all)                                                         | P     |
 | `ctrl+shift+g`             | `key_findPrevious` → `cmd_findPrevious`                | previous match                           | a    | `find_previous` (all)                                                     | P     |
 | `f3`                       | `key_findAgain2` → `cmd_findAgain`                     | next match                               | a    | `find_next` (all)                                                         | P     |
@@ -261,8 +261,8 @@ Conditional (**c**): the profiler's `ctrl+shift+1`, `ctrl+shift+2`, `ctrl+alt+sh
 | `ctrl+shift+pagedown`                                                                                              | Tabbrowser `on_keydown` (`MOVE_TAB_FORWARD`)                               | move the tab right                          | b    | `move_tab_right` (all)                                               | V     |
 | `ctrl+shift+pageup`                                                                                                | Tabbrowser `on_keydown` (`MOVE_TAB_BACKWARD`)                              | move the tab left                           | b    | `move_tab_left` (all)                                                | V     |
 | `ctrl+f4`                                                                                                          | Tabbrowser `on_keydown` (`CLOSE_TAB`)                                      | close the tab (not pinned)                  | a    | `close_tab` (all)                                                    | V     |
-| `f7`                                                                                                               | Tabbrowser `on_keypress` (`TOGGLE_CARET_BROWSING`, after the page's reply) | caret browsing (asks first)                 | a    | `copy_mode` (all), see Q4                                            | P     |
-| `alt` (tap)                                                                                                        | MenuBarListener                                                            | shows the menu bar                          | c    | off: `ui.key.menuAccessKeyFocuses = false`, see Q3                   | —     |
+| `f7`                                                                                                               | Tabbrowser `on_keypress` (`TOGGLE_CARET_BROWSING`, after the page's reply) | caret browsing (asks first)                 | c    | — (unbound, Q4)                                                      | —     |
+| `alt` (tap)                                                                                                        | MenuBarListener                                                            | shows the menu bar                          | c    | off: `ui.key.menuAccessKeyFocuses = false`, Q3                       | —     |
 | `alt+f`, `alt+e`, `alt+v`, `alt+s`, `alt+b`, `alt+t`, `alt+h` (7 keys)                                             | menu bar accesskeys (`menubar.ftl`)                                        | open a menu                                 | c    | off: the host drops `accesskey` from `#main-menubar > menu`          | —     |
 | `'`                                                                                                                | FindBarChild (quick find, links only)                                      | quick find links                            | c    | off: `accessibility.typeaheadfind.manual = false`; `f` hints instead | —     |
 | `/`                                                                                                                | FindBarChild (quick find)                                                  | quick find                                  | a    | `find_forward` (n) already; off in fields by the same pref           | V     |
@@ -490,7 +490,7 @@ Each is its own keymap PR, in this order, one open at a time:
     and insert mode and from the address bar; a page that calls `preventDefault` on `ctrl+f`,
     `ctrl+s` and `ctrl+plus` keeps them and Vimma does nothing; the same page cannot keep
     `ctrl+t` or `ctrl+tab`; `ctrl+shift+z` in a field redoes and opens no toolbox; a Block
-    "shortcuts" permission makes `ctrl+f` Vimma's first; about:preferences keeps its `ctrl+f`;
+    "shortcuts" permission makes `ctrl+s` Vimma's first; about:preferences keeps its `ctrl+f`;
     the PDF viewer zooms its own way on `ctrl+plus`.
   - `browser_vimma_firefox_coverage.js` (new, sub-PR 3): Decision 12.
   - `browser_vimma_help_overlay.js`: "Go back" lists `H`, `ctrl+o`, `alt+left`, `ctrl+[`; the
@@ -528,14 +528,16 @@ Firefox `<command>` (the c keys stay reachable through `:firefox`).
 
 ## Open questions for the user
 
-1. **`ctrl+f`**: Firefox's find (the default here, muscle memory from Firefox), or Vim's page down
-   (with `ctrl+b` taken by the prefix, Vim's pair is half there already)?
-2. **`ctrl+[` in a text field**: Vim's `Esc` (leave insert mode), or Firefox's back? The spec
-   makes it Vim's `Esc` in insert mode and back in normal mode.
-3. **The `alt` tap that shows the menu bar**: off (this spec; `F10` still opens the menus), or
-   keep it? toolbar-toggle's spec currently says "alt still shows it".
-4. **`F7`**: Vimma's copy mode (this spec), or Firefox's caret browsing toggle (a sticky mode some
-   keyboard users rely on), reachable then as a new `caret_browsing` action?
+1. ~~**`ctrl+f`**~~ Answered 2026-10-12: neither. It is unbound by default, so a page gets it
+   and otherwise it does nothing. `find_forward` keeps its Vimma keys, and `[keys]` can add
+   `ctrl+f`.
+2. ~~**`ctrl+[` in a text field**~~ Answered 2026-10-12: neither. In insert mode and text fields
+   it does nothing. In normal mode it is still back, as listed under "Go back".
+3. ~~**The `alt` tap that shows the menu bar**~~ Answered 2026-10-12: off
+   (`ui.key.menuAccessKeyFocuses = false`, and `F10` still opens the menus). This replaces
+   toolbar-toggle's "`alt` still shows it", and sub-PR 1 updates that spec.
+4. ~~**`F7`**~~ Answered 2026-10-12: neither. It is unbound by default, and Firefox's caret
+   browsing toggle is off with the rest. `copy_mode` keeps its Vimma keys.
 5. ~~**DevTools keys**~~ Answered 2026-10-12: exactly as in Firefox. All 12 actions are bound
    by default on Firefox's chords, and each one can be rebound or unbound by name in `[keys]` in
    config.toml, like any other action. The DOM panel's `ctrl+shift+w` stays unbound, as it is in
