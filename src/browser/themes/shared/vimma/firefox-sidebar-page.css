@@ -1,0 +1,23 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* Each document Firefox's sidebar loads (history, bookmarks, synced tabs; spec
+ * docs/specs/firefox-sidebar-theme.md), loaded by ui/theme-host.mjs with the token sheet and
+ * focus.css. These documents import browser-colors.css again, so the window's variables
+ * (firefox-sidebar.css) do not reach them: the same variables are pointed at the tokens here.
+ * The root stays transparent, as Firefox has it: the #sidebar browser behind it is the surface.
+ * !important: a Firefox theme sets these inline on the root (contentTheme.js). */
+
+:root {
+  --sidebar-background-color: var(--vimma-bg-dark) !important;
+  --sidebar-text-color: var(--vimma-fg) !important;
+  --sidebar-border-color: var(--vimma-muted) !important;
+  --lwt-sidebar-highlight-background-color: var(--vimma-selection) !important;
+  --lwt-sidebar-highlight-text-color: var(--vimma-fg) !important;
+  /* The design system's text, which the cards and lists use rather than the root's colour. */
+  --text-color: var(--vimma-fg) !important;
+  --text-color-deemphasized: var(--vimma-fg-dim) !important;
+  /* Instead of the theme's lwt-sidebar attribute or the system's scheme. */
+  color-scheme: var(--vimma-color-scheme) !important;
+}

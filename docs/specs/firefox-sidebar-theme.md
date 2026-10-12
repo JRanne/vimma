@@ -1,6 +1,6 @@
 # Spec: firefox-sidebar-theme
 
-Status: in progress · Milestone: after M5 (builds on [m5-omarchy-theme](m5-omarchy-theme.md) and
+Status: implemented (PR pending review) · Milestone: after M5 (builds on [m5-omarchy-theme](m5-omarchy-theme.md) and
 the focus colour of [m7-a11y](m7-a11y.md)) · Area: `ui/theme-host.mjs`,
 `browser/themes/shared/vimma/firefox-sidebar.css` (new),
 `browser/themes/shared/vimma/firefox-sidebar-page.css` (new),
@@ -81,9 +81,13 @@ var(--sidebar-text-color)`, background transparent; `browser/themes/shared/place
 - **CSP**: the revamp documents allow only `default-src resource: chrome:`
   (`sidebar-history.html:9-12`), so a `<link>` or `<style>` with a data: URI would be blocked. An
   author sheet loaded through `windowUtils` is not subject to the page's CSP.
-- **Loads**: `SidebarController._show` sets the browser's `src` and listens for the document's
-  `load` with a capturing listener on the browser (`browser-sidebar.js:2335-2361`): events of the
-  sidebar's documents reach listeners on the `#sidebar` element in the window.
+- **Loads**: `SidebarController._show` sets the browser's `src` and waits for `load` with a
+  capturing listener on the browser (`browser-sidebar.js:2335-2361`). That is the frame
+  element's own `load`, which the frame loader fires on `<browser>` in the window: the documents'
+  other events (`DOMContentLoaded`) stay in their own document and never reach the window, as a
+  first try at this spec found. The `document-element-inserted` observer topic fires for every
+  document in the parent process as soon as it has a root element, before it is styled; the
+  document's `browsingContext.embedderElement` is then the `#sidebar` browser.
 
 ### Measured before the fix (the new mochitest, dark Omarchy fixture)
 
@@ -111,12 +115,14 @@ var(--vimma-color-scheme)` on the launcher and the box (instead of `lwt-sidebar`
    separate file because `:root` there is the document, and the window's root colour scheme must
    not change.
 3. **Every document the `#sidebar` browser loads gets the tokens, `focus.css` and the page sheet**
-   as author sheets, from `ThemeHost`: a capturing `DOMContentLoaded` listener on `#sidebar`
-   (registered in `ThemeHost.init`, so no new call site), plus the document already there at init.
-   The document joins the same set of windows `apply()` updates, so a theme switch reaches an open
-   panel, and leaves it on `unload`. `focus.css` in the document replaces the blue ring with
-   `--vimma-focus`. Extension sidebars load `webext-panels.xhtml` into the same browser: its frame
-   takes the surface, the extension's own page keeps its own colours.
+   as author sheets, from `ThemeHost`: one `document-element-inserted` observer, added with the
+   first window, keeps the documents whose embedder is `#sidebar` in a window ThemeHost themes,
+   plus the document already there at `init`. They are kept by document, not by window (the
+   sidebar's window object outlives its documents), and `apply()` swaps their token sheet with
+   the windows', so a theme switch reaches an open panel; a document leaves on `unload`.
+   `focus.css` in the document replaces the blue ring with `--vimma-focus`. Extension sidebars
+   load `webext-panels.xhtml` into the same browser: its frame takes the surface, the extension's
+   own page keeps its own colours.
 4. **No high-contrast gate** beyond what `focus.css` already has: Vimma's own surfaces do not
    switch to system colours under `prefers-contrast` either, and forced colours override author
    colours anyway.

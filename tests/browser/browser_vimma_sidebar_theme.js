@@ -1,0 +1,302 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// Spec: docs/specs/firefox-sidebar-theme.md
+
+"use strict";
+
+const { Subprocess } = ChromeUtils.importESModule("resource://gre/modules/Subprocess.sys.mjs");
+
+const POLL_MS = 100;
+/** The built-in vimma palette's dark_background, dark and light (browser_vimma_theme.js). */
+const VIMMA_DARK_BG = "#070b0d";
+const VIMMA_LIGHT_BG = "#eae9e2";
+
+/**
+ * A colors.toml in Omarchy 4's format (the theme test's fixture, trimmed to what the tokens
+ * read). Each theme varies its surfaces, text and accent, so a stale colour is told apart.
+ * @param {{ bg: string, darkBg: string, fg: string, accent: string, muted: string,
+ *   selection?: string, mode?: string | null }} p  mode null: no mode key, light.mode decides
+ */
+function colorsToml({ bg, darkBg, fg, accent, muted, selection = "#292e42", mode = "dark" }) {
+  return `${mode === null ? "" : `mode = "${mode}"\n`}
+accent = "${accent}"
+selection = "${selection}"
+muted = "${muted}"
+
+background = "${bg}"
+dark_background = "${darkBg}"
+darker_background = "#0e0e14"
+lighter_background = "#24283b"
+
+foreground = "${fg}"
+dark_foreground = "#565f89"
+light_foreground = "#b4bee6"
+bright_foreground = "#c0caf5"
+
+red = "#f7768e"
+yellow = "#e0af68"
+orange = "#ff9e64"
+green = "#9ece6a"
+cyan = "#7dcfff"
+blue = "#7aa2f7"
+magenta = "#bb9af7"
+brown = "#db4b4b"
+
+bright_red = "#ff7a93"
+bright_yellow = "#ff9e64"
+bright_green = "#b9f27c"
+bright_cyan = "#7dcfff"
+bright_blue = "#7da6ff"
+bright_magenta = "#bb9af7"
+`;
+}
+
+const DARK_ONE = {
+  bg: "#1a1b26",
+  darkBg: "#16161e",
+  fg: "#a9b1d6",
+  accent: "#7aa2f7",
+  muted: "#414868",
+};
+const DARK_TWO = {
+  bg: "#2a1a2a",
+  darkBg: "#301030",
+  fg: "#e0c0e0",
+  accent: "#ff79c6",
+  muted: "#6a4a6a",
+};
+/** Catppuccin Latte: light surfaces, dark text, no mode key. */
+const LIGHT = {
+  bg: "#eff1f5",
+  darkBg: "#e6e9ef",
+  fg: "#4c4f69",
+  accent: "#1e66f5",
+  muted: "#9ca0b0",
+  selection: "#ccd0da",
+  mode: null,
+};
+
+/** "#rrggbb" → "rgb(r, g, b)", as getComputedStyle reports it. */
+function rgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgb(${n >> 16}, ${(n >> 8) & 255}, ${n & 255})`;
+}
+
+const token = (/** @type {string} */ name) =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+/**
+ * A colour custom property as `el` sees it (inherited through shadow roots), resolved to the
+ * rgb() form getComputedStyle reports.
+ * @param {Element} el
+ * @param {string} name  e.g. "--focus-outline-color"
+ */
+function colourVar(el, name) {
+  const win = /** @type {Window} */ (el.ownerDocument.defaultView);
+  const value = win.getComputedStyle(el).getPropertyValue(name).trim();
+  const probe = el.ownerDocument.createElementNS("http://www.w3.org/1999/xhtml", "div");
+  probe.style.color = value;
+  el.ownerDocument.documentElement.append(probe);
+  const out = win.getComputedStyle(probe).color;
+  probe.remove();
+  return out;
+}
+
+/** The colour that shows behind `el`: its own background or the first opaque ancestor's. */
+function backdrop(/** @type {Element} */ el) {
+  /** @type {Element | null} */
+  let node = el;
+  while (node) {
+    const bg = node.ownerDocument.defaultView.getComputedStyle(node).backgroundColor;
+    if (bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") return bg;
+    node = node.parentElement ?? node.ownerDocument.defaultView.frameElement;
+  }
+  return "none";
+}
+
+async function ln(target, link) {
+  const command = await Subprocess.pathSearch("ln");
+  const proc = await Subprocess.call({ command, arguments: ["-sfn", target, link] });
+  const { exitCode } = await proc.wait();
+  Assert.equal(exitCode, 0, `ln -sfn ${target} ${link}`);
+}
+
+const root = PathUtils.join(PathUtils.tempDir, `vimma-sidebar-theme-${Date.now()}`);
+const dir = (/** @type {string} */ name) => PathUtils.join(root, "themes", name);
+const currentTheme = PathUtils.join(root, "current", "theme");
+
+/** Waits until the window's tokens are the theme whose dark_background is `hex`. */
+function waitForTheme(/** @type {string} */ hex, /** @type {string} */ msg) {
+  return TestUtils.waitForCondition(() => token("--vimma-bg-dark") === hex, msg, 50, 100);
+}
+
+/** Opens a Firefox sidebar panel and waits for its document to finish loading. */
+async function showSidebar(/** @type {string} */ command) {
+  await SidebarController.show(command);
+  const browser = SidebarController.browser;
+  const url = SidebarController.sidebars.get(command).url;
+  await TestUtils.waitForCondition(
+    () =>
+      browser.contentDocument?.location.href === url &&
+      browser.contentDocument.readyState === "complete",
+    `${command} loads`,
+  );
+  return browser.contentDocument;
+}
+
+/**
+ * Firefox's own sidebar, open on `command`, paints the current Vimma theme: the launcher strip,
+ * the panel box and its browser, the panel document's text, colour scheme and focus ring.
+ * @param {string} label  which theme, for the messages
+ * @param {Document} doc  the open sidebar document
+ */
+function assertSidebarFollowsTheTheme(label, doc) {
+  const surface = rgb(token("--vimma-bg-dark"));
+  const text = rgb(token("--vimma-fg"));
+  const focus = rgb(token("--vimma-focus"));
+  const border = rgb(token("--vimma-muted"));
+  const scheme = token("--vimma-color-scheme");
+  Assert.ok(
+    /^#[0-9a-f]{6}$/.test(token("--vimma-focus")),
+    `${label}: the theme has a focus colour`,
+  );
+  const $ = (/** @type {string} */ id) => /** @type {Element} */ (document.getElementById(id));
+  const style = (/** @type {Element} */ el) => el.ownerDocument.defaultView.getComputedStyle(el);
+
+  const launcher = $("sidebar-container");
+  Assert.ok(BrowserTestUtils.isVisible(launcher), `${label}: the launcher strip shows`);
+  Assert.equal(
+    style(launcher).backgroundColor,
+    surface,
+    `${label}: the launcher is on --vimma-bg-dark`,
+  );
+  Assert.equal(style(launcher).color, text, `${label}: the launcher's text is --vimma-fg`);
+  Assert.equal(style(launcher).colorScheme, scheme, `${label}: the launcher's colour scheme`);
+
+  const button = /** @type {Element} */ (
+    document.querySelector("sidebar-main").shadowRoot.querySelector("moz-button[view]")
+  );
+  Assert.equal(style(button).color, text, `${label}: a launcher button's text is --vimma-fg`);
+  Assert.equal(
+    colourVar(button, "--button-icon-fill"),
+    text,
+    `${label}: a launcher button's icon is --vimma-fg`,
+  );
+
+  const box = $("sidebar-box");
+  Assert.equal(backdrop(box), surface, `${label}: the panel box is on --vimma-bg-dark`);
+  Assert.equal(
+    style(box).borderInlineEndColor,
+    border,
+    `${label}: the panel's edge is --vimma-muted`,
+  );
+  Assert.equal(style(box).colorScheme, scheme, `${label}: the panel box's colour scheme`);
+
+  const browser = SidebarController.browser;
+  Assert.equal(backdrop(browser), surface, `${label}: the panel browser is on --vimma-bg-dark`);
+  Assert.equal(style(browser).color, text, `${label}: the panel browser's text is --vimma-fg`);
+  Assert.equal(
+    colourVar(launcher, "--focus-outline-color"),
+    focus,
+    `${label}: the window's focus ring (launcher, splitter) is --vimma-focus`,
+  );
+
+  const page = doc.documentElement;
+  // The places sidebars (bookmarks) are XUL documents: no <body>, the root is the surface.
+  const body = doc.body ?? page;
+  Assert.equal(style(body).color, text, `${label}: ${doc.location.href} body text is --vimma-fg`);
+  Assert.equal(
+    backdrop(body),
+    surface,
+    `${label}: ${doc.location.href} body is on --vimma-bg-dark`,
+  );
+  Assert.equal(style(page).colorScheme, scheme, `${label}: ${doc.location.href} colour scheme`);
+  Assert.equal(
+    colourVar(page, "--sidebar-background-color"),
+    surface,
+    `${label}: ${doc.location.href} --sidebar-background-color is --vimma-bg-dark`,
+  );
+  Assert.equal(
+    colourVar(page, "--focus-outline-color"),
+    focus,
+    `${label}: ${doc.location.href} focus ring is --vimma-focus, not the system blue`,
+  );
+}
+
+add_task(async function setup() {
+  for (const [name, colours] of [
+    ["one", DARK_ONE],
+    ["two", DARK_TWO],
+    ["light", LIGHT],
+  ]) {
+    await IOUtils.makeDirectory(dir(name), { createAncestors: true });
+    await IOUtils.writeUTF8(PathUtils.join(dir(name), "colors.toml"), colorsToml(colours));
+  }
+  await IOUtils.writeUTF8(PathUtils.join(dir("light"), "light.mode"), "");
+  await IOUtils.makeDirectory(PathUtils.join(root, "current"), { createAncestors: true });
+  await ln(dir("one"), currentTheme);
+
+  // browser.toml pins vimma.theme.source=builtin for every other test; this one opts in.
+  await SpecialPowers.pushPrefEnv({
+    set: [
+      ["vimma.theme.pollMs", POLL_MS],
+      ["vimma.theme.omarchyPath", currentTheme],
+      ["vimma.theme.source", "omarchy"],
+      ["ui.systemUsesDarkTheme", 1],
+    ],
+  });
+  registerCleanupFunction(async () => {
+    SidebarController.hide();
+    await SpecialPowers.popPrefEnv();
+    await IOUtils.remove(root, { recursive: true });
+  });
+  await waitForTheme(DARK_ONE.darkBg, "theme one is current");
+});
+
+add_task(async function the_history_sidebar_follows_a_dark_theme() {
+  const doc = await showSidebar("viewHistorySidebar");
+  assertSidebarFollowsTheTheme("dark", doc);
+});
+
+add_task(async function an_open_sidebar_follows_a_theme_switch() {
+  const doc = SidebarController.browser.contentDocument;
+  await ln(dir("two"), currentTheme);
+  await waitForTheme(DARK_TWO.darkBg, "omarchy-theme-set's swap: theme two");
+  Assert.equal(SidebarController.browser.contentDocument, doc, "the same sidebar document");
+  assertSidebarFollowsTheTheme("switched", doc);
+});
+
+add_task(async function the_bookmarks_sidebar_follows_the_switched_theme() {
+  const doc = await showSidebar("viewBookmarksSidebar");
+  assertSidebarFollowsTheTheme("bookmarks", doc);
+});
+
+add_task(async function the_sidebar_follows_a_light_theme() {
+  await ln(dir("light"), currentTheme);
+  await waitForTheme(LIGHT.darkBg, "the light theme");
+  Assert.equal(token("--vimma-color-scheme"), "light", "light.mode makes the tokens light");
+  const doc = await showSidebar("viewHistorySidebar");
+  assertSidebarFollowsTheTheme("light", doc);
+});
+
+// The built-in vimma palette carries its light variant under prefers-color-scheme: an open
+// sidebar document must switch with the desktop, as the window does.
+add_task(async function the_builtin_palette_follows_the_desktop_scheme_live() {
+  await SpecialPowers.pushPrefEnv({ set: [["vimma.theme.source", "builtin"]] });
+  await waitForTheme(VIMMA_DARK_BG, "the built-in vimma palette, dark");
+  const doc = await showSidebar("viewHistorySidebar");
+  assertSidebarFollowsTheTheme("vimma dark", doc);
+
+  await SpecialPowers.pushPrefEnv({ set: [["ui.systemUsesDarkTheme", 0]] });
+  await waitForTheme(VIMMA_LIGHT_BG, "a light desktop: vimma light, without a reload");
+  await TestUtils.waitForCondition(
+    () => doc.defaultView.getComputedStyle(doc.body).color === rgb(token("--vimma-fg")),
+    "the open sidebar document turns light too",
+  );
+  assertSidebarFollowsTheTheme("vimma light", doc);
+
+  await SpecialPowers.popPrefEnv();
+  await SpecialPowers.popPrefEnv();
+});
