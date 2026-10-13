@@ -37,6 +37,8 @@ Engine paths are relative to `engine/` (Firefox 157.0.1). Vimma paths are on mai
   pop-ups blocked, decision 30.
 - On downloads (2026-10-13): "agent should be able to download etc. As long as we can have way
   to ensure it downloads safe things", decision 31.
+- On site permissions, after the security review of #177 found that Firefox shares them across
+  containers (2026-10-13): "Per workspace", decision 30.
 
 ## Short answer
 
@@ -541,6 +543,14 @@ working in the agent workspace changes nothing about where you are or what you d
       stays as it was (no end time).
 30. **The agent workspace's pages are kept on a short leash (user).** Whatever an agent opens
     there runs with no one watching, so:
+    - **Site permissions are per workspace (user: "Per workspace").** Firefox keeps one set of
+      site permissions for every container, so a camera allowed for a site in `work` was allowed
+      for it in the agent workspace too, without a prompt Vimma could refuse. Vimma sets
+      `permissions.isolateBy.userContext` (branding prefs): each container, so each workspace,
+      keeps its own, as it keeps its own logins. Permissions stored before stay with the default
+      container, and Firefox's built-in grants (`browser/app/permissions`: addons.mozilla.org's
+      `install`, the UITour sites) apply only there, so installing from AMO in a workspace asks
+      once more.
     - **Permission requests are refused, without a prompt.** Every request through Firefox's
       `nsIContentPermissionPrompt` (geolocation, notifications, XR, MIDI, persistent storage,
       storage access, and any later type) whose principal is in the agent container is
@@ -587,9 +597,9 @@ working in the agent workspace changes nothing about where you are or what you d
     the quarantine directory) until `clamscan --no-summary` says it is clean, and is deleted if
     not. The notice says `scanned (ClamAV)` or `not scanned`. Without ClamAV it is released as
     `not scanned`.
-    Vimma has no Google Safe Browsing download-reputation lists (it is Mozilla's build; the
-    remote lookup needs Google's API key, which Vimma does not carry), so (d) and (g) are the
-    checks; security.md says so in 2c.
+    Download reputation: Firefox's Safe Browsing lists check downloads only in a build with a
+    Google key (security.md P6), and Vimma has no remote reputation service of its own, so in
+    every build (d) and (g) are Vimma's checks; security.md says so in 2c.
 
 ## Security
 
@@ -974,6 +984,28 @@ approval settings are theirs), the protocol spec (protocol 2 section), ADR-019,
   would not match CI's fonts. Sub-PR 3's `vimma-ctl mcp` scenario records CI's images.
 - No `[mcp]` key was added; downloads' keys come with 2c.
 
+**After the security review of #177** (all fixed in 2b):
+
+- H1: the line arms again on window activate, deactivate, focus, blur and visibilitychange, and
+  when a key arrives before it is armed; a just-focused window counts as one being typed in.
+- M1: site permissions per workspace (`permissions.isolateBy.userContext`, user: "Per
+  workspace"), decision 30.
+- M2: while MCP is on, `vimma-ctl` prints a 4-character code and sends it in its auth (an
+  optional field of protocol 2's auth); the full-control question shows it.
+- L1: the WebRTC deny is also set when a top-level agent document's window global is created
+  (`window-global-created`), so a page a service worker serves is covered.
+- L2: a sweep that has to sandbox an agent tab reloads it if it had loaded.
+- L3: Firefox's external-protocol chooser (`@mozilla.org/content-dispatch-chooser;1`) is wrapped
+  so a load in the agent container launches no app; agent tabs get `SANDBOXED_DOWNLOADS`, and
+  `Integration.downloads`' `shouldBlockForParentalControls` blocks any other download from the
+  agent container, until 2c.
+- L4: `:control on`'s end time is ms since the epoch in the string pref
+  `vimma.control.enabledUntilMs`, and anything but a time ahead within 1441 minutes turns full
+  control off (core `controlEnd`).
+- L5: the rest of a key sequence, and keys while a prompt, picker, panel or the command line is
+  open over the line, go to them; the line waits until they close.
+- L6: client names and titles are `<bdi>`, URLs left-to-right isolates.
+
 ## Sub-PR 2c: agent downloads (decision 31), the handover
 
 2b came to more than the 2,000 lines the coordinator set as the split point without downloads
@@ -1029,7 +1061,11 @@ approval settings are theirs), the protocol spec (protocol 2 section), ADR-019,
   cap, and an unknown size that grows past it, cancelled and removed; with a fake `clamscan`
   (exit 0, 1, 2) released as scanned, deleted, or kept as not scanned; a download from a `work`
   tab is untouched.
-- **Docs.** security.md §12 M10-M12 (downloads asked, quarantined, never launched; dangerous types;
+- **Undo 2b's stopgap first.** 2b blocks every agent download (review of #177, L3): remove
+  `SANDBOXED_DOWNLOADS` from `AGENT_SANDBOX` and the blanket `shouldBlockForParentalControls`
+  override in `ctl/AgentPages.sys.mjs` (make that override the ask, below), and turn
+  `test_agent_pages_launch_no_app_and_download_nothing`'s download half into 2c's tests.
+- **Docs.** security.md §12 M11-M13 (downloads asked, quarantined, never launched; dangerous types;
   no Google download reputation in Vimma, Mozilla's build only); the guide's Agents section.
 
 ## Out of scope

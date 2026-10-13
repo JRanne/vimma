@@ -107,6 +107,12 @@ export default [
     languageOptions: { globals: { Cu: "readonly" } },
   },
   {
+    // Agent pages launch no app: the component registrar wraps the external-protocol chooser
+    // (docs/specs/vimma-mcp.md, review of #177 L3).
+    files: ["src/**/vimma/ctl/AgentPages.sys.mjs"],
+    languageOptions: { globals: { Components: "readonly" } },
+  },
+  {
     // The -vimma-from command-line handler: the component registrar (workspace-routing).
     files: ["src/**/vimma/workspaces/WorkspaceRouter.sys.mjs"],
     languageOptions: { globals: { Components: "readonly" } },

@@ -687,6 +687,14 @@ more as you need them (see [Managing workspaces](#managing-workspaces)).
 - A tab in a container that belongs to no workspace (Firefox's own containers, "no container",
   an extension's) joins the workspace you are in as a `foreign` tab: it does not share that
   workspace's cookies and logins. The workspace picker counts it (`3 tabs, 1 foreign`).
+- **Site permissions are per workspace**, like logins: a camera, microphone, location or
+  notification permission you give a site in `work` does not apply to the same site in `main`
+  or any other workspace (Vimma sets `permissions.isolateBy.userContext`). Permissions you gave
+  before this change stay with "no container", so give them again in each workspace that needs
+  them. Firefox's Settings → Privacy & Security → Permissions lists a site once for each
+  workspace that has a permission for it; the site information panel in the address bar shows
+  the tab's own workspace. Firefox's built-in permission for addons.mozilla.org to install
+  add-ons applies only outside workspaces, so installing from it asks once more.
 - **A restart restores them.** Each window comes back with its workspaces, their tabs, the
   workspace you were in, the tab you had selected in each, every workspace's split panes laid
   out as you left them with the same pane focused, your tab names and each page's scroll position. Tabs of other workspaces are not loaded
@@ -869,7 +877,10 @@ number of agent tabs for the tab list.
 
 - **Nothing else answers.** Any other key does nothing and the line stays; a key held down from
   before never counts; and for its first second the line takes no key at all (the hint appears
-  when it is ready), so a key meant for something else cannot answer it.
+  when it is ready), so a key meant for something else cannot answer it. That second starts
+  again whenever the window comes to the front or leaves it, and with every key pressed before
+  it is up. A prompt, picker or the command line you open over the line gets your keys; the
+  question waits and comes back when it closes.
 - **It never interrupts your typing.** It opens by itself only when the window is in front,
   focus is not in a text field, you have not pressed a key for 1.5 s, and no other prompt,
   picker or panel is open. Otherwise it waits, and the status bar says `◇ agent 1?`; press
@@ -893,7 +904,9 @@ An agent with a shell can read the control socket's token like any program of yo
 agents are on (`:mcp on`), each new `vimma-ctl` connection with full control (keys in your
 window, every workspace) asks in the same line: `◇ vimma-ctl wants full control — y/N`. `y` lets
 that one connection in, anything else from `n`, `Esc`, `Enter` or `x` refuses it, and nothing is
-remembered: the next one asks again. `vimma-ctl` waits for your answer and says so; refused, it
+remembered: the next one asks again. The line shows the code `vimma-ctl` printed in your terminal
+(`vimma-ctl with code 7F3K wants full control`): answer `y` only if it is the same, since
+another program could have asked at the same moment. `vimma-ctl` waits for your answer and says so; refused, it
 prints `full control refused` and exits 4. With agents off, nothing asks.
 
 `:control on 15` turns full control (the pref `vimma.control.enabled`) on for 15 minutes after a
@@ -907,6 +920,11 @@ Pages there run with nobody watching, so they get less than yours:
 - **No permission prompts.** A request for your location, notifications, camera, microphone,
   screen, MIDI, persistent storage, the local network and the rest is refused without a prompt.
 - **No pop-ups.** `window.open` and links that open a new window or tab do nothing there.
+- **No other apps.** A link to `mailto:`, `zoommtg:` or another app's protocol opens nothing.
+- **No downloads, for now.** A download from the agent workspace is refused before a byte is
+  written; asked-for, quarantined downloads come in a later update.
+- If you change `[mcp] workspace`, the new agent workspace's open tabs are reloaded once, so
+  these rules apply to the pages already in them.
 
 ### Side panel
 

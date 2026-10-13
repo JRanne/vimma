@@ -97,9 +97,15 @@ only the agent workspace, and every request asks you first (§12).
   `y` in the agent question line (no grant covers it, one waits at a time, three noes mute the
   question for a minute); a no, a timeout or a closed connection refuses it (`denied`). An agent
   with a shell can read the token, so the token alone **never** gives it keys in your window.
-  With MCP off nothing asks. `:control on <minutes>` **must** turn full control off when its time
-  is up, also across a restart.
+  With MCP off nothing asks. While MCP is on, `vimma-ctl` prints a 4-character code and sends it
+  in its auth, and the question shows it (`vimma-ctl with code 7F3K wants full control`; a client
+  without one is "a client with no code"), so a racing client's question is told from the one
+  the user ran. `:control on <minutes>` **must** turn full control off when its time is up, also
+  across a restart, and **must** fail closed: an end time that is not a time ahead within 1441
+  minutes turns it off.
   [`test_full_control_asks_only_while_mcp_is_on`](../tests/browser/browser_vimma_mcp_control.js),
+  [`prints_and_sends_a_code_while_mcp_is_on`](../tools/vimma-ctl/tests/cli.rs),
+  [`a time ahead, within 1440 minutes and a minute: control stays on until then`](../packages/vimma-core/test/agent-prompt.test.mjs),
   [`test_control_on_minutes_turns_itself_off`](../tests/browser/browser_vimma_mcp_control.js),
   [`waits_for_the_users_answer_while_mcp_is_on`](../tools/vimma-ctl/tests/cli.rs),
   [`reports_refused_full_control_with_exit_4`](../tools/vimma-ctl/tests/cli.rs)
@@ -327,6 +333,11 @@ Spec: [m0-mozilla-services](specs/m0-mozilla-services.md),
   says so) in one without.
   [`test_keyed_build_fetches_google_lists`](../tests/browser/browser_vimma_safebrowsing.js),
   [`test_keyless_build_is_honestly_off`](../tests/browser/browser_vimma_safebrowsing.js)
+- P7. Site permissions (camera, location, notifications …) **must** be kept per container, so
+  per workspace (`permissions.isolateBy.userContext`; user decision "Per workspace",
+  [vimma-mcp](specs/vimma-mcp.md) decision 30): one given in one workspace never applies to the
+  same site in another, the agent workspace included.
+  [`test_site_permissions_are_per_workspace`](../tests/browser/browser_vimma_mcp_agent_pages.js)
 
 ## 10. Firefox updates (the upstream autopilot, `upstream.yml`)
 
@@ -444,9 +455,19 @@ a shell can run `vimma-ctl` itself, or speak the protocol directly.
 - M4. The question **never** opens by itself while you type, are in a field, or have another
   prompt open, never takes focus, is armed only after `security.dialog_enable_delay` (1 s), a
   held key **never** counts, and no key but `y` or a count with `a` allows; any other key
-  neither allows nor denies. A window not in front gets the urgency hint and a notification
-  with no URL, no title and no buttons.
+  neither allows nor denies. It **must** arm again whenever its window is activated or
+  deactivated, focused or blurred, hidden or shown, and when a key arrives before it is armed,
+  so a window brought to the front (by the user, or by a process that can focus windows) never
+  takes a key meant for another; a just-focused window counts as one being typed in. With a
+  prompt, picker, panel or the command line open over it, and for the rest of a key sequence,
+  the keys are theirs. Text an agent or a page chooses (the client name, which is the agent's own
+  claim and proves nothing, and titles) is drawn as a bidi isolate (`<bdi>`), URLs as
+  left-to-right isolates. A window not in front gets the urgency hint and a notification with no
+  URL, no title and no buttons.
   [`test_the_line_opens_arms_and_ignores_stray_keys`](../tests/browser/browser_vimma_mcp_prompt.js),
+  [`test_focus_changes_and_early_keys_rearm_the_line`](../tests/browser/browser_vimma_mcp_prompt_guards.js),
+  [`test_other_ui_opened_over_the_line_gets_the_keys`](../tests/browser/browser_vimma_mcp_prompt_guards.js),
+  [`test_names_titles_and_urls_are_bidi_isolates`](../tests/browser/browser_vimma_mcp_prompt_guards.js),
   [`test_typing_in_a_field_waits_for_ctrl_b_shift_a`](../tests/browser/browser_vimma_mcp_prompt.js),
   [`test_a_window_not_in_front_gets_attention_and_a_notification`](../tests/browser/browser_vimma_mcp_control.js),
   [`any other key neither allows nor denies`](../packages/vimma-core/test/agent-prompt.test.mjs),
@@ -476,14 +497,24 @@ a shell can run `vimma-ctl` itself, or speak the protocol directly.
   [`test_the_yes_stands_for_what_was_asked`](../tests/browser/browser_vimma_mcp_agent.js),
   [`test_the_read_checks_last`](../tests/browser/browser_vimma_mcp_agent.js),
   [`test_confinement_edges`](../tests/browser/browser_vimma_mcp_agent.js)
-- M10. Pages in the agent container **must** get no permission prompt: every
-  `nsIContentPermissionPrompt` request from it is cancelled, and camera, microphone and screen
-  are denied per agent tab (a browser-scoped DENY, never the origin's permission, which other
-  containers share); and they **must** open no new window or tab (`SANDBOXED_AUXILIARY_NAVIGATION`
-  on every agent tab). A tab of another workspace still asks and still opens pop-ups.
+- M10. Pages in the agent container **must** get no permission prompt and no permission given
+  elsewhere: site permissions are kept per container (`permissions.isolateBy.userContext`, user
+  decision "Per workspace"), every `nsIContentPermissionPrompt` request from the agent
+  container is cancelled, and camera, microphone and screen are denied per agent tab (a
+  browser-scoped DENY, set on each HTTP response and when each document's window global is
+  created, so a page a service worker serves is covered). They **must** open no new window or
+  tab and start no download (`SANDBOXED_AUXILIARY_NAVIGATION | SANDBOXED_DOWNLOADS` on every
+  agent tab, which is reloaded if it had loaded without them, and Firefox's DownloadIntegration
+  hook blocks any other download until sub-PR 2c), and launch no other app through an external
+  protocol (Firefox's chooser is wrapped for the agent container). A tab of another workspace
+  still asks, opens pop-ups and downloads as before.
   [`test_the_agent_container_asks_for_nothing`](../tests/browser/browser_vimma_mcp_agent_pages.js),
   [`test_another_workspace_still_asks`](../tests/browser/browser_vimma_mcp_agent_pages.js),
-  [`test_agent_tabs_open_no_popups`](../tests/browser/browser_vimma_mcp_agent_pages.js)
+  [`test_agent_tabs_open_no_popups`](../tests/browser/browser_vimma_mcp_agent_pages.js),
+  [`test_site_permissions_are_per_workspace`](../tests/browser/browser_vimma_mcp_agent_pages.js),
+  [`test_a_page_from_a_service_worker_is_denied_too`](../tests/browser/browser_vimma_mcp_agent_pages.js),
+  [`test_a_sweep_reloads_agent_tabs_that_loaded_unsandboxed`](../tests/browser/browser_vimma_mcp_agent_pages.js),
+  [`test_agent_pages_launch_no_app_and_download_nothing`](../tests/browser/browser_vimma_mcp_agent_pages.js)
 - M9. `vimma-ctl mcp`'s JSON-RPC parsing **never** panics. **⚠ gap:** `vimma-ctl mcp` is sub-PR
   3 of [vimma-mcp](specs/vimma-mcp.md); until then the protocol 2 decoders it will use are fuzzed
   ([`decoders_never_panic_and_accept_only_the_schema`](../tools/vimma-ctl/tests/protocol_props.rs)).
