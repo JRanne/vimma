@@ -8,9 +8,15 @@ Status: ready (not started) · Milestone: after M5 (builds on
 `host/VimmaHost.sys.mjs`, `ui/help-overlay.mjs`, `about/AboutVimma.sys.mjs`,
 `branding/vimma/pref/firefox-branding.js`. No upstream patch.
 
-**This changes the default keymap. It lands as its own keymap PRs, one at a time, after the
-implementation of [toolbar-toggle](toolbar-toggle.md) (spec PR #136, key `ctrl+b u`) has merged.
-Nothing here binds `ctrl+b u` or any other prefix key, so the two do not clash.**
+Checked against main on 2026-10-13 (after the private workspace #142, the private swap
+#151/#160, unsplit #150, bindings.json #154, find #167 and the restore focus fix #168). File:line
+references below are to that main.
+
+**This changes the default keymap. It lands as its own keymap PRs, one at a time (no other
+keymap PR open at the same time). [toolbar-toggle](toolbar-toggle.md) (spec #136, key `ctrl+b u`)
+is specced but not built yet; nothing here binds `ctrl+b u` or any other prefix key, so the two do
+not clash and either may land first. Whichever lands second merges main and re-runs the other's
+tests.**
 
 ## The user's words
 
@@ -53,14 +59,16 @@ set them with config.toml?" (2026-10-12, answering open question 5)
 ### Vimma today (confirmed in the code)
 
 - **`[firefox]`** (key-handling-batch § 1; `core/firefox-keys.mjs`, `host/firefox-keys.mjs`,
-  `config.mjs` `resolveFirefox`, guide § "Firefox's own shortcuts"). Schema 2. Default
-  `disable` is `OVERLAP_CHORDS` (`ctrl+b d e h i k o u w y`), `enable = []`. The host sets `disabled="true"` (and a
-  `vimma-disabled` mark) on matching `<key>` elements of **`#mainKeyset` only**; a
+  `config.mjs:563` `resolveFirefox`, guide § "Firefox's own shortcuts"). Schema 2. Default
+  `disable` is `OVERLAP_CHORDS` (`ctrl+b d e h i k o u w y`, `core/firefox-keys.mjs:18-29`;
+  `defaults.mjs:278`), `enable = []`. The host sets `disabled="true"` (and a `vimma-disabled`
+  mark) on matching `<key>` elements of **`#mainKeyset` only** (`host/firefox-keys.mjs:15-17`); a
   MutationObserver re-applies when Fluent or Firefox changes a key. `GlobalKeyListener.cpp` reads
   `disabled` at key time (`CanHandle` → `KeyElementIsDisabled`), so a disabled key neither runs nor
   is reserved and the page gets the chord.
-- **`disable = "all"`** (`planFirefoxKeys`): every `#mainKeyset` key whose chord has ctrl, alt or
-  meta (`isModified`), except `ALL_KEEP = ["ctrl+q"]` (`cmd+q` on macOS) and `internal` keys
+- **`disable = "all"`** (`planFirefoxKeys`, `core/firefox-keys.mjs:119-131`): every
+  `#mainKeyset` key whose chord has ctrl, alt or meta (`isModified`), except
+  `ALL_KEEP = ["ctrl+q"]` (`cmd+q` on macOS) and `internal` keys
   (undo, redo, cut, copy, paste, select all). It leaves: plain keys and function keys without a
   modifier (`F5`, `F11`, `F3`, `shift+F3`, `Esc` stop, `shift+Esc`, `Delete`, `Backspace`) —
   `isModified` ignores shift; keys without a nameable chord yet; and everything outside
@@ -70,32 +78,54 @@ set them with config.toml?" (2026-10-12, answering open question 5)
   On Linux `alt+1..9` is tab N (`XP_GNOME`, `NUM_SELECT_TAB_MODIFIER alt`); `ctrl+1..9` is not
   bound at all, so "all" does turn off `alt+1..9`.
 - **`enable`**: chords that stay Firefox's whatever `disable` says; a Firefox shortcut enabled on a
-  text-field key (`ctrl+w`) wins over Vimma's editing key (`FirefoxKeys.fires`, `_editCommand`).
-  Validation: a chord must have ctrl, alt or meta or be a function key (`isShortcutChord`).
-- **Key capture** (`VimmaHost._onKeyDown`, `_dispatch`): one capture-phase `keydown` listener on
-  the window sees every key first. A key that completes a runnable binding is consumed
-  (`preventDefault` + `stopPropagation`); `preventDefault` from chrome also stops the forward to a
+  text-field key (`ctrl+w`) wins over Vimma's editing key (`FirefoxKeys.fires`,
+  `host/firefox-keys.mjs:153`; `_editCommand`, `VimmaHost.sys.mjs:1433-1439`).
+  Validation: a chord must have ctrl, alt or meta or be a function key (`isShortcutChord`,
+  `core/firefox-keys.mjs:89-91`).
+- **Key capture** (`VimmaHost._onKeyDown`, `VimmaHost.sys.mjs:1321-1360`; `_dispatch`,
+  `:1369-1425`): one capture-phase `keydown` listener on the window sees every key first
+  (`:1000`). A key that completes a runnable binding is consumed (`consume`, `:825-828`:
+  `preventDefault` + `stopPropagation`); `preventDefault` from chrome also stops the forward to a
   remote page (`WidgetEvent::PreventDefault` → `StopCrossProcessForwarding`). Unbound keys pass.
-  Mode: `insert` when focus is in chrome (URL bar, find bar) or a text field; `[keys]` bindings
-  whose first chord has ctrl/alt/meta (or the prefix) are in **every** mode (`compileKeymap`:
-  `global`); plain `[keys]` bindings are normal-mode only. Today no default `[keys]` binding is a
-  bare chord: all are `prefix+…`.
+  Before any binding, an open picker (goto, workspace, add-on) takes every key (`:1342-1348`),
+  and a `/` search takes Enter, Esc and keys typed before its input exists (`:1349-1353`, m1-find).
+  Mode (`_mode`, `:1267-1280`): `insert` when focus is in chrome (URL bar, find bar) or a text
+  field, `panel` while the side panel or bookmarks panel is open; `[keys]` bindings whose first
+  chord has ctrl/alt/meta (or the prefix) are in **every** mode (`compileKeymap`: `global`,
+  `keymap.mjs:156-163`); plain `[keys]` bindings are normal-mode only. Today one default `[keys]`
+  binding is a bare chord: `ctrl+shift+p` → `private_workspace` (`defaults.mjs:87-89`,
+  private-workspace decision 2), which Vimma consumes on keydown, so Firefox's reserved
+  `key_privatebrowsing` (`browser-sets.inc.xhtml:350-351`) never runs although `[firefox]` does
+  not list it. Every other default `[keys]` binding is `prefix+…`.
 - **Page first, already built once:** Vim's editing keys (`ctrl+w/u/h` in insert mode) wait for
   the page: `requestReplyFromRemoteContent()` for a remote page, a system-group bubble listener
-  (`_onKeyDownAfter`) for a parent-process page, and run only if the page did not
-  `preventDefault`. This spec reuses that path.
+  (`_onKeyDownAfter`, `VimmaHost.sys.mjs:1003`, `:1476-1486`; `editAfterPage`, `:785`) for a
+  parent-process page, and run only if the page did not `preventDefault` (`_editKey`,
+  `:1452-1468`). This spec reuses that path.
 - **Actions with arguments**: an action's `arg` is a fixed number per config name
-  (`select_tab_1..9` → `tab.goto` arg 1..9). Free text reaches an action only through the `:`
-  line (`textAction`: `:layout tiled` → `pane.select_layout`, `:addon name` → `addons.popup`).
-  Presets are both: named actions (`layout_tiled`) for keys, a text action for the line. No
-  binding can carry text today.
-- **Help**: `bindingTable` (core `help.mjs`) makes one row per `ACTIONS` entry with the keys
-  `keymap.keysFor` returns; the overlay, `:map` and `docs/bindings.md` all render it. Firefox's
-  keys are in none of them.
-- **Config file**: `:config` / first run writes `formatConfigTemplate()`, every setting commented
-  out (`# disable = [...]` under `[firefox]`); an existing file is never rewritten
-  (ConfigHost `createFromTemplate`). `CONFIG_SCHEMA_VERSION = 2`; `MIGRATIONS` steps 0→1→2 only
-  add keys.
+  (`select_tab_1..9` → `tab.goto` arg 1..9, `actions.mjs:63`). Free text reaches an action only
+  through the `:` line (`textAction`, `cmdline.mjs:20-21`: `:layout tiled` →
+  `pane.select_layout`, `cmdline.mjs:76-77`; `:addon name` → `addons.popup`). Presets are both:
+  named actions (`layout_tiled`) for keys, a text action for the line. No binding can carry text
+  today.
+- **Help**: `bindingTable` (`help.mjs:31-37`) makes one row per `ACTIONS` entry with the keys
+  `keymap.keysFor` returns (`keymap.mjs:316`); the overlay, `:map`, `docs/bindings.md` and, since
+  #154, `docs/bindings.json` (`bindingsJson`, `help.mjs:76-110`; vimma.dev mirrors it through
+  `.github/workflows/site-dispatch.yml`) all render it. `tools/gen-docs.mjs` writes
+  `defaults.toml`, bindings.md and bindings.json; `defaults.test.mjs:16-19` fails when the
+  committed bindings.json is stale. Firefox's keys are in none of them. Groups today, in order
+  (`actions.mjs`): Help, Tabs, Panes, Workspaces (`private_workspace` there), Navigation
+  (`history_back`, `history_forward`, `reload`, `focus_urlbar` at `:146-152`), Page, Hints,
+  Find, Modes, Copy mode, Side panel, Bookmarks, Config, Add-ons. `restore_tab`
+  (`tab.restore`) sits in "Side panel" (`actions.mjs:259`) because its only key is the panel's
+  `<C-S-t>` (`defaults.mjs:216-217`; runner `VimmaHost.sys.mjs:595-596`).
+- **Config file**: `:config` / first run writes `formatConfigTemplate()` (`defaults.mjs:395-413`),
+  every setting commented out (`# disable = [...]` under `[firefox]`, `defaults.mjs:328-332`); an
+  existing file is never rewritten (`ConfigHost.sys.mjs:257` `createFromTemplate`).
+  `CONFIG_SCHEMA_VERSION = 2` (`config.mjs:80`); `MIGRATIONS` steps 0→1→2 only add keys
+  (`config.mjs:86-92`).
+- **about:vimma** shows "Firefox shortcuts off" (`about/about.html:61`,
+  `AboutVimma.sys.mjs:295`) and the unmatched `disable` chords (`about/about.mjs:263-265`).
 
 ### Firefox (engine/, Firefox 157, Linux, en-US)
 
@@ -209,7 +239,7 @@ Chords are written as Vimma canonicalises them: `shift` folds into the character
 | `ctrl+0`                   | `key_fullZoomReset` → `cmd_fullZoomReset`              | reset zoom                               | b    | `page_zoom_reset` (all)                                                   | P     |
 | `ctrl+shift+tab`           | `key_showAllTabs` (ctrlTab runs it)                    | previous tab                             | a    | `previous_tab` (all)                                                      | V     |
 | `ctrl+shift+x`             | `key_switchTextDirection` → `cmd_switchTextDirection`  | flip text direction in a field           | c    | —                                                                         | —     |
-| `ctrl+shift+p`             | `key_privatebrowsing` → `Tools:PrivateBrowsing`        | new private window                       | b    | `new_private_window` (all)                                                | V     |
+| `ctrl+shift+p`             | `key_privatebrowsing` → `Tools:PrivateBrowsing`        | new private window                       | a    | `private_workspace` (all), since private-workspace                        | V     |
 | `ctrl+shift+s`             | `key_screenshot` → `Browser:Screenshot`                | screenshot                               | b    | `screenshot` (all)                                                        | P     |
 | `ctrl+shift+delete`        | `key_sanitize` → `Tools:Sanitize`                      | clear recent history                     | b    | `clear_history` (all)                                                     | P     |
 | `ctrl+q`                   | `key_quitApplication` → `cmd_quitApplication`          | quit (asks first)                        | b    | `quit` (all)                                                              | V     |
@@ -282,12 +312,12 @@ Conditional (**c**): the profiler's `ctrl+shift+1`, `ctrl+shift+2`, `ctrl+alt+sh
 menu accesskeys counts as a key; each `d` row of a field's or the platform's own keys (address
 bar, find bar, editing and scrolling, hardware keys, `Esc` in dialogs) counts as one. By fate:
 
-| Fate                 | Keys                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------ |
-| (a) existing action  | 38 (9 of them Vimma's keys since key-handling-batch: `ctrl+k o w u i d b h` and `/`) |
-| (b) new named action | 44                                                                                   |
-| (c) unbound, off     | 27                                                                                   |
-| (d) stays as it is   | 21                                                                                   |
+| Fate                 | Keys                                                                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| (a) existing action  | 39 (10 of them Vimma's keys already: `ctrl+k o w u i d b h` and `/` since key-handling-batch, `ctrl+shift+p` since private-workspace) |
+| (b) new named action | 43                                                                                                                                    |
+| (c) unbound, off     | 27                                                                                                                                    |
+| (d) stays as it is   | 21                                                                                                                                    |
 
 ## Decisions
 
@@ -300,8 +330,8 @@ bar, find bar, editing and scrolling, hardware keys, `Esc` in dialogs) counts as
    key (a page-first binding and Firefox's key would otherwise both fire on the same keypress).
    `[firefox]` only decides what happens to chords Vimma does not bind.
 3. **Named actions for the common features**, so the overlay reads well and each is rebindable by
-   name. New "Browser" group (after "Page"): `new_window` (`window.new`), `new_private_window`
-   (`window.new_private`), `close_window` (`window.close`), `restore_window` (`window.restore`),
+   name. New "Browser" group (after "Page"): `new_window` (`window.new`), `close_window`
+   (`window.close`), `restore_window` (`window.restore`),
    `quit` (`app.quit`), `reload_hard` (`page.reload_hard`), `stop_loading` (`page.stop`),
    `go_home` (`page.home`), `page_zoom_in` / `page_zoom_out` / `page_zoom_reset`
    (`page.zoom_in` …; `page_` so they do not read as the pane's `zoom`), `toggle_fullscreen`
@@ -315,7 +345,16 @@ bar, find bar, editing and scrolling, hardware keys, `Esc` in dialogs) counts as
    "Developer tools" group: `devtools`, `browser_toolbox`, `browser_console`,
    `responsive_design`, `devtools_inspector`, `devtools_console`, `devtools_debugger`,
    `devtools_network`, `devtools_style_editor`, `devtools_performance`, `devtools_storage`,
-   `devtools_accessibility` (ids `devtools.*`). 39 new actions.
+   `devtools_accessibility` (ids `devtools.*`). 38 new actions.
+   - **No `new_private_window`.** Firefox's `ctrl+shift+p` is already Vimma's
+     `private_workspace` (`workspace.private`, `defaults.mjs:89`, group "Workspaces"): go to the
+     private workspace, or open it. A second action that opens one more private window per press
+     would undo private-workspace decision 2 (one private workspace), so there is none; its
+     inventory row is fate a with no new binding, as private-workspace's coordination note asks.
+     The rare need for a bare private window is `:firefox Tools:PrivateBrowsing` (Decision 5),
+     and that window still joins the private workspace (private-workspace decision 4).
+   - **`restore_tab` moves** from "Side panel" (`actions.mjs:259`) to "Tabs", since its key
+     `ctrl+shift+t` becomes global (Decision 7) and is no longer a panel-only key.
 4. **Each runs exactly what Firefox's key ran**, through a new `host/browser-ops.mjs`: the key's
    `<command>` (`doCommand()` on `cmd_newNavigator`, `Browser:ReloadSkipCache`,
    `cmd_fullZoomEnlarge`, `View:PictureInPicture`, …) or, for keys with no `<command>` (`goHome`,
@@ -361,15 +400,33 @@ bar, find bar, editing and scrolling, hardware keys, `Esc` in dialogs) counts as
    and cancelling a pending key; it stops a load only when the page did not take it (P).
    `ctrl+[` / `ctrl+]` are `[modal.normal]` (Q2). The Vim keys stay where they are (`H`/`L`,
    `ctrl+o`/`ctrl+i` normal only); the new keys are added next to them, so "Go back" lists `H`,
-   `ctrl+o`, `alt+left`, `ctrl+[`. The `[modal.panel]` `<C-S-t>` entry goes: the global
-   `restore_tab` binding covers the panel.
+   `ctrl+o`, `alt+left`, `ctrl+[`. The `[modal.panel]` `<C-S-t>` entry (`defaults.mjs:216-217`)
+   goes: the global `restore_tab` binding covers the panel. An open picker (goto, workspace,
+   add-on) keeps taking every key before any binding (`VimmaHost.sys.mjs:1342-1348`), so
+   `ctrl+t` does nothing while one is open, as today; the help overlay is not a picker and runs
+   global bindings.
 8. **Default bindings** are the inventory's a and b rows. No new binding clashes with an existing
-   default (checked against `defaults.mjs`): the bare Firefox chords are all free in `[keys]`;
-   `ctrl+o`, `ctrl+i`, `ctrl+d`, `ctrl+u`, `ctrl+e`, `ctrl+y`, `ctrl+w`, `ctrl+^`, `ctrl+6` keep
-   their Vimma meanings; no prefix key changes, so `ctrl+b u` (toolbar-toggle) is untouched.
+   default (checked against main's `defaults.mjs` on 2026-10-13):
+   - `[keys]` (`defaults.mjs:52-96`) has one bare chord, `ctrl+shift+p` (`private_workspace`),
+     which the inventory keeps as is (fate a); every other new `[keys]` chord is free. Prefix keys
+     do not change: `prefix+enter`, `prefix+space` (tiling-layouts), `prefix+shift+p`
+     (private-workspace), `prefix+^` / `prefix+ctrl+6` are untouched, and `ctrl+b u`
+     (toolbar-toggle) stays free for that spec.
+   - `[modal.normal]` (`:104-162`): `ctrl+o`, `ctrl+i`, `ctrl+d`, `ctrl+u`, `ctrl+e`, `ctrl+y`,
+     the `ctrl+w` pane keys, `ctrl+^` and `ctrl+6` keep their Vimma meanings; `]w` / `[w` are
+     plain-key sequences, not `ctrl+]` / `ctrl+[`; normal mode has no `<Esc>` binding yet, and a
+     pending sequence's `Esc` still cancels first (`dispatcher.mjs:94-98`).
+   - `[modal.panel]` (`:202-233`, with unsplit's marks `<Space>` and `V` from #149/#150) binds
+     only plain keys besides `<C-S-t>`, which goes (Decision 7). `[modal.resize]`,
+     `[modal.help]`, `[modal.hint]`, `[modal.visual]`, `[modal.insert]` and `[modal.command]` bind
+     only plain keys and `<Esc>`/arrows, so the new global chords do not shadow any of them.
+   - The `/` search (#167) handles only Enter, Esc and plain keys before the keymap, so
+     `ctrl+g` / `f3` (`find_next`) reach the dispatcher and step Firefox's finder as `n` does.
+
    toolbar-toggle relies on `ctrl+l`, `alt+d` and `F6` giving a focused address bar: `ctrl+l`
    and `alt+d` run `focus_urlbar` (`Browser:OpenLocation`, the path toolbar-toggle hooks), `F6`
    is d.
+
 9. **`[firefox]` from now on.** Default `disable = "all"`, and "all" means the whole inventory
    except fate d: plain and function keys (`F5`, `F11`, `Esc`, `shift+Esc`, `F3`), every keyset
    of the window (`#mainKeyset`, `#devtoolsKeyset`, the conditional ones), and the out-of-keyset
@@ -445,16 +502,22 @@ bar, find bar, editing and scrolling, hardware keys, `Esc` in dialogs) counts as
 
 Each is its own keymap PR, in this order, one open at a time:
 
-1. **Firefox's keys are Vimma bindings.** `FIREFOX_SHORTCUTS` table; the 39 actions and their
-   runners (`browser-ops.mjs`); the a/b default bindings; F-keys global in `[keys]`; the P/V rule
-   (keypress after the page, reply handling); "bound means off" in `planFirefoxKeys` (every
-   keyset of the window); the "Browser" and "Developer tools" groups; gen-docs (bindings.md gains
-   "Firefox's shortcuts", the inventory with each key's action); guide and README. `[firefox]`
-   keeps today's default here, so unbound Firefox keys are as before.
+1. **Firefox's keys are Vimma bindings.** `FIREFOX_SHORTCUTS` table in `core/firefox-keys.mjs`
+   (every inventory row, `ctrl+shift+p` as fate a → `private_workspace` with no new binding); the
+   37 new actions of Decision 3 except `firefox_command`, and their runners in a new
+   `host/browser-ops.mjs`; `restore_tab` moved to "Tabs"; the a/b default bindings in
+   `defaults.mjs` (`[keys]`, plus `esc`, `ctrl+[`, `ctrl+]` in `[modal.normal]`) and the panel's
+   `<C-S-t>` removed; F-keys global in `[keys]` (`keymap.mjs`); the P/V rule (keypress after the
+   page, reply handling; Decision 6); "bound means off" in `planFirefoxKeys` over every keyset of
+   the window (`host/firefox-keys.mjs` watches all `<keyset>`s, not `#mainKeyset` only); the
+   "Browser" and "Developer tools" groups; gen-docs (`defaults.toml`, bindings.md with a new
+   "Firefox's shortcuts" section, bindings.json with the new rows); the snapshots; guide,
+   README, and toolbar-toggle.md's "`alt` still shows it" line (Q3). `[firefox]` keeps today's
+   default `disable` (`OVERLAP_CHORDS`) here, so unbound Firefox keys are as before.
 2. **Firefox's own shortcuts off.** Default `disable = "all"` with the wider "all"; consuming the
    out-of-keyset handlers; the menu bar accesskeys and the two prefs; `enable` dropping default
-   bindings and its new error; `:firefox` and `:` bindings with the "Commands" group; the
-   "Firefox (on in config.toml)" group; about:vimma; the template comment.
+   bindings and its new error; `firefox_command`, `:firefox` and `:` bindings with the "Commands"
+   group; the "Firefox (on in config.toml)" group; about:vimma; the template comment.
 3. **The coverage test** (Decision 12) and its `docs/rebase.md` line.
 
 ## Test plan
@@ -478,7 +541,11 @@ Each is its own keymap PR, in this order, one open at a time:
     groups from supplied rows, empty and hidden by default.
   - Snapshots re-recorded with a line each: `help.test.mjs.snap` (the new rows and keys),
     `defaults.test.mjs.snap` (the new `[keys]` entries, `[firefox] disable = "all"`, the panel's
-    `<C-S-t>` gone); `defaults.toml` and `docs/bindings.md` regenerated.
+    `<C-S-t>` gone); `defaults.toml`, `docs/bindings.md` and `docs/bindings.json` regenerated
+    (`defaults.test.mjs` fails on a stale bindings.json).
+  - `help.test.mjs` `bindingsJson`: the new groups appear in bindings.json in the overlay's
+    order, and its `version` stays 1 (the shape does not change; the "Firefox's shortcuts"
+    inventory is bindings.md only).
 - **Mochitests:**
   - `browser_vimma_firefox_keys.js` is rewritten, because its premise changes on purpose (it
     asserts `ctrl+t`, `ctrl+l`, `ctrl+tab` "stay Firefox's"): now they run Vimma's actions and
@@ -486,9 +553,11 @@ Each is its own keymap PR, in this order, one open at a time:
   - `browser_vimma_browser_keys.js` (new): each b action does what Firefox's key did (a window
     opens, zoom changes and resets, full screen toggles, a slow page stops on `Esc` in normal
     mode, `ctrl+q` shows the quit prompt and cancelling it keeps the browser, `alt+9` selects the
-    workspace's last tab, `ctrl+shift+pagedown` moves the tab); `alt+left` goes back in normal
-    and insert mode and from the address bar; a page that calls `preventDefault` on `ctrl+f`,
-    `ctrl+s` and `ctrl+plus` keeps them and Vimma does nothing; the same page cannot keep
+    workspace's last tab, `ctrl+shift+p` goes to the private workspace and its disabled
+    `key_privatebrowsing` opens no second private window, `ctrl+shift+pagedown` moves the tab);
+    `alt+left` goes back in normal and insert mode and from the address bar; a page that calls
+    `preventDefault` on `ctrl+f`, `ctrl+s` and `ctrl+plus` keeps them and Vimma does nothing;
+    the same page cannot keep
     `ctrl+t` or `ctrl+tab`; `ctrl+shift+z` in a field redoes and opens no toolbox; a Block
     "shortcuts" permission makes `ctrl+s` Vimma's first; about:preferences keeps its `ctrl+f`;
     the PDF viewer zooms its own way on `ctrl+plus`.
@@ -497,8 +566,10 @@ Each is its own keymap PR, in this order, one open at a time:
     "Firefox (on in config.toml)" group appears with `enable = ["ctrl+j"]`; a `:` binding shows in
     "Commands".
   - `browser_vimma_edit_keys.js`, `_key_capture.js`, `_nav_keys.js`, `_tab_keys.js`,
-    `_pane_keys.js`, `_workspace_buffer_keys.js`, `_a11y.js` and toolbar-toggle's tests run
-    unchanged and stay green.
+    `_pane_keys.js`, `_workspace_buffer_keys.js`, `_a11y.js`, `_find.js`,
+    `_side_panel_unsplit.js`, `_private_workspace.js` and
+    `_private_swap.js` run unchanged and stay green, as do toolbar-toggle's tests once it is
+    built.
 - **e2e:** `m0-happy-path-help.png` shows the overlay, whose Tabs rows gain `ctrl+t`, `ctrl+tab`,
   `alt+1` …, so it is expected to change. Re-record it only if it does, with the changelog line
   "the bindings overlay lists Firefox's keys (ctrl+t, alt+1..9, ctrl+tab …) next to Vimma's".
@@ -517,6 +588,11 @@ Each is its own keymap PR, in this order, one open at a time:
   bindings too.
 - **bindings.md** via `npm run gen-docs`: the new rows, and a generated "Firefox's shortcuts"
   section (the inventory: key, what Firefox did, Vimma's action or "off").
+- **bindings.json** via the same `npm run gen-docs`: the new groups and rows, same shape
+  (`version: 1`). Merging it runs `site-dispatch.yml`, which opens the vimma.dev mirror PR.
+- **defaults.toml** via `npm run gen-docs`.
+- **toolbar-toggle.md**: "`alt` still shows it" becomes "`alt` does not (firefox-keys Q3); `F10`
+  does" (sub-PR 1).
 - **CHANGELOG.md** is the maintainer's at merge time (CLAUDE.md), not these PRs'.
 
 ## Out of scope
