@@ -22,6 +22,9 @@ export function tabTarget(action, current, length) {
   switch (action.id) {
     case "tab.goto":
       return action.arg === undefined ? null : nth(action.arg);
+    // Firefox's alt+9 (docs/specs/firefox-keys.md).
+    case "tab.goto_last":
+      return length - 1;
     case "tab.next":
       // Vim: `3gt` goes to tab 3, `gt` to the next one.
       return action.count === undefined ? (current + 1) % length : nth(action.count);

@@ -73,7 +73,7 @@ describe("formatConfigTemplate", () => {
     expect(text.startsWith("# Vimma config")).toBe(true);
     expect(text).toContain(":source");
     expect(text).toMatch(/^schema = 2$/m);
-    expect(text).toMatch(/^# new_tab = \["prefix\+c"\]$/m);
+    expect(text).toMatch(/^# new_tab = \["prefix\+c", "ctrl\+t"\]$/m);
     expect(text).toMatch(/^\[keys\]$/m);
     expect(text).not.toMatch(/^new_tab =/m);
   });

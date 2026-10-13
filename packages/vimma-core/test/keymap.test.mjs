@@ -187,3 +187,21 @@ describe("I focuses the address bar", () => {
     expect(compileKeymap().bindingsFor("focus_urlbar")).toContain("I");
   });
 });
+
+// docs/specs/firefox-keys.md decision 7: a function-key chord in [keys] is global, as
+// Firefox's are.
+describe("function keys in [keys]", () => {
+  test("an f5 or shift+f12 binding works in every mode", () => {
+    const km = compileKeymap({ keys: { goto_picker: ["f8", "shift+f8"] } });
+    for (const mode of /** @type {const} */ (["normal", "insert", "visual", "panel", "help"])) {
+      expect(km.trie(mode).children.get("f8")?.action?.name, mode).toBe("goto_picker");
+      expect(km.trie(mode).children.get("shift+f8")?.action?.name, mode).toBe("goto_picker");
+    }
+  });
+
+  test("a plain [keys] binding stays normal-only", () => {
+    const km = compileKeymap({ keys: { goto_picker: ["q"] } });
+    expect(km.trie("normal").children.get("q")?.action?.name).toBe("goto_picker");
+    expect(km.trie("insert").children.get("q")).toBeUndefined();
+  });
+});

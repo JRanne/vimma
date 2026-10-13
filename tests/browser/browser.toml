@@ -189,3 +189,6 @@ support-files = ["file_vimma_addon_updates.json"]
 ["browser_vimma_perf.js"]
 
 ["browser_vimma_a11y.js"]
+
+["browser_vimma_browser_keys.js"]
+support-files = ["file_vimma_plain.html", "file_vimma_slow.sjs"]

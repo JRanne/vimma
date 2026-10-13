@@ -255,7 +255,11 @@ add_task(async function colon_config_opens_the_file_and_creates_it_from_the_temp
   Assert.ok(await IOUtils.exists(fresh), "the missing file was created, folders too");
   const text = await IOUtils.readUTF8(fresh);
   Assert.ok(text.startsWith("# Vimma config"), "from the commented template");
-  Assert.stringContains(text, '# new_tab = ["prefix+c"]', "listing the defaults, commented");
+  Assert.stringContains(
+    text,
+    '# new_tab = ["prefix+c", "ctrl+t"]',
+    "listing the defaults, commented",
+  );
   await ConfigHost.reload();
   Assert.deepEqual(ConfigHost.errors, [], "the template is a valid config");
   BrowserTestUtils.removeTab(shown);

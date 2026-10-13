@@ -339,7 +339,16 @@ export class Find {
    * @param {boolean} reverse
    */
   again(browser, reverse) {
-    if (this.session || !this.last) return;
+    if (this.session) return;
+    // Firefox's own find bar (ctrl+f) is open, or was the only search: its query, as Firefox's
+    // ctrl+g and F3 ran (docs/specs/firefox-keys.md). Vimma's `/` closes the bar when it ends.
+    const tab = this.#gBrowser().getTabForBrowser(browser);
+    const findbar = tab ? this.#gBrowser().getCachedFindBar(tab) : undefined;
+    if (findbar?._findField.value && (!findbar.hidden || !this.last)) {
+      findbar.onFindAgainCommand(reverse);
+      return;
+    }
+    if (!this.last) return;
     const { query, backward } = this.last;
     const known = this.#known(browser, query);
     if (known?.notFound && known.uri === browser.currentURI?.spec) {
