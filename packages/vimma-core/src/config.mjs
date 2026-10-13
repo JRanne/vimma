@@ -15,7 +15,7 @@ import { KeymapError, compileKeymap } from "./keymap.mjs";
 import { MODES, isMode } from "./modes.mjs";
 import { PANES_MAX_DEFAULT, PANES_MAX_LIMIT } from "./panes.mjs";
 import { MAIN_SIZE_DEFAULT } from "./layouts.mjs";
-import { BUILTIN_THEMES, PALETTE_KEYS, isHexColor, normalizeHex } from "./theme.mjs";
+import { APPEARANCES, BUILTIN_THEMES, PALETTE_KEYS, isHexColor, normalizeHex } from "./theme.mjs";
 import { resolveRoutes, validateRoutes } from "./routes.mjs";
 import { formatPath, locateKeys, parsePath, parseToml } from "./toml.mjs";
 import { OVERLAP_CHORDS, canonicalChord, isShortcutChord } from "./firefox-keys.mjs";
@@ -158,7 +158,7 @@ const TOP_KEYS = [
 ];
 const KEYMAP_SECTIONS = new Set(["keys", "modal", "unbind"]);
 const WORKSPACE_KEYS = ["color", "icon", "home", "autofill"];
-const THEME_KEYS = ["source", "name", "font", "colors"];
+const THEME_KEYS = ["source", "name", "appearance", "font", "colors"];
 const THEME_NAMES = Object.keys(BUILTIN_THEMES);
 const THEME_SOURCES = ["omarchy", "file"];
 const PANES_KEYS = ["max", "layout", "main_size"];
@@ -181,6 +181,7 @@ const SCHEMA_2_KEYS = [
   "modal.insert_editing",
   "bookmarks",
   "theme.name",
+  "theme.appearance",
   "private",
 ];
 /** `[bookmarks]` (docs/specs/bookmarks.md, decision 2). */
@@ -511,6 +512,13 @@ function validate(raw, declared) {
           const names = THEME_NAMES.map((n) => `"${n}"`).join(" or ");
           fail(path, `must be ${names}`, closest(v, THEME_NAMES));
         }
+      } else if (key === "appearance") {
+        // docs/specs/theme-appearance.md B1: left out, `:theme` (a pref) decides.
+        if (gated(path)) continue;
+        if (typeof v !== "string") typeError(path, v, "a string");
+        else if (!APPEARANCES.includes(/** @type {any} */ (v))) {
+          fail(path, `must be "system", "dark" or "light"`, closest(v, [...APPEARANCES]));
+        }
       } else if (key === "font") {
         if (typeof v !== "string") typeError(path, v, "a string");
         else if (v.length < 1 || v.length > MAX_FONT)
@@ -602,6 +610,8 @@ export function mergeWithDefaults(user, workspaceOrder, siteOrder) {
     theme: {
       source: theme.source ?? defTheme.source,
       name: theme.name ?? defTheme.name,
+      // Only when the file sets it: config.toml then wins over `:theme` (theme-appearance B4).
+      ...(theme.appearance === undefined ? {} : { appearance: theme.appearance }),
       font: theme.font ?? defTheme.font,
       colors,
     },

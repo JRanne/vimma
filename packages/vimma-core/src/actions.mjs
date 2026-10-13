@@ -326,6 +326,8 @@ group("Bookmarks", [
 group("Config", [
   ["reload_config", "config.reload", "Reload config"],
   ["edit_config", "config.edit", "Open config.toml in a tab"],
+  // docs/specs/theme-appearance.md: no default key; `:theme dark|light|system`.
+  ["theme_appearance", "theme.appearance", "Built-in theme: dark, light or the system's (:theme)"],
 ]);
 
 // docs/specs/addon-manager.md

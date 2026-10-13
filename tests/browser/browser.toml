@@ -168,6 +168,8 @@ support-files = ["file_vimma_insert_scroll.html"]
 ["browser_vimma_theme.js"]
 run-if = ["os == 'linux'"] # ln -s for the omarchy-theme-set symlink swap
 
+["browser_vimma_theme_appearance.js"]
+
 ["browser_vimma_sidebar_theme.js"]
 run-if = ["os == 'linux'"] # ln -s for the omarchy-theme-set symlink swap
 

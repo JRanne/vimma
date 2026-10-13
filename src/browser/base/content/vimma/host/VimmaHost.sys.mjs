@@ -26,6 +26,7 @@ import { copyModeRunners } from "./copy-mode.mjs";
 import { pageRunners } from "./page-ops.mjs";
 import { Notice } from "../ui/notice.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
+import { ThemeHost } from "../ui/theme-host.mjs";
 import { AddonPicker, GotoPicker, WorkspacePicker } from "../ui/picker.mjs";
 import { RenamePrompt } from "../ui/rename-prompt.mjs";
 import { SidePanel } from "../ui/side-panel.mjs";
@@ -665,6 +666,11 @@ export const RUNNERS = Object.freeze({
   // `:config`: ConfigHost opens config.toml in a tab of this window (creating it if missing).
   "config.edit": (/** @type {WindowState} */ s) =>
     Services.obs.notifyObservers(/** @type {any} */ (s.win), CONFIG_EDIT_TOPIC),
+  // `:theme [dark|light|system]` (docs/specs/theme-appearance.md): the built-in palette.
+  "theme.appearance": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ t) => {
+    const said = ThemeHost.setAppearance(s.win, t);
+    s.notice.show(said.text, { error: said.error });
+  },
 });
 
 /**

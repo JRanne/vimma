@@ -463,6 +463,48 @@ describe("[theme] name", () => {
   });
 });
 
+// docs/specs/theme-appearance.md, B: the built-in palette dark, light or as the system is.
+describe("[theme] appearance", () => {
+  test("left out, it stays out: :theme's pref decides", () => {
+    expect(ok(v2()).theme.appearance).toBeUndefined();
+    expect(DEFAULT_CONFIG.theme?.appearance).toBeUndefined();
+  });
+
+  test.each([["system"], ["dark"], ["light"]])('appearance = "%s" is accepted', (v) => {
+    expect(ok(v2("[theme]", `appearance = "${v}"`)).theme.appearance).toBe(v);
+  });
+
+  test("an unknown value suggests the nearest; a non-string is a type error", () => {
+    expect(errors(v2("[theme]", 'appearance = "ligt"'))).toEqual([
+      {
+        line: 3,
+        path: "theme.appearance",
+        message: 'must be "system", "dark" or "light"',
+        suggestion: "light",
+      },
+    ]);
+    expect(errors(v2("[theme]", "appearance = 1"))).toEqual([
+      { line: 3, path: "theme.appearance", message: "expected a string, got an integer" },
+    ]);
+  });
+
+  test("is new in schema 2", () => {
+    expect(errors(toml("schema = 1", "[theme]", 'appearance = "dark"'))).toEqual([
+      {
+        line: 3,
+        path: "theme.appearance",
+        message: "is new in schema 2: put schema = 2 at the top of the file",
+      },
+    ]);
+  });
+
+  test("defaults.toml documents it as a comment, so the file does not pin it", () => {
+    expect(formatDefaultsToml()).toMatch(/^# appearance = "system"$/m);
+    expect(formatDefaultsToml()).not.toMatch(/^appearance =/m);
+    expect(ok(formatDefaultsToml()).theme.appearance).toBeUndefined();
+  });
+});
+
 // docs/specs/private-swap.md, decision 1 (user decision, 2026-10-12).
 describe("[private] placement", () => {
   test('defaults to "swap"', () => {
