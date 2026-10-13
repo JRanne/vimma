@@ -247,13 +247,14 @@ export function workspaceOfTab(s, tabId) {
 }
 
 /**
- * Appends a workspace, with `def.id` when given (`bad-id`, `duplicate-id`).
+ * Appends a workspace, with `def.id` when given (`bad-id`, `duplicate-id`); with `before`, the
+ * id of a workspace, just ahead of that one (the agent workspace sorts last, vimma-mcp 9).
  * @param {Workspaces} s
  * @param {WorkspaceDef} def
- * @param {{ activate?: boolean }} [options]
+ * @param {{ activate?: boolean, before?: string }} [options]
  * @returns {Workspaces}
  */
-export function addWorkspace(s, def, { activate = true } = {}) {
+export function addWorkspace(s, def, { activate = true, before } = {}) {
   const name = checkName(s, def.name, null);
   if (typeof def.container !== "string" || !def.container) {
     throw new WorkspaceError("empty-container", `workspace "${name}" needs a container`);
@@ -279,8 +280,11 @@ export function addWorkspace(s, def, { activate = true } = {}) {
     { id, name, container: def.container, tabs: [], activeTab: null, panes: null },
     {},
   );
+  const workspaces = [...s.workspaces];
+  const at = before === undefined ? -1 : workspaces.findIndex((x) => x.id === before);
+  workspaces.splice(at < 0 ? workspaces.length : at, 0, w);
   return updateState(s, {
-    workspaces: [...s.workspaces, w],
+    workspaces,
     active: activate ? id : s.active,
     next,
   });
@@ -364,24 +368,48 @@ export function switchWorkspace(s, ref) {
   return w.id === s.active ? s : updateState(s, { active: w.id });
 }
 
+/** @type {ReadonlySet<string>} */
+const NONE = new Set();
+
 /**
- * The alternate workspace: the one active before this one (Vim's `#`), or undefined.
+ * The alternate workspace: the one active before this one (Vim's `#`), or undefined. One in
+ * `skip` (the agent workspace, docs/specs/vimma-mcp.md decision 9) is never the alternate of a
+ * workspace outside it; from inside it, the alternate is where you came from.
  * @param {Workspaces} s
+ * @param {ReadonlySet<string>} [skip]  workspace ids
  * @returns {WorkspaceState | undefined}
  */
-export function alternateWorkspace(s) {
-  return s.alternate === undefined ? undefined : findWorkspace(s, { id: s.alternate });
+export function alternateWorkspace(s, skip = NONE) {
+  if (s.alternate === undefined) return undefined;
+  if (skip.has(s.alternate) && !skip.has(s.active)) return undefined;
+  return findWorkspace(s, { id: s.alternate });
 }
 
 /**
  * `ctrl+^` / `ctrl+b ^`: back to the alternate workspace, which makes the one left the
  * alternate, so a second press toggles back. Without an alternate, the input itself.
  * @param {Workspaces} s
+ * @param {ReadonlySet<string>} [skip]  workspace ids (alternateWorkspace)
  * @returns {Workspaces}
  */
-export function lastWorkspace(s) {
-  const w = alternateWorkspace(s);
+export function lastWorkspace(s, skip = NONE) {
+  const w = alternateWorkspace(s, skip);
   return w ? switchWorkspace(s, { id: w.id }) : s;
+}
+
+/**
+ * After a switch (`prev` to `next`) out of a workspace in `skip`, the alternate is the one
+ * before it, not the skipped one: the `ctrl+^` of another workspace never lands in the agent
+ * workspace (vimma-mcp decision 9). Any other switch returns `next` itself.
+ * @param {Workspaces} prev
+ * @param {Workspaces} next
+ * @param {ReadonlySet<string>} skip  workspace ids
+ * @returns {Workspaces}
+ */
+export function leaveSkipped(prev, next, skip) {
+  if (next.active === prev.active || !skip.has(prev.active) || skip.has(next.active)) return next;
+  if (next.alternate !== prev.active) return next;
+  return setAlternate(next, prev.alternate);
 }
 
 /**
@@ -400,30 +428,41 @@ export function setAlternate(s, id) {
 }
 
 /**
+ * The next workspace `step` away that is not in `skip`; none (only skipped ones besides the
+ * active one): the input itself.
  * @param {Workspaces} s
  * @param {number} step
+ * @param {ReadonlySet<string>} skip
  */
-function cycle(s, step) {
+function cycle(s, step, skip) {
   const n = s.workspaces.length;
-  return switchWorkspace(s, { index: ((activeIndex(s) + step + n) % n) + 1 });
+  const from = activeIndex(s);
+  for (let k = 1; k < n; k++) {
+    const i = (((from + step * k) % n) + n) % n;
+    const w = /** @type {WorkspaceState} */ (s.workspaces[i]);
+    if (!skip.has(w.id)) return switchWorkspace(s, { id: w.id });
+  }
+  return s;
 }
 
 /**
- * `ctrl+b )`; wraps around.
+ * `ctrl+b )`; wraps around, past the workspaces in `skip` (vimma-mcp decision 9).
  * @param {Workspaces} s
+ * @param {ReadonlySet<string>} [skip]  workspace ids
  * @returns {Workspaces}
  */
-export function nextWorkspace(s) {
-  return cycle(s, 1);
+export function nextWorkspace(s, skip = NONE) {
+  return cycle(s, 1, skip);
 }
 
 /**
- * `ctrl+b (`; wraps around.
+ * `ctrl+b (`; wraps around, past the workspaces in `skip`.
  * @param {Workspaces} s
+ * @param {ReadonlySet<string>} [skip]  workspace ids
  * @returns {Workspaces}
  */
-export function previousWorkspace(s) {
-  return cycle(s, -1);
+export function previousWorkspace(s, skip = NONE) {
+  return cycle(s, -1, skip);
 }
 
 /**

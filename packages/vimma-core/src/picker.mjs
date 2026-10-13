@@ -7,6 +7,7 @@
  * with highlight ranges, and the picker's key handling as a pure state machine. The `prefix+w`
  * workspace picker (m3-workspaces 5) is the same machine over one item per workspace.
  */
+import { AGENT_GLYPH } from "./agent.mjs";
 import { deleteWordBackward } from "./strings.mjs";
 import { displayLabel } from "./tablabels.mjs";
 import { graphemes } from "./textwidth.mjs";
@@ -34,8 +35,9 @@ import { graphemes } from "./textwidth.mjs";
  * @property {number} workspaceIndex 1-based, the workspace order
  * @property {number} tabCount
  * @property {number} foreignCount   tabs adopted from a container no workspace owns
- * @property {string} display        the name
+ * @property {string} display        the name (`◇ agent` for the agent workspace)
  * @property {boolean} active        the window's active workspace
+ * @property {true} [agent]          the agent workspace (docs/specs/vimma-mcp.md, decision 9)
  */
 /** @import { AddonItem } from "./addons.mjs" */
 /** @typedef {PickerItem | WorkspaceItem | AddonItem} AnyItem */
@@ -374,9 +376,10 @@ export function pickerItems(state, info, labels) {
  * ones among them).
  * @param {Workspaces} state
  * @param {(tabId: string) => boolean} [isForeign]
+ * @param {string | null} [agentId]  the agent workspace's id
  * @returns {WorkspaceItem[]}
  */
-export function workspaceItems(state, isForeign = () => false) {
+export function workspaceItems(state, isForeign = () => false, agentId = null) {
   return state.workspaces.map((w, wi) =>
     Object.freeze({
       kind: /** @type {const} */ ("workspace"),
@@ -385,8 +388,10 @@ export function workspaceItems(state, isForeign = () => false) {
       workspaceIndex: wi + 1,
       tabCount: w.tabs.length,
       foreignCount: w.tabs.filter(isForeign).length,
-      display: w.name,
+      // The agent workspace's row: `◇ agent` (docs/specs/vimma-mcp.md, decision 9).
+      display: w.id === agentId ? `${AGENT_GLYPH} ${w.name}` : w.name,
       active: w.id === state.active,
+      ...(w.id === agentId ? { agent: /** @type {const} */ (true) } : {}),
     }),
   );
 }

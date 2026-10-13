@@ -405,6 +405,14 @@ describe("mergeWithDefaults", () => {
       insertEditing: true,
       bookmarks: { root: "workspace" },
       private: { placement: "swap" },
+      mcp: {
+        workspace: "agent",
+        askTimeout: 50,
+        grantMinutes: 10,
+        grantMaxMinutes: 480,
+        maxReadChars: 200000,
+        notify: true,
+      },
     });
   });
 });

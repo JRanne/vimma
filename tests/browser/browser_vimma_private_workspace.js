@@ -249,10 +249,13 @@ add_task(async function cycling_never_enters_private_and_leaves_to_the_ends() {
   const [priv] = privateWindows();
   const A = workspace("pw-a");
   const B = workspace("pw-b");
-  const order = () => ww().model.workspaces.map((w) => w.id);
+  // The agent workspace sorts last and is never cycled (docs/specs/vimma-mcp.md decision 9).
+  const all = () => ww().model.workspaces.map((w) => w.id);
+  Assert.equal(all().at(-1), WorkspaceStore.agent?.id, "the agent workspace is the last one");
+  const order = () => all().filter((id) => id !== WorkspaceStore.agent?.id);
   const first = () => order()[0];
   const last = () => order().at(-1);
-  Assert.equal(last(), B.id, "B is the last workspace");
+  Assert.equal(last(), B.id, "B is the last cycled workspace");
 
   await SimpleTest.promiseFocus(window);
   ww().switchTo({ id: B.id });

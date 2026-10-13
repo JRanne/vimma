@@ -20,6 +20,7 @@ import {
   privateToggle,
 } from "../core/privatews.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
+import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
 import { PrivateSwap, startedUp } from "./private-swap.mjs";
 import { workspacePickerItems } from "./workspace-ops.mjs";
 
@@ -231,7 +232,11 @@ export function togglePrivate(win) {
 export function cycleOutOfPrivate(dir) {
   const win = normalWindow();
   if (!win) return NO_NORMAL;
-  const order = WindowWorkspaces.get(win)?.model?.workspaces.map((w) => w.id) ?? [];
+  // The agent workspace is never a cycle's target (docs/specs/vimma-mcp.md, decision 9).
+  const agent = WorkspaceStore.agent?.id;
+  const order = (WindowWorkspaces.get(win)?.model?.workspaces ?? [])
+    .map((w) => w.id)
+    .filter((id) => id !== agent);
   return showNormal(win, cycleFromPrivate(order, dir));
 }
 

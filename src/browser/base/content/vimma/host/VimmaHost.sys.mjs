@@ -94,6 +94,7 @@ import {
   switchFromPrivate,
   togglePrivate,
 } from "./private-ops.mjs";
+import { McpHost } from "./mcp-ops.mjs";
 import { parsePrivateCommand } from "../core/privatews.mjs";
 import { findWorkspace } from "../core/workspaces.mjs";
 import { KeyLog } from "../about/key-log.mjs";
@@ -298,8 +299,24 @@ function workspaceRunner(op, prompt) {
   };
 }
 
-/** `workspace.move_tab` in a normal window: `:wsmove name`, or its key asks. */
-const moveTab = workspaceRunner(moveTabToWorkspace, () => "wsmove ");
+/**
+ * `workspace.move_tab` in a normal window: `:wsmove name`, or its key asks. A move into the agent
+ * workspace asks y/N first (docs/specs/vimma-mcp.md, decision 11).
+ * @param {WindowState} s
+ * @param {Action} a
+ * @param {string} [text]
+ */
+const moveTab = (s, a, text) =>
+  workspaceRunner(
+    (win, t) =>
+      moveTabToWorkspace(
+        win,
+        t,
+        (question, yes) => s.rename.ask(question, yes),
+        (said) => s.notice.show(said),
+      ),
+    () => "wsmove ",
+  )(s, a, text);
 
 /**
  * A workspace step (ctrl+b ) / ctrl+b (, ]w / [w, ctrl+^); shows its refusal, if any.
@@ -666,6 +683,16 @@ export const RUNNERS = Object.freeze({
   // `:config`: ConfigHost opens config.toml in a tab of this window (creating it if missing).
   "config.edit": (/** @type {WindowState} */ s) =>
     Services.obs.notifyObservers(/** @type {any} */ (s.win), CONFIG_EDIT_TOPIC),
+  // `:mcp [on|off|forget]` (docs/specs/vimma-mcp.md): agents and the agent workspace.
+  "mcp.command": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) => {
+    s.notice.hide();
+    const said = McpHost.run(
+      text,
+      (question, yes) => s.rename.ask(question, yes),
+      (t) => s.notice.show(t),
+    );
+    if (said) s.notice.show(said);
+  },
   // `:theme [dark|light|system]` (docs/specs/theme-appearance.md): the built-in palette.
   "theme.appearance": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ t) => {
     const said = ThemeHost.setAppearance(s.win, t);

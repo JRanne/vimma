@@ -50,7 +50,9 @@ registerCleanupFunction(async () => {
   if (document.getElementById(PROMPT_ID)?.hidden === false) EventUtils.synthesizeKey("KEY_Escape");
   await WorkspaceStore.setConfig([]);
   ww().switchTo({ id: main().id });
-  for (const w of WorkspaceStore.definitions.workspaces.filter((d) => d.name !== "main")) {
+  for (const w of WorkspaceStore.definitions.workspaces.filter(
+    (d) => d.name !== "main" && d.id !== WorkspaceStore.agent?.id,
+  )) {
     await WorkspaceStore.deleteWorkspace(w.id, { confirmed: true });
   }
   while (gBrowser.tabs.length > 1) BrowserTestUtils.removeTab(gBrowser.tabs.at(-1));
@@ -151,7 +153,12 @@ async function create(name) {
 }
 
 add_task(async function the_last_workspace_cannot_be_closed() {
-  Assert.equal(WorkspaceStore.definitions.workspaces.length, 1, "only main to begin with");
+  // And the agent workspace, which never counts as the one left (docs/specs/vimma-mcp.md 8).
+  Assert.deepEqual(
+    WorkspaceStore.definitions.workspaces.map((w) => w.name),
+    ["main", "agent"],
+    "only main (and the agent workspace) to begin with",
+  );
   await runCommand("wsdelete");
   await until(() => /last workspace/.test(noticeText()), "the notice says why");
   Assert.ok(!promptOpen(), "nothing to confirm");

@@ -555,3 +555,128 @@ describe("[private] placement", () => {
     ]);
   });
 });
+
+// docs/specs/vimma-mcp.md, decision 26: [mcp], a schema-2 table; config wins over :mcp on|off.
+describe("[mcp]", () => {
+  test("defaults: workspace agent, 50 s, 10 of at most 480 min, 200,000 characters, notify", () => {
+    expect(ok(v2()).mcp).toEqual({
+      workspace: "agent",
+      askTimeout: 50,
+      grantMinutes: 10,
+      grantMaxMinutes: 480,
+      maxReadChars: 200000,
+      notify: true,
+    });
+    expect(ok(toml()).mcp.workspace).toBe("agent");
+    expect(DEFAULT_CONFIG.mcp).toEqual({
+      workspace: "agent",
+      ask_timeout: 50,
+      grant_minutes: 10,
+      grant_max_minutes: 480,
+      max_read_chars: 200000,
+      notify: true,
+    });
+    const text = formatDefaultsToml();
+    expect(text).toMatch(/^\[mcp\]\n# enabled = false\nworkspace = "agent"\nask_timeout = 50$/m);
+    expect(text).toMatch(
+      /^grant_minutes = 10\ngrant_max_minutes = 480\nmax_read_chars = 200000\nnotify = true$/m,
+    );
+  });
+
+  test("every key as written; enabled only when the file sets it", () => {
+    const mcp = ok(
+      v2(
+        "[mcp]",
+        "enabled = true",
+        'workspace = "bots"',
+        "ask_timeout = 10",
+        "grant_minutes = 1440",
+        "grant_max_minutes = 1440",
+        "max_read_chars = 1000",
+        "notify = false",
+      ),
+    ).mcp;
+    expect(mcp).toEqual({
+      enabled: true,
+      workspace: "bots",
+      askTimeout: 10,
+      grantMinutes: 1440,
+      grantMaxMinutes: 1440,
+      maxReadChars: 1000,
+      notify: false,
+    });
+    expect(ok(v2("[mcp]", "enabled = false")).mcp.enabled).toBe(false);
+    expect("enabled" in ok(v2("[mcp]", "notify = true")).mcp).toBe(false);
+  });
+
+  test("each bound is an error that says the range", () => {
+    const at = (/** @type {string} */ line) => errors(v2("[mcp]", line))[0];
+    expect(at("ask_timeout = 5")).toEqual({
+      line: 3,
+      path: "mcp.ask_timeout",
+      message: "must be an integer between 10 and 300 (seconds)",
+    });
+    expect(at("ask_timeout = 301")?.message).toBe(
+      "must be an integer between 10 and 300 (seconds)",
+    );
+    expect(at("grant_max_minutes = 0")?.message).toBe(
+      "must be an integer between 1 and 1440 (minutes)",
+    );
+    expect(at("grant_max_minutes = 1441")?.path).toBe("mcp.grant_max_minutes");
+    expect(at("grant_minutes = 0")?.message).toBe(
+      "must be an integer between 1 and grant_max_minutes (480)",
+    );
+    expect(at("max_read_chars = 999")?.message).toBe("must be an integer between 1000 and 500000");
+    expect(at("max_read_chars = 500001")?.path).toBe("mcp.max_read_chars");
+    expect(at('ask_timeout = "50"')?.message).toBe("expected an integer, got a string");
+    expect(at("notify = 1")?.message).toBe("expected a boolean, got an integer");
+    expect(at('enabled = "yes"')?.message).toBe("expected a boolean, got a string");
+  });
+
+  test("grant_minutes above grant_max_minutes is an error", () => {
+    expect(errors(v2("[mcp]", "grant_minutes = 60", "grant_max_minutes = 30"))).toEqual([
+      {
+        line: 3,
+        path: "mcp.grant_minutes",
+        message: "must be an integer between 1 and grant_max_minutes (30)",
+      },
+    ]);
+    expect(errors(v2("[mcp]", "grant_minutes = 500"))[0]?.message).toBe(
+      "must be an integer between 1 and grant_max_minutes (480)",
+    );
+  });
+
+  test('workspace follows the workspace-name rules and is never "private"', () => {
+    const at = (/** @type {string} */ line) => errors(v2("[mcp]", line))[0];
+    expect(at('workspace = "private"')).toEqual({
+      line: 3,
+      path: "mcp.workspace",
+      message: 'must not be "private", the private workspace\'s name',
+    });
+    expect(at('workspace = ""')?.message).toBe("must be 1 to 32 characters");
+    expect(at(`workspace = "${"x".repeat(33)}"`)?.message).toBe("must be 1 to 32 characters");
+    expect(at('workspace = "a\\u0007b"')?.message).toBe("must not contain control characters");
+    expect(at("workspace = 3")?.message).toBe("expected a string, got an integer");
+  });
+
+  test("a misspelt key suggests the right one; [mcp] without schema = 2 asks for it", () => {
+    expect(errors(v2("[mcp]", "ask_timout = 50"))).toEqual([
+      {
+        line: 3,
+        path: "mcp.ask_timout",
+        message: 'unknown key "ask_timout"',
+        suggestion: "ask_timeout",
+      },
+    ]);
+    expect(errors(toml("[mcp]", "enabled = true"))).toEqual([
+      {
+        line: 1,
+        path: "mcp",
+        message: "is new in schema 2: put schema = 2 at the top of the file",
+      },
+    ]);
+    expect(errors(v2("mcp = true"))).toEqual([
+      { line: 2, path: "mcp", message: "expected a table, got a boolean" },
+    ]);
+  });
+});
