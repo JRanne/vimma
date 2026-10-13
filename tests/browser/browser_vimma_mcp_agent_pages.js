@@ -329,3 +329,98 @@ add_task(async function test_a_sweep_reloads_agent_tabs_that_loaded_unsandboxed(
   Assert.ok(!(await opens()), "and reloaded the page, which now opens none");
   BrowserTestUtils.removeTab(tab);
 });
+
+// Review of #177 (L3): an agent page cannot launch another app through an external protocol
+// (zoommtg:, mailto: …; Firefox's "always open" choice is shared across containers), and until
+// sub-PR 2c every download from the agent container is blocked.
+add_task(async function test_agent_pages_launch_no_app_and_download_nothing() {
+  const { AgentPages } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/ctl/AgentPages.sys.mjs",
+  );
+  /** @type {string[]} */
+  const launched = [];
+  AgentPages._chooserForTests = {
+    QueryInterface: ChromeUtils.generateQI(["nsIContentDispatchChooser"]),
+    handleURI(_handler, uri) {
+      launched.push(uri.spec);
+    },
+  };
+  registerCleanupFunction(() => (AgentPages._chooserForTests = null));
+  // A known protocol (a web handler for vimmatest:), so a load of it reaches the chooser.
+  const handlerSvc = Cc["@mozilla.org/uriloader/handler-service;1"].getService(
+    Ci.nsIHandlerService,
+  );
+  const info = Cc["@mozilla.org/uriloader/external-protocol-service;1"]
+    .getService(Ci.nsIExternalProtocolService)
+    .getProtocolHandlerInfo("vimmatest");
+  const web = Cc["@mozilla.org/uriloader/web-handler-app;1"].createInstance(Ci.nsIWebHandlerApp);
+  web.name = "vimma test";
+  web.uriTemplate = "https://example.com/vimmatest/%s";
+  info.possibleApplicationHandlers.appendElement(web);
+  handlerSvc.store(info);
+  registerCleanupFunction(() => handlerSvc.remove(info));
+  const agent = /** @type {any} */ (WorkspaceStore.agent);
+  const agentTab = await tabIn(agent.userContextId);
+  await SpecialPowers.spawn(agentTab.linkedBrowser, [], () => {
+    content.document.notifyUserGestureActivation();
+    content.location.href = "vimmatest:from-agent";
+  });
+  const mine = await BrowserTestUtils.openNewForegroundTab(gBrowser, PAGE);
+  await SpecialPowers.spawn(mine.linkedBrowser, [], () => {
+    content.document.notifyUserGestureActivation();
+    content.location.href = "vimmatest:from-main";
+  });
+  await TestUtils.waitForCondition(() => launched.length > 0, "main's launch reached Firefox");
+  await new Promise((r) => setTimeout(r, 300));
+  Assert.deepEqual(launched, ["vimmatest:from-main"], "the agent page launched nothing");
+  BrowserTestUtils.removeTab(mine);
+
+  const dir = await IOUtils.createUniqueDirectory(PathUtils.tempDir, "vimma-dl");
+  registerCleanupFunction(() => IOUtils.remove(dir, { recursive: true }));
+  await SpecialPowers.pushPrefEnv({
+    set: [
+      ["browser.download.always_ask_before_handling_new_types", false],
+      ["browser.download.useDownloadDir", true],
+      ["browser.download.folderList", 2],
+      ["browser.download.dir", dir],
+      ["browser.download.start_downloads_in_tmp_dir", false],
+    ],
+  });
+  const { Downloads } = ChromeUtils.importESModule("resource://gre/modules/Downloads.sys.mjs");
+  const list = await Downloads.getList(Downloads.ALL);
+  const added = new Promise((resolve) => {
+    const view = {
+      onDownloadAdded(d) {
+        list.removeView(view);
+        resolve(d);
+      },
+    };
+    list.addView(view);
+  });
+  BrowserTestUtils.startLoadingURIString(
+    agentTab.linkedBrowser,
+    `${DIR}file_vimma_agent_download.sjs`,
+  );
+  // Forbidden before it starts (the sandbox), or failing as blocked (the integration hook):
+  // either way it never succeeds and leaves no file.
+  const download = await Promise.race([added, new Promise((r) => setTimeout(r, 3000))]);
+  if (download) {
+    await TestUtils.waitForCondition(() => download.stopped, "the download stopped");
+    Assert.ok(!download.succeeded, "a download from the agent container does not succeed");
+  }
+  Assert.deepEqual(await IOUtils.getChildren(dir), [], "and nothing is written");
+  // A download made another way (not a page's navigation) is blocked by Firefox's own hook.
+  const { Integration } = ChromeUtils.importESModule("resource://gre/modules/Integration.sys.mjs");
+  const { DownloadIntegration } = ChromeUtils.importESModule(
+    "resource://gre/modules/DownloadIntegration.sys.mjs",
+  );
+  const combined = Integration.downloads.getCombined(DownloadIntegration);
+  Assert.ok(
+    await combined.shouldBlockForParentalControls({
+      source: { userContextId: agent.userContextId },
+    }),
+    "any download from the agent container is blocked",
+  );
+  await list.removeFinished();
+  BrowserTestUtils.removeTab(agentTab);
+});

@@ -28,6 +28,14 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 /** nsSandboxFlags.h: no new browsing contexts (window.open, target=_blank). */
 export const SANDBOXED_AUXILIARY_NAVIGATION = 0x2;
+/**
+ * nsSandboxFlags.h: no downloads (review of #177, L3), until sub-PR 2c asks and quarantines
+ * them: nsContentSecurityUtils::ClassifyDownload forbids a download whose load has it, before
+ * any file is made. 2c removes it from AGENT_SANDBOX.
+ */
+export const SANDBOXED_DOWNLOADS = 0x10000;
+/** What every agent tab's browsing context is sandboxed against. */
+export const AGENT_SANDBOX = SANDBOXED_AUXILIARY_NAVIGATION | SANDBOXED_DOWNLOADS;
 
 /**
  * Prompts WebRTCParent shows itself, outside nsIContentPermissionPrompt (decision 30): denied
@@ -87,8 +95,8 @@ const permissionOverride = (base) => ({
  */
 function sandbox(bc) {
   try {
-    if ((bc.sandboxFlags & SANDBOXED_AUXILIARY_NAVIGATION) === 0) {
-      bc.sandboxFlags |= SANDBOXED_AUXILIARY_NAVIGATION;
+    if ((bc.sandboxFlags & AGENT_SANDBOX) !== AGENT_SANDBOX) {
+      bc.sandboxFlags |= AGENT_SANDBOX;
       return true;
     }
   } catch (e) {
@@ -186,12 +194,82 @@ function observe(subject, topic) {
   else onResponse(subject);
 }
 
+/**
+ * Downloads (review of #177, L3): until sub-PR 2c asks, quarantines and checks them, every
+ * download from the agent container is blocked before a byte is written, through Firefox's own
+ * DownloadIntegration hook (the download fails as "blocked by parental controls").
+ * @param {any} base  DownloadIntegration
+ */
+const downloadOverride = (base) => ({
+  __proto__: base,
+  /** @param {any} download */
+  shouldBlockForParentalControls(download) {
+    if (isAgentContainer(download?.source?.userContextId)) return Promise.resolve(true);
+    return base.shouldBlockForParentalControls(download);
+  },
+});
+
+/** Firefox's chooser for external protocols (uriloader/exthandler/nsIContentDispatchChooser). */
+const CHOOSER_CONTRACT = "@mozilla.org/content-dispatch-chooser;1";
+const CHOOSER_CID = Components.ID("{a69ebe05-6906-408c-b7ed-a626713b04f3}");
+
+/**
+ * External protocols (review of #177, L3): an agent page that sets `location = "zoommtg:…"`
+ * would launch another app, and Firefox's "always open" choice for a site is not per
+ * container. The chooser is wrapped, so a load in the agent container launches nothing; every
+ * other load goes to Firefox's own chooser unchanged.
+ */
+function wrapChooser() {
+  const registrar = Components.manager.QueryInterface(Ci.nsIComponentRegistrar);
+  const original = registrar.contractIDToCID(CHOOSER_CONTRACT);
+  const factory = {
+    QueryInterface: ChromeUtils.generateQI(["nsIFactory"]),
+    /** @param {any} iid */
+    createInstance(iid) {
+      const inner =
+        AgentPages._chooserForTests ??
+        /** @type {any} */ (Components).classesByID[original].createInstance(
+          Ci.nsIContentDispatchChooser,
+        );
+      const chooser = {
+        QueryInterface: ChromeUtils.generateQI(["nsIContentDispatchChooser"]),
+        /** @param {any[]} args  handler, uri, principal, browsingContext, … */
+        handleURI(...args) {
+          const [, uri, principal, bc] = args;
+          const context = bc?.top?.originAttributes?.userContextId;
+          if (isAgentContainer(context) || isAgentPrincipal(principal)) {
+            console.warn(`vimma: an agent page's ${uri?.scheme}: link opens no app`);
+            return undefined;
+          }
+          return inner.handleURI(...args);
+        },
+      };
+      return chooser.QueryInterface(iid);
+    },
+  };
+  registrar.registerFactory(
+    CHOOSER_CID,
+    "Vimma: no app launches from agent pages",
+    CHOOSER_CONTRACT,
+    factory,
+  );
+}
+
 export const AgentPages = {
+  /** Test-only: the chooser agent-free loads go to, in place of Firefox's. @type {any} */
+  _chooserForTests: null,
+
   /** Once per app (vimma.js): the hooks stay for the session. */
   init() {
     if (initialised) return;
     initialised = true;
     lazy.Integration.contentPermission.register(permissionOverride);
+    lazy.Integration.downloads.register(downloadOverride);
+    try {
+      wrapChooser();
+    } catch (e) {
+      console.error("vimma agent pages: external protocols not guarded", e);
+    }
     Services.obs.addObserver(observe, "browsing-context-attached");
     Services.obs.addObserver(observe, "window-global-created");
     for (const topic of RESPONSE_TOPICS) Services.obs.addObserver(observe, topic);
