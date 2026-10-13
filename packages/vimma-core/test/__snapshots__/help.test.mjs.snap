@@ -62,6 +62,7 @@ Workspaces
   close_workspace         ctrl+b shift+d                                    Close workspace
   move_to_workspace       (unbound)                                         Move the tab to another workspace (reopens it there)
   route_rules             (unbound)                                         Routing rules: list them; :route add [workspace], :route move
+  private_workspace       ctrl+b shift+p, ctrl+shift+p                      Private workspace (a private window); again goes back
 
 Navigation
   goto_picker             ctrl+b g, b                                       Goto picker: every tab in every workspace
@@ -152,8 +153,8 @@ Side panel
   panel_select_9          9 [panel]                                         Select row 9
   panel_down              j [panel]                                         Next row
   panel_up                k [panel]                                         Previous row
-  panel_open              enter [panel]                                     Open the selected row, or show the marked tabs as panes
-  panel_close             esc [panel]                                       End the range, clear the marks, or close the side panel
+  panel_open              enter [panel]                                     Apply the marks (the marked tabs become the panes), then go to the selected row
+  panel_close             esc [panel]                                       End the range, clear or restore the marks, or close the side panel
   panel_close_tab         x [panel]                                         Close the selected tab; the panel stays open
   panel_mark              space [panel]                                     Mark or unmark the selected tab and move down
   panel_visual            V [panel]                                         Start a range of rows to mark, or mark it

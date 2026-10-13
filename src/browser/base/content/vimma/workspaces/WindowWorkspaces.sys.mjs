@@ -16,7 +16,7 @@
 
 import { planWorkspaceSwitch } from "../core/switchplan.mjs";
 import { canWrite, readSnapshot, toSnapshot } from "../core/snapshot.mjs";
-import { closePane, leaves } from "../core/panes.mjs";
+import { closePane, leaves, showView } from "../core/panes.mjs";
 import {
   activeWorkspace,
   addWorkspace,
@@ -75,7 +75,15 @@ export const TAB_WORKSPACE_KEY = "vimma-workspace";
  * @property {(text: string) => void} [notify]  a status message (`opened in "work"`)
  */
 
-const TAB_EVENTS = ["TabOpen", "TabClose", "TabSelect", "TabPinned", "TabUnpinned", LABEL_EVENT];
+const TAB_EVENTS = [
+  "TabOpen",
+  "TabClose",
+  "TabSelect",
+  "TabPinned",
+  "TabUnpinned",
+  "SSTabRestored",
+  LABEL_EVENT,
+];
 const SESSION_EVENTS = ["SSWindowStateBusy", "SSWindowStateReady", "SSWindowClosing"];
 
 /** A new uuid, without braces. */
@@ -152,6 +160,7 @@ export class WindowWorkspacesImpl {
     this.#onChange = onChange;
     this.#notify = notify;
     for (const type of [...TAB_EVENTS, ...SESSION_EVENTS]) win.addEventListener(type, this);
+    win.addEventListener("focus", this.#onFocus, true);
     Services.obs.addObserver(this.#observer, CHANGED_TOPIC);
     this.ready = this.#start().catch((e) => console.error("vimma: no workspaces", e));
   }
@@ -160,6 +169,8 @@ export class WindowWorkspacesImpl {
     for (const type of [...TAB_EVENTS, ...SESSION_EVENTS]) {
       this.#win.removeEventListener(type, this);
     }
+    this.#win.removeEventListener("focus", this.#onFocus, true);
+    this.#restoring = null;
     Services.obs.removeObserver(this.#observer, CHANGED_TOPIC);
     this.#win.gBrowser?.removeTabsProgressListener(this.#progress);
     const view = PaneViews.get(this.#win);
@@ -388,6 +399,12 @@ export class WindowWorkspacesImpl {
         return;
       case "SSWindowClosing":
         this.#save();
+        return;
+      case "TabSelect":
+        this.#win.queueMicrotask(() => this.#guardFocus());
+        break;
+      case "SSTabRestored":
+        this.#onRestored(/** @type {Tab} */ (e.target));
         return;
     }
     // Tab events inside a restore are not applied: the Ready reconcile reads the live tabs.
@@ -890,6 +907,51 @@ export class WindowWorkspacesImpl {
   }
 
   /**
+   * The selected tab's browser while SessionStore restores a page into it in the parent process
+   * (the start page), kept without focus until it has restored (#guardFocus).
+   * @type {any}
+   */
+  #restoring = null;
+
+  /** Focus moved: it may have gone into a restoring page (#guardFocus), after this event. */
+  #onFocus = () => {
+    if (!this.#win.closed) this.#win.queueMicrotask(() => this.#guardFocus());
+  };
+
+  /**
+   * Keeps focus out of the selected tab's page while SessionStore restores it in the parent
+   * process (the start page, and every lazy tab a workspace switch selects after a restart):
+   * until that page's layout starts, Gecko drops every key aimed at it before any listener sees
+   * it (PresShell's GetFrameForHandlingEventWith finds no frame for the focused document), so a
+   * ctrl+b typed right after the switch was lost (issue #140). Firefox's tab switch, and
+   * #focusPane after ours, focus the page at once; focus goes back to the window instead, where
+   * the keys reach VimmaHost, and to the page once it has restored (#onRestored). A page in a
+   * content process gets every key through the window first, so it keeps its focus.
+   */
+  #guardFocus() {
+    const gBrowser = this.#gBrowser;
+    if (this.#win.closed || !gBrowser) return;
+    const browser = /** @type {any} */ (gBrowser.selectedBrowser);
+    if (this.#win.document.activeElement !== browser || browser.isRemoteBrowser) return;
+    if (!lazy.SessionStore.isTabRestoring(gBrowser.selectedTab)) return;
+    this.#restoring = browser;
+    Services.focus.clearFocus(this.#win);
+  }
+
+  /**
+   * `tab` has restored: its page gets the focus #guardFocus kept from it, unless it is no longer
+   * selected or something else has taken focus meanwhile.
+   * @param {Tab} tab
+   */
+  #onRestored(tab) {
+    const browser = tab.linkedBrowser;
+    if (!browser || browser !== this.#restoring) return;
+    this.#restoring = null;
+    const el = this.#win.document.activeElement;
+    if (tab.selected && (!el || el === this.#win.document.body)) browser.focus();
+  }
+
+  /**
    * After a switch to a split workspace: its focused pane's page gets focus when focus is left
    * nowhere (the body) or in the workspace left's page. A split's browsers are already active,
    * so Firefox's tab switch completes at once and its focus adjustment sees the old page still
@@ -953,8 +1015,13 @@ export class WindowWorkspacesImpl {
           return id && w.tabs.includes(id) ? id : undefined;
         });
       if (!tree) return w;
+      // A hidden view keeps the tab shown alone as the selected one; core's snapshot writes it
+      // as `alone` (docs/specs/side-panel-unsplit.md decision 24).
+      const alone = tree.hidden && w.activeTab && !leaves(tree).some((l) => l.tab === w.activeTab);
+      if (alone) return { ...w, panes: tree };
+      const shown = showView(tree);
       const focus = leaves(tree).find((l) => l.pane === tree.focus)?.tab;
-      return focus ? { ...w, panes: tree, activeTab: focus } : w;
+      return focus ? { ...w, panes: shown, activeTab: focus } : w;
     });
     return { ...model, workspaces };
   }

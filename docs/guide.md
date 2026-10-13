@@ -92,8 +92,10 @@ every binding.
 
 New windows and new tabs open Vimma's start page: the logo, and under it the three keys to start
 from (`ctrl+b ?` keys, `:` commands, `f` hints). The URL bar is empty and focused, so you can type an
-address straight away; click the page to use `:` and the other keys there. It is a local page
-(`chrome://browser/content/vimma/start/start.html`); nothing loads from the network.
+address straight away; click the page to use `:` and the other keys there. At the bottom, a small
+line shows which Vimma you run and the Firefox release it is built on (`Vimma 0.1.0 · Firefox
+157.0.1`). It is a local page (`chrome://browser/content/vimma/start/start.html`); nothing loads
+from the network.
 
 To change it back:
 
@@ -218,6 +220,9 @@ is on screen), as Vim's starts at the cursor.
   After a search that found nothing they do nothing.
 - **`?`** searches backward: it shows matches as you type, as `/` does, and `Enter` lands on the
   last match before where you were. After `?`, `n` goes on backward and `N` forward.
+- **A match in a text field** (a site's search box that holds your query) is selected there,
+  but the field does not keep the focus: you stay in normal mode and `n` / `N` go on to the
+  next match. `i` or a click puts you in the field.
 
 `ctrl+f` still opens Firefox's own find bar, where `Enter` goes to the next match.
 
@@ -274,6 +279,9 @@ with `F11` keeps it. From the left:
 - the **pending keys**, e.g. `prefix` after `ctrl+b`;
 - the **workspace**: `● 2:work`, its number in workspace order and its name;
 - `tab 2/5`: the selected tab and how many the workspace shows;
+- in a split, `pane 2/3`: the focused pane and how many there are; `split 3 hidden` (dim) when
+  the workspace's split is kept out of sight while another tab shows alone
+  ([below](#picking-a-tab-during-a-split));
 - the page **title**, or your rename (`ctrl+b shift+t`);
 - on the right, the **search** in this page: `/word [2/5]` (match 2 of 5), or
   `/zzz not found` in red;
@@ -303,7 +311,11 @@ the moment that changes, without a reload. Firefox's own focus rings follow the 
 the address bar's focus ring and the outline of the focused pane in a split are the theme's
 accent (made a shade darker or lighter if it would not stand out at 3:1 against the colours
 around it), and so are the focus rings of Vimma's own side panel, bookmarks panel, pickers and
-help overlay. A `colors.toml` Vimma cannot read (a value that is
+help overlay. Firefox's own sidebar (history, bookmarks and synced tabs, opened from the toolbar's
+sidebar button or the View menu) follows the theme as well: its launcher strip and panel
+are on the same surface as Vimma's side panel, with the theme's text, edge and focus colours (the
+search box, the open panel's button in the launcher and the lists' scrollbars included), and
+an open sidebar recolours with the rest of the window. A `colors.toml` Vimma cannot read (a value that is
 not a `#rrggbb` colour, a missing key) is ignored: the colours stay as they were, and the
 Browser Console (`ctrl+shift+j`) says which line is wrong.
 
@@ -410,10 +422,22 @@ the current workspace, as `:tabnew`'s does. Page zoom has no Vimma keys: `ctrl+p
 
 Clicking into a pane focuses it, as `ctrl+b h/j/k/l` would. So does selecting a pane's tab any
 other way (the `ctrl+b g` picker, `ctrl+tab`, `alt+1..9`): the status bar's `pane n/m` and the
-URL bar follow, and a zoom ends, as it does when a pane key moves. Selecting a tab that no pane
-shows (the picker, `ctrl+tab`, `alt+1..9`, `ctrl+t`, a link opened in a new foreground tab)
-shows it in the focused pane: the split stays, and the tab that pane showed stays open in the
-workspace. A pinned tab shows alone; selecting a pane's tab brings the split back.
+URL bar follow, and a zoom ends, as it does when a pane key moves.
+
+#### Picking a tab during a split
+
+Going to a tab that is not in the split (the `ctrl+b g` picker, `ctrl+tab`, `alt+1..9`,
+`ctrl+b 1..9`, `ctrl+b n` / `p`, `gt` / `gT`, a click on a tab, the side panel) shows that tab
+alone in the whole window, as Firefox's own split view does. The split is not lost: it waits,
+hidden, with its panes, sizes and focused pane, and the status bar says `split 3 hidden`. Go to
+any of its tabs, by any of the same routes, and the whole split comes back, with that tab's pane
+focused. A pinned tab works the same way. While the split is hidden the pane keys act on the tab
+you see as on a single pane, and `ctrl+b v` / `-` / `enter` say "the split is hidden: go to one
+of its tabs first". The hidden split survives a workspace switch and a restart.
+
+A new tab you open while the split shows (`ctrl+t`, `ctrl+b c`, `t`, `:tabnew`, `P`, a link
+opened in a new foreground tab, also with `f`, or a link from another app) opens in the focused
+pane instead: the split stays, and the tab that pane showed stays open in the workspace.
 
 A split made outside Vimma (Firefox's own split-view command, an extension, or a restored
 Firefox session) becomes the workspace's panes: its tabs side by side in its order, at the
@@ -528,7 +552,10 @@ shortcuts are off in every mode: in insert mode, in the URL bar, and when Vimma 
 `ctrl+e` and `ctrl+y` (scroll a step) are on the list too; Firefox binds neither on Linux (its
 second web-search key is `ctrl+j` there, and downloads is `ctrl+shift+y`), so nothing changes.
 Every other Firefox shortcut works as before: `ctrl+t`, `ctrl+shift+t`, `ctrl+n`, `ctrl+l`,
-`ctrl+f`, `ctrl+tab`, `alt+1..9`, `ctrl+plus`, `ctrl+q`, `F5`, and so on.
+`ctrl+f`, `ctrl+tab`, `alt+1..9`, `ctrl+plus`, `ctrl+q`, `F5`, and so on. One is Vimma's with the
+same meaning: `ctrl+shift+p`, Firefox's "New Private Window", goes to the
+[private workspace](#private-workspace) (and opens it if it is not open) instead of a new private
+window on every press. Unbind `private_workspace`'s `ctrl+shift+p` to give it back to Firefox.
 
 Vimma turns them off at startup by disabling Firefox's own `<key>` elements (`#mainKeyset`), with
 no change to Firefox's code; `about:vimma` lists each one that is off (key, Firefox's id and
@@ -642,6 +669,8 @@ If you think of a workspace as a Vim buffer, the keys are the ones your fingers 
 | `ctrl+b shift+w` | `:wsrename market`               | Rename the current workspace (and its container).                   |
 | `ctrl+b shift+d` | `:wsdelete [shop]`, `:wd [shop]` | Close the current (or the named) workspace, after a `y/N` question. |
 |                  | `:wsmove work` / `:wsmove 2`     | Move the current tab to another workspace, by name or number.       |
+| `ctrl+b shift+p` | `:private`, `:priv`              | Go to the [private workspace](#private-workspace); again goes back. |
+|                  | `:private close`                 | Close the private workspace and discard its data, after `y/N`.      |
 
 - The keys open the command line with the command typed for you (`ctrl+b shift+w` with the
   current name to edit).
@@ -674,7 +703,9 @@ If you think of a workspace as a Vim buffer, the keys are the ones your fingers 
 ### Workspace picker
 
 `ctrl+b w` lists the window's workspaces over the page, in workspace order: each with its number,
-its name and how many tabs it has here; the one you are in says `current` and is selected.
+its name and how many tabs it has here; the one you are in says `current` and is selected. The
+last row is the [private workspace](#private-workspace): `◆ private` with its tab count, or
+`new` while it is not open. It shows a count only, never a title or an address.
 
 | Key               | What it does                                                 |
 | ----------------- | ------------------------------------------------------------ |
@@ -691,6 +722,12 @@ the workspace changes before your `y` (another tab selected, the workspace renam
 nothing is moved. `m` on the workspace the tab is already in says so and asks nothing. To create,
 rename or close a workspace, use `ctrl+b shift+n`, `shift+w` and `shift+d`.
 
+`m` on the private row reopens the tab in the private workspace, after
+`Reopen this tab in the private workspace? … y/N`. The page is already in your normal history, so
+nothing new is recorded; it is Firefox's "Open Link in New Private Window" as a move. A private
+tab never moves out: `m` on a normal row from the private workspace, and `:wsmove` there, say
+`a private tab cannot leave the private workspace`.
+
 ### Side panel
 
 `ctrl+b b` or `:sidebar` opens a panel on the left of the window. It is closed when Vimma
@@ -700,19 +737,19 @@ the workspace's tabs, numbered, each with its name (or title) and its site. The 
 highlighted and its number coloured; a tab playing sound shows `♪`, one from another container
 `foreign`.
 
-| Key                     | What it does                                                                                                                |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `j` / `k`               | Move the highlight down / up.                                                                                               |
-| `Enter`                 | Go to the highlighted tab and close the panel. With marks, show the marked tabs together ([below](#showing-tabs-together)). |
-| `1` … `9`               | Go to that row's tab and close the panel.                                                                                   |
-| `space`                 | Mark the highlighted tab (or unmark it) and move down.                                                                      |
-| `V`                     | Start a range: `j` / `k` stretch it, and `V` or `space` marks every row in it.                                              |
-| `x`                     | Close the highlighted tab; the highlight moves to the next row and the panel stays open, so `x x x` closes three.           |
-| `ctrl+shift+t`          | Reopen the last closed tab, as in Firefox.                                                                                  |
-| `ctrl+b )` / `ctrl+b (` | Switch workspace; the panel stays open and lists that one (its marks are dropped).                                          |
-| `I`                     | Close the panel and focus the address bar.                                                                                  |
-| `Esc`                   | End a range; else clear the marks; else close the panel, and the page has the keys again.                                   |
-| `ctrl+b b`              | Close the panel.                                                                                                            |
+| Key                     | What it does                                                                                                                                                                                               |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `j` / `k`               | Move the highlight down / up.                                                                                                                                                                              |
+| `Enter`                 | Go to the highlighted tab and close the panel. With marks, show the marked tabs together ([below](#showing-tabs-together)); with a split, apply your changes to it ([below](#changing-or-ending-a-split)). |
+| `1` … `9`               | Go to that row's tab and close the panel.                                                                                                                                                                  |
+| `space`                 | Mark the highlighted tab (or unmark it) and move down.                                                                                                                                                     |
+| `V`                     | Start a range: `j` / `k` stretch it, and `V` or `space` marks every row in it.                                                                                                                             |
+| `x`                     | Close the highlighted tab; the highlight moves to the next row and the panel stays open, so `x x x` closes three.                                                                                          |
+| `ctrl+shift+t`          | Reopen the last closed tab, as in Firefox.                                                                                                                                                                 |
+| `ctrl+b )` / `ctrl+b (` | Switch workspace; the panel stays open and lists that one (its marks are dropped).                                                                                                                         |
+| `I`                     | Close the panel and focus the address bar.                                                                                                                                                                 |
+| `Esc`                   | End a range; else clear the marks (with a split: put its marks back); else close the panel, and the page has the keys again.                                                                               |
+| `ctrl+b b`              | Close the panel.                                                                                                                                                                                           |
 
 Pinned tabs belong to no workspace, so the panel never lists them and `x` never closes one (a
 row pinned since it was drawn says "pinned tab: unpin it to close it"). The panel takes no
@@ -722,7 +759,8 @@ normal mode's, which closes the tab. In the bookmarks panel `x` does nothing;
 
 While it is open, every other plain key is the panel's and never reaches the page; `ctrl+b`
 keys and `:` commands still work, and a tab you open meanwhile shows up in the list. The panel
-follows your Omarchy theme as the status bar does. Change its keys under `[modal.panel]` in
+follows your Omarchy theme as the status bar does, scrollbar included (the theme's muted
+colour on the panel's background), and recolours the moment the theme changes. Change its keys under `[modal.panel]` in
 `config.toml`; `[keys] toggle_sidebar` changes the keys that open it, and a `<leader>` binding
 you add there (`toggle_sidebar = ["prefix+b", "<leader>n"]`) closes it too.
 
@@ -747,12 +785,43 @@ preview at once: `ctrl+b b`, `space` on each of the three, `Enter`.
   with `"manual"` they sit in a row. A main-* preset makes the focused tab the big pane.
 - **What changes.** Tabs that were in the old split and are not marked leave it and stay open as
   ordinary tabs. No page reloads: each keeps its scroll, what you typed and its history.
-- **Limits.** One mark is just `Enter` on that row. More marks than `[panes] max` (4 by default)
+- **Limits.** Without a split, one mark is just `Enter` on that row. More marks than `[panes] max` (4 by default)
   says `Show together: at most 4 panes` and changes nothing; the panel stays open with your
   marks so you can drop some. A pinned row cannot be marked.
 - **Keys.** Rebind them under `[modal.panel]` with the actions `panel_mark` and
   `panel_visual`, e.g. `m = "panel_mark"`. If you give the leader (`space`) a binding, `space`
   in the panel waits `timeout_ms` for the rest of it before it marks.
+
+#### Changing or ending a split
+
+When the workspace has a split, the panel opens with its panes' tabs already marked, so you see
+which tabs they are, and the head says `split: 3 panes`. Change the marks as above and press
+`Enter`:
+
+- **Unmark a pane** (`space` on its row) and it leaves the split: the tab stays open, as an
+  ordinary tab right after the split in the tab order. Its row shows a dim `○` until you press
+  `Enter`, and the head says `split: 3 → 2`. The other panes keep their places and sizes, as
+  after `ctrl+b x`.
+- **Unmark down to one** (`split: 3 → 1 (unsplit)`) and the split ends: that tab is shown alone
+  (or, with the highlight on a pane you just unmarked, that one). Unmark every pane and the split
+  ends too, showing the highlighted tab.
+- **Mark another tab** and it joins as a pane; the panes are then arranged afresh in the
+  workspace's layout, as in [Showing tabs together](#showing-tabs-together). You can unmark one
+  and mark another in one go. `[panes] max` still applies.
+- **Then `Enter` goes to the highlighted row.** If its tab is in the split, the split shows with
+  that pane focused. If it is the pane you just unmarked, that tab shows alone and the rest stay
+  a hidden split: three panes, `space` on C, `k` back to C, `Enter`, and C fills the window
+  while A and B wait. On any other row the split shows, focused on the pane you were in if you
+  kept it, else the first marked one.
+- **Nothing changed?** `Enter` just goes to the highlighted tab: a pane's tab shows the split
+  focused there; any other tab shows alone and the split waits hidden
+  ([Picking a tab during a split](#picking-a-tab-during-a-split)). One `Esc` closes the panel.
+  After a change, the first `Esc` puts the split's marks back and the second closes.
+- **A hidden split** is listed the same way, its tabs marked, and the head says
+  `split: 2 panes (hidden)`.
+
+`ctrl+b )` / `ctrl+b (` with the panel open list the other workspace with its own split marked.
+No page reloads.
 
 ### Routing: which workspace a link opens in
 
@@ -827,6 +896,98 @@ is called, run `vimma-open https://example.com` from it, or look at its process 
 
 `:route add` refuses a site an earlier rule already routes (it names the rule), a `config.toml`
 that has errors, and a file without `schema = 2`. It only ever appends to the file.
+
+### Private workspace
+
+The private workspace is a Firefox private window that Vimma treats as a workspace. Everything
+a private window promises, it keeps, because it is one: nothing you do there stays on disk.
+History, cookies and site storage, the cache, form history, the downloads list and session
+restore all forget it, and so do Vimma's own files. Spec:
+[private-workspace](specs/private-workspace.md).
+
+| Keys                             | Command          | What it does                                                               |
+| -------------------------------- | ---------------- | -------------------------------------------------------------------------- |
+| `ctrl+b shift+p`, `ctrl+shift+p` | `:private`       | Go to the private workspace, opening it if it is not open; in it, go back. |
+| `ctrl+b shift+d` (in it)         | `:private close` | Close it after `y/N`; its history, cookies and site data are discarded.    |
+| `ctrl+^`, `ctrl+b ^` (in it)     |                  | Back to the workspace you came from, in the window you came from.          |
+| `ctrl+b )` / `ctrl+b (` (in it)  |                  | Leave it for your first / last workspace.                                  |
+| `ctrl+b w`                       | `:workspaces`    | The picker; the private workspace is its last row.                         |
+
+- **Its own key only.** The private workspace is never a stop on `ctrl+b (` / `ctrl+b )`,
+  `]w` / `[w`, `:wn` / `:wp`, nor the `ctrl+^` of a normal window, so cycling never drops you
+  into it by accident. From inside it, those keys take you out.
+- **In it**, the status bar says `◆ private` (in the theme's magenta), and `ctrl+b b` lists its
+  tabs under a `◆ private` head. Splits, hints, find, copy mode, marks in the side panel and the
+  command line work as in any workspace; the command line's history there is its own and is
+  never written.
+- **There is one private workspace.** Every private window is part of it: `ctrl+n` in it, or
+  Firefox's "Open Link in New Private Window", makes another, and the key takes you to the most
+  recent one. They share one cookie jar, as Firefox's private windows do.
+- **Closing it** (`ctrl+b shift+d` or `:wd` in it, or `:private close` anywhere) asks
+  `Close the private workspace (5 tabs)? Its history, cookies and site data are discarded. y/N`,
+  then closes every private window, pop-ups included (an open sign-in pop-up would otherwise
+  keep the data alive), and Firefox discards their data. The windows close as a script closes
+  them: your `y` was the question, so Firefox's own warnings do not follow, and a private
+  download still in progress is cancelled. Closing a private window with your window manager
+  or `ctrl+shift+w` asks nothing; the data goes once the last private window has closed.
+- **Add-ons** run there only if you allowed them in private windows (`ctrl+b e`, then `P`).
+  Searches use Firefox's private search engine if you set one. Vimma's own keys and pages need
+  no add-on.
+- **Links from other apps** open in your normal window, as Firefox does, so you leave the
+  private workspace to see them (on Hyprland the normal window swaps back into place; the
+  private workspace stays one key away). Routing rules never send a page into or out of it.
+- **Scripts:** `vimma-ctl state` in the private workspace says `"private": true` and
+  `"workspace": "private"`, and gives every tab's `url` and `title` as `null`. `vimma-ctl open`
+  and `send-keys` act on the focused window, so with the private workspace focused they load
+  into it and type there.
+- **Diagnostics:** `about:vimma` and `:bug` in a normal window leave private windows out, and
+  keys typed in a private window are never added to their key log.
+- **What a private window does not hide:** the clipboard (copy mode's `y` copies to the system
+  clipboard, as in Firefox). Its window title, which your window manager, its bar and screen
+  sharing see, is only `Vimma Private Browsing`, never the page's title (see
+  [Privacy defaults](#privacy-defaults)).
+- **Permanent private browsing** (`browser.privatebrowsing.autostart`) makes every window
+  private, so there is no private workspace: the key and `:private close` say
+  `every window is private (permanent private browsing)` and do nothing, and private windows
+  behave as before (no workspaces, no `◆ private`). A policy
+  that turns private browsing off makes it say `private browsing is turned off by policy`.
+
+**On Hyprland it takes your Vimma window's place.** Firefox keeps privacy per window, so the
+private workspace is a window of its own, but you never see the two side by side: going to it
+puts the private window exactly where your Vimma window was (same workspace, same tile, same
+size, fullscreen or floating if it was), and the other tiles keep their sizes. Your normal window
+waits in a hidden special workspace, `special:vimma`, and comes back in the same place when you
+switch back (any of the keys above), when the private window closes (`ctrl+b shift+d`,
+`ctrl+shift+w`, `SUPER+W`), or when a link from another app arrives. If Vimma quits or crashes
+meanwhile, the next start shows your normal window as usual: nothing about the swap is written
+to disk.
+
+- **How:** Vimma talks to Hyprland over Hyprland's own socket (`$XDG_RUNTIME_DIR/hypr/…`), from
+  the browser process only, with a fixed set of commands: move, swap, focus, fullscreen state,
+  float or tile, exact size and position. They carry only window addresses, workspace numbers
+  and sizes, never a page title or URL, and Vimma runs no `hyprctl` and no other program. To
+  learn which window is which, a new Vimma window carries a random title (`vimma-` and 32 hex
+  digits) for a moment when it opens. Checked with Hyprland 0.56.2 and a Lua config, as
+  Omarchy has; older configs use the legacy command names, which Vimma also speaks.
+- **Grouped or pinned:** a grouped (`SUPER+G`) or pinned Vimma window is not swapped. The private
+  workspace opens beside it in the group, as a group tab, and switching moves the focus.
+- **If Hyprland refuses a swap**, Vimma shows your normal window, says
+  `private: the window manager refused the swap; showing it as a window`, and opens the private
+  workspace as a window of its own until the config is next reloaded. `about:vimma` shows the
+  Hyprland version and which placement is in force, or why it is not swapping.
+- **If Hyprland never names a Vimma window** (its random title does not show up), that switch
+  shows the private workspace as a window of its own, the browser console says
+  `private: Hyprland did not name the Vimma window; showing it as a window` once, and
+  `about:vimma` adds `(last switch: window not named)`. The next switch tries again.
+- **Never stuck:** if a swap cannot be done, for example because you moved the private window
+  to a scratchpad, going back brings your normal window out of `special:vimma` to the
+  workspace you are on.
+- **Opting out:** `[private] placement = "window"` in `config.toml` (below) opens it as a second
+  window, as on other systems.
+
+**Elsewhere** (other window managers, X11, or `placement = "window"`) it is a second window:
+Vimma opens it at the current window's size (and, on X11 and floating window managers, its
+position) and focuses it when you switch.
 
 ## Bookmarks
 
@@ -1028,6 +1189,7 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:workspace name`, `:ws 2`, `:ws #`   | Switches to the workspace with that name, that number in workspace order, or the previous one (`ctrl+^`). `Tab` completes names. |
 | `:workspace`, `:ws`, `:workspaces`    | Opens the workspace picker.                                                                                                      |
 | `:wa name`, `:wd [name]`              | `:wsnew`, `:wsdelete` ([Workspaces as Vim buffers](#workspaces-as-vim-buffers)).                                                 |
+| `:private`, `:priv`, `:private close` | Goes to the [private workspace](#private-workspace) and back, as `ctrl+b shift+p`; `close` closes it (asks `y/N`).               |
 | `:sidebar`                            | Opens or closes the side panel, as `ctrl+b b`.                                                                                   |
 | `:route`, `:route add`, `:route move` | Workspace routing rules: list them, add one for this site, move this tab ([Routing](#routing-which-workspace-a-link-opens-in)).  |
 | `:bookmarks`                          | Opens or closes the [bookmarks panel](#bookmarks), as `ctrl+b shift+b`.                                                          |
@@ -1141,8 +1303,11 @@ accent = "#ff9e64"
   shortcuts are off, [above](#firefoxs-own-shortcuts)); `[modal] insert_editing` (`ctrl+w`,
   `ctrl+u`, `ctrl+h` in text fields, default `true`); `[bookmarks] root` (`"workspace"`, the
   default: the current workspace's folder; `"toolbar"`; or `"all"`: what the
-  [bookmarks panel](#bookmarks) lists and where paths start).
+  [bookmarks panel](#bookmarks) lists and where paths start); `[private] placement` (`"swap"`, the
+  default: on Hyprland the [private workspace](#private-workspace) takes the Vimma window's place;
+  `"window"`: it is a window of its own beside it).
 - **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]`, `[firefox]`, `[bookmarks]`,
+  `[private]`,
   `hint_chars`, `insert_editing` and `[theme] name`; every key,
   its type and default are in [m5-core-config-and-theme](specs/m5-core-config-and-theme.md#schema-v1)
   and [m3-m4-core-prep](specs/m3-m4-core-prep.md#config-schema-2), and
@@ -1230,6 +1395,7 @@ name, then toggle or edit it). Spec:
 | Feature and add-on recommendations       | `browser.newtabpage.activity-stream.asrouter.providers.cfr`: change `"enabled":false` to `true` in its JSON value; then `…asrouter.userprefs.cfr.addons`, `…cfr.features` = `true`                    |
 | Mozilla promos (VPN, Relay, Pin, mobile) | `browser.vpn_promo.enabled`, `browser.promo.relay.enabled`, `browser.promo.pin.enabled`, `browser.preferences.moreFromMozilla`                                                                        |
 | Crash reporter                           | Not built in. A crash leaves a local core dump (`coredumpctl list vimma`). Opt-in reporting to Vimma's own server is planned for M6.                                                                  |
+| Page titles in a private window's title  | `privacy.exposeContentTitleInWindow.pbm` = `true` (Vimma's default is `false`: the window manager, its bar and screen sharing see only `Vimma Private Browsing`)                                      |
 | Telemetry upload                         | Not built in (no official telemetry). The data-collection switches in Settings are off to match.                                                                                                      |
 
 Kept as in Firefox: Remote Settings (CRLite certificate revocation, intermediate certificates),
@@ -1239,8 +1405,8 @@ updates are off, so neither asks Mozilla's update server. The one remaining requ
 the OpenH264 and Widevine plugins, which video calls and DRM video need.
 
 Sites see Firefox 157's user agent, with no Vimma token, and add-ons see Firefox's version
-(`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. `vimma --version` and the About
-dialog show Vimma's own version (`0.1.0`).
+(`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. `vimma --version`, the About
+dialog and the start page show Vimma's own version (`0.1.0`).
 
 ### Safe Browsing
 
@@ -1346,6 +1512,13 @@ Firefox's Library (`ctrl+shift+o`) still works for the rest.
 
 **A binding says "not implemented yet".** Every default binding runs now. The message is for a
 binding whose command is not built yet, and the overlay dims such a binding too.
+
+**Does a playing video keep the screen awake?** Yes, while the video's window is visible. On
+Linux, Vimma asks the Wayland compositor directly (its idle-inhibit protocol) instead of
+Firefox's D-Bus route, which on Hyprland (Omarchy) reports success without stopping the
+screensaver. On Hyprland, `hyprctl -j clients | jq '.[] | select(.class|test("vimma")) |
+.inhibitingIdle'` prints `true` while it holds. A `MOZ_WAKE_LOCK_TYPE` you export yourself wins
+over Vimma's choice.
 
 **Where are crash reports?** Nothing is sent anywhere. Use `coredumpctl list vimma`, then
 `coredumpctl info` on the entry.

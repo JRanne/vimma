@@ -29,6 +29,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   AppConstants: "resource://gre/modules/AppConstants.sys.mjs",
   AsyncShutdown: "resource://gre/modules/AsyncShutdown.sys.mjs",
   BrowserWindowTracker: "resource:///modules/BrowserWindowTracker.sys.mjs",
+  PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
   clearTimeout: "resource://gre/modules/Timer.sys.mjs",
   setTimeout: "resource://gre/modules/Timer.sys.mjs",
 });
@@ -243,6 +244,8 @@ function paneState(win, visible) {
   return {
     focus: idOf(tabOf(focused(panes.root)?.tab)),
     zoomed: panes.zoom !== null,
+    // docs/specs/side-panel-unsplit.md decision 28: a split kept as a hidden view.
+    hidden: panes.hidden === true,
     root: node(panes.root),
   };
 }
@@ -261,15 +264,19 @@ const COMMANDS = {
     const host = VimmaHost.status(win);
     const { gBrowser } = win;
     const visible = gBrowser.visibleTabs;
+    // docs/specs/private-workspace.md decision 8d: a private window's pages stay unnamed; the
+    // ids and the pane structure are kept, so scripts can still drive it.
+    const hidden = lazy.PrivateBrowsingUtils.isWindowPrivate(win);
     return {
       mode: host.mode,
       pending: host.pending.length ? host.pending.join(" ") : null,
       workspace: host.workspace?.name ?? null,
+      ...(hidden ? { private: true } : {}),
       tabs: visible.map((/** @type {any} */ tab, /** @type {number} */ index) => ({
         id: String(tab.linkedBrowser.browserId),
         index,
-        url: tab.linkedBrowser.currentURI.spec,
-        title: tab.label,
+        url: hidden ? null : tab.linkedBrowser.currentURI.spec,
+        title: hidden ? null : tab.label,
         selected: tab.selected,
         pinned: tab.pinned,
       })),

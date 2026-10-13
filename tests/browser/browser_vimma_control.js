@@ -432,6 +432,7 @@ add_task(async function test_state_panes() {
     {
       focus: id(right),
       zoomed: false,
+      hidden: false,
       root: {
         axis: "x",
         ratios: [0.5, 0.5],

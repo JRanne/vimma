@@ -60,6 +60,11 @@ describe("parseCommandLine: plan §2 commands", () => {
     [":route add work", run("route", "workspace.route", { text: "add work" })],
     [":route move", run("route", "workspace.route", { text: "move" })],
     [":route_rules", run("route_rules", "workspace.route")],
+    // docs/specs/private-workspace.md decision 2: toggles; `close` closes it after y/N.
+    [":private", run("private", "workspace.private")],
+    [":priv", run("private", "workspace.private")],
+    [":private close", run("private", "workspace.private", { text: "close" })],
+    [":private_workspace", run("private_workspace", "workspace.private")],
     [":ls", run("ls", "goto.picker")],
     [":sidebar", run("sidebar", "sidebar.toggle")],
     [":map", run("map", "help.show")],

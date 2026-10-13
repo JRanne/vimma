@@ -6,6 +6,11 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
+- `docs/bindings.json` is generated with `docs/bindings.md` from the same source, and vimma.dev is told when the default bindings change, so its `?` overlay lists every Vimma binding (#154).
+- The start page shows Vimma's version and the Firefox release it is built on, read from the build (#159).
+- Private workspace on Hyprland: going to it puts the private window exactly where the Vimma window was (same workspace, tile, size, fullscreen or floating) and hides the normal window in `special:vimma` until you switch back, close the private window, or a link from another app arrives. Vimma talks to Hyprland's socket with a fixed command set and sends no titles or URLs; `[private] placement = "window"` keeps it a separate window. Private windows' titles no longer include the page title (`privacy.exposeContentTitleInWindow.pbm` = `false`). The `defaults.toml` snapshot gained the `[private]` section.
+- Side panel: with a split, the panel opens with the panes' tabs marked. Unmark one and `Enter` takes it out of the split (it stays open, right after the split) while the other panes keep their sizes; unmark down to one to end the split; mark another tab to add it. `Enter` then goes to the highlighted row: unmark pane C and press `Enter` on C, and C shows alone while the others wait as a hidden split. Going to any tab outside a split (the picker, `ctrl+tab`, `alt+1..9`, `ctrl+b n`/`p`, a click, the panel) now shows it alone and keeps the split hidden, as Firefox's split view does, instead of putting it in the focused pane; going to one of the split's tabs brings it back whole, also after a workspace switch or a restart, and the status bar says `split 3 hidden` meanwhile. A new tab (`ctrl+t`, a link) still opens in the focused pane. The help-text snapshot changed with the new `Enter` and `Esc` descriptions.
+- Private workspace: `ctrl+b shift+p` (or `ctrl+shift+p`, `:private`) goes to Firefox's private window as if it were one more workspace, and back. It is never a stop on `ctrl+b (` / `)`; the workspace picker lists it last with a tab count only; `m` moves a tab in after y/N; `ctrl+b shift+d` there closes every private window, pop-ups included, and discards its data. `vimma-ctl state` withholds its URLs and titles. The help-text and `defaults.toml` snapshots gained the key, and the e2e baseline `m3-private-workspace` is new.
 - Vimma's own palette from vimma.dev, mint on green-black, is the built-in theme, light or dark as the system is, and switches live. Omarchy themes are unchanged; `[theme] name = "tokyo-night"` brings back the old palette. The e2e baselines `m0-happy-path-help` and `m4-split-panes` and the `defaults.toml` snapshot changed for it.
 - Side panel: mark tabs with `space` or a `V` range, and `Enter` shows them together as panes in the workspace's layout (dwindle by default) without reloading them; past `[panes] max` it refuses and changes nothing. The help-text and `defaults.toml` snapshots gained the two new keys.
 - `about:license` lists the smol-toml TOML parser's BSD-3-Clause notice under Vimma, so release builds carry it (#16).
@@ -63,6 +68,14 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Fixed
 
+- Keys typed right after switching to a workspace whose start page is still being restored are no longer lost: focus waits on the window until the page has loaded (#140).
+- Private workspace on Hyprland: Vimma listens to Hyprland's events again even when a switch happens just as Hyprland closes the event socket (#163).
+- On Hyprland the private workspace now really takes the Vimma window's place (a new private window used to be shown beside it); a swap that cannot name the window says so once in the console and in `about:vimma` (#160).
+- A key name with a bracket or a quote in `config.toml` is reported as an error instead of crashing the config reload (#134).
+- Find: a match in a page's search box (YouTube, DuckDuckGo) no longer switches the tab to insert mode; `n` / `N` keep stepping through matches (#164).
+- A playing video keeps the screen awake on Wayland: Vimma sets Firefox's own `MOZ_WAKE_LOCK_TYPE=WaylandIdleInhibit` at startup on Linux unless one is exported, since the portal path inhibited nothing on Hyprland (#153).
+- The side panel's scrollbar takes the theme's colours instead of Firefox's white track; the bookmarks panel's too (#146).
+- Firefox's own sidebar (history, bookmarks, synced tabs and the launcher strip) follows the theme, live, with the theme's focus ring instead of Firefox's blue (#148).
 - The address bar's focus ring, the focused pane's outline in a split and other focus rings in the browser's own UI take the theme's accent instead of Firefox's blue, a shade darker or lighter where the accent would miss 3:1 contrast.
 - `npm run import` no longer fails after a patch changes: it restores the Firefox files our patches touch before re-applying them. `tools/relocate-checkout.mjs` repairs a checkout that was moved.
 - Switching workspaces with `ctrl+b (`, `ctrl+b )` or `:workspace` no longer shows "no workspaces in this window" after a successful switch.

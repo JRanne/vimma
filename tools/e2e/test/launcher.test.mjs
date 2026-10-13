@@ -183,6 +183,15 @@ describe("browser command line and environment", () => {
     expect(args.slice(0, 3)).toEqual(["-no-remote", "-profile", "/p"]);
   });
 
+  it("puts extra switches before the URL (the site suite's --start-debugger-server)", () => {
+    const args = browserArgs(
+      "/p",
+      { width: 1280, height: 800 },
+      { extra: ["--start-debugger-server", "/p/rdp.sock"] },
+    );
+    expect(args.slice(-3)).toEqual(["--start-debugger-server", "/p/rdp.sock", "about:blank"]);
+  });
+
   it("points the browser at our Xvfb and away from Wayland", () => {
     const env = browserEnv(
       { PATH: "/bin", WAYLAND_DISPLAY: "wayland-1", DISPLAY: ":0" },

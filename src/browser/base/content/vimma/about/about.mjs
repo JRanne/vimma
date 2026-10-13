@@ -222,6 +222,9 @@ function render(d) {
     ]),
   );
 
+  // docs/specs/private-swap.md decision 10: no addresses, no titles.
+  fill("window-manager", dl([["Window manager", d.windowManager]]));
+
   const fk = d.firefoxKeys;
   fill(
     "firefox-keys",

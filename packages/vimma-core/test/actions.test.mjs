@@ -77,4 +77,17 @@ describe("actions", () => {
     }
     expect(getAction("select_tab_3")).toMatchObject({ id: "tab.goto", arg: 3 });
   });
+
+  test("private_workspace: prefix+shift+p and ctrl+shift+p, in every mode (private-workspace)", () => {
+    const km = compileKeymap();
+    expect(getAction("private_workspace")).toMatchObject({
+      id: "workspace.private",
+      group: "Workspaces",
+    });
+    expect(km.bindingsFor("private_workspace")).toEqual(["prefix+shift+p", "ctrl+shift+p"]);
+    for (const mode of /** @type {const} */ (["normal", "insert", "visual", "panel", "help"])) {
+      const node = km.trie(mode).children.get("ctrl+shift+p");
+      expect(node?.action?.id, mode).toBe("workspace.private");
+    }
+  });
 });

@@ -58,8 +58,15 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
   `ctrl+b (` switch, `ctrl+^` goes back to the last one as Vim's alternate buffer does,
   `ctrl+b w` picks one by name, and tabs move between them. Every workspace keeps its tabs and
   split layout across restarts.
+- Private workspace: `ctrl+b shift+p` (or `ctrl+shift+p`) goes to Firefox's private window as
+  if it were one more workspace, and back; closing it discards its data. On Hyprland it replaces
+  the Vimma window in place.
 - Side panel: `ctrl+b b` lists the workspace's tabs; pick one with `j`/`k`, or mark several
-  with `space` / `V` and `Enter` shows them together as panes in the current layout.
+  with `space` / `V` and `Enter` shows them together as panes in the current layout. With a
+  split, its panes start marked: unmark one to take it out, or down to one to end the split.
+- Going to a tab outside a split shows it alone and keeps the split, hidden, until you go to one
+  of its tabs again (`split 3 hidden` in the status bar); a new tab still opens in the focused
+  pane.
 - `ctrl+b ?` lists every binding, searchable.
 
 **Yours to configure**
@@ -69,9 +76,10 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
   ([guide](docs/guide.md#every-key-is-yours)).
 - `~/.config/vimma/config.toml` sets options, key bindings and workspaces, and applies on save.
   `about:vimma` shows the version and what is in force.
-- Theming: the bars, pickers, hints and start page take their colours from your desktop theme
-  and switch at once when it changes, or from your own colours in `config.toml` (by default
-  Vimma's own vimma.dev palette, light or dark as your system is; Tokyo Night by name).
+- Theming: the bars, pickers, hints, start page and Firefox's own sidebar take their colours
+  from your desktop theme and switch at once when it changes, or from your own colours in
+  `config.toml` (by default Vimma's own vimma.dev palette, light or dark as your system is;
+  Tokyo Night by name).
 - Accessible: Vimma's own UI works with a screen reader, keeps focus where you left it, and its
   text meets WCAG AA contrast in dark and light themes
   ([guide](docs/guide.md#accessibility)).
@@ -130,9 +138,12 @@ is BSD-3-Clause ([ADR-012](docs/adr/012-toml-parser-smol-toml.md)); its notice i
 
 ## Acknowledgements
 
+- [Vim](https://www.vim.org/) and [tmux](https://github.com/tmux/tmux), the two programs Vimma is
+  modelled on: Vim for the modes, tmux for the `ctrl+b` prefix, panes, layouts and sessions.
 - [Firefox](https://www.mozilla.org/firefox/) and Mozilla, for the browser underneath.
 - [Surfer](https://github.com/zen-browser/surfer) and [Zen Browser](https://zen-browser.app/),
   for the build toolchain and for showing how to run a Firefox fork this way.
-- [Herdr](https://herdr.dev/), the source of the default prefix keymap.
+- [Herdr](https://herdr.dev/), whose `[keys]` syntax (`action = [chords]`) and action names
+  `config.toml` follows.
 - [Omarchy](https://omarchy.org/), whose themes Vimma follows.
 - [Tridactyl](https://github.com/tridactyl/tridactyl) and [Vimium](https://github.com/philc/vimium), prior art for Vim keys in a browser.

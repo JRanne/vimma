@@ -64,7 +64,10 @@ import { BOOKMARKS_ROOTS } from "./bookmarks.mjs";
  * @property {FirefoxKeySetting} firefox                 `[firefox]`, chords canonical (schema 2)
  * @property {boolean} insertEditing                     `[modal] insert_editing` (schema 2)
  * @property {{ root: BookmarksRoot }} bookmarks          `[bookmarks]` (schema 2)
+ * @property {{ placement: PrivatePlacement }} private    `[private]` (schema 2), private-swap
  */
+
+/** @typedef {"swap" | "window"} PrivatePlacement */
 
 /**
  * Which of Firefox's own shortcuts are off (docs/specs/key-handling-batch.md § 1).
@@ -151,6 +154,7 @@ const TOP_KEYS = [
   "routes",
   "firefox",
   "bookmarks",
+  "private",
 ];
 const KEYMAP_SECTIONS = new Set(["keys", "modal", "unbind"]);
 const WORKSPACE_KEYS = ["color", "icon", "home", "autofill"];
@@ -177,9 +181,15 @@ const SCHEMA_2_KEYS = [
   "modal.insert_editing",
   "bookmarks",
   "theme.name",
+  "private",
 ];
 /** `[bookmarks]` (docs/specs/bookmarks.md, decision 2). */
 const BOOKMARKS_KEYS = ["root"];
+/** `[private] placement` (docs/specs/private-swap.md, decision 1). */
+export const PRIVATE_PLACEMENTS = Object.freeze(
+  /** @type {PrivatePlacement[]} */ (["swap", "window"]),
+);
+const PRIVATE_KEYS = ["placement"];
 const NEEDS_SCHEMA_2 = "is new in schema 2: put schema = 2 at the top of the file";
 const LABEL = "[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?";
 const DOMAIN = new RegExp(`^(?=.{1,253}$)${LABEL}(?:\\.${LABEL})*\\.?$`, "i");
@@ -448,6 +458,17 @@ function validate(raw, declared) {
     }
   }
 
+  if (declared >= 2 && isTable(raw.private)) {
+    for (const [key, v] of Object.entries(raw.private)) {
+      const path = ["private", key];
+      if (key !== "placement") unknownKey(path, key, PRIVATE_KEYS);
+      else if (typeof v !== "string") typeError(path, v, "a string");
+      else if (!PRIVATE_PLACEMENTS.includes(/** @type {PrivatePlacement} */ (v))) {
+        fail(path, 'must be "swap" or "window"', closest(v, PRIVATE_PLACEMENTS));
+      }
+    }
+  }
+
   if (declared >= 2 && isTable(raw.sites)) {
     /** @type {Map<string, string>} */
     const seen = new Map();
@@ -598,6 +619,7 @@ export function mergeWithDefaults(user, workspaceOrder, siteOrder) {
     firefox: resolveFirefox(user.firefox),
     insertEditing: /** @type {boolean | undefined} */ (user.modal?.insert_editing) ?? true,
     bookmarks: { root: user.bookmarks?.root ?? "workspace" },
+    private: { placement: user.private?.placement ?? "swap" },
   };
 }
 

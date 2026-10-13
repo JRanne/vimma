@@ -101,7 +101,13 @@ add_task(async function prefix_w_lists_workspaces_with_counts_and_switches() {
   await until(() => active() === def("main").id, "back in main");
 
   await openPicker();
-  Assert.deepEqual(names(), ["main", "alpha", "beta"], "every workspace, in ctrl+i order");
+  // docs/specs/private-workspace.md decision 5: the private workspace is the last row.
+  Assert.deepEqual(
+    names(),
+    ["main", "alpha", "beta", "◆ private"],
+    "every workspace, in ctrl+i order, then the private workspace",
+  );
+  Assert.equal(cell(rows()[3], "host"), "new", "which says new while it is not open");
   const counts = rows().map((r) => cell(r, "host"));
   Assert.ok(counts[0].startsWith(`${tabsIn(def("main").id).length} tab`), "main's tab count");
   Assert.ok(counts[0].includes("current"), "main is marked as current");

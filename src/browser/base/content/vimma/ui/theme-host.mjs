@@ -23,6 +23,10 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 /** Points Firefox's focus colour at --vimma-focus (focus rings, the focused pane's outline). */
 const FOCUS_SHEET = "chrome://browser/skin/vimma/focus.css";
+/** Firefox's own sidebar in the tokens: the window's launcher and panel, and each panel document
+ * (spec firefox-sidebar-theme). */
+const SIDEBAR_SHEET = "chrome://browser/skin/vimma/firefox-sidebar.css";
+const SIDEBAR_PAGE_SHEET = "chrome://browser/skin/vimma/firefox-sidebar-page.css";
 const SOURCE_PREF = "vimma.theme.source";
 const PATH_PREF = "vimma.theme.omarchyPath";
 const POLL_PREF = "vimma.theme.pollMs";
@@ -77,6 +81,14 @@ const notFound = (/** @type {unknown} */ e) => /** @type {any} */ (e)?.name === 
 let css = builtinCss();
 /** @type {Map<Window, string>} each window's token sheet (a data: URI of `css`) */
 const windows = new Map();
+/**
+ * @type {Map<Document, string>} the token sheet of each document in Firefox's sidebar (spec
+ * firefox-sidebar-theme), by document: the sidebar's window object outlives its documents
+ */
+const pages = new Map();
+/** Sidebar documents are found by this topic (onDocumentInserted) while a window is themed. */
+const DOCUMENT_TOPIC = "document-element-inserted";
+let observingDocuments = false;
 /** @type {Set<WeakRef<HTMLStyleElement>>} start pages' token <style> elements */
 const styles = new Set();
 /** What the theme file looked like at the last check; "" forces a read. */
@@ -105,6 +117,17 @@ function apply(next) {
     win.windowUtils.loadSheetUsingURIString(uri, win.windowUtils.AUTHOR_SHEET);
     win.windowUtils.removeSheetUsingURIString(old, win.windowUtils.AUTHOR_SHEET);
     windows.set(win, uri);
+  }
+  for (const [doc, old] of pages) {
+    const win = doc.defaultView;
+    if (!win || win.document !== doc) {
+      pages.delete(doc);
+      continue;
+    }
+    const uri = sheetUri(css);
+    win.windowUtils.loadSheetUsingURIString(uri, win.windowUtils.AUTHOR_SHEET);
+    win.windowUtils.removeSheetUsingURIString(old, win.windowUtils.AUTHOR_SHEET);
+    pages.set(doc, uri);
   }
   for (const ref of styles) {
     const style = ref.deref();
@@ -241,13 +264,78 @@ function stopIfIdle() {
   Services.prefs.removeObserver(SOURCE_PREF, onPref);
   Services.prefs.removeObserver(PATH_PREF, onPref);
   Services.prefs.removeObserver(POLL_PREF, onPref);
+  if (observingDocuments) Services.obs.removeObserver(onDocumentInserted, DOCUMENT_TOPIC);
+  observingDocuments = false;
+}
+
+/**
+ * A XUL <tree> (the bookmarks sidebar's) draws its vertical scrollbar as a <scrollbar> element in
+ * its shadow root, which the UA sheet resets to initial values (scrollbars.css, `all: initial`,
+ * for its style cache): it inherits neither scrollbar-color nor color-scheme, so it shows a white
+ * track on any theme, and no document sheet reaches into the shadow root. Custom properties
+ * survive `all`, so one rule adopted into each tree's shadow root gives it the side panel's colours
+ * (side-panel.css), following the tokens on a theme change.
+ */
+const TREE_SCROLLBAR_RULE =
+  "scrollbar { scrollbar-color: var(--vimma-muted) var(--vimma-bg-dark) !important; }";
+
+/** @param {Document} doc  a sidebar document, once parsed */
+function colourTreeScrollbars(doc) {
+  const win = /** @type {any} */ (doc.defaultView);
+  if (!win) return;
+  for (const tree of doc.querySelectorAll("tree")) {
+    const root = tree.shadowRoot;
+    if (!root) continue;
+    const sheet = new win.CSSStyleSheet();
+    sheet.replaceSync(TREE_SCROLLBAR_RULE);
+    root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
+  }
+}
+
+/**
+ * A document in Firefox's sidebar (history, bookmarks, ...): a separate chrome document the
+ * window's sheets do not reach, and whose CSP refuses a data: <style>. It gets the tokens,
+ * focus.css and firefox-sidebar-page.css as author sheets, which its CSP does not apply to, and
+ * its trees' scrollbars their colour once it is parsed.
+ * @param {Document | null | undefined} doc
+ */
+function attachSidebarPage(doc) {
+  const win = doc?.defaultView;
+  if (!doc || !win || pages.has(doc) || doc.documentURI === "about:blank") return;
+  const uri = sheetUri(css);
+  win.windowUtils.loadSheetUsingURIString(uri, win.windowUtils.AUTHOR_SHEET);
+  win.windowUtils.loadSheetUsingURIString(FOCUS_SHEET, win.windowUtils.AUTHOR_SHEET);
+  win.windowUtils.loadSheetUsingURIString(SIDEBAR_PAGE_SHEET, win.windowUtils.AUTHOR_SHEET);
+  pages.set(doc, uri);
+  win.addEventListener("unload", () => pages.delete(doc), { once: true });
+  if (doc.readyState === "loading") {
+    doc.addEventListener("DOMContentLoaded", () => colourTreeScrollbars(doc), { once: true });
+  } else {
+    colourTreeScrollbars(doc);
+  }
+}
+
+/**
+ * "document-element-inserted": a document got its root element, before it is styled or painted.
+ * The sidebar documents' events do not reach the window, so this observer, not a listener on
+ * <browser id="sidebar">, is how they are found: the panel's own document (not a frame inside it)
+ * in a window this module themes.
+ * @param {unknown} subject
+ */
+function onDocumentInserted(subject) {
+  const doc = /** @type {Document} */ (subject);
+  const frame = doc.defaultView?.browsingContext?.embedderElement;
+  if (frame?.id !== "sidebar") return;
+  const owner = frame.ownerDocument.defaultView;
+  if (owner && windows.has(owner)) attachSidebarPage(doc);
 }
 
 export const ThemeHost = {
   /**
    * Once per browser window (vimma.js), before its UI is built: the current tokens as an author
-   * sheet, swapped in place on every theme change, and focus.css, which gives Firefox's focus
-   * colour the tokens' --vimma-focus.
+   * sheet, swapped in place on every theme change; focus.css, which gives Firefox's focus colour
+   * the tokens' --vimma-focus; and firefox-sidebar.css, which gives Firefox's sidebar the tokens.
+   * Every document the sidebar's browser loads gets the tokens too (spec firefox-sidebar-theme).
    * @param {Window} win
    */
   init(win) {
@@ -255,6 +343,7 @@ export const ThemeHost = {
     const uri = sheetUri(css);
     win.windowUtils.loadSheetUsingURIString(uri, win.windowUtils.AUTHOR_SHEET);
     win.windowUtils.loadSheetUsingURIString(FOCUS_SHEET, win.windowUtils.AUTHOR_SHEET);
+    win.windowUtils.loadSheetUsingURIString(SIDEBAR_SHEET, win.windowUtils.AUTHOR_SHEET);
     windows.set(win, uri);
     win.addEventListener(
       "unload",
@@ -264,6 +353,12 @@ export const ThemeHost = {
       },
       { once: true },
     );
+    if (!observingDocuments) {
+      Services.obs.addObserver(onDocumentInserted, DOCUMENT_TOPIC);
+      observingDocuments = true;
+    }
+    // A panel already open (restored with the window) has missed its document's insertion.
+    attachSidebarPage(/** @type {any} */ (win.document.getElementById("sidebar"))?.contentDocument);
     start();
   },
 

@@ -124,6 +124,12 @@ group("Workspaces", [
     "workspace.route",
     "Routing rules: list them; :route add [workspace], :route move",
   ],
+  // docs/specs/private-workspace.md: Firefox's private window, as a workspace.
+  [
+    "private_workspace",
+    "workspace.private",
+    "Private workspace (a private window); again goes back",
+  ],
 ]);
 
 group("Navigation", [
@@ -237,8 +243,16 @@ group("Side panel", [
   ...numbered("panel_select", "panel.select", (n) => `Select row ${n}`),
   ["panel_down", "panel.down", "Next row"],
   ["panel_up", "panel.up", "Previous row"],
-  ["panel_open", "panel.open", "Open the selected row, or show the marked tabs as panes"],
-  ["panel_close", "panel.close", "End the range, clear the marks, or close the side panel"],
+  [
+    "panel_open",
+    "panel.open",
+    "Apply the marks (the marked tabs become the panes), then go to the selected row",
+  ],
+  [
+    "panel_close",
+    "panel.close",
+    "End the range, clear or restore the marks, or close the side panel",
+  ],
   ["panel_close_tab", "panel.close_tab", "Close the selected tab; the panel stays open"],
   ["panel_mark", "panel.mark", "Mark or unmark the selected tab and move down"],
   ["panel_visual", "panel.visual", "Start a range of rows to mark, or mark it"],

@@ -1,5 +1,6 @@
 import { describe, test, expect } from "vitest";
 import { compileKeymap, KeymapError } from "../src/keymap.mjs";
+import { parsePath } from "../src/toml.mjs";
 
 describe("compileKeymap", () => {
   test("compiles defaults without errors", () => {
@@ -19,6 +20,25 @@ describe("compileKeymap", () => {
     expect(err.path).toBe("keys.new_tabb");
     expect(err.suggestion).toBe("new_tab");
     expect(err.message).toMatch(/did you mean "new_tab"/);
+  });
+
+  // Regression (found by the fuzzer, seed 1027517388, issue #134): `keys."c[mmand"` came back
+  // as the path `keys.c[mmand`, which parsePath cannot read back.
+  test.each([
+    [{ keys: { "c[mmand": "/" } }, 'keys."c[mmand"', ["keys", "c[mmand"]],
+    [{ keys: { "new.tab": ["prefix+c"] } }, 'keys."new.tab"', ["keys", "new.tab"]],
+    [{ modal: { 'n"x': {} } }, 'modal."n\\"x"', ["modal", 'n"x']],
+    [{ unbind: { "a[0": [] } }, 'unbind."a[0"', ["unbind", "a[0"]],
+  ])("a written name that is not bare is quoted in the error path (%j)", (user, path, segs) => {
+    let err;
+    try {
+      compileKeymap(user);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(KeymapError);
+    expect(err.path).toBe(path);
+    expect(parsePath(err.path)).toEqual(segs);
   });
 
   test("an unknown action in [modal.normal] fails with a suggestion", () => {

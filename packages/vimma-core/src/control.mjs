@@ -180,6 +180,11 @@ function checkStateResult(result, errors) {
       errors.push(`result.${key} must be a string or null`);
     }
   }
+  // A private window's state (docs/specs/private-workspace.md decision 8d): no url or title.
+  if ("private" in result && typeof result.private !== "boolean") {
+    errors.push("result.private must be a boolean");
+  }
+  const hidden = result.private === true;
   if (!Array.isArray(result.tabs)) {
     errors.push("result.tabs must be an array");
   } else {
@@ -189,8 +194,13 @@ function checkStateResult(result, errors) {
         errors.push(`result.tabs[${i}] must be an object`);
         return;
       }
-      for (const key of ["id", "url", "title"]) {
-        if (typeof tab[key] !== "string") errors.push(`result.tabs[${i}].${key} must be a string`);
+      if (typeof tab.id !== "string") errors.push(`result.tabs[${i}].id must be a string`);
+      for (const key of ["url", "title"]) {
+        if (hidden && tab[key] !== null) {
+          errors.push(`result.tabs[${i}].${key} must be null in a private window`);
+        } else if (!hidden && typeof tab[key] !== "string") {
+          errors.push(`result.tabs[${i}].${key} must be a string`);
+        }
       }
       if (typeof tab.selected !== "boolean") {
         errors.push(`result.tabs[${i}].selected must be a boolean`);

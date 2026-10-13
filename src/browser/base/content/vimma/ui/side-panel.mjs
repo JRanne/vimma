@@ -8,9 +8,17 @@
 // is core sidepanel.mjs, this only renders it.
 
 import { WORKSPACE_COLOR_TOKENS } from "../core/statusbar.mjs";
-import { inRange, markSummary, openPanel, panelKey, refreshPanel } from "../core/sidepanel.mjs";
+import {
+  gutterOf,
+  inRange,
+  markSummary,
+  openPanel,
+  panelKey,
+  refreshPanel,
+} from "../core/sidepanel.mjs";
+import { PRIVATE_COLOR_TOKEN, PRIVATE_GLYPH } from "../core/privatews.mjs";
 
-/** @import { PanelState, PanelTabInfo } from "../core/sidepanel.mjs" */
+/** @import { PanelOptions, PanelState, PanelTabInfo } from "../core/sidepanel.mjs" */
 /** @import { Workspaces } from "../core/workspaces.mjs" */
 
 export const PANEL_ID = "vimma-panel";
@@ -26,12 +34,22 @@ const TAB_EVENTS = ["TabOpen", "TabClose", "TabSelect", "TabAttrModified", "TabM
  * @property {() => Workspaces | null} model  the window's workspaces, tabs in window order
  * @property {(tabId: string) => PanelTabInfo | undefined} info
  * @property {() => string | undefined} color  the active workspace's colour name
+ * @property {() => PanelOptions | undefined} [where]  the private workspace's head and
+ *   neighbours (docs/specs/private-workspace.md decision 6)
  * @property {(tabId: string) => void} select  a row was picked; the panel closes right after
  * @property {(text: string) => void} say  a refusal for the notice
  * @property {(tabId: string) => void} closeTab  `x`: close that tab; the panel stays open
- * @property {(tabIds: string[], focus: string) => string | null} together  `Enter` with marks:
- *   show those tabs as the workspace's panes (docs/specs/m4-side-panel-multiselect.md); a
- *   refusal's text, or null once done (the panel then closes)
+ * @property {(tabIds: string[], focus: string, alone?: string) => string | null} together
+ *   `Enter` with marks: show those tabs as the workspace's panes
+ *   (docs/specs/m4-side-panel-multiselect.md), or with `alone` keep them as a hidden view and show
+ *   that tab by itself (side-panel-unsplit decision 25); a refusal's text, or null once done (the
+ *   panel then closes)
+ * @property {() => { panes: string[], focus: string | null, hidden?: boolean } | null} [split]
+ *   the active workspace's split, its tabs (row ids), focused pane's tab and whether it is a
+ *   hidden view; null without one
+ *   (docs/specs/side-panel-unsplit.md)
+ * @property {(tabId: string) => void} [alone]  `Enter` down to one mark or none: end the split
+ *   and show that tab alone (side-panel-unsplit); the panel then closes
  */
 
 export class SidePanel {
@@ -73,7 +91,7 @@ export class SidePanel {
     if (!model) return false;
     const box = this.box ?? this.build();
     this.opener = rememberFocus(this.win);
-    this.state = openPanel(model, this.host.info, { color: this.host.color() });
+    this.state = openPanel(model, this.host.info, this.#options());
     this.render();
     box.hidden = false;
     const tabs = this.#tabContainer();
@@ -127,9 +145,14 @@ export class SidePanel {
       this.host.select(effect.id);
       this.close();
     }
+    // Ending the split first, then closing focuses the tab shown alone (side-panel-unsplit).
+    if (effect?.type === "alone") {
+      this.host.alone?.(effect.id);
+      this.close();
+    }
     // Refused (past [panes] max): nothing changed, so the panel stays open with its marks.
     if (effect?.type === "together") {
-      const refused = this.host.together(effect.ids, effect.focus);
+      const refused = this.host.together(effect.ids, effect.focus, effect.alone);
       if (refused) this.host.say(refused);
       else this.close();
     }
@@ -143,7 +166,7 @@ export class SidePanel {
       this.close();
       return;
     }
-    this.state = refreshPanel(this.state, model, this.host.info, { color: this.host.color() });
+    this.state = refreshPanel(this.state, model, this.host.info, this.#options());
     this.render();
   }
 
@@ -152,6 +175,16 @@ export class SidePanel {
     this.close();
     this.box?.remove();
     this.box = this.list = this.count = null;
+  }
+
+  /** @returns {PanelOptions} */
+  #options() {
+    const split = this.host.split?.();
+    return {
+      color: this.host.color(),
+      ...this.host.where?.(),
+      ...(split ? { panes: split.panes, paneFocus: split.focus, paneHidden: !!split.hidden } : {}),
+    };
   }
 
   #tabContainer() {
@@ -179,16 +212,20 @@ export class SidePanel {
     const header = /** @type {HTMLElement} */ (box.querySelector(".vimma-panel-header"));
     const { workspace: w } = state;
     const tokens = /** @type {Record<string, string>} */ (WORKSPACE_COLOR_TOKENS);
-    const dot = el("span", "vimma-panel-dot", "●");
+    // The private workspace: ◆ in the theme's magenta, no number (private-workspace 6).
+    const dot = el("span", "vimma-panel-dot", w.private ? PRIVATE_GLYPH : "●");
     dot.setAttribute("aria-hidden", "true"); // the workspace's colour, nothing to read
-    dot.style.color = `var(${(w.color && tokens[w.color]) || "--vimma-accent"})`;
+    const colour = w.private
+      ? PRIVATE_COLOR_TOKEN
+      : (w.color && tokens[w.color]) || "--vimma-accent";
+    dot.style.color = `var(${colour})`;
     const neighbours =
       state.previous === null
         ? ""
         : `ctrl+b ( ${state.previous} · ctrl+b ) ${/** @type {string} */ (state.next)}`;
     header.replaceChildren(
       dot,
-      el("span", "vimma-panel-name", `${w.index}:${w.name}`),
+      el("span", "vimma-panel-name", w.private ? w.name : `${w.index}:${w.name}`),
       el("span", "vimma-panel-neighbours", neighbours),
     );
 
@@ -200,8 +237,9 @@ export class SidePanel {
     const list = /** @type {HTMLElement} */ (this.list);
     list.setAttribute("aria-label", `Tabs in ${w.name}`);
     // aria-selected stays the highlight (m7-a11y); marks are the options' checked state, given
-    // only while there is something marked or a range, so a plain list reads as before.
-    const checkable = state.marked.length > 0 || state.anchor !== null;
+    // only while there is something marked, a range or a split (side-panel-unsplit), so a plain
+    // list reads as before.
+    const checkable = state.marked.length > 0 || state.anchor !== null || state.panes.length > 0;
     const marked = new Set(state.marked);
     list.replaceChildren(
       ...state.rows.map((r, i) => {
@@ -216,7 +254,10 @@ export class SidePanel {
         if (checkable) row.setAttribute("aria-checked", String(isMarked));
         if (isMarked) row.classList.add("vimma-panel-marked");
         if (ranged) row.classList.add("vimma-panel-in-range");
-        const gutter = el("span", "vimma-panel-mark", isMarked ? "●" : ranged ? "│" : "");
+        const glyph = gutterOf(state, i);
+        // A pane that leaves the split on Enter (side-panel-unsplit decision 16).
+        if (glyph === "○") row.classList.add("vimma-panel-leaving");
+        const gutter = el("span", "vimma-panel-mark", glyph);
         gutter.setAttribute("aria-hidden", "true"); // aria-checked says it
         const marks = [r.playing ? "♪" : "", r.foreign ? "foreign" : ""].filter(Boolean);
         row.append(
@@ -248,7 +289,7 @@ export class SidePanel {
     const { box, header, list } = buildPanelBox(this.win, {
       id: PANEL_ID,
       label: "Side panel",
-      hint: "j/k move · 1-9 or Enter go · space V mark, Enter splits · x close tab · Esc close",
+      hint: "j/k move · 1-9 or Enter go · space V mark, Enter splits or unsplits · x close tab · Esc close",
     });
     const count = panelElement(this.win.document, "div", "vimma-panel-count");
     count.setAttribute("role", "status");
