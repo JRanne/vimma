@@ -16,6 +16,7 @@ import {
   deniedNotice,
   FULL_CONTROL,
   grantNotice,
+  isPage,
   mayOpenByItself,
   promptKey,
   questionLine,
@@ -208,6 +209,8 @@ function onGate(event) {
       w.notice(deniedNotice(event.question, "timeout"));
     } else if (event.kind === "ran") {
       w.notice(ranNotice(event, event.until, Date.now()));
+    } else if (event.kind === "notice") {
+      w.notice(event.text);
     }
   }
   if (event?.kind === "ran" || (event?.kind === "answered" && event.answer !== "deny")) {
@@ -283,8 +286,11 @@ export const AgentUi = {
       return true;
     }
     if (e.repeat) return true;
+    const q = current.question;
     const result = promptKey({ count: current.count }, formatKey(chord), {
-      full: current.question.tool === FULL_CONTROL,
+      full: q.tool === FULL_CONTROL,
+      noGrant: isPage(q) || !!(/** @type {any} */ (q.what)?.unscanned),
+      dangerous: !!(/** @type {any} */ (q.what)?.danger),
     });
     if (result.kind === "count") {
       current.count = result.count;

@@ -278,3 +278,35 @@ describe(":mcp revoke and :mcp's status", () => {
     ).toBe(" · 2 agents connected · 3 waiting · 2 grants, the first ends in 15m");
   });
 });
+
+// docs/specs/vimma-mcp.md, decision 31 d (sub-PR 2c): a dangerous download asks even under a
+// grant of its tool, a grant never covers it, and an answer to it never makes a grant.
+describe("questions that always ask", () => {
+  const DOWNLOAD = "vimma_download";
+  test("a grant of the tool does not run it: it waits", () => {
+    const q = queue();
+    q.answer(q.ask(1, DOWNLOAD, 0).id, { kind: "grant", minutes: 10 }, 0);
+    expect(q.ask(1, DOWNLOAD, MIN).kind).toBe("run");
+    expect(q.ask(1, DOWNLOAD, MIN, { always: true }).kind).toBe("wait");
+    expect(q.ask(1, DOWNLOAD, MIN).kind).toBe("run"); // the grant still stands
+  });
+
+  test("a grant given to another question of the tool leaves it waiting", () => {
+    const q = queue();
+    const a = q.ask(1, DOWNLOAD, 0);
+    const b = q.ask(1, DOWNLOAD, 0, { always: true });
+    expect(q.answer(a.id, { kind: "grant", minutes: 5 }, 0).resolved).toEqual([
+      { id: a.id, allow: true },
+    ]);
+    expect(q.waiting.map((r) => r.id)).toEqual([b.id]);
+  });
+
+  test("a grant as its answer allows it once and grants nothing", () => {
+    const q = queue();
+    const b = q.ask(1, DOWNLOAD, 0, { always: true });
+    expect(q.answer(b.id, { kind: "grant", minutes: 5 }, 0)).toEqual({
+      resolved: [{ id: b.id, allow: true }],
+    });
+    expect(q.grants(0)).toEqual([]);
+  });
+});

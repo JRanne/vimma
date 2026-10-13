@@ -921,10 +921,90 @@ Pages there run with nobody watching, so they get less than yours:
   screen, MIDI, persistent storage, the local network and the rest is refused without a prompt.
 - **No pop-ups.** `window.open` and links that open a new window or tab do nothing there.
 - **No other apps.** A link to `mailto:`, `zoommtg:` or another app's protocol opens nothing.
-- **No downloads, for now.** A download from the agent workspace is refused before a byte is
-  written; asked-for, quarantined downloads come in a later update.
+- **Downloads ask, and are kept apart.** See [Downloads from the agent workspace](#downloads-from-the-agent-workspace).
 - If you change `[mcp] workspace`, the new agent workspace's open tabs are reloaded once, so
   these rules apply to the pages already in them.
+
+#### Downloads from the agent workspace
+
+An agent (or a page in the agent workspace) may download files, but each one asks first, in the
+same line as every other request:
+
+`◇ claude-code wants vimma_download: "report.pdf" 2.1 MB application/pdf (.pdf) from example.com`
+
+It shows the file's name, its size (or `unknown size`), its type and extension and the site it
+comes from, never the full address. `y`, `n`, `x` and a count with `a` work as for any request;
+a `vimma_download` grant lets that agent's next downloads through without asking. A download
+counts as the agent's only when it is the address the agent itself opened (`vimma_open`), right
+then. Anything else, such as a page the agent opened downloading something later, says `a page
+in the agent workspace wants vimma_download` and takes only `y` or `n`, whatever grants you
+gave.
+
+- **Kept apart.** Files are saved only to `~/Downloads/vimma-agent/` (`[mcp] download_dir`),
+  never to your Downloads folder, with mode 0600: no one else can read them and nothing can run
+  them. Until a file has passed every check it keeps a `.part` name there. The folder itself is
+  kept private (mode 0700). It may not be your home folder, your Downloads folder, a hidden folder
+  of your home (such as `~/.local/bin`), or `/tmp`, `/var/tmp` or `/dev/shm`. If the folder is not
+  yours or cannot be made private, every agent download is refused, with a notice that says
+  why.
+- **Never opened.** Vimma never opens an agent's download, offers no "open with", and refuses
+  to open one from the downloads list later (`agent downloads are never opened by Vimma`). Open
+  it yourself from the folder once you trust it.
+- **Dangerous files ask with `!`.** Programs and libraries (ELF, Windows and macOS programs,
+  also found by their first bytes), scripts (`.sh`, `.py`, `.js`, `.desktop`, a `#!` line …),
+  installers and packages (`.deb`, `.rpm`, `.AppImage`, `.flatpak`, `.msi`, `.dmg` …), and
+  archives Vimma cannot look inside (`.tar.gz`, `.7z`, `.rar` …) end the question with `— ⚠ a
+script` (or what it is). `y` and grants do nothing there: only `!` allows that one file. A
+  `.zip` is checked by the entries it lists (it is never unpacked). If one is a dangerous file,
+  has an exec bit, is a symbolic link, or would unpack outside its folder (`../`, `/…`), the zip
+  asks with `!`. Some dangers show only once the file is in: an ELF named `data.bin`, or a
+  program inside what was allowed as a script. Then a second question asks before the file gets
+  its name, and `n` deletes it.
+- **https only.** A download over plain `http:`, or one a page's script made (`blob:`, `data:`),
+  is refused (`refused download "a.txt": not https`).
+- **A size cap.** Over `[mcp] download_max_mb` (200 MB by default, 1 to 4096) it is refused, or
+  stopped and deleted once it grows past it when the server did not say its size.
+- **ClamAV, if you have it** ([below](#virus-scanning-with-clamav)). Each file is scanned
+  before it leaves its `.part` name, and a file ClamAV flags is deleted (`deleted download
+"a.zip": ClamAV found …`). Sometimes ClamAV fails, takes over five minutes, or cannot look
+  inside a file (encrypted, or over its limits). Then the line asks `— ⚠ not scanned: ClamAV
+failed; keep it?`: `y` keeps it unscanned, anything else deletes it. The notice says
+  `saved "report.pdf" to ~/Downloads/vimma-agent, scanned (ClamAV)`, `not fully scanned (ClamAV)`
+  or `not scanned`. Vimma has no download reputation service of its own: Firefox's Safe Browsing
+  checks downloads only in a build with a Google key.
+- **Your own saves are yours.** Save Page (`ctrl+s`), Save Link As and Save Image As in an agent
+  tab ask nothing and save where you choose, as in any workspace: an agent cannot press them.
+
+```toml
+[mcp]
+download_dir = "~/Downloads/vimma-agent"  # ~/… or /…; never ~ or your Downloads folder itself
+download_max_mb = 200
+```
+
+##### Virus scanning with ClamAV
+
+ClamAV is optional, and Vimma does not ship it. If the system's `clamscan` is installed, Vimma
+uses it on every agent download. That means `/usr/bin/clamscan` or `/usr/local/bin/clamscan`,
+owned by root, never a copy found on your `PATH`. Without it, the notices say `not scanned`.
+Vimma does not update ClamAV or its virus definitions: your system's `freshclam` does.
+
+On Omarchy and Arch:
+
+```sh
+sudo pacman -S clamav
+sudo freshclam                                   # the first download of the definitions
+sudo systemctl enable --now clamav-freshclam     # keeps them up to date
+```
+
+On Debian and Ubuntu, install `clamav`; the `clamav-freshclam` service keeps the definitions
+current. On Fedora, install `clamav clamav-update` and run `sudo freshclam`.
+
+Two limits for now, both planned follow-ups:
+
+- Vimma does not yet notice stale definitions. Keep `freshclam` running, or scans use whatever
+  definitions you last downloaded.
+- `clamscan` loads its whole database for each file. A scan takes a while and about 1 GB of
+  memory.
 
 ### Side panel
 
