@@ -1,0 +1,19 @@
+{
+  "description": "Page text, inside the untrusted-content delimiters",
+  "kind": "response",
+  "command": "agent-read",
+  "message": {
+    "type": "response",
+    "id": 3,
+    "ok": true,
+    "result": {
+      "url": "https://docs.rs/serde",
+      "title": "serde - Rust",
+      "text": "<untrusted-web-content>\nSerde is a framework for serializing data.\n</untrusted-web-content>",
+      "truncated": false,
+      "selection": null,
+      "language": "en",
+      "background": true
+    }
+  }
+}

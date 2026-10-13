@@ -325,8 +325,8 @@ add_task(async function test_handshake() {
   Assert.equal(await skipAuth.closed, 0, "and closed");
 
   const v2 = new Client(port);
-  await v2.send({ type: "hello", protocol: 2, nonce: randomHex() });
-  Assert.equal((await v2.read())?.error?.code, "unsupported-protocol", "protocol 2 is refused");
+  await v2.send({ type: "hello", protocol: 3, role: "full", nonce: randomHex() });
+  Assert.equal((await v2.read())?.error?.code, "unsupported-protocol", "protocol 3 is refused");
   Assert.equal(await v2.closed, 0, "and closed");
 
   const right = new Client(port);

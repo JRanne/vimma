@@ -21,9 +21,10 @@ describe(":mcp words", () => {
     expect(parseMcpCommand("on")).toEqual({ kind: "on" });
     expect(parseMcpCommand(" OFF ")).toEqual({ kind: "off" });
     expect(parseMcpCommand("forget")).toEqual({ kind: "forget" });
-    expect(parseMcpCommand("revoke")).toEqual({
+    expect(parseMcpCommand("revoke")).toEqual({ kind: "revoke" });
+    expect(parseMcpCommand("maybe")).toEqual({
       kind: "refuse",
-      text: ":mcp takes on, off or forget",
+      text: ":mcp takes on, off, revoke or forget",
     });
   });
 });

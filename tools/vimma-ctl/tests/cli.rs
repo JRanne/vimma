@@ -49,14 +49,27 @@ fn temp_profile() -> PathBuf {
 }
 
 fn write_discovery(profile: &Path, port: u16, mode: u32) {
+    write_discovery_text(
+        profile,
+        &format!(r#"{{"protocol":1,"port":{port},"token":"{TOKEN}","pid":1}}"#),
+        mode,
+    );
+}
+
+fn write_discovery_text(profile: &Path, text: &str, mode: u32) {
     use std::os::unix::fs::PermissionsExt;
     let path = profile.join("vimma-control.json");
-    fs::write(
-        &path,
-        format!(r#"{{"protocol":1,"port":{port},"token":"{TOKEN}","pid":1}}"#),
-    )
-    .unwrap();
+    fs::write(&path, text).unwrap();
     fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
+}
+
+/// A protocol 2 discovery file serving `roles` (docs/specs/vimma-mcp.md, decision 2).
+fn write_discovery_v2(profile: &Path, port: u16, roles: &str) {
+    write_discovery_text(
+        profile,
+        &format!(r#"{{"protocol":2,"port":{port},"token":"{TOKEN}","pid":1,"roles":{roles}}}"#),
+        0o600,
+    );
 }
 
 /// One accepted connection: the lines it read, in order.
@@ -564,4 +577,86 @@ fn reports_a_discovery_file_whose_process_has_exited() {
         "{}",
         stderr(&out)
     );
+}
+
+// Protocol 2 (docs/specs/vimma-mcp.md, decision 2): against a Vimma whose discovery file says 2,
+// vimma-ctl's commands use the `full` role; with only MCP on, it says the control socket is off.
+
+#[test]
+fn speaks_protocol_2_as_full_against_a_protocol_2_vimma() {
+    let server = Server::start(|n, line| match n {
+        0 => {
+            let proof = vimma_ctl::protocol::challenge_proof(TOKEN, &nonce_of(line));
+            Some(vec![format!(
+                r#"{{"type":"challenge","protocol":2,"proof":"{proof}"}}"#
+            )])
+        }
+        1 => Some(vec![
+            r#"{"type":"welcome","protocol":2,"app":"Vimma","version":"0.1.0","role":"full"}"#
+                .into(),
+        ]),
+        2 => Some(vec![
+            r#"{"type":"response","id":1,"ok":true,"result":{"sent":1}}"#.into(),
+        ]),
+        _ => None,
+    });
+    let port = read_port(&server.profile);
+    write_discovery_v2(&server.profile, port, r#"["full","agent"]"#);
+    let out = vimma_ctl(&server.profile, &["send-keys", "j"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let lines = server.lines();
+    let nonce = nonce_of(&lines[0]);
+    assert_eq!(
+        lines[0],
+        format!(r#"{{"nonce":"{nonce}","protocol":2,"role":"full","type":"hello"}}"#)
+    );
+}
+
+#[test]
+fn says_the_control_socket_is_off_when_only_mcp_is_on() {
+    let server = Server::start(|_, _| None);
+    let port = read_port(&server.profile);
+    write_discovery_v2(&server.profile, port, r#"["agent"]"#);
+    let out = vimma_ctl(&server.profile, &["state"]);
+    assert_eq!(out.status.code(), Some(3), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("set the pref vimma.control.enabled to true"),
+        "{}",
+        stderr(&out)
+    );
+    // Nothing was sent: it did not even connect. Unblock the fake server's accept.
+    drop(TcpStream::connect(("127.0.0.1", port)));
+    assert_eq!(server.lines(), Vec::<String>::new());
+}
+
+#[test]
+fn reports_role_off_with_exit_3() {
+    let server = Server::start(|_, _| {
+        Some(vec![
+            r#"{"type":"response","id":null,"ok":false,"error":{"code":"role-off","message":"the control socket is off: set the pref vimma.control.enabled to true"}}"#
+                .into(),
+        ])
+    });
+    let port = read_port(&server.profile);
+    write_discovery_v2(&server.profile, port, r#"["full"]"#);
+    let out = vimma_ctl(&server.profile, &["state"]);
+    assert_eq!(out.status.code(), Some(3), "{}", stderr(&out));
+    assert_eq!(
+        stderr(&out),
+        "vimma-ctl: role-off: the control socket is off: set the pref vimma.control.enabled to true\n"
+    );
+    drop(server.lines());
+}
+
+/// The port the fake server's discovery file names.
+fn read_port(profile: &Path) -> u16 {
+    let text = fs::read_to_string(profile.join("vimma-control.json")).unwrap();
+    let value = vimma_ctl::json::parse(&text).unwrap();
+    u16::try_from(
+        value
+            .get("port")
+            .and_then(vimma_ctl::json::Value::as_u64)
+            .unwrap(),
+    )
+    .unwrap()
 }

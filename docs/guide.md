@@ -804,9 +804,10 @@ tab count. `m` on it asks
 Every profile has a workspace named `agent`, for local AI agents (Claude Code, Codex, opencode,
 Copilot) to use later through `vimma-ctl mcp`. It is a workspace like the others, with a
 container of its own, so its cookies and logins are apart from `main`, `work` and the rest. An
-agent will only ever reach this workspace, and every request asks you first. **The agent
-connection is not in this build yet:** for now the workspace is there, empty, and `:mcp on`
-records your choice. Spec: [vimma-mcp](specs/vimma-mcp.md).
+agent will only ever reach this workspace, and every request asks you first. **Not usable yet:**
+with `:mcp on`, Vimma's side of the agent connection runs (the control socket's agent role), but
+the question you answer requests with and `vimma-ctl mcp` are still to come, so for now every
+request an agent makes is denied after its timeout. Spec: [vimma-mcp](specs/vimma-mcp.md).
 
 - **Made for you.** A new profile gets it after `main`; an existing one at its next start. It
   is cyan, with the fingerprint icon. It has no tabs until you move one in (or an agent opens
@@ -828,9 +829,10 @@ records your choice. Spec: [vimma-mcp](specs/vimma-mcp.md).
 
 | Command       | What it does                                                                                             |
 | ------------- | -------------------------------------------------------------------------------------------------------- |
-| `:mcp`        | Says whether agents are on or off, and which workspace is theirs.                                        |
+| `:mcp`        | Says whether agents are on or off, which workspace is theirs, and how many agents, questions and grants. |
 | `:mcp on`     | Asks `Let local AI agents ask to use the "agent" workspace? Every request asks you first. y/N`, then on. |
-| `:mcp off`    | Turns agents off, without a question.                                                                    |
+| `:mcp off`    | Turns agents off, without a question. Connected agents are disconnected and their grants end.            |
+| `:mcp revoke` | Ends every time-limited grant you gave agents, at once.                                                  |
 | `:mcp forget` | Asks, then deletes the agent workspace's cookies and site data (its logins). The workspace stays.        |
 
 - When the agent workspace is one of yours rather than one Vimma made, `:mcp on` warns:
@@ -1285,35 +1287,35 @@ type reaches the page, and `ctrl+b` sequences still work.
 - An argument is the rest of the line, as typed. Quotes are removed only when one pair wraps all
   of it: `:tabrename "my  tab"`.
 
-| Command                               | What it does                                                                                                                     |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `:open text`                          | Opens `text` in this tab as the URL bar would: `example.com` becomes a web address, other words a web search.                    |
-| `:tabnew`, `:tabnew text`             | Opens a new tab; with text, opens it there (as `:open`).                                                                         |
-| `:q`, `:quit`                         | Closes the pane, as `ctrl+b x`; with one pane the tab, as `x`: a pinned tab is kept and the next one selected.                   |
-| `:map`, `:help`, `:h`                 | Shows every binding (the `ctrl+b ?` overlay).                                                                                    |
-| `:scroll_down`, `:tab.next`…          | Any action by its name in [bindings.md](bindings.md), or by its dotted id. Actions take no argument.                             |
-| `:tabrename [name]`                   | Renames the tab; without a name, opens the rename prompt.                                                                        |
-| `:ls`, `:b`                           | Opens the goto picker.                                                                                                           |
-| `:vsplit`/`:vs`, `:split`/`:sp`       | Splits the pane right / down, as `ctrl+b v` / `ctrl+b -`.                                                                        |
-| `:layout [name]`                      | Arranges the panes in the named preset ([Layouts](#layouts)); Tab completes the names. Without one, the next preset.             |
-| `:wsnext`/`:wn`, `:wsprev`/`:wp`      | Next / previous workspace, as `ctrl+b )` / `ctrl+b (`.                                                                           |
-| `:workspace name`, `:ws 2`, `:ws #`   | Switches to the workspace with that name, that number in workspace order, or the previous one (`ctrl+^`). `Tab` completes names. |
-| `:workspace`, `:ws`, `:workspaces`    | Opens the workspace picker.                                                                                                      |
-| `:wa name`, `:wd [name]`              | `:wsnew`, `:wsdelete` ([Workspaces as Vim buffers](#workspaces-as-vim-buffers)).                                                 |
-| `:private`, `:priv`, `:private close` | Goes to the [private workspace](#private-workspace) and back, as `ctrl+b shift+p`; `close` closes it (asks `y/N`).               |
-| `:sidebar`                            | Opens or closes the side panel, as `ctrl+b b`.                                                                                   |
-| `:route`, `:route add`, `:route move` | Workspace routing rules: list them, add one for this site, move this tab ([Routing](#routing-which-workspace-a-link-opens-in)).  |
-| `:bookmarks`                          | Opens or closes the [bookmarks panel](#bookmarks), as `ctrl+b shift+b`.                                                          |
-| `:bookmark [path]`                    | Bookmarks the page under `path` (`work/docs/title`); without one, opens the prompt, as `ctrl+b a`.                               |
-| `:source`                             | Reads `config.toml` now instead of within 2 seconds (see [config.toml](#configtoml)).                                            |
-| `:source path`                        | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                                  |
-| `:config`                             | Opens `config.toml` in a new tab (read-only view); creates it from a commented template when it is missing.                      |
-| `:mcp [on\|off\|forget]`              | Agents and the [agent workspace](#agent-workspace): the status, on (asks `y/N`), off, or forget its logins (asks `y/N`).         |
-| `:theme [dark\|light\|system]`        | The built-in palette dark, light or as the system is; bare, the other of dark and light (see [Colours](#colours-and-themes)).    |
-| `:about`, `:vimma`                    | Opens [about:vimma](#aboutvimma) in a new tab.                                                                                   |
-| `:addons`                             | Opens the [add-on picker](#add-ons), as `ctrl+b e`.                                                                              |
-| `:addon name`                         | Opens that add-on's popup; `Tab` completes the name ([Add-ons](#add-ons)).                                                       |
-| `:bug`                                | Opens about:vimma and copies its redacted report to the clipboard, for a bug report.                                             |
+| Command                               | What it does                                                                                                                                |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `:open text`                          | Opens `text` in this tab as the URL bar would: `example.com` becomes a web address, other words a web search.                               |
+| `:tabnew`, `:tabnew text`             | Opens a new tab; with text, opens it there (as `:open`).                                                                                    |
+| `:q`, `:quit`                         | Closes the pane, as `ctrl+b x`; with one pane the tab, as `x`: a pinned tab is kept and the next one selected.                              |
+| `:map`, `:help`, `:h`                 | Shows every binding (the `ctrl+b ?` overlay).                                                                                               |
+| `:scroll_down`, `:tab.next`…          | Any action by its name in [bindings.md](bindings.md), or by its dotted id. Actions take no argument.                                        |
+| `:tabrename [name]`                   | Renames the tab; without a name, opens the rename prompt.                                                                                   |
+| `:ls`, `:b`                           | Opens the goto picker.                                                                                                                      |
+| `:vsplit`/`:vs`, `:split`/`:sp`       | Splits the pane right / down, as `ctrl+b v` / `ctrl+b -`.                                                                                   |
+| `:layout [name]`                      | Arranges the panes in the named preset ([Layouts](#layouts)); Tab completes the names. Without one, the next preset.                        |
+| `:wsnext`/`:wn`, `:wsprev`/`:wp`      | Next / previous workspace, as `ctrl+b )` / `ctrl+b (`.                                                                                      |
+| `:workspace name`, `:ws 2`, `:ws #`   | Switches to the workspace with that name, that number in workspace order, or the previous one (`ctrl+^`). `Tab` completes names.            |
+| `:workspace`, `:ws`, `:workspaces`    | Opens the workspace picker.                                                                                                                 |
+| `:wa name`, `:wd [name]`              | `:wsnew`, `:wsdelete` ([Workspaces as Vim buffers](#workspaces-as-vim-buffers)).                                                            |
+| `:private`, `:priv`, `:private close` | Goes to the [private workspace](#private-workspace) and back, as `ctrl+b shift+p`; `close` closes it (asks `y/N`).                          |
+| `:sidebar`                            | Opens or closes the side panel, as `ctrl+b b`.                                                                                              |
+| `:route`, `:route add`, `:route move` | Workspace routing rules: list them, add one for this site, move this tab ([Routing](#routing-which-workspace-a-link-opens-in)).             |
+| `:bookmarks`                          | Opens or closes the [bookmarks panel](#bookmarks), as `ctrl+b shift+b`.                                                                     |
+| `:bookmark [path]`                    | Bookmarks the page under `path` (`work/docs/title`); without one, opens the prompt, as `ctrl+b a`.                                          |
+| `:source`                             | Reads `config.toml` now instead of within 2 seconds (see [config.toml](#configtoml)).                                                       |
+| `:source path`                        | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                                             |
+| `:config`                             | Opens `config.toml` in a new tab (read-only view); creates it from a commented template when it is missing.                                 |
+| `:mcp [on\|off\|revoke\|forget]`      | Agents and the [agent workspace](#agent-workspace): the status, on (asks `y/N`), off, revoke the grants, or forget its logins (asks `y/N`). |
+| `:theme [dark\|light\|system]`        | The built-in palette dark, light or as the system is; bare, the other of dark and light (see [Colours](#colours-and-themes)).               |
+| `:about`, `:vimma`                    | Opens [about:vimma](#aboutvimma) in a new tab.                                                                                              |
+| `:addons`                             | Opens the [add-on picker](#add-ons), as `ctrl+b e`.                                                                                         |
+| `:addon name`                         | Opens that add-on's popup; `Tab` completes the name ([Add-ons](#add-ons)).                                                                  |
+| `:bug`                                | Opens about:vimma and copies its redacted report to the clipboard, for a bug report.                                                        |
 
 A command that is not built yet says so for a moment, as its keys do.
 
@@ -1463,6 +1465,11 @@ is **off by default**. Spec: [m0-control-server](specs/m0-control-server.md), pr
 
    It finds your default profile itself; pass `--profile DIR` (or set `VIMMA_PROFILE`) for
    another one. In Hyprland: `bind = SUPER, slash, exec, vimma-ctl send-keys "ctrl+b ?"`.
+
+   The socket also starts when only agents are on ([`:mcp on`](#agent-workspace)); that side
+   is for agents only, so `vimma-ctl` then says the control socket is off until you set
+   `vimma.control.enabled` too. A `vimma-ctl` from before protocol 2 still works with this
+   Vimma.
 
 `send-keys` presses the keys in the most recently focused Vimma window, exactly as typing them
 would: Vimma's bindings, Firefox's shortcuts (`ctrl+t`, `ctrl+q`) and the page all see them. Keys

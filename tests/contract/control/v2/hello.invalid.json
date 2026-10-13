@@ -1,0 +1,10 @@
+{
+  "description": "A role the protocol does not have",
+  "kind": "hello",
+  "message": {
+    "type": "hello",
+    "protocol": 2,
+    "nonce": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+    "role": "root"
+  }
+}

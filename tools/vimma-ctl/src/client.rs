@@ -7,7 +7,7 @@
 
 use crate::json::{self, Value};
 use crate::protocol::{
-    self, Command, CommandResult, Discovery, ErrorBody, MAX_LINE, PROTOCOL, Response,
+    self, Command, CommandResult, Discovery, ErrorBody, MAX_LINE, Response, Role,
 };
 use std::fmt;
 use std::io::{self, BufRead, BufReader, Write};
@@ -81,6 +81,17 @@ impl Client {
     /// [`Error::NotRunning`] when nothing listens, [`Error::Auth`] when the token or protocol is
     /// refused, [`Error::Protocol`] on a malformed or late reply.
     pub fn connect(discovery: &Discovery, timeout: Duration) -> Result<Self, Error> {
+        // vimma-ctl's commands are the `full` role. A protocol 2 Vimma says which roles it
+        // serves: with only MCP on, the control socket's full side is off (vimma-mcp decision 3).
+        if !discovery.roles.contains(&Role::Full) {
+            return Err(Error::NotRunning(
+                "Vimma's control socket is off (only MCP is on); set the pref \
+                 vimma.control.enabled to true"
+                    .to_string(),
+            ));
+        }
+        // Speak the newest protocol both sides know: 2 (role full) when the file says 2.
+        let protocol = discovery.protocol.min(protocol::PROTOCOL);
         let timeout = timeout.min(MAX_TIMEOUT);
         let deadline = Instant::now()
             .checked_add(timeout)
@@ -103,12 +114,17 @@ impl Client {
             Error::Protocol(format!("cannot read random bytes for the handshake: {e}"))
         })?;
         // 1. hello: a fresh nonce and no token.
-        client.send(&protocol::hello(&nonce))?;
+        let hello = if protocol >= 2 {
+            protocol::hello_v2(&nonce, Role::Full)
+        } else {
+            protocol::hello(&nonce)
+        };
+        client.send(&hello)?;
         let reply = client.handshake_reply("challenge")?;
         let challenge = protocol::decode_challenge(&reply).map_err(protocol_error)?;
-        if challenge.protocol != PROTOCOL {
+        if challenge.protocol != protocol {
             return Err(Error::Protocol(format!(
-                "server speaks protocol {}, this vimma-ctl speaks {PROTOCOL}",
+                "server speaks protocol {}, this vimma-ctl speaks {protocol}",
                 challenge.protocol
             )));
         }
@@ -126,10 +142,11 @@ impl Client {
         client.send(&protocol::auth(&discovery.token))?;
         let reply = client.handshake_reply("welcome")?;
         let welcome = protocol::decode_welcome(&reply).map_err(protocol_error)?;
-        if welcome.protocol != PROTOCOL {
+        if welcome.protocol != protocol || welcome.role != Role::Full {
             return Err(Error::Protocol(format!(
-                "server speaks protocol {}, this vimma-ctl speaks {PROTOCOL}",
-                welcome.protocol
+                "server speaks protocol {} as {}, this vimma-ctl speaks {protocol} as full",
+                welcome.protocol,
+                welcome.role.name()
             )));
         }
         Ok(client)
@@ -141,6 +158,10 @@ impl Client {
         if reply.get("type") == Some(&Value::String("response".into())) {
             return match protocol::decode_response(&reply).map_err(protocol_error)? {
                 Response::Err { error, .. } if error.code == "busy" => Err(Error::Busy(error)),
+                // The role asked for is off in Vimma: like a socket that is off (exit 3).
+                Response::Err { error, .. } if error.code == "role-off" => Err(Error::NotRunning(
+                    format!("{}: {}", error.code, error.message),
+                )),
                 Response::Err { error, .. } => Err(Error::Auth(error)),
                 Response::Ok { .. } => Err(Error::Protocol(format!(
                     "expected {expected}, got a result"
@@ -271,6 +292,7 @@ mod tests {
         ErrorBody {
             code: code.into(),
             message: "m".into(),
+            reason: None,
         }
     }
 
@@ -303,6 +325,7 @@ mod tests {
             port,
             token: "0".repeat(64),
             pid: 1,
+            roles: vec![Role::Full],
         };
         let result = Client::connect(&discovery, Duration::MAX);
         assert!(matches!(result, Err(Error::NotRunning(_))), "{result:?}");

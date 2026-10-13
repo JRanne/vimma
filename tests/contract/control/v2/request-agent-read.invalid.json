@@ -1,0 +1,13 @@
+{
+  "description": "A format the server does not have",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 3,
+    "command": "agent-read",
+    "args": {
+      "tab": "12",
+      "format": "html"
+    }
+  }
+}

@@ -2,12 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Local AI agents and the agent workspace (docs/specs/vimma-mcp.md, sub-PR 1): `[mcp]` from
-// config.toml, the pref `vimma.mcp.enabled` that `:mcp on|off` sets, and `:mcp forget`. The agent
-// role of the control socket, which reads this switch, is sub-PR 2.
+// Local AI agents and the agent workspace (docs/specs/vimma-mcp.md): `[mcp]` from config.toml,
+// the pref `vimma.mcp.enabled` that `:mcp on|off` sets, `:mcp forget` and `:mcp revoke`. The
+// control socket's agent role (ctl/VimmaControl.sys.mjs) runs while `state.enabled` is true and
+// hears of every change through MCP_CHANGED_TOPIC.
 
 import {
   MCP_FORGET_QUESTION,
+  mcpActivity,
   mcpOnQuestion,
   mcpStatus,
   parseMcpCommand,
@@ -19,6 +21,14 @@ import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
 
 /** `:mcp on|off` (decision 3); `[mcp] enabled` in config.toml wins over it (decision 26). */
 export const MCP_ENABLED_PREF = "vimma.mcp.enabled";
+/** Told when `[mcp]` was (re)read: the socket's agent role may have to start or stop. */
+export const MCP_CHANGED_TOPIC = "vimma-mcp-changed";
+
+const lazy = /** @type {any} */ ({});
+// Lazily, at call time: AgentGate reads `[mcp]` from this module too.
+ChromeUtils.defineESModuleGetters(lazy, {
+  AgentGate: "chrome://browser/content/vimma/ctl/AgentGate.sys.mjs",
+});
 
 /** @type {McpConfig | null} config.toml's `[mcp]`, once read; until then the defaults apply. */
 let config = null;
@@ -33,6 +43,7 @@ export const McpHost = {
    */
   configure(mcp) {
     config = mcp;
+    Services.obs.notifyObservers(null, MCP_CHANGED_TOPIC);
   },
 
   /** `[mcp]` in force, or null before config.toml was read. */
@@ -64,8 +75,22 @@ export const McpHost = {
     switch (command.kind) {
       case "refuse":
         return command.text;
-      case "status":
-        return mcpStatus({ ...this.state, workspace: name });
+      case "status": {
+        const gate = lazy.AgentGate;
+        const activity = mcpActivity({
+          connections: gate.connections.length,
+          waiting: gate.waiting.length,
+          grants: gate.grants(),
+          now: Date.now(),
+        });
+        return mcpStatus({ ...this.state, workspace: name }) + activity;
+      }
+      case "revoke": {
+        const n = lazy.AgentGate.revoke();
+        return n
+          ? `mcp: ended ${n} agent grant${n === 1 ? "" : "s"}`
+          : "mcp: no agent grants to end";
+      }
       case "forget":
         return forget(ask, say);
       case "on":

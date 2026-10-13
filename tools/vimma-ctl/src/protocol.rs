@@ -2,16 +2,18 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-//! Protocol version 1 messages: encoding what the client sends (`hello`, requests) and decoding
-//! what it receives (`welcome`, responses, results) and the discovery file. The rules mirror
-//! `packages/vimma-core/src/control.mjs`; both are tested against `tests/contract/control/v1/`.
+//! Protocol messages, versions 1 and 2: encoding what the client sends (`hello`, requests) and
+//! decoding what it receives (`welcome`, responses, results) and the discovery file. The rules
+//! mirror `packages/vimma-core/src/control.mjs`; both are tested against
+//! `tests/contract/control/v1/` and `v2/`. Protocol 2 adds the hello's role
+//! (docs/specs/vimma-mcp.md, decision 2): vimma-ctl's own commands use `full`.
 
 use crate::json::Value;
 use std::collections::BTreeMap;
 use std::fmt;
 
-/// The protocol version this client speaks.
-pub const PROTOCOL: u64 = 1;
+/// The newest protocol version this client speaks; it falls back to 1 for an older Vimma.
+pub const PROTOCOL: u64 = 2;
 /// Longest line accepted from the server, in bytes, excluding the newline.
 pub const MAX_LINE: usize = 1024 * 1024;
 /// Largest request id (2^53 - 1, exact in a JSON number).
@@ -21,7 +23,7 @@ pub const MODES: [&str; 8] = [
     "normal", "insert", "visual", "command", "hint", "help", "panel", "resize",
 ];
 /// vimma-core's `ERROR_CODES`.
-pub const ERROR_CODES: [&str; 9] = [
+pub const ERROR_CODES: [&str; 11] = [
     "bad-request",
     "unauthorized",
     "unsupported-protocol",
@@ -31,7 +33,38 @@ pub const ERROR_CODES: [&str; 9] = [
     "failed",
     "internal",
     "busy",
+    "role-off",
+    "denied",
 ];
+/// vimma-core's `DENY_REASONS`: why an agent request was denied.
+pub const DENY_REASONS: [&str; 5] = ["user", "timeout", "busy", "muted", "changed"];
+
+/// A connection's role (protocol 2). Protocol 1 is always `Full`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    /// The agent commands only, confined to the agent workspace and confirmed in Vimma.
+    Agent,
+    /// Protocol 1's commands: `send-keys`, `state`, `open`, `reload-theme`.
+    Full,
+}
+
+impl Role {
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Role::Agent => "agent",
+            Role::Full => "full",
+        }
+    }
+
+    fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "agent" => Some(Role::Agent),
+            "full" => Some(Role::Full),
+            _ => None,
+        }
+    }
+}
 
 /// Where `open` loads the URL.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,6 +94,8 @@ pub struct Welcome {
     pub protocol: u64,
     pub app: String,
     pub version: String,
+    /// The connection's role: `Full` for protocol 1.
+    pub role: Role,
 }
 
 /// The server's `challenge`: proof that it knows the token, before the client sends it.
@@ -79,6 +114,8 @@ pub const CHALLENGE_CONTEXT: &str = "vimma-server\0";
 pub struct ErrorBody {
     pub code: String,
     pub message: String,
+    /// Why, for `denied` (protocol 2); `None` for every other code.
+    pub reason: Option<String>,
 }
 
 /// A decoded response envelope; `id` is `None` for handshake errors.
@@ -123,6 +160,8 @@ pub struct Discovery {
     pub port: u16,
     pub token: String,
     pub pid: u64,
+    /// The roles the server serves: `[Full]` for protocol 1.
+    pub roles: Vec<Role>,
 }
 
 /// Why a message does not follow the protocol.
@@ -144,6 +183,17 @@ pub fn hello(nonce: &str) -> Value {
         ("type", text("hello")),
         ("protocol", Value::Number(1.0)),
         ("nonce", text(nonce)),
+    ])
+}
+
+/// A protocol 2 `hello`: the same, and the connection's `role`.
+#[must_use]
+pub fn hello_v2(nonce: &str, role: Role) -> Value {
+    object([
+        ("type", text("hello")),
+        ("protocol", Value::Number(2.0)),
+        ("nonce", text(nonce)),
+        ("role", text(role.name())),
     ])
 }
 
@@ -199,10 +249,21 @@ pub fn request(id: u32, command: &Command) -> Value {
 pub fn decode_welcome(value: &Value) -> Result<Welcome, DecodeError> {
     let map = as_object(value, "welcome")?;
     expect_type(map, "welcome")?;
+    let protocol = protocol_field(map)?;
+    let role = if protocol >= 2 {
+        match map.get("role") {
+            Some(Value::String(role)) => Role::from_name(role),
+            _ => None,
+        }
+        .ok_or_else(|| fail("role must be \"agent\" or \"full\""))?
+    } else {
+        Role::Full
+    };
     Ok(Welcome {
-        protocol: protocol_field(map)?,
+        protocol,
         app: string_field(map, "app")?.to_string(),
         version: string_field(map, "version")?.to_string(),
+        role,
     })
 }
 
@@ -250,7 +311,7 @@ pub fn decode_response(value: &Value) -> Result<Response, DecodeError> {
         (true, _, _) => Err(fail("ok: true needs result and no error")),
         (false, None, Some(error)) => {
             let error = as_object(error, "error")?;
-            only_fields(error, &["code", "message"], "error.")?;
+            only_fields(error, &["code", "message", "reason"], "error.")?;
             let code = string_field(error, "code")
                 .ok()
                 .filter(|code| ERROR_CODES.contains(code))
@@ -262,11 +323,28 @@ pub fn decode_response(value: &Value) -> Result<Response, DecodeError> {
                 })?;
             let message = string_field(error, "message")
                 .map_err(|_| fail("error.message must be a string"))?;
+            // A denial says why; nothing else carries a reason.
+            let reason = match (code, error.get("reason")) {
+                ("denied", Some(Value::String(reason)))
+                    if DENY_REASONS.contains(&reason.as_str()) =>
+                {
+                    Some(reason.clone())
+                }
+                ("denied", _) => {
+                    return Err(fail(&format!(
+                        "error.reason must be one of {}",
+                        DENY_REASONS.join(", ")
+                    )));
+                }
+                (_, Some(_)) => return Err(fail("error.reason is only for denied")),
+                (_, None) => None,
+            };
             Ok(Response::Err {
                 id,
                 error: ErrorBody {
                     code: code.to_string(),
                     message: message.to_string(),
+                    reason,
                 },
             })
         }
@@ -385,12 +463,42 @@ pub fn decode_discovery(value: &Value) -> Result<Discovery, DecodeError> {
         .and_then(Value::as_u64)
         .filter(|pid| *pid >= 1)
         .ok_or_else(|| fail("pid must be an integer >= 1"))?;
+    let roles = if protocol >= 2 || map.contains_key("roles") {
+        decode_roles(map.get("roles"))?
+    } else {
+        vec![Role::Full]
+    };
     Ok(Discovery {
         protocol,
         port,
         token,
         pid,
+        roles,
     })
+}
+
+/// The discovery file's `roles`: one or both, each once.
+fn decode_roles(value: Option<&Value>) -> Result<Vec<Role>, DecodeError> {
+    let bad = || fail("roles must be a list of \"agent\" and \"full\", each once");
+    let Some(Value::Array(items)) = value else {
+        return Err(bad());
+    };
+    let mut roles = Vec::with_capacity(items.len());
+    for item in items {
+        let role = match item {
+            Value::String(name) => Role::from_name(name),
+            _ => None,
+        }
+        .ok_or_else(bad)?;
+        if roles.contains(&role) {
+            return Err(bad());
+        }
+        roles.push(role);
+    }
+    if roles.is_empty() {
+        return Err(bad());
+    }
+    Ok(roles)
 }
 
 fn fail(message: &str) -> DecodeError {
@@ -758,7 +866,8 @@ mod tests {
                 id: None,
                 error: ErrorBody {
                     code: "unauthorized".into(),
-                    message: "no".into()
+                    message: "no".into(),
+                    reason: None,
                 }
             })
         );
@@ -868,7 +977,8 @@ mod tests {
                 protocol: 1,
                 port: 1,
                 token: TOKEN.into(),
-                pid: 1
+                pid: 1,
+                roles: vec![Role::Full],
             })
         );
         assert!(decode_discovery(&file("0", TOKEN, "1")).is_err());
@@ -876,5 +986,120 @@ mod tests {
         assert!(decode_discovery(&file("1", &TOKEN.to_uppercase(), "1")).is_err());
         assert!(decode_discovery(&file("1", "abc", "1")).is_err());
         assert!(decode_discovery(&file("1", TOKEN, "0")).is_err());
+    }
+
+    // Protocol 2 (docs/specs/vimma-mcp.md, decision 2; fixtures tests/contract/control/v2/).
+
+    fn v2_fixtures() -> Vec<(String, Value)> {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/contract/control/v2");
+        let mut out: Vec<(String, Value)> = fs::read_dir(&dir)
+            .expect("v2 fixtures")
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .filter(|name| Path::new(name).extension().is_some_and(|ext| ext == "json"))
+            .map(|name| {
+                let text = fs::read_to_string(dir.join(&name)).unwrap();
+                (
+                    name.clone(),
+                    parse(&text).unwrap_or_else(|e| panic!("{name}: {e}")),
+                )
+            })
+            .collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    }
+
+    /// Agent commands and their results: `vimma-ctl mcp` sends and decodes them (sub-PR 3).
+    fn agent_only(name: &str) -> bool {
+        name.starts_with("request-agent-") || name.starts_with("response-agent-")
+    }
+
+    #[test]
+    fn decodes_v2_server_direction_fixtures_as_named() {
+        let mut seen = 0;
+        for (name, fixture) in v2_fixtures() {
+            let kind = str_field(&fixture, "kind").unwrap();
+            if matches!(kind, "hello" | "auth" | "request") || agent_only(&name) {
+                continue;
+            }
+            seen += 1;
+            let result = decode_fixture(&fixture);
+            if name.ends_with(".valid.json") {
+                assert_eq!(result, Ok(()), "{name}");
+            } else {
+                assert!(result.is_err(), "{name} decoded but is invalid");
+            }
+        }
+        assert!(seen >= 8, "only {seen} v2 server-direction fixtures");
+    }
+
+    #[test]
+    fn encodes_v2_hellos_exactly() {
+        for (name, fixture) in v2_fixtures() {
+            if str_field(&fixture, "kind") != Some("hello") || !name.ends_with(".valid.json") {
+                continue;
+            }
+            let message = fixture.get("message").unwrap();
+            let role = match str_field(message, "role") {
+                Some("agent") => Role::Agent,
+                Some("full") => Role::Full,
+                other => panic!("{name}: role {other:?}"),
+            };
+            let nonce = str_field(message, "nonce").unwrap();
+            assert_eq!(&hello_v2(nonce, role), message, "{name}");
+        }
+        assert_eq!(
+            hello_v2(&"ab".repeat(32), Role::Full).to_string(),
+            format!(
+                r#"{{"nonce":"{}","protocol":2,"role":"full","type":"hello"}}"#,
+                "ab".repeat(32)
+            )
+        );
+    }
+
+    #[test]
+    fn decode_discovery_reads_the_roles() {
+        let file = |text: &str| decode_discovery(&parse(text).unwrap());
+        let v1 = format!(r#"{{"protocol":1,"port":9,"token":"{TOKEN}","pid":3}}"#);
+        assert_eq!(file(&v1).unwrap().roles, vec![Role::Full]);
+        let v2 = |roles: &str| {
+            format!(r#"{{"protocol":2,"port":9,"token":"{TOKEN}","pid":3,"roles":{roles}}}"#)
+        };
+        assert_eq!(file(&v2(r#"["agent"]"#)).unwrap().roles, vec![Role::Agent]);
+        assert_eq!(
+            file(&v2(r#"["full","agent"]"#)).unwrap().roles,
+            vec![Role::Full, Role::Agent]
+        );
+        for bad in ["[]", r#"["root"]"#, r#"["full","full"]"#, r#""full""#] {
+            assert!(file(&v2(bad)).is_err(), "{bad}");
+        }
+        let missing = format!(r#"{{"protocol":2,"port":9,"token":"{TOKEN}","pid":3}}"#);
+        assert!(file(&missing).is_err());
+    }
+
+    #[test]
+    fn a_denial_carries_its_reason_and_nothing_else_does() {
+        let decode = |text: &str| decode_response(&parse(text).unwrap());
+        let denied = decode(
+            r#"{"type":"response","id":2,"ok":false,"error":{"code":"denied","message":"no","reason":"timeout"}}"#,
+        );
+        assert_eq!(
+            denied,
+            Ok(Response::Err {
+                id: Some(2),
+                error: ErrorBody {
+                    code: "denied".into(),
+                    message: "no".into(),
+                    reason: Some("timeout".into()),
+                },
+            })
+        );
+        assert!(
+            decode(
+                r#"{"type":"response","id":2,"ok":false,"error":{"code":"denied","message":"no"}}"#
+            )
+            .is_err()
+        );
+        assert!(decode(r#"{"type":"response","id":2,"ok":false,"error":{"code":"denied","message":"no","reason":"bored"}}"#).is_err());
+        assert!(decode(r#"{"type":"response","id":2,"ok":false,"error":{"code":"failed","message":"no","reason":"user"}}"#).is_err());
     }
 }

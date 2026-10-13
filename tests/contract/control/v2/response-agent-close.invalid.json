@@ -1,0 +1,13 @@
+{
+  "description": "closed must be true",
+  "kind": "response",
+  "command": "agent-close",
+  "message": {
+    "type": "response",
+    "id": 5,
+    "ok": true,
+    "result": {
+      "closed": false
+    }
+  }
+}

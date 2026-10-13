@@ -1,0 +1,12 @@
+{
+  "description": "Close an agent tab",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 5,
+    "command": "agent-close",
+    "args": {
+      "tab": "12"
+    }
+  }
+}

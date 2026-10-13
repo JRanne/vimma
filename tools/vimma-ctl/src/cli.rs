@@ -406,7 +406,7 @@ mod tests {
         );
         assert_eq!(
             String::from_utf8(out).unwrap(),
-            format!("vimma-ctl {} (protocol 1)\n", env!("CARGO_PKG_VERSION"))
+            format!("vimma-ctl {} (protocol 2)\n", env!("CARGO_PKG_VERSION"))
         );
     }
 
