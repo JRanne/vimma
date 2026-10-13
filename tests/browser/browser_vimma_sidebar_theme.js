@@ -123,6 +123,9 @@ async function ln(target, link) {
   Assert.equal(exitCode, 0, `ln -sfn ${target} ${link}`);
 }
 
+/** A bookmark the bookmarks cases rename in place (setup). */
+let RENAME_GUID = "";
+
 const root = PathUtils.join(PathUtils.tempDir, `vimma-sidebar-theme-${Date.now()}`);
 const dir = (/** @type {string} */ name) => PathUtils.join(root, "themes", name);
 const currentTheme = PathUtils.join(root, "current", "theme");
@@ -320,6 +323,44 @@ function assertSidebarFollowsTheTheme(label, doc) {
     `${border} ${surface}`,
     `${label}: ${doc.location.href} the list's scrollbar is --vimma-muted on --vimma-bg-dark`,
   );
+  if (tree) assertRenameFieldFollowsTheTheme(label, /** @type {any} */ (tree));
+}
+
+/**
+ * Renames a bookmark in place in the bookmarks tree and checks what its field paints: an
+ * <input class="tree-input"> in the tree's shadow root, which no document sheet reaches and
+ * which the UA fills with Field (grey #2b2a33 or white), its selected text in Highlight.
+ * @param {string} label  which theme, for the messages
+ * @param {any} tree  the bookmarks sidebar's places tree
+ */
+function assertRenameFieldFollowsTheTheme(label, tree) {
+  const style = (/** @type {Element} */ el, /** @type {string} */ pseudo = "") =>
+    el.ownerDocument.defaultView.getComputedStyle(el, pseudo);
+  const t = (/** @type {string} */ name) => rgb(token(name));
+  // Firefox's bookmarks sidebar tree is not editable by default (editBookmark.js's folder tree
+  // is): opt in for the test, the field and its styles are the same.
+  tree.setAttribute("editable", "true");
+  tree.selectItems([RENAME_GUID], true);
+  const row = tree.view.treeIndexForNode(tree.selectedNode);
+  Assert.greater(row, -1, `${label}: the bookmark to rename shows`);
+  Assert.ok(tree.startEditing(row, tree.columns.getFirstColumn()), `${label}: rename in place`);
+  const field = /** @type {HTMLInputElement} */ (tree.shadowRoot.querySelector(".tree-input"));
+  Assert.ok(!field.hidden && field.matches(":focus"), `${label}: the rename field has focus`);
+  Assert.equal(style(field).backgroundColor, t("--vimma-bg"), `${label}: rename field surface`);
+  Assert.equal(style(field).color, t("--vimma-fg"), `${label}: rename field text`);
+  Assert.equal(ringColour(field), t("--vimma-focus"), `${label}: rename field ring`);
+  Assert.equal(
+    style(field, "::selection").backgroundColor,
+    t("--vimma-selection"),
+    `${label}: the rename field's selected text is on --vimma-selection, not Highlight`,
+  );
+  Assert.equal(
+    style(field, "::selection").color,
+    t("--vimma-fg-bright"),
+    `${label}: the rename field's selected text is --vimma-fg-bright`,
+  );
+  tree.stopEditing(false);
+  tree.removeAttribute("editable");
 }
 
 add_task(async function setup() {
@@ -334,6 +375,13 @@ add_task(async function setup() {
   await IOUtils.writeUTF8(PathUtils.join(dir("light"), "light.mode"), "");
   await IOUtils.makeDirectory(PathUtils.join(root, "current"), { createAncestors: true });
   await ln(dir("one"), currentTheme);
+  RENAME_GUID = (
+    await PlacesUtils.bookmarks.insert({
+      parentGuid: PlacesUtils.bookmarks.unfiledGuid,
+      url: "https://example.com/rename-me",
+      title: "Rename me",
+    })
+  ).guid;
 
   // browser.toml pins vimma.theme.source=builtin for every other test; this one opts in.
   await SpecialPowers.pushPrefEnv({
@@ -347,6 +395,7 @@ add_task(async function setup() {
   registerCleanupFunction(async () => {
     SidebarController.hide();
     await SpecialPowers.popPrefEnv();
+    await PlacesUtils.bookmarks.remove(RENAME_GUID);
     await IOUtils.remove(root, { recursive: true });
   });
   await waitForTheme(DARK_ONE.darkBg, "theme one is current");
