@@ -100,17 +100,19 @@ function isAgentTab(win, tab, agent) {
 }
 
 /**
- * The agent's tabs, in window and strip order. A lazy one (restored, or unloaded under memory
- * pressure) gets its browser first, which gives it the id agents name it by; its page loads
- * only when it is read (spec B2).
- * @param {AgentWorkspace} agent @returns {{ win: Win, tab: Tab }[]}
+ * The agent's tabs, in window and strip order. With `name`, after the user's yes to the list, a
+ * lazy one (restored, or unloaded under memory pressure) gets its browser, which gives it the
+ * id agents name it by; its page loads only when it is read (spec B2). Without, nothing is
+ * touched: a lazy tab has no id yet, so no agent can name it.
+ * @param {AgentWorkspace} agent @param {boolean} [name]
+ * @returns {{ win: Win, tab: Tab }[]}
  */
-function agentTabs(agent) {
+function agentTabs(agent, name = false) {
   return normalWindows().flatMap((win) =>
     win.gBrowser.tabs
       .filter((/** @type {Tab} */ t) => isAgentTab(win, t, agent))
       .map((/** @type {Tab} */ tab) => {
-        if (!tab.linkedPanel) win.gBrowser.insertBrowser(tab);
+        if (name && !tab.linkedPanel) win.gBrowser.insertBrowser(tab);
         return { win, tab };
       }),
   );
@@ -291,7 +293,7 @@ const COMMANDS = {
     const now = agentWorkspace();
     if (now.id !== agent.id) throw denied("changed");
     return {
-      tabs: agentTabs(now).map(({ tab }) => ({
+      tabs: agentTabs(now, true).map(({ tab }) => ({
         id: tabId(tab),
         url: tabUrl(tab),
         title: String(tab.label ?? ""),
