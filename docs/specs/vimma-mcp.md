@@ -1112,13 +1112,47 @@ where the spec was silent (3 and 4 can revisit):
 - **Never opened, also later:** `launchDownload` refuses any agent download (or a file in the
   quarantine folder) with a notice, so the downloads list's "Open" does nothing for them.
 - **C2's one exception.** Chrome code never started a process (security.md C2); ClamAV needs
-  one. The check now allows exactly `Subprocess.pathSearch("clamscan")` and `Subprocess.call`
-  with fixed arguments in `ctl/AgentDownloads.sys.mjs`, and nothing else anywhere.
+  one, in `ctl/AgentDownloads.sys.mjs` only (tightened after the review, below).
 - **Found on the way:** 2b's external-protocol chooser wrapper made Firefox's own chooser with
   `Components.classesByID`, which system modules do not have, so every external-protocol link
   in every workspace threw. Fixed with `Components.manager.getClassObject`, with a test.
 - **vimma-ctl** (review of #177, follow-up): the full-control code is printed only after the auth
   carrying it was sent (`auth_then_code`, a Rust unit test).
+
+**After the security review of #182** (no critical or high; all fixed in 2c):
+
+- 1 (medium): a zip's entries count by what they become: the central directory's version made
+  by (Unix) and external attributes give each entry's mode, and an exec bit, a symbolic link or a
+  path with a `..` segment, a leading `/` or a drive letter makes the zip dangerous.
+- 2 (medium): a grant covered whatever the agent's tab later downloaded. Now `agent-open`
+  records the URL it loads; a download is that connection's only when it is that load (its URL
+  before redirects, within 60 s, once), and the record is dropped as soon as the tab shows a page
+  (`window-global-created`). Anything else asks as the page's.
+- 3 (medium): `download_dir` must not be a hidden folder of home or under `/tmp`, `/var/tmp` or
+  `/dev/shm` (config and at runtime, core `quarantineProblem`). At runtime the folder is made and
+  chmod 0700. A chmod that fails (not the user's folder) or a mode read back as anything else
+  makes it unusable. Agent downloads are then refused with a notice, and agent tabs download into
+  the profile's `vimma-agent-refused` instead (fail closed).
+- 4 (low): an agent download is also one by its tab's container and by being written to the
+  quarantine (or refusal) folder.
+- 5 (low): a `!` allows one kind of danger; another kind found in the bytes asks again.
+- 6 (low): `shouldKeepBlockedData` is left alone. `block()` deletes the `.part` itself.
+- 7 (low): clamscan's stderr is drained, it runs with `--alert-encrypted=yes
+--alert-exceeds-max=yes` and `--` before the path. An encrypted or over-the-limits verdict is
+  "not fully scanned". On that, an error, or five minutes without an answer (the process is
+  killed and not waited for), keeping the file is asked: y/N, no grant, a no deletes it.
+- 8 (low): tests for Firefox's "always ask" dialog, "always open similar files"
+  (useSystemDefault), a frame's download and a `blob:` download. Vitest's only intermittent test
+  here was the key-to-action bench gate (`tools/bench/test/bench.test.mjs`, the known noisy one,
+  issue #125). It failed once in four full runs and passed 5 of 5 alone. It measures wall-clock
+  time while other test files run in parallel, so it is not caused by this change.
+- C2 ("accept with changes"): no `pathSearch`. Only `/usr/bin/clamscan` or
+  `/usr/local/bin/clamscan` runs, and only when it is a regular, executable, non-symlink file the
+  user cannot write, in a folder the user cannot write, owned by another user. Ownership is
+  checked by a no-op chmod that must fail. The source check requires exactly one
+  `Subprocess.call(` with `command: clam` and `arguments: clamArguments(path)`, the fixed list,
+  and no aliasing, bracket access or PATH search. The tests reach a fake clamscan only through
+  `AgentDownloads._clamForTests`, which chrome code alone can set.
 
 ## Out of scope
 

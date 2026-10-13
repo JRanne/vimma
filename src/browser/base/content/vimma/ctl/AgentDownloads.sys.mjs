@@ -25,6 +25,7 @@ import {
   DOWNLOAD_TOOL,
   HEAD_BYTES,
   ZIP_TAIL_BYTES,
+  clamArguments,
   clamVerdict,
   dangerousContent,
   dangerousName,
@@ -32,8 +33,9 @@ import {
   displayDir,
   downloadRefusedNotice,
   downloadSavedNotice,
+  quarantineProblem,
   resolveDownloadDir,
-  zipEntryNames,
+  zipEntryList,
   zipLocate,
   zipVerdict,
 } from "../core/agent-downloads.mjs";
@@ -63,23 +65,41 @@ const DEFAULT_MAX_MB = /** @type {number} */ (DEFAULT_CONFIG.mcp?.download_max_m
 const WATCH_MS = 250;
 /** The longest ClamAV may take on one file before it counts as an error. */
 const CLAM_TIMEOUT_MS = 5 * 60 * 1000;
+/** Test-only: ClamAV's time limit in ms. */
+const CLAM_TIMEOUT_PREF = "vimma.mcp.clamTimeoutMs";
+/**
+ * The only clamscan Vimma runs (security.md C2's one exception; security review of #182): the
+ * system's, never one found on PATH, and only when the user cannot write it or its folder.
+ */
+const CLAM_PATHS = Object.freeze(["/usr/bin/clamscan", "/usr/local/bin/clamscan"]);
+/** How long after agent-open a download counts as that open's (security review, finding 2). */
+const OPENER_MS = 60_000;
 
 /**
  * @typedef {{ conn: string | number | null, name: string, what: Record<string, any>,
- *   allowedDanger: boolean, scan: "none" | "clean" | "error", refused: boolean }} Tracked
+ *   allowedKind: string | null, scan: "none" | "clean" | "partial" | "error",
+ *   refused: boolean }} Tracked
  */
 
 /** The agent downloads let through the question, until they are done. @type {WeakMap<any, Tracked>} */
 const tracked = new WeakMap();
-/** Browsers whose tab an agent connection opened or loaded (agent-open). */
-/** @type {WeakMap<Element, string | number>} */
+/**
+ * The load an agent connection started in a tab (agent-open): a download is that connection's
+ * only when it is that load (its URL, before redirects), soon after; once, and never after the
+ * tab showed a page (security review of #182, finding 2).
+ * @type {WeakMap<Element, { conn: string | number, url: string, at: number }>}
+ */
 const openers = new WeakMap();
 /** Content-Length by quarantine path, from the helper-app launcher (it knows it first). */
 /** @type {Map<string, number>} */
 const lengths = new Map();
-/** Blocked agent downloads whose data must not be kept (shouldKeepBlockedData). */
-let drops = 0;
 let initialised = false;
+/**
+ * The quarantine folder's check (decision 31 b; security review of #182, finding 3): made,
+ * mode 0700 after a chmod (which fails on a folder that is not the user's), or why not.
+ * @type {{ dir: string, problem: string | null } | null}
+ */
+let folder = null;
 
 const services = /** @type {any} */ (Services);
 
@@ -91,33 +111,75 @@ function isAgentContainer(userContextId) {
 
 const home = () => services.dirsvc.get("Home", Ci.nsIFile).path;
 
-/**
- * The quarantine folder (decision 31 b): `[mcp] download_dir`, expanded. Never the folder
- * Firefox downloads to: then the default quarantine is used instead.
- */
+/** The quarantine folder (decision 31 b): `[mcp] download_dir`, expanded. */
 function quarantineDir() {
-  const raw = McpHost.config?.downloadDir ?? DEFAULT_DIR;
-  const dir = resolveDownloadDir(raw, home());
+  return resolveDownloadDir(McpHost.config?.downloadDir ?? DEFAULT_DIR, home());
+}
+
+/** Where an agent tab's bytes go while the quarantine folder is not usable: the profile's. */
+const refusedDir = () => PathUtils.join(PathUtils.profileDir, "vimma-agent-refused");
+
+/** Why `dir` is not a quarantine, from its place alone (no disk), or null. @param {string} dir */
+function placeProblem(dir) {
+  const fixed = quarantineProblem(dir, home());
+  if (fixed) return fixed;
   /** @type {string[]} */
-  const theirs = [];
+  const downloads = [];
   try {
-    theirs.push(services.dirsvc.get("DfltDwnld", Ci.nsIFile).path);
+    downloads.push(services.dirsvc.get("DfltDwnld", Ci.nsIFile).path);
   } catch {
     // No default downloads folder on this system.
   }
   const pref = Services.prefs.getStringPref("browser.download.dir", "");
-  if (pref) theirs.push(pref);
-  if (dir === home() || theirs.includes(dir)) {
-    console.error(`vimma: [mcp] download_dir ${dir} is not a quarantine folder; using the default`);
-    return resolveDownloadDir(DEFAULT_DIR, home());
-  }
+  if (pref) downloads.push(pref);
+  return downloads.includes(dir) ? "must not be the Downloads folder itself" : null;
+}
+
+/**
+ * The folder an agent tab downloads into (its `downloadFolderOverride`): the quarantine, or the
+ * profile's refusal folder while the quarantine is not usable (its downloads are then refused).
+ */
+function overrideDir() {
+  const dir = quarantineDir();
+  if (placeProblem(dir)) return refusedDir();
+  if (folder?.dir === dir && folder.problem) return refusedDir();
   return dir;
 }
 
-/** The quarantine folder, made if missing, mode 0700. @param {string} dir */
-async function ensureDir(dir) {
-  await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
-  await IOUtils.setPermissions(dir, 0o700);
+/**
+ * Check the quarantine folder now: why it is not usable, or null. It is made if missing, then
+ * chmod 0700: a folder of another user fails the chmod, and the mode is read back. It fails
+ * closed: any error is a problem.
+ * @returns {Promise<string | null>}
+ */
+async function checkFolder() {
+  const dir = quarantineDir();
+  let problem = placeProblem(dir);
+  if (!problem) {
+    try {
+      await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
+      try {
+        await IOUtils.setPermissions(dir, 0o700, false);
+      } catch {
+        problem = "it is not yours";
+      }
+      if (!problem && ((await IOUtils.stat(dir)).permissions & 0o777) !== 0o700) {
+        problem = "it is not private (mode 0700)";
+      }
+    } catch (e) {
+      problem = `it cannot be made (${/** @type {Error} */ (e).message})`;
+    }
+  }
+  folder = { dir, problem };
+  if (problem) {
+    console.error(`vimma: the agent downloads' quarantine ${dir} is not usable: ${problem}`);
+    await IOUtils.makeDirectory(refusedDir(), {
+      createAncestors: true,
+      ignoreExisting: true,
+      permissions: 0o700,
+    }).catch(() => {});
+  }
+  return problem;
 }
 
 /** The cap in bytes (decision 31 f). */
@@ -135,22 +197,44 @@ function isExecutable(/** @type {string} */ name) {
   }
 }
 
-/** @param {any} download */
-const isAgentDownload = (download) => isAgentContainer(download?.source?.userContextId);
+/** Whether a path is in the quarantine folder or the refusal folder. @param {string} [path] */
+const inOurFolders = (path) =>
+  !!path && [quarantineDir(), refusedDir()].includes(PathUtils.parent(path) ?? "");
+
+/**
+ * Whether a download is an agent download (security review of #182, finding 4): its container,
+ * its tab's container, or being written to the quarantine (or refusal) folder.
+ * @param {any} download
+ */
+function isAgentDownload(download) {
+  if (isAgentContainer(download?.source?.userContextId)) return true;
+  try {
+    const bc = BrowsingContext.get(download?.source?.browsingContextId);
+    if (isAgentContainer(bc?.top?.originAttributes?.userContextId)) return true;
+  } catch {
+    // No such browsing context any more.
+  }
+  return inOurFolders(download?.target?.path) || inOurFolders(download?.target?.partFilePath);
+}
 
 /** @param {any} download  the download's name, as saved */
 const nameOf = (download) => PathUtils.filename(download.target.path);
 
 /**
- * The agent connection a download belongs to: the one that opened its tab, if still open.
+ * The agent connection a download belongs to: the one whose agent-open started this very load
+ * (its URL before redirects, within OPENER_MS), if still connected. Used once.
  * @param {any} download
  */
 function connOf(download) {
   try {
     const bc = BrowsingContext.get(download.source.browsingContextId);
     const browser = bc?.top?.embedderElement;
-    const conn = browser ? openers.get(browser) : undefined;
-    return AgentGate.isConnected(conn) ? /** @type {string | number} */ (conn) : null;
+    const opened = browser ? openers.get(browser) : undefined;
+    if (!browser || !opened) return null;
+    openers.delete(browser);
+    const urls = [download.source.url, download.source.originalUrl];
+    if (Date.now() - opened.at > OPENER_MS || !urls.includes(opened.url)) return null;
+    return AgentGate.isConnected(opened.conn) ? opened.conn : null;
   } catch {
     return null;
   }
@@ -218,9 +302,8 @@ async function discard(download) {
     await Promise.race([executed.catch(() => {}), new Promise((r) => lazy.setTimeout(r, 5000))]);
   }
   await download.finalize(true).catch(() => {});
-  const dir = quarantineDir();
   for (const path of [download.target.partFilePath, download.target.path]) {
-    if (path && PathUtils.parent(path) === dir) {
+    if (inOurFolders(path)) {
       await IOUtils.remove(path, { ignoreAbsent: true }).catch(() => {});
     }
   }
@@ -251,6 +334,8 @@ async function admit(download) {
     // Not a URL: refused below.
   }
   if (url?.protocol !== "https:") return refuse({ kind: "http" });
+  const problem = await checkFolder();
+  if (problem) return refuse({ kind: "folder", text: problem });
   const dir = quarantineDir();
   const part = download.target.partFilePath;
   if (PathUtils.parent(download.target.path) !== dir || (part && PathUtils.parent(part) !== dir)) {
@@ -312,7 +397,7 @@ async function admit(download) {
     conn,
     name,
     what,
-    allowedDanger: !!danger,
+    allowedKind: danger?.kind ?? null,
     scan: "none",
     refused: false,
   });
@@ -328,7 +413,6 @@ async function block(download, why) {
   if (t) t.refused = true;
   const part = download.target.partFilePath ?? download.target.path;
   await IOUtils.remove(part, { ignoreAbsent: true }).catch(() => {});
-  drops++;
   notice(downloadRefusedNotice(nameOf(download), why));
   // Off the list once it has failed.
   download.whenSucceeded().catch(() => {});
@@ -356,47 +440,97 @@ async function contentDanger(path) {
   const cd = at.length
     ? await IOUtils.read(path, { offset: at.offset, maxBytes: at.length })
     : new Uint8Array(0);
-  const names = zipEntryNames(cd, at.entries);
-  if (!names) return { kind: "archive", text: "a zip Vimma cannot list" };
-  return zipVerdict(names, { isExecutable });
+  const entries = zipEntryList(cd, at.entries);
+  if (!entries) return { kind: "archive", text: "a zip Vimma cannot list" };
+  return zipVerdict(entries, { isExecutable });
 }
 
-/** The clamscan on PATH, or null (decision 31 g). */
-async function findClam() {
+/** Whether a file is owned by someone else: a no-op chmod fails on another's. @param {string} path */
+async function ownedByAnother(path) {
   try {
-    return await lazy.Subprocess.pathSearch("clamscan");
+    const { permissions } = await IOUtils.stat(path);
+    await IOUtils.setPermissions(path, permissions, false);
+    return false;
   } catch {
-    return null;
+    return true;
   }
 }
 
 /**
- * `clamscan --no-summary --stdout <path>`: its answer.
- * @param {string} command @param {string} path
+ * The system's clamscan (decision 31 g; C2's one exception): the first of CLAM_PATHS that is a
+ * regular executable file another user (root) owns, that the user cannot write, in a folder the
+ * user cannot write. Never one found on PATH. Null when there is none.
+ * @returns {Promise<string | null>}
  */
-async function runClam(command, path) {
+async function findClam() {
+  const hook = AgentDownloads._clamForTests;
+  for (const path of hook?.paths ?? CLAM_PATHS) {
+    try {
+      const file = new lazy.FileUtils.File(path);
+      if (!file.exists() || !file.isFile() || file.isSymlink() || !file.isExecutable()) continue;
+      if (hook?.trusted) return path;
+      if (file.isWritable() || file.parent?.isWritable()) continue;
+      if (!(await ownedByAnother(path))) continue;
+      return path;
+    } catch {
+      // Not usable: the next.
+    }
+  }
+  return null;
+}
+
+/**
+ * @typedef {{ kind: "clean" } | { kind: "infected", signature: string }
+ *   | { kind: "partial", reason: string } | { kind: "error", why: string }} ClamAnswer
+ */
+
+/**
+ * Run clamscan on `path`, its output read to the end (stdout kept, stderr drained), within the
+ * time limit: its answer, or an error.
+ * @param {string} clam  from findClam @param {string} path
+ * @returns {Promise<ClamAnswer>}
+ */
+async function runClam(clam, path) {
   /** @type {any} */
   let proc;
   /** @type {any} */
   let timer;
   try {
     proc = await lazy.Subprocess.call({
-      command,
-      arguments: ["--no-summary", "--stdout", path],
+      command: clam,
+      arguments: clamArguments(path),
       stderr: "pipe",
     });
-    timer = lazy.setTimeout(() => proc.kill(), CLAM_TIMEOUT_MS);
+    const ms = Services.prefs.getIntPref(CLAM_TIMEOUT_PREF, 0) || CLAM_TIMEOUT_MS;
     proc.stdin.close().catch(() => {});
-    proc.stderr.readString().catch(() => {});
-    let stdout = "";
-    for (let s; (s = await proc.stdout.readString());) {
-      if (stdout.length < 65536) stdout += s;
+    const run = (async () => {
+      const drain = (async () => {
+        while (await proc.stderr.readString()) {
+          // Read and dropped, so a full pipe never stops clamscan.
+        }
+      })().catch(() => {});
+      let stdout = "";
+      for (let s; (s = await proc.stdout.readString());) {
+        if (stdout.length < 65536) stdout += s;
+      }
+      await drain;
+      const { exitCode } = await proc.wait();
+      return clamVerdict({ exitCode, stdout });
+    })();
+    // Past the limit it is killed and not waited for: a child it left may hold the pipes open.
+    const late = new Promise((resolve) => {
+      timer = lazy.setTimeout(() => resolve(null), ms);
+    });
+    const verdict = await Promise.race([run, late]);
+    if (!verdict) {
+      run.catch(() => {});
+      proc.kill();
+      return { kind: "error", why: "ClamAV took too long" };
     }
-    const { exitCode } = await proc.wait();
-    return clamVerdict({ exitCode, stdout });
+    return verdict.kind === "error" ? { kind: "error", why: "ClamAV failed" } : verdict;
   } catch (e) {
     console.error("vimma: clamscan failed", e);
-    return /** @type {const} */ ({ kind: "error" });
+    return { kind: "error", why: "ClamAV failed" };
   } finally {
     lazy.clearTimeout(timer);
   }
@@ -410,10 +544,7 @@ async function runClam(command, path) {
 async function check(download, base) {
   const t = /** @type {Tracked} */ (tracked.get(download));
   const before = await base.shouldBlockForReputationCheck(download);
-  if (before?.shouldBlock) {
-    drops++;
-    return before;
-  }
+  if (before?.shouldBlock) return before;
   const path = download.target.partFilePath ?? download.target.path;
   const size = await IOUtils.stat(path).then(
     (st) => st.size ?? 0,
@@ -425,17 +556,17 @@ async function check(download, base) {
     console.error("vimma: agent download check failed", e);
     return { kind: /** @type {const} */ ("archive"), text: "a file Vimma could not read" };
   });
-  if (danger && !t.allowedDanger) {
-    const what = { ...t.what, size, danger: danger.text };
+  /** Ask again, as the same agent (or the page), always: no grant covers it. @param {object} more */
+  const askAgain = (more) => {
+    const what = { ...t.what, size, ...more };
     const options = { always: true };
-    const outcome = AgentGate.isConnected(t.conn)
-      ? await AgentGate.request(
-          /** @type {string | number} */ (t.conn),
-          DOWNLOAD_TOOL,
-          what,
-          options,
-        )
-      : await AgentGate.askPage(DOWNLOAD_TOOL, what, options);
+    return AgentGate.isConnected(t.conn)
+      ? AgentGate.request(/** @type {string | number} */ (t.conn), DOWNLOAD_TOOL, what, options)
+      : AgentGate.askPage(DOWNLOAD_TOOL, what, options);
+  };
+  // A `!` for one kind of danger is not one for another (security review, finding 5).
+  if (danger && danger.kind !== t.allowedKind) {
+    const outcome = await askAgain({ danger: danger.text });
     if (!outcome.allow) return block(download, { kind: "danger", text: danger.text });
   }
   const clam = await findClam();
@@ -443,6 +574,15 @@ async function check(download, base) {
     const verdict = await runClam(clam, path);
     if (verdict.kind === "infected") {
       return block(download, { kind: "infected", signature: verdict.signature });
+    }
+    if (verdict.kind === "partial" || verdict.kind === "error") {
+      // What ClamAV could not do is the user's call, default no (security review, finding 7).
+      const unscanned =
+        verdict.kind === "partial" ? `not fully scanned (${verdict.reason})` : verdict.why;
+      const outcome = await askAgain({ unscanned });
+      if (!outcome.allow) {
+        return block(download, { kind: "danger", text: `${unscanned}; you said no` });
+      }
     }
     t.scan = verdict.kind;
   }
@@ -483,13 +623,6 @@ const downloadOverride = (base) => ({
       return block(download, { kind: "danger", text: "a file Vimma could not check" });
     });
   },
-  shouldKeepBlockedData() {
-    if (drops > 0) {
-      drops--;
-      return false;
-    }
-    return base.shouldKeepBlockedData();
-  },
   /** @param {any} download */
   async downloadDone(download) {
     if (!isAgentDownload(download)) return base.downloadDone(download);
@@ -509,7 +642,7 @@ const downloadOverride = (base) => ({
   /** @param {any} download @param {any} options */
   launchDownload(download, options) {
     const dir = quarantineDir();
-    if (isAgentDownload(download) || PathUtils.parent(download?.target?.path ?? "") === dir) {
+    if (isAgentDownload(download)) {
       notice(`agent downloads are never opened by Vimma: they are in ${displayDir(dir, home())}`);
       return Promise.reject(new Error("vimma: agent downloads are never opened"));
     }
@@ -537,9 +670,9 @@ function fromAgentTab(launcher) {
  * @param {any} launcher @param {string} name @param {string} ext
  */
 async function saveToQuarantine(launcher, name, ext) {
-  const dir = quarantineDir();
   try {
-    await ensureDir(dir);
+    // Not usable: into the refusal folder, where the question refuses it.
+    const dir = (await checkFolder()) ? refusedDir() : quarantineDir();
     const leaf =
       lazy.DownloadPaths.sanitize(name || `download${ext || ""}`, { compressWhitespaces: true }) ||
       "download";
@@ -588,6 +721,13 @@ function wrapDialog() {
 }
 
 export const AgentDownloads = {
+  /**
+   * Test-only: the clamscan candidates in place of CLAM_PATHS; `trusted` skips the ownership
+   * and write checks (a test's fake is the user's own).
+   * @type {{ paths: string[], trusted?: boolean } | null}
+   */
+  _clamForTests: null,
+
   /** Once per app (AgentPages.init): the hooks stay for the session. */
   init() {
     if (initialised) return;
@@ -603,20 +743,29 @@ export const AgentDownloads = {
       .catch(console.error);
   },
 
-  /** The quarantine folder agent tabs download into (AgentPages sets it on each tab). */
-  quarantineDir,
+  /** The folder agent tabs download into (AgentPages sets it on each tab). */
+  overrideDir,
 
-  /** Made, mode 0700, before an agent tab may write to it. */
+  /** Check (and make) the quarantine folder now: at startup and when `[mcp]` changes. */
   ensureQuarantine() {
-    return ensureDir(quarantineDir()).catch((e) => console.error("vimma: quarantine", e));
+    return checkFolder().catch((e) => console.error("vimma: quarantine", e));
   },
 
   /**
-   * An agent connection opened or loaded this tab (agent-open): its downloads are that
-   * connection's, and a grant of its vimma_download covers them.
-   * @param {Element} browser @param {string | number} conn
+   * An agent connection started loading `url` in this tab (agent-open): a download of that load,
+   * soon after, is that connection's, and a grant of its vimma_download covers it.
+   * @param {Element} browser @param {string | number} conn @param {string} url
    */
-  openedBy(browser, conn) {
-    openers.set(browser, conn);
+  openedBy(browser, conn, url) {
+    openers.set(browser, { conn, url, at: Date.now() });
+  },
+
+  /**
+   * The tab showed a page: what it downloads from now on is the page's (security review,
+   * finding 2).
+   * @param {Element} browser
+   */
+  committed(browser) {
+    openers.delete(browser);
   },
 };

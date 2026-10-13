@@ -173,7 +173,11 @@ export function questionLine(q, { grantMinutes }) {
       }
     } else if (q.tool === DOWNLOAD_TOOL) {
       parts = [...head, ...downloadParts(w)];
-      if (w.danger) {
+      if (w.unscanned) {
+        // Security review of #182 (finding 7): ClamAV could not scan it; keep it unscanned?
+        parts.push({ text: ` — ⚠ not scanned: ${clean(w.unscanned)}; keep it?` });
+        hint = "y keep it unscanned · n delete";
+      } else if (w.danger) {
         parts.push({ text: ` — ⚠ ${clean(w.danger)}` });
         hint = "! allow this one file · n deny";
       } else if (isPage(q)) {

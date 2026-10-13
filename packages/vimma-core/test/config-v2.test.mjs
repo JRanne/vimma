@@ -674,6 +674,17 @@ describe("[mcp]", () => {
     expect(at("download_dir = 3")?.message).toBe("expected a string, got an integer");
   });
 
+  // Security review of #182 (finding 3): no hidden folder of home, nothing anyone can write.
+  test("download_dir is never in a hidden folder of home or in /tmp, /var/tmp, /dev/shm", () => {
+    const at = (/** @type {string} */ line) => errors(v2("[mcp]", line))[0]?.message;
+    expect(at('download_dir = "~/.local/bin"')).toBe("must not be in a hidden folder (.local)");
+    expect(at('download_dir = "~/a/.cache"')).toBe("must not be in a hidden folder (.cache)");
+    for (const dir of ["/tmp/q", "/var/tmp", "/dev/shm/x", "/tmp"]) {
+      expect(at(`download_dir = "${dir}"`), dir).toBe("must not be in /tmp, /var/tmp or /dev/shm");
+    }
+    expect(ok(v2("[mcp]", 'download_dir = "~/agent.files"')).mcp.downloadDir).toBe("~/agent.files");
+  });
+
   test("download_max_mb is 1 to 4096", () => {
     const at = (/** @type {string} */ line) => errors(v2("[mcp]", line))[0];
     expect(ok(v2("[mcp]", "download_max_mb = 1")).mcp.downloadMaxMb).toBe(1);

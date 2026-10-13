@@ -404,8 +404,8 @@ const COMMANDS = {
     const principal = agentPrincipal(agent.userContextId);
     if (current) {
       const { tab } = stillAsAsked(agent, current.tab, current.url);
-      // Its downloads are this connection's (decision 31): a vimma_download grant covers them.
-      AgentDownloads.openedBy(tab.linkedBrowser, conn);
+      // A download of this load is this connection's (decision 31): its grant covers it.
+      AgentDownloads.openedBy(tab.linkedBrowser, conn, uri.spec);
       tab.linkedBrowser.loadURI(uri, { triggeringPrincipal: principal });
       return { tab: tabId(tab) };
     }
@@ -427,7 +427,7 @@ const COMMANDS = {
         skipAnimation: true,
       }),
     );
-    AgentDownloads.openedBy(tab.linkedBrowser, conn);
+    AgentDownloads.openedBy(tab.linkedBrowser, conn, uri.spec);
     return { tab: tabId(tab) };
   },
 

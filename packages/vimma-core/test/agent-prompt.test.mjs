@@ -380,6 +380,17 @@ describe("a download's question (decision 31 a, d)", () => {
     expect(line.hint).toBe("! allow this one file · n deny");
   });
 
+  // Security review of #182 (finding 7): when ClamAV could not scan it, keeping it is asked.
+  test("ClamAV could not scan it: y keeps it, anything else deletes it", () => {
+    const what = { ...download.what, unscanned: "ClamAV failed" };
+    const line = questionLine({ ...download, what }, { grantMinutes: 10 });
+    expect(text(line)).toMatch(/ — ⚠ not scanned: ClamAV failed; keep it\?$/);
+    expect(line.hint).toBe("y keep it unscanned · n delete");
+    const u = { noGrant: true };
+    expect(promptKey(none, "y", u)).toEqual({ kind: "answer", answer: { kind: "once" } });
+    expect(promptKey(none, "a", u)).toEqual({ kind: "ignore" });
+  });
+
   test("a download no agent asked for (a page's own) cannot be granted", () => {
     const line = questionLine(page, { grantMinutes: 10 });
     expect(text(line)).toMatch(/^◇ a page in the agent workspace wants vimma_download: /);

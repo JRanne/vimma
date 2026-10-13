@@ -289,7 +289,7 @@ export const AgentUi = {
     const q = current.question;
     const result = promptKey({ count: current.count }, formatKey(chord), {
       full: q.tool === FULL_CONTROL,
-      noGrant: isPage(q),
+      noGrant: isPage(q) || !!(/** @type {any} */ (q.what)?.unscanned),
       dangerous: !!(/** @type {any} */ (q.what)?.danger),
     });
     if (result.kind === "count") {

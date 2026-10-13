@@ -114,7 +114,7 @@ function sandbox(bc) {
  */
 function quarantine(bc) {
   try {
-    const dir = AgentDownloads.quarantineDir();
+    const dir = AgentDownloads.overrideDir();
     if (bc.downloadFolderOverride !== dir) bc.downloadFolderOverride = dir;
   } catch (e) {
     console.error("vimma agent pages: no quarantine folder", e);
@@ -182,6 +182,9 @@ function onWindowGlobal(wgp) {
   if (!principal?.isContentPrincipal) return;
   if (!isAgentContainer(principal.originAttributes?.userContextId)) return;
   denyFor(principal.URI, principal.originAttributes, bc.browserId);
+  // A page is showing: what the tab downloads from now on is the page's, not the agent-open's.
+  const browser = bc.embedderElement;
+  if (browser && principal.URI?.spec !== "about:blank") AgentDownloads.committed(browser);
 }
 
 /** Every agent tab open now: sandboxed, and its origin denied (the agent workspace changed). */
@@ -207,8 +210,8 @@ function observe(subject, topic) {
   if (topic === "browsing-context-attached") onAttached(subject);
   else if (topic === "window-global-created") onWindowGlobal(subject);
   else if (topic === "vimma-mcp-changed") {
-    AgentDownloads.ensureQuarantine();
-    sweep();
+    // The folder is checked first, so each tab's download folder is the checked one.
+    AgentDownloads.ensureQuarantine().then(sweep);
   } else onResponse(subject);
 }
 
@@ -268,7 +271,7 @@ export const AgentPages = {
     initialised = true;
     lazy.Integration.contentPermission.register(permissionOverride);
     AgentDownloads.init();
-    AgentDownloads.ensureQuarantine();
+    AgentDownloads.ensureQuarantine().then(sweep);
     try {
       wrapChooser();
     } catch (e) {

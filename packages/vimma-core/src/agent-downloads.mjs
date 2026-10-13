@@ -316,44 +316,83 @@ export function zipLocate(tail, size) {
 }
 
 /**
+ * @typedef {{ name: string, mode: number | null }} ZipEntry  `mode`: the Unix mode `zip` keeps
+ *   in the external attributes when the entry was made on Unix (version made by, high byte 3),
+ *   else null
+ */
+
+/**
+ * The entries of a central directory, or null when it does not hold `entries` well-formed
+ * records.
+ * @param {Uint8Array} cd
+ * @param {number} entries
+ * @returns {ZipEntry[] | null}
+ */
+export function zipEntryList(cd, entries) {
+  if (entries > ZIP_MAX_ENTRIES) return null;
+  const decoder = new TextDecoder("utf-8", { fatal: false });
+  /** @type {ZipEntry[]} */
+  const out = [];
+  let at = 0;
+  for (let n = 0; n < entries; n++) {
+    if (at + 46 > cd.length || u32(cd, at) !== 0x02014b50) return null;
+    const madeOnUnix = byte(cd, at + 5) === 3;
+    const attributes = u32(cd, at + 38);
+    const nameLength = u16(cd, at + 28);
+    const extra = u16(cd, at + 30);
+    const comment = u16(cd, at + 32);
+    const next = at + 46 + nameLength + extra + comment;
+    if (next > cd.length) return null;
+    out.push({
+      name: decoder.decode(cd.subarray(at + 46, at + 46 + nameLength)),
+      mode: madeOnUnix ? attributes >>> 16 : null,
+    });
+    at = next;
+  }
+  return out;
+}
+
+/**
  * The names in a central directory, or null when it does not hold `entries` well-formed records.
  * @param {Uint8Array} cd
  * @param {number} entries
  * @returns {string[] | null}
  */
 export function zipEntryNames(cd, entries) {
-  if (entries > ZIP_MAX_ENTRIES) return null;
-  const decoder = new TextDecoder("utf-8", { fatal: false });
-  /** @type {string[]} */
-  const names = [];
-  let at = 0;
-  for (let n = 0; n < entries; n++) {
-    if (at + 46 > cd.length || u32(cd, at) !== 0x02014b50) return null;
-    const nameLength = u16(cd, at + 28);
-    const extra = u16(cd, at + 30);
-    const comment = u16(cd, at + 32);
-    const next = at + 46 + nameLength + extra + comment;
-    if (next > cd.length) return null;
-    names.push(decoder.decode(cd.subarray(at + 46, at + 46 + nameLength)));
-    at = next;
-  }
-  return names;
+  return zipEntryList(cd, entries)?.map((e) => e.name) ?? null;
 }
 
+/** S_IFMT and S_IFLNK (sys/stat.h). */
+const S_IFMT = 0o170000;
+const S_IFLNK = 0o120000;
+
+/** Whether an entry's path leaves the folder it is unpacked in: `..`, `/…`, `C:`. */
+const leaves = (/** @type {string} */ name) =>
+  /^[/\\]/.test(name) || /^[A-Za-z]:/.test(name) || name.split(/[/\\]/).some((seg) => seg === "..");
+
 /**
- * Whether a zip is dangerous by what it holds (decision 31 d): any dangerous name inside, a
- * nested zip included (it cannot be listed without extracting).
- * @param {string[]} names
+ * Whether a zip is dangerous by what it holds (decision 31 d; security review of #182, finding
+ * 1): any dangerous name inside, a nested zip (it cannot be listed without extracting), an entry
+ * that unpacks with an exec bit or as a symbolic link, or a path that leaves its folder.
+ * @param {(string | ZipEntry)[]} entries
  * @param {{ isExecutable?: (name: string) => boolean }} [options]
  * @returns {Danger | null}
  */
-export function zipVerdict(names, options) {
-  for (const name of names) {
+export function zipVerdict(entries, options) {
+  for (const entry of entries) {
+    const { name, mode } = typeof entry === "string" ? { name: entry, mode: null } : entry;
+    const shown = oneLine(name, 60);
+    if (leaves(name))
+      return { kind: "archive", text: `a zip with a path outside its folder (${shown})` };
+    if (mode !== null && (mode & S_IFMT) === S_IFLNK) {
+      return { kind: "archive", text: `a zip holding a symbolic link (${shown})` };
+    }
     if (name.endsWith("/")) continue;
     const [last] = extensions(name);
     const inner = dangerousName(name, options) ?? (last === "zip" ? danger("archive") : null);
-    if (inner) {
-      return { kind: "archive", text: `a zip holding ${inner.text} (${oneLine(name, 60)})` };
+    if (inner) return { kind: "archive", text: `a zip holding ${inner.text} (${shown})` };
+    if (mode !== null && (mode & 0o111) !== 0) {
+      return { kind: "executable", text: `a zip holding an executable (${shown}, exec bit)` };
     }
   }
   return null;
@@ -363,17 +402,49 @@ export function zipVerdict(names, options) {
 // ClamAV (decision 31 g).
 
 /**
- * `clamscan --no-summary --stdout <file>`'s answer: exit 0 clean, 1 infected, anything else an
- * error (the file is then kept as not scanned).
+ * `clamscan`'s arguments: fixed, alerting on files it cannot open (encrypted, over its limits),
+ * and the path after `--`, so a name starting with `-` is never an option.
+ * @param {string} path
+ */
+export function clamArguments(path) {
+  return [
+    "--no-summary",
+    "--stdout",
+    "--alert-encrypted=yes",
+    "--alert-exceeds-max=yes",
+    "--",
+    path,
+  ];
+}
+
+/** Heuristics that say ClamAV could not look inside, not that it found something. */
+const PARTIAL = /** @type {const} */ ([
+  [/^Heuristics\.Encrypted\./, "encrypted"],
+  [/^Heuristics\.Limits\.Exceeded/, "over ClamAV's limits"],
+]);
+
+/**
+ * `clamscan`'s answer: exit 0 clean, 1 infected, anything else an error. Found only by the
+ * encrypted or over-the-limits heuristics, it is `partial`: not fully scanned.
  * @param {{ exitCode: number, stdout: string }} run
- * @returns {{ kind: "clean" } | { kind: "infected", signature: string } | { kind: "error" }}
+ * @returns {{ kind: "clean" } | { kind: "infected", signature: string }
+ *   | { kind: "partial", reason: string } | { kind: "error" }}
  */
 export function clamVerdict({ exitCode, stdout }) {
   if (exitCode === 0) return { kind: "clean" };
   if (exitCode !== 1) return { kind: "error" };
-  const found = /:\s*([^\n]*?)\s+FOUND\s*$/m.exec(String(stdout ?? ""));
-  const signature = oneLine(found?.[1] ?? "", 60);
-  return { kind: "infected", signature: signature || "a virus" };
+  const found = [...String(stdout ?? "").matchAll(/:\s*([^\n]*?)\s+FOUND\s*$/gm)].map((m) =>
+    String(m[1] ?? ""),
+  );
+  /** @type {string | null} */
+  let partial = null;
+  for (const signature of found) {
+    const heuristic = PARTIAL.find(([re]) => re.test(signature));
+    if (!heuristic) return { kind: "infected", signature: oneLine(signature, 60) || "a virus" };
+    partial ??= heuristic[1];
+  }
+  if (partial) return { kind: "partial", reason: partial };
+  return { kind: "infected", signature: "a virus" };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -395,6 +466,37 @@ export function resolveDownloadDir(raw, home) {
     else out.push(seg);
   }
   return `/${out.join("/")}`;
+}
+
+/** Folders anyone can write to: never a quarantine. */
+const SHARED_DIRS = ["/tmp", "/var/tmp", "/dev/shm"];
+
+/**
+ * Why a resolved folder is not a quarantine (decision 31 b; security review of #182, finding
+ * 3), or null: never `/`, home, the Downloads folder itself, a hidden folder of home (where
+ * autostart, shell and app configs live) or a folder anyone can write to.
+ * @param {string} dir  absolute, resolved
+ * @param {string} home
+ * @returns {string | null}
+ */
+export function quarantineProblem(dir, home) {
+  const why = (/** @type {string} */ what) => `must not be ${what}`;
+  if (dir === "/") return why("/");
+  if (dir === home) return why("your home folder");
+  if (dir.toLowerCase() === `${home}/downloads`.toLowerCase()) {
+    return why("the Downloads folder itself");
+  }
+  if (SHARED_DIRS.some((d) => dir === d || dir.startsWith(`${d}/`))) {
+    return why("in /tmp, /var/tmp or /dev/shm");
+  }
+  if (dir.startsWith(`${home}/`)) {
+    const hidden = dir
+      .slice(home.length + 1)
+      .split("/")
+      .find((seg) => seg.startsWith("."));
+    if (hidden) return why(`in a hidden folder (${oneLine(hidden, 30)})`);
+  }
+  return null;
 }
 
 /**
@@ -430,20 +532,24 @@ export function formatBytes(n) {
 
 /**
  * The notice once a download is out of quarantine.
- * @param {{ name: string, dir: string, scan: "clean" | "none" | "error" }} a  `dir` as shown
+ * @param {{ name: string, dir: string, scan: "clean" | "partial" | "none" | "error" }} a
+ *   `dir` as shown
  */
 export function downloadSavedNotice({ name, dir, scan }) {
   const how =
     scan === "clean"
       ? "scanned (ClamAV)"
-      : scan === "error"
-        ? "not scanned (ClamAV failed)"
-        : "not scanned";
+      : scan === "partial"
+        ? "not fully scanned (ClamAV)"
+        : scan === "error"
+          ? "not scanned (ClamAV failed)"
+          : "not scanned";
   return `saved "${oneLine(name, 60)}" to ${oneLine(dir, 60)}, ${how}`;
 }
 
 /**
  * @typedef {{ kind: "http" } | { kind: "cap", mb: number } | { kind: "place" }
+ *   | { kind: "folder", text: string }
  *   | { kind: "infected", signature: string } | { kind: "danger", text: string }} Refusal
  */
 
@@ -460,6 +566,8 @@ export function downloadRefusedNotice(name, why) {
       return `refused download ${file}: over [mcp] download_max_mb (${why.mb} MB)`;
     case "place":
       return `refused download ${file}: not in the quarantine folder`;
+    case "folder":
+      return `refused download ${file}: the quarantine folder is not usable: ${oneLine(why.text, 80)}`;
     case "infected":
       return `deleted download ${file}: ClamAV found ${oneLine(why.signature, 60)}`;
     default:

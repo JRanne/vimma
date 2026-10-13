@@ -58,21 +58,33 @@ describe("chrome code", () => {
     expect(hits(/\beval\(|new Function\b|\bFunction\(|evalInSandbox|loadSubScript/)).toEqual([]);
   });
 
-  // C2's one exception (docs/specs/vimma-mcp.md decision 31 g, user-approved): an agent
-  // download is scanned with ClamAV when `clamscan` is on PATH. One file, one program, fixed
-  // arguments, no shell; nothing else in chrome starts a process.
+  // C2's one exception (docs/specs/vimma-mcp.md decision 31 g, user-approved; security review
+  // of #182: "accept with changes"): an agent download is scanned with the system's clamscan.
+  // One file, one call, a fixed program list, fixed arguments with the path after `--`, no
+  // shell, no PATH search, and no other way to reach Subprocess.
   test("never starts a process, but clamscan on an agent download", () => {
     const CLAM = "src/browser/base/content/vimma/ctl/AgentDownloads.sys.mjs";
     const all = hits(/Subprocess|nsIProcess|@mozilla\.org\/process\/|\.launch\(\)|\.reveal\(\)/);
     expect(all.filter((h) => !h.startsWith(`${CLAM}:`))).toEqual([]);
     const text = readFileSync(join(ROOT, CLAM), "utf8");
-    expect([...text.matchAll(/Subprocess\.(?!sys\b)(\w+)/g)].map((m) => m[1]).sort()).toEqual([
-      "call",
-      "pathSearch",
-    ]);
-    expect(text).toContain('Subprocess.pathSearch("clamscan")');
-    expect(text).toMatch(/arguments: \["--no-summary", "--stdout", path\]/);
-    expect(text).not.toMatch(/nsIProcess|\/bin\/sh|"sh"|"-c"/);
+    // Every mention: the lazy getter's name and module, and one call.
+    expect(text.match(/Subprocess\b/g)).toHaveLength(3);
+    expect(text).toContain('  Subprocess: "resource://gre/modules/Subprocess.sys.mjs",');
+    expect(text.match(/Subprocess\.call\(/g)).toHaveLength(1);
+    expect(text).toMatch(
+      /lazy\.Subprocess\.call\(\{\s*command: clam,\s*arguments: clamArguments\(path\),\s*stderr: "pipe",?\s*\}\)/,
+    );
+    expect(text).toContain(
+      'const CLAM_PATHS = Object.freeze(["/usr/bin/clamscan", "/usr/local/bin/clamscan"]);',
+    );
+    // No PATH search, no aliasing, no bracket access, no shell.
+    expect(text).not.toMatch(
+      /pathSearch|Subprocess\s*\[|=\s*(lazy\.)?Subprocess\b|\}\s*=\s*lazy\b/,
+    );
+    expect(text).not.toMatch(/lazy\s*\[|nsIProcess|\/bin\/sh|"sh"|"-c"/);
+    // clamArguments: fixed, with the path last, after `--`.
+    const core = readFileSync(join(ROOT, "packages/vimma-core/src/agent-downloads.mjs"), "utf8");
+    expect(core).toMatch(/"--alert-exceeds-max=yes",\s*"--",\s*path,\s*\]/);
   });
 
   test("never installs an add-on", () => {

@@ -32,6 +32,9 @@ const { AgentPages } = ChromeUtils.importESModule(
 const { McpHost, MCP_ENABLED_PREF } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/host/mcp-ops.mjs",
 );
+const { AgentDownloads } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/ctl/AgentDownloads.sys.mjs",
+);
 const { WorkspaceStore } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/workspaces/WorkspaceStore.sys.mjs",
 );
@@ -72,7 +75,6 @@ const noticeText = () => document.getElementById("vimma-notice")?.textContent ??
 let quarantine = "";
 let normal = "";
 let clamDir = "";
-const savedPath = Services.env.get("PATH");
 
 /** The `[mcp]` config in force, with the quarantine folder and `extra` set. */
 function configure(extra = {}) {
@@ -90,31 +92,40 @@ function configure(extra = {}) {
 }
 
 /**
- * A fake `clamscan` first on PATH (decision 31 g): `clean` exits 0, `infected` 1 with a
- * signature, `error` 2; `missing` leaves none on PATH.
- * @param {"clean" | "infected" | "error" | "missing"} mode
+ * A fake `clamscan` (decision 31 g). Vimma runs only /usr/bin/clamscan or /usr/local/bin/clamscan,
+ * and only one it cannot write (security review of #182): the test's hook puts the fake in
+ * that list and, unless `owned` is asked for, lets a file of ours count as not ours. `clean`
+ * exits 0, `infected` 1 with a signature, `partial` 1 with Heuristics.Encrypted, `error` 2,
+ * `hang` sleeps past the timeout; `missing` leaves none.
+ * @param {"clean" | "infected" | "partial" | "error" | "hang" | "missing"} mode
+ * @param {{ owned?: boolean }} [options]  `owned`: check ownership for real (the fake is ours)
  */
-async function fakeClam(mode) {
+async function fakeClam(mode, { owned = false } = {}) {
   const script = PathUtils.join(clamDir, "clamscan");
   if (mode === "missing") {
     await IOUtils.remove(script, { ignoreAbsent: true });
   } else {
-    const code = { clean: 0, infected: 1, error: 2 }[mode];
+    const out = {
+      clean: 'echo "$f: OK"; exit 0',
+      infected: 'echo "$f: Vimma-Test-Signature FOUND"; exit 1',
+      partial: 'echo "$f: Heuristics.Encrypted.Zip FOUND"; exit 1',
+      error: 'echo "cannot open" >&2; exit 2',
+      hang: "sleep 30; exit 0",
+    }[mode];
     await IOUtils.writeUTF8(
       script,
       [
         "#!/bin/sh",
-        // The last argument is the file; it must still have its .part name.
+        // Every argument, one per line, then a blank line; the file is the last one.
+        'for a; do echo "$a"; done >> "$(dirname "$0")/args"; echo >> "$(dirname "$0")/args"',
         'for f; do :; done; echo "$f" >> "$(dirname "$0")/scanned"',
-        mode === "infected" ? 'echo "$f: Vimma-Test-Signature FOUND"' : 'echo "$f: OK"',
-        `exit ${code}`,
+        out,
         "",
       ].join("\n"),
     );
     await IOUtils.setPermissions(script, 0o755);
   }
-  // Only the fake's folder: a clamscan installed on this machine must not answer.
-  Services.env.set("PATH", `${clamDir}:/usr/bin:/bin`);
+  AgentDownloads._clamForTests = { paths: [script], trusted: !owned };
 }
 
 /** The files the fake clamscan was asked to scan. */
@@ -125,7 +136,11 @@ async function scanned() {
 }
 
 add_task(async function setup() {
-  quarantine = await IOUtils.createUniqueDirectory(PathUtils.tempDir, "vimma-quarantine");
+  // In home: a quarantine is never in /tmp, /var/tmp or /dev/shm (security review of #182).
+  quarantine = await IOUtils.createUniqueDirectory(
+    Services.dirsvc.get("Home", Ci.nsIFile).path,
+    "vimma-test-quarantine",
+  );
   normal = await IOUtils.createUniqueDirectory(PathUtils.tempDir, "vimma-downloads");
   clamDir = await IOUtils.createUniqueDirectory(PathUtils.tempDir, "vimma-clam");
   await SpecialPowers.pushPrefEnv({
@@ -157,7 +172,7 @@ add_task(async function setup() {
       DownloadsPanel.hidePanel();
       await hidden;
     }
-    Services.env.set("PATH", savedPath);
+    AgentDownloads._clamForTests = null;
     Services.prefs.clearUserPref(MCP_ENABLED_PREF);
     Services.prefs.clearUserPref(ASK_TIMEOUT);
     McpHost.configure(null);
@@ -246,7 +261,11 @@ async function names(dir) {
 /** Wait for `download` to stop; whether it succeeded. @param {any} download */
 async function settled(download) {
   await until(() => download.stopped, "the download stopped");
-  if (!download.succeeded) info(`not saved: ${download.error?.message ?? "no error"}`);
+  if (!download.succeeded) {
+    info(
+      `not saved: ${download.error?.message ?? "no error"}; notices: ${notices.slice(-2).join(" / ")}`,
+    );
+  }
   return download.succeeded;
 }
 
@@ -398,6 +417,22 @@ add_task(async function test_dangerous_content_asks_again_and_no_deletes_it() {
   await clean();
 });
 
+// Security review of #182 (finding 5): a `!` for one kind of danger is not a `!` for another.
+add_task(async function test_a_different_danger_in_the_bytes_asks_again() {
+  const tab = await agentTab();
+  const added = nextDownload();
+  await startIn(tab, fileUrl({ name: "run.sh", type: "text/x-sh", body: "elf" }));
+  let q = await downloadQuestion();
+  Assert.equal(q.what.danger, "a script", "a script by its name");
+  AgentGate.answer(q.id, { kind: "once" });
+  q = await downloadQuestion();
+  Assert.equal(q.what.danger, "an executable (ELF)", "an ELF by its bytes asks again");
+  AgentGate.answer(q.id, { kind: "deny" });
+  Assert.ok(!(await settled(await added)), "and no deletes it");
+  BrowserTestUtils.removeTab(tab);
+  await clean();
+});
+
 add_task(async function test_http_is_refused() {
   const tab = await agentTab();
   const added = nextDownload();
@@ -446,12 +481,20 @@ add_task(async function test_the_size_cap() {
 
 add_task(async function test_clamav_clean_infected_error_and_missing() {
   const tab = await agentTab();
-  /** @param {string} name */
-  const run = async (name) => {
+  /** @param {string} name @param {"once" | "deny" | null} [unscanned]  the answer if asked */
+  const run = async (name, unscanned = null) => {
     const added = nextDownload();
     await startIn(tab, fileUrl({ name, type: "text/plain" }));
     const q = await downloadQuestion();
     AgentGate.answer(q.id, { kind: "once" });
+    if (unscanned) {
+      const again = await until(
+        () => AgentGate.waiting.find((w) => /** @type {any} */ (w.what).unscanned),
+        "asks whether to keep it unscanned",
+      ).then(() => /** @type {any} */ (AgentGate.waiting[0]));
+      Assert.ok(again.what.unscanned, `the question says why: ${again.what.unscanned}`);
+      AgentGate.answer(again.id, { kind: unscanned });
+    }
     const download = await added;
     return { download, ok: await settled(download) };
   };
@@ -463,7 +506,20 @@ add_task(async function test_clamav_clean_infected_error_and_missing() {
   Assert.equal(asked.length, 1, "scanned once");
   Assert.ok(asked[0]?.endsWith(".part"), `while it still had its .part name: ${asked[0]}`);
   Assert.equal(PathUtils.parent(asked[0] ?? ""), quarantine, "in the quarantine");
-  await noticed('"clean.txt" to /');
+  const args = (await IOUtils.readUTF8(PathUtils.join(clamDir, "args"))).split("\n\n")[0];
+  Assert.deepEqual(
+    args?.split("\n"),
+    [
+      "--no-summary",
+      "--stdout",
+      "--alert-encrypted=yes",
+      "--alert-exceeds-max=yes",
+      "--",
+      asked[0],
+    ],
+    "fixed arguments, alerting on what it cannot open, the path after --",
+  );
+  await noticed('"clean.txt" to ');
   Assert.ok(notices.at(-1)?.endsWith(", scanned (ClamAV)"), notices.at(-1));
 
   await fakeClam("infected");
@@ -472,16 +528,41 @@ add_task(async function test_clamav_clean_infected_error_and_missing() {
   Assert.ok(!(await names(quarantine)).includes("bad.txt"), "and deleted");
   await noticed('"bad.txt": ClamAV found Vimma-Test-Signature');
 
+  // Security review of #182 (finding 7): what ClamAV could not do is asked, and no deletes it.
   await fakeClam("error");
-  r = await run("unsure.txt");
-  Assert.ok(r.ok, "a ClamAV error keeps the file");
-  await noticed('"unsure.txt" to /');
+  r = await run("unsure.txt", "deny");
+  Assert.ok(!r.ok, "a ClamAV error asks; no deletes it");
+  await until(async () => !(await names(quarantine)).includes("unsure.txt"), "deleted");
+  r = await run("kept.txt", "once");
+  Assert.ok(r.ok, "yes keeps it");
+  await noticed('"kept.txt" to ');
   Assert.ok(notices.at(-1)?.endsWith("not scanned (ClamAV failed)"), notices.at(-1));
+
+  await fakeClam("partial");
+  r = await run("locked.txt", "once");
+  Assert.ok(r.ok, "encrypted: asked, and kept on a yes");
+  await noticed('"locked.txt" to ');
+  Assert.ok(notices.at(-1)?.endsWith("not fully scanned (ClamAV)"), notices.at(-1));
+
+  await SpecialPowers.pushPrefEnv({ set: [["vimma.mcp.clamTimeoutMs", 500]] });
+  await fakeClam("hang");
+  r = await run("slow.txt", "deny");
+  Assert.ok(!r.ok, "a ClamAV that does not finish in time asks; no deletes it");
+  await SpecialPowers.popPrefEnv();
+
+  // Vimma's own copy check: a clamscan the user can write is never run.
+  await fakeClam("clean", { owned: true });
+  await IOUtils.remove(PathUtils.join(clamDir, "scanned"), { ignoreAbsent: true });
+  r = await run("owned.txt");
+  Assert.ok(r.ok, "saved");
+  Assert.deepEqual(await scanned(), [], "a clamscan of the user's own is not run");
+  await noticed('"owned.txt" to ');
+  Assert.ok(notices.at(-1)?.endsWith(", not scanned"), notices.at(-1));
 
   await fakeClam("missing");
   r = await run("plain.txt");
   Assert.ok(r.ok, "no ClamAV: released");
-  await noticed('"plain.txt" to /');
+  await noticed('"plain.txt" to ');
   Assert.ok(notices.at(-1)?.endsWith(", not scanned"), notices.at(-1));
   BrowserTestUtils.removeTab(tab);
   await clean();
@@ -528,6 +609,195 @@ add_task(async function test_an_agents_download_is_its_and_a_grant_covers_it() {
   for (const tab of [...gBrowser.tabs]) {
     if (tab.userContextId === WorkspaceStore.agent?.userContextId) BrowserTestUtils.removeTab(tab);
   }
+  await clean();
+});
+
+// Security review of #182 (finding 2): a grant covers the downloads the agent's own open
+// started, not what the page it opened downloads later.
+add_task(async function test_a_grant_never_covers_the_pages_own_downloads() {
+  const c = await agentClient();
+  /** @param {string} url */
+  const open = async (url) => {
+    const id = c.request("agent-open", { url });
+    await until(() => AgentGate.waiting.length === 1, "the open asks");
+    AgentGate.answer(/** @type {any} */ (AgentGate.waiting[0]).id, { kind: "once" });
+    return /** @type {any} */ (await c.response(id)).result.tab;
+  };
+  let added = nextDownload();
+  await open(fileUrl({ name: "first.txt", type: "text/plain" }));
+  const q = await downloadQuestion();
+  Assert.equal(q.label.client, "claude-code", "the agent's own download");
+  AgentGate.answer(q.id, { kind: "grant", minutes: 10 });
+  Assert.ok(await settled(await added), "granted and saved");
+
+  // The agent opens a page; whatever that page downloads afterwards is the page's.
+  await open(PAGE);
+  const agentTabs = () =>
+    gBrowser.tabs.filter((t) => t.userContextId === WorkspaceStore.agent?.userContextId);
+  const tab = /** @type {any} */ (
+    agentTabs().find((t) => t.linkedBrowser.currentURI.spec === PAGE) ??
+      (await until(
+        () => agentTabs().some((t) => t.linkedBrowser.currentURI.spec === PAGE),
+        "the page loads",
+      ).then(() => agentTabs().find((t) => t.linkedBrowser.currentURI.spec === PAGE)))
+  );
+  for (const [how, go] of [
+    ["location=", (/** @type {string} */ u) => `location.href = ${JSON.stringify(u)}`],
+    [
+      "<a download>",
+      (/** @type {string} */ u) =>
+        `{ const a = document.createElement("a"); a.href = ${JSON.stringify(u)}; ` +
+        `a.download = "x"; document.body.append(a); a.click(); }`,
+    ],
+    [
+      "meta refresh",
+      (/** @type {string} */ u) =>
+        `{ const m = document.createElement("meta"); m.httpEquiv = "refresh"; ` +
+        `m.content = "0;url=" + ${JSON.stringify(u)}; document.head.append(m); }`,
+    ],
+  ]) {
+    added = nextDownload();
+    const url = fileUrl({ name: `page-${how.replace(/\W/g, "")}.txt`, type: "text/plain" });
+    await SpecialPowers.spawn(tab.linkedBrowser, [go(url)], (code) => {
+      const script = content.document.createElement("script");
+      script.textContent = code;
+      content.document.body.append(script);
+    });
+    const asked = await downloadQuestion();
+    Assert.equal(asked.label.client, "a page in the agent workspace", `${how}: the page's, asked`);
+    // A yes on the last: three noes in a row would mute the page's questions for a minute.
+    const yes = how === "meta refresh";
+    AgentGate.answer(asked.id, { kind: yes ? "once" : "deny" });
+    Assert.equal(await settled(await added), yes, `${how}: as answered`);
+  }
+  c.close();
+  for (const t of agentTabs()) BrowserTestUtils.removeTab(t);
+  await clean();
+});
+
+// Security review of #182 (finding 3): the quarantine folder must be a private folder of the
+// user's; one that is not is refused, and so is every download meanwhile.
+add_task(async function test_a_folder_that_is_not_private_is_refused() {
+  const home = Services.dirsvc.get("Home", Ci.nsIFile).path;
+  for (const [dir, why] of [
+    ["/usr/share", "not yours"],
+    [PathUtils.join(home, ".vimma-test-hidden"), "a hidden folder"],
+  ]) {
+    configure({ downloadDir: dir });
+    const tab = await agentTab();
+    const added = nextDownload();
+    await startIn(tab, fileUrl({ name: "x.txt", type: "text/plain" }));
+    const download = await added;
+    Assert.ok(!(await settled(download)), `${why}: refused`);
+    Assert.equal(AgentGate.waiting.length, 0, `${why}: without a question`);
+    await noticed('"x.txt": the quarantine folder is not usable');
+    Assert.ok(!(await IOUtils.exists(PathUtils.join(home, ".vimma-test-hidden"))), "not made");
+    BrowserTestUtils.removeTab(tab);
+    notices.length = 0;
+  }
+  configure();
+  await clean();
+});
+
+// Security review of #182 (finding 4): a download is an agent download by its container, by its
+// tab's container, or by being in the quarantine folder.
+add_task(async function test_classified_by_tab_and_by_place_too() {
+  const tab = await agentTab();
+  // From an agent tab, with no container on the download itself: still the agent's, and
+  // refused outside the quarantine.
+  let download = await Downloads.createDownload({
+    source: {
+      url: fileUrl({ name: "t.txt", type: "text/plain" }),
+      browsingContextId: tab.linkedBrowser.browsingContext.id,
+    },
+    target: PathUtils.join(normal, "t.txt"),
+  });
+  download.start().catch(() => {});
+  await until(() => download.stopped, "stopped");
+  Assert.ok(!download.succeeded, "its tab: an agent download, refused outside the quarantine");
+  await noticed('"t.txt": not in the quarantine folder');
+  Assert.ok(!(await IOUtils.exists(PathUtils.join(normal, "t.txt"))), "nothing written");
+
+  // Into the quarantine, with no container and no tab: asked like an agent download.
+  download = await Downloads.createDownload({
+    source: { url: fileUrl({ name: "p.txt", type: "text/plain" }) },
+    target: PathUtils.join(quarantine, "p.txt"),
+  });
+  download.start().catch(() => {});
+  const q = await downloadQuestion();
+  Assert.equal(q.what.name, "p.txt", "its place: asked");
+  AgentGate.answer(q.id, { kind: "deny" });
+  await until(() => download.stopped, "stopped");
+  Assert.ok(!download.succeeded, "and refused on a no");
+  BrowserTestUtils.removeTab(tab);
+  await clean();
+});
+
+// Security review of #182 (finding 8): the other ways a download starts.
+add_task(async function test_the_dialog_the_launch_path_a_frame_and_a_blob() {
+  const tab = await agentTab();
+  // Firefox's "always ask" dialog: never shown for an agent tab; saved to the quarantine.
+  await SpecialPowers.pushPrefEnv({
+    set: [["browser.download.always_ask_before_handling_new_types", true]],
+  });
+  let added = nextDownload();
+  await startIn(tab, fileUrl({ name: "asked.txt", type: "application/x-vimma-ask" }));
+  let q = await downloadQuestion();
+  AgentGate.answer(q.id, { kind: "once" });
+  let download = await added;
+  Assert.ok(await settled(download), "saved, with no dialog");
+  Assert.equal(PathUtils.parent(download.target.path), quarantine, "in the quarantine");
+  await SpecialPowers.popPrefEnv();
+
+  // "Always open similar files" (useSystemDefault): saved, never launched.
+  const mime = Cc["@mozilla.org/mime;1"].getService(Ci.nsIMIMEService);
+  const handlers = Cc["@mozilla.org/uriloader/handler-service;1"].getService(Ci.nsIHandlerService);
+  const info = mime.getFromTypeAndExtension("application/x-vimma-open", "vopen");
+  info.preferredAction = Ci.nsIHandlerInfo.useSystemDefault;
+  info.alwaysAskBeforeHandling = false;
+  handlers.store(info);
+  registerCleanupFunction(() => handlers.remove(info));
+  added = nextDownload();
+  await startIn(tab, fileUrl({ name: "open.vopen", type: "application/x-vimma-open" }));
+  q = await downloadQuestion();
+  AgentGate.answer(q.id, { kind: "once" });
+  download = await added;
+  Assert.ok(await settled(download), "saved");
+  Assert.ok(!download.launchWhenSucceeded, "not launched");
+  Assert.equal(PathUtils.parent(download.target.path), quarantine, "in the quarantine");
+
+  // A frame's download: the top's folder and question.
+  added = nextDownload();
+  const frameUrl = fileUrl({ name: "frame.txt", type: "text/plain" });
+  await SpecialPowers.spawn(tab.linkedBrowser, [PAGE, frameUrl], async (page, url) => {
+    const f = content.document.createElement("iframe");
+    f.src = page;
+    content.document.body.append(f);
+    await new Promise((r) => (f.onload = r));
+    const a = f.contentDocument.createElement("a");
+    a.href = url;
+    f.contentDocument.body.append(a);
+    a.click();
+  });
+  q = await downloadQuestion();
+  AgentGate.answer(q.id, { kind: "once" });
+  download = await added;
+  Assert.ok(await settled(download), "a frame's download is asked and saved");
+  Assert.equal(PathUtils.parent(download.target.path), quarantine, "in the quarantine");
+
+  // A blob: download made by the page's script: refused, not https.
+  added = nextDownload();
+  await SpecialPowers.spawn(tab.linkedBrowser, [], () => {
+    const script = content.document.createElement("script");
+    script.textContent =
+      'const a = document.createElement("a"); a.download = "made.txt"; ' +
+      'a.href = URL.createObjectURL(new Blob(["x"])); document.body.append(a); a.click();';
+    content.document.body.append(script);
+  });
+  download = await added;
+  Assert.ok(!(await settled(download)), "a blob: download is refused");
+  await noticed('"made.txt": not https');
+  BrowserTestUtils.removeTab(tab);
   await clean();
 });
 

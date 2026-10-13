@@ -21,6 +21,7 @@ import { formatPath, locateKeys, parsePath, parseToml } from "./toml.mjs";
 import { OVERLAP_CHORDS, canonicalChord, isShortcutChord } from "./firefox-keys.mjs";
 import { KeyNotationError, parseKey } from "./keys.mjs";
 import { BOOKMARKS_ROOTS } from "./bookmarks.mjs";
+import { quarantineProblem, resolveDownloadDir } from "./agent-downloads.mjs";
 
 /** @import { Keymap } from "./keymap.mjs" */
 /** @import { UserConfig } from "./defaults.mjs" */
@@ -220,12 +221,7 @@ export const MCP_BOUNDS = Object.freeze({
   maxReadChars: Object.freeze({ min: 1000, max: 500000 }),
   downloadMaxMb: Object.freeze({ min: 1, max: 4096 }),
 });
-/** `[mcp] download_dir` values that are not a quarantine folder (decision 31 b). */
-const NOT_QUARANTINE = /** @type {Record<string, string>} */ ({
-  "~": "your home folder",
-  "/": "/",
-  "~/downloads": "the Downloads folder itself",
-});
+
 /** The private workspace's name (privatews.mjs): never the agent workspace's. */
 const PRIVATE_WORKSPACE_NAME = "private";
 const NEEDS_SCHEMA_2 = "is new in schema 2: put schema = 2 at the top of the file";
@@ -652,12 +648,10 @@ function downloadDirProblem(v) {
   if (hasControl(v)) return "must not contain control characters";
   if (v.startsWith("$")) return "must not start with $: write ~/ for your home folder";
   if (!(v === "~" || v.startsWith("~/") || v.startsWith("/"))) return "must start with ~/ or /";
-  const segments = v.split("/").slice(1);
-  if (segments.includes("..")) return "must not contain ..";
-  const kept = segments.filter((seg) => seg !== "" && seg !== ".");
-  const bare = `${v.startsWith("~") ? "~" : ""}${kept.length ? "/" : ""}${kept.join("/")}` || "/";
-  const what = NOT_QUARANTINE[bare.toLowerCase()];
-  return what ? `must not be ${what}` : null;
+  if (v.split("/").includes("..")) return "must not contain ..";
+  // `~` stands for a home folder no real path can be: the checks see `~/…` as under home.
+  const HOME = "/~";
+  return quarantineProblem(resolveDownloadDir(v, HOME), HOME);
 }
 
 /**

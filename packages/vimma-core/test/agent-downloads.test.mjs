@@ -15,8 +15,11 @@ import {
   displayDir,
   downloadRefusedNotice,
   downloadSavedNotice,
+  clamArguments,
   formatBytes,
+  quarantineProblem,
   resolveDownloadDir,
+  zipEntryList,
   zipEntryNames,
   zipLocate,
   zipVerdict,
@@ -25,12 +28,15 @@ import {
 const enc = new TextEncoder();
 
 /**
- * A zip with these names (stored, empty files): local headers, the central directory and the
- * end-of-central-directory record, as `zip -0` writes them.
- * @param {string[]} names
+ * A zip with these entries (stored, empty files): local headers, the central directory and the
+ * end-of-central-directory record, as `zip -0` writes them. An entry is a name, or a name with
+ * the Unix mode `zip` records in the external attributes (version made by: Unix).
+ * @param {(string | { name: string, mode: number })[]} entries
  * @param {{ comment?: string }} [options]
  */
-export function makeZip(names, { comment = "" } = {}) {
+export function makeZip(entries, { comment = "" } = {}) {
+  const names = entries.map((e) => (typeof e === "string" ? e : e.name));
+  const modes = entries.map((e) => (typeof e === "string" ? null : e.mode));
   /** @type {number[]} */
   const out = [];
   const u16 = (/** @type {number} */ n) => out.push(n & 0xff, (n >> 8) & 0xff);
@@ -56,8 +62,9 @@ export function makeZip(names, { comment = "" } = {}) {
   const cdStart = out.length;
   names.forEach((name, i) => {
     const bytes = enc.encode(name);
+    const mode = modes[i];
     u32(0x02014b50);
-    u16(20);
+    u16(mode === null || mode === undefined ? 20 : (3 << 8) | 20); // version made by: Unix
     u16(10);
     u16(0);
     u16(0);
@@ -70,7 +77,7 @@ export function makeZip(names, { comment = "" } = {}) {
     u16(0);
     u16(0);
     u16(0);
-    u32(0);
+    u32(mode === null || mode === undefined ? 0 : (mode << 16) >>> 0); // external attributes
     u32(/** @type {number} */ (offsets[i]));
     out.push(...bytes);
   });
@@ -284,7 +291,81 @@ describe("a zip's names, from its central directory (never extracted)", () => {
   });
 });
 
+// Security review of #182 (finding 1): what an entry becomes when unpacked counts too.
+describe("a zip entry's mode and path", () => {
+  test("an entry with an exec bit is an executable, whatever its name", () => {
+    expect(list(makeZip([{ name: "tool", mode: 0o100755 }]))).toEqual(["tool"]);
+    expect(zipVerdict(zipEntries(makeZip([{ name: "tool", mode: 0o100755 }])))).toEqual({
+      kind: "executable",
+      text: "a zip holding an executable (tool, exec bit)",
+    });
+    expect(zipVerdict(zipEntries(makeZip([{ name: "notes.txt", mode: 0o100644 }])))).toBe(null);
+  });
+
+  test("a symbolic link is dangerous", () => {
+    expect(zipVerdict(zipEntries(makeZip([{ name: "docs", mode: 0o120777 }])))?.text).toBe(
+      "a zip holding a symbolic link (docs)",
+    );
+  });
+
+  test.each(["../evil.txt", "a/../../evil.txt", "/etc/passwd", "a\\..\\b.txt", "C:/x.txt"])(
+    "%s leaves its folder",
+    (name) => {
+      expect(zipVerdict(zipEntries(makeZip([name])))?.text).toMatch(
+        /^a zip with a path outside its folder \(/,
+      );
+    },
+  );
+
+  test("modes from another system (version made by not Unix) are not read", () => {
+    const zip = makeZip([{ name: "tool", mode: 0o100755 }]);
+    const at = zipLocate(zip, zip.length);
+    if (at.kind !== "zip") throw new Error("expected a zip");
+    zip[at.offset + 5] = 0; // made by MS-DOS
+    expect(zipVerdict(zipEntries(zip))).toBe(null);
+  });
+});
+
+/** A zip's entries, as the browser reads them. @param {Uint8Array} zip */
+function zipEntries(zip) {
+  const at = zipLocate(zip.subarray(Math.max(0, zip.length - ZIP_TAIL_BYTES)), zip.length);
+  if (at.kind !== "zip") throw new Error("expected a zip");
+  return /** @type {any[]} */ (
+    zipEntryList(zip.subarray(at.offset, at.offset + at.length), at.entries)
+  );
+}
+
 describe("ClamAV's answer (decision 31 g)", () => {
+  // Security review of #182 (finding 7): what ClamAV could not open is "not fully scanned".
+  test("encrypted or over ClamAV's limits: not fully scanned, not infected", () => {
+    expect(
+      clamVerdict({ exitCode: 1, stdout: "/q/a.part: Heuristics.Encrypted.Zip FOUND\n" }),
+    ).toEqual({ kind: "partial", reason: "encrypted" });
+    expect(
+      clamVerdict({
+        exitCode: 1,
+        stdout: "/q/a.part: Heuristics.Limits.Exceeded.MaxFileSize FOUND\n",
+      }),
+    ).toEqual({ kind: "partial", reason: "over ClamAV's limits" });
+    expect(
+      clamVerdict({
+        exitCode: 1,
+        stdout: "/q/a: Heuristics.Encrypted.Zip FOUND\n/q/a: Win.Trojan.X FOUND\n",
+      }),
+    ).toEqual({ kind: "infected", signature: "Win.Trojan.X" });
+  });
+
+  test("the arguments: fixed, alerting on what it cannot open, the path after --", () => {
+    expect(clamArguments("/q/-x.part")).toEqual([
+      "--no-summary",
+      "--stdout",
+      "--alert-encrypted=yes",
+      "--alert-exceeds-max=yes",
+      "--",
+      "/q/-x.part",
+    ]);
+  });
+
   test("exit 0 is clean, 1 infected with the signature, anything else an error", () => {
     expect(clamVerdict({ exitCode: 0, stdout: "/q/a.part: OK\n" })).toEqual({ kind: "clean" });
     expect(clamVerdict({ exitCode: 1, stdout: "/q/a.part: Eicar-Test-Signature FOUND\n" })).toEqual(
@@ -311,6 +392,27 @@ describe("ClamAV's answer (decision 31 g)", () => {
 
 describe("the quarantine folder (decision 31 b)", () => {
   const home = "/home/u";
+  // Security review of #182 (finding 3): never a hidden folder of home, or one anyone can write.
+  test.each([
+    ["/home/u", "your home folder"],
+    ["/home/u/Downloads", "the Downloads folder itself"],
+    ["/home/u/.local/bin", "in a hidden folder (.local)"],
+    ["/home/u/x/.cache/q", "in a hidden folder (.cache)"],
+    ["/tmp/q", "in /tmp, /var/tmp or /dev/shm"],
+    ["/var/tmp", "in /tmp, /var/tmp or /dev/shm"],
+    ["/dev/shm/q", "in /tmp, /var/tmp or /dev/shm"],
+    ["/", "/"],
+  ])("%s is refused: %s", (dir, why) => {
+    expect(quarantineProblem(dir, home)).toBe(`must not be ${why}`);
+  });
+
+  test.each(["/home/u/Downloads/vimma-agent", "/srv/agent", "/home/u/agent.files"])(
+    "%s is fine",
+    (dir) => {
+      expect(quarantineProblem(dir, home)).toBe(null);
+    },
+  );
+
   test("~ expands; an absolute path stays; trailing slashes go", () => {
     expect(resolveDownloadDir("~/Downloads/vimma-agent/", home)).toBe(
       "/home/u/Downloads/vimma-agent",
@@ -340,6 +442,18 @@ describe("the question and the notices (decision 31 a, g)", () => {
     [3_200_000_000, "3.2 GB"],
   ])("%d bytes: %s", (n, text) => {
     expect(formatBytes(n)).toBe(text);
+  });
+
+  test("not fully scanned, and kept after a yes when ClamAV failed", () => {
+    expect(downloadSavedNotice({ name: "a.zip", dir: "/q", scan: "partial" })).toBe(
+      'saved "a.zip" to /q, not fully scanned (ClamAV)',
+    );
+    expect(downloadSavedNotice({ name: "a.zip", dir: "/q", scan: "error" })).toBe(
+      'saved "a.zip" to /q, not scanned (ClamAV failed)',
+    );
+    expect(downloadRefusedNotice("a.bin", { kind: "folder", text: "it is not yours" })).toBe(
+      'refused download "a.bin": the quarantine folder is not usable: it is not yours',
+    );
   });
 
   test("saved: where, and whether ClamAV scanned it", () => {

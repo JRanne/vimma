@@ -8,7 +8,7 @@ import {
   clamVerdict,
   dangerousContent,
   dangerousName,
-  zipEntryNames,
+  zipEntryList,
   zipLocate,
   zipVerdict,
 } from "../../src/agent-downloads.mjs";
@@ -44,7 +44,7 @@ describe("agent downloads fuzzing", () => {
             if (at.kind !== "zip") return;
             expect(at.offset).toBeGreaterThanOrEqual(0);
             expect(at.offset + at.length).toBeLessThanOrEqual(bytes.length);
-            const names = zipEntryNames(
+            const names = zipEntryList(
               bytes.subarray(at.offset, at.offset + at.length),
               at.entries,
             );

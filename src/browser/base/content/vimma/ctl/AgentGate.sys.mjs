@@ -273,7 +273,8 @@ export const AgentGate = {
       if (answer.kind === "mute") final = { kind: "deny" };
     }
     // A dangerous download is allowed for that one file only (decision 31 d): no grant.
-    if (answer.kind === "grant" && /** @type {any} */ (question?.what)?.danger) return null;
+    const asked = /** @type {any} */ (question?.what);
+    if (answer.kind === "grant" && (asked?.danger || asked?.unscanned)) return null;
     if (answer.kind === "grant") {
       length = grantLength(answer.minutes, McpHost.config ?? DEFAULT_GRANT);
       final = { kind: "grant", minutes: length.minutes };
