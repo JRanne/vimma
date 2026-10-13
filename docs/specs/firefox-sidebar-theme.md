@@ -204,8 +204,37 @@ on Ristretto the ring is `#f7b5a2` (`--vimma-focus`), the field `#2c2525`, the l
 `#403e41`, the tracks `#211b1b` with a `#72696a` thumb, and no Firefox blue, grey or white pixel
 is left in the sidebar; on Latte the same with Latte's colours (ring `#1852c4`, tracks `#e3e4e8`).
 
-Not covered: the tree's inline rename field (`.tree-input`, in the tree's shadow root, shown only
-while renaming in place) keeps `Field` colours.
+### Follow-up: the tree's rename field, and the notice
+
+The tree's inline rename field (`html|input.tree-input` in `MozTree`'s shadow root, `tree.js`;
+`toolkit/themes/shared/tree/tree.css` gives it `appearance: none`, no border and
+`outline: var(--focus-outline)` but no colours) was left on the UA's `Field`/`FieldText`
+(`#2b2a33` or white) with its selected text in `Highlight`. No document sheet reaches into the
+shadow root and Firefox drives it from no variable, so `ThemeHost` adds its rules to the sheet it
+already adopts into each tree's shadow root for the scrollbar (now `TREE_RULES`, `colourTrees`):
+the field on `--vimma-bg` with `--vimma-fg` text, as the search box, and its selected text on
+`--vimma-selection` in `--vimma-fg-bright`, as a selected row. Its ring was already
+`--vimma-focus` (`focus.css` in the document). Firefox's bookmarks sidebar tree is not `editable`
+by default (the folder tree in the bookmark dialog, `editBookmark.js`, is), so the field shows
+there only once a tree opts in; the test and the screenshots set `editable` to show it. Red before
+the fix: 8 failed assertions (surface, text, selection surface and text, bookmarks under the
+switched dark and the light theme); green after.
+
+Vimma's own toast (`ui/notice.mjs`, `notice.css`) was the last Vimma surface on `Canvas`/
+`CanvasText` ("theme tokens come in M5"). It now uses the tokens the command line and pickers use,
+with the same system-colour fallbacks: `--vimma-bg-dark` surface, `--vimma-fg` text, a
+`--vimma-muted` border and `color-scheme: var(--vimma-color-scheme)`. `browser_vimma_theme.js`
+checks its painted colours under the dark, light and built-in light themes (12 failed assertions
+before the fix, green after).
+
+Screenshots (a temporary mochitest, not committed; the bookmarks sidebar renaming a bookmark in
+place, a notice showing) under Ristretto, Tokyo Night and Catppuccin Latte: the field is the
+theme's background with its text and selection, ringed in the focus colour, and the toast sits on
+the status bar's surface with the theme's text and muted edge; no `Field` grey or white is left.
+`event-horizon` (the user's current theme, an Aether-made `colors.toml`) is rejected by the
+validator (no `selection`, `muted`, `dark_background`, ... keys), so it shows the built-in palette.
+
+Not covered: nothing known in the sidebar.
 
 ## Open questions
 

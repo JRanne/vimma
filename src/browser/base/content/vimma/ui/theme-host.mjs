@@ -269,25 +269,37 @@ function stopIfIdle() {
 }
 
 /**
- * A XUL <tree> (the bookmarks sidebar's) draws its vertical scrollbar as a <scrollbar> element in
- * its shadow root, which the UA sheet resets to initial values (scrollbars.css, `all: initial`,
- * for its style cache): it inherits neither scrollbar-color nor color-scheme, so it shows a white
- * track on any theme, and no document sheet reaches into the shadow root. Custom properties
- * survive `all`, so one rule adopted into each tree's shadow root gives it the side panel's colours
- * (side-panel.css), following the tokens on a theme change.
+ * A XUL <tree> (the bookmarks sidebar's) keeps two parts in its shadow root, where no document
+ * sheet reaches, so one sheet adopted into each tree's shadow root gives them the tokens (custom
+ * properties inherit into it), following them on a theme change:
+ * - its vertical <scrollbar>, which the UA sheet resets to initial values (scrollbars.css,
+ *   `all: initial`, for its style cache): it inherits neither scrollbar-color nor color-scheme,
+ *   so it shows a white track on any theme. It gets the side panel's colours (side-panel.css).
+ * - its rename-in-place field (`.tree-input`, tree.css), which the UA fills with Field and
+ *   FieldText (a grey #2b2a33, or white) and whose selected text is Highlight. It takes the
+ *   sidebar search box's colours (firefox-sidebar-page.css) and a selected row's (side-panel.css).
+ *   Its ring is already --vimma-focus (focus.css in the document).
  */
-const TREE_SCROLLBAR_RULE =
-  "scrollbar { scrollbar-color: var(--vimma-muted) var(--vimma-bg-dark) !important; }";
+const TREE_RULES = `
+scrollbar { scrollbar-color: var(--vimma-muted) var(--vimma-bg-dark) !important; }
+.tree-input {
+  background-color: var(--vimma-bg) !important;
+  color: var(--vimma-fg) !important;
+}
+.tree-input::selection {
+  background-color: var(--vimma-selection) !important;
+  color: var(--vimma-fg-bright) !important;
+}`;
 
 /** @param {Document} doc  a sidebar document, once parsed */
-function colourTreeScrollbars(doc) {
+function colourTrees(doc) {
   const win = /** @type {any} */ (doc.defaultView);
   if (!win) return;
   for (const tree of doc.querySelectorAll("tree")) {
     const root = tree.shadowRoot;
     if (!root) continue;
     const sheet = new win.CSSStyleSheet();
-    sheet.replaceSync(TREE_SCROLLBAR_RULE);
+    sheet.replaceSync(TREE_RULES);
     root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
   }
 }
@@ -296,7 +308,7 @@ function colourTreeScrollbars(doc) {
  * A document in Firefox's sidebar (history, bookmarks, ...): a separate chrome document the
  * window's sheets do not reach, and whose CSP refuses a data: <style>. It gets the tokens,
  * focus.css and firefox-sidebar-page.css as author sheets, which its CSP does not apply to, and
- * its trees' scrollbars their colour once it is parsed.
+ * its trees' scrollbars and rename fields their colours once it is parsed.
  * @param {Document | null | undefined} doc
  */
 function attachSidebarPage(doc) {
@@ -309,9 +321,9 @@ function attachSidebarPage(doc) {
   pages.set(doc, uri);
   win.addEventListener("unload", () => pages.delete(doc), { once: true });
   if (doc.readyState === "loading") {
-    doc.addEventListener("DOMContentLoaded", () => colourTreeScrollbars(doc), { once: true });
+    doc.addEventListener("DOMContentLoaded", () => colourTrees(doc), { once: true });
   } else {
-    colourTreeScrollbars(doc);
+    colourTrees(doc);
   }
 }
 

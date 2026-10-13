@@ -10,6 +10,9 @@
 /* global focusContent -- from head.js */
 
 const { Subprocess } = ChromeUtils.importESModule("resource://gre/modules/Subprocess.sys.mjs");
+const { VimmaHost } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
+);
 
 const START = "chrome://browser/content/vimma/start/start.html";
 const POLL_MS = 100;
@@ -139,7 +142,26 @@ async function assertSurfacesFollowTheTheme(label) {
     await TestUtils.waitForCondition(() => !shown(s.el()), `${label}: ${s.what} closes`);
   }
   await assertSidePanelFollowsTheTheme(label);
+  assertNoticeFollowsTheTheme(label);
   BrowserTestUtils.removeTab(tab);
+}
+
+/**
+ * Shows the toast (ui/notice.mjs) and checks what it paints, not its variables: its surface,
+ * text and border are the tokens Vimma's other surfaces use, not the system's Canvas colours.
+ * @param {string} label  which theme, for the messages
+ */
+function assertNoticeFollowsTheTheme(label) {
+  VimmaHost.say(window, `${label}: a notice`);
+  const toast = /** @type {Element} */ (document.getElementById("vimma-notice"));
+  Assert.ok(toast?.matches(":popover-open"), `${label}: the notice shows`);
+  const style = getComputedStyle(toast);
+  const t = (/** @type {string} */ name) => rgb(token(name));
+  Assert.equal(style.backgroundColor, t("--vimma-bg-dark"), `${label}: notice surface`);
+  Assert.equal(style.color, t("--vimma-fg"), `${label}: notice text`);
+  Assert.equal(style.borderTopColor, t("--vimma-muted"), `${label}: notice border`);
+  Assert.equal(style.colorScheme, token("--vimma-color-scheme"), `${label}: notice scheme`);
+  /** @type {any} */ (toast).hidePopover();
 }
 
 /**
