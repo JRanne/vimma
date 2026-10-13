@@ -13,7 +13,8 @@ and workspaces, and your hands never leave the keyboard.
 - **tmux for the window:** `ctrl+b`, tmux's default prefix, then `c` for a new tab, `v` to split,
   `w` to switch workspace. If your fingers know tmux, they already know Vimma.
 - **Every key is yours:** every binding, the prefix and the leader can be remapped in
-  `config.toml`.
+  `config.toml`, Firefox's own keys too: `ctrl+t`, `alt+left` and `F12` are Vimma bindings
+  with Firefox's meaning, listed in `ctrl+b ?`.
 
 ### The name
 
@@ -73,7 +74,9 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
 
 - Every key is yours: any binding, the `ctrl+b` prefix and the `space` leader can be remapped in
   `~/.config/vimma/config.toml`, e.g. `keys.prefix = "ctrl+a"`
-  ([guide](docs/guide.md#every-key-is-yours)).
+  ([guide](docs/guide.md#every-key-is-yours)). Firefox's own shortcuts (`ctrl+t`, `ctrl+l`,
+  `alt+1..9`, `ctrl+plus`, the DevTools keys) are Vimma bindings too, with Firefox's meaning,
+  and `ctrl+b ?` lists them with the rest.
 - `~/.config/vimma/config.toml` sets options, key bindings and workspaces, and applies on save.
   `about:vimma` shows the version and what is in force.
 - Theming: the bars, pickers, hints, start page and Firefox's own sidebar take their colours

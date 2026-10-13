@@ -18,6 +18,7 @@ browser.jar:
         content/browser/vimma/host/find.mjs               (host/find.mjs)
         content/browser/vimma/host/copy-mode.mjs          (host/copy-mode.mjs)
         content/browser/vimma/host/page-ops.mjs           (host/page-ops.mjs)
+        content/browser/vimma/host/browser-ops.mjs        (host/browser-ops.mjs)
         content/browser/vimma/host/bookmark-ops.mjs       (host/bookmark-ops.mjs)
         content/browser/vimma/host/bookmark-actions.mjs   (host/bookmark-actions.mjs)
         content/browser/vimma/actors/VimmaActors.sys.mjs  (actors/VimmaActors.sys.mjs)

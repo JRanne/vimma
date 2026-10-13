@@ -49,18 +49,30 @@ import { DEFAULT_THEME_NAME } from "./theme.mjs";
  * @property {Record<string, string>} [colors]
  */
 
-/** Herdr's default keymap (https://herdr.dev/docs/keyboard/), plus vimma's own global chords. */
+/**
+ * Herdr's default keymap (https://herdr.dev/docs/keyboard/), plus vimma's own global chords and
+ * Firefox's own keys as Vimma bindings (docs/specs/firefox-keys.md: the inventory's a and b rows
+ * in FIREFOX_SHORTCUTS, which a test keeps in step with this table).
+ */
 const keys = {
   prefix: "ctrl+b",
   show_keybinds: ["prefix+?"],
-  new_tab: ["prefix+c"],
-  next_tab: ["prefix+n"],
-  previous_tab: ["prefix+p"],
+  new_tab: ["prefix+c", "ctrl+t"],
+  next_tab: ["prefix+n", "ctrl+tab", "ctrl+pagedown"],
+  previous_tab: ["prefix+p", "ctrl+shift+tab", "ctrl+pageup"],
   ...Object.fromEntries(
-    Array.from({ length: 9 }, (_, i) => [`select_tab_${i + 1}`, [`prefix+${i + 1}`]]),
+    Array.from({ length: 9 }, (_, i) => [
+      `select_tab_${i + 1}`,
+      // Firefox's alt+1..8 (Linux); its alt+9 is the last tab.
+      i < 8 ? [`prefix+${i + 1}`, `alt+${i + 1}`] : [`prefix+${i + 1}`],
+    ]),
   ),
   rename_tab: ["prefix+shift+t"],
-  close_tab: ["prefix+shift+x"],
+  close_tab: ["prefix+shift+x", "ctrl+f4"],
+  select_last_tab: ["alt+9"],
+  move_tab_left: ["ctrl+shift+pageup"],
+  move_tab_right: ["ctrl+shift+pagedown"],
+  restore_tab: ["ctrl+shift+t"],
   split_vertical: ["prefix+v"],
   split_horizontal: ["prefix+minus"],
   focus_pane_left: ["prefix+h"],
@@ -90,6 +102,45 @@ const keys = {
   private_workspace: ["prefix+shift+p", "ctrl+shift+p"],
   goto_picker: ["prefix+g"],
   toggle_sidebar: ["prefix+b"],
+  history_back: ["alt+left"],
+  history_forward: ["alt+right"],
+  reload: ["f5", "ctrl+r"],
+  focus_urlbar: ["ctrl+l", "alt+d"],
+  find_next: ["ctrl+g", "f3"],
+  find_previous: ["ctrl+shift+g", "shift+f3"],
+  new_window: ["ctrl+n"],
+  close_window: ["ctrl+shift+w"],
+  restore_window: ["ctrl+shift+n"],
+  quit: ["ctrl+q"],
+  reload_hard: ["ctrl+f5", "ctrl+shift+r"],
+  go_home: ["alt+home"],
+  page_zoom_in: ["ctrl+plus", "ctrl+="],
+  page_zoom_out: ["ctrl+minus", "ctrl+_"],
+  page_zoom_reset: ["ctrl+0"],
+  toggle_fullscreen: ["f11"],
+  save_page: ["ctrl+s"],
+  print_page: ["ctrl+p"],
+  downloads: ["ctrl+shift+y"],
+  addons_manager: ["ctrl+shift+a"],
+  history_library: ["ctrl+shift+h"],
+  bookmarks_library: ["ctrl+shift+o"],
+  mute_tab: ["ctrl+m"],
+  picture_in_picture: ["ctrl+}"],
+  reader_view: ["ctrl+alt+r"],
+  screenshot: ["ctrl+shift+s"],
+  clear_history: ["ctrl+shift+delete"],
+  devtools: ["ctrl+shift+i", "f12"],
+  browser_toolbox: ["ctrl+alt+shift+i"],
+  browser_console: ["ctrl+shift+j"],
+  responsive_design: ["ctrl+shift+m"],
+  devtools_inspector: ["ctrl+shift+c"],
+  devtools_console: ["ctrl+shift+k"],
+  devtools_debugger: ["ctrl+shift+z"],
+  devtools_network: ["ctrl+shift+e"],
+  devtools_style_editor: ["shift+f7"],
+  devtools_performance: ["shift+f5"],
+  devtools_storage: ["shift+f9"],
+  devtools_accessibility: ["shift+f12"],
   toggle_bookmarks: ["prefix+shift+b"],
   add_bookmark: ["prefix+a"],
   copy_mode: ["prefix+["],
@@ -119,6 +170,12 @@ const modal = {
     L: "history.forward",
     "<C-o>": "history.back",
     "<C-i>": "history.forward",
+    // Firefox's Unix back / forward; in a text field they do nothing (firefox-keys Q2).
+    "<C-[>": "history.back",
+    "<C-]>": "history.forward",
+    // Firefox's stop, after the page had Esc (firefox-keys decision 7): Esc still leaves insert
+    // mode, closes dialogs and cancels a pending key first.
+    "<Esc>": "page.stop",
     r: "page.reload",
     f: "hint.follow",
     F: "hint.follow_new_tab",
@@ -214,8 +271,6 @@ const modal = {
     // Marks for Enter to show together (m4-side-panel-multiselect), ranger's keys.
     "<Space>": "panel.mark",
     V: "panel.visual",
-    // The panel takes every key: Firefox's ctrl+shift+t, as an action of its own.
-    "<C-S-t>": "tab.restore",
     // Closes the panel, then focuses the address bar (as I does in normal mode).
     I: "urlbar.focus",
     // The bookmarks panel (docs/specs/bookmarks.md), neo-tree's keys; nothing in the tabs panel.
@@ -326,8 +381,9 @@ export function formatDefaultsToml() {
     "[unbind]",
     "normal = []",
     "",
-    "# Firefox's own shortcuts that are off, so they never fire on Vimma's keys. disable = \"all\"",
-    "# turns off every Firefox shortcut with ctrl, alt or meta but ctrl+q; enable keeps chords on.",
+    "# Firefox's own shortcuts that are off. One on a key Vimma binds is always off (ctrl+b ? lists",
+    '# them); disable = "all" turns off every other one with ctrl, alt or meta but ctrl+q, and',
+    "# enable keeps chords on.",
     "[firefox]",
     `disable = [${OVERLAP_CHORDS.map(tomlString).join(", ")}]`,
     "enable = []",

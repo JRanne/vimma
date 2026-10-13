@@ -31,7 +31,7 @@ describe("help table", () => {
     const keys = (name) => rows.find((r) => r.name === name)?.bindings;
     expect(keys("show_keybinds")).toContain("ctrl+b ?");
     expect(keys("toggle_sidebar")).toEqual(["ctrl+b b", "space n"]);
-    expect(keys("close_tab")).toEqual(["ctrl+b shift+x", "x"]);
+    expect(keys("close_tab")).toEqual(["ctrl+b shift+x", "ctrl+f4", "x"]);
     expect(keys("focus_pane_left")).toEqual(["ctrl+b h", "ctrl+w h"]);
     for (const r of rows) {
       for (const b of r.bindings) expect(b, r.name).not.toMatch(/prefix|<leader>|<[a-z]/i);
@@ -154,5 +154,46 @@ describe("bindingsJson (docs/bindings.json, mirrored by vimma.dev)", () => {
     expect(data.modes).toEqual([...MODES]);
     const all = data.groups.flatMap((g) => g.actions).flatMap((a) => a.keys);
     expect(all.map((k) => k.keys)).toContain("ctrl+a ?");
+  });
+});
+
+// docs/specs/firefox-keys.md decisions 3 and 7.
+describe("Firefox's keys in the overlay", () => {
+  const rows = bindingTable(compileKeymap());
+  const row = (name) => rows.find((r) => r.name === name);
+
+  test("Browser comes after Page, Developer tools after it", () => {
+    const groups = [...new Set(rows.map((r) => r.group))];
+    expect(groups.indexOf("Browser")).toBe(groups.indexOf("Page") + 1);
+    expect(groups.indexOf("Developer tools")).toBe(groups.indexOf("Browser") + 1);
+  });
+
+  test("restore_tab is a Tabs action now, on ctrl+shift+t in every mode", () => {
+    expect(row("restore_tab")).toMatchObject({ group: "Tabs", bindings: ["ctrl+shift+t"] });
+  });
+
+  test("Go back lists H, ctrl+o, alt+left and ctrl+[", () => {
+    expect(row("history_back")?.bindings).toEqual(["alt+left", "H", "ctrl+o", "ctrl+["]);
+    expect(row("history_forward")?.bindings).toEqual(["alt+right", "L", "ctrl+i", "ctrl+]"]);
+  });
+
+  test("the tab keys list Firefox's", () => {
+    expect(row("new_tab")?.bindings).toEqual(["ctrl+b c", "ctrl+t", "t"]);
+    expect(row("next_tab")?.bindings).toEqual(["ctrl+b n", "ctrl+tab", "ctrl+pagedown", "gt"]);
+    expect(row("select_tab_1")?.bindings).toEqual(["ctrl+b 1", "alt+1"]);
+    expect(row("select_tab_9")?.bindings).toEqual(["ctrl+b 9"]);
+    expect(row("select_last_tab")).toMatchObject({ group: "Tabs", bindings: ["alt+9"] });
+  });
+
+  test("the developer tools keys are Firefox's own", () => {
+    expect(row("devtools")).toMatchObject({
+      group: "Developer tools",
+      bindings: ["ctrl+shift+i", "f12"],
+    });
+    expect(row("devtools_style_editor")?.bindings).toEqual(["shift+f7"]);
+  });
+
+  test("stop_loading is normal-mode esc", () => {
+    expect(row("stop_loading")).toMatchObject({ group: "Browser", bindings: ["esc"] });
   });
 });
