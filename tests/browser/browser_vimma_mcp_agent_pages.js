@@ -217,3 +217,43 @@ add_task(async function test_agent_tabs_open_no_popups() {
   BrowserTestUtils.removeTab(await newTab);
   BrowserTestUtils.removeTab(mine);
 });
+
+// Review of #177 (M1), user decision 2026-10-13: "Per workspace". Site permissions are kept per
+// container (permissions.isolateBy.userContext), so an ALLOW given in the default container or
+// in `work` never reaches the agent workspace, and `work`'s own ALLOW still works in `work`.
+add_task(async function test_site_permissions_are_per_workspace() {
+  Assert.equal(
+    Services.prefs.getDefaultBranch("").getBoolPref("permissions.isolateBy.userContext", false),
+    true,
+    "Vimma's default: permissions are isolated by container",
+  );
+  const { ContextualIdentityService } = ChromeUtils.importESModule(
+    "moz-src:///toolkit/components/contextualidentity/ContextualIdentityService.sys.mjs",
+  );
+  const work = ContextualIdentityService.create("vimma-test-work", "briefcase", "blue");
+  registerCleanupFunction(() => ContextualIdentityService.remove(work.userContextId));
+  const uri = Services.io.newURI(PAGE);
+  for (const userContextId of [0, work.userContextId]) {
+    const principal = Services.scriptSecurityManager.createContentPrincipal(uri, { userContextId });
+    for (const type of ["geo", "camera"]) {
+      Services.perms.addFromPrincipal(principal, type, Services.perms.ALLOW_ACTION);
+    }
+  }
+  const agent = /** @type {any} */ (WorkspaceStore.agent);
+  const agentTab = await tabIn(agent.userContextId);
+  const there = await ask(agentTab.linkedBrowser);
+  Assert.equal(there.geo, "denied", "the default and work ALLOWs do not reach an agent tab");
+  Assert.equal(there.camera, "denied", "nor its camera");
+  BrowserTestUtils.removeTab(agentTab);
+
+  // work's own ALLOW stays work's: read with each container's principal.
+  const of = (/** @type {number} */ userContextId) =>
+    Services.perms.testPermissionFromPrincipal(
+      Services.scriptSecurityManager.createContentPrincipal(uri, { userContextId }),
+      "geo",
+    );
+  Assert.equal(of(work.userContextId), Services.perms.ALLOW_ACTION, "work keeps its ALLOW");
+  Assert.equal(of(0), Services.perms.ALLOW_ACTION, "so does the default container");
+  Assert.equal(of(agent.userContextId), Services.perms.UNKNOWN_ACTION, "the agent has none");
+  Services.perms.removeAll();
+});

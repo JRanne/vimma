@@ -123,6 +123,12 @@ pref("accessibility.typeaheadfind.casesensitive", 2);
 // Firefox only uses a preloaded about:newtab for tabs in no container, so it would never be used.
 pref("browser.newtab.preload", false);
 
+// Site permissions per workspace (docs/specs/vimma-mcp.md, user decision 2026-10-13: "Per
+// workspace"): each container keeps its own permissions, as it keeps its own logins, so a camera
+// or location you allowed in `work` never applies to the same site in the agent workspace.
+// Permissions stored before this stay with the default container (no container).
+pref("permissions.isolateBy.userContext", true);
+
 // Workspaces (spec m3-workspaces, decision 9): closing the last visible tab must not close a
 // window whose other workspaces' tabs are hidden; Firefox opens a new tab in the workspace instead.
 pref("browser.tabs.closeWindowWithLastTab", false);
