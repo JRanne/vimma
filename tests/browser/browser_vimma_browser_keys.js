@@ -14,9 +14,6 @@
 const { VimmaHost } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
 );
-const { PermissionTestUtils } = ChromeUtils.importESModule(
-  "resource://testing-common/PermissionTestUtils.sys.mjs",
-);
 
 const ROOT = getRootDirectory(gTestPath).replace(
   "chrome://mochitests/content",
@@ -224,13 +221,16 @@ add_task(async function zoom_keys_zoom_and_a_page_that_takes_one_keeps_it() {
 add_task(async function a_blocked_shortcuts_permission_makes_the_key_vimmas_first() {
   const tab = await normalPage();
   const browser = tab.linkedBrowser;
-  PermissionTestUtils.add(browser.currentURI, "shortcuts", Services.perms.DENY_ACTION);
-  registerCleanupFunction(() => PermissionTestUtils.remove(browser.currentURI, "shortcuts"));
+  // The tab's own principal: site permissions are per workspace (container), as Firefox's site
+  // panel sets them (docs/specs/vimma-mcp.md decision 30).
+  const principal = browser.contentPrincipal;
+  Services.perms.addFromPrincipal(principal, "shortcuts", Services.perms.DENY_ACTION);
+  registerCleanupFunction(() => Services.perms.removeFromPrincipal(principal, "shortcuts"));
   await pageTakes(browser, ["ctrl+="]);
   EventUtils.synthesizeKey("=", { ctrlKey: true });
   await TestUtils.waitForCondition(() => zoomOf(browser) > 1, "zoomed although the page asked");
   FullZoom.reset(browser);
-  PermissionTestUtils.remove(browser.currentURI, "shortcuts");
+  Services.perms.removeFromPrincipal(principal, "shortcuts");
   BrowserTestUtils.removeTab(tab);
 });
 
