@@ -51,7 +51,17 @@ export class AgentPrompt {
     const text = /** @type {HTMLElement} */ (this.text);
     text.replaceChildren(
       ...line.parts.map((p) => {
-        const node = doc.createElementNS(HTML_NS, p.strong ? "b" : "span");
+        // Text an agent or a page chose is its own bidi run (review of #177, L6): a name or a
+        // title is a <bdi>, a URL a left-to-right isolate, so neither can reorder the question.
+        const tag = p.isolate === "auto" && !p.strong ? "bdi" : p.strong ? "b" : "span";
+        const node = /** @type {HTMLElement} */ (doc.createElementNS(HTML_NS, tag));
+        if (p.isolate === "ltr") {
+          node.dir = "ltr";
+          node.style.unicodeBidi = "isolate";
+        } else if (p.isolate === "auto" && p.strong) {
+          node.dir = "auto";
+          node.style.unicodeBidi = "isolate";
+        }
         node.textContent = p.text;
         return node;
       }),

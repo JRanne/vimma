@@ -31,7 +31,9 @@ const MAX_COUNT_DIGITS = 4;
 /**
  * @typedef {{ client?: string, version?: string, via?: string } | null | undefined} Label
  * @typedef {{ tool: string, label: Label, what: Record<string, any> }} Asked
- * @typedef {{ text: string, strong?: boolean }} Part
+ * @typedef {{ text: string, strong?: boolean, isolate?: "auto" | "ltr" }} Part  `isolate`: text an
+ *   agent or a page chose, drawn as its own bidi run (review of #177, L6): `auto` for names and
+ *   titles (<bdi>), `ltr` for URLs
  * @typedef {{ kind: "once" } | { kind: "deny" } | { kind: "mute" }
  *   | { kind: "grant", minutes: number | null }} PromptAnswer
  */
@@ -72,12 +74,17 @@ const cutTitle = (title) => truncate(clean(title), TITLE_COLUMNS, "end");
 /**
  * A tab as the question shows it: its place in the agent workspace, title and URL.
  * @param {Record<string, any>} what
+ * @returns {Part[]}
  */
-function tabText(what) {
+function tabParts(what) {
   const place = Number.isInteger(what.index) ? `${what.index} ` : "";
-  return `${place}"${cutTitle(what.title)}" ${displayUrl(clean(what.url))}`;
+  return [
+    { text: `${place}"` },
+    { text: cutTitle(what.title), isolate: "auto" },
+    { text: '" ' },
+    { text: displayUrl(clean(what.url)), isolate: "ltr" },
+  ];
 }
-
 /**
  * The URL with its host in bold (decision 13: opens show the full URL).
  * @param {string} url @param {string} host
@@ -85,12 +92,16 @@ function tabText(what) {
  */
 function urlParts(url, host) {
   const at = host ? url.indexOf(host) : -1;
-  if (at === -1) return [{ text: url }];
-  return [
-    { text: url.slice(0, at) },
-    { text: host, strong: true },
-    { text: url.slice(at + host.length) },
-  ].filter((p) => p.text);
+  /** @type {Part[]} */
+  const parts =
+    at === -1
+      ? [{ text: url }]
+      : [
+          { text: url.slice(0, at) },
+          { text: host, strong: true },
+          { text: url.slice(at + host.length) },
+        ];
+  return parts.filter((p) => p.text).map((p) => ({ ...p, isolate: "ltr" }));
 }
 
 /**
@@ -122,15 +133,22 @@ export function questionLine(q, { grantMinutes }) {
       hint = "y allow · n deny";
     }
   } else {
-    const head = { text: `${AGENT_GLYPH} ${who} wants ${q.tool}: ` };
+    /** @type {Part[]} */
+    const head = [
+      { text: `${AGENT_GLYPH} ` },
+      { text: who, isolate: "auto" },
+      { text: ` wants ${q.tool}: ` },
+    ];
     if (q.tool === "vimma_open") {
       const url = clean(w.url);
-      parts = [head, ...urlParts(url, clean(w.host))];
-      if (w.tab !== undefined) parts.push({ text: ` in "${cutTitle(w.title)}"` });
+      parts = [...head, ...urlParts(url, clean(w.host))];
+      if (w.tab !== undefined) {
+        parts.push({ text: ' in "' }, { text: cutTitle(w.title), isolate: "auto" }, { text: '"' });
+      }
     } else if (q.tool === "vimma_tabs") {
-      parts = [head, { text: `the list of agent tabs (${Number(w.count) || 0})` }];
+      parts = [...head, { text: `the list of agent tabs (${Number(w.count) || 0})` }];
     } else {
-      parts = [head, { text: tabText(w) }];
+      parts = [...head, ...tabParts(w)];
     }
   }
   return { parts, hint, label: parts.map((p) => p.text).join("") };

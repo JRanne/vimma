@@ -150,3 +150,25 @@ add_task(async function test_other_ui_opened_over_the_line_gets_the_keys() {
   c.close();
   await setSwitches({});
 });
+
+// Review of #177 (L6): a right-to-left title or client name cannot reorder the question: names
+// and titles are <bdi>, URLs a left-to-right isolate.
+add_task(async function test_names_titles_and_urls_are_bidi_isolates() {
+  await setSwitches({ mcp: true });
+  Services.prefs.setIntPref(ARMING, 100);
+  const c = await agentClient("עברית agent");
+  await calmPage();
+  const id = c.request("agent-open", { url: "https://example.com/‮evil" });
+  await armed();
+  const bdi = [...line().querySelectorAll("bdi")].map((b) => b.textContent);
+  Assert.deepEqual(bdi, ["עברית agent"], "the client name is a <bdi>");
+  const ltr = [...line().querySelectorAll('[dir="ltr"]')];
+  Assert.ok(ltr.length > 0, "the URL is drawn left to right");
+  for (const el of ltr) {
+    Assert.equal(window.getComputedStyle(el).unicodeBidi, "isolate", "as an isolate");
+  }
+  EventUtils.synthesizeKey("n");
+  await c.response(id);
+  c.close();
+  await setSwitches({});
+});

@@ -113,6 +113,26 @@ describe("the question's text (decision 13)", () => {
     expect(line.hint).toBe("y if the code is the one vimma-ctl printed · n deny");
   });
 
+  // Review of #177 (L6): text an agent or a page chooses is isolated, so a right-to-left run
+  // in a title or a client name cannot reorder the rest of the question.
+  test("the client name and titles are isolated, URLs are isolated left to right", () => {
+    const iso = (/** @type {any} */ line) =>
+      line.parts
+        .filter((/** @type {any} */ p) => p.isolate)
+        .map((/** @type {any} */ p) => [p.text, p.isolate]);
+    expect(iso(questionLine(read, { grantMinutes: 10 }))).toEqual([
+      ["claude-code", "auto"],
+      ["Pull requests · JRanne/vimma", "auto"],
+      ["github.com/JRanne/vimma/pulls", "ltr"],
+    ]);
+    expect(iso(questionLine(open, { grantMinutes: 10 }))).toEqual([
+      ["claude-code", "auto"],
+      ["https://", "ltr"],
+      ["docs.rs", "ltr"],
+      ["/serde/latest/serde/", "ltr"],
+    ]);
+  });
+
   test("a hostile title of 300 characters is literal text cut at 60 columns", () => {
     const title = `<img src=x onerror=alert(1)>${"x".repeat(272)}`;
     const line = questionLine({ ...read, what: { ...read.what, title } }, { grantMinutes: 10 });
