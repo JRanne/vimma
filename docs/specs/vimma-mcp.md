@@ -25,6 +25,11 @@ Engine paths are relative to `engine/` (Firefox 157.0.1). Vimma paths are on mai
   create agent workspace as one of the default workspaces"
 - "Requests can be allowed for x minutes, user sets the time" (2026-10-13, answering the
   question of time-limited grants)
+- Answers to this spec's open questions (2026-10-13): "Each profile should get agent
+  workspace"; "Appear on its own" (the question line); the 50 s timeout: yes; a grant per
+  tool: yes.
+- On the cycle (2026-10-13): "You are correct to skip it when cycling".
+- Follow-up: "Will other workspaces be usable when agent uses it's own?"
 
 ## Short answer
 
@@ -40,10 +45,15 @@ in the client would stop nothing.
 
 ## User stories
 
+- As a user, every profile has an empty `agent` workspace from the start. It loads nothing
+  and is not in my `ctrl+b (` / `ctrl+b )` cycle. I reach it from the picker or with `:ws agent`.
 - As a user, I run `:mcp on` once and answer `y` to
   `Let local AI agents ask to use the "agent" workspace? Every request asks you first. y/N`.
-  Vimma then creates the `agent` workspace (if it does not exist) and starts the control socket's
-  agent side. `vimma-ctl mcp` then works from Claude Code, Codex, opencode and Copilot.
+  Vimma then starts the control socket's agent side. `vimma-ctl mcp` then works from Claude
+  Code, Codex, opencode and Copilot.
+- As a user, I keep working in `work` while an agent reads and opens pages in `agent`. Nothing
+  switches my workspace or takes my focus. Only the question line appears, when I am not
+  typing.
 - As a user, I ask Claude Code to "read the PR I opened in Vimma's agent workspace and summarise
   it". The status bar shows `◇ agent 1?` and the question line opens at the foot of the window:
   `claude-code wants vimma_read_page: 2 "Pull requests · JRanne/vimma" github.com/JRanne/vimma/pulls  y once · 15a for 15 min · n deny`.
@@ -269,27 +279,50 @@ where one is available, and records the version tested in the guide.
    moment the command runs. A foreign tab adopted into it (m3-workspaces decision 1) does not
    count. Private windows have no workspaces (private-workspace decision 6), so the agent can
    never see a private tab.
-8. **When it is created: on first enable, not on first run for everyone.** The user said "we can
-   create agent workspace as one of the default workspaces". For MCP users it is exactly that:
-   `:mcp on` (or `[mcp] enabled = true` at a config load) creates it if it does not exist, and
-   it then stays like any default. For everyone else, m3-workspaces decision 5 still holds. A
-   workspace nobody uses would sit in every `ctrl+b )` cycle and add a container to Firefox's
-   Settings. It is a runtime workspace (`source: "runtime"`), color `cyan` (not `purple`, which
-   reads as the private workspace's magenta), icon `fingerprint` (`config.mjs:130`), appended
-   after the others. **No schema change**:
-   `vimma-workspaces.json` stays at schema 1, the agent workspace is found by name like a
-   `[workspaces]` entry, and an older Vimma sees an ordinary workspace. Open question 1 asks
-   whether to create it on first run anyway.
-   - If a workspace with that name already exists (yours, or from `[workspaces] agent`), it is
-     used, and `:mcp on`'s question says so: `… use your workspace "agent" (3 tabs)? …`.
-   - Renaming it in Vimma is refused, as for a config workspace: `its name is [mcp] workspace
-in config.toml`. So agent access never silently follows or loses a workspace.
-   - Closing it works as today (runtime: y/N, and its container and data go). The question
-     adds `agents lose their workspace until the next request`. The next allowed request
-     creates it again, empty and logged out.
-   - Turning MCP off keeps the workspace and its logins. Closing it is a separate act.
-9. **It is in the cycle and the picker** like any workspace, because you will want to watch
-   and take over what an agent does. Its status-bar segment is the normal `● 3:agent`.
+8. **Every profile has it (user, 2026-10-13: "Each profile should get agent workspace").** New
+   profiles get it at first run, after `main`. Existing profiles get it at their next start.
+   MCP itself stays off until `:mcp on` (decision 3), so the workspace is inert until then.
+   - **The exception to m3-workspaces decision 5.** That decision rejected starter workspaces
+     (`work`/`admin`/`personal`) for three reasons. They presume a life layout, they would sit
+     in every cycle, and as config workspaces they could not be deleted. The agent workspace
+     presumes nothing about your life: it is a sandbox for a feature Vimma ships. It is kept
+     out of the cycle (decision 9). Its one visible cost is one container in Firefox's Settings
+     (`containers.json`). Decision 5 still holds for everything else: no other starter
+     workspace.
+   - **Empty and free while unused.** It has no tabs until an agent opens one or you move one
+     in, so it loads no page and uses no content process. Switching to it while it is empty
+     opens its home tab, as for any empty workspace (m3-workspaces 4b).
+   - **How it is made (migration).** Core's `reconcileDefinitions` (`workspacedefs.mjs:211`)
+     gains the agent name from `[mcp] workspace`. When no workspace has that name, it appends
+     one: a runtime workspace (`source: "runtime"`) in `cyan` (not `purple`, which reads as the
+     private workspace's magenta) with the `fingerprint` icon (`config.mjs:130`). The reconcile
+     runs at every start, so an existing profile gets it at its next start, with no migration
+     step and **no schema change**. `vimma-workspaces.json` stays at schema 1, and an older
+     Vimma sees an ordinary workspace. When Vimma creates it, it records the id in the pref
+     `vimma.mcp.agentWorkspaceId`.
+   - **A workspace of that name already exists** (yours, or `[workspaces] agent`): it is
+     adopted, not duplicated. Its id differs from the pref, so `:mcp on`'s question warns:
+     `"agent" is your own workspace (3 tabs, its own logins). Agents will be able to read it. y/N`.
+   - **It cannot be deleted, only emptied.** It behaves like a config workspace. Closing it
+     (`ctrl+b shift+d`) closes its tabs and keeps its container. Renaming it in Vimma is
+     refused (`its name is [mcp] workspace in config.toml`), so agent access never silently
+     follows or loses a workspace. `:mcp forget` asks
+     `Delete the agent workspace's cookies and site data (its logins)? y/N`, then clears its
+     container through the same path as a runtime workspace's delete
+     (`clear-origin-attributes-data`). The workspace stays, logged out.
+   - Changing `[mcp] workspace` to another name makes that workspace the agent's. The old one
+     becomes an ordinary runtime workspace, as a config workspace removed from the file does.
+9. **In the picker, not in the cycle (user, 2026-10-13: "You are correct to skip it when
+   cycling").** As with the private workspace (private-workspace decision 5),
+   `ctrl+b (` / `ctrl+b )`, `]w` / `[w` and `:wn` / `:wp` skip it. The `ctrl+^` alternate of
+   another workspace never lands on it either. From inside it, `ctrl+^` goes back to where you
+   came from. Cycling through your own workspaces never drops you into the agent's, and you go
+   there on purpose, to watch or take over: the workspace picker (`ctrl+b w`, its row is
+   `◇ agent · 3 tabs`), `:ws agent`, or `:mcp` (which shows its tabs). It sorts last, so
+   `:ws 1`…`:ws N` keep their places. In it, the status-bar segment is `● agent` in cyan.
+   Core: `nextWorkspace`, `previousWorkspace` and `alternateWorkspace`
+   (`workspaces.mjs:372-430`) take the set of ids to skip, which is empty in tests that do not
+   pass one.
 10. **Agent opens never switch, route or steal focus.** `agent-open` adds the tab with the
     agent container's `userContextId` explicitly, in the background (decision 12), in the most
     recently focused normal window. Routing does not apply: the socket's open path never
@@ -303,6 +336,43 @@ in config.toml`. So agent access never silently follows or loses a workspace.
     logins, never yours. That is the point of the isolation. The move question says it:
     `Move this tab to "agent"? Agents you allow can read it there. It is reopened with the agent's cookies; its history and form data are lost. y/N`.
     No new key. A "share without reopening" would hand the agent your session, and is rejected.
+
+### B2. Your other workspaces stay yours while an agent works
+
+The user asked: "Will other workspaces be usable when agent uses it's own?" Yes. An agent
+working in the agent workspace changes nothing about where you are or what you do:
+
+- **Opens are background.** `agent-open` adds a hidden tab to the agent workspace
+  (decision 10). Your window stays on your workspace, its selected tab and its focus.
+  Workspaces are per window (m3-workspaces decision 10), so with two windows, neither switches.
+- **Reads work on hidden tabs.** The agent workspace is usually hidden while you work
+  elsewhere, so its tabs are hidden (`gBrowser.hideTab`) and not selected. Their `<browser>`
+  stays loaded, and its actors are reachable, as for any background tab. `PageExtractor` is
+  written for that case: `waitForPageReady` waits for `DOMContentLoaded`, then a
+  `requestIdleCallback` capped at 2,000 ms, and **skips the `requestAnimationFrame` wait when
+  `document.hidden`** (`PageExtractorChild.sys.mjs:19, 100-126`). A hidden tab is never
+  painted, so rAF would never fire. Visibility checks use `getBoundingClientRect` and computed
+  style (`DOMExtractor.sys.mjs:915-1000`), and layout runs in a background tab (only painting
+  stops). Firefox's own AI window reads tabs that are not in front the same way
+  (`aiwindow/models/Tools.sys.mjs:915-935`).
+- **Background throttling.** A hidden tab's timers are throttled (at most one per second,
+  and budget-throttled after 30 s in the background), rAF does not run, and media may not
+  autoplay. A page that renders its content late with timers or rAF can read as incomplete
+  while hidden. `agent-read` waits for the page's load and the idle callback, then reads what
+  is there. It does not unhide the tab or switch to it, since that would take your view. Its
+  result says `"background": true`, and the tool text notes that a script-heavy page may be
+  incomplete. The guide says to switch to `agent` once if a page needs it. Two more cases:
+  - A **lazy tab** (restored, never loaded) has no browser. `agent-read` loads it in the
+    background first, as `agent-open` would.
+  - A tab **Firefox unloaded** under memory pressure (`browser.tabs.unloadOnLowMemory`) is
+    lazy again, and is handled the same way.
+- **The question appears over whatever workspace you are in**, under decision 14's guards: not
+  while you type or are in a field, not over another prompt, picker or the command line, not in
+  DOM full screen, and never with a focus or workspace change. Answering it leaves you where
+  you were: the line closes and focus goes back to what had it (`RenamePrompt`'s `opener`).
+- **Nothing an agent does closes or moves your tabs.** `agent-close` takes only agent tab ids,
+  and a tab you move out of `agent` leaves the agent's reach at once (decision 7's check runs
+  when each command runs).
 
 ### C. Confirmation
 
@@ -338,7 +408,8 @@ in config.toml`. So agent access never silently follows or loses a workspace.
     - It opens by itself only when the Vimma window has focus, focus is not in an editable
       field (insert mode), no key was pressed in the last 1,500 ms, no other prompt, picker or
       command line is open, and the page is not in DOM full screen.
-    - Otherwise it waits. The status bar shows `◇ agent 1?`, and `ctrl+b shift+a`
+    - Otherwise it waits. (User, 2026-10-13: "Appear on its own". This decision stands as
+      written.) The status bar shows `◇ agent 1?`, and `ctrl+b shift+a`
       (`agent_prompt`, new action `mcp.answer`, group "Agents") opens it. The same key with
       nothing pending shows the grants and asks `Revoke 2 agent grants? y/N`.
     - It never raises, focuses or moves the window, and never switches workspace.
@@ -350,7 +421,7 @@ in config.toml`. So agent access never silently follows or loses a workspace.
     notification button would be a one-click approval outside the arming delay and outside
     Vimma's view of what is asked. `[mcp] notify = false` turns the notification off (urgency
     stays).
-16. **Timeout = deny.** No answer within `[mcp] ask_timeout` (default 50 s, 10 to 300) denies,
+16. **Timeout = deny** (50 s confirmed by the user, 2026-10-13). No answer within `[mcp] ask_timeout` (default 50 s, 10 to 300) denies,
     with reason `timeout`, and the line closes with the notice `agent request timed out (denied)`.
     50 s fits inside Codex's default 60 s tool timeout. The guide says to raise
     `tool_timeout_sec` for a longer `ask_timeout`.
@@ -374,7 +445,7 @@ in config.toml`. So agent access never silently follows or loses a workspace.
     a count and `a`. `[mcp] grant_minutes` (default 10) is what a bare `a` gives.
     `[mcp] grant_max_minutes` (default 480, at most 1440) caps both the count and the config
     value. A larger count is cut to the cap, and the notice says so.
-21. **A grant is per connection and per tool.** It belongs to the one control connection of
+21. **A grant is per connection and per tool** (per tool confirmed by the user, 2026-10-13). It belongs to the one control connection of
     one `vimma-ctl mcp` process (one agent session), not to a client name, which any process
     can claim. A grant for `vimma_read_page` does not cover `vimma_open` or `vimma_close_tab`.
     Reading and acting differ in risk, and the cost is one more question per tool. Still in
@@ -399,7 +470,7 @@ in config.toml`. So agent access never silently follows or loses a workspace.
     announced through the status bar's live region when a question waits
     (`statusAnnouncement`). Truncation priority is just below the workspace segment's.
 25. **Commands** (`:mcp`): `:mcp` (status: on/off, workspace, connections, waiting requests,
-    grants), `:mcp on`, `:mcp off`, `:mcp revoke`. Action `mcp.answer` / `[keys]` name
+    grants), `:mcp on`, `:mcp off`, `:mcp revoke`, `:mcp forget` (decision 8). Action `mcp.answer` / `[keys]` name
     `agent_prompt` on `prefix+shift+a`. `ctrl+b ?` and bindings.md list it in a new "Agents"
     group.
 26. **Config** (`[mcp]`, a schema-2 table like `[private]`; config wins, as `[theme] appearance`
@@ -422,8 +493,9 @@ in config.toml`. So agent access never silently follows or loses a workspace.
     `:mcp on` asks its y/N question only when the pref is set by the command, not when the
     config sets it. Writing `enabled = true` is the explicit choice.
 
-27. **Migration.** None needed. Existing profiles get nothing until MCP is turned on. Then
-    the agent workspace is created (decision 8) and the discovery file gains `roles`. A config
+27. **Migration.** No migration step. The reconcile that runs at every start adds the agent
+    workspace to existing profiles (decision 8). When MCP is turned on, the discovery file gains
+    `roles`. A config
     file without `[mcp]` gets the defaults, and schema 2 already exists. about:vimma gains an
     "Agents (MCP)" section: on/off, workspace, connections, grants.
 
@@ -516,6 +588,15 @@ guarantee. The tool's description says the same, and so does the guide.
     then it is the literal text cut at 60 columns.
   - `wrapUntrusted`: Given page text containing `</untrusted-web-content>`, then the output has
     exactly one closing delimiter.
+- `workspacedefs.test.mjs`: Given an empty file, when reconciled, then `main` and then `agent`
+  (cyan, fingerprint, runtime); given a profile with `main` and `work` and no `agent`, then
+  `agent` is appended last and the others keep ids and order; given a workspace already named
+  `agent`, then no second one; given `[mcp] workspace = "bots"`, then `bots` is the one ensured
+  and an old `agent` stays as an ordinary workspace; reconciling twice changes nothing.
+- `workspaces.test.mjs`: Given `main`, `work` and `agent` (skipped), when `nextWorkspace` from
+  `work`, then `main`; `previousWorkspace` from `main`, then `work`; the alternate of `work`
+  after a visit to `agent` is the workspace before it, never `agent`; from `agent`,
+  `alternateWorkspace` returns the one you came from.
 - `config.test.mjs`: `[mcp]` defaults; each bound (`ask_timeout = 5` is an error with the
   range); `workspace = "private"` is an error; `grant_minutes` > `grant_max_minutes` is an
   error; `[mcp]` without `schema = 2` asks for it.
@@ -547,6 +628,29 @@ guarantee. The tool's description says the same, and so does the guide.
 `browser_vimma_mcp.js` (driven by a JS test client speaking protocol 2, and by `vimma-ctl mcp`
 through `Subprocess` where it is built, as `browser_vimma_control.js` does):
 
+- Given a fresh profile, then `main` and an empty `agent` exist, `agent` has its own container
+  and no tab, and no content process was started for it; given a profile from before this
+  change (a stored `vimma-workspaces.json` without `agent`), after a restart, then `agent` exists
+  and the old workspaces, their tabs and containers are unchanged.
+- Given `main`, `work` and `agent`, when `ctrl+b )` is pressed three times from `main`, then
+  `work`, `main`, `work`: never `agent`; `ctrl+b w` lists `agent` last; Enter on it switches.
+- Given `ctrl+b shift+d` in `agent` with 2 tabs and `y`, then its tabs close and its container
+  and a cookie set in it remain; `:mcp forget` and `y` clears the cookie and the workspace
+  stays; `:wsrename` in it is refused.
+- **Other workspaces stay usable** (`browser_vimma_mcp_background.js`):
+  - Given I am in `work` with focus in a page, when an allowed `agent-open` runs, then the
+    window's workspace is still `work`, the selected tab and the focused element are unchanged,
+    and the new tab is hidden in `agent`.
+  - Given an agent tab loaded and hidden while I am in `work`, when an allowed `agent-read`
+    runs, then it returns the page's text, `background: true`, and `work` is still shown (the
+    tab stayed hidden and unselected).
+  - Given a hidden agent tab whose content appears after a 3 s `setTimeout`, when read at once,
+    then the result is returned within the 2 s idle cap plus the read, without hanging on rAF.
+  - Given a lazy (restored, unloaded) agent tab, when read, then it is loaded in the
+    background and read, and no workspace switches.
+  - Given I am typing in a `work` text field, when a request arrives, then the field keeps
+    focus and every character, the question waits in the status bar; after 1,500 ms without
+    keys, focus out of the field, it opens; after `y` focus returns to the element that had it.
 - Given MCP off, when an agent hello arrives, then `role-off` and close; given control on
   and MCP off, the same; given MCP on and control off, then a `full` hello is `role-off`.
 - Given `:mcp on` and `y`, then the `agent` workspace exists with its own container, and the
@@ -585,7 +689,9 @@ through `Subprocess` where it is built, as `browser_vimma_control.js` does):
 (`initialize`, then `server/discover` in a second run), and call `vimma_open` on a local test
 page. While the call waits, `vimma-ctl send-keys` (a separate `full` connection the harness
 enables) presses `y`. Assert the tool result. Then `vimma_read_page` and `15a`, and a second
-read that does not ask. Screenshots: the question line, and the status bar with `◇ agent 1?`
+read that does not ask. Run it with the window on `main` and a page focused there, so the
+agent workspace is hidden throughout. Assert from `state` that the workspace stayed `main`
+and the selected tab did not change. Screenshots: the question line, and the status bar with `◇ agent 1?`
 and `◇ agent 14m`. These are new baselines, each with its changelog line. Run with the real
 Omarchy theme as the screenshot-verify rule asks.
 
@@ -593,12 +699,12 @@ Omarchy theme as the screenshot-verify rule asks.
 
 One at a time, after firefox-keys sub-PR 2 (both change the keymap; this adds `prefix+shift+a`).
 
-| #   | PR                                                             | Contents                                                                                                                                                                                                                                                                                                                                           | Size                                                                                                                                                                                     |
-| --- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `feat(workspaces): an agent workspace for MCP`                 | `[mcp]` config table (all keys, validated); `vimma.mcp.enabled` pref; `:mcp on                                                                                                                                                                                                                                                                     | off` with its y/N; agent workspace created on enable, rename refused, close question text, move question text; about:vimma section; guide "Agents" stub (workspace only, no socket yet). | S–M (~600 lines with tests) |
-| 2   | `feat(ctl): agent role with a confirmation for every request`  | Protocol 2 (role, `role-off`, `denied`, agent commands, v2 fixtures); server roles and switches; `AgentGate.sys.mjs` (queue, prompt, grants, mute, timeout, attention, notification); `ui/agent-prompt.mjs`; `agent.mjs` in core; status segment; `:mcp`, `:mcp revoke`, `prefix+shift+a`; `PageExtractor` reads; ADR-019; security.md §1 and §12. | L (~1,800 lines; the review should split it if it grows: 2a protocol and gate, 2b prompt and status bar)                                                                                 |
-| 3   | `feat(vimma-ctl): vimma-ctl mcp, an MCP server over stdio`     | `src/mcp.rs` dual-era server, tool table and fixtures, protocol-2 client, keep-alive, error texts; Rust unit, integration and property tests; e2e scenario and baselines.                                                                                                                                                                          | M (~900 lines)                                                                                                                                                                           |
-| 4   | `docs(guide): set up Claude Code, Codex, opencode and Copilot` | Guide "Agents (MCP)" in full: what it is, the threat model in plain words, `:mcp on`, each tool's setup checked against an install, timeouts, grants, sharing a tab, revoking, why `vimma.control.enabled` stays off; README feature line; limits.md.                                                                                              | S                                                                                                                                                                                        |
+| #   | PR                                                             | Contents                                                                                                                                                                                                                                                                                                                                                                                                      | Size                                                                                                     |
+| --- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 1   | `feat(workspaces): every profile gets an agent workspace`      | `[mcp]` config table (all keys, validated); `vimma.mcp.enabled` pref; `:mcp on`, `:mcp off` and `:mcp forget` with their y/N; the reconcile ensures the agent workspace (new and existing profiles); skipped by the cycle and the alternate, last in the picker; rename refused, close keeps its container, the move question text; about:vimma section; guide "Agents" stub (workspace only, no socket yet). | M (~800 lines with tests)                                                                                |
+| 2   | `feat(ctl): agent role with a confirmation for every request`  | Protocol 2 (role, `role-off`, `denied`, agent commands, v2 fixtures); server roles and switches; `AgentGate.sys.mjs` (queue, prompt, grants, mute, timeout, attention, notification); `ui/agent-prompt.mjs`; `agent.mjs` in core; status segment; `:mcp`, `:mcp revoke`, `prefix+shift+a`; `PageExtractor` reads; ADR-019; security.md §1 and §12.                                                            | L (~1,800 lines; the review should split it if it grows: 2a protocol and gate, 2b prompt and status bar) |
+| 3   | `feat(vimma-ctl): vimma-ctl mcp, an MCP server over stdio`     | `src/mcp.rs` dual-era server, tool table and fixtures, protocol-2 client, keep-alive, error texts; Rust unit, integration and property tests; e2e scenario and baselines.                                                                                                                                                                                                                                     | M (~900 lines)                                                                                           |
+| 4   | `docs(guide): set up Claude Code, Codex, opencode and Copilot` | Guide "Agents (MCP)" in full: what it is, the threat model in plain words, `:mcp on`, each tool's setup checked against an install, timeouts, grants, sharing a tab, revoking, why `vimma.control.enabled` stays off; README feature line; limits.md.                                                                                                                                                         | S                                                                                                        |
 
 ## Docs the implementation must update
 
@@ -620,16 +726,6 @@ and notifications differ; the macOS spec picks it up); Windows.
 
 ## Open questions for the user
 
-1. **Agent workspace for everyone?** It is created when you first turn MCP on, not on every
-   first run (decision 8). Should every new profile get it anyway? _Recommended: no. It would
-   sit in everyone's `ctrl+b )` cycle and add a container to Settings, and m3-workspaces
-   decision 5 rejected starter workspaces for that reason._
-2. **Should a question open by itself at all?** Decision 14 lets it open when you are not
-   typing. Alternatively it could always wait in the status bar for `ctrl+b shift+a`.
-   _Recommended: open by itself, with the guards and the 1 s arming delay. Two extra keys on
-   every request would push people toward long grants._
-3. **Default ask timeout of 50 s** (decision 16)? _Recommended: yes. It stays inside Codex's
-   60 s default, and Claude Code waits much longer anyway._
-4. **Grant scope:** per agent session and per tool (decision 21), or one grant covering all
-   of that session's tools? _Recommended: per tool. A read grant should never let a
-   prompt-injected agent open URLs unasked._
+None. The four questions of the first draft were answered on 2026-10-13 and are now decisions 8
+(agent workspace in every profile), 14 (the question opens by itself), 16 (50 s) and 21 (a grant
+per tool). The cycle question is decision 9.
