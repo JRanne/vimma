@@ -20,6 +20,7 @@ import {
   withBookmarksFolder,
   withContainer,
   deleteBookmarksQuestion,
+  AGENT_LOOKS,
 } from "../src/workspacedefs.mjs";
 
 const fixture = (/** @type {string} */ name) =>
@@ -502,5 +503,132 @@ describe("deleteBookmarksQuestion", () => {
     expect(deleteBookmarksQuestion("work", 1, null)).toBe(
       'The 1 bookmark of "work": k keep the folder (default), d delete it? K/d',
     );
+  });
+});
+
+// docs/specs/vimma-mcp.md, decisions 8, 9 and 11 (user decision, 2026-10-13: "Each profile
+// should get agent workspace"): the reconcile ensures the agent workspace, last.
+describe("the agent workspace", () => {
+  const agent = { agent: "agent" };
+  const names = (/** @type {{ workspaces: { name: string }[] }} */ d) =>
+    d.workspaces.map((w) => w.name);
+
+  test("an empty file gives main, then agent (cyan, fingerprint, runtime); created names it", () => {
+    const r = reconcileDefinitions(emptyDefinitions(), [], minter(), agent);
+    expect(r.changed).toBe(true);
+    expect(r.definitions.workspaces).toEqual([
+      expect.objectContaining({ id: "ws-1", name: "main", source: "runtime" }),
+      {
+        id: "ws-2",
+        name: "agent",
+        userContextId: null,
+        color: "cyan",
+        icon: "fingerprint",
+        source: "runtime",
+      },
+    ]);
+    expect(r.definitions.lastActive).toBe("ws-1");
+    expect(r.agentCreated).toBe("ws-2");
+    expect(AGENT_LOOKS).toEqual({ color: "cyan", icon: "fingerprint" });
+  });
+
+  test("an existing profile (main, work) gets agent appended; the others keep ids and order", () => {
+    const before = withContainer(
+      addRuntimeWorkspace(reconcileDefinitions(emptyDefinitions(), [], minter()).definitions, {
+        id: "ws-work",
+        name: "work",
+        color: "blue",
+        icon: "circle",
+      }),
+      "ws-work",
+      7,
+    );
+    const r = reconcileDefinitions(before, [], () => "ws-new", agent);
+    expect(names(r.definitions)).toEqual(["main", "work", "agent"]);
+    expect(r.definitions.workspaces.slice(0, 2)).toEqual(before.workspaces);
+    expect(r.definitions.lastActive).toBe(before.lastActive);
+    expect(r.agentCreated).toBe("ws-new");
+  });
+
+  test("a workspace already named agent is adopted, not duplicated, and sorts last", () => {
+    let d = reconcileDefinitions(
+      emptyDefinitions(),
+      [cfg("agent"), cfg("work")],
+      minter(),
+    ).definitions;
+    const r = reconcileDefinitions(d, [cfg("agent"), cfg("work")], minter(), agent);
+    expect(names(r.definitions)).toEqual(["work", "agent"]);
+    expect(r.definitions.workspaces[1]).toEqual(
+      expect.objectContaining({ id: "ws-1", source: "config", color: "gray" }),
+    );
+    expect(r.agentCreated).toBeNull();
+    d = addRuntimeWorkspace(r.definitions, { id: "x", name: "x", color: "red", icon: "circle" });
+    expect(names(d)).toEqual(["work", "agent", "x"]);
+    expect(
+      names(reconcileDefinitions(d, [cfg("agent"), cfg("work")], minter(), agent).definitions),
+    ).toEqual(["work", "x", "agent"]);
+  });
+
+  test('[mcp] workspace = "bots": bots is ensured; an old agent stays, an ordinary workspace', () => {
+    const d = reconcileDefinitions(emptyDefinitions(), [], minter(), agent).definitions;
+    const r = reconcileDefinitions(d, [], () => "ws-bots", { agent: "bots" });
+    expect(names(r.definitions)).toEqual(["main", "agent", "bots"]);
+    expect(r.definitions.workspaces[1]).toEqual(d.workspaces[1]);
+    expect(r.definitions.workspaces[2]).toEqual(
+      expect.objectContaining({ id: "ws-bots", color: "cyan", icon: "fingerprint" }),
+    );
+  });
+
+  test("reconciling twice changes nothing", () => {
+    const once = reconcileDefinitions(emptyDefinitions(), [cfg("work")], minter(), agent);
+    const twice = reconcileDefinitions(once.definitions, [cfg("work")], minter(), agent);
+    expect(twice.changed).toBe(false);
+    expect(twice.definitions).toBe(once.definitions);
+    expect(twice.agentCreated).toBeNull();
+  });
+
+  test("a new runtime workspace goes before the agent workspace, which stays last", () => {
+    const d = reconcileDefinitions(emptyDefinitions(), [], minter(), agent).definitions;
+    const added = addRuntimeWorkspace(
+      d,
+      { id: "s", name: "shop", color: "red", icon: "circle" },
+      agent,
+    );
+    expect(names(added)).toEqual(["main", "shop", "agent"]);
+  });
+
+  test("it cannot be deleted, only emptied; renaming it is refused", () => {
+    const d = reconcileDefinitions(emptyDefinitions(), [], minter(), agent).definitions;
+    const del = defsError(() => removeWorkspaceDefinition(d, "ws-2", agent));
+    expect(del.code).toBe("agent-workspace");
+    const ren = defsError(() => renameWorkspaceDefinition(d, "ws-2", "robots", agent));
+    expect(ren.code).toBe("agent-workspace");
+    expect(ren.message).toBe("its name is [mcp] workspace in config.toml");
+    expect(renameWorkspaceDefinition(d, "ws-1", "home", agent).workspaces[0]?.name).toBe("home");
+  });
+
+  test("the last workspace besides the agent's stays: agent is never all that is left", () => {
+    const d = reconcileDefinitions(emptyDefinitions(), [], minter(), agent).definitions;
+    expect(defsError(() => removeWorkspaceDefinition(d, "ws-1", agent)).code).toBe(
+      "last-workspace",
+    );
+    const two = addRuntimeWorkspace(d, { id: "s", name: "shop", color: "red", icon: "circle" });
+    expect(removeWorkspaceDefinition(two, "ws-1", agent).removed.name).toBe("main");
+  });
+
+  test("its close question says it stays with its logins; its move question warns", () => {
+    const d = reconcileDefinitions(emptyDefinitions(), [], minter(), agent).definitions;
+    const a = /** @type {any} */ (d.workspaces[1]);
+    expect(closeWorkspaceQuestion(a, 2, agent)).toBe(
+      'Close the 2 tabs of "agent"? It stays, with its cookies and logins (:mcp forget clears them). y/N',
+    );
+    expect(closeWorkspaceQuestion(/** @type {any} */ (d.workspaces[0]), 2, agent)).toBe(
+      'Close "main" (2 tabs) and delete its cookies and site data? y/N',
+    );
+    expect(moveTabQuestion("agent", agent)).toBe(
+      'Move this tab to "agent"? Agents you allow can read it there. It is reopened with the ' +
+        "agent's cookies; its history and form data are lost. y/N",
+    );
+    expect(moveTabQuestion("main", agent)).toBe(moveTabQuestion("main"));
   });
 });

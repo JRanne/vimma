@@ -47,7 +47,9 @@ registerCleanupFunction(async () => {
   if (isOpen()) EventUtils.synthesizeKey("KEY_Escape");
   if (promptOpen()) EventUtils.synthesizeKey("KEY_Escape");
   ww().switchTo({ id: def("main").id });
-  for (const w of WorkspaceStore.definitions.workspaces.filter((d) => d.name !== "main")) {
+  for (const w of WorkspaceStore.definitions.workspaces.filter(
+    (d) => d.name !== "main" && d.id !== WorkspaceStore.agent?.id,
+  )) {
     await WorkspaceStore.deleteWorkspace(w.id, { confirmed: true });
   }
   while (gBrowser.tabs.length > 1) BrowserTestUtils.removeTab(gBrowser.tabs.at(-1));
@@ -89,7 +91,8 @@ add_task(async function setup_three_workspaces() {
   for (const name of ["alpha", "beta"]) {
     if (!def(name)) WorkspaceStore.newWorkspace(name);
   }
-  await until(() => ww().model.workspaces.length === 3, "main, alpha and beta");
+  // docs/specs/vimma-mcp.md decision 8: every profile has the agent workspace, which sorts last.
+  await until(() => ww().model.workspaces.length === 4, "main, alpha, beta and agent");
   ww().switchTo({ id: def("main").id });
 });
 
@@ -101,13 +104,16 @@ add_task(async function prefix_w_lists_workspaces_with_counts_and_switches() {
   await until(() => active() === def("main").id, "back in main");
 
   await openPicker();
-  // docs/specs/private-workspace.md decision 5: the private workspace is the last row.
+  // docs/specs/private-workspace.md decision 5: the private workspace is the last row; the agent
+  // workspace (docs/specs/vimma-mcp.md decision 9) the last of the normal ones, as `◇ agent`.
   Assert.deepEqual(
     names(),
-    ["main", "alpha", "beta", "◆ private"],
-    "every workspace, in ctrl+i order, then the private workspace",
+    ["main", "alpha", "beta", "◇ agent", "◆ private"],
+    "every workspace, in ctrl+i order, the agent's last, then the private workspace",
   );
-  Assert.equal(cell(rows()[3], "host"), "new", "which says new while it is not open");
+  Assert.equal(cell(rows()[3], "index"), "4", "the agent workspace keeps its place");
+  Assert.equal(cell(rows()[3], "host"), "0 tabs", "and its tab count");
+  Assert.equal(cell(rows()[4], "host"), "new", "the private one says new while it is not open");
   const counts = rows().map((r) => cell(r, "host"));
   Assert.ok(counts[0].startsWith(`${tabsIn(def("main").id).length} tab`), "main's tab count");
   Assert.ok(counts[0].includes("current"), "main is marked as current");

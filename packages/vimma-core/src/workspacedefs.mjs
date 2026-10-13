@@ -19,6 +19,17 @@ export const DEFINITIONS_SCHEMA_VERSION = 1;
 /** Decision 5: without `[workspaces]`, the one workspace a profile starts with. */
 export const DEFAULT_WORKSPACE_NAME = "main";
 const DEFAULT_LOOKS = Object.freeze({ color: "gray", icon: "circle" });
+/**
+ * The agent workspace's looks when Vimma makes it (docs/specs/vimma-mcp.md, decision 8): cyan,
+ * not purple, which reads as the private workspace's magenta.
+ */
+export const AGENT_LOOKS = Object.freeze({ color: "cyan", icon: "fingerprint" });
+/**
+ * `agent`: the name of the agent workspace (`[mcp] workspace`), which the reconcile ensures and
+ * keeps last, and which cannot be renamed or deleted (vimma-mcp decisions 8 and 9). Left out (or
+ * null), no workspace is the agent's.
+ * @typedef {{ agent?: string | null }} AgentOption
+ */
 const HOME = /^(?:https?:\/\/|about:)\S+$/;
 /** A Places guid (toolkit/components/places/PlacesUtils.sys.mjs isValidGuid). */
 const PLACES_GUID = /^[a-zA-Z0-9\-_]{12}$/;
@@ -47,7 +58,7 @@ export class DefinitionsError extends Error {
   /**
    * @param {"syntax" | "invalid" | "unsupported-schema" | "unknown-workspace" | "duplicate-name"
    *   | "duplicate-id" | "bad-id" | "bad-name" | "bad-color" | "bad-icon" | "config-workspace"
-   *   | "last-workspace"} code
+   *   | "last-workspace" | "agent-workspace"} code
    * @param {string} path
    * @param {string} message
    */
@@ -183,6 +194,15 @@ export function canWriteDefinitions(existing) {
   return !(Number.isInteger(schema) && schema > DEFINITIONS_SCHEMA_VERSION);
 }
 
+/** Why the agent workspace is never renamed (vimma-mcp decision 8). */
+const AGENT_RENAME = "its name is [mcp] workspace in config.toml";
+
+/**
+ * @param {WorkspaceDefinition} w
+ * @param {string | null | undefined} agent
+ */
+const isAgent = (w, agent) => !!agent && w.name === agent;
+
 /** @param {WorkspaceDefinition} a @param {WorkspaceDefinition} b */
 const sameDef = (a, b) =>
   a.id === b.id &&
@@ -198,13 +218,16 @@ const sameDef = (a, b) =>
  * Reconciles the file with `[workspaces]` (decision 7, Reconcile step 1): config workspaces by
  * name, in file order, take colour, icon and home and keep their id and container; the others
  * stay as runtime workspaces (a config one removed from the file becomes runtime: nothing is
- * removed); an empty result gets `main`. Idempotent.
+ * removed); an empty result gets `main`. With `agent` (vimma-mcp decision 8), the workspace of
+ * that name is ensured: one of that name is adopted, else a runtime one is appended in
+ * AGENT_LOOKS (`agentCreated` is its id); either way it goes last (decision 9). Idempotent.
  * @param {Definitions} defs
  * @param {readonly Pick<Workspace, "name" | "color" | "icon" | "home">[]} config
  * @param {() => string} mintId a new global workspace id (`ws-<uuid>`)
- * @returns {{ definitions: Definitions, changed: boolean }}
+ * @param {AgentOption} [options]
+ * @returns {{ definitions: Definitions, changed: boolean, agentCreated: string | null }}
  */
-export function reconcileDefinitions(defs, config, mintId) {
+export function reconcileDefinitions(defs, config, mintId, { agent = null } = {}) {
   const byName = new Map(defs.workspaces.map((w) => [w.name, w]));
   const configNames = new Set(config.map((c) => c.name));
   /** @type {WorkspaceDefinition[]} */
@@ -237,6 +260,23 @@ export function reconcileDefinitions(defs, config, mintId) {
       source: "runtime",
     });
   }
+  /** @type {string | null} */
+  let agentCreated = null;
+  if (agent) {
+    const at = workspaces.findIndex((w) => w.name === agent);
+    if (at < 0) {
+      agentCreated = mintId();
+      workspaces.push({
+        id: agentCreated,
+        name: agent,
+        userContextId: null,
+        ...AGENT_LOOKS,
+        source: "runtime",
+      });
+    } else if (at !== workspaces.length - 1) {
+      workspaces.push(...workspaces.splice(at, 1));
+    }
+  }
   const lastActive = workspaces.some((w) => w.id === defs.lastActive)
     ? defs.lastActive
     : /** @type {WorkspaceDefinition} */ (workspaces[0]).id;
@@ -245,10 +285,11 @@ export function reconcileDefinitions(defs, config, mintId) {
     defs.schema !== DEFINITIONS_SCHEMA_VERSION ||
     workspaces.length !== defs.workspaces.length ||
     workspaces.some((w, i) => !sameDef(w, /** @type {WorkspaceDefinition} */ (defs.workspaces[i])));
-  if (!changed) return { definitions: defs, changed };
+  if (!changed) return { definitions: defs, changed, agentCreated };
   return {
     definitions: { schema: DEFINITIONS_SCHEMA_VERSION, lastActive, workspaces },
     changed,
+    agentCreated,
   };
 }
 
@@ -332,12 +373,14 @@ export function setLastActive(defs, id) {
 }
 
 /**
- * Adds a runtime workspace (no container yet) at the end.
+ * Adds a runtime workspace (no container yet) at the end, or just before the agent workspace
+ * when that is last (it sorts last, vimma-mcp decision 9).
  * @param {Definitions} defs
  * @param {{ id: string, name: string, color: string, icon: string, home?: string }} w
+ * @param {AgentOption} [options]
  * @returns {Definitions}
  */
-export function addRuntimeWorkspace(defs, w) {
+export function addRuntimeWorkspace(defs, w, { agent = null } = {}) {
   if (!isWorkspaceId(w.id)) throw new DefinitionsError("bad-id", "id", "not a valid id");
   if (defs.workspaces.some((x) => x.id === w.id)) {
     throw new DefinitionsError("duplicate-id", "id", `"${w.id}" exists`);
@@ -357,23 +400,36 @@ export function addRuntimeWorkspace(defs, w) {
     source: "runtime",
   };
   if (w.home !== undefined) def.home = w.home;
-  return { ...defs, workspaces: [...defs.workspaces, def] };
+  const workspaces = [...defs.workspaces];
+  const lastIsAgent = !!agent && workspaces[workspaces.length - 1]?.name === agent;
+  workspaces.splice(lastIsAgent ? workspaces.length - 1 : workspaces.length, 0, def);
+  return { ...defs, workspaces };
 }
 
 /**
  * Removes a runtime workspace (decision 7: a config workspace stays while it is in
- * `config.toml`; the last workspace stays). The host removes `removed.userContextId`.
+ * `config.toml`; the last workspace stays; the agent workspace stays, vimma-mcp decision 8).
+ * The host removes `removed.userContextId`.
  * @param {Definitions} defs
  * @param {string} id
+ * @param {AgentOption} [options]
  * @returns {{ definitions: Definitions, removed: WorkspaceDefinition }}
  */
-export function removeWorkspaceDefinition(defs, id) {
+export function removeWorkspaceDefinition(defs, id, { agent = null } = {}) {
   const i = mustIndex(defs, id);
   const removed = /** @type {WorkspaceDefinition} */ (defs.workspaces[i]);
+  if (isAgent(removed, agent)) {
+    throw new DefinitionsError(
+      "agent-workspace",
+      "",
+      `"${removed.name}" is the agent workspace; it is only emptied`,
+    );
+  }
   if (removed.source === "config") {
     throw new DefinitionsError("config-workspace", "", `"${removed.name}" is in config.toml`);
   }
-  if (defs.workspaces.length === 1) {
+  // The agent workspace never is all that is left (vimma-mcp decision 8): it is not counted.
+  if (defs.workspaces.filter((w) => !isAgent(w, agent)).length === 1) {
     throw new DefinitionsError("last-workspace", "", "cannot delete the last workspace");
   }
   const workspaces = defs.workspaces.filter((_, k) => k !== i);
@@ -406,16 +462,20 @@ function checkNewName(name) {
 /**
  * Renames a runtime workspace (`prefix+shift+w`, `:wsrename`; sub-spec 4a). A config workspace
  * is named by its `[workspaces]` key, and a reconcile matches by that name, so it is renamed in
- * `config.toml`. The same name returns `defs` itself. The host renames the container too.
+ * `config.toml`, and so is the agent workspace (`[mcp] workspace`, vimma-mcp decision 8), so
+ * agent access never follows or loses a workspace. The same name returns `defs` itself. The host
+ * renames the container too.
  * @param {Definitions} defs
  * @param {string} id
  * @param {string} name
+ * @param {AgentOption} [options]
  * @returns {Definitions}
  */
-export function renameWorkspaceDefinition(defs, id, name) {
+export function renameWorkspaceDefinition(defs, id, name, { agent = null } = {}) {
   const i = mustIndex(defs, id);
   const w = /** @type {WorkspaceDefinition} */ (defs.workspaces[i]);
   if (w.name === name) return defs;
+  if (isAgent(w, agent)) throw new DefinitionsError("agent-workspace", "", AGENT_RENAME);
   if (w.source === "config") {
     throw new DefinitionsError("config-workspace", "", `"${w.name}" is named in config.toml`);
   }
@@ -429,12 +489,20 @@ export function renameWorkspaceDefinition(defs, id, name) {
 
 /**
  * The y/N question before closing a workspace (decision 7): a runtime workspace goes with its
- * container and so its site data; a config one only loses its tabs.
+ * container and so its site data; a config one only loses its tabs, and so does the agent
+ * workspace, which keeps its container (vimma-mcp decision 8).
  * @param {WorkspaceDefinition} w
  * @param {number} tabs  its open tabs, in every window
+ * @param {AgentOption} [options]
  */
-export function closeWorkspaceQuestion(w, tabs) {
+export function closeWorkspaceQuestion(w, tabs, { agent = null } = {}) {
   const count = `${tabs} tab${tabs === 1 ? "" : "s"}`;
+  if (isAgent(w, agent)) {
+    return (
+      `Close the ${count} of "${w.name}"? It stays, with its cookies and logins ` +
+      "(:mcp forget clears them). y/N"
+    );
+  }
   return w.source === "config"
     ? `Close the ${count} of "${w.name}"? It stays, as it is in config.toml. y/N`
     : `Close "${w.name}" (${count}) and delete its cookies and site data? y/N`;
@@ -458,10 +526,18 @@ export function deleteBookmarksQuestion(name, count, moveTo) {
 
 /**
  * The y/N question before the workspace picker's `m` moves the current tab (decision 6: the tab
- * is reopened by URL in the target's container).
+ * is reopened by URL in the target's container). Into the agent workspace it says that agents
+ * can read it there, with the agent's cookies (vimma-mcp decision 11).
  * @param {string} name  the target workspace
+ * @param {AgentOption} [options]
  */
-export function moveTabQuestion(name) {
+export function moveTabQuestion(name, { agent = null } = {}) {
+  if (agent && name === agent) {
+    return (
+      `Move this tab to "${name}"? Agents you allow can read it there. It is reopened with the ` +
+      "agent's cookies; its history and form data are lost. y/N"
+    );
+  }
   return (
     `Move this tab to "${name}"? It is reopened there; its back/forward history and form data ` +
     "are lost. y/N"

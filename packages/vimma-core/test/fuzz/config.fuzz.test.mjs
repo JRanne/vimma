@@ -222,6 +222,44 @@ describe("config.toml fuzzing", () => {
     FUZZ_TIMEOUT,
   );
 
+  // docs/specs/vimma-mcp.md (M7 fuzzing): any [mcp] values; an accepted one is in its bounds.
+  test(
+    "[mcp] values are refused or within their bounds",
+    () =>
+      fuzz(
+        "config-mcp-bounds",
+        fc.property(
+          fc.oneof(fc.integer({ min: -5, max: 2000 }), fc.constantFrom("true", '"x"', "1.5")),
+          fc.oneof(fc.integer({ min: -5, max: 2000 }), fc.constantFrom("0", '"10"')),
+          fc.oneof(fc.integer({ min: 0, max: 600000 }), fc.constantFrom("false")),
+          fc.oneof(nastyString, fc.constantFrom("agent", "private", "", ...PROTO_NAMES)),
+          (minutes, max, chars, name) => {
+            const text = [
+              "schema = 2",
+              "[mcp]",
+              `grant_minutes = ${minutes}`,
+              `grant_max_minutes = ${max}`,
+              `max_read_chars = ${chars}`,
+              `workspace = ${JSON.stringify(name)}`,
+              "",
+            ].join("\n");
+            const r = within(2000, () => parseConfig(text));
+            expectWellFormed(r);
+            if (!r.config) return;
+            const m = r.config.mcp;
+            expect(m.grantMaxMinutes >= 1 && m.grantMaxMinutes <= 1440).toBe(true);
+            expect(m.grantMinutes >= 1 && m.grantMinutes <= m.grantMaxMinutes).toBe(true);
+            expect(m.maxReadChars >= 1000 && m.maxReadChars <= 500000).toBe(true);
+            expect(m.workspace).toBe(name);
+            expect(m.workspace).not.toBe("private");
+            expect([...m.workspace].length).toBeGreaterThan(0);
+          },
+        ),
+        { weight: 5 },
+      ),
+    FUZZ_TIMEOUT,
+  );
+
   test(
     "migrations never change their input",
     () =>

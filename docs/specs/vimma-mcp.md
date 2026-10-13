@@ -1,7 +1,7 @@
 # Spec: vimma-mcp
 
-Status: proposed (research done, design chosen; not implemented) · Milestone: queued after
-firefox-keys sub-PR 2 (plan §6) · Area: `tools/vimma-ctl` (`src/mcp.rs` new, `src/protocol.rs`,
+Status: sub-PR 1 merged (the agent workspace, `[mcp]`, `:mcp on|off|forget`); sub-PRs 2-4 to
+do · Milestone: queued after firefox-keys sub-PR 2 (plan §6) · Area: `tools/vimma-ctl` (`src/mcp.rs` new, `src/protocol.rs`,
 `src/client.rs`, `src/cli.rs`); `packages/vimma-core/src/` (`control.mjs`, `agent.mjs` new,
 `config.mjs`, `defaults.mjs`, `actions.mjs`, `cmdline.mjs`, `statusbar.mjs`,
 `workspacedefs.mjs`); `ctl/VimmaControl.sys.mjs`, `ctl/AgentGate.sys.mjs` (new),
@@ -705,6 +705,43 @@ One at a time, after firefox-keys sub-PR 2 (both change the keymap; this adds `p
 | 2   | `feat(ctl): agent role with a confirmation for every request`  | Protocol 2 (role, `role-off`, `denied`, agent commands, v2 fixtures); server roles and switches; `AgentGate.sys.mjs` (queue, prompt, grants, mute, timeout, attention, notification); `ui/agent-prompt.mjs`; `agent.mjs` in core; status segment; `:mcp`, `:mcp revoke`, `prefix+shift+a`; `PageExtractor` reads; ADR-019; security.md §1 and §12.                                                            | L (~1,800 lines; the review should split it if it grows: 2a protocol and gate, 2b prompt and status bar) |
 | 3   | `feat(vimma-ctl): vimma-ctl mcp, an MCP server over stdio`     | `src/mcp.rs` dual-era server, tool table and fixtures, protocol-2 client, keep-alive, error texts; Rust unit, integration and property tests; e2e scenario and baselines.                                                                                                                                                                                                                                     | M (~900 lines)                                                                                           |
 | 4   | `docs(guide): set up Claude Code, Codex, opencode and Copilot` | Guide "Agents (MCP)" in full: what it is, the threat model in plain words, `:mcp on`, each tool's setup checked against an install, timeouts, grants, sharing a tab, revoking, why `vimma.control.enabled` stays off; README feature line; limits.md.                                                                                                                                                         | S                                                                                                        |
+
+## Handover after sub-PR 1 (2026-10-13)
+
+Sub-PR 1 is in: core `reconcileDefinitions(..., { agent })` ensures the agent workspace and keeps
+it last (`agentCreated` is its id when it made one, recorded in `vimma.mcp.agentWorkspaceId`);
+`addRuntimeWorkspace`, `removeWorkspaceDefinition`, `renameWorkspaceDefinition`,
+`closeWorkspaceQuestion` and `moveTabQuestion` take the same `{ agent }` option; `nextWorkspace`,
+`previousWorkspace`, `alternateWorkspace` and `lastWorkspace` take a skip set, and `leaveSkipped`
+keeps the alternate of before when a switch leaves the agent workspace (WindowWorkspaces#show).
+`agent.mjs` (core) has the `:mcp` words, `planMcpSwitch`, the questions and `AGENT_GLYPH`; the
+queue, grants and prompt text of sub-PR 2 go there too. `host/mcp-ops.mjs` (`McpHost`) holds
+`[mcp]` from ConfigHost and the pref `vimma.mcp.enabled` (`McpHost.state` is what the server's
+switch should read). `WorkspaceStore.agent`, `agentName`, `agentIsOurs()` and `forgetAgent()` are
+the store's side. Config: every `[mcp]` key is validated and resolved (`config.mcp`, camelCase).
+
+Choices sub-PR 1 made where the spec was silent (sub-PR 2 can revisit):
+
+- The agent workspace never counts as the last workspace: with `main` and `agent` only, `main`
+  cannot be closed (`removeWorkspaceDefinition` and both close paths), so agent is never all
+  that is left.
+- `:wsmove agent` asks the agent move question (decision 11 says "after their y/N"; `:wsmove`
+  had none before). Other `:wsmove` targets still move at once.
+- Bare `:mcp` says on/off, where that comes from, and the workspace; sub-PR 2 adds connections,
+  waiting requests and grants. The action is `mcp_command` (`mcp.command`), unbound, in a new
+  "Agents" group; sub-PR 2 adds `agent_prompt` there.
+- The status bar's workspace segment in it is the existing `● 3:agent` (cyan from its colour),
+  with its number like every workspace, not `● agent`.
+- Known limits: at a first start with `[mcp] workspace = "bots"`, the store's init (before
+  config.toml is read) makes `agent`, and the config read then makes `bots`; `agent` stays an
+  ordinary workspace. Renaming `[mcp] workspace` at runtime reorders the window's model only at
+  the next start. `vimma.mcp.enabled` has no line in the branding prefs (the code defaults to
+  false); sub-PR 2 can add it with the server switch.
+
+Next (sub-PR 2): protocol 2 and the agent role, `AgentGate.sys.mjs`, `ui/agent-prompt.mjs`, the
+status segment, `:mcp revoke`, `prefix+shift+a`, ADR-019, security.md §1 and §12, as the table
+above says. The server must start when `McpHost.state.enabled` and stop when it and
+`vimma.control.enabled` are both off; observe `vimma.mcp.enabled` and ConfigHost's reapply.
 
 ## Docs the implementation must update
 

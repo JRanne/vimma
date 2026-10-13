@@ -19,6 +19,7 @@ import { redactReport } from "../core/report.mjs";
 import { ConfigHost } from "../config/ConfigHost.sys.mjs";
 import { ENABLED_PREF, VimmaControl } from "../ctl/VimmaControl.sys.mjs";
 import { VimmaHost } from "../host/VimmaHost.sys.mjs";
+import { McpHost } from "../host/mcp-ops.mjs";
 import { PrivateSwap } from "../host/private-swap.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
@@ -57,6 +58,9 @@ const CONTRACT = "@mozilla.org/network/protocol/about;1?what=vimma";
  * @property {{ count: number, window: { name: string, active: boolean, tabs: number,
  *   panes: number }[] }} workspaces
  * @property {{ enabled: boolean, port: number | null }} control
+ * @property {{ enabled: boolean, from: "config" | "pref", workspace: string | null,
+ *   adopted: boolean, tabs: number }} mcp  agents (docs/specs/vimma-mcp.md): the switch and the
+ *   agent workspace, with its tab count; never its URLs or titles
  * @property {string} windowManager  Hyprland and the private placement (private-swap)
  * @property {{ off: { chord: string, id: string, command: string }[], unmatched: string[] }}
  *   firefoxKeys  Firefox's own shortcuts that are off (docs/specs/key-handling-batch.md)
@@ -71,6 +75,29 @@ const CONTRACT = "@mozilla.org/network/protocol/about;1?what=vimma";
  * @property {{ host: string, workspace: string, rule: number | null, target: string | null }
  *   | null} tab
  */
+
+/**
+ * The agents section (docs/specs/vimma-mcp.md, decision 27): on or off and why, and the agent
+ * workspace with its tab count. Connections and grants come with the agent role (sub-PR 2).
+ * @returns {AboutData["mcp"]}
+ */
+function mcpOf() {
+  const agent = WorkspaceStore.agent;
+  const ucid = agent?.userContextId ?? null;
+  let tabs = 0;
+  if (ucid !== null) {
+    for (const w of /** @type {any} */ (Services.wm).getEnumerator("navigator:browser")) {
+      if (lazy.PrivateBrowsingUtils.isWindowPrivate(w)) continue;
+      tabs += [...(w.gBrowser?.tabs ?? [])].filter((t) => t.userContextId === ucid).length;
+    }
+  }
+  return {
+    ...McpHost.state,
+    workspace: agent?.name ?? null,
+    adopted: !!agent && !WorkspaceStore.agentIsOurs(),
+    tabs,
+  };
+}
 
 /** An nsIAboutModule that is its own nsIFactory; XPCOM types are untyped here (types/). */
 const aboutModule = /** @type {any} */ ({
@@ -253,6 +280,7 @@ export const AboutVimma = {
         enabled: Services.prefs.getBoolPref(ENABLED_PREF, false),
         port: VimmaControl.port,
       },
+      mcp: mcpOf(),
       routes: routesOf(win, tab),
       firefoxKeys: VimmaHost.firefoxKeys(win),
       windowManager: PrivateSwap.status,
@@ -293,6 +321,8 @@ export const AboutVimma = {
       `Routes: ${data.routes.rules.length}` +
         ` (${data.routes.rules.filter((r) => r.skipped).length} skipped)`,
       `Control socket: ${data.control.enabled ? `enabled, port ${data.control.port ?? "-"}` : "off"}`,
+      `Agents (MCP): ${data.mcp.enabled ? "on" : "off"} (${data.mcp.from}), workspace ` +
+        `${data.mcp.workspace ?? "none"}${data.mcp.adopted ? " (adopted)" : ""}, ${data.mcp.tabs}t`,
       `Window manager: ${data.windowManager}`,
       `Firefox shortcuts off: ${data.firefoxKeys.off.map((k) => k.chord).join(" ") || "none"}`,
     ];

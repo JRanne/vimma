@@ -42,7 +42,9 @@ registerCleanupFunction(async () => {
   const ww = WindowWorkspaces.get(window);
   const main = WorkspaceStore.definitions.workspaces.find((w) => w.name === "main");
   if (ww && main) ww.switchTo({ id: main.id });
-  for (const w of WorkspaceStore.definitions.workspaces.filter((d) => d.name !== "main")) {
+  for (const w of WorkspaceStore.definitions.workspaces.filter(
+    (d) => d.name !== "main" && d.id !== WorkspaceStore.agent?.id,
+  )) {
     await WorkspaceStore.deleteWorkspace(w.id, { confirmed: true });
   }
   while (gBrowser.tabs.length > 1) gBrowser.removeTab(gBrowser.tabs.at(-1));

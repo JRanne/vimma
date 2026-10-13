@@ -30,6 +30,9 @@ import { DEFAULT_THEME_NAME } from "./theme.mjs";
  *   (docs/specs/bookmarks.md)
  * @property {{ placement?: "swap" | "window" }} [private]  where the private workspace is shown
  *   (docs/specs/private-swap.md)
+ * @property {{ enabled?: boolean, workspace?: string, ask_timeout?: number,
+ *   grant_minutes?: number, grant_max_minutes?: number, max_read_chars?: number,
+ *   notify?: boolean }} [mcp]  local AI agents and the agent workspace (docs/specs/vimma-mcp.md)
  */
 
 /**
@@ -334,6 +337,15 @@ export const DEFAULT_CONFIG = Object.freeze({
   firefox: { disable: OVERLAP_CHORDS, enable: [] },
   bookmarks: { root: /** @type {const} */ ("workspace") },
   private: { placement: /** @type {const} */ ("swap") },
+  // docs/specs/vimma-mcp.md, decision 26. No `enabled`: left out, `:mcp on|off` decides.
+  mcp: {
+    workspace: "agent",
+    ask_timeout: 50,
+    grant_minutes: 10,
+    grant_max_minutes: 480,
+    max_read_chars: 200000,
+    notify: true,
+  },
 });
 
 /** @param {string} s */
@@ -428,6 +440,8 @@ export function formatDefaultsToml() {
     "[private]",
     `placement = ${tomlString(DEFAULT_CONFIG.private?.placement ?? "swap")}`,
     "",
+    ...mcpLines(),
+    "",
     "# Per-site insert mode: auto (detect text fields), never (keys stay vimma's), always.",
     "# A host also covers its subdomains. None by default.",
     '# [sites."docs.google.com"]',
@@ -441,6 +455,25 @@ export function formatDefaultsToml() {
     "",
   );
   return lines.join("\n");
+}
+
+/** `[mcp]` in defaults.toml (docs/specs/vimma-mcp.md, decision 26). */
+function mcpLines() {
+  const m = /** @type {Required<NonNullable<UserConfig["mcp"]>>} */ (DEFAULT_CONFIG.mcp);
+  return [
+    "# Local AI agents (Claude Code, Codex, opencode, Copilot) reach only the agent workspace, and",
+    "# every request asks you first. Left out, :mcp on|off sets enabled and remembers it; set",
+    "# here, it always wins. ask_timeout: seconds a request waits for you (10 to 300); a bare `a`",
+    "# grants grant_minutes, a count before it up to grant_max_minutes (at most 1440).",
+    "[mcp]",
+    "# enabled = false",
+    `workspace = ${tomlString(m.workspace)}`,
+    `ask_timeout = ${m.ask_timeout}`,
+    `grant_minutes = ${m.grant_minutes}`,
+    `grant_max_minutes = ${m.grant_max_minutes}`,
+    `max_read_chars = ${m.max_read_chars}`,
+    `notify = ${m.notify}`,
+  ];
 }
 
 /** The lines of defaults.toml's header, which the template replaces. */

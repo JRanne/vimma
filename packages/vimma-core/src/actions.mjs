@@ -331,6 +331,10 @@ group("Config", [
 ]);
 
 // docs/specs/addon-manager.md
+// docs/specs/vimma-mcp.md: local AI agents, confined to the agent workspace. No default key;
+// `:mcp on|off|forget`.
+group("Agents", [["mcp_command", "mcp.command", "Agents (MCP): :mcp on, off or forget"]]);
+
 group("Add-ons", [
   ["addon_picker", "addons.picker", "Add-on picker: popup, options, on/off, remove, update"],
   ["addon_popup", "addons.popup", "Open an add-on's popup by name (:addon name)"],

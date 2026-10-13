@@ -290,8 +290,17 @@ add_task(async function a_newer_window_value_is_left_untouched() {
   });
   const ww = WindowWorkspaces.get(win);
   Assert.ok(ww.model, "the window has a model");
-  Assert.equal(ww.model.workspaces.length, 1, "with one workspace");
-  Assert.equal(ww.model.workspaces[0].tabs.length, win.gBrowser.tabs.length, "holding every tab");
+  // main, and the agent workspace every profile has (docs/specs/vimma-mcp.md decision 8).
+  Assert.deepEqual(
+    ww.model.workspaces.map((w) => w.name),
+    ["main", "agent"],
+    "with main and the agent workspace",
+  );
+  Assert.equal(
+    ww.model.workspaces[0].tabs.length,
+    win.gBrowser.tabs.length,
+    "main holds every tab",
+  );
   const added = await openIn(win, `${PAGE}?n3`);
   Assert.equal(workspaceOf(win, added), main.id, "a new tab joins it");
   await TestUtils.waitForTick();

@@ -273,6 +273,12 @@ shows as `space n` ([guide](guide.md#configtoml)).
 | Open config.toml in a tab                            | `edit_config`      | —        |
 | Built-in theme: dark, light or the system's (:theme) | `theme_appearance` | —        |
 
+## Agents
+
+| Action                               | Config name   | Bindings |
+| ------------------------------------ | ------------- | -------- |
+| Agents (MCP): :mcp on, off or forget | `mcp_command` | —        |
+
 ## Add-ons
 
 | Action                                                | Config name    | Bindings   |

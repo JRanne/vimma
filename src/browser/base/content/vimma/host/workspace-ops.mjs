@@ -120,8 +120,17 @@ export function renameWorkspace(win, name) {
 export function closeWorkspace(win, text, ask, say, choose) {
   const { def, refused } = definitionOf(win, text);
   if (!def) return refused ?? NO_WORKSPACES;
-  if (WorkspaceStore.definitions.workspaces.length === 1) return "cannot close the last workspace";
+  // The agent workspace is only emptied, never deleted (docs/specs/vimma-mcp.md, decision 8),
+  // and never counts as the workspace left.
+  const agent = def.name === WorkspaceStore.agentName;
+  const others = WorkspaceStore.definitions.workspaces.filter(
+    (d) => d.name !== WorkspaceStore.agentName,
+  );
+  if (!agent && others.length === 1) return "cannot close the last workspace";
   const tabs = def.userContextId === null ? 0 : countTabs(def.userContextId);
+  if (agent && tabs === 0) {
+    return `"${def.name}" has no tabs, and stays: it is the agent workspace ([mcp] workspace)`;
+  }
   if (def.source === "config" && tabs === 0) {
     return `"${def.name}" has no tabs, and stays: it is in config.toml`;
   }
@@ -145,7 +154,7 @@ export function closeWorkspace(win, text, ask, say, choose) {
     if (ww?.model?.active === def.id) ww.previous();
     return WorkspaceStore.closeWorkspace(def.id, { confirmed: true, asked }).then(
       ({ cleared }) => {
-        if (asked.source === "runtime" && !cleared) {
+        if (asked.source === "runtime" && !agent && !cleared) {
           say(
             `closed "${asked.name}"; its container is no longer vimma's (renamed in Settings?), ` +
               "so its tabs and site data were kept",
@@ -159,10 +168,11 @@ export function closeWorkspace(win, text, ask, say, choose) {
       },
     );
   };
-  ask(closeWorkspaceQuestion(def, tabs), () => {
+  ask(closeWorkspaceQuestion(def, tabs, { agent: WorkspaceStore.agentName }), () => {
     const now = unchanged();
     if (!now) return;
-    if (asked.source !== "runtime" || !choose) {
+    // Its bookmarks stay with it: only a deleted workspace asks about them.
+    if (asked.source !== "runtime" || agent || !choose) {
       close();
       return;
     }
@@ -252,16 +262,25 @@ function countTabs(userContextId) {
 }
 
 /**
- * `:wsmove name|number`: the selected tab to that workspace (decision 6), reopened there.
+ * `:wsmove name|number`: the selected tab to that workspace (decision 6), reopened there. Into
+ * the agent workspace it asks first, through `ask` (docs/specs/vimma-mcp.md, decision 11):
+ * agents can read it there.
  * @param {Window} win
  * @param {string} text
- * @returns {string} what happened, or why not
+ * @param {(question: string, yes: () => void) => void} [ask]
+ * @param {(text: string) => void} [say]  the notice, after the answer
+ * @returns {string | null} what happened, or why not; null while asking
  */
-export function moveTabToWorkspace(win, text) {
+export function moveTabToWorkspace(win, text, ask, say) {
   const ww = WindowWorkspaces.get(win);
   if (!ww?.model) return NO_WORKSPACES;
   const ref = workspaceRef(text, ww.model);
-  const to = findWorkspace(ww.model, ref)?.name;
+  const target = findWorkspace(ww.model, ref);
+  if (target && ask && say && target.id === WorkspaceStore.agent?.id) {
+    const refused = moveTabFromPicker(win, target.id, ask, say);
+    return refused;
+  }
+  const to = target?.name;
   const tab = /** @type {any} */ (win).gBrowser.selectedTab;
   const refused = ww.moveTab(tab, ref);
   if (refused) return refused;
@@ -286,10 +305,14 @@ export function workspacePickerItems(win) {
   const ww = WindowWorkspaces.get(win);
   const model = ww?.model;
   if (!ww || !model) return [];
-  return workspaceItems(model, (id) => {
-    const tab = ww.tabOf(id);
-    return !!tab && ww.isForeign(tab);
-  });
+  return workspaceItems(
+    model,
+    (id) => {
+      const tab = ww.tabOf(id);
+      return !!tab && ww.isForeign(tab);
+    },
+    WorkspaceStore.agent?.id ?? null,
+  );
 }
 
 /**
@@ -315,7 +338,7 @@ export function moveTabFromPicker(win, id, ask, say) {
     return `already in "${target.name}"`;
   }
   const name = target.name;
-  ask(moveTabQuestion(name), () => {
+  ask(moveTabQuestion(name, { agent: WorkspaceStore.agentName }), () => {
     const now = ww.model?.workspaces.find((w) => w.id === id);
     if (now?.name !== name || !tab.isConnected || gBrowser.selectedTab !== tab) {
       say(`move: the tab or "${name}" changed since you were asked; nothing was moved`);

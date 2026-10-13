@@ -245,9 +245,12 @@ add_task(async function key_to_paint_workspace_switch_with_200_tabs() {
   await until(() => ww().model.active === main.id, "sanity: back in main");
   // Two workspaces only (main and perf-200, plus any the profile has): ) and ( alternate
   // between main and perf-200 when they are neighbours; switch by name otherwise.
-  const order = WorkspaceStore.definitions.workspaces.map((w) => w.id);
-  Assert.equal(order.at(-1), big.id, "sanity: perf-200 is the last workspace");
-  Assert.equal(order.length, 2, "sanity: main and perf-200 are the only workspaces");
+  // The agent workspace (docs/specs/vimma-mcp.md decision 9) sorts last and is not cycled.
+  const all = WorkspaceStore.definitions.workspaces.map((w) => w.id);
+  Assert.equal(all.at(-1), WorkspaceStore.agent?.id, "sanity: the agent workspace is last");
+  const order = all.filter((id) => id !== WorkspaceStore.agent?.id);
+  Assert.equal(order.at(-1), big.id, "sanity: perf-200 is the last cycled workspace");
+  Assert.equal(order.length, 2, "sanity: main and perf-200 are the only cycled workspaces");
 
   const into = [];
   const outOf = [];

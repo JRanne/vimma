@@ -654,11 +654,12 @@ enable = []
 Workspaces keep the different parts of your day apart. Every tab lives in a workspace, and every
 workspace is a Firefox container of its own: a site you are signed in to in one workspace sees
 none of its cookies or storage in another. A new
-profile has one workspace, `main`; you make more as you need them (see
-[Managing workspaces](#managing-workspaces)).
+profile has one workspace, `main`, and the empty [agent workspace](#agent-workspace); you make
+more as you need them (see [Managing workspaces](#managing-workspaces)).
 
 - `ctrl+b )` / `ctrl+b (` (or `]w` / `[w`, `:wsnext` / `:wsprev`) go to the next / previous workspace in
-  workspace order (`[workspaces]` in `config.toml`, then the ones you made), wrapping around, as
+  workspace order (`[workspaces]` in `config.toml`, then the ones you made), skipping the
+  [agent workspace](#agent-workspace), wrapping around, as
   tmux's session keys do, from every mode; `:workspace work` or `:workspace 2` goes to one by
   name or number. The status bar shows where you are (`● 2:work`). `(` and `)` are matched by
   the character they type, not the key: `shift+9` / `shift+0` on a US keyboard, `shift+8` /
@@ -793,6 +794,50 @@ rename or close a workspace, use `ctrl+b shift+n`, `shift+w` and `shift+d`.
 nothing new is recorded; it is Firefox's "Open Link in New Private Window" as a move. A private
 tab never moves out: `m` on a normal row from the private workspace, and `:wsmove` there, say
 `a private tab cannot leave the private workspace`.
+
+The [agent workspace](#agent-workspace) is the last normal row, `◇ agent`, with its number and
+tab count. `m` on it asks
+`Move this tab to "agent"? Agents you allow can read it there. It is reopened with the agent's cookies; … y/N`.
+
+### Agent workspace
+
+Every profile has a workspace named `agent`, for local AI agents (Claude Code, Codex, opencode,
+Copilot) to use later through `vimma-ctl mcp`. It is a workspace like the others, with a
+container of its own, so its cookies and logins are apart from `main`, `work` and the rest. An
+agent will only ever reach this workspace, and every request asks you first. **The agent
+connection is not in this build yet:** for now the workspace is there, empty, and `:mcp on`
+records your choice. Spec: [vimma-mcp](specs/vimma-mcp.md).
+
+- **Made for you.** A new profile gets it after `main`; an existing one at its next start. It
+  is cyan, with the fingerprint icon. It has no tabs until you move one in (or an agent opens
+  one), so it loads nothing. If you already have a workspace named `agent` (your own, or one in
+  `[workspaces]`), that one is used and no second one is made.
+- **Not in the cycle.** `ctrl+b )` / `ctrl+b (`, `]w` / `[w`, `:wn` / `:wp` skip it, and the
+  `ctrl+^` of another workspace never lands on it. You go there on purpose: the
+  [workspace picker](#workspace-picker), where it is the last normal row (`◇ agent`), or
+  `:ws agent`. In it, `ctrl+^` goes back to where you came from. It always sorts last, so
+  `:ws 1`…`:ws N` keep their places.
+- **Emptied, never deleted.** `ctrl+b shift+d` in it asks
+  `Close the 2 tabs of "agent"? It stays, with its cookies and logins (:mcp forget clears them). y/N`:
+  its tabs close and its container stays. It never counts as the last workspace, so `main` (or
+  your last other one) stays too. Renaming it is refused
+  (`its name is [mcp] workspace in config.toml`); to use another name, set `[mcp] workspace`.
+  The old one then becomes an ordinary workspace.
+- **Sharing a tab with an agent is moving it** there (`m` in the picker, or `:wsmove agent`),
+  after a `y/N`. The tab is reopened with the agent workspace's cookies, never yours.
+
+| Command       | What it does                                                                                             |
+| ------------- | -------------------------------------------------------------------------------------------------------- |
+| `:mcp`        | Says whether agents are on or off, and which workspace is theirs.                                        |
+| `:mcp on`     | Asks `Let local AI agents ask to use the "agent" workspace? Every request asks you first. y/N`, then on. |
+| `:mcp off`    | Turns agents off, without a question.                                                                    |
+| `:mcp forget` | Asks, then deletes the agent workspace's cookies and site data (its logins). The workspace stays.        |
+
+- When the agent workspace is one of yours rather than one Vimma made, `:mcp on` warns:
+  `"agent" is your own workspace (3 tabs, its own logins). Agents will be able to read it. y/N`.
+- `:mcp on|off` is remembered in the pref `vimma.mcp.enabled`. `[mcp] enabled` in `config.toml`
+  wins over it; then `:mcp on|off` changes nothing and says to edit the file.
+- about:vimma's **Agents (MCP)** section shows the switch and the agent workspace's tab count.
 
 ### Side panel
 
@@ -1263,6 +1308,7 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:source`                             | Reads `config.toml` now instead of within 2 seconds (see [config.toml](#configtoml)).                                            |
 | `:source path`                        | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                                  |
 | `:config`                             | Opens `config.toml` in a new tab (read-only view); creates it from a commented template when it is missing.                      |
+| `:mcp [on\|off\|forget]`              | Agents and the [agent workspace](#agent-workspace): the status, on (asks `y/N`), off, or forget its logins (asks `y/N`).         |
 | `:theme [dark\|light\|system]`        | The built-in palette dark, light or as the system is; bare, the other of dark and light (see [Colours](#colours-and-themes)).    |
 | `:about`, `:vimma`                    | Opens [about:vimma](#aboutvimma) in a new tab.                                                                                   |
 | `:addons`                             | Opens the [add-on picker](#add-ons), as `ctrl+b e`.                                                                              |
@@ -1291,6 +1337,8 @@ Refresh for the current state. It is an ordinary page, so `j` / `k` scroll it.
   directory, its `colors.toml` time and why the last theme file was rejected, if one was.
 - **Workspaces:** how many there are, and this window's with their tab and pane counts.
 - **Control socket:** on or off, and its port. The token is never shown.
+- **Agents (MCP):** on or off (and whether `config.toml` or `:mcp on` decides), and the
+  [agent workspace](#agent-workspace) with its tab count; never its addresses or titles.
 
 **Copy redacted report** (or `:bug`) copies all of that as text, without the binding table's
 defaults, with every URL replaced by `<url>` and your home directory by `~`. It never contains
@@ -1376,9 +1424,14 @@ accent = "#ff9e64"
   default: the current workspace's folder; `"toolbar"`; or `"all"`: what the
   [bookmarks panel](#bookmarks) lists and where paths start); `[private] placement` (`"swap"`, the
   default: on Hyprland the [private workspace](#private-workspace) takes the Vimma window's place;
-  `"window"`: it is a window of its own beside it).
+  `"window"`: it is a window of its own beside it); `[mcp]` (local AI agents:
+  `enabled`, which wins over `:mcp on|off`; `workspace`, the [agent workspace](#agent-workspace)'s
+  name, default `"agent"`, never `"private"`; `ask_timeout`, 10 to 300 seconds, default 50;
+  `grant_minutes`, default 10, at most `grant_max_minutes`, 1 to 1440, default 480;
+  `max_read_chars`, 1,000 to 500,000, default 200,000; `notify`, default `true`. Only
+  `workspace` and `enabled` do anything until the agent connection lands).
 - **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]`, `[firefox]`, `[bookmarks]`,
-  `[private]`,
+  `[private]`, `[mcp]`,
   `hint_chars`, `insert_editing`, `[theme] name` and `appearance`; every key,
   its type and default are in [m5-core-config-and-theme](specs/m5-core-config-and-theme.md#schema-v1)
   and [m3-m4-core-prep](specs/m3-m4-core-prep.md#config-schema-2), and

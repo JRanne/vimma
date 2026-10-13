@@ -230,6 +230,27 @@ function render(d) {
     ]),
   );
 
+  // docs/specs/vimma-mcp.md decision 27: the switch and the agent workspace, no URLs or titles.
+  const mcp = d.mcp;
+  fill(
+    "mcp",
+    dl([
+      [
+        "State",
+        mcp.enabled
+          ? `on${mcp.from === "config" ? " ([mcp] enabled in config.toml)" : " (:mcp on)"}`
+          : `off${mcp.from === "config" ? " ([mcp] enabled in config.toml)" : " (:mcp on turns it on)"}`,
+      ],
+      [
+        "Agent workspace",
+        mcp.workspace === null
+          ? "none"
+          : `${mcp.workspace}${mcp.adopted ? " (your own, adopted)" : ""} · ${mcp.tabs} ` +
+            `${mcp.tabs === 1 ? "tab" : "tabs"}`,
+      ],
+    ]),
+  );
+
   // docs/specs/private-swap.md decision 10: no addresses, no titles.
   fill("window-manager", dl([["Window manager", d.windowManager]]));
 

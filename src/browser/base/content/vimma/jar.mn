@@ -14,6 +14,7 @@ browser.jar:
         content/browser/vimma/host/workspace-ops.mjs      (host/workspace-ops.mjs)
         content/browser/vimma/host/private-ops.mjs        (host/private-ops.mjs)
         content/browser/vimma/host/private-swap.mjs       (host/private-swap.mjs)
+        content/browser/vimma/host/mcp-ops.mjs            (host/mcp-ops.mjs)
         content/browser/vimma/host/hypr/HyprIpc.sys.mjs   (host/hypr/HyprIpc.sys.mjs)
         content/browser/vimma/host/find.mjs               (host/find.mjs)
         content/browser/vimma/host/copy-mode.mjs          (host/copy-mode.mjs)

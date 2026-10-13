@@ -126,6 +126,8 @@ support-files = ["file_vimma_cookie.html"]
 
 ["browser_vimma_workspace_ops.js"]
 
+["browser_vimma_mcp.js"]
+
 ["browser_vimma_workspace_picker.js"]
 
 ["browser_vimma_workspace_edges.js"]

@@ -142,7 +142,9 @@ registerCleanupFunction(async () => {
   VimmaHost.configure({ bookmarksRoot: "workspace" });
   await closePanel();
   ww().switchTo({ id: def("main").id });
-  for (const w of WorkspaceStore.definitions.workspaces.filter((d) => d.name !== "main")) {
+  for (const w of WorkspaceStore.definitions.workspaces.filter(
+    (d) => d.name !== "main" && d.id !== WorkspaceStore.agent?.id,
+  )) {
     await WorkspaceStore.deleteWorkspace(w.id, { confirmed: true });
   }
   WorkspaceStore.setBookmarksFolder(def("main").id, null);

@@ -222,6 +222,9 @@ Config
   edit_config             (unbound)                                         Open config.toml in a tab
   theme_appearance        (unbound)                                         Built-in theme: dark, light or the system's (:theme)
 
+Agents
+  mcp_command             (unbound)                                         Agents (MCP): :mcp on, off or forget
+
 Add-ons
   addon_picker            ctrl+b e                                          Add-on picker: popup, options, on/off, remove, update
   addon_popup             (unbound)                                         Open an add-on's popup by name (:addon name)

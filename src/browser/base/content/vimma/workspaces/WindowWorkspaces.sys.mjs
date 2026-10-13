@@ -25,6 +25,7 @@ import {
   deleteWorkspace,
   findWorkspace,
   lastWorkspace,
+  leaveSkipped,
   moveTab,
   nextWorkspace,
   openTab,
@@ -357,17 +358,27 @@ export class WindowWorkspacesImpl {
     return principal;
   }
 
-  /** ctrl+b ); wraps. */
+  /**
+   * The workspaces the cycle and the alternate skip: the agent workspace (docs/specs/vimma-mcp.md,
+   * decision 9), reached on purpose through the picker or `:ws agent`.
+   * @returns {ReadonlySet<string>}
+   */
+  #skip() {
+    const agent = WorkspaceStore.agent;
+    return new Set(agent ? [agent.id] : []);
+  }
+
+  /** ctrl+b ); wraps, past the agent workspace. */
   next() {
     if (!this.#model) return "no workspaces in this window";
-    this.#show(this.#model, nextWorkspace(this.#model));
+    this.#show(this.#model, nextWorkspace(this.#model, this.#skip()));
     return null;
   }
 
-  /** ctrl+b (; wraps. */
+  /** ctrl+b (; wraps, past the agent workspace. */
   previous() {
     if (!this.#model) return "no workspaces in this window";
-    this.#show(this.#model, previousWorkspace(this.#model));
+    this.#show(this.#model, previousWorkspace(this.#model, this.#skip()));
     return null;
   }
 
@@ -378,7 +389,7 @@ export class WindowWorkspacesImpl {
   last() {
     const model = this.#model;
     if (!model) return "no workspaces in this window";
-    const next = lastWorkspace(model);
+    const next = lastWorkspace(model, this.#skip());
     if (next === model) return "no previous workspace in this window";
     this.#show(model, next);
     return null;
@@ -805,13 +816,16 @@ export class WindowWorkspacesImpl {
       model = state;
       orphans = [...orphans, ...closedTabs];
     }
+    const agentId = WorkspaceStore.agent?.id;
     for (const d of defs) {
       const w = findWorkspace(model, { id: d.id });
       if (!w) {
+        // The agent workspace sorts last (vimma-mcp decision 9): a new one goes before it.
+        const before = agentId && agentId !== d.id ? agentId : undefined;
         model = addWorkspace(
           model,
           { id: d.id, name: d.name, container: String(d.userContextId) },
-          { activate: false },
+          { activate: false, before },
         );
       } else {
         if (w.name !== d.name) model = renameWorkspace(model, { id: d.id }, d.name);
@@ -869,6 +883,8 @@ export class WindowWorkspacesImpl {
    * @param {Workspaces} next
    */
   #show(prev, next) {
+    // Leaving the agent workspace, the alternate stays the one before it (vimma-mcp 9).
+    next = leaveSkipped(prev, next, this.#skip());
     const gBrowser = this.#gBrowser;
     const view = PaneViews.get(this.#win);
     this.#model = next;
