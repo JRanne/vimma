@@ -33,9 +33,10 @@ export const SANDBOXED_AUXILIARY_NAVIGATION = 0x2;
  * Prompts WebRTCParent shows itself, outside nsIContentPermissionPrompt (decision 30): denied
  * per agent tab. A browser-scoped DENY (Services.perms.addFromPrincipalForBrowser) is what
  * SitePermissions.getForPrincipal(principal, id, browser) reads as a temporary BLOCK, and
- * WebRTCParent then denies without a prompt. Browser-scoped, not the origin's permission:
- * permissions are shared across containers (permissions.isolateBy.userContext is false), so an
- * origin-wide DENY would reach the same site in `work`.
+ * WebRTCParent then denies without a prompt. Browser-scoped, not the origin's permission: Vimma
+ * isolates permissions by container (permissions.isolateBy.userContext, user decision "Per
+ * workspace"), but that pref can be turned off in about:config, and an origin-wide DENY would
+ * then reach the same site in `work`.
  */
 export const AGENT_DENIED_PERMISSIONS = Object.freeze([
   "camera",
@@ -139,6 +140,21 @@ function denyFor(uri, originAttributes, browserId) {
   }
 }
 
+/**
+ * A document's window global was created (review of #177, L1): whatever served it (the network,
+ * a service worker, the cache, bfcache), a top-level agent document gets its WebRTC deny before
+ * it can ask. Frames ask with the top-level principal (permission delegation).
+ * @param {any} wgp  a WindowGlobalParent
+ */
+function onWindowGlobal(wgp) {
+  const bc = wgp?.browsingContext;
+  if (!bc?.isContent || bc.parent || !bc.browserId) return;
+  const principal = wgp.documentPrincipal;
+  if (!principal?.isContentPrincipal) return;
+  if (!isAgentContainer(principal.originAttributes?.userContextId)) return;
+  denyFor(principal.URI, principal.originAttributes, bc.browserId);
+}
+
 /** Every agent tab open now: sandboxed, and its origin denied (the agent workspace changed). */
 function sweep() {
   for (const win of /** @type {any} */ (Services.wm).getEnumerator("navigator:browser")) {
@@ -156,6 +172,7 @@ function sweep() {
 /** @param {any} subject @param {string} topic */
 function observe(subject, topic) {
   if (topic === "browsing-context-attached") onAttached(subject);
+  else if (topic === "window-global-created") onWindowGlobal(subject);
   else if (topic === "vimma-mcp-changed") sweep();
   else onResponse(subject);
 }
@@ -167,6 +184,7 @@ export const AgentPages = {
     initialised = true;
     lazy.Integration.contentPermission.register(permissionOverride);
     Services.obs.addObserver(observe, "browsing-context-attached");
+    Services.obs.addObserver(observe, "window-global-created");
     for (const topic of RESPONSE_TOPICS) Services.obs.addObserver(observe, topic);
     Services.obs.addObserver(observe, "vimma-mcp-changed");
     sweep();

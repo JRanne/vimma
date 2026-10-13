@@ -138,7 +138,11 @@ support-files = ["file_vimma_agent_page.html", "head_vimma_control.js"]
 support-files = ["file_vimma_agent_page.html", "head_vimma_control.js"]
 
 ["browser_vimma_mcp_agent_pages.js"]
-support-files = ["file_vimma_agent_page.html"]
+support-files = [
+  "file_vimma_agent_page.html",
+  "file_vimma_agent_sw.html",
+  "file_vimma_agent_sw.js",
+]
 
 ["browser_vimma_workspace_picker.js"]
 

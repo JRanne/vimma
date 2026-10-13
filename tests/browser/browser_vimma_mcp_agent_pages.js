@@ -257,3 +257,45 @@ add_task(async function test_site_permissions_are_per_workspace() {
   Assert.equal(of(agent.userContextId), Services.perms.UNKNOWN_ACTION, "the agent has none");
   Services.perms.removeAll();
 });
+
+// Review of #177 (L1): a document a service worker serves has no HTTP response, so the camera
+// deny is set when its window global is created, whatever served it.
+add_task(async function test_a_page_from_a_service_worker_is_denied_too() {
+  await SpecialPowers.pushPrefEnv({
+    set: [
+      ["dom.serviceWorkers.enabled", true],
+      ["dom.serviceWorkers.testing.enabled", true],
+    ],
+  });
+  const agent = /** @type {any} */ (WorkspaceStore.agent);
+  const tab = await tabIn(agent.userContextId, `${DIR}file_vimma_agent_sw.html`);
+  await TestUtils.waitForCondition(
+    () => tab.linkedBrowser.contentTitle === "sw ready",
+    "the worker is ready",
+  );
+  const browserId = tab.linkedBrowser.browserId;
+  const principal = tab.linkedBrowser.contentPrincipal;
+  for (const type of ["camera", "microphone", "screen", "speaker"]) {
+    Services.perms.removeFromPrincipalForBrowser(principal, type, browserId);
+  }
+  Assert.equal(
+    Services.perms.getForBrowser(principal, "camera", browserId),
+    null,
+    "sanity: no deny before the worker's page",
+  );
+  const page = `${DIR}file_vimma_agent_sw_page.html`;
+  BrowserTestUtils.startLoadingURIString(tab.linkedBrowser, page);
+  await BrowserTestUtils.browserLoaded(tab.linkedBrowser, false, page);
+  Assert.equal(tab.linkedBrowser.contentTitle, "from the worker", "the worker served it");
+  Assert.equal(
+    Services.perms.getForBrowser(principal, "camera", browserId)?.capability,
+    Services.perms.DENY_ACTION,
+    "the worker's page is denied the camera",
+  );
+  const got = await ask(tab.linkedBrowser);
+  Assert.equal(got.camera, "denied", "and its getUserMedia is refused");
+  await SpecialPowers.spawn(tab.linkedBrowser, [], async () => {
+    for (const r of await content.navigator.serviceWorker.getRegistrations()) await r.unregister();
+  });
+  BrowserTestUtils.removeTab(tab);
+});
