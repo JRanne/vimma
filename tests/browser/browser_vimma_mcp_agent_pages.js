@@ -299,3 +299,33 @@ add_task(async function test_a_page_from_a_service_worker_is_denied_too() {
   });
   BrowserTestUtils.removeTab(tab);
 });
+
+// Review of #177 (L2): a document keeps the sandbox flags it loaded with. When the agent
+// workspace changes (a sweep), an agent tab that loaded without the flag is reloaded, so the
+// flag applies to the page in it, not only to its next navigation.
+add_task(async function test_a_sweep_reloads_agent_tabs_that_loaded_unsandboxed() {
+  const agent = /** @type {any} */ (WorkspaceStore.agent);
+  const tab = await tabIn(agent.userContextId);
+  const bc = tab.linkedBrowser.browsingContext;
+  bc.sandboxFlags &= ~SANDBOXED_AUXILIARY_NAVIGATION;
+  BrowserTestUtils.reloadTab(tab);
+  await BrowserTestUtils.browserLoaded(tab.linkedBrowser);
+  // The document's own flags (Document.sandboxFlagsAsString lists what it may still do; null
+  // for none): whether the page in the tab may open windows.
+  const opens = () =>
+    SpecialPowers.spawn(tab.linkedBrowser, [], () => {
+      const flags = content.document.sandboxFlagsAsString;
+      return flags === null || flags.split(" ").includes("allow-popups");
+    });
+  Assert.ok(await opens(), "sanity: a page loaded without the flag may open windows");
+
+  const reloaded = BrowserTestUtils.browserLoaded(tab.linkedBrowser);
+  Services.obs.notifyObservers(null, "vimma-mcp-changed");
+  await reloaded;
+  Assert.ok(
+    tab.linkedBrowser.browsingContext.sandboxFlags & SANDBOXED_AUXILIARY_NAVIGATION,
+    "the sweep set the flag",
+  );
+  Assert.ok(!(await opens()), "and reloaded the page, which now opens none");
+  BrowserTestUtils.removeTab(tab);
+});

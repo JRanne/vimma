@@ -81,15 +81,20 @@ const permissionOverride = (base) => ({
   },
 });
 
-/** @param {any} bc  a top-level content BrowsingContext in the parent */
+/**
+ * @param {any} bc  a top-level content BrowsingContext in the parent
+ * @returns {boolean} whether the flag was missing (and is set now)
+ */
 function sandbox(bc) {
   try {
     if ((bc.sandboxFlags & SANDBOXED_AUXILIARY_NAVIGATION) === 0) {
       bc.sandboxFlags |= SANDBOXED_AUXILIARY_NAVIGATION;
+      return true;
     }
   } catch (e) {
     console.error("vimma agent pages: cannot sandbox", e);
   }
+  return false;
 }
 
 /** @param {any} subject  a BrowsingContext, just attached */
@@ -160,8 +165,12 @@ function sweep() {
   for (const win of /** @type {any} */ (Services.wm).getEnumerator("navigator:browser")) {
     for (const tab of win.gBrowser?.tabs ?? []) {
       if (!isAgentContainer(tab.userContextId)) continue;
-      const bc = tab.linkedBrowser?.browsingContext;
-      if (bc) sandbox(bc);
+      const browser = tab.linkedBrowser;
+      const bc = browser?.browsingContext;
+      // A document keeps the flags it loaded with (review of #177, L2): a page already loaded
+      // without the flag is reloaded, so the flag applies to it now, not at its next navigation.
+      const loaded = !tab.hasAttribute("pending") && browser?.currentURI?.spec !== "about:blank";
+      if (bc && sandbox(bc) && loaded) browser.reload();
       const uri = tab.linkedBrowser?.currentURI;
       const browserId = tab.linkedBrowser?.browserId;
       if (uri && browserId) denyFor(uri, { userContextId: tab.userContextId }, browserId);
