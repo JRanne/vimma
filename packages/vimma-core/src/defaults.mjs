@@ -146,6 +146,7 @@ const keys = {
   devtools_accessibility: ["shift+f12"],
   toggle_bookmarks: ["prefix+shift+b"],
   add_bookmark: ["prefix+a"],
+  agent_prompt: ["prefix+shift+a"],
   copy_mode: ["prefix+["],
   addon_picker: ["prefix+e"],
 };

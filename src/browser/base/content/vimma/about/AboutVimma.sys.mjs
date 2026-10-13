@@ -20,6 +20,7 @@ import { ConfigHost } from "../config/ConfigHost.sys.mjs";
 import { ENABLED_PREF, VimmaControl } from "../ctl/VimmaControl.sys.mjs";
 import { VimmaHost } from "../host/VimmaHost.sys.mjs";
 import { McpHost } from "../host/mcp-ops.mjs";
+import { ControlHost } from "../host/control-ops.mjs";
 import { PrivateSwap } from "../host/private-swap.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
@@ -57,7 +58,8 @@ const CONTRACT = "@mozilla.org/network/protocol/about;1?what=vimma";
  *   name: the Omarchy theme's, or the built-in palette's when that is shown
  * @property {{ count: number, window: { name: string, active: boolean, tabs: number,
  *   panes: number }[] }} workspaces
- * @property {{ enabled: boolean, port: number | null }} control
+ * @property {{ enabled: boolean, port: number | null, status: string }} control  `status`:
+ *   full control's state with the minutes `:control on` left (docs/specs/vimma-mcp.md 29 D)
  * @property {{ enabled: boolean, from: "config" | "pref", workspace: string | null,
  *   adopted: boolean, tabs: number }} mcp  agents (docs/specs/vimma-mcp.md): the switch and the
  *   agent workspace, with its tab count; never its URLs or titles
@@ -279,6 +281,7 @@ export const AboutVimma = {
       control: {
         enabled: Services.prefs.getBoolPref(ENABLED_PREF, false),
         port: VimmaControl.port,
+        status: ControlHost.status(),
       },
       mcp: mcpOf(),
       routes: routesOf(win, tab),

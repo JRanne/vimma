@@ -1,7 +1,8 @@
 # Spec: vimma-mcp
 
 Status: sub-PR 1 merged (the agent workspace, `[mcp]`, `:mcp on|off|forget`); sub-PR 2 split:
-2a in review (protocol 2, the agent role and its gate), 2b, 3 and 4 to do · Milestone: queued after firefox-keys sub-PR 2 (plan §6) · Area: `tools/vimma-ctl` (`src/mcp.rs` new, `src/protocol.rs`,
+2a merged (#176, protocol 2, the agent role and its gate); 2b in review (the question line,
+full control asks, the agent workspace's pages); 2c (downloads), 3 and 4 to do · Milestone: queued after firefox-keys sub-PR 2 (plan §6) · Area: `tools/vimma-ctl` (`src/mcp.rs` new, `src/protocol.rs`,
 `src/client.rs`, `src/cli.rs`); `packages/vimma-core/src/` (`control.mjs`, `agent.mjs` new,
 `config.mjs`, `defaults.mjs`, `actions.mjs`, `cmdline.mjs`, `statusbar.mjs`,
 `workspacedefs.mjs`); `ctl/VimmaControl.sys.mjs`, `ctl/AgentGate.sys.mjs` (new),
@@ -30,6 +31,14 @@ Engine paths are relative to `engine/` (Firefox 157.0.1). Vimma paths are on mai
   tool: yes.
 - On the cycle (2026-10-13): "You are correct to skip it when cycling".
 - Follow-up: "Will other workspaces be usable when agent uses it's own?"
+- After the review of 2a (2026-10-13), on full control while MCP is on: options C and D (each
+  new full-control connection asks y/N; `:control on <minutes>`), decision 29.
+- On the agent workspace (2026-10-13): its tabs' permission requests are refused and their
+  pop-ups blocked, decision 30.
+- On downloads (2026-10-13): "agent should be able to download etc. As long as we can have way
+  to ensure it downloads safe things", decision 31.
+- On site permissions, after the security review of #177 found that Firefox shares them across
+  containers (2026-10-13): "Per workspace", decision 30.
 
 ## Short answer
 
@@ -509,6 +518,89 @@ working in the agent workspace changes nothing about where you are or what you d
     than the existing socket), MCP elicitation for the confirmation (the agent's host would
     answer it), `send-keys` for agents, and agent access to every workspace.
 
+### G. Full control, the agent workspace's pages, downloads (user, 2026-10-13)
+
+29. **Full control while MCP is on (user: options C and D).** Why: an agent with a shell can read
+    the token from the discovery file like any process of yours, and with `vimma.control.enabled`
+    on it would then have the `full` role (keys in your window, every workspace) without a
+    question.
+    - **C. Each new full connection asks, while MCP is on.** After a full connection's auth and
+      before its welcome, Vimma asks in the agent question line:
+      `◇ vimma-ctl wants full control — y/N`. `y` (armed after 1 s, held keys ignored, as in
+      decision 13) lets that one connection in; `n`, `Esc`, `Enter` and `x` refuse it, and so do
+      no answer within `[mcp] ask_timeout` and a full queue. The answer applies to that connection
+      only, and nothing is remembered. A refused connection gets the error `denied` (with its
+      reason) instead of the welcome, and closes. With MCP off nothing changes: no question,
+      v1 and v2 full clients as before, so the e2e harness's profile (MCP off) is untouched. A
+      full connection already open when MCP is turned on stays open (it was not new while MCP was
+      on). `vimma-ctl` waits for the welcome up to 310 s (the longest `ask_timeout` plus 10 s)
+      when the discovery file lists the `agent` role, and says on stderr that Vimma is asking.
+    - **D. `:control on <minutes>`** turns `vimma.control.enabled` on for that many minutes (1 to
+      1440), after a y/N, and then off; `:control off` turns it off now; `:control` says on or
+      off and the minutes left. The end time is the pref `vimma.control.enabledUntilMs` (ms
+      since the epoch), so a restart inside the window keeps it and one after it turns control
+      off at startup. `:mcp` and about:vimma show it. Turning control on through `about:config`
+      stays as it was (no end time).
+30. **The agent workspace's pages are kept on a short leash (user).** Whatever an agent opens
+    there runs with no one watching, so:
+    - **Site permissions are per workspace (user: "Per workspace").** Firefox keeps one set of
+      site permissions for every container, so a camera allowed for a site in `work` was allowed
+      for it in the agent workspace too, without a prompt Vimma could refuse. Vimma sets
+      `permissions.isolateBy.userContext` (branding prefs): each container, so each workspace,
+      keeps its own, as it keeps its own logins. Permissions stored before stay with the default
+      container, and Firefox's built-in grants (`browser/app/permissions`: addons.mozilla.org's
+      `install`, the UITour sites) apply only there, so installing from AMO in a workspace asks
+      once more.
+    - **Permission requests are refused, without a prompt.** Every request through Firefox's
+      `nsIContentPermissionPrompt` (geolocation, notifications, XR, MIDI, persistent storage,
+      storage access, and any later type) whose principal is in the agent container is
+      cancelled. Vimma registers with Firefox's own extension point,
+      `Integration.contentPermission` (`browser/components/permissions/ContentPermissionPrompt.sys.mjs`,
+      `createPermissionPrompt`), so no upstream patch. Camera, microphone and screen sharing do
+      not go through it (`browser/actors/WebRTCParent.sys.mjs`, `prompt`): there Vimma sets a
+      session-only `DENY` for `camera`, `microphone`, `screen` and the other prompt types on the
+      origin of every document that loads in the agent container (`http-on-examine-response`,
+      before the document reaches the page), which `WebRTCParent` and `MediaManager` read
+      (`SitePermissions.getForPrincipal(...).state == BLOCK` denies without a prompt;
+      `dom/media/MediaManager.cpp`, `GetPersistentPermissions`). Permission delegation makes
+      frames ask with the top-level principal. Nothing is written to disk (`EXPIRE_SESSION`).
+    - **Pop-ups are blocked.** Each agent tab's top-level browsing context gets
+      `SANDBOXED_AUXILIARY_NAVIGATION` in its sandbox flags, as Firefox's own hidden page reader
+      does (`toolkit/components/pageextractor/PageExtractorParent.sys.mjs:200-211`) and the
+      thumbnailer (`toolkit/actors/BackgroundThumbnailsChild.sys.mjs:60`): `window.open` and
+      `target=_blank` open nothing. The flags survive a browsing-context replacement
+      (`CanonicalBrowsingContext::ReplacedBy` copies them). Set when an agent tab is created or
+      restored (`TabOpen` in the agent container) and by `agent-open`.
+31. **Downloads (user: "agent should be able to download etc. As long as we can have way to
+    ensure it downloads safe things"). Sub-PR 2c.** Downloads from agent-container tabs are
+    allowed, under these rules:
+    a. Each download asks in the question line: file name, size if known, type (MIME and
+    extension) and source host, never the full URL. It is a tool, `vimma_download`, so a grant
+    can cover it like any other (decision 21), but the dangerous-type rule (d) still asks.
+    b. It is saved to a quarantine directory, `[mcp] download_dir` (default
+    `~/Downloads/vimma-agent/`), never the normal Downloads directory.
+    c. Never opened by Vimma, no "open with" handler, saved without the executable bit (mode
+    0600 at most).
+    d. Dangerous types are refused unless allowed in that prompt for that one file (`!` instead
+    of `y`): executables and libraries (ELF, PE, Mach-O by magic bytes), scripts (`.sh`, `.py`,
+    `.pl`, `.rb`, `.js`, `.ps1`, `.bat`, `.cmd`, `.desktop`, a `#!` first line), installers and
+    packages (`.deb`, `.rpm`, `.AppImage`, `.flatpak`, `.snap`, `.msi`, `.dmg`, `.pkg`, `.apk`),
+    and Firefox's own executable list (`DownloadIntegration`'s `shouldBlockForParentalControls`
+    and `nsIApplicationReputation`'s dangerous extensions). Archives: the zip central directory
+    is listed (cheap, no extraction) and any dangerous name inside makes the archive dangerous;
+    other archive formats (`.tar.*`, `.7z`, `.rar`) are dangerous by default, since listing them
+    needs a parser Vimma does not ship.
+    e. HTTPS only: an `http:` download from the agent container is refused.
+    f. A size cap, `[mcp] download_max_mb` (default 200): over it, or past it while streaming
+    when the size was unknown, the download is cancelled and the part deleted.
+    g. With `clamscan` on `PATH`, each finished file stays in a pending state (a `.part` name in
+    the quarantine directory) until `clamscan --no-summary` says it is clean, and is deleted if
+    not. The notice says `scanned (ClamAV)` or `not scanned`. Without ClamAV it is released as
+    `not scanned`.
+    Download reputation: Firefox's Safe Browsing lists check downloads only in a build with a
+    Google key (security.md P6), and Vimma has no remote reputation service of its own, so in
+    every build (d) and (g) are Vimma's checks; security.md says so in 2c.
+
 ## Security
 
 ### Threat model
@@ -699,12 +791,14 @@ Omarchy theme as the screenshot-verify rule asks.
 
 One at a time, after firefox-keys sub-PR 2 (both change the keymap; this adds `prefix+shift+a`).
 
-| #   | PR                                                             | Contents                                                                                                                                                                                                                                                                                                                                                                                                      | Size                                                                                                     |
-| --- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| 1   | `feat(workspaces): every profile gets an agent workspace`      | `[mcp]` config table (all keys, validated); `vimma.mcp.enabled` pref; `:mcp on`, `:mcp off` and `:mcp forget` with their y/N; the reconcile ensures the agent workspace (new and existing profiles); skipped by the cycle and the alternate, last in the picker; rename refused, close keeps its container, the move question text; about:vimma section; guide "Agents" stub (workspace only, no socket yet). | M (~800 lines with tests)                                                                                |
-| 2   | `feat(ctl): agent role with a confirmation for every request`  | Protocol 2 (role, `role-off`, `denied`, agent commands, v2 fixtures); server roles and switches; `AgentGate.sys.mjs` (queue, prompt, grants, mute, timeout, attention, notification); `ui/agent-prompt.mjs`; `agent.mjs` in core; status segment; `:mcp`, `:mcp revoke`, `prefix+shift+a`; `PageExtractor` reads; ADR-019; security.md §1 and §12.                                                            | L (~1,800 lines; the review should split it if it grows: 2a protocol and gate, 2b prompt and status bar) |
-| 3   | `feat(vimma-ctl): vimma-ctl mcp, an MCP server over stdio`     | `src/mcp.rs` dual-era server, tool table and fixtures, protocol-2 client, keep-alive, error texts; Rust unit, integration and property tests; e2e scenario and baselines.                                                                                                                                                                                                                                     | M (~900 lines)                                                                                           |
-| 4   | `docs(guide): set up Claude Code, Codex, opencode and Copilot` | Guide "Agents (MCP)" in full: what it is, the threat model in plain words, `:mcp on`, each tool's setup checked against an install, timeouts, grants, sharing a tab, revoking, why `vimma.control.enabled` stays off; README feature line; limits.md.                                                                                                                                                         | S                                                                                                        |
+| #   | PR                                                                 | Contents                                                                                                                                                                                                                                                                                                                                                                                                      | Size                                                                                                     |
+| --- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 1   | `feat(workspaces): every profile gets an agent workspace`          | `[mcp]` config table (all keys, validated); `vimma.mcp.enabled` pref; `:mcp on`, `:mcp off` and `:mcp forget` with their y/N; the reconcile ensures the agent workspace (new and existing profiles); skipped by the cycle and the alternate, last in the picker; rename refused, close keeps its container, the move question text; about:vimma section; guide "Agents" stub (workspace only, no socket yet). | M (~800 lines with tests)                                                                                |
+| 2   | `feat(ctl): agent role with a confirmation for every request`      | Protocol 2 (role, `role-off`, `denied`, agent commands, v2 fixtures); server roles and switches; `AgentGate.sys.mjs` (queue, prompt, grants, mute, timeout, attention, notification); `ui/agent-prompt.mjs`; `agent.mjs` in core; status segment; `:mcp`, `:mcp revoke`, `prefix+shift+a`; `PageExtractor` reads; ADR-019; security.md §1 and §12.                                                            | L (~1,800 lines; the review should split it if it grows: 2a protocol and gate, 2b prompt and status bar) |
+| 2b  | `feat(mcp): the agent question line and status, full control asks` | Decisions 13-15 and 23-25 (the question line, `◇ agent`, `ctrl+b shift+a`, attention and notifications, grant notices), 29 (full control asks while MCP is on; `:control on <minutes>`), 30 (permissions refused, pop-ups blocked in the agent workspace).                                                                                                                                                    | L                                                                                                        |
+| 2c  | `feat(mcp): agent downloads, asked and quarantined`                | Decision 31, with its handover below.                                                                                                                                                                                                                                                                                                                                                                         | M                                                                                                        |
+| 3   | `feat(vimma-ctl): vimma-ctl mcp, an MCP server over stdio`         | `src/mcp.rs` dual-era server, tool table and fixtures, protocol-2 client, keep-alive, error texts; Rust unit, integration and property tests; e2e scenario and baselines.                                                                                                                                                                                                                                     | M (~900 lines)                                                                                           |
+| 4   | `docs(guide): set up Claude Code, Codex, opencode and Copilot`     | Guide "Agents (MCP)" in full: what it is, the threat model in plain words, `:mcp on`, each tool's setup checked against an install, timeouts, grants, sharing a tab, revoking, why `vimma.control.enabled` stays off; README feature line; limits.md.                                                                                                                                                         | S                                                                                                        |
 
 ## Handover after sub-PR 1 (2026-10-13)
 
@@ -840,6 +934,139 @@ and defaults.toml via `npm run gen-docs`, security.md (above), limits.md (no key
 screenshots for agents; the client label is self-reported; Copilot and the other tools' own
 approval settings are theirs), the protocol spec (protocol 2 section), ADR-019,
 `docs/adr/README` index if there is one. CHANGELOG.md is the maintainer's at merge time.
+
+## Handover after sub-PR 2b (2026-10-13)
+
+**In 2b.** Decisions 13-15, 23-25, 29 and 30:
+
+- Core `agent-prompt.mjs` (pure): `mayOpenByItself` (decision 14, `QUIET_MS` 1,500),
+  `questionLine` (13: client label cleaned of control and bidi characters, titles cut at 60
+  columns, the host of an open in bold), `promptKey` (13, 20: `y`; `n`/`Esc`/`Enter`; `x`; a
+  count of at most 4 digits and `a`; `Backspace`; any other key ignored; full control has only
+  `y` and no), the notices (`grantNotice`, `ranNotice`, `deniedNotice`), `agentAlertText` (15),
+  `agentState` (24), and `:control` (`parseControlCommand`, `controlStatus`, `controlOnQuestion`).
+  Core `statusbar.mjs`: the `agent` segment (right side, priority 3.5, `◇ agent ·` on the normal
+  badge's colours) and its announcement when the count of waiting questions rises.
+- `ui/agent-prompt.mjs` (the line, an `alertdialog` that takes no focus, a zero-height row like
+  the command line's in `cmdline.css`), `host/agent-ui.mjs` (which window asks, the guards, the
+  keys from VimmaHost's capture listener, attention and the notification, the notices, the
+  status), `host/control-ops.mjs` (`:control`, the pref `vimma.control.enabledUntilMs`),
+  `ctl/AgentPages.sys.mjs` (decision 30), `AgentGate.askFull` and gate events, and the
+  full-control question in `VimmaControl`'s handshake. `vimma-ctl` waits up to 310 s for the
+  welcome when the discovery file lists `agent`, says so on stderr, and maps `denied` to exit 4
+  (`full control refused: …`).
+- The e2e harness gained `hold`, `agent`/`agent-result`, `ctl`/`ctl-result` and `sleep` steps
+  (`tools/e2e/control-client.mjs`), and `m0-mcp-agent-prompt` drives a real agent connection
+  and a full-control question through the line.
+
+**Choices 2b made where the spec was silent** (3 and 4 can revisit):
+
+- The asking window is the most recent normal window; a private window never asks
+  (`ctrl+b shift+a` there says to answer in a normal one). The status bar shows the segment in
+  every window.
+- While the line shows, plain keys are its own (consumed, whatever they are); chords with
+  `ctrl`, `alt` or meta go on to the bindings. Focus moving into a field while it shows sends it
+  back to waiting, so a click into a field and typing never answers. `ctrl+b shift+a` opens it
+  even with focus in a field, and then it takes the keys (the field gets none).
+- `◇ agent 1?` stays while the line shows (the request still waits); waiting wins over a
+  grant's minutes in the segment.
+- Full-control questions share one queue key: one waits at a time (a second new connection is
+  refused `busy` at once), and three noes in a row mute them for a minute, like an agent's. `x`
+  is a plain no there. The answer is never remembered.
+- A full connection open before MCP was turned on stays open.
+- Camera, microphone and screen are denied with a browser-scoped DENY
+  (`Services.perms.addFromPrincipalForBrowser`, per agent tab, re-set at every document
+  response), not an origin permission: `permissions.isolateBy.userContext` is false, so an
+  origin DENY would reach the same site in `work`. A cancelled `Notification.requestPermission()`
+  stays `"default"` (nothing granted, no prompt); geolocation reports `PERMISSION_DENIED`.
+- The committed e2e scenario has no screenshot baselines: the screenshots were checked from
+  throwaway scenarios (built-in theme and Omarchy's ristretto), and a baseline recorded here
+  would not match CI's fonts. Sub-PR 3's `vimma-ctl mcp` scenario records CI's images.
+- No `[mcp]` key was added; downloads' keys come with 2c.
+
+**After the security review of #177** (all fixed in 2b):
+
+- H1: the line arms again on window activate, deactivate, focus, blur and visibilitychange, and
+  when a key arrives before it is armed; a just-focused window counts as one being typed in.
+- M1: site permissions per workspace (`permissions.isolateBy.userContext`, user: "Per
+  workspace"), decision 30.
+- M2: while MCP is on, `vimma-ctl` prints a 4-character code and sends it in its auth (an
+  optional field of protocol 2's auth); the full-control question shows it.
+- L1: the WebRTC deny is also set when a top-level agent document's window global is created
+  (`window-global-created`), so a page a service worker serves is covered.
+- L2: a sweep that has to sandbox an agent tab reloads it if it had loaded.
+- L3: Firefox's external-protocol chooser (`@mozilla.org/content-dispatch-chooser;1`) is wrapped
+  so a load in the agent container launches no app; agent tabs get `SANDBOXED_DOWNLOADS`, and
+  `Integration.downloads`' `shouldBlockForParentalControls` blocks any other download from the
+  agent container, until 2c.
+- L4: `:control on`'s end time is ms since the epoch in the string pref
+  `vimma.control.enabledUntilMs`, and anything but a time ahead within 1441 minutes turns full
+  control off (core `controlEnd`).
+- L5: the rest of a key sequence, and keys while a prompt, picker, panel or the command line is
+  open over the line, go to them; the line waits until they close.
+- L6: client names and titles are `<bdi>`, URLs left-to-right isolates.
+
+## Sub-PR 2c: agent downloads (decision 31), the handover
+
+2b came to more than the 2,000 lines the coordinator set as the split point without downloads
+(about 3,000 with its tests and docs), so decision 31 is its own sub-PR. What it needs (engine paths relative to `engine/`):
+
+- **Where a download starts.** Every download is a `Download` in `DownloadCore.sys.mjs`; its
+  `start()` awaits `DownloadIntegration.shouldBlockForParentalControls(this)` (`:510-514`)
+  before the saver runs, and `downloadDone(this)` (`:646`) after. `DownloadIntegration` is an
+  integration point: `DownloadCore` gets it through `Integration.downloads.defineESModuleGetter`
+  (`:37`), so `Integration.downloads.register(base => ({ __proto__: base, ... }))` overrides its
+  methods for every download without a patch, as 2b does for permission prompts
+  (`Integration.contentPermission`). Override `shouldBlockForParentalControls` (ask, and refuse
+  by returning true: the download fails with `becauseBlockedByParentalControls`, its part
+  removed), `getPreferredDownloadsDirectory`/`getTargetDirectory`-style choices are not enough
+  since the helper-app dialog picks the path first, so set the target in
+  `Downloads.getList(Downloads.ALL)`'s `onDownloadAdded` view before `start()` copies to it, or
+  refuse and re-create it (below). `download.source.userContextId` says whether it came from the
+  agent container; `download.source.url` and `referrerInfo` give the host; `download.contentType`,
+  `totalBytes` (−1 unknown) and `target.path` the rest.
+- **Before any byte is written** a download from the agent container must not land in the
+  normal directory. The helper-app dialog (`toolkit/mozapps/downloads/HelperAppDlg.sys.mjs`,
+  `nsUnknownContentTypeDialog.promptForSaveToFileAsync`) and `DownloadIntegration.getPreferredDownloadsDirectory`
+  (`:332`) choose the directory. If the override cannot redirect the target, refuse it in
+  `shouldBlockForParentalControls` after the question and, on a yes, re-create it with
+  `Downloads.createDownload({ source: { url, userContextId, referrerInfo }, target: { path:
+<quarantine>/<name>.part } })` in the agent's `userContextId`, so the cookies stay the
+  agent's. A size or type known only from the response (`totalBytes`, `contentType`) is
+  re-checked in `onDownloadChanged`, and past the cap the download is cancelled and its part
+  removed (`removePartialData()`).
+- **No launching.** `launchWhenSucceeded` false, `launcherPath` null on the re-created download,
+  and the file mode set to 0600 with `IOUtils.setPermissions(path, 0o600)` once it succeeded;
+  `DownloadIntegration.downloadDone` already makes temp files read-only. Firefox's own launch
+  check is `file.isExecutable()` in `launchDownload` (`:832`); it is never reached because
+  nothing launches.
+- **Dangerous types.** `Cc["@mozilla.org/reputationservice/application-reputation-service;1"]`
+  `.getService(Ci.nsIApplicationReputationService).isExecutable(name)` (`nsIApplicationReputation.idl:73`,
+  the `sExecutableExts` list of `nsLocalFileCommon.h`) plus core's own list in decision 31 (d)
+  and the magic-byte check of the finished `.part` (ELF `7F 45 4C 46`, PE `MZ`, Mach-O
+  `FE ED FA CE/CF`, `CA FE BA BE`, `#!`). Zip: read the end-of-central-directory record and the
+  names in the central directory (pure, in core, fuzzed); never extract.
+- **ClamAV.** `Subprocess.call({ command: <clamscan on PATH>, arguments: ["--no-summary",
+"--stdout", path] })` (`toolkit/modules/subprocess`), exit 0 clean, 1 infected (delete), 2
+  error (keep as `not scanned`, say so). Find it with `Subprocess.pathSearch("clamscan")`. The
+  mochitest puts a fake `clamscan` shell script first on `PATH` (`Services.env.set("PATH", …)`).
+- **Config.** `[mcp] download_dir` (a path; `~` expanded as `:source` does; must not be the
+  Downloads directory itself) and `download_max_mb` (1..4096, default 200). defaults.toml and its
+  snapshot change.
+- **Tests (red first).** Core: the dangerous-type rule, the zip lister (fuzzed: any bytes, no
+  throw), the question text and notice. Mochitests (`browser_vimma_mcp_downloads.js`, the test
+  server's `.sjs` serving files with chosen types and sizes): the question shows name, size, type
+  and host and no URL; `y` saves to the quarantine dir, mode 0600, not opened; `n` saves
+  nothing; an `.sh` / ELF / zip-with-ELF is refused unless `!`; `http:` refused; a size over the
+  cap, and an unknown size that grows past it, cancelled and removed; with a fake `clamscan`
+  (exit 0, 1, 2) released as scanned, deleted, or kept as not scanned; a download from a `work`
+  tab is untouched.
+- **Undo 2b's stopgap first.** 2b blocks every agent download (review of #177, L3): remove
+  `SANDBOXED_DOWNLOADS` from `AGENT_SANDBOX` and the blanket `shouldBlockForParentalControls`
+  override in `ctl/AgentPages.sys.mjs` (make that override the ask, below), and turn
+  `test_agent_pages_launch_no_app_and_download_nothing`'s download half into 2c's tests.
+- **Docs.** security.md §12 M11-M13 (downloads asked, quarantined, never launched; dangerous types;
+  no Google download reputation in Vimma, Mozilla's build only); the guide's Agents section.
 
 ## Out of scope
 

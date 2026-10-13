@@ -290,6 +290,9 @@ with `F11` keeps it. From the left:
 - the page **title**, or your rename (`ctrl+b shift+t`);
 - on the right, the **search** in this page: `/word [2/5]` (match 2 of 5), or
   `/zzz not found` in red;
+- `◇ agent` while a local AI agent is connected ([agent workspace](#agent-workspace)):
+  `◇ agent 2?` when 2 of its requests wait for your answer, `◇ agent 14m` while a grant you gave
+  has 14 minutes left, and `◇ agent ·` for a moment after a request ran;
 - `loading` while the page loads, then its **URL** without `https://`.
 
 On a narrow window the least important parts give way first: the URL is shortened in the middle,
@@ -684,6 +687,14 @@ more as you need them (see [Managing workspaces](#managing-workspaces)).
 - A tab in a container that belongs to no workspace (Firefox's own containers, "no container",
   an extension's) joins the workspace you are in as a `foreign` tab: it does not share that
   workspace's cookies and logins. The workspace picker counts it (`3 tabs, 1 foreign`).
+- **Site permissions are per workspace**, like logins: a camera, microphone, location or
+  notification permission you give a site in `work` does not apply to the same site in `main`
+  or any other workspace (Vimma sets `permissions.isolateBy.userContext`). Permissions you gave
+  before this change stay with "no container", so give them again in each workspace that needs
+  them. Firefox's Settings → Privacy & Security → Permissions lists a site once for each
+  workspace that has a permission for it; the site information panel in the address bar shows
+  the tab's own workspace. Firefox's built-in permission for addons.mozilla.org to install
+  add-ons applies only outside workspaces, so installing from it asks once more.
 - **A restart restores them.** Each window comes back with its workspaces, their tabs, the
   workspace you were in, the tab you had selected in each, every workspace's split panes laid
   out as you left them with the same pane focused, your tab names and each page's scroll position. Tabs of other workspaces are not loaded
@@ -802,12 +813,12 @@ tab count. `m` on it asks
 ### Agent workspace
 
 Every profile has a workspace named `agent`, for local AI agents (Claude Code, Codex, opencode,
-Copilot) to use later through `vimma-ctl mcp`. It is a workspace like the others, with a
-container of its own, so its cookies and logins are apart from `main`, `work` and the rest. An
-agent will only ever reach this workspace, and every request asks you first. **Not usable yet:**
-with `:mcp on`, Vimma's side of the agent connection runs (the control socket's agent role), but
-the question you answer requests with and `vimma-ctl mcp` are still to come, so for now every
-request an agent makes is denied after its timeout. Spec: [vimma-mcp](specs/vimma-mcp.md).
+Copilot) to use through `vimma-ctl mcp`. It is a workspace like the others, with a container of
+its own, so its cookies and logins are apart from `main`, `work` and the rest. An agent will only
+ever reach this workspace, and every request asks you first. **Not usable yet from an agent's
+tool:** with `:mcp on`, Vimma's side runs (the control socket's agent role and the question
+below), but `vimma-ctl mcp`, the command an agent's tool starts, is still to come. Spec:
+[vimma-mcp](specs/vimma-mcp.md).
 
 - **Made for you.** A new profile gets it after `main`; an existing one at its next start. It
   is cyan, with the fingerprint icon. It has no tabs until you move one in (or an agent opens
@@ -827,19 +838,93 @@ request an agent makes is denied after its timeout. Spec: [vimma-mcp](specs/vimm
 - **Sharing a tab with an agent is moving it** there (`m` in the picker, or `:wsmove agent`),
   after a `y/N`. The tab is reopened with the agent workspace's cookies, never yours.
 
-| Command       | What it does                                                                                             |
-| ------------- | -------------------------------------------------------------------------------------------------------- |
-| `:mcp`        | Says whether agents are on or off, which workspace is theirs, and how many agents, questions and grants. |
-| `:mcp on`     | Asks `Let local AI agents ask to use the "agent" workspace? Every request asks you first. y/N`, then on. |
-| `:mcp off`    | Turns agents off, without a question. Connected agents are disconnected and their grants end.            |
-| `:mcp revoke` | Ends every time-limited grant you gave agents, at once.                                                  |
-| `:mcp forget` | Asks, then deletes the agent workspace's cookies and site data (its logins). The workspace stays.        |
+| Command          | What it does                                                                                             |
+| ---------------- | -------------------------------------------------------------------------------------------------------- |
+| `:mcp`           | Says whether agents are on or off, which workspace is theirs, and how many agents, questions and grants. |
+| `:mcp on`        | Asks `Let local AI agents ask to use the "agent" workspace? Every request asks you first. y/N`, then on. |
+| `:mcp off`       | Turns agents off, without a question. Connected agents are disconnected and their grants end.            |
+| `:mcp revoke`    | Ends every time-limited grant you gave agents, at once.                                                  |
+| `:mcp forget`    | Asks, then deletes the agent workspace's cookies and site data (its logins). The workspace stays.        |
+| `ctrl+b shift+a` | Answers the waiting agent request; with none, offers to end every grant.                                 |
+| `:control on 15` | Turns full control (`vimma-ctl`) on for 15 minutes, after a y/N; `:control off` ends it now.             |
 
 - When the agent workspace is one of yours rather than one Vimma made, `:mcp on` warns:
   `"agent" is your own workspace (3 tabs, its own logins). Agents will be able to read it. y/N`.
 - `:mcp on|off` is remembered in the pref `vimma.mcp.enabled`. `[mcp] enabled` in `config.toml`
   wins over it; then `:mcp on|off` changes nothing and says to edit the file.
-- about:vimma's **Agents (MCP)** section shows the switch and the agent workspace's tab count.
+- about:vimma's **Agents (MCP)** section shows the switch, full control's state and the agent
+  workspace's tab count.
+
+#### Answering an agent
+
+Each request an agent makes appears as one line at the foot of the window, above the status bar:
+
+```
+◇ claude-code wants vimma_read_page: 2 "Pull requests · JRanne/vimma" github.com/JRanne/vimma/pulls   y once · 10a for 10 min · n deny · x mute
+```
+
+It names the agent (as the agent calls itself), the tool, and what it touches: the tab's place,
+title and address for a read or a close, the whole address for an open (its host in bold), the
+number of agent tabs for the tab list.
+
+| Key                   | Answer                                                                                  |
+| --------------------- | --------------------------------------------------------------------------------------- |
+| `y`                   | Allow this request once.                                                                |
+| a count, then `a`     | Allow this agent's use of this tool for that many minutes (`15a`); a bare `a` gives 10. |
+| `n`, `Esc` or `Enter` | Deny it.                                                                                |
+| `x`                   | Deny it and everything else this agent asked, and ignore it until it reconnects.        |
+| `Backspace`           | Take back a digit of the count.                                                         |
+
+- **Nothing else answers.** Any other key does nothing and the line stays; a key held down from
+  before never counts; and for its first second the line takes no key at all (the hint appears
+  when it is ready), so a key meant for something else cannot answer it. That second starts
+  again whenever the window comes to the front or leaves it, and with every key pressed before
+  it is up. A prompt, picker or the command line you open over the line gets your keys; the
+  question waits and comes back when it closes.
+- **It never interrupts your typing.** It opens by itself only when the window is in front,
+  focus is not in a text field, you have not pressed a key for 1.5 s, and no other prompt,
+  picker or panel is open. Otherwise it waits, and the status bar says `◇ agent 1?`; press
+  `ctrl+b shift+a` to answer it then. It never takes focus: answer, and you carry on where you
+  were. If you click into a text field while it shows, it goes back to waiting.
+- **One at a time**, oldest first. An agent may have 4 waiting, and all agents 16. With no
+  answer within 50 s (`[mcp] ask_timeout`) the request is denied (`agent request timed out
+(denied)`). Three noes in a row from one agent ignore it for a minute.
+- **Not in front?** When Vimma's window is not the one you are using, it is marked urgent (on
+  Hyprland, the workspace is highlighted) and a desktop notification says, for example,
+  `claude-code asks to use Vimma's agent workspace (read a page)`. It carries no address or
+  title and no buttons: you answer in Vimma. `[mcp] notify = false` turns the notification off.
+- **Grants show.** `◇ agent 14m` counts down the shortest one, and each request a grant lets
+  through shows a notice (`claude-code read "Pull requests · JRanne/vimma" (grant, 14m left)`).
+  `:mcp revoke`, or `ctrl+b shift+a` with nothing waiting and then `y`, ends them all. A grant
+  also ends when the agent disconnects or `:mcp off` runs, and is never written to disk.
+
+#### Full control while agents are on
+
+An agent with a shell can read the control socket's token like any program of yours. So while
+agents are on (`:mcp on`), each new `vimma-ctl` connection with full control (keys in your
+window, every workspace) asks in the same line: `◇ vimma-ctl wants full control — y/N`. `y` lets
+that one connection in, anything else from `n`, `Esc`, `Enter` or `x` refuses it, and nothing is
+remembered: the next one asks again. The line shows the code `vimma-ctl` printed in your terminal
+(`vimma-ctl with code 7F3K wants full control`): answer `y` only if it is the same, since
+another program could have asked at the same moment. `vimma-ctl` waits for your answer and says so; refused, it
+prints `full control refused` and exits 4. With agents off, nothing asks.
+
+`:control on 15` turns full control (the pref `vimma.control.enabled`) on for 15 minutes after a
+y/N, and then off again, even across a restart; `:control off` turns it off now, and `:control`
+says whether it is on and how long is left. Turning it on in `about:config` sets no end time.
+
+#### What pages in the agent workspace may do
+
+Pages there run with nobody watching, so they get less than yours:
+
+- **No permission prompts.** A request for your location, notifications, camera, microphone,
+  screen, MIDI, persistent storage, the local network and the rest is refused without a prompt.
+- **No pop-ups.** `window.open` and links that open a new window or tab do nothing there.
+- **No other apps.** A link to `mailto:`, `zoommtg:` or another app's protocol opens nothing.
+- **No downloads, for now.** A download from the agent workspace is refused before a byte is
+  written; asked-for, quarantined downloads come in a later update.
+- If you change `[mcp] workspace`, the new agent workspace's open tabs are reloaded once, so
+  these rules apply to the pages already in them.
 
 ### Side panel
 
@@ -1468,7 +1553,8 @@ is **off by default**. Spec: [m0-control-server](specs/m0-control-server.md), pr
 
    The socket also starts when only agents are on ([`:mcp on`](#agent-workspace)); that side
    is for agents only, so `vimma-ctl` then says the control socket is off until you set
-   `vimma.control.enabled` too. A `vimma-ctl` from before protocol 2 still works with this
+   `vimma.control.enabled` too (or `:control on <minutes>`). With both on, each `vimma-ctl` run
+   asks you first in Vimma ([full control while agents are on](#full-control-while-agents-are-on)). A `vimma-ctl` from before protocol 2 still works with this
    Vimma.
 
 `send-keys` presses the keys in the most recently focused Vimma window, exactly as typing them

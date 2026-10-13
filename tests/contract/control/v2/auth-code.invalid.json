@@ -1,0 +1,9 @@
+{
+  "description": "The code is 4 characters of 2-9 and A-Z without I and O",
+  "kind": "auth",
+  "message": {
+    "type": "auth",
+    "token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "code": "7f3O"
+  }
+}

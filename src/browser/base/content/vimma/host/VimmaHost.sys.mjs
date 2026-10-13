@@ -95,6 +95,9 @@ import {
   togglePrivate,
 } from "./private-ops.mjs";
 import { McpHost } from "./mcp-ops.mjs";
+import { ControlHost } from "./control-ops.mjs";
+import { AgentUi } from "./agent-ui.mjs";
+import { AgentPrompt } from "../ui/agent-prompt.mjs";
 import { parsePrivateCommand } from "../core/privatews.mjs";
 import { findWorkspace } from "../core/workspaces.mjs";
 import { KeyLog } from "../about/key-log.mjs";
@@ -192,6 +195,8 @@ const PAGE_FIRST_MAX = 16;
  * @property {WorkspacePicker} wsPicker  the prefix+w overlay (m3-workspaces 5)
  * @property {AddonPicker} addonPicker  the prefix+e overlay (docs/specs/addon-manager.md)
  * @property {RenamePrompt} rename  the prefix+shift+t prompt (m2-picker-rename)
+ * @property {AgentPrompt} agentPrompt  the agent question line (docs/specs/vimma-mcp.md)
+ * @property {() => void} onFocus  focus moved in the window: the agent line may go back to waiting
  * @property {SidePanel} panel  prefix+b, `panel` mode while open (m3-workspaces 6)
  * @property {BookmarksPanel} bookmarks  prefix+shift+b, in the side panel's slot
  *   and `panel` mode (docs/specs/bookmarks.md)
@@ -693,6 +698,22 @@ export const RUNNERS = Object.freeze({
     );
     if (said) s.notice.show(said);
   },
+  // prefix+shift+a (docs/specs/vimma-mcp.md decision 14): the waiting agent question, or with
+  // none, revoke the grants after y/N.
+  "mcp.answer": (/** @type {WindowState} */ s) => {
+    s.notice.hide();
+    AgentUi.answer(s.win);
+  },
+  // `:control [on <minutes>|off]` (decision 29 D): full control for a while.
+  "control.command": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ t) => {
+    s.notice.hide();
+    const said = ControlHost.run(
+      t,
+      (question, yes) => s.rename.ask(question, yes),
+      (text) => s.notice.show(text),
+    );
+    if (said) s.notice.show(said);
+  },
   // `:theme [dark|light|system]` (docs/specs/theme-appearance.md): the built-in palette.
   "theme.appearance": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ t) => {
     const said = ThemeHost.setAppearance(s.win, t);
@@ -1027,6 +1048,8 @@ export const VimmaHost = {
         changed: () => this._emit(state),
       }),
       find: new Find(win, () => this._emit(state)),
+      agentPrompt: new AgentPrompt(win),
+      onFocus: () => AgentUi.onFocusChange(win),
       panel: new SidePanel(win, {
         // A private window lists its tabs as the private workspace (private-workspace 6).
         model: () => {
@@ -1075,6 +1098,27 @@ export const VimmaHost = {
     states.set(win, state);
     windows.add(win);
     win.addEventListener("keydown", state.onKeyDown, true);
+    win.addEventListener("focus", state.onFocus, true);
+    // The agent question (docs/specs/vimma-mcp.md decisions 13-15): shown here when this is
+    // the most recent normal window and the user is not typing.
+    AgentUi.register(win, {
+      prompt: state.agentPrompt,
+      inField: () => this._mode(state) === "insert",
+      otherOpen: () =>
+        state.help.isOpen ||
+        state.picker.isOpen ||
+        state.wsPicker.isOpen ||
+        state.addonPicker.isOpen ||
+        state.cmdline.isOpen ||
+        state.rename.isOpen ||
+        state.panel.isOpen ||
+        state.bookmarks.isOpen ||
+        state.find.typing,
+      pending: () => state.dispatcher.pending().length > 0,
+      notice: (text) => state.notice.show(text),
+      ask: (question, yes) => state.rename.ask(question, yes),
+      emit: () => this._emit(state),
+    });
     // After the page and in the system group, as Tabbrowser's own key handling: text-field keys
     // the page left alone (key-handling-batch § 2).
     win.addEventListener("keydown", state.onKeyDownAfter, SYSTEM_GROUP);
@@ -1145,6 +1189,8 @@ export const VimmaHost = {
     if (!state) return;
     this._cancelPending(win, state);
     win.removeEventListener("keydown", state.onKeyDown, true);
+    win.removeEventListener("focus", state.onFocus, true);
+    AgentUi.unregister(win);
     win.removeEventListener("keydown", state.onKeyDownAfter, SYSTEM_GROUP);
     win.removeEventListener("keypress", state.onKeyPress, SYSTEM_GROUP_CAPTURE);
     win.removeEventListener("keypress", state.onKeyPressAfter, SYSTEM_GROUP);
@@ -1180,7 +1226,8 @@ export const VimmaHost = {
    * @returns {{ mode: Mode, pending: string[], find?: FindStatus | null,
    *   pane?: { index: number, count: number } | null, configErrors?: readonly ConfigError[],
    *   configFile?: string, alerts?: readonly string[],
-   *   workspace?: { name: string, index: number, color?: string, private?: boolean } | null }}
+   *   workspace?: { name: string, index: number, color?: string, private?: boolean } | null,
+   *   agent?: { waiting: number, minutes: number | null, ran: boolean } | null }}
    */
   status(win) {
     const state = states.get(win);
@@ -1196,6 +1243,8 @@ export const VimmaHost = {
       configFile: settings.configFile,
       // Persistent, unlike a notice: containers off at startup (m3-workspaces).
       alerts: WorkspaceStore.alert ? [WorkspaceStore.alert] : [],
+      // docs/specs/vimma-mcp.md decision 24: `◇ agent`, `◇ agent 2?`, `◇ agent 14m`.
+      agent: AgentUi.status(),
     };
   },
 
@@ -1318,6 +1367,8 @@ export const VimmaHost = {
     const win = browser?.ownerDocument?.defaultView;
     const state = win && states.get(win);
     if (state) VimmaHost._emit(state);
+    // Into a field: the agent question goes back to waiting (vimma-mcp decision 14).
+    if (state) AgentUi.onFocusChange(win);
   },
 
   /**
@@ -1414,6 +1465,11 @@ export const VimmaHost = {
     // A key the page has had, back for chrome's shortcuts (requestReplyFromRemoteContent): it
     // was dispatched once already, before the page.
     if (/** @type {ChromeKeyEvent} */ (e).isReplyEventFromRemoteContent) return;
+    // The agent question takes its keys first, and only while it shows (vimma-mcp 13-14).
+    if (AgentUi.onKey(win, e)) {
+      this._emit(state);
+      return;
+    }
     const chord = chordFromEvent(e);
     if (!chord) return; // a bare modifier
     const key = formatKey(chord);

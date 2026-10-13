@@ -400,6 +400,8 @@ class Connection {
     this.agentState = {};
     /** Agent requests waiting for an answer or running: they do not wait for each other. */
     this.inflight = 0;
+    /** Withdraws a full-control question still waiting (decision 29 C). @type {(() => void) | null} */
+    this.cancelAsk = null;
   }
 
   /** The idle limit closes a connection, unless an agent request of it is waiting or running. */
@@ -559,6 +561,32 @@ class Connection {
       return;
     }
     srv.connections.add(this);
+    // While MCP is on, a new full connection asks first (vimma-mcp decision 29 C): an agent with
+    // a shell can read the token. The question waits as long as the agent role's do.
+    if (this.role === "full" && McpHost.state.enabled) {
+      if (this.timer !== null) lazy.clearTimeout(this.timer);
+      this.timer = null;
+      // The code the client printed, shown in the question (review of #177, M2).
+      const code = typeof m.code === "string" ? m.code : null;
+      const outcome = await AgentGate.askFull(code, (cancel) => (this.cancelAsk = cancel));
+      this.cancelAsk = null;
+      if (this.closed) return;
+      if (!outcome.allow) {
+        const message =
+          outcome.reason === "timeout"
+            ? "no answer in Vimma in time: full control refused"
+            : outcome.reason === "busy"
+              ? "another full-control question is waiting in Vimma"
+              : "the user refused full control in Vimma";
+        this.fail(null, "denied", message, outcome.reason);
+        return;
+      }
+      // The switches may have changed while the user was asked.
+      if (!srv.roles.includes("full")) {
+        this.fail(null, "role-off", ROLE_OFF.full);
+        return;
+      }
+    }
     this.authenticated = true;
     this.armIdle();
     this.write({
@@ -700,9 +728,10 @@ class Connection {
    * loses the answer now and then: with unread input the kernel resets the connection (RST),
    * and a client may see the close before it has read the line.
    * @param {unknown} id @param {string} code @param {string} message
+   * @param {string} [reason]  a denial's (`denied` needs one)
    */
-  fail(id, code, message) {
-    this.respond(id, { error: { code, message } });
+  fail(id, code, message, reason) {
+    this.respond(id, { error: { code, message, ...(reason ? { reason } : {}) } });
     this.draining = true;
     this.arm(DRAIN_MS, () => this.stop());
     this.waitForInput();
@@ -750,6 +779,8 @@ class Connection {
   close() {
     if (this.closed) return;
     this.closed = true;
+    this.cancelAsk?.();
+    this.cancelAsk = null;
     // Its waiting questions go, and its grants end (vimma-mcp decision 22).
     if (this.role === "agent") {
       AgentGate.disconnect(this.id);

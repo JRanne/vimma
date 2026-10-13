@@ -87,6 +87,18 @@
   );
   VimmaControl.init(window);
 
+  // docs/specs/vimma-mcp.md decision 29 D: `:control on <minutes>` ends, also across a restart.
+  const { ControlHost } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/host/control-ops.mjs",
+  );
+  ControlHost.init();
+
+  // Decision 30: the agent workspace's pages ask for no permission and open no pop-up.
+  const { AgentPages } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/ctl/AgentPages.sys.mjs",
+  );
+  AgentPages.init();
+
   // The private workspace in place of this window on Hyprland (spec private-swap): learns the
   // window's address while `[private] placement = "swap"` applies. Nothing without Hyprland.
   const { PrivateSwap } = ChromeUtils.importESModule(

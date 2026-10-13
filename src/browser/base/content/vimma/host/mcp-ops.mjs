@@ -16,6 +16,7 @@ import {
   planMcpSwitch,
 } from "../core/agent.mjs";
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
+import { ControlHost } from "./control-ops.mjs";
 
 /** @import { McpConfig } from "../core/config.mjs" */
 
@@ -83,7 +84,8 @@ export const McpHost = {
           grants: gate.grants(),
           now: Date.now(),
         });
-        return mcpStatus({ ...this.state, workspace: name }) + activity;
+        // Decision 29: full control's state too, since an agent could use it.
+        return `${mcpStatus({ ...this.state, workspace: name })}${activity} · ${ControlHost.status()}`;
       }
       case "revoke": {
         const n = lazy.AgentGate.revoke();

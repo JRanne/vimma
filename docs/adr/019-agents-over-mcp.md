@@ -55,5 +55,10 @@ process of the user's.
 - With only MCP on, the token reaches only the confined, confirmed role. The guide tells MCP
   users to keep `vimma.control.enabled` off: a `full` token lets any process of theirs press keys
   in their window without asking.
-- Rules M1-M9 in [docs/security.md](../security.md) §12 hold this to its tests. Spec:
-  [vimma-mcp](../specs/vimma-mcp.md).
+- With both switches on, the `full` role is still the user's to give: while MCP is on, each new
+  full connection is welcomed only after a `y` in the agent question line (vimma-mcp decision
+  29, user 2026-10-13), and `:control on <minutes>` gives it for a while. Pages in the agent
+  workspace get no permission prompt and open no pop-up (decision 30), through Firefox's own
+  `Integration.contentPermission`, browser-scoped permissions and sandbox flags, no patch.
+- Rules M1-M10 in [docs/security.md](../security.md) §12 and S13 in §1 hold this to its tests.
+  Spec: [vimma-mcp](../specs/vimma-mcp.md).

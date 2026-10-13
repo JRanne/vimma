@@ -146,6 +146,40 @@ describe("status bar segments", () => {
     expect(s[1]).toMatchObject({ id: "workspace", text: "◆ private", fg: "--vimma-text-magenta" });
   });
 
+  // docs/specs/vimma-mcp.md decision 24: glyph and word carry it without colour.
+  test("the agent segment: ◇ agent, ◇ agent 2?, ◇ agent 14m, ◇ agent · in cyan, on the right", () => {
+    const at = (/** @type {any} */ agent) =>
+      statusSegments({ ...base, agent }).find((s) => s.id === "agent");
+    expect(at(null)).toBeUndefined();
+    expect(at({ waiting: 0, minutes: null, ran: false })).toMatchObject({
+      text: "◇ agent",
+      fg: "--vimma-text-cyan",
+      bg: null,
+      side: "right",
+    });
+    expect(at({ waiting: 2, minutes: 14, ran: false })?.text).toBe("◇ agent 2?");
+    expect(at({ waiting: 0, minutes: 14, ran: false })?.text).toBe("◇ agent 14m");
+    // A question waiting says so even just after a request ran (review of #177).
+    expect(at({ waiting: 1, minutes: null, ran: true })?.text).toBe("◇ agent 1?");
+    expect(at({ waiting: 0, minutes: 14, ran: true })).toMatchObject({
+      text: "◇ agent ·",
+      fg: "--vimma-mode-normal-fg",
+      bg: "--vimma-mode-normal",
+    });
+  });
+
+  test("the agent segment gives way just after the workspace's", () => {
+    const all = statusSegments({ ...base, agent: { waiting: 1, minutes: null, ran: false } });
+    const p = (/** @type {string} */ id) => /** @type {Segment} */ (all.find((s) => s.id === id));
+    expect(p("agent").priority).toBeGreaterThan(p("workspace").priority);
+    expect(p("agent").priority).toBeLessThan(p("tab").priority);
+    // Narrow: the URL and title go before it, the workspace stays longer.
+    const fitted = fitStatus(all, 30).map((s) => s.id);
+    expect(fitted).toContain("agent");
+    expect(fitted).toContain("workspace");
+    expect(fitted).not.toContain("url");
+  });
+
   test("displayUrl drops http(s) and a lone trailing slash", () => {
     expect(displayUrl("https://github.com/")).toBe("github.com");
     expect(displayUrl("http://a.org/b/")).toBe("a.org/b/");

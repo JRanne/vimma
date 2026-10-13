@@ -225,6 +225,12 @@ Spec: [vimma-mcp](vimma-mcp.md) (decisions 2-4), ADR-019. Fixtures:
   A v1 client reads past `roles` and speaks protocol 1, which works while `full` is served.
   `vimma-ctl` speaks protocol 2 as `full` when the file says 2, and says the control socket is
   off when `roles` lacks `full`, without connecting.
+- **Full control while MCP is on** ([vimma-mcp](vimma-mcp.md) decision 29). After a `full`
+  connection's auth and before its welcome, Vimma asks the user; a refusal is the error `denied`
+  (with its `reason`) in place of the welcome. The auth may carry `"code"`: 4 characters of 2-9
+  and A-Z without I and O, which `vimma-ctl` prints on stderr and the question shows, so the
+  user answers for the client they ran. `vimma-ctl` sends it, and waits up to 310 s for the
+  welcome, only when the discovery file lists `agent`.
 - **New error codes.** `role-off` (above) and `denied`: an agent request the user did not allow.
   A `denied` error carries `reason`: `user`, `timeout`, `busy`, `muted`, `changed` or
   `cancelled`; no other error has a `reason`.

@@ -10,6 +10,7 @@ import { runSteps } from "./scenario.mjs";
  *   ctl: import("./scenario.mjs").StepContext["ctl"],
  *   screenshot: (name: string) => Promise<void>,
  *   restart?: (how: "quit" | "kill") => Promise<void>,
+ *   control?: import("./scenario.mjs").Control,
  *   teardown: () => Promise<void>,
  * }} Session
  */
@@ -120,6 +121,7 @@ async function runOne(scenario, { startSession, timeoutMs, pollMs, settleMs }) {
       ctl: s.ctl,
       screenshot: s.screenshot,
       restart: s.restart,
+      control: s.control,
       pollMs,
       signal: controller.signal,
     });
