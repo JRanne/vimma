@@ -252,6 +252,8 @@ Weeks are evenings-and-weekends ordering estimates, not dates. Each milestone en
 
 Vimma MCP (user request, 2026-10-13) is queued after firefox-keys sub-PR 2: it adds a key (`ctrl+b shift+a`), so it waits for that keymap PR. Its implementation adds ADR-019 (agents reach Vimma through a confined control-socket role).
 
+Firefox's bookmarks toolbar hidden by default (user request, 2026-10-13: "always hiding firefox bookmarks by default, user can enable toolbar if they want, but default would be Vimma bookmarks pane"; `docs/specs/bookmarks-toolbar-hidden.md`, spec in review) is queued: its first sub-PR adds no key, so it need not wait for the keymap queue; binding `ctrl+shift+b` to it (open question 1) would be a keymap PR after firefox-keys sub-PR 2.
+
 Recurring every 4 weeks from M0: the upstream rebase. Budget half a day for the first three, then it should be automatic.
 
 ---
