@@ -59,6 +59,10 @@
               "chords": ["ctrl+b", "c"]
             },
             {
+              "keys": "ctrl+t",
+              "chords": ["ctrl+t"]
+            },
+            {
               "keys": "t",
               "chords": ["t"]
             }
@@ -71,6 +75,14 @@
             {
               "keys": "ctrl+b n",
               "chords": ["ctrl+b", "n"]
+            },
+            {
+              "keys": "ctrl+tab",
+              "chords": ["ctrl+tab"]
+            },
+            {
+              "keys": "ctrl+pagedown",
+              "chords": ["ctrl+pagedown"]
             },
             {
               "keys": "gt",
@@ -87,6 +99,14 @@
               "chords": ["ctrl+b", "p"]
             },
             {
+              "keys": "ctrl+shift+tab",
+              "chords": ["ctrl+shift+tab"]
+            },
+            {
+              "keys": "ctrl+pageup",
+              "chords": ["ctrl+pageup"]
+            },
+            {
               "keys": "gT",
               "chords": ["gT"]
             }
@@ -99,6 +119,10 @@
             {
               "keys": "ctrl+b 1",
               "chords": ["ctrl+b", "1"]
+            },
+            {
+              "keys": "alt+1",
+              "chords": ["alt+1"]
             }
           ]
         },
@@ -109,6 +133,10 @@
             {
               "keys": "ctrl+b 2",
               "chords": ["ctrl+b", "2"]
+            },
+            {
+              "keys": "alt+2",
+              "chords": ["alt+2"]
             }
           ]
         },
@@ -119,6 +147,10 @@
             {
               "keys": "ctrl+b 3",
               "chords": ["ctrl+b", "3"]
+            },
+            {
+              "keys": "alt+3",
+              "chords": ["alt+3"]
             }
           ]
         },
@@ -129,6 +161,10 @@
             {
               "keys": "ctrl+b 4",
               "chords": ["ctrl+b", "4"]
+            },
+            {
+              "keys": "alt+4",
+              "chords": ["alt+4"]
             }
           ]
         },
@@ -139,6 +175,10 @@
             {
               "keys": "ctrl+b 5",
               "chords": ["ctrl+b", "5"]
+            },
+            {
+              "keys": "alt+5",
+              "chords": ["alt+5"]
             }
           ]
         },
@@ -149,6 +189,10 @@
             {
               "keys": "ctrl+b 6",
               "chords": ["ctrl+b", "6"]
+            },
+            {
+              "keys": "alt+6",
+              "chords": ["alt+6"]
             }
           ]
         },
@@ -159,6 +203,10 @@
             {
               "keys": "ctrl+b 7",
               "chords": ["ctrl+b", "7"]
+            },
+            {
+              "keys": "alt+7",
+              "chords": ["alt+7"]
             }
           ]
         },
@@ -169,6 +217,10 @@
             {
               "keys": "ctrl+b 8",
               "chords": ["ctrl+b", "8"]
+            },
+            {
+              "keys": "alt+8",
+              "chords": ["alt+8"]
             }
           ]
         },
@@ -201,8 +253,52 @@
               "chords": ["ctrl+b", "shift+x"]
             },
             {
+              "keys": "ctrl+f4",
+              "chords": ["ctrl+f4"]
+            },
+            {
               "keys": "x",
               "chords": ["x"]
+            }
+          ]
+        },
+        {
+          "name": "select_last_tab",
+          "description": "Jump to the last tab in this workspace",
+          "keys": [
+            {
+              "keys": "alt+9",
+              "chords": ["alt+9"]
+            }
+          ]
+        },
+        {
+          "name": "move_tab_left",
+          "description": "Move the tab left",
+          "keys": [
+            {
+              "keys": "ctrl+shift+pageup",
+              "chords": ["ctrl+shift+pageup"]
+            }
+          ]
+        },
+        {
+          "name": "move_tab_right",
+          "description": "Move the tab right",
+          "keys": [
+            {
+              "keys": "ctrl+shift+pagedown",
+              "chords": ["ctrl+shift+pagedown"]
+            }
+          ]
+        },
+        {
+          "name": "restore_tab",
+          "description": "Reopen the last closed tab",
+          "keys": [
+            {
+              "keys": "ctrl+shift+t",
+              "chords": ["ctrl+shift+t"]
             }
           ]
         }
@@ -807,12 +903,20 @@
           "description": "Go back",
           "keys": [
             {
+              "keys": "alt+left",
+              "chords": ["alt+left"]
+            },
+            {
               "keys": "H",
               "chords": ["H"]
             },
             {
               "keys": "ctrl+o",
               "chords": ["ctrl+o"]
+            },
+            {
+              "keys": "ctrl+[",
+              "chords": ["ctrl+["]
             }
           ]
         },
@@ -821,12 +925,20 @@
           "description": "Go forward",
           "keys": [
             {
+              "keys": "alt+right",
+              "chords": ["alt+right"]
+            },
+            {
               "keys": "L",
               "chords": ["L"]
             },
             {
               "keys": "ctrl+i",
               "chords": ["ctrl+i"]
+            },
+            {
+              "keys": "ctrl+]",
+              "chords": ["ctrl+]"]
             }
           ]
         },
@@ -834,6 +946,14 @@
           "name": "reload",
           "description": "Reload page",
           "keys": [
+            {
+              "keys": "f5",
+              "chords": ["f5"]
+            },
+            {
+              "keys": "ctrl+r",
+              "chords": ["ctrl+r"]
+            },
             {
               "keys": "r",
               "chords": ["r"]
@@ -867,8 +987,16 @@
         },
         {
           "name": "focus_urlbar",
-          "description": "Focus the address bar (as ctrl+l)",
+          "description": "Focus the address bar, its text selected",
           "keys": [
+            {
+              "keys": "ctrl+l",
+              "chords": ["ctrl+l"]
+            },
+            {
+              "keys": "alt+d",
+              "chords": ["alt+d"]
+            },
             {
               "keys": "I",
               "chords": ["I"]
@@ -943,6 +1071,372 @@
       ]
     },
     {
+      "name": "Browser",
+      "actions": [
+        {
+          "name": "new_window",
+          "description": "New window",
+          "keys": [
+            {
+              "keys": "ctrl+n",
+              "chords": ["ctrl+n"]
+            }
+          ]
+        },
+        {
+          "name": "close_window",
+          "description": "Close the window",
+          "keys": [
+            {
+              "keys": "ctrl+shift+w",
+              "chords": ["ctrl+shift+w"]
+            }
+          ]
+        },
+        {
+          "name": "restore_window",
+          "description": "Reopen the last closed window",
+          "keys": [
+            {
+              "keys": "ctrl+shift+n",
+              "chords": ["ctrl+shift+n"]
+            }
+          ]
+        },
+        {
+          "name": "quit",
+          "description": "Quit (asks first)",
+          "keys": [
+            {
+              "keys": "ctrl+q",
+              "chords": ["ctrl+q"]
+            }
+          ]
+        },
+        {
+          "name": "reload_hard",
+          "description": "Reload, bypassing the cache",
+          "keys": [
+            {
+              "keys": "ctrl+f5",
+              "chords": ["ctrl+f5"]
+            },
+            {
+              "keys": "ctrl+shift+r",
+              "chords": ["ctrl+shift+r"]
+            }
+          ]
+        },
+        {
+          "name": "stop_loading",
+          "description": "Stop loading the page",
+          "keys": [
+            {
+              "keys": "esc",
+              "chords": ["esc"]
+            }
+          ]
+        },
+        {
+          "name": "go_home",
+          "description": "Go to the home page",
+          "keys": [
+            {
+              "keys": "alt+home",
+              "chords": ["alt+home"]
+            }
+          ]
+        },
+        {
+          "name": "page_zoom_in",
+          "description": "Zoom the page in",
+          "keys": [
+            {
+              "keys": "ctrl+plus",
+              "chords": ["ctrl+plus"]
+            },
+            {
+              "keys": "ctrl+=",
+              "chords": ["ctrl+="]
+            }
+          ]
+        },
+        {
+          "name": "page_zoom_out",
+          "description": "Zoom the page out",
+          "keys": [
+            {
+              "keys": "ctrl+minus",
+              "chords": ["ctrl+minus"]
+            },
+            {
+              "keys": "ctrl+_",
+              "chords": ["ctrl+_"]
+            }
+          ]
+        },
+        {
+          "name": "page_zoom_reset",
+          "description": "Reset the page's zoom",
+          "keys": [
+            {
+              "keys": "ctrl+0",
+              "chords": ["ctrl+0"]
+            }
+          ]
+        },
+        {
+          "name": "toggle_fullscreen",
+          "description": "Full screen, or leave it",
+          "keys": [
+            {
+              "keys": "f11",
+              "chords": ["f11"]
+            }
+          ]
+        },
+        {
+          "name": "save_page",
+          "description": "Save the page",
+          "keys": [
+            {
+              "keys": "ctrl+s",
+              "chords": ["ctrl+s"]
+            }
+          ]
+        },
+        {
+          "name": "print_page",
+          "description": "Print the page",
+          "keys": [
+            {
+              "keys": "ctrl+p",
+              "chords": ["ctrl+p"]
+            }
+          ]
+        },
+        {
+          "name": "downloads",
+          "description": "Downloads (the Library)",
+          "keys": [
+            {
+              "keys": "ctrl+shift+y",
+              "chords": ["ctrl+shift+y"]
+            }
+          ]
+        },
+        {
+          "name": "addons_manager",
+          "description": "Add-ons manager (about:addons)",
+          "keys": [
+            {
+              "keys": "ctrl+shift+a",
+              "chords": ["ctrl+shift+a"]
+            }
+          ]
+        },
+        {
+          "name": "history_library",
+          "description": "History (the Library)",
+          "keys": [
+            {
+              "keys": "ctrl+shift+h",
+              "chords": ["ctrl+shift+h"]
+            }
+          ]
+        },
+        {
+          "name": "bookmarks_library",
+          "description": "Bookmarks (the Library)",
+          "keys": [
+            {
+              "keys": "ctrl+shift+o",
+              "chords": ["ctrl+shift+o"]
+            }
+          ]
+        },
+        {
+          "name": "mute_tab",
+          "description": "Mute or unmute the tab",
+          "keys": [
+            {
+              "keys": "ctrl+m",
+              "chords": ["ctrl+m"]
+            }
+          ]
+        },
+        {
+          "name": "picture_in_picture",
+          "description": "Picture-in-Picture",
+          "keys": [
+            {
+              "keys": "ctrl+}",
+              "chords": ["ctrl+}"]
+            }
+          ]
+        },
+        {
+          "name": "reader_view",
+          "description": "Reader View",
+          "keys": [
+            {
+              "keys": "ctrl+alt+r",
+              "chords": ["ctrl+alt+r"]
+            }
+          ]
+        },
+        {
+          "name": "screenshot",
+          "description": "Take a screenshot",
+          "keys": [
+            {
+              "keys": "ctrl+shift+s",
+              "chords": ["ctrl+shift+s"]
+            }
+          ]
+        },
+        {
+          "name": "clear_history",
+          "description": "Clear recent history",
+          "keys": [
+            {
+              "keys": "ctrl+shift+delete",
+              "chords": ["ctrl+shift+delete"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Developer tools",
+      "actions": [
+        {
+          "name": "devtools",
+          "description": "Open / close the developer tools",
+          "keys": [
+            {
+              "keys": "ctrl+shift+i",
+              "chords": ["ctrl+shift+i"]
+            },
+            {
+              "keys": "f12",
+              "chords": ["f12"]
+            }
+          ]
+        },
+        {
+          "name": "browser_toolbox",
+          "description": "Browser Toolbox",
+          "keys": [
+            {
+              "keys": "ctrl+alt+shift+i",
+              "chords": ["ctrl+alt+shift+i"]
+            }
+          ]
+        },
+        {
+          "name": "browser_console",
+          "description": "Browser Console",
+          "keys": [
+            {
+              "keys": "ctrl+shift+j",
+              "chords": ["ctrl+shift+j"]
+            }
+          ]
+        },
+        {
+          "name": "responsive_design",
+          "description": "Responsive Design Mode",
+          "keys": [
+            {
+              "keys": "ctrl+shift+m",
+              "chords": ["ctrl+shift+m"]
+            }
+          ]
+        },
+        {
+          "name": "devtools_inspector",
+          "description": "Developer tools: Inspector",
+          "keys": [
+            {
+              "keys": "ctrl+shift+c",
+              "chords": ["ctrl+shift+c"]
+            }
+          ]
+        },
+        {
+          "name": "devtools_console",
+          "description": "Developer tools: Web Console",
+          "keys": [
+            {
+              "keys": "ctrl+shift+k",
+              "chords": ["ctrl+shift+k"]
+            }
+          ]
+        },
+        {
+          "name": "devtools_debugger",
+          "description": "Developer tools: Debugger",
+          "keys": [
+            {
+              "keys": "ctrl+shift+z",
+              "chords": ["ctrl+shift+z"]
+            }
+          ]
+        },
+        {
+          "name": "devtools_network",
+          "description": "Developer tools: Network",
+          "keys": [
+            {
+              "keys": "ctrl+shift+e",
+              "chords": ["ctrl+shift+e"]
+            }
+          ]
+        },
+        {
+          "name": "devtools_style_editor",
+          "description": "Developer tools: Style Editor",
+          "keys": [
+            {
+              "keys": "shift+f7",
+              "chords": ["shift+f7"]
+            }
+          ]
+        },
+        {
+          "name": "devtools_performance",
+          "description": "Developer tools: Performance",
+          "keys": [
+            {
+              "keys": "shift+f5",
+              "chords": ["shift+f5"]
+            }
+          ]
+        },
+        {
+          "name": "devtools_storage",
+          "description": "Developer tools: Storage",
+          "keys": [
+            {
+              "keys": "shift+f9",
+              "chords": ["shift+f9"]
+            }
+          ]
+        },
+        {
+          "name": "devtools_accessibility",
+          "description": "Developer tools: Accessibility",
+          "keys": [
+            {
+              "keys": "shift+f12",
+              "chords": ["shift+f12"]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Hints",
       "actions": [
         {
@@ -1006,6 +1500,14 @@
           "description": "Next match",
           "keys": [
             {
+              "keys": "ctrl+g",
+              "chords": ["ctrl+g"]
+            },
+            {
+              "keys": "f3",
+              "chords": ["f3"]
+            },
+            {
               "keys": "n",
               "chords": ["n"]
             }
@@ -1015,6 +1517,14 @@
           "name": "find_previous",
           "description": "Previous match",
           "keys": [
+            {
+              "keys": "ctrl+shift+g",
+              "chords": ["ctrl+shift+g"]
+            },
+            {
+              "keys": "shift+f3",
+              "chords": ["shift+f3"]
+            },
             {
               "keys": "N",
               "chords": ["N"]
@@ -1610,17 +2120,6 @@
             {
               "keys": "V",
               "chords": ["V"],
-              "mode": "panel"
-            }
-          ]
-        },
-        {
-          "name": "restore_tab",
-          "description": "Reopen the last closed tab (Firefox's ctrl+shift+t)",
-          "keys": [
-            {
-              "keys": "ctrl+shift+t",
-              "chords": ["ctrl+shift+t"],
               "mode": "panel"
             }
           ]

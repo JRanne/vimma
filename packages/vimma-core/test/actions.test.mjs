@@ -61,14 +61,18 @@ describe("actions", () => {
     /** @type {Record<string, string[]>} */
     const want = {
       show_keybinds: ["prefix+?"],
-      new_tab: ["prefix+c", "t"],
-      next_tab: ["prefix+n", "gt"],
-      previous_tab: ["prefix+p", "gT"],
+      // Firefox's own tab keys too (docs/specs/firefox-keys.md).
+      new_tab: ["prefix+c", "ctrl+t", "t"],
+      next_tab: ["prefix+n", "ctrl+tab", "ctrl+pagedown", "gt"],
+      previous_tab: ["prefix+p", "ctrl+shift+tab", "ctrl+pageup", "gT"],
       ...Object.fromEntries(
-        Array.from({ length: 9 }, (_, i) => [`select_tab_${i + 1}`, [`prefix+${i + 1}`]]),
+        Array.from({ length: 9 }, (_, i) => [
+          `select_tab_${i + 1}`,
+          i < 8 ? [`prefix+${i + 1}`, `alt+${i + 1}`] : [`prefix+${i + 1}`],
+        ]),
       ),
       rename_tab: ["prefix+shift+t"],
-      close_tab: ["prefix+shift+x", "x"],
+      close_tab: ["prefix+shift+x", "ctrl+f4", "x"],
       goto_picker: ["prefix+g", "b"],
     };
     for (const [name, bindings] of Object.entries(want)) {

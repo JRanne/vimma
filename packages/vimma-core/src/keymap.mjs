@@ -153,9 +153,13 @@ export function compileKeymap(user = {}) {
       const path = formatPath(Array.isArray(value) ? ["keys", name, i] : ["keys", name]);
       const els = notation(() => parseBinding(text), path);
       const first = els[0];
+      // A chord with ctrl, alt or meta, or a function key (firefox-keys decision 7), works in
+      // every mode, as Firefox's own keys do.
       const global =
         !!first &&
-        ("special" in first ? first.special === "prefix" : first.ctrl || first.alt || first.meta);
+        ("special" in first
+          ? first.special === "prefix"
+          : first.ctrl || first.alt || first.meta || /^f\d+$/.test(first.key));
       // A leader binding works in the side panel too: `<leader>n` closes what it opened
       // (m3-workspaces 6). The panel takes plain keys itself, so a leader there types nothing.
       const leader = !!first && "special" in first && first.special === "leader";

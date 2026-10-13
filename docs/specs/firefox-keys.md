@@ -1,6 +1,6 @@
 # Spec: firefox-keys
 
-Status: ready (not started) · Milestone: after M5 (builds on
+Status: in progress (sub-PR 1 built; sub-PRs 2 and 3 next) · Milestone: after M5 (builds on
 [key-handling-batch](key-handling-batch.md) § 1, [m0-help-overlay](m0-help-overlay.md),
 [m5-config-load](m5-config-load.md) and [m1-cmdline](m1-cmdline.md)) · Area:
 `packages/vimma-core/src/firefox-keys.mjs`, `actions.mjs`, `defaults.mjs`, `keymap.mjs`,
@@ -519,6 +519,30 @@ Each is its own keymap PR, in this order, one open at a time:
    bindings and its new error; `firefox_command`, `:firefox` and `:` bindings with the "Commands"
    group; the "Firefox (on in config.toml)" group; about:vimma; the template comment.
 3. **The coverage test** (Decision 12) and its `docs/rebase.md` line.
+
+**Sub-PR 1, as built (handover for sub-PR 2).**
+
+- **"Bound"** is the first chord of every binding in any mode (`boundChords`), so `ctrl+w`
+  (Vimma's `ctrl+w h`) counts. Bound means off unless `[firefox] enable` lists the chord: then
+  Firefox's key stays on and Vimma's binding takes the key first (V) where it binds it, so the
+  two never both run (`enable = ["ctrl+u"]` still gives view source in a text field). Sub-PR 2's
+  "enable drops the default bindings" replaces this.
+- **P only where the inventory binds it:** a row bound in normal mode only (`esc`, `ctrl+[`,
+  `ctrl+]`) is page-first in normal mode only (`pageFirst(chord, { mode })`); `Esc` leaving
+  insert or copy mode stays Vimma's first (the copy-mode, find and insert mochitests caught it).
+- **Page-first keys queue** (`state.pageFirst`, oldest first, at most 16): keys typed fast or
+  held down each wait for their own reply.
+- **Off the page:** `history.back` / `forward`, `page.reload`, `find.next` / `previous` run on the
+  selected tab's page when no page of ours has focus (`alt+left`, `F5`, `ctrl+g` from the address
+  bar, as Firefox's did).
+- **Find:** with Firefox's own find bar open (`ctrl+f` is still Firefox's here), `ctrl+g`, `F3`
+  and `n` step its search (`onFindAgainCommand`).
+- **Keysets:** the host watches every `<keyset>` of the window and where keysets are added (the
+  body, the root), so `#devtoolsKeyset` is covered once DevTools hook in. `runKey` dispatches the
+  command on a disabled key by lifting `disabled` for that one call (needed for `goHome` and the
+  DevTools keys; checked in `browser_vimma_browser_keys.js`).
+- Not covered by a test yet: `F11` (headless full screen), the PDF viewer's own `ctrl+plus`,
+  `about:preferences`' `ctrl+f` (unbound here anyway).
 
 ## Test plan
 

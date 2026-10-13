@@ -7,20 +7,24 @@ exports[`help table > help text for defaults matches the snapshot 1`] = `
   help_filter             / [help]                                          Filter the bindings overlay
 
 Tabs
-  new_tab                 ctrl+b c, t                                       New tab
-  next_tab                ctrl+b n, gt                                      Next tab (with a count: go to tab N)
-  previous_tab            ctrl+b p, gT                                      Previous tab
-  select_tab_1            ctrl+b 1                                          Jump to tab 1 in this workspace
-  select_tab_2            ctrl+b 2                                          Jump to tab 2 in this workspace
-  select_tab_3            ctrl+b 3                                          Jump to tab 3 in this workspace
-  select_tab_4            ctrl+b 4                                          Jump to tab 4 in this workspace
-  select_tab_5            ctrl+b 5                                          Jump to tab 5 in this workspace
-  select_tab_6            ctrl+b 6                                          Jump to tab 6 in this workspace
-  select_tab_7            ctrl+b 7                                          Jump to tab 7 in this workspace
-  select_tab_8            ctrl+b 8                                          Jump to tab 8 in this workspace
+  new_tab                 ctrl+b c, ctrl+t, t                               New tab
+  next_tab                ctrl+b n, ctrl+tab, ctrl+pagedown, gt             Next tab (with a count: go to tab N)
+  previous_tab            ctrl+b p, ctrl+shift+tab, ctrl+pageup, gT         Previous tab
+  select_tab_1            ctrl+b 1, alt+1                                   Jump to tab 1 in this workspace
+  select_tab_2            ctrl+b 2, alt+2                                   Jump to tab 2 in this workspace
+  select_tab_3            ctrl+b 3, alt+3                                   Jump to tab 3 in this workspace
+  select_tab_4            ctrl+b 4, alt+4                                   Jump to tab 4 in this workspace
+  select_tab_5            ctrl+b 5, alt+5                                   Jump to tab 5 in this workspace
+  select_tab_6            ctrl+b 6, alt+6                                   Jump to tab 6 in this workspace
+  select_tab_7            ctrl+b 7, alt+7                                   Jump to tab 7 in this workspace
+  select_tab_8            ctrl+b 8, alt+8                                   Jump to tab 8 in this workspace
   select_tab_9            ctrl+b 9                                          Jump to tab 9 in this workspace
   rename_tab              ctrl+b shift+t                                    Rename tab
-  close_tab               ctrl+b shift+x, x                                 Close tab
+  close_tab               ctrl+b shift+x, ctrl+f4, x                        Close tab
+  select_last_tab         alt+9                                             Jump to the last tab in this workspace
+  move_tab_left           ctrl+shift+pageup                                 Move the tab left
+  move_tab_right          ctrl+shift+pagedown                               Move the tab right
+  restore_tab             ctrl+shift+t                                      Reopen the last closed tab
 
 Panes
   split_vertical          ctrl+b v                                          Split right
@@ -75,13 +79,13 @@ Navigation
   scroll_half_up          u, ctrl+u                                         Scroll half a page up
   scroll_top              gg                                                Scroll to top
   scroll_bottom           G                                                 Scroll to bottom
-  history_back            H, ctrl+o                                         Go back
-  history_forward         L, ctrl+i                                         Go forward
-  reload                  r                                                 Reload page
+  history_back            alt+left, H, ctrl+o, ctrl+[                       Go back
+  history_forward         alt+right, L, ctrl+i, ctrl+]                      Go forward
+  reload                  f5, ctrl+r, r                                     Reload page
   open_url                (unbound)                                         Open a URL or search in this tab
   url_up                  gu                                                Go up a level in the URL path
   url_root                gU                                                Go to the site's root
-  focus_urlbar            I, I [visual], I [panel]                          Focus the address bar (as ctrl+l)
+  focus_urlbar            ctrl+l, alt+d, I, I [visual], I [panel]           Focus the address bar, its text selected
 
 Page
   yank_url                yy                                                Copy the page's URL
@@ -89,6 +93,44 @@ Page
   open_clipboard_tab      P                                                 Open the clipboard's URL or search in a new tab
   focus_input             gi                                                Focus the first text field (with a count: the Nth)
   view_source             gf                                                View the page's source in a new tab
+
+Browser
+  new_window              ctrl+n                                            New window
+  close_window            ctrl+shift+w                                      Close the window
+  restore_window          ctrl+shift+n                                      Reopen the last closed window
+  quit                    ctrl+q                                            Quit (asks first)
+  reload_hard             ctrl+f5, ctrl+shift+r                             Reload, bypassing the cache
+  stop_loading            esc                                               Stop loading the page
+  go_home                 alt+home                                          Go to the home page
+  page_zoom_in            ctrl+plus, ctrl+=                                 Zoom the page in
+  page_zoom_out           ctrl+minus, ctrl+_                                Zoom the page out
+  page_zoom_reset         ctrl+0                                            Reset the page's zoom
+  toggle_fullscreen       f11                                               Full screen, or leave it
+  save_page               ctrl+s                                            Save the page
+  print_page              ctrl+p                                            Print the page
+  downloads               ctrl+shift+y                                      Downloads (the Library)
+  addons_manager          ctrl+shift+a                                      Add-ons manager (about:addons)
+  history_library         ctrl+shift+h                                      History (the Library)
+  bookmarks_library       ctrl+shift+o                                      Bookmarks (the Library)
+  mute_tab                ctrl+m                                            Mute or unmute the tab
+  picture_in_picture      ctrl+}                                            Picture-in-Picture
+  reader_view             ctrl+alt+r                                        Reader View
+  screenshot              ctrl+shift+s                                      Take a screenshot
+  clear_history           ctrl+shift+delete                                 Clear recent history
+
+Developer tools
+  devtools                ctrl+shift+i, f12                                 Open / close the developer tools
+  browser_toolbox         ctrl+alt+shift+i                                  Browser Toolbox
+  browser_console         ctrl+shift+j                                      Browser Console
+  responsive_design       ctrl+shift+m                                      Responsive Design Mode
+  devtools_inspector      ctrl+shift+c                                      Developer tools: Inspector
+  devtools_console        ctrl+shift+k                                      Developer tools: Web Console
+  devtools_debugger       ctrl+shift+z                                      Developer tools: Debugger
+  devtools_network        ctrl+shift+e                                      Developer tools: Network
+  devtools_style_editor   shift+f7                                          Developer tools: Style Editor
+  devtools_performance    shift+f5                                          Developer tools: Performance
+  devtools_storage        shift+f9                                          Developer tools: Storage
+  devtools_accessibility  shift+f12                                         Developer tools: Accessibility
 
 Hints
   follow_link             f                                                 Follow link
@@ -98,8 +140,8 @@ Hints
 Find
   find_forward            /                                                 Search in page
   find_backward           ?                                                 Search backwards in page
-  find_next               n                                                 Next match
-  find_previous           N                                                 Previous match
+  find_next               ctrl+g, f3, n                                     Next match
+  find_previous           ctrl+shift+g, shift+f3, N                         Previous match
 
 Modes
   normal_mode             esc [insert], esc [visual]                        Back to normal mode
@@ -158,7 +200,6 @@ Side panel
   panel_close_tab         x [panel]                                         Close the selected tab; the panel stays open
   panel_mark              space [panel]                                     Mark or unmark the selected tab and move down
   panel_visual            V [panel]                                         Start a range of rows to mark, or mark it
-  restore_tab             ctrl+shift+t [panel]                              Reopen the last closed tab (Firefox's ctrl+shift+t)
 
 Bookmarks
   toggle_bookmarks        ctrl+b shift+b                                    Open / close the bookmarks panel
