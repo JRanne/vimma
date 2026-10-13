@@ -921,10 +921,55 @@ Pages there run with nobody watching, so they get less than yours:
   screen, MIDI, persistent storage, the local network and the rest is refused without a prompt.
 - **No pop-ups.** `window.open` and links that open a new window or tab do nothing there.
 - **No other apps.** A link to `mailto:`, `zoommtg:` or another app's protocol opens nothing.
-- **No downloads, for now.** A download from the agent workspace is refused before a byte is
-  written; asked-for, quarantined downloads come in a later update.
+- **Downloads ask, and are kept apart.** See [Downloads from the agent workspace](#downloads-from-the-agent-workspace).
 - If you change `[mcp] workspace`, the new agent workspace's open tabs are reloaded once, so
   these rules apply to the pages already in them.
+
+#### Downloads from the agent workspace
+
+An agent (or a page in the agent workspace) may download files, but each one asks first, in the
+same line as every other request:
+
+`◇ claude-code wants vimma_download: "report.pdf" 2.1 MB application/pdf (.pdf) from example.com`
+
+It shows the file's name, its size (or `unknown size`), its type and extension and the site it
+comes from, never the full address. `y`, `n`, `x` and a count with `a` work as for any request;
+a `vimma_download` grant lets that agent's next downloads through without asking. A download no
+agent asked for (a page's own, or one whose agent has gone) says `a page in the agent workspace
+wants vimma_download` and takes only `y` or `n`.
+
+- **Kept apart.** Files are saved only to `~/Downloads/vimma-agent/` (`[mcp] download_dir`),
+  never to your Downloads folder, with mode 0600: no one else can read them and nothing can run
+  them. Until a file has passed every check it keeps a `.part` name there.
+- **Never opened.** Vimma never opens an agent's download, offers no "open with", and refuses
+  to open one from the downloads list later (`agent downloads are never opened by Vimma`). Open
+  it yourself from the folder once you trust it.
+- **Dangerous files ask with `!`.** Programs and libraries (ELF, Windows and macOS programs,
+  also found by their first bytes), scripts (`.sh`, `.py`, `.js`, `.desktop`, a `#!` line …),
+  installers and packages (`.deb`, `.rpm`, `.AppImage`, `.flatpak`, `.msi`, `.dmg` …), and
+  archives Vimma cannot look inside (`.tar.gz`, `.7z`, `.rar` …) end the question with `— ⚠ a
+script` (or what it is). `y` and grants do nothing there: only `!` allows that one file. A
+  `.zip` is checked by the names it lists (it is never unpacked): one holding a dangerous file
+  asks again with `!`. When the danger shows only once the file is in (an ELF named `data.bin`),
+  a second question asks before it gets its name, and `n` deletes it.
+- **https only.** A download over plain `http:`, or one a page's script made (`blob:`, `data:`),
+  is refused (`refused download "a.txt": not https`).
+- **A size cap.** Over `[mcp] download_max_mb` (200 MB by default, 1 to 4096) it is refused, or
+  stopped and deleted once it grows past it when the server did not say its size.
+- **ClamAV, if you have it.** With `clamscan` on your `PATH`, each file is scanned before it
+  leaves its `.part` name: a file ClamAV flags is deleted (`deleted download "a.zip": ClamAV
+found …`). The notice says `saved "report.pdf" to ~/Downloads/vimma-agent, scanned (ClamAV)`,
+  or `not scanned` without ClamAV (`not scanned (ClamAV failed)` if it could not run). Vimma has
+  no download reputation service of its own: Firefox's Safe Browsing checks downloads only in a
+  build with a Google key.
+- **Your own saves are yours.** Save Page (`ctrl+s`), Save Link As and Save Image As in an agent
+  tab ask nothing and save where you choose, as in any workspace: an agent cannot press them.
+
+```toml
+[mcp]
+download_dir = "~/Downloads/vimma-agent"  # ~/… or /…; never ~ or your Downloads folder itself
+download_max_mb = 200
+```
 
 ### Side panel
 

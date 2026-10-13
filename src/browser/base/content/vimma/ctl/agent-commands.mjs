@@ -16,6 +16,7 @@ import { VimmaActors } from "../actors/VimmaActors.sys.mjs";
 import { McpHost } from "../host/mcp-ops.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
+import { AgentDownloads } from "./AgentDownloads.sys.mjs";
 import { AgentGate } from "./AgentGate.sys.mjs";
 
 /** @import { ConnId } from "../core/agent.mjs" */
@@ -403,6 +404,8 @@ const COMMANDS = {
     const principal = agentPrincipal(agent.userContextId);
     if (current) {
       const { tab } = stillAsAsked(agent, current.tab, current.url);
+      // Its downloads are this connection's (decision 31): a vimma_download grant covers them.
+      AgentDownloads.openedBy(tab.linkedBrowser, conn);
       tab.linkedBrowser.loadURI(uri, { triggeringPrincipal: principal });
       return { tab: tabId(tab) };
     }
@@ -424,6 +427,7 @@ const COMMANDS = {
         skipAnimation: true,
       }),
     );
+    AgentDownloads.openedBy(tab.linkedBrowser, conn);
     return { tab: tabId(tab) };
   },
 

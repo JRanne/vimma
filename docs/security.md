@@ -97,14 +97,16 @@ only the agent workspace, and every request asks you first (§12).
   `y` in the agent question line (no grant covers it, one waits at a time, three noes mute the
   question for a minute); a no, a timeout or a closed connection refuses it (`denied`). An agent
   with a shell can read the token, so the token alone **never** gives it keys in your window.
-  With MCP off nothing asks. While MCP is on, `vimma-ctl` prints a 4-character code and sends it
-  in its auth, and the question shows it (`vimma-ctl with code 7F3K wants full control`; a client
+  With MCP off nothing asks. While MCP is on, `vimma-ctl` sends a 4-character code in its auth
+  and only then prints it, so a process reading your terminal learns it too late to race it in,
+  and the question shows it (`vimma-ctl with code 7F3K wants full control`; a client
   without one is "a client with no code"), so a racing client's question is told from the one
   the user ran. `:control on <minutes>` **must** turn full control off when its time is up, also
   across a restart, and **must** fail closed: an end time that is not a time ahead within 1441
   minutes turns it off.
   [`test_full_control_asks_only_while_mcp_is_on`](../tests/browser/browser_vimma_mcp_control.js),
   [`prints_and_sends_a_code_while_mcp_is_on`](../tools/vimma-ctl/tests/cli.rs),
+  [`the_code_is_shown_only_after_its_auth_was_sent`](../tools/vimma-ctl/src/client.rs),
   [`a time ahead, within 1440 minutes and a minute: control stays on until then`](../packages/vimma-core/test/agent-prompt.test.mjs),
   [`test_control_on_minutes_turns_itself_off`](../tests/browser/browser_vimma_mcp_control.js),
   [`waits_for_the_users_answer_while_mcp_is_on`](../tools/vimma-ctl/tests/cli.rs),
@@ -241,8 +243,10 @@ text that pages, add-ons and bookmarks choose.
   [`toggles_in_the_side_panels_slot_one_panel_at_a_time`](../tests/browser/browser_vimma_bookmarks.js),
   [`never parses strings as HTML: page titles, add-on and bookmark names stay text`](../tools/security/test/chrome-source.test.mjs)
 - C2. Chrome code **never** builds code from text (`eval`, `Function`) and **never** starts a
-  process. [`never builds code from text: no eval, Function or sandbox evaluation`](../tools/security/test/chrome-source.test.mjs),
-  [`never starts a process`](../tools/security/test/chrome-source.test.mjs)
+  process, with one exception: `clamscan`, found on `PATH`, run with fixed arguments and no
+  shell on an agent download in the quarantine folder (M13; [vimma-mcp](specs/vimma-mcp.md)
+  decision 31 g). [`never builds code from text: no eval, Function or sandbox evaluation`](../tools/security/test/chrome-source.test.mjs),
+  [`never starts a process, but clamscan on an agent download`](../tools/security/test/chrome-source.test.mjs)
 
 ## 7. Omarchy hook and the `vimma-open` launcher
 
@@ -503,10 +507,9 @@ a shell can run `vimma-ctl` itself, or speak the protocol directly.
   container is cancelled, and camera, microphone and screen are denied per agent tab (a
   browser-scoped DENY, set on each HTTP response and when each document's window global is
   created, so a page a service worker serves is covered). They **must** open no new window or
-  tab and start no download (`SANDBOXED_AUXILIARY_NAVIGATION | SANDBOXED_DOWNLOADS` on every
-  agent tab, which is reloaded if it had loaded without them, and Firefox's DownloadIntegration
-  hook blocks any other download until sub-PR 2c), and launch no other app through an external
-  protocol (Firefox's chooser is wrapped for the agent container). A tab of another workspace
+  tab (`SANDBOXED_AUXILIARY_NAVIGATION` on every agent tab, which is reloaded if it had loaded
+  without it) and launch no other app through an external protocol (Firefox's chooser is
+  wrapped for the agent container). Their downloads follow M11-M13. A tab of another workspace
   still asks, opens pop-ups and downloads as before.
   [`test_the_agent_container_asks_for_nothing`](../tests/browser/browser_vimma_mcp_agent_pages.js),
   [`test_another_workspace_still_asks`](../tests/browser/browser_vimma_mcp_agent_pages.js),
@@ -514,7 +517,48 @@ a shell can run `vimma-ctl` itself, or speak the protocol directly.
   [`test_site_permissions_are_per_workspace`](../tests/browser/browser_vimma_mcp_agent_pages.js),
   [`test_a_page_from_a_service_worker_is_denied_too`](../tests/browser/browser_vimma_mcp_agent_pages.js),
   [`test_a_sweep_reloads_agent_tabs_that_loaded_unsandboxed`](../tests/browser/browser_vimma_mcp_agent_pages.js),
-  [`test_agent_pages_launch_no_app_and_download_nothing`](../tests/browser/browser_vimma_mcp_agent_pages.js)
+  [`test_agent_pages_launch_no_app`](../tests/browser/browser_vimma_mcp_agent_pages.js)
+- M11. A download from the agent container **must** ask in the question line first (its name,
+  size, type and host, **never** the URL), as the `vimma_download` of the agent connection that
+  opened its tab, or else of "a page in the agent workspace" (no grant, `x` a plain no); a
+  `vimma_download` grant covers only that connection's. Only `https:` is downloaded, nothing over
+  `[mcp] download_max_mb` (refused when the size is known, stopped and deleted once it grows past
+  it), and a refused download leaves no file. The user's own Save Page, Save Link As and Save
+  Image As are the user's (an agent cannot press them) and ask nothing. Another workspace's
+  downloads are untouched.
+  [`test_the_question_then_yes_saves_to_the_quarantine_0600_unopened`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_no_saves_nothing`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_http_is_refused`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_the_size_cap`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_an_agents_download_is_its_and_a_grant_covers_it`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_the_users_save_page_in_an_agent_tab_is_the_users`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_another_workspace_downloads_as_before`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`name, size, type and extension, and the host in bold; no URL`](../packages/vimma-core/test/agent-prompt.test.mjs)
+- M12. An agent download **must** be written only to the quarantine folder (`[mcp] download_dir`,
+  never home, `/` or the Downloads folder itself; mode 0700), as its `.part` and under its name
+  (the agent tab's `downloadFolderOverride`, and Firefox's download dialog wrapped so it never
+  offers "open with"), saved with mode 0600 (no exec bit), and **never** opened by Vimma, then or
+  later from the downloads list.
+  [`test_agent_tabs_may_download_again`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_the_question_then_yes_saves_to_the_quarantine_0600_unopened`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`download_dir is ~ or absolute, never home, / or the Downloads folder itself`](../packages/vimma-core/test/config-v2.test.mjs),
+  [`[mcp] download_dir and download_max_mb are refused or a quarantine folder in bounds`](../packages/vimma-core/test/fuzz/config.fuzz.test.mjs)
+- M13. A dangerous file (an executable or library by name, type or first bytes; a script, a `#!`
+  line, an installer or package; Firefox's executable list; an archive Vimma cannot list; a zip
+  whose central directory names one of these) **must** be allowed only by `!` for that one file:
+  no grant covers it and `y` does nothing. Found only in the finished `.part`, it asks again
+  before the file gets its name, and a no deletes it. With `clamscan` on `PATH` the `.part` is
+  scanned before it gets its name, and deleted when ClamAV flags it; the notice says scanned or
+  not scanned. Vimma has no download reputation service of its own: Firefox's Safe Browsing
+  checks downloads only in a build with a Google key (P6), so in a keyless build these checks
+  and ClamAV are all there is.
+  [`test_a_dangerous_file_needs_bang_for_that_one_file`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_dangerous_content_asks_again_and_no_deletes_it`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_clamav_clean_infected_error_and_missing`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`a grant of the tool does not run it: it waits`](../packages/vimma-core/test/agent-gate.test.mjs),
+  [`! allows a dangerous one; y, a and counts do nothing there`](../packages/vimma-core/test/agent-prompt.test.mjs),
+  [`a dangerous name inside makes the zip dangerous, and says which`](../packages/vimma-core/test/agent-downloads.test.mjs),
+  [`any bytes: the zip lister and the magic check never throw, and stay inside the file`](../packages/vimma-core/test/fuzz/agent-downloads.fuzz.test.mjs)
 - M9. `vimma-ctl mcp`'s JSON-RPC parsing **never** panics. **⚠ gap:** `vimma-ctl mcp` is sub-PR
   3 of [vimma-mcp](specs/vimma-mcp.md); until then the protocol 2 decoders it will use are fuzzed
   ([`decoders_never_panic_and_accept_only_the_schema`](../tools/vimma-ctl/tests/protocol_props.rs)).

@@ -14,7 +14,7 @@
 // 29 C), as a question of its own that no grant can cover.
 
 import { AgentQueue, grantLength } from "../core/agent.mjs";
-import { FULL_CONTROL } from "../core/agent-prompt.mjs";
+import { FULL_CONTROL, PAGE_CLIENT } from "../core/agent-prompt.mjs";
 import { McpHost } from "../host/mcp-ops.mjs";
 
 /** @import { Answer, ConnId } from "../core/agent.mjs" */
@@ -41,7 +41,9 @@ const DEFAULT_GRANT = { grantMinutes: 10, grantMaxMinutes: 480 };
  *       length: { minutes: number, capped: boolean } | null }
  *   | { kind: "timeout", question: Question }
  *   | { kind: "ran", conn: ConnId, tool: string, what: object, label: AgentLabel,
- *       until: number }} GateEvent  what listeners hear, for the notices (decisions 16, 20, 23)
+ *       until: number }
+ *   | { kind: "notice", text: string }} GateEvent  what listeners hear, for the notices
+ *   (decisions 16, 20, 23; `notice`: an agent download's, decision 31)
  */
 
 const queue = new AgentQueue();
@@ -57,6 +59,14 @@ const listeners = new Set();
 let ranAt = null;
 /** The queue's key for full-control questions (decision 29 C); never an agent connection. */
 const FULL_CONN = "full";
+/**
+ * The queue's key for downloads no agent connection asked for (decision 31): a page's own in the
+ * agent workspace, or one whose agent is gone. Never granted; `x` is a plain no.
+ */
+const PAGE_CONN = "page";
+/** Connections that are not an agent's: no grant, and not listed. */
+/** @type {Set<ConnId>} */
+const NOT_AGENTS = new Set([FULL_CONN, PAGE_CONN]);
 
 /**
  * Withdraw question `id` unanswered: its connection went away.
@@ -151,13 +161,16 @@ export const AgentGate = {
    * @param {ConnId} conn
    * @param {string} tool  the MCP tool (core AGENT_TOOLS)
    * @param {object} what  what it touches, for the question: plain data, shown as text
+   * @param {{ always?: boolean, onCancel?: (cancel: () => void) => void }} [options]
+   *   `always`: ask even under a grant (a dangerous download, decision 31 d); `onCancel` is
+   *   given a way to withdraw the question unanswered
    * @returns {Promise<Outcome>}
    */
-  request(conn, tool, what) {
+  request(conn, tool, what, { always = false, onCancel } = {}) {
     const label = labels.get(conn);
     if (!label) return Promise.resolve({ allow: false, reason: "busy" });
     const now = Date.now();
-    const admission = queue.ask(conn, tool, now);
+    const admission = queue.ask(conn, tool, now, { always });
     if (admission.kind === "run") {
       ranAt = now;
       changed({ kind: "ran", conn, tool, what, label, until: admission.grant.until });
@@ -185,8 +198,37 @@ export const AgentGate = {
         resolve,
         timer,
       });
+      onCancel?.(() => cancel(id));
       changed({ kind: "asked", question: /** @type {Question} */ (questionOf(id)) });
     });
+  },
+
+  /**
+   * A download no agent connection asked for (decision 31): asks as "a page in the agent
+   * workspace", with no grant.
+   * @param {string} tool @param {object} what
+   * @param {{ always?: boolean, onCancel?: (cancel: () => void) => void }} [options]
+   * @returns {Promise<Outcome>}
+   */
+  askPage(tool, what, options) {
+    if (!labels.has(PAGE_CONN)) this.connect(PAGE_CONN, { client: PAGE_CLIENT });
+    return this.request(PAGE_CONN, tool, what, options);
+  },
+
+  /**
+   * Whether `conn` is an agent connection after its hello, still open.
+   * @param {ConnId | null | undefined} conn
+   */
+  isConnected(conn) {
+    return conn !== null && conn !== undefined && !NOT_AGENTS.has(conn) && labels.has(conn);
+  },
+
+  /**
+   * A notice for the window that asks (an agent download's, decision 31).
+   * @param {string} text
+   */
+  notify(text) {
+    changed({ kind: "notice", text });
   },
 
   /**
@@ -224,11 +266,14 @@ export const AgentGate = {
     let length = null;
     /** @type {Answer} */
     let final = /** @type {Answer} */ (answer);
-    // Full control is one connection's yes or no: no grant covers it, and `x` is a plain no.
-    if (question?.tool === FULL_CONTROL) {
+    // Full control and a page's download are one yes or no: no grant covers them, and `x` is a
+    // plain no.
+    if (question?.tool === FULL_CONTROL || question?.conn === PAGE_CONN) {
       if (answer.kind === "grant") return null;
       if (answer.kind === "mute") final = { kind: "deny" };
     }
+    // A dangerous download is allowed for that one file only (decision 31 d): no grant.
+    if (answer.kind === "grant" && /** @type {any} */ (question?.what)?.danger) return null;
     if (answer.kind === "grant") {
       length = grantLength(answer.minutes, McpHost.config ?? DEFAULT_GRANT);
       final = { kind: "grant", minutes: length.minutes };
@@ -279,7 +324,7 @@ export const AgentGate = {
 
   /** Agent connections and their labels (`:mcp`, about:vimma); never a full-control question's. */
   get connections() {
-    return [...labels.entries()].filter(([conn]) => conn !== FULL_CONN).map(([, label]) => label);
+    return [...labels.entries()].filter(([conn]) => !NOT_AGENTS.has(conn)).map(([, l]) => l);
   },
 
   /**

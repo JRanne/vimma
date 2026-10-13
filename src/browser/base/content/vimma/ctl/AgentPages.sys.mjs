@@ -17,9 +17,12 @@
 //   SANDBOXED_AUXILIARY_NAVIGATION, as Firefox's own hidden page reader does
 //   (toolkit/components/pageextractor/PageExtractorParent.sys.mjs); window.open and
 //   target=_blank open nothing. CanonicalBrowsingContext::ReplacedBy copies the flags.
+// - Downloads (decision 31, sub-PR 2c): every agent tab's top browsing context downloads into
+//   the quarantine folder (`downloadFolderOverride`), and AgentDownloads asks and checks each.
 // The agent container is WorkspaceStore.agent's, read at each check.
 
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
+import { AgentDownloads } from "./AgentDownloads.sys.mjs";
 
 const lazy = /** @type {any} */ ({});
 ChromeUtils.defineESModuleGetters(lazy, {
@@ -29,13 +32,10 @@ ChromeUtils.defineESModuleGetters(lazy, {
 /** nsSandboxFlags.h: no new browsing contexts (window.open, target=_blank). */
 export const SANDBOXED_AUXILIARY_NAVIGATION = 0x2;
 /**
- * nsSandboxFlags.h: no downloads (review of #177, L3), until sub-PR 2c asks and quarantines
- * them: nsContentSecurityUtils::ClassifyDownload forbids a download whose load has it, before
- * any file is made. 2c removes it from AGENT_SANDBOX.
+ * What every agent tab's browsing context is sandboxed against. Not SANDBOXED_DOWNLOADS: since
+ * sub-PR 2c downloads are allowed, asked and quarantined (decision 31; 2b had it as a stopgap).
  */
-export const SANDBOXED_DOWNLOADS = 0x10000;
-/** What every agent tab's browsing context is sandboxed against. */
-export const AGENT_SANDBOX = SANDBOXED_AUXILIARY_NAVIGATION | SANDBOXED_DOWNLOADS;
+export const AGENT_SANDBOX = SANDBOXED_AUXILIARY_NAVIGATION;
 
 /**
  * Prompts WebRTCParent shows itself, outside nsIContentPermissionPrompt (decision 30): denied
@@ -94,6 +94,7 @@ const permissionOverride = (base) => ({
  * @returns {boolean} whether the flag was missing (and is set now)
  */
 function sandbox(bc) {
+  quarantine(bc);
   try {
     if ((bc.sandboxFlags & AGENT_SANDBOX) !== AGENT_SANDBOX) {
       bc.sandboxFlags |= AGENT_SANDBOX;
@@ -103,6 +104,21 @@ function sandbox(bc) {
     console.error("vimma agent pages: cannot sandbox", e);
   }
   return false;
+}
+
+/**
+ * The tab downloads into the quarantine folder (decision 31 b): nsExternalAppHandler puts its
+ * `.part` file in a top browsing context's `downloadFolderOverride`. Not copied when the context
+ * is replaced, so set at every attach.
+ * @param {any} bc
+ */
+function quarantine(bc) {
+  try {
+    const dir = AgentDownloads.quarantineDir();
+    if (bc.downloadFolderOverride !== dir) bc.downloadFolderOverride = dir;
+  } catch (e) {
+    console.error("vimma agent pages: no quarantine folder", e);
+  }
 }
 
 /** @param {any} subject  a BrowsingContext, just attached */
@@ -190,24 +206,11 @@ function sweep() {
 function observe(subject, topic) {
   if (topic === "browsing-context-attached") onAttached(subject);
   else if (topic === "window-global-created") onWindowGlobal(subject);
-  else if (topic === "vimma-mcp-changed") sweep();
-  else onResponse(subject);
+  else if (topic === "vimma-mcp-changed") {
+    AgentDownloads.ensureQuarantine();
+    sweep();
+  } else onResponse(subject);
 }
-
-/**
- * Downloads (review of #177, L3): until sub-PR 2c asks, quarantines and checks them, every
- * download from the agent container is blocked before a byte is written, through Firefox's own
- * DownloadIntegration hook (the download fails as "blocked by parental controls").
- * @param {any} base  DownloadIntegration
- */
-const downloadOverride = (base) => ({
-  __proto__: base,
-  /** @param {any} download */
-  shouldBlockForParentalControls(download) {
-    if (isAgentContainer(download?.source?.userContextId)) return Promise.resolve(true);
-    return base.shouldBlockForParentalControls(download);
-  },
-});
 
 /** Firefox's chooser for external protocols (uriloader/exthandler/nsIContentDispatchChooser). */
 const CHOOSER_CONTRACT = "@mozilla.org/content-dispatch-chooser;1";
@@ -228,9 +231,9 @@ function wrapChooser() {
     createInstance(iid) {
       const inner =
         AgentPages._chooserForTests ??
-        /** @type {any} */ (Components).classesByID[original].createInstance(
-          Ci.nsIContentDispatchChooser,
-        );
+        Components.manager
+          .getClassObject(original, Ci.nsIFactory)
+          .createInstance(Ci.nsIContentDispatchChooser);
       const chooser = {
         QueryInterface: ChromeUtils.generateQI(["nsIContentDispatchChooser"]),
         /** @param {any[]} args  handler, uri, principal, browsingContext, … */
@@ -264,7 +267,8 @@ export const AgentPages = {
     if (initialised) return;
     initialised = true;
     lazy.Integration.contentPermission.register(permissionOverride);
-    lazy.Integration.downloads.register(downloadOverride);
+    AgentDownloads.init();
+    AgentDownloads.ensureQuarantine();
     try {
       wrapChooser();
     } catch (e) {

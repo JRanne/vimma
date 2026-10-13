@@ -58,10 +58,21 @@ describe("chrome code", () => {
     expect(hits(/\beval\(|new Function\b|\bFunction\(|evalInSandbox|loadSubScript/)).toEqual([]);
   });
 
-  test("never starts a process", () => {
-    expect(
-      hits(/Subprocess|nsIProcess|@mozilla\.org\/process\/|\.launch\(\)|\.reveal\(\)/),
-    ).toEqual([]);
+  // C2's one exception (docs/specs/vimma-mcp.md decision 31 g, user-approved): an agent
+  // download is scanned with ClamAV when `clamscan` is on PATH. One file, one program, fixed
+  // arguments, no shell; nothing else in chrome starts a process.
+  test("never starts a process, but clamscan on an agent download", () => {
+    const CLAM = "src/browser/base/content/vimma/ctl/AgentDownloads.sys.mjs";
+    const all = hits(/Subprocess|nsIProcess|@mozilla\.org\/process\/|\.launch\(\)|\.reveal\(\)/);
+    expect(all.filter((h) => !h.startsWith(`${CLAM}:`))).toEqual([]);
+    const text = readFileSync(join(ROOT, CLAM), "utf8");
+    expect([...text.matchAll(/Subprocess\.(?!sys\b)(\w+)/g)].map((m) => m[1]).sort()).toEqual([
+      "call",
+      "pathSearch",
+    ]);
+    expect(text).toContain('Subprocess.pathSearch("clamscan")');
+    expect(text).toMatch(/arguments: \["--no-summary", "--stdout", path\]/);
+    expect(text).not.toMatch(/nsIProcess|\/bin\/sh|"sh"|"-c"/);
   });
 
   test("never installs an add-on", () => {

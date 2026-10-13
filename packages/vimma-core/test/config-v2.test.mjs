@@ -566,6 +566,8 @@ describe("[mcp]", () => {
       grantMaxMinutes: 480,
       maxReadChars: 200000,
       notify: true,
+      downloadDir: "~/Downloads/vimma-agent",
+      downloadMaxMb: 200,
     });
     expect(ok(toml()).mcp.workspace).toBe("agent");
     expect(DEFAULT_CONFIG.mcp).toEqual({
@@ -575,12 +577,15 @@ describe("[mcp]", () => {
       grant_max_minutes: 480,
       max_read_chars: 200000,
       notify: true,
+      download_dir: "~/Downloads/vimma-agent",
+      download_max_mb: 200,
     });
     const text = formatDefaultsToml();
     expect(text).toMatch(/^\[mcp\]\n# enabled = false\nworkspace = "agent"\nask_timeout = 50$/m);
     expect(text).toMatch(
       /^grant_minutes = 10\ngrant_max_minutes = 480\nmax_read_chars = 200000\nnotify = true$/m,
     );
+    expect(text).toMatch(/^download_dir = "~\/Downloads\/vimma-agent"\ndownload_max_mb = 200$/m);
   });
 
   test("every key as written; enabled only when the file sets it", () => {
@@ -594,6 +599,8 @@ describe("[mcp]", () => {
         "grant_max_minutes = 1440",
         "max_read_chars = 1000",
         "notify = false",
+        'download_dir = "/srv/agent-files"',
+        "download_max_mb = 4096",
       ),
     ).mcp;
     expect(mcp).toEqual({
@@ -604,6 +611,8 @@ describe("[mcp]", () => {
       grantMaxMinutes: 1440,
       maxReadChars: 1000,
       notify: false,
+      downloadDir: "/srv/agent-files",
+      downloadMaxMb: 4096,
     });
     expect(ok(v2("[mcp]", "enabled = false")).mcp.enabled).toBe(false);
     expect("enabled" in ok(v2("[mcp]", "notify = true")).mcp).toBe(false);
@@ -644,6 +653,37 @@ describe("[mcp]", () => {
     expect(errors(v2("[mcp]", "grant_minutes = 500"))[0]?.message).toBe(
       "must be an integer between 1 and grant_max_minutes (480)",
     );
+  });
+
+  // Decision 31 b, f (sub-PR 2c): the quarantine folder and the size cap.
+  test("download_dir is ~ or absolute, never home, / or the Downloads folder itself", () => {
+    const at = (/** @type {string} */ line) => errors(v2("[mcp]", line))[0];
+    expect(ok(v2("[mcp]", 'download_dir = "~/agent-files"')).mcp.downloadDir).toBe("~/agent-files");
+    expect(at('download_dir = "agent-files"')).toEqual({
+      line: 3,
+      path: "mcp.download_dir",
+      message: "must start with ~/ or /",
+    });
+    for (const dir of ["~", "~/", "/", "/./", "~/Downloads", "~/./Downloads/", "$HOME/Downloads"]) {
+      expect(at(`download_dir = "${dir}"`)?.message, dir).toMatch(
+        /^must not (be your home folder|be \/|be the Downloads folder itself|start with \$)/,
+      );
+    }
+    expect(at('download_dir = "~/a/../b"')?.message).toBe("must not contain ..");
+    expect(at('download_dir = "~/a\\u0007b"')?.message).toBe("must not contain control characters");
+    expect(at("download_dir = 3")?.message).toBe("expected a string, got an integer");
+  });
+
+  test("download_max_mb is 1 to 4096", () => {
+    const at = (/** @type {string} */ line) => errors(v2("[mcp]", line))[0];
+    expect(ok(v2("[mcp]", "download_max_mb = 1")).mcp.downloadMaxMb).toBe(1);
+    expect(at("download_max_mb = 0")).toEqual({
+      line: 3,
+      path: "mcp.download_max_mb",
+      message: "must be an integer between 1 and 4096 (MB)",
+    });
+    expect(at("download_max_mb = 4097")?.path).toBe("mcp.download_max_mb");
+    expect(at('download_max_mb = "200"')?.message).toBe("expected an integer, got a string");
   });
 
   test('workspace follows the workspace-name rules and is never "private"', () => {
