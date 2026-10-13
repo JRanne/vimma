@@ -33,7 +33,14 @@ export const AGENT_COMMANDS = Object.freeze([
   "agent-ping",
 ]);
 /** Why an agent request was `denied` (vimma-mcp decision 4). */
-export const DENY_REASONS = Object.freeze(["user", "timeout", "busy", "muted", "changed"]);
+export const DENY_REASONS = Object.freeze([
+  "user",
+  "timeout",
+  "busy",
+  "muted",
+  "changed",
+  "cancelled",
+]);
 export const ERROR_CODES = Object.freeze([
   "bad-request",
   "unauthorized",

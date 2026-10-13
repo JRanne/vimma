@@ -1,0 +1,10 @@
+{
+  "description": "The request was cancelled before an answer (its call ended)",
+  "kind": "response",
+  "message": {
+    "type": "response",
+    "id": 4,
+    "ok": false,
+    "error": { "code": "denied", "message": "the request was cancelled", "reason": "cancelled" }
+  }
+}

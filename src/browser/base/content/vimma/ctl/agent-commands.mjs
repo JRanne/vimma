@@ -9,7 +9,7 @@
 // Every command but hello and ping asks through AgentGate first (decision 12), and after the
 // yes the tab and URL must still be the ones asked about, or nothing happens (decision 19).
 
-import { AGENT_TOOLS, wrapUntrusted } from "../core/agent.mjs";
+import { AGENT_TOOLS, OpenRate, wrapUntrusted } from "../core/agent.mjs";
 import { MAX_LINE_LENGTH, MAX_READ_CHARS } from "../core/control.mjs";
 import { workspaceOfTab } from "../core/workspaces.mjs";
 import { VimmaActors } from "../actors/VimmaActors.sys.mjs";
@@ -35,6 +35,8 @@ const EXTRACT_TIMEOUT_MS = 30000;
 /** Room in the 1 MiB reply line for everything but the text (protocol, decision 4). */
 const REPLY_OVERHEAD = 64 * 1024;
 const DEFAULT_MAX_READ = 200000;
+/** Each connection's opens: at most OPEN_RATE a minute, asked or under a grant. */
+const opens = new OpenRate();
 
 /** A refusal with a protocol error code (and, for `denied`, its reason). */
 export class AgentError extends Error {
@@ -262,6 +264,13 @@ function cut(text, max) {
     : { text, truncated: false };
 }
 
+/**
+ * `s` as well-formed Unicode: a lone surrogate (a page's title or text can hold one) becomes
+ * U+FFFD, so the JSON line is one vimma-ctl's strict parser accepts (review of #176).
+ * @param {unknown} s
+ */
+const wf = (s) => /** @type {string} */ (/** @type {any} */ (String(s)).toWellFormed());
+
 /** UTF-8 length of `value` as JSON. @param {unknown} value */
 const jsonBytes = (value) => new TextEncoder().encode(JSON.stringify(value)).length;
 
@@ -295,8 +304,8 @@ const COMMANDS = {
     return {
       tabs: agentTabs(now, true).map(({ tab }) => ({
         id: tabId(tab),
-        url: tabUrl(tab),
-        title: String(tab.label ?? ""),
+        url: wf(tabUrl(tab)),
+        title: wf(tab.label ?? ""),
         loading: tab.hasAttribute("busy") || tab.hasAttribute("pending") || !tab.linkedPanel,
       })),
     };
@@ -333,30 +342,44 @@ const COMMANDS = {
     if (!result || typeof result.text !== "string") {
       throw new AgentError("failed", "Vimma could not read text from this page");
     }
-    // The page may have navigated while it was read: the text must be the asked page's.
-    stillAsAsked(agent, id, what.url);
-    let { text, truncated } = cut(result.text, limit);
-    const selection = await VimmaActors.selection(tab.linkedBrowser, limit);
+    let { text, truncated } = cut(wf(result.text), limit);
+    const picked = await VimmaActors.selection(tab.linkedBrowser, limit);
+    /** @type {string | null} */
+    let selection = picked === null ? null : wf(picked);
     let language = null;
     try {
       const meta = await extractor.getPageMetadata();
-      language = typeof meta?.language === "string" && meta.language ? meta.language : null;
+      language = typeof meta?.language === "string" && meta.language ? wf(meta.language) : null;
     } catch {
       // metadata is a nicety; the text stands without it
     }
+    const title = wf(tab.label ?? "");
+    const background = !(tab.selected && /** @type {any} */ (Services.focus).activeWindow === win);
+    // Last, once everything is collected (review of #176): the page may have navigated or the
+    // tab moved while it was read, and then nothing of it is sent.
+    stillAsAsked(agent, id, what.url);
+    // Page JS can set the selection, so it is as untrusted as the text.
     const reply = () => ({
-      url: what.url,
-      title: String(tab.label ?? ""),
+      url: wf(what.url),
+      title,
       text: wrapUntrusted(text),
       truncated,
-      selection,
+      selection: selection === null ? null : wrapUntrusted(selection),
       language,
-      background: !(tab.selected && /** @type {any} */ (Services.focus).activeWindow === win),
+      background,
     });
-    // The whole reply line must fit the protocol's 1 MiB (decision 4).
-    while (jsonBytes(reply()) > MAX_LINE_LENGTH - REPLY_OVERHEAD && text.length) {
-      text = cut(text, Math.floor([...text].length * 0.9)).text;
+    // The whole reply line must fit the protocol's 1 MiB (decision 4): cut the longer of the
+    // text and the selection until it does.
+    while (jsonBytes(reply()) > MAX_LINE_LENGTH - REPLY_OVERHEAD) {
       truncated = true;
+      if (selection !== null && jsonBytes(selection) >= jsonBytes(text)) {
+        const n = Math.floor([...selection].length * 0.9);
+        selection = n > 0 ? cut(selection, n).text : null;
+      } else if (text.length) {
+        text = cut(text, Math.floor([...text].length * 0.9)).text;
+      } else {
+        throw new AgentError("failed", "the page's reply does not fit the protocol's line");
+      }
     }
     return reply();
   },
@@ -374,6 +397,9 @@ const COMMANDS = {
       ...(current ? { tab: current.tab, title: current.title, current: current.url } : {}),
     };
     await ask(conn, "agent-open", what);
+    if (!opens.take(conn, Date.now())) {
+      throw new AgentError("denied", "too many opens from this agent in the last minute", "busy");
+    }
     const principal = agentPrincipal(agent.userContextId);
     if (current) {
       const { tab } = stillAsAsked(agent, current.tab, current.url);
@@ -412,6 +438,14 @@ const COMMANDS = {
     return { closed: true };
   },
 };
+
+/**
+ * The connection closed: forget its opens.
+ * @param {ConnId} conn
+ */
+export function forgetAgentConnection(conn) {
+  opens.forget(conn);
+}
 
 /**
  * Run an agent command, validated already. `state` is the connection's: `agent` once its

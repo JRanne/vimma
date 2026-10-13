@@ -33,7 +33,7 @@ import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
 import { MCP_CHANGED_TOPIC, MCP_ENABLED_PREF, McpHost } from "../host/mcp-ops.mjs";
 import { AgentGate } from "./AgentGate.sys.mjs";
-import { AgentError, runAgentCommand } from "./agent-commands.mjs";
+import { AgentError, forgetAgentConnection, runAgentCommand } from "./agent-commands.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
 
@@ -55,6 +55,13 @@ const HELLO_TIMEOUT_MS = 5000;
 const IDLE_TIMEOUT_MS = 60000;
 /** Authenticated connections; the next hello is told busy. */
 const MAX_CONNECTIONS = 8;
+/**
+ * Of those, agent connections (review of #176): agents never take every slot, so vimma-ctl
+ * still gets in.
+ */
+const MAX_AGENT_CONNECTIONS = 4;
+/** An agent connection's requests waiting or running at once; beyond, `busy`. */
+const MAX_AGENT_INFLIGHT = 4;
 /**
  * Connections still waiting for their hello. Anyone local can open those, so they are capped
  * apart from the authenticated ones and a new one evicts the oldest: a flood of idle
@@ -546,6 +553,11 @@ class Connection {
       srv.refuse(this, "busy", `${srv.connections.size} connections open`);
       return;
     }
+    const agents = [...srv.connections].filter((c) => c.role === "agent").length;
+    if (this.role === "agent" && agents >= MAX_AGENT_CONNECTIONS) {
+      srv.refuse(this, "busy", `${agents} agent connections open`);
+      return;
+    }
     srv.connections.add(this);
     this.authenticated = true;
     this.armIdle();
@@ -640,6 +652,11 @@ class Connection {
       return;
     }
     const command = /** @type {string} */ (m.command);
+    if (this.inflight >= MAX_AGENT_INFLIGHT) {
+      const message = `${this.inflight} requests of this agent are already waiting or running`;
+      this.respond(id, { error: { code: "denied", message, reason: "busy" } });
+      return;
+    }
     this.inflight++;
     try {
       const result = await runAgentCommand(this.id, this.agentState, command, m.args);
@@ -734,7 +751,10 @@ class Connection {
     if (this.closed) return;
     this.closed = true;
     // Its waiting questions go, and its grants end (vimma-mcp decision 22).
-    if (this.role === "agent") AgentGate.disconnect(this.id);
+    if (this.role === "agent") {
+      AgentGate.disconnect(this.id);
+      forgetAgentConnection(this.id);
+    }
     if (this.timer !== null) lazy.clearTimeout(this.timer);
     this.timer = null;
     this.input.close();

@@ -37,7 +37,7 @@ pub const ERROR_CODES: [&str; 11] = [
     "denied",
 ];
 /// vimma-core's `DENY_REASONS`: why an agent request was denied.
-pub const DENY_REASONS: [&str; 5] = ["user", "timeout", "busy", "muted", "changed"];
+pub const DENY_REASONS: [&str; 6] = ["user", "timeout", "busy", "muted", "changed", "cancelled"];
 
 /// A connection's role (protocol 2). Protocol 1 is always `Full`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -742,6 +742,10 @@ mod tests {
         assert_eq!(
             quoted_after(&src("control.mjs"), "ERROR_CODES = Object.freeze(["),
             ERROR_CODES
+        );
+        assert_eq!(
+            quoted_after(&src("control.mjs"), "DENY_REASONS = Object.freeze(["),
+            DENY_REASONS
         );
     }
 

@@ -371,7 +371,8 @@ export class VimmaChild extends JSWindowActorChild {
         // any, cut at `max` characters; a copy, nothing in the page changes.
         const max = Math.max(0, Math.min(Number(msg.data?.max) || 0, 500000));
         const text = this.contentWindow?.getSelection()?.toString() ?? "";
-        return text ? text.slice(0, max) : null;
+        // By code point: a cut through a surrogate pair would leave half a character.
+        return text ? [...text].slice(0, max).join("") : null;
       }
       case "Vimma:ScrollTo": {
         const x = Number(msg.data?.x);

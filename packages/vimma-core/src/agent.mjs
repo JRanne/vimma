@@ -117,6 +117,40 @@ export const AGENT_TOOLS = Object.freeze({
 });
 /** Questions that may wait: per connection and in all (decision 17). */
 export const QUEUE_LIMITS = Object.freeze({ perConnection: 4, total: 16 });
+/**
+ * `agent-open`s per connection in any window of `ms` (review of #176): a `vimma_open` grant
+ * runs unasked, and must not open thousands of tabs.
+ */
+export const OPEN_RATE = Object.freeze({ max: 10, ms: 60_000 });
+
+/** A sliding window of each connection's opens. */
+export class OpenRate {
+  constructor() {
+    /** @type {Map<string | number, number[]>} */
+    this.times = new Map();
+  }
+
+  /**
+   * Whether connection `conn` may open one more now; if so, it is counted.
+   * @param {string | number} conn @param {number} now
+   */
+  take(conn, now) {
+    const recent = (this.times.get(conn) ?? []).filter((t) => t > now - OPEN_RATE.ms);
+    if (recent.length >= OPEN_RATE.max) {
+      this.times.set(conn, recent);
+      return false;
+    }
+    recent.push(now);
+    this.times.set(conn, recent);
+    return true;
+  }
+
+  /** @param {string | number} conn  closed */
+  forget(conn) {
+    this.times.delete(conn);
+  }
+}
+
 /** Denials in a row that mute a connection, and for how long (decision 18). */
 export const MUTE_AFTER = 3;
 export const MUTE_MS = 60_000;
@@ -339,13 +373,18 @@ export const UNTRUSTED_OPEN = "<untrusted-web-content>";
 export const UNTRUSTED_CLOSE = "</untrusted-web-content>";
 const ZWSP = "\u200b";
 
+/** Any tag a model could read as a delimiter: spaces, other separators, attributes, any case. */
+const LOOK_ALIKE = /<(?=\s*\/?\s*untrusted[^>]{0,40}content[^>]*>)/gi;
+
 /**
- * `text` between the delimiters. Any delimiter inside it, in any case, is broken up with a
- * zero-width space before its last `>`, so the output has exactly one of each.
+ * `text` between the delimiters. The text is NFKC-normalised first (so full-width and other
+ * compatibility look-alikes become plain letters), then every tag that looks like a delimiter,
+ * however spaced or spelt (`</ untrusted_web_content >`), is broken with a zero-width space
+ * after its `<`, so the output has exactly one of each (review of #176).
  * @param {string} text
  */
 export function wrapUntrusted(text) {
-  const broken = text.replace(/<(\/?)untrusted-web-content>/gi, (m) => `${m.slice(0, -1)}${ZWSP}>`);
+  const broken = text.normalize("NFKC").replace(LOOK_ALIKE, `<${ZWSP}`);
   return `${UNTRUSTED_OPEN}\n${broken}\n${UNTRUSTED_CLOSE}`;
 }
 

@@ -75,7 +75,7 @@ describe("protocol 2 constants", () => {
     expect(AGENT_COMMANDS.some((c) => CONTROL_COMMANDS.includes(c))).toBe(false);
     expect(ERROR_CODES).toContain("role-off");
     expect(ERROR_CODES).toContain("denied");
-    expect([...DENY_REASONS]).toEqual(["user", "timeout", "busy", "muted", "changed"]);
+    expect([...DENY_REASONS]).toEqual(["user", "timeout", "busy", "muted", "changed", "cancelled"]);
   });
 });
 
@@ -221,7 +221,7 @@ describe("agent commands: results and errors", () => {
     });
     for (const reason of DENY_REASONS) expect(errorsOf(denied(reason))).toEqual([]);
     expect(errorsOf(denied())).toEqual([
-      "error.reason must be one of user, timeout, busy, muted, changed",
+      "error.reason must be one of user, timeout, busy, muted, changed, cancelled",
     ]);
     const other = { code: "failed", message: "m", reason: "user" };
     expect(errorsOf({ type: "response", id: 1, ok: false, error: other })).toEqual([

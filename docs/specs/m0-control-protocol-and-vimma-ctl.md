@@ -226,8 +226,8 @@ Spec: [vimma-mcp](vimma-mcp.md) (decisions 2-4), ADR-019. Fixtures:
   `vimma-ctl` speaks protocol 2 as `full` when the file says 2, and says the control socket is
   off when `roles` lacks `full`, without connecting.
 - **New error codes.** `role-off` (above) and `denied`: an agent request the user did not allow.
-  A `denied` error carries `reason`: `user`, `timeout`, `busy`, `muted` or `changed`; no other
-  error has a `reason`.
+  A `denied` error carries `reason`: `user`, `timeout`, `busy`, `muted`, `changed` or
+  `cancelled`; no other error has a `reason`.
 - **Agent commands** (role `agent` only; `agent-hello` must come first, and only once):
 
   | Command       | `args`                                                     | `result`                                                                         |
@@ -250,7 +250,11 @@ Spec: [vimma-mcp](vimma-mcp.md) (decisions 2-4), ADR-019. Fixtures:
 - **Asking.** Every agent command but `agent-hello` and `agent-ping` waits for the user's answer
   in Vimma, or runs under a grant of that connection and tool. An agent connection's requests do
   not wait for each other: each is answered by `id` when its answer comes, so responses may come
-  out of order. A connection with requests waiting is not closed by the 60 s idle limit.
+  out of order. A connection with requests waiting is not closed by the 60 s idle limit. Limits: at most 4
+  agent connections (of the server's 8), at most 4 requests of one agent connection waiting or
+  running at once, and at most 10 `agent-open`s of one connection a minute; beyond each, `busy`.
+  Strings in agent replies are well-formed Unicode (a lone surrogate becomes U+FFFD), and the
+  read's `selection` is inside the untrusted-content delimiters too.
 
 ## Security
 

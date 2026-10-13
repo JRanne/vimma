@@ -55,8 +55,10 @@ only the agent workspace, and every request asks you first (§12).
   [`test_handshake`](../tests/browser/browser_vimma_control.js),
   [`challenge.valid's proof is HMAC-SHA256(token, vimma-server NUL nonce)`](../packages/vimma-core/test/control.test.mjs),
   [`a_squatter_gets_neither_the_token_nor_a_command`](../tools/vimma-ctl/tests/cli.rs)
-- S5. It **must** cap connections (8 open, 2 waiting for a hello), line length (1 MiB) and
-  handshake and idle time. [`test_limits`](../tests/browser/browser_vimma_control.js)
+- S5. It **must** cap connections (8 open, of which at most 4 agents; 2 waiting for a hello),
+  line length (1 MiB) and handshake and idle time.
+  [`test_limits`](../tests/browser/browser_vimma_control.js),
+  [`test_agents_cannot_take_every_connection`](../tests/browser/browser_vimma_mcp_agent.js)
 - S6. A token file left by a crash **must** be removed at start; a symlink or directory in its
   place is never followed. [`test_stale_discovery_file_removed_at_start`](../tests/browser/browser_vimma_control.js)
 - S7. Only the commands of the connection's role **must** run (`full`: the four of protocol 1;
@@ -415,14 +417,20 @@ a shell can run `vimma-ctl` itself, or speak the protocol directly.
   [`test_grants_per_connection_and_tool`](../tests/browser/browser_vimma_mcp_agent.js),
   [`15 min for (conn 1, read): reads run unasked until 15:00; opens and conn 2 ask`](../packages/vimma-core/test/agent-gate.test.mjs)
 - M2. Agent commands **must** see only tabs of the agent workspace in its container, checked
-  when each command runs; **never** another workspace's tab or a private window's.
-  [`test_agent_sees_only_the_agent_workspace`](../tests/browser/browser_vimma_mcp_agent.js)
-- M3. No answer within `[mcp] ask_timeout`, a full queue (4 per connection, 16 in all) and a
-  muted connection (three noes in a row, for 60 s; `x`, until it reconnects) **must** deny.
+  when each command runs; **never** another workspace's tab, a foreign or pinned tab, or a
+  private window's.
+  [`test_agent_sees_only_the_agent_workspace`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`test_confinement_edges`](../tests/browser/browser_vimma_mcp_agent.js)
+- M3. No answer within `[mcp] ask_timeout`, a full queue (4 per connection, 16 in all), more
+  than 4 requests of one connection waiting or running at once (grants included), more than 10
+  opens of one connection in a minute (grants included) and a muted connection (three noes in a
+  row, for 60 s; `x`, until it reconnects) **must** deny.
   [`test_denials_timeouts_queue_and_mute`](../tests/browser/browser_vimma_mcp_agent.js),
   [`two connections sending 5 each: 4 of each wait in order, the 5th of each is busy`](../packages/vimma-core/test/agent-gate.test.mjs),
   [`three denials in a row mute a connection for 60 s, without asking`](../packages/vimma-core/test/agent-gate.test.mjs),
-  [`no sequence of events breaks the queue's limits or resolves a request twice`](../packages/vimma-core/test/fuzz/agent.fuzz.test.mjs)
+  [`no sequence of events breaks the queue's limits or resolves a request twice`](../packages/vimma-core/test/fuzz/agent.fuzz.test.mjs),
+  [`test_grants_cannot_flood`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`at most OPEN_RATE.max opens per connection in any OPEN_RATE.ms window`](../packages/vimma-core/test/agent-gate.test.mjs)
 - M4. The question **never** opens while you type or are in a field, is armed only after 1 s,
   and no key but `y` or a count with `a` allows. **⚠ gap:** the question line is sub-PR 2b of
   [vimma-mcp](specs/vimma-mcp.md); until it lands no request is asked on screen, so every
@@ -438,13 +446,20 @@ a shell can run `vimma-ctl` itself, or speak the protocol directly.
   never in the foreground: your window keeps its workspace, selected tab and focus.
   [`test_agent_open_is_background_and_checked`](../tests/browser/browser_vimma_mcp_agent.js),
   [`agent-open: only http and https, at most 65536 characters, an optional tab`](../packages/vimma-core/test/control-v2.test.mjs)
-- M7. Page text **must** be capped (`[mcp] max_read_chars`, and the 1 MiB line) and returned
-  inside the untrusted-content delimiters, which the page cannot close early.
+- M7. Page text and the page's selection **must** be capped (`[mcp] max_read_chars`, and the
+  1 MiB line), well-formed Unicode, and returned inside the untrusted-content delimiters, which
+  the page cannot close early, not even with a look-alike tag (other spacing or separators,
+  full-width letters, attributes; matched after NFKC).
   [`test_agent_read_returns_marked_text_of_a_hidden_tab`](../tests/browser/browser_vimma_mcp_agent.js),
-  [`any page text comes out with exactly one opening and one closing delimiter`](../packages/vimma-core/test/fuzz/agent.fuzz.test.mjs)
+  [`any page text comes out with exactly one opening and one closing delimiter`](../packages/vimma-core/test/fuzz/agent.fuzz.test.mjs),
+  [`test_the_selection_is_marked_and_fits_the_line`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`test_replies_are_well_formed_unicode`](../tests/browser/browser_vimma_mcp_agent.js)
 - M8. A yes **must** stand only for the tab and URL asked about: if the tab left the agent
   workspace or navigated since, the request is denied (`changed`) and nothing is read, loaded
-  or closed. [`test_the_yes_stands_for_what_was_asked`](../tests/browser/browser_vimma_mcp_agent.js)
+  or closed; a read checks again after collecting everything, just before it replies.
+  [`test_the_yes_stands_for_what_was_asked`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`test_the_read_checks_last`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`test_confinement_edges`](../tests/browser/browser_vimma_mcp_agent.js)
 - M9. `vimma-ctl mcp`'s JSON-RPC parsing **never** panics. **⚠ gap:** `vimma-ctl mcp` is sub-PR
   3 of [vimma-mcp](specs/vimma-mcp.md); until then the protocol 2 decoders it will use are fuzzed
   ([`decoders_never_panic_and_accept_only_the_schema`](../tools/vimma-ctl/tests/protocol_props.rs)).

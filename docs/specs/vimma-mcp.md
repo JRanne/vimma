@@ -795,6 +795,22 @@ docs, so 2b stays its own PR.
   to name it by); its page loads only when it is read, from its session history's URL.
 - An agent connection with a request waiting is not closed by the 60 s idle limit.
 
+**After the security review of #176** (all fixed in 2a):
+
+- Limits: at most 4 agent connections of the server's 8 (vimma-ctl always gets in), at most 4
+  requests of one agent connection waiting or running at once (`busy` beyond, grants included),
+  and at most 10 `agent-open`s per connection a minute (core `OpenRate`, `busy` beyond).
+- `agent-read`'s `selection` is wrapped in the delimiters like the text and cut, with the text,
+  until the reply fits 1 MiB; the selection is cut by code point in the content process.
+- Every string in agent replies goes through `toWellFormed()`: a lone surrogate (a page title of
+  `"\uD800"`) would make a line vimma-ctl's strict JSON parser refuses.
+- `wrapUntrusted` NFKC-normalises the text and breaks any tag matching
+  `<\s*/?\s*untrusted[^>]{0,40}content[^>]*>` (any case) with a zero-width space after its `<`,
+  not only the exact closing tag.
+- A read collects text, selection, language and title first, then checks the tab is still as
+  asked, then replies.
+- `cancelled` is a deny reason (a request whose connection or call ended).
+
 **Next (2b): the prompt and the status bar.** All of decisions 13-15, 23-25 that need UI:
 
 - `ui/agent-prompt.mjs`: the question line (decision 13's text and keys; a count then `a`;
