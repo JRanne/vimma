@@ -37,25 +37,26 @@ specified in [m3-m4-core-prep](m3-m4-core-prep.md).
 Every key is optional. "Defaults" are `DEFAULT_CONFIG` (`defaults.toml` is generated from it).
 Unknown keys anywhere in the schema are errors with the closest known key as suggestion.
 
-| Key                            | Type                      | Default                 | Validation                                                                                                                              |
-| ------------------------------ | ------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `schema`                       | integer                   | absent = version 0      | `0 ≤ schema ≤ 1`; higher: "from a newer vimma"                                                                                          |
-| `[keys] prefix`                | key string                | `"ctrl+b"`              | `compileKeymap` (key notation)                                                                                                          |
-| `[keys] <action>`              | string or list of strings | `defaults.mjs`          | `compileKeymap`: action name from `actions.mjs` (suggestion), notation, no sequence bound twice in a mode                               |
-| `[modal] leader`               | key string                | `" "`                   | string; notation via `compileKeymap`                                                                                                    |
-| `[modal] timeout_ms`           | integer                   | `800`                   | `0 ≤ n ≤ 10000`                                                                                                                         |
-| `[modal.<mode>] "<seq>"`       | action string             | `defaults.mjs`          | `<mode>` ∈ `MODES` (suggestion); action and notation via `compileKeymap`                                                                |
-| `[unbind] <mode>`              | list of strings           | `[]`                    | `<mode>` ∈ `MODES` (suggestion); notation via `compileKeymap`                                                                           |
-| `[workspaces] <name>`          | table                     | none                    | name 1–32 characters, no control characters; order of the file = workspace order                                                        |
-| `[workspaces.<name>] color`    | string                    | `"gray"`                | Firefox container colour: `gray yellow orange red pink purple violet blue cyan green`; aliases `turquoise` → `cyan`, `toolbar` → `gray` |
-| `[workspaces.<name>] icon`     | string                    | `"circle"`              | Firefox container icon: `fingerprint briefcase dollar cart vacation gift food fruit pet tree chill circle fence`                        |
-| `[workspaces.<name>] home`     | string                    | none                    | `http://…`, `https://…` or `about:…`, no whitespace                                                                                     |
-| `[workspaces.<name>] autofill` | boolean                   | `true`                  | boolean                                                                                                                                 |
-| `[theme] source`               | string                    | `"omarchy"`             | `"omarchy"` (follow Omarchy's `colors.toml`, the built-in `name` when absent) or `"file"` (the built-in `name`)                         |
-| `[theme] name` (schema 2)      | string                    | `"vimma"`               | `"vimma"` (vimma.dev's colours, dark and light) or `"tokyo-night"` (suggestion); added after M5, see `BUILTIN_THEMES`                   |
-| `[theme] font`                 | string                    | `"monospace"`           | 1–200 characters, none of `" ; { } \ < >` or control characters (it goes into CSS)                                                      |
-| `[theme.colors] <key>`         | hex colour string         | from the source palette | key ∈ `PALETTE_KEYS` (Omarchy's `colors.toml` keys; suggestion); `#rgb` or `#rrggbb`, stored as `#rrggbb` lowercase                     |
-| `[theme.colors] mode`          | string                    | source palette's        | `"dark"` or `"light"`                                                                                                                   |
+| Key                             | Type                      | Default                                     | Validation                                                                                                                                              |
+| ------------------------------- | ------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema`                        | integer                   | absent = version 0                          | `0 ≤ schema ≤ 1`; higher: "from a newer vimma"                                                                                                          |
+| `[keys] prefix`                 | key string                | `"ctrl+b"`                                  | `compileKeymap` (key notation)                                                                                                                          |
+| `[keys] <action>`               | string or list of strings | `defaults.mjs`                              | `compileKeymap`: action name from `actions.mjs` (suggestion), notation, no sequence bound twice in a mode                                               |
+| `[modal] leader`                | key string                | `" "`                                       | string; notation via `compileKeymap`                                                                                                                    |
+| `[modal] timeout_ms`            | integer                   | `800`                                       | `0 ≤ n ≤ 10000`                                                                                                                                         |
+| `[modal.<mode>] "<seq>"`        | action string             | `defaults.mjs`                              | `<mode>` ∈ `MODES` (suggestion); action and notation via `compileKeymap`                                                                                |
+| `[unbind] <mode>`               | list of strings           | `[]`                                        | `<mode>` ∈ `MODES` (suggestion); notation via `compileKeymap`                                                                                           |
+| `[workspaces] <name>`           | table                     | none                                        | name 1–32 characters, no control characters; order of the file = workspace order                                                                        |
+| `[workspaces.<name>] color`     | string                    | `"gray"`                                    | Firefox container colour: `gray yellow orange red pink purple violet blue cyan green`; aliases `turquoise` → `cyan`, `toolbar` → `gray`                 |
+| `[workspaces.<name>] icon`      | string                    | `"circle"`                                  | Firefox container icon: `fingerprint briefcase dollar cart vacation gift food fruit pet tree chill circle fence`                                        |
+| `[workspaces.<name>] home`      | string                    | none                                        | `http://…`, `https://…` or `about:…`, no whitespace                                                                                                     |
+| `[workspaces.<name>] autofill`  | boolean                   | `true`                                      | boolean                                                                                                                                                 |
+| `[theme] source`                | string                    | `"omarchy"`                                 | `"omarchy"` (follow Omarchy's `colors.toml`, the built-in `name` when absent) or `"file"` (the built-in `name`)                                         |
+| `[theme] name` (schema 2)       | string                    | `"vimma"`                                   | `"vimma"` (vimma.dev's colours, dark and light) or `"tokyo-night"` (suggestion); added after M5, see `BUILTIN_THEMES`                                   |
+| `[theme] appearance` (schema 2) | string                    | absent (the pref `:theme` sets; `"system"`) | `"system"`, `"dark"` or `"light"` (suggestion): the built-in palette's variant; `[theme.colors] mode` wins; see [theme-appearance](theme-appearance.md) |
+| `[theme] font`                  | string                    | `"monospace"`                               | 1–200 characters, none of `" ; { } \ < >` or control characters (it goes into CSS)                                                                      |
+| `[theme.colors] <key>`          | hex colour string         | from the source palette                     | key ∈ `PALETTE_KEYS` (Omarchy's `colors.toml` keys; suggestion); `#rgb` or `#rrggbb`, stored as `#rrggbb` lowercase                                     |
+| `[theme.colors] mode`           | string                    | source palette's                            | `"dark"` or `"light"`                                                                                                                                   |
 
 Wrong types say what was expected and what was found (`expected a boolean, got a string`).
 Config is parsed with integers as BigInt, so TOML floats (`1.0`, `1e3`) are told apart from
@@ -134,8 +135,8 @@ Picking badge text by contrast is what makes one rule work for light and dark th
 - `resolveTheme({ theme, omarchy?, omarchyLightMode?, scheme? })` →
   `{ tokens, mode, errors, warnings, adaptive }`. Base: Omarchy text when `source = "omarchy"`
   and the host found the file, else the built-in `name`, its light variant when `scheme` is
-  `"light"` (or `[theme.colors] mode` pins it) and it has one (warning when
-  `source = "omarchy"` but no file). `[theme.colors]` overlays the base for both sources. An
+  `"light"` (or `[theme.colors] mode` or `[theme] appearance` pins it) and it has one. No
+  warning when `source = "omarchy"` but no file ([theme-appearance](theme-appearance.md) A). `[theme.colors]` overlays the base for both sources. An
   invalid Omarchy file → errors with `colors.toml` lines and the built-in base; the host keeps
   the previous tokens on errors, as for config.
 - `themeStylesheet({ theme, omarchy?, omarchyLightMode?, selector? })` → `{ css, errors,

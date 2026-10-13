@@ -91,7 +91,8 @@ every binding.
 ### The start page
 
 New windows and new tabs open Vimma's start page: the logo, and under it the three keys to start
-from (`ctrl+b ?` keys, `:` commands, `f` hints). The URL bar is empty and focused, so you can type an
+from (`ctrl+b ?` keys, `:` commands, `f` hints), and, unless the colours are your Omarchy
+theme's, `:theme light/dark` to [switch the colours](#colours-and-themes). The URL bar is empty and focused, so you can type an
 address straight away; click the page to use `:` and the other keys there. At the bottom, a small
 line shows which Vimma you run and the Firefox release it is built on (`Vimma 0.1.0 · Firefox
 157.0.1`). It is a local page (`chrome://browser/content/vimma/start/start.html`); nothing loads
@@ -296,44 +297,67 @@ After `ctrl+b` (or any key that starts a longer sequence) only the pending keys 
 no list of next keys pops up. To see the bindings, press `ctrl+b ?` (`ctrl+b shift+?` on a
 layout where `?` is shifted): the overlay is the one place that lists them.
 
-### Colours: your Omarchy theme
+### Colours and themes
 
 The status bar, the command line, the `ctrl+b ?` overlay, the pickers and prompts, link hints,
-notices, pane borders and the start page take their colours from your current [Omarchy](https://omarchy.org) theme, with nothing to
-set up: Vimma reads `~/.local/state/omarchy/current/theme/colors.toml` (and `light.mode`, for a
-light theme) and checks it every 2 seconds, so `omarchy-theme-set` (or picking a theme from the
-Omarchy menu) recolours every open window and start page within 2 seconds, without a restart.
-Without Omarchy, or with `vimma.theme.source` set to `builtin`, the colours are Vimma's own,
+notices, pane borders and the start page share one theme. Out of the box it is Vimma's own,
 the palette of [vimma.dev](https://vimma.dev): near-black surfaces, grey-green text, and mint
-for the accent, the normal-mode badge and link hints. It has a dark and a light variant and
-follows your system's or Firefox's light or dark setting (`prefers-color-scheme`), switching
-the moment that changes, without a reload. Firefox's own focus rings follow the theme too:
-the address bar's focus ring and the outline of the focused pane in a split are the theme's
+for the accent, the normal-mode badge and link hints. It has a dark and a light variant, and by
+default it follows your system's or Firefox's light or dark setting (`prefers-color-scheme`),
+switching the moment that changes, without a reload. Firefox's own focus rings follow the theme
+too: the address bar's focus ring and the outline of the focused pane in a split are the theme's
 accent (made a shade darker or lighter if it would not stand out at 3:1 against the colours
 around it), and so are the focus rings of Vimma's own side panel, bookmarks panel, pickers and
 help overlay. Firefox's own sidebar (history, bookmarks and synced tabs, opened from the toolbar's
 sidebar button or the View menu) follows the theme as well: its launcher strip and panel
 are on the same surface as Vimma's side panel, with the theme's text, edge and focus colours (the
 search box, the open panel's button in the launcher and the lists' scrollbars included), and
-an open sidebar recolours with the rest of the window. A `colors.toml` Vimma cannot read (a value that is
-not a `#rrggbb` colour, a missing key) is ignored: the colours stay as they were, and the
-Browser Console (`ctrl+shift+j`) says which line is wrong.
+an open sidebar recolours with the rest of the window.
+
+**Dark, light or the system's: `:theme`.** The start page says it too:
+
+- `:theme dark` or `:theme light` keeps the built-in palette dark or light whatever the system
+  says; `:theme system` follows the system again (the default). Tab completes the three.
+- A bare `:theme` switches to the other one of what you see now.
+- It applies at once in every window and start page, and Vimma remembers it across restarts
+  (in the `vimma.theme.appearance` preference).
+- The same in [config.toml](#configtoml) is `[theme] appearance = "dark"` (`"light"`,
+  `"system"`). Set there, the file always wins: `:theme` then changes nothing and its notice
+  says to change the file.
+- `[theme.colors] mode = "dark"` (or `"light"`) also keeps the palette dark or light; it is an
+  override on top of any palette, so it wins over `appearance`.
 
 **Picking the built-in palette.** `[theme] name` in [config.toml](#configtoml) chooses it:
-`"vimma"` (the default) or `"tokyo-night"`, the Tokyo Night Vimma used before, dark only.
-`source = "file"` always shows that palette; with the default `source = "omarchy"` it is what
-you see without an Omarchy theme. With an Omarchy theme, nothing changes: Vimma follows it.
+`"vimma"` (the default) or `"tokyo-night"`, the Tokyo Night Vimma used before, dark only (so
+`appearance` makes no difference to it). `[theme.colors]` changes single colours of either.
 
 ```toml
 schema = 2
 
 [theme]
-source = "file"        # ignore Omarchy; always the palette below
 name = "tokyo-night"   # or "vimma", the default
+appearance = "dark"    # the built-in palette dark, "light", or "system" (the default)
 ```
 
-To keep the vimma palette dark (or light) whatever the system says, set
-`[theme.colors] mode = "dark"` (or `"light"`).
+**On Omarchy: your Omarchy theme.** On an [Omarchy](https://omarchy.org) system, Vimma takes its
+colours from your current Omarchy theme instead, with nothing to set up. When it starts, Vimma
+looks once for Omarchy (`~/.local/share/omarchy` or `~/.local/state/omarchy`); anywhere else it
+reads nothing and checks nothing, and installing Omarchy later takes effect at the next start.
+On Omarchy it reads `~/.local/state/omarchy/current/theme/colors.toml` (and `light.mode`, for a
+light theme) and checks it every 2 seconds, so `omarchy-theme-set` (or picking a theme from the
+Omarchy menu) recolours every open window and start page within 2 seconds, without a restart.
+The Omarchy theme decides dark or light itself; `:theme` then applies to the built-in palette,
+which shows when you set `[theme] source = "file"` (or `vimma.theme.source` to `builtin`). A
+`colors.toml` Vimma cannot read (a value that is not a `#rrggbb` colour, a missing key) is
+ignored: the colours stay as they were, and the Browser Console (`ctrl+shift+j`) says which line
+is wrong.
+
+```toml
+schema = 2
+
+[theme]
+source = "file"        # ignore Omarchy; always the built-in palette
+```
 
 **Instant theme changes.** On Omarchy, Vimma recolours as soon as `omarchy-theme-set` finishes,
 not within 2 seconds, with nothing to set up. When Vimma starts and finds
@@ -1197,6 +1221,7 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:source`                             | Reads `config.toml` now instead of within 2 seconds (see [config.toml](#configtoml)).                                            |
 | `:source path`                        | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                                  |
 | `:config`                             | Opens `config.toml` in a new tab (read-only view); creates it from a commented template when it is missing.                      |
+| `:theme [dark\|light\|system]`        | The built-in palette dark, light or as the system is; bare, the other of dark and light (see [Colours](#colours-and-themes)).    |
 | `:about`, `:vimma`                    | Opens [about:vimma](#aboutvimma) in a new tab.                                                                                   |
 | `:addons`                             | Opens the [add-on picker](#add-ons), as `ctrl+b e`.                                                                              |
 | `:addon name`                         | Opens that add-on's popup; `Tab` completes the name ([Add-ons](#add-ons)).                                                       |
@@ -1218,9 +1243,10 @@ Refresh for the current state. It is an ordinary page, so `j` / `k` scroll it.
   the command line show as `·`, so nothing you type is kept.
 - **Config:** the `config.toml` path, whether it was read, its `schema`, every error with its
   line, and the full binding table with the keys your file changes marked `*`.
-- **Theme:** the colour source, the Omarchy theme directory, the theme's name (the Omarchy
-  theme's, or the built-in palette's, e.g. `vimma (built in)`) and its `colors.toml` time, and
-  why the last theme file was rejected, if one was.
+- **Theme:** the colour source (`built in`, or `Omarchy`), the theme's name (the Omarchy
+  theme's, or the built-in palette's, e.g. `vimma (built in)`), its appearance (`system`,
+  `dark` or `light`, where that comes from and how to change it), and on Omarchy the theme
+  directory, its `colors.toml` time and why the last theme file was rejected, if one was.
 - **Workspaces:** how many there are, and this window's with their tab and pane counts.
 - **Control socket:** on or off, and its port. The token is never shown.
 
@@ -1235,17 +1261,18 @@ The licences of Firefox's third-party code are in `about:license`; the code Vimm
 
 Vimma's own preferences today:
 
-| Preference                 | Default                                | What it does                                                                                                                                               |
-| -------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vimma.ui.tabstrip.hidden` | `true`                                 | Hides Firefox's tab strip (horizontal, and the vertical tab list). Set `false` to show it again; it applies at once, no restart.                           |
-| `vimma.debug.keys`         | unset                                  | Create it as a boolean set to `true` to log every key Vimma sees (`{ key, mods, mode }`) to the Browser Console (`ctrl+shift+j`; enable its Debug filter). |
-| `vimma.startpage.newtab`   | `true`                                 | New tabs open Vimma's start page (see [The start page](#the-start-page)). Set `false` for Firefox's new tab page; it applies at once, no restart.          |
-| `vimma.control.enabled`    | `false`                                | Turns on the control socket for `vimma-ctl` and scripts (see [Scripting with vimma-ctl](#scripting-with-vimma-ctl)). Applies at once, no restart.          |
-| `vimma.theme.source`       | `omarchy`                              | `omarchy` follows your Omarchy theme (see [Colours](#colours-your-omarchy-theme)); `builtin` forces `[theme] name`'s palette. Applies at once.             |
-| `vimma.theme.omarchyPath`  | `~/.local/state/omarchy/current/theme` | The Omarchy theme directory to read `colors.toml` and `light.mode` from. Applies at once.                                                                  |
-| `vimma.theme.omarchyHook`  | `true`                                 | Installs the Omarchy theme-set hook for instant theme changes (see [Colours](#colours-your-omarchy-theme)). `false` removes Vimma's unedited hook at once. |
-| `vimma.config.path`        | unset                                  | A different config file than `$XDG_CONFIG_HOME/vimma/config.toml` (tests use it). Applies at once.                                                         |
-| `vimma.config.pollMs`      | `2000`                                 | How often Vimma checks `config.toml` for a change, in milliseconds. Applies at once.                                                                       |
+| Preference                 | Default                                | What it does                                                                                                                                                                            |
+| -------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vimma.ui.tabstrip.hidden` | `true`                                 | Hides Firefox's tab strip (horizontal, and the vertical tab list). Set `false` to show it again; it applies at once, no restart.                                                        |
+| `vimma.debug.keys`         | unset                                  | Create it as a boolean set to `true` to log every key Vimma sees (`{ key, mods, mode }`) to the Browser Console (`ctrl+shift+j`; enable its Debug filter).                              |
+| `vimma.startpage.newtab`   | `true`                                 | New tabs open Vimma's start page (see [The start page](#the-start-page)). Set `false` for Firefox's new tab page; it applies at once, no restart.                                       |
+| `vimma.control.enabled`    | `false`                                | Turns on the control socket for `vimma-ctl` and scripts (see [Scripting with vimma-ctl](#scripting-with-vimma-ctl)). Applies at once, no restart.                                       |
+| `vimma.theme.source`       | `omarchy`                              | `omarchy` follows your Omarchy theme where Omarchy is installed (see [Colours](#colours-and-themes)); `builtin` forces `[theme] name`'s palette. Applies at once.                       |
+| `vimma.theme.appearance`   | `system`                               | What `:theme` sets: the built-in palette `dark`, `light` or as the system is (see [Colours](#colours-and-themes)). `[theme] appearance` in `config.toml` wins over it. Applies at once. |
+| `vimma.theme.omarchyPath`  | `~/.local/state/omarchy/current/theme` | The Omarchy theme directory to read `colors.toml` and `light.mode` from. Applies at once.                                                                                               |
+| `vimma.theme.omarchyHook`  | `true`                                 | Installs the Omarchy theme-set hook for instant theme changes (see [Colours](#colours-and-themes)). `false` removes Vimma's unedited hook at once.                                      |
+| `vimma.config.path`        | unset                                  | A different config file than `$XDG_CONFIG_HOME/vimma/config.toml` (tests use it). Applies at once.                                                                                      |
+| `vimma.config.pollMs`      | `2000`                                 | How often Vimma checks `config.toml` for a change, in milliseconds. Applies at once.                                                                                                    |
 
 ## config.toml
 
@@ -1269,7 +1296,8 @@ new_tab = ["prefix+t"]        # replaces ctrl+b c
 max = 2
 
 [theme]
-source = "file"               # the built-in vimma palette instead of your Omarchy theme
+source = "file"               # on Omarchy: the built-in vimma palette instead of its theme
+appearance = "dark"           # the built-in palette dark whatever the system says
 [theme.colors]
 accent = "#ff9e64"
 ```
@@ -1297,6 +1325,7 @@ accent = "#ff9e64"
   `[panes] main_size` (the main-\* presets' main pane, 20 to 80 percent, default 60); `[sites."<host>"] insert` (`auto`, `never` or `always`: whether a text field on that
   site and its subdomains takes insert mode); `[theme]` `source` (`omarchy` or `file`, the
   built-in palette), `name` (`vimma`, the default, or `tokyo-night`: the built-in palette),
+  `appearance` (`system`, `dark` or `light`: the built-in palette's; left out, `:theme` sets it),
   `font` and `[theme.colors]` (single colours over either source);
   `[workspaces]` (a new one gets its container at once; one removed from the file stays, as a
   workspace you can close yourself); `[firefox] disable` and `enable` (which of Firefox's own
@@ -1308,7 +1337,7 @@ accent = "#ff9e64"
   `"window"`: it is a window of its own beside it).
 - **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]`, `[firefox]`, `[bookmarks]`,
   `[private]`,
-  `hint_chars`, `insert_editing` and `[theme] name`; every key,
+  `hint_chars`, `insert_editing`, `[theme] name` and `appearance`; every key,
   its type and default are in [m5-core-config-and-theme](specs/m5-core-config-and-theme.md#schema-v1)
   and [m3-m4-core-prep](specs/m3-m4-core-prep.md#config-schema-2), and
   `packages/vimma-core/defaults.toml` lists them with their defaults.

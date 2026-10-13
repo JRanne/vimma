@@ -220,10 +220,11 @@ shows as `space n` ([guide](guide.md#configtoml)).
 
 ## Config
 
-| Action                    | Config name     | Bindings |
-| ------------------------- | --------------- | -------- |
-| Reload config             | `reload_config` | —        |
-| Open config.toml in a tab | `edit_config`   | —        |
+| Action                                               | Config name        | Bindings |
+| ---------------------------------------------------- | ------------------ | -------- |
+| Reload config                                        | `reload_config`    | —        |
+| Open config.toml in a tab                            | `edit_config`      | —        |
+| Built-in theme: dark, light or the system's (:theme) | `theme_appearance` | —        |
 
 ## Add-ons
 

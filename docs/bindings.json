@@ -1796,6 +1796,11 @@
           "name": "edit_config",
           "description": "Open config.toml in a tab",
           "keys": []
+        },
+        {
+          "name": "theme_appearance",
+          "description": "Built-in theme: dark, light or the system's (:theme)",
+          "keys": []
         }
       ]
     },

@@ -117,19 +117,27 @@ function render(d) {
       : []),
   );
 
+  // docs/specs/theme-appearance.md: the Omarchy rows only where Vimma follows Omarchy.
   const t = d.theme;
-  fill(
-    "theme",
-    dl([
-      ["Source", t.source],
-      ["Omarchy path", t.path],
-      ["State", t.state],
-      ["Theme", t.name ?? "-"],
-      ["colors.toml mtime", t.mtime ? new Date(t.mtime).toISOString() : "-"],
-      ["Last error", t.lastError ? el("span", { class: "error" }, t.lastError) : "none"],
-      ["Warnings", t.warnings.join("; ") || "none"],
-    ]),
+  const omarchy = t.source === "omarchy";
+  const from = { config: "config.toml", pref: ":theme", default: "the default" }[t.appearance.from];
+  const change =
+    t.appearance.from === "config"
+      ? "change [theme] appearance in config.toml"
+      : ":theme dark, :theme light or :theme system";
+  /** @type {[string, string | Node][]} */
+  const rows = [["Source", omarchy ? "Omarchy" : "built in"]];
+  if (omarchy) rows.push(["Omarchy path", t.path], ["State", t.state]);
+  rows.push(
+    ["Theme", t.name ?? "-"],
+    field("Appearance", `${t.appearance.value} (${from}; ${change})`, "theme-appearance"),
   );
+  if (omarchy) rows.push(["colors.toml mtime", t.mtime ? new Date(t.mtime).toISOString() : "-"]);
+  rows.push(
+    ["Last error", t.lastError ? el("span", { class: "error" }, t.lastError) : "none"],
+    ["Warnings", t.warnings.join("; ") || "none"],
+  );
+  fill("theme", dl(rows));
 
   fill(
     "workspaces",
