@@ -1114,6 +1114,7 @@ export const VimmaHost = {
         state.panel.isOpen ||
         state.bookmarks.isOpen ||
         state.find.typing,
+      pending: () => state.dispatcher.pending().length > 0,
       notice: (text) => state.notice.show(text),
       ask: (question, yes) => state.rename.ask(question, yes),
       emit: () => this._emit(state),

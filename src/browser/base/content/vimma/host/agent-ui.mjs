@@ -47,6 +47,7 @@ const TICK_MS = 15_000;
  * @property {import("../ui/agent-prompt.mjs").AgentPrompt} prompt
  * @property {() => boolean} inField  focus is in an editable field (insert mode)
  * @property {() => boolean} otherOpen  a picker, prompt, panel or the command line is open
+ * @property {() => boolean} pending  a key sequence is under way (after ctrl+b)
  * @property {(text: string) => void} notice
  * @property {(question: string, yes: () => void) => void} ask  a y/N on the prompt line
  * @property {() => void} emit  redraw the status bar
@@ -265,6 +266,15 @@ export const AgentUi = {
     const chord = chordFromEvent(e);
     if (!chord) return false; // a bare modifier: shift for `Y`
     if (chord.ctrl || chord.alt || chord.meta) return false;
+    // The rest of a sequence (the g of ctrl+b g) is the bindings' (review of #177, L5).
+    if (w.pending()) return false;
+    // Another prompt, picker or the command line opened over the line takes the keys; the line
+    // goes back to waiting and comes back when it closes.
+    if (w.otherOpen()) {
+      close();
+      sync();
+      return false;
+    }
     e.preventDefault();
     e.stopPropagation();
     // Not armed yet: the delay starts again, so typing on through the line never answers it.

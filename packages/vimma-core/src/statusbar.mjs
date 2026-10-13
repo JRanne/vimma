@@ -284,10 +284,11 @@ export function statusSegments(input) {
   if (agent) {
     // The glyph and the word carry it without colour (decision 24), as `◆ private` does.
     const word = `${AGENT_GLYPH} agent`;
-    const text = agent.ran
-      ? `${word} ·`
-      : agent.waiting
-        ? `${word} ${agent.waiting}?`
+    const ran = agent.ran && !agent.waiting;
+    const text = agent.waiting
+      ? `${word} ${agent.waiting}?`
+      : ran
+        ? `${word} ·`
         : agent.minutes !== null
           ? `${word} ${agent.minutes}m`
           : word;
@@ -295,8 +296,8 @@ export function statusSegments(input) {
       seg({
         id: "agent",
         text,
-        fg: agent.ran ? "--vimma-mode-normal-fg" : "--vimma-text-cyan",
-        bg: agent.ran ? "--vimma-mode-normal" : null,
+        fg: ran ? "--vimma-mode-normal-fg" : "--vimma-text-cyan",
+        bg: ran ? "--vimma-mode-normal" : null,
         side: "right",
         // Just below the workspace's: it gives way before it, after the tab and title.
         priority: 3.5,
