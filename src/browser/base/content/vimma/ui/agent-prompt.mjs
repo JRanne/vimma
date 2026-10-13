@@ -59,9 +59,21 @@ export class AgentPrompt {
     el.setAttribute("aria-label", line.label);
     /** @type {HTMLElement} */ (this.hint).textContent = line.hint;
     this.setCount("");
+    el.hidden = false;
+    this.rearm(armMs);
+    return true;
+  }
+
+  /**
+   * Keys count only `armMs` from now: after the window came to the front, lost it, or a key
+   * arrived before the line was armed (review of #177, H1; as PopupNotifications re-arms on
+   * activate). The hint hides until then.
+   * @param {number} armMs
+   */
+  rearm(armMs) {
+    if (!this.isOpen) return;
     this.disarm();
     /** @type {HTMLElement} */ (this.hint).hidden = true;
-    el.hidden = false;
     this.armTimer = this.win.setTimeout(
       () => {
         this.armTimer = null;
@@ -70,7 +82,6 @@ export class AgentPrompt {
       },
       Math.max(0, armMs),
     );
-    return true;
   }
 
   /** @param {string} count  the digits of a grant typed so far */

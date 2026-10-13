@@ -84,15 +84,31 @@ const isFocused = (win) => /** @type {any} */ (Services.focus).activeWindow === 
 const isFullscreen = (win) => win.document.documentElement.hasAttribute("inDOMFullscreen");
 
 const grantMinutes = () => McpHost.config?.grantMinutes ?? 10;
+const armMs = () => Services.prefs.getIntPref(ARMING_PREF, 1000);
+
+/** Window events after which the line must arm again (review of #177, H1). */
+const REARM_EVENTS = ["activate", "deactivate", "focus", "blur"];
+/** @type {WeakMap<Window, (e: Event) => void>} */
+const rearmers = new WeakMap();
+
+/**
+ * The window came to the front or left it, or its page was hidden or shown: a just-focused
+ * window counts as one being typed in (no opening by itself for 1.5 s), and an open line arms
+ * again, so a key meant for another window never answers it.
+ * @param {Window} win @param {Event} e
+ */
+function onWindowChange(win, e) {
+  // focus and blur bubble from every element: only the window's own count.
+  if ((e.type === "focus" || e.type === "blur") && e.target !== win) return;
+  lastKey.set(win, Date.now());
+  if (current?.win === win) windows.get(win)?.prompt.rearm(armMs());
+}
 
 /** @param {Window} win @param {Question} q */
 function open(win, q) {
   const w = windows.get(win);
   if (!w) return false;
-  const shown = w.prompt.show(
-    questionLine(q, { grantMinutes: grantMinutes() }),
-    Services.prefs.getIntPref(ARMING_PREF, 1000),
-  );
+  const shown = w.prompt.show(questionLine(q, { grantMinutes: grantMinutes() }), armMs());
   if (!shown) return false;
   current = { id: q.id, win, count: "", question: q };
   return true;
@@ -207,6 +223,10 @@ export const AgentUi = {
    */
   register(win, w) {
     windows.set(win, w);
+    const rearm = (/** @type {Event} */ e) => onWindowChange(win, e);
+    rearmers.set(win, rearm);
+    for (const type of REARM_EVENTS) win.addEventListener(type, rearm, true);
+    win.document.addEventListener("visibilitychange", rearm, true);
     if (!listening) {
       listening = true;
       AgentGate.addListener(onGate);
@@ -215,6 +235,11 @@ export const AgentUi = {
 
   /** @param {Window} win  closing (VimmaHost.uninit) */
   unregister(win) {
+    const rearm = rearmers.get(win);
+    if (rearm) {
+      for (const type of REARM_EVENTS) win.removeEventListener(type, rearm, true);
+      win.document.removeEventListener("visibilitychange", rearm, true);
+    }
     if (current?.win === win) current = null;
     windows.get(win)?.prompt.destroy();
     windows.delete(win);
@@ -242,7 +267,12 @@ export const AgentUi = {
     if (chord.ctrl || chord.alt || chord.meta) return false;
     e.preventDefault();
     e.stopPropagation();
-    if (e.repeat || !w.prompt.armed) return true;
+    // Not armed yet: the delay starts again, so typing on through the line never answers it.
+    if (!w.prompt.armed) {
+      w.prompt.rearm(armMs());
+      return true;
+    }
+    if (e.repeat) return true;
     const result = promptKey({ count: current.count }, formatKey(chord), {
       full: current.question.tool === FULL_CONTROL,
     });

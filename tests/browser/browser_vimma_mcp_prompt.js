@@ -292,3 +292,41 @@ add_task(async function test_timeouts_deny_and_questions_come_one_at_a_time() {
   Services.prefs.clearUserPref(ASK_TIMEOUT);
   await setSwitches({});
 });
+
+// Review of #177 (H1): a window that comes to the front, by the user or by a process that can
+// focus windows (hyprctl dispatch focuswindow), re-arms the line, so a `y` typed for another
+// app never answers it; a key pressed while the line is not armed yet restarts the delay.
+add_task(async function test_focus_changes_and_early_keys_rearm_the_line() {
+  await setSwitches({ mcp: true });
+  Services.prefs.setIntPref(ARMING, 1000);
+  const c = await agentClient();
+  await calmPage();
+  const id = c.request("agent-tabs");
+  await armed();
+
+  const other = await BrowserTestUtils.openNewBrowserWindow({ private: true });
+  await SimpleTest.promiseFocus(other);
+  await SimpleTest.promiseFocus(window);
+  Assert.ok(lineOpen(), "the line is still there after the window came back");
+  Assert.ok(!hintShown(), "but disarmed");
+  EventUtils.synthesizeKey("y");
+  await new Promise((r) => setTimeout(r, 100));
+  Assert.equal(AgentGate.waiting.length, 1, "a y right after the window came back does nothing");
+
+  // Keys while it is not armed restart the delay: 600 ms after a key, still not armed.
+  await new Promise((r) => setTimeout(r, 600));
+  EventUtils.synthesizeKey("j");
+  await new Promise((r) => setTimeout(r, 600));
+  Assert.ok(!hintShown(), "a key while disarmed restarted the delay");
+  EventUtils.synthesizeKey("y");
+  await new Promise((r) => setTimeout(r, 100));
+  Assert.equal(AgentGate.waiting.length, 1, "so this y does nothing either");
+
+  await until(hintShown, "armed a full delay after the last key");
+  EventUtils.synthesizeKey("y");
+  Assert.ok((await c.response(id)).ok, "then y allows");
+  c.close();
+  await BrowserTestUtils.closeWindow(other);
+  await SimpleTest.promiseFocus(window);
+  await setSwitches({});
+});
