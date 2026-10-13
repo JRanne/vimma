@@ -29,6 +29,10 @@ The coordinator proposed, and the user approved ("do so"):
 The user's answers to the first draft: "go with ctrl + b u, what happens if i want to access
 toolbar when it's hidden? there should be some minimalistic bar that shows what i'm writing".
 
+Added 2026-10-13, about the account panel the toolbar's account button opens: "then there is
+button "get vimma for android or iOS", i think atleast that should be removed", then "write it
+to toolbar-toggle spec" (decision 20).
+
 ## User stories
 
 - As a user, `ctrl+b u` hides the toolbar in every window. The window is then the pages and
@@ -482,6 +486,18 @@ toolbar when it's hidden? there should be some minimalistic bar that shows what 
     - `TabBarVisibility` is not touched. The nav bar keeps its `browser-titlebar` class whether
       hidden or not.
 
+20. **No mobile-app promo in the account panel.** The account button's panel (`PanelUI-fxa`)
+    has a "Get Vimma for Android or iOS" row: Firefox's `PanelUI-fxa-menu-get-firefox-mobile`
+    (`browser/base/content/appmenu-viewcache.inc.xhtml:735`, label `fxa-menu-get-firefox-mobile`
+    = "Get { -brand-product-name } for Android or iOS", `browser/locales/en-US/browser/appmenu.ftl:181`,
+    handled in `browser/base/content/browser-sync.js:1782, 1890`). With Vimma's brand name it
+    advertises a mobile app that does not exist. It is hidden with `display: none` in our
+    toolbar CSS, which already restyles the nav bar this spec owns; no upstream patch and no
+    string change. The rest of the account panel (sign-in, Sync, devices) stays: Sync is kept
+    (m0-mozilla-services). Test: a mochitest opens the account panel and asserts the row is not
+    rendered (`checkVisibility()` false) while the sign-in and Sync rows still are. The wider
+    sweep of Firefox's panels is the queued Firefox panels audit (plan.md, Q-UI).
+
 ## Test plan
 
 Write first; paste red, then green (CLAUDE.md).
@@ -607,6 +623,8 @@ Write first; paste red, then green (CLAUDE.md).
     bar with only the URL field, and the full toolbar comes back on hover and for add-on popups."
   - "Added: e2e baselines `toolbar-hidden.png` and `toolbar-minimal.png` for the hidden toolbar
     and its minimal URL bar."
+  - "Removed: the account panel's "Get Vimma for Android or iOS" row; there is no Vimma mobile
+    app."
 
 ## Out of scope
 
