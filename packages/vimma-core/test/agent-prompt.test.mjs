@@ -4,6 +4,7 @@
 import { describe, test, expect } from "vitest";
 import {
   CONTROL_MAX_MINUTES,
+  controlEnd,
   FULL_CONTROL,
   QUIET_MS,
   agentAlertText,
@@ -280,5 +281,37 @@ describe(":control (decision 29 D)", () => {
     expect(controlStatus({ enabled: true, until: null, now: 0 })).toBe(
       "full control on (vimma.control.enabled, no time limit)",
     );
+  });
+});
+
+// Review of #177 (L4): the end time of :control on fails closed.
+describe(":control's end time", () => {
+  const now = 1_800_000_000_000;
+  test("no pref: no end time (control set in about:config)", () => {
+    expect(controlEnd(undefined, now)).toEqual({ kind: "none" });
+  });
+  test("a time ahead, within 1440 minutes and a minute: control stays on until then", () => {
+    expect(controlEnd(String(now + 15 * MIN), now)).toEqual({
+      kind: "until",
+      until: now + 15 * MIN,
+    });
+    expect(controlEnd(String(now + (CONTROL_MAX_MINUTES + 1) * MIN), now).kind).toBe("until");
+  });
+  test.each([
+    ["passed", String(now - 1)],
+    ["now", String(now)],
+    [
+      "beyond the cap (a clock moved back, or a hand edit)",
+      String(now + (CONTROL_MAX_MINUTES + 2) * MIN),
+    ],
+    ["empty", ""],
+    ["zero", "0"],
+    ["negative", "-5"],
+    ["not a number", "soon"],
+    ["a fraction", "1.5"],
+    ["seconds in exponent form", "1e15"],
+    ["too long to be exact", "99999999999999999999"],
+  ])("%s: off", (_why, raw) => {
+    expect(controlEnd(raw, now)).toEqual({ kind: "off" });
   });
 });

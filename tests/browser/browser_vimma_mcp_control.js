@@ -229,23 +229,34 @@ add_task(async function test_control_on_minutes_turns_itself_off() {
   );
   EventUtils.synthesizeKey("y");
   await until(() => Services.prefs.getBoolPref(CONTROL, false), "y turns full control on");
-  const until15 = Services.prefs.getIntPref(CONTROL_UNTIL_PREF, 0);
-  Assert.ok(Math.abs(until15 - (Date.now() / 1000 + 900)) < 30, "for 15 minutes");
+  const until15 = Number(Services.prefs.getStringPref(CONTROL_UNTIL_PREF, "0"));
+  Assert.ok(Math.abs(until15 - (Date.now() + 900_000)) < 30_000, "for 15 minutes, in ms");
   await until(() => noticeText().startsWith("full control on, 15m left"), "and says so");
 
   // The end time comes closer: control goes off when it passes.
-  Services.prefs.setIntPref(CONTROL_UNTIL_PREF, Math.ceil(Date.now() / 1000) + 1);
+  Services.prefs.setStringPref(CONTROL_UNTIL_PREF, String(Date.now() + 1000));
   await until(() => !Services.prefs.getBoolPref(CONTROL, true), "off when the time is up");
   Assert.ok(!Services.prefs.prefHasUserValue(CONTROL_UNTIL_PREF), "and the end time is gone");
 
   // A restart after the end time: off at startup.
   Services.prefs.setBoolPref(CONTROL, true);
-  Services.prefs.setIntPref(CONTROL_UNTIL_PREF, Math.floor(Date.now() / 1000) - 60);
+  Services.prefs.setStringPref(CONTROL_UNTIL_PREF, String(Date.now() - 60_000));
   ControlHost.init();
   Assert.ok(!Services.prefs.getBoolPref(CONTROL, true), "an end time in the past turns it off");
 
+  // Review of #177 (L4): an end time that is not one fails closed.
+  for (const bad of ["", "0", "-5", "soon", String(Date.now() + 2 * 24 * 3600_000)]) {
+    Services.prefs.setBoolPref(CONTROL, true);
+    Services.prefs.setStringPref(CONTROL_UNTIL_PREF, bad);
+    ControlHost.init();
+    Assert.ok(
+      !Services.prefs.getBoolPref(CONTROL, true),
+      `an end time of ${JSON.stringify(bad)}: off`,
+    );
+  }
+
   Services.prefs.setBoolPref(CONTROL, true);
-  Services.prefs.setIntPref(CONTROL_UNTIL_PREF, Math.floor(Date.now() / 1000) + 600);
+  Services.prefs.setStringPref(CONTROL_UNTIL_PREF, String(Date.now() + 600_000 - 1000));
   await focusContent(gBrowser.selectedBrowser);
   EventUtils.synthesizeKey(":", { shiftKey: true });
   EventUtils.sendString("mcp");

@@ -286,3 +286,21 @@ export function controlStatus({ enabled, until, now }) {
   if (until === null) return "full control on (vimma.control.enabled, no time limit)";
   return `full control on, ${Math.max(1, Math.ceil((until - now) / 60_000))}m left`;
 }
+
+/**
+ * `:control on`'s end time, read back (review of #177, L4): the pref holds ms since the epoch as
+ * a string of digits. Anything else, a time that has passed, or one further ahead than the
+ * longest `:control on` (a clock moved back, a hand edit) turns control off: it fails closed.
+ * No pref at all is control set without an end (about:config).
+ * @param {string | undefined} raw  the pref, or undefined when it is not set
+ * @param {number} now  ms
+ * @returns {{ kind: "none" } | { kind: "off" } | { kind: "until", until: number }}
+ */
+export function controlEnd(raw, now) {
+  if (raw === undefined) return { kind: "none" };
+  if (!/^[1-9][0-9]{0,15}$/.test(raw)) return { kind: "off" };
+  const until = Number(raw);
+  if (!Number.isSafeInteger(until) || until <= now) return { kind: "off" };
+  if (until - now > (CONTROL_MAX_MINUTES + 1) * 60_000) return { kind: "off" };
+  return { kind: "until", until };
+}

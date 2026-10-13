@@ -535,7 +535,7 @@ working in the agent workspace changes nothing about where you are or what you d
       when the discovery file lists the `agent` role, and says on stderr that Vimma is asking.
     - **D. `:control on <minutes>`** turns `vimma.control.enabled` on for that many minutes (1 to
       1440), after a y/N, and then off; `:control off` turns it off now; `:control` says on or
-      off and the minutes left. The end time is the pref `vimma.control.enabledUntil` (seconds
+      off and the minutes left. The end time is the pref `vimma.control.enabledUntilMs` (ms
       since the epoch), so a restart inside the window keeps it and one after it turns control
       off at startup. `:mcp` and about:vimma show it. Turning control on through `about:config`
       stays as it was (no end time).
@@ -940,7 +940,7 @@ approval settings are theirs), the protocol spec (protocol 2 section), ADR-019,
 - `ui/agent-prompt.mjs` (the line, an `alertdialog` that takes no focus, a zero-height row like
   the command line's in `cmdline.css`), `host/agent-ui.mjs` (which window asks, the guards, the
   keys from VimmaHost's capture listener, attention and the notification, the notices, the
-  status), `host/control-ops.mjs` (`:control`, the pref `vimma.control.enabledUntil`),
+  status), `host/control-ops.mjs` (`:control`, the pref `vimma.control.enabledUntilMs`),
   `ctl/AgentPages.sys.mjs` (decision 30), `AgentGate.askFull` and gate events, and the
   full-control question in `VimmaControl`'s handshake. `vimma-ctl` waits up to 310 s for the
   welcome when the discovery file lists `agent`, says so on stderr, and maps `denied` to exit 4

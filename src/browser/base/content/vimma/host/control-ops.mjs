@@ -7,7 +7,12 @@
 // is a pref, so a restart inside the window keeps it and one after it turns control off at
 // startup. Turning control on in about:config sets no end time and is left alone.
 
-import { controlOnQuestion, controlStatus, parseControlCommand } from "../core/agent-prompt.mjs";
+import {
+  controlEnd,
+  controlOnQuestion,
+  controlStatus,
+  parseControlCommand,
+} from "../core/agent-prompt.mjs";
 
 const lazy = /** @type {any} */ ({});
 ChromeUtils.defineESModuleGetters(lazy, {
@@ -16,16 +21,27 @@ ChromeUtils.defineESModuleGetters(lazy, {
 });
 
 export const CONTROL_ENABLED_PREF = "vimma.control.enabled";
-/** When `:control on <minutes>` ends, in seconds since the epoch; absent: no end. */
-export const CONTROL_UNTIL_PREF = "vimma.control.enabledUntil";
+/**
+ * When `:control on <minutes>` ends: ms since the epoch, as a string (no 2038 limit); absent:
+ * no end. Anything else turns control off (review of #177, L4; core controlEnd).
+ */
+export const CONTROL_UNTIL_PREF = "vimma.control.enabledUntilMs";
 
 let timer = /** @type {any} */ (null);
 let watching = false;
 
+/** The end time, read back: none, off (passed or not a valid one), or until when. */
+function end() {
+  const raw = Services.prefs.prefHasUserValue(CONTROL_UNTIL_PREF)
+    ? Services.prefs.getStringPref(CONTROL_UNTIL_PREF, "")
+    : undefined;
+  return controlEnd(raw, Date.now());
+}
+
 /** The end time in ms, or null. */
 function untilMs() {
-  const s = Services.prefs.getIntPref(CONTROL_UNTIL_PREF, 0);
-  return s > 0 ? s * 1000 : null;
+  const e = end();
+  return e.kind === "until" ? e.until : null;
 }
 
 /** Off now, and the end time gone. */
@@ -40,17 +56,17 @@ function turnOff() {
 function arm() {
   if (timer) lazy.clearTimeout(timer);
   timer = null;
-  const until = untilMs();
-  if (until === null) return;
+  const e = end();
+  if (e.kind === "none") return;
   if (!Services.prefs.getBoolPref(CONTROL_ENABLED_PREF, false)) {
     Services.prefs.clearUserPref(CONTROL_UNTIL_PREF);
     return;
   }
-  const left = until - Date.now();
-  if (left <= 0) {
+  if (e.kind === "off") {
     turnOff();
     return;
   }
+  const left = e.until - Date.now();
   // Timers past 2^31 ms overflow; 1440 minutes is far below that.
   timer = lazy.setTimeout(arm, Math.min(left, 60 * 60 * 1000));
 }
@@ -97,10 +113,7 @@ export const ControlHost = {
         ask(controlOnQuestion(minutes), () => {
           // On first: the end time's observer clears an end time while control is off.
           Services.prefs.setBoolPref(CONTROL_ENABLED_PREF, true);
-          Services.prefs.setIntPref(
-            CONTROL_UNTIL_PREF,
-            Math.floor((Date.now() + minutes * 60_000) / 1000),
-          );
+          Services.prefs.setStringPref(CONTROL_UNTIL_PREF, String(Date.now() + minutes * 60_000));
           arm();
           say(this.status());
         });
