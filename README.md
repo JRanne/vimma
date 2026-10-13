@@ -78,8 +78,8 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
   `about:vimma` shows the version and what is in force.
 - Theming: the bars, pickers, hints, start page and Firefox's own sidebar take their colours
   from your desktop theme and switch at once when it changes, or from your own colours in
-  `config.toml` (by default Vimma's own vimma.dev palette, light or dark as your system is;
-  Tokyo Night by name).
+  `config.toml` (by default Vimma's own vimma.dev palette, light or dark as your system is, or
+  as you pick with `:theme`; Tokyo Night by name).
 - Accessible: Vimma's own UI works with a screen reader, keeps focus where you left it, and its
   text meets WCAG AA contrast in dark and light themes
   ([guide](docs/guide.md#accessibility)).

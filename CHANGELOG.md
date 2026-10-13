@@ -6,6 +6,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
+- Theme: `:theme dark`, `:theme light` and `:theme system` (or `[theme] appearance` in `config.toml`, which wins) keep the built-in palette dark or light or have it follow the system, live and across restarts; the start page and `about:vimma` say how. Off Omarchy, Vimma no longer looks for Omarchy: it checks once at startup, and without it there is no theme poll, no hook check and no Omarchy wording. The help-text and `defaults.toml` snapshots gained the action and the `appearance` comment.
 - `docs/bindings.json` is generated with `docs/bindings.md` from the same source, and vimma.dev is told when the default bindings change, so its `?` overlay lists every Vimma binding (#154).
 - The start page shows Vimma's version and the Firefox release it is built on, read from the build (#159).
 - Private workspace on Hyprland: going to it puts the private window exactly where the Vimma window was (same workspace, tile, size, fullscreen or floating) and hides the normal window in `special:vimma` until you switch back, close the private window, or a link from another app arrives. Vimma talks to Hyprland's socket with a fixed command set and sends no titles or URLs; `[private] placement = "window"` keeps it a separate window. Private windows' titles no longer include the page title (`privacy.exposeContentTitleInWindow.pbm` = `false`). The `defaults.toml` snapshot gained the `[private]` section.

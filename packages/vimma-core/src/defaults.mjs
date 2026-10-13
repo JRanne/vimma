@@ -44,6 +44,7 @@ import { DEFAULT_THEME_NAME } from "./theme.mjs";
  * @typedef {object} ThemeInput
  * @property {"omarchy" | "file"} [source]
  * @property {string} [name]   a built-in palette: "vimma" or "tokyo-night" (schema 2)
+ * @property {"system" | "dark" | "light"} [appearance]  the built-in palette's variant (schema 2)
  * @property {string} [font]
  * @property {Record<string, string>} [colors]
  */
@@ -336,12 +337,15 @@ export function formatDefaultsToml() {
     "[workspaces]",
     '# work = { color = "blue", icon = "briefcase", home = "https://intranet.example" }',
     "",
-    '# "omarchy" follows the current Omarchy theme, and uses the built-in palette `name` without',
-    '# one; "file" always uses `name`: "vimma" (vimma.dev\'s colours, light or dark as the browser',
-    '# is) or "tokyo-night" (dark).',
+    '# The built-in palette `name`: "vimma" (vimma.dev\'s colours, dark or light) or "tokyo-night"',
+    '# (dark). "omarchy" follows your Omarchy theme where Omarchy is installed and uses `name`',
+    '# elsewhere; "file" always uses `name`.',
     "[theme]",
     `source = ${tomlString(theme.source)}`,
     `name = ${tomlString(theme.name)}`,
+    '# The built-in palette "dark", "light", or "system" (as the system or Firefox is, live).',
+    "# Left out, :theme dark|light|system sets it and remembers it; set here, it always wins.",
+    '# appearance = "system"',
     `font = ${tomlString(theme.font)}`,
     "",
     "# Overrides on top of the palette, with the keys of Omarchy's colors.toml.",

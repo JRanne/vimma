@@ -1,6 +1,6 @@
 # Spec: theme-appearance
 
-Status: in progress · Area: `packages/vimma-core/src/` (`theme.mjs`, `config.mjs`,
+Status: implemented · Area: `packages/vimma-core/src/` (`theme.mjs`, `config.mjs`,
 `defaults.mjs`, `cmdline.mjs`, `actions.mjs`); `ui/theme-host.mjs`,
 `omarchy/OmarchyHook.sys.mjs`, `host/VimmaHost.sys.mjs` (one runner), `about/`, `start/`.
 No upstream patch, no new dependency. Builds on [m5-omarchy-theme](m5-omarchy-theme.md) and
@@ -103,7 +103,7 @@ Decisions:
   - detection against a temp `HOME` without Omarchy: `status.omarchy` false, no timer
     (`status.polling` false), source `built in`, the built-in palette shows; with
     `~/.local/share/omarchy` in the temp `HOME`: detected, polling;
-  - `OmarchyHook.syncAfterDetection` does not look for hooks without Omarchy;
+  - `OmarchyHook.syncIfInstalled(home, false)` does not look for hooks without Omarchy;
   - `:theme light` under a dark desktop turns the bar light at once and sets the pref; `:theme`
     toggles back to dark; `:theme system` clears the pref and follows the desktop; a
     `[theme] appearance` from config wins (`setConfig`) and the notice says so; a bad word is
@@ -114,3 +114,22 @@ Decisions:
 - **Screenshots** (real build, Xvfb, no Omarchy prefs): `:theme dark`, `:theme light`, the start
   page tip, about:vimma's Theme section; one run with `vimma.theme.omarchyPath` at
   `~/.local/share/omarchy/themes/ristretto`: the Omarchy colours win after `:theme light`.
+
+## Results
+
+- Vitest red: 17 failures (`:theme` unknown, no `appearance` key, the Omarchy warning still
+  there, `defaults.toml` without the comment). Green: 2228/2228 in core, with the help-text and
+  `defaults.toml` snapshots re-recorded (the `theme_appearance` row; the `[theme]` comments).
+- Mochitest red: 10 failures (`ThemeHost.detectOmarchy is not a function`, the poll timer left
+  running). Green: 35/35. Mutations: a timer that ignores the detection failed `no poll timer
+runs` and `the poll stops`; the old about page failed the four about:vimma checks; reading
+  "Omarchy shown" after setting the pref (whose observer resets it) lost the Omarchy notice.
+  Full `tests/browser/` in a lane: 5445 passed before the last two tasks, 0 failed after the
+  stale-warning fix (an Omarchy theme's contrast warnings stayed in `status` after the built-in
+  palette applied; now reset).
+- Screenshots (artifact build, Xvfb, no Omarchy prefs): `:theme dark` and `:theme light`, the
+  completion list, the start page tip in both, the choice kept after a restart, about:vimma's
+  Theme section; with `vimma.theme.omarchyPath` at Omarchy's ristretto theme, `:theme light`
+  keeps ristretto's colours and says so, and the start page has no tip.
+- The e2e baselines are unchanged: `m3-private-workspace` (a start page) differs by 0.38 % in
+  CI with the tip, under the 0.5 % threshold.

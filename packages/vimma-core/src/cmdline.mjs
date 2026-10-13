@@ -113,6 +113,8 @@ export const COMMANDS = Object.freeze([
   // m5-config-load: with a path, that file replaces the config in force (all or nothing).
   cmd("source", "optional", "config.reload", "Reload config (or load the given file)"),
   cmd("config", "none", "config.edit", "Open config.toml in a tab (created if missing)"),
+  // docs/specs/theme-appearance.md: without a word, the other of dark and light.
+  cmd("theme", "optional", "theme.appearance", "Built-in theme: dark, light or system (Tab)"),
   // about:vimma (m5-about-vimma): a fixed URL for tab.new, so no new action or host runner.
   cmd("about", "none", "tab.new", "Open about:vimma (diagnostics)", {
     aliases: ["vimma"],
@@ -307,6 +309,8 @@ const ARGUMENT_KINDS = Object.freeze({
   addon: { names: "addon", kind: "add-on" },
   layout: { names: "layout", kind: "layout", fixed: LAYOUTS },
   private: { names: "private", kind: "private workspace", fixed: ["close"] },
+  // The two a first-time user wants first, then back to following the system.
+  theme: { names: "theme", kind: "appearance", fixed: ["dark", "light", "system"] },
   workspace: { names: "workspace", kind: "workspace" },
   wsdelete: { names: "workspace", kind: "workspace" },
   wsmove: { names: "workspace", kind: "workspace" },
