@@ -1,0 +1,13 @@
+{
+  "description": "The tab id is a string",
+  "kind": "response",
+  "command": "agent-open",
+  "message": {
+    "type": "response",
+    "id": 4,
+    "ok": true,
+    "result": {
+      "tab": 13
+    }
+  }
+}

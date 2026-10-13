@@ -366,6 +366,14 @@ export class VimmaChild extends JSWindowActorChild {
       }
       case "Vimma:FindAnchor":
         return this.#findAnchor();
+      case "Vimma:Selection": {
+        // An agent's read (docs/specs/vimma-mcp.md, decision 4): the page's selected text, if
+        // any, cut at `max` characters; a copy, nothing in the page changes.
+        const max = Math.max(0, Math.min(Number(msg.data?.max) || 0, 500000));
+        const text = this.contentWindow?.getSelection()?.toString() ?? "";
+        // By code point: a cut through a surrogate pair would leave half a character.
+        return text ? [...text].slice(0, max).join("") : null;
+      }
       case "Vimma:ScrollTo": {
         const x = Number(msg.data?.x);
         const y = Number(msg.data?.y);

@@ -1,0 +1,14 @@
+{
+  "description": "workspace must be a string",
+  "kind": "response",
+  "command": "agent-hello",
+  "message": {
+    "type": "response",
+    "id": 1,
+    "ok": true,
+    "result": {
+      "workspace": null,
+      "exists": true
+    }
+  }
+}

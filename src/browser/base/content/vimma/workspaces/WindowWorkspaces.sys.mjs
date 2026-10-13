@@ -137,6 +137,8 @@ export class WindowWorkspacesImpl {
   /** @type {Map<string, Tab>} */
   #byId = new Map();
   #switching = false;
+  /** While `quietly` runs: tabs it opens get no `opened in` notice. */
+  #quiet = false;
   /** While moveTab opens the copy: the tab it replaces and the target workspace. */
   /** @type {{ from: string, to: string } | null} */
   #moving = null;
@@ -238,6 +240,22 @@ export class WindowWorkspacesImpl {
    */
   tabOf(id) {
     return this.#tab(id);
+  }
+
+  /**
+   * Runs `open`, which opens tabs, with no `opened in` notice for them: an agent's background
+   * open, which its question already named (docs/specs/vimma-mcp.md, decision 10).
+   * @template T
+   * @param {() => T} open
+   * @returns {T}
+   */
+  quietly(open) {
+    this.#quiet = true;
+    try {
+      return open();
+    } finally {
+      this.#quiet = false;
+    }
   }
 
   /** @param {Tab} tab */
@@ -756,7 +774,10 @@ export class WindowWorkspacesImpl {
       if (moving.to !== model.active) this.#gBrowser.hideTab(tab);
     } else {
       // Decision 12: a background open into another workspace never switches; it says where.
-      this.#adopt(tab, (hiddenIn) => this.#notify(`opened in "${hiddenIn}"`));
+      const quiet = this.#quiet;
+      this.#adopt(tab, (hiddenIn) => {
+        if (!quiet) this.#notify(`opened in "${hiddenIn}"`);
+      });
     }
     this.#changed();
   }

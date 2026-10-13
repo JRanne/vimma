@@ -2,15 +2,25 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// The control socket's server, protocol v1 (specs: docs/specs/m0-control-server.md,
-// docs/specs/m0-control-protocol-and-vimma-ctl.md; ADR-007). One per app, not per window: the
-// pref `vimma.control.enabled` starts and stops it, live. JSON lines over TCP on 127.0.0.1, a
-// token from <profile>/vimma-control.json (0600) required before any command.
+// The control socket's server, protocols 1 and 2 (specs: docs/specs/m0-control-server.md,
+// docs/specs/m0-control-protocol-and-vimma-ctl.md; ADR-007; protocol 2's roles:
+// docs/specs/vimma-mcp.md, ADR-019). One per app, not per window. JSON lines over TCP on
+// 127.0.0.1, a token from <profile>/vimma-control.json (0600) required before any command.
+//
+// Two switches, two roles (vimma-mcp decision 3): `vimma.control.enabled` serves `full` (v1's
+// commands: keys, state, open, theme), `[mcp] enabled` / `:mcp on` serves `agent` (the agent
+// commands only, confined to the agent workspace and confirmed, ctl/agent-commands.mjs). Either
+// starts the server; it stops when both are off. A connection's role is fixed by its hello, and
+// every command is checked against it.
 
 import {
+  AGENT_COMMANDS,
   CONTROL_COMMANDS,
   CONTROL_PROTOCOL,
+  LATEST_PROTOCOL,
   LineFramer,
+  PROTOCOLS,
+  ROLES,
   MAX_LINE_LENGTH,
   RESERVED_COMMANDS,
   tokensEqual,
@@ -21,6 +31,9 @@ import { parseKey } from "../core/keys.mjs";
 import { VimmaHost } from "../host/VimmaHost.sys.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
+import { MCP_CHANGED_TOPIC, MCP_ENABLED_PREF, McpHost } from "../host/mcp-ops.mjs";
+import { AgentGate } from "./AgentGate.sys.mjs";
+import { AgentError, forgetAgentConnection, runAgentCommand } from "./agent-commands.mjs";
 
 /** @import { Chord } from "../core/keys.mjs" */
 
@@ -43,6 +56,13 @@ const IDLE_TIMEOUT_MS = 60000;
 /** Authenticated connections; the next hello is told busy. */
 const MAX_CONNECTIONS = 8;
 /**
+ * Of those, agent connections (review of #176): agents never take every slot, so vimma-ctl
+ * still gets in.
+ */
+const MAX_AGENT_CONNECTIONS = 4;
+/** An agent connection's requests waiting or running at once; beyond, `busy`. */
+const MAX_AGENT_INFLIGHT = 4;
+/**
  * Connections still waiting for their hello. Anyone local can open those, so they are capped
  * apart from the authenticated ones and a new one evicts the oldest: a flood of idle
  * connections cannot lock out a client with the token (review of #38).
@@ -57,7 +77,25 @@ const DISCOVERY_FILE = "vimma-control.json";
 /** After an error that ends the connection: how long to wait for the client to close first. */
 const DRAIN_MS = 1000;
 
-/** @typedef {{ code: string, message: string }} ProtocolError */
+/** @typedef {{ code: string, message: string, reason?: string }} ProtocolError */
+/** @typedef {"agent" | "full"} Role */
+
+/** What a hello for a role that is off is told: the switch that turns it on. */
+const ROLE_OFF = {
+  agent: "MCP is off in Vimma: run :mcp on (or set [mcp] enabled = true)",
+  full: "the control socket is off: set the pref vimma.control.enabled to true",
+};
+
+/** The roles the switches serve now, in ROLES order. @returns {Role[]} */
+function enabledRoles() {
+  const on = {
+    agent: McpHost.state.enabled,
+    full: Services.prefs.getBoolPref(ENABLED_PREF, false),
+  };
+  return /** @type {Role[]} */ (ROLES.filter((r) => on[/** @type {Role} */ (r)]));
+}
+
+let connectionIds = 0;
 
 /**
  * A failure the client caused (or `failed`): answered with `code`, not logged as a bug.
@@ -353,6 +391,23 @@ class Connection {
     this.queue = Promise.resolve();
     this.timer = null;
     this.decoder = new TextDecoder("utf-8", { fatal: true });
+    /** Its key in AgentGate. */
+    this.id = ++connectionIds;
+    /** Fixed by the hello: protocol 1 is `full`. @type {Role | null} */
+    this.role = null;
+    this.protocol = CONTROL_PROTOCOL;
+    /** An agent connection's labels, once its agent-hello is in. @type {{ agent?: any }} */
+    this.agentState = {};
+    /** Agent requests waiting for an answer or running: they do not wait for each other. */
+    this.inflight = 0;
+  }
+
+  /** The idle limit closes a connection, unless an agent request of it is waiting or running. */
+  armIdle() {
+    this.arm(Services.prefs.getIntPref(IDLE_TIMEOUT_PREF, IDLE_TIMEOUT_MS), () => {
+      if (this.inflight > 0) this.armIdle();
+      else this.close();
+    });
   }
 
   start() {
@@ -425,8 +480,11 @@ class Connection {
       this.queue = this.queue.then(() => this.handshake(message));
       return;
     }
-    this.arm(Services.prefs.getIntPref(IDLE_TIMEOUT_PREF, IDLE_TIMEOUT_MS), () => this.close());
-    this.queue = this.queue.then(() => this.request(message));
+    this.armIdle();
+    // An agent's requests wait for the user, each on its own (vimma-mcp decision 17): they
+    // run side by side and are answered by id. A full connection's run in order.
+    if (this.role === "agent") this.request(message);
+    else this.queue = this.queue.then(() => this.request(message));
   }
 
   /**
@@ -443,8 +501,12 @@ class Connection {
         this.fail(null, "bad-request", "the first line must be a hello");
         return;
       }
-      if (Number.isInteger(m.protocol) && m.protocol !== CONTROL_PROTOCOL) {
-        this.fail(null, "unsupported-protocol", `this server speaks protocol ${CONTROL_PROTOCOL}`);
+      if (Number.isInteger(m.protocol) && !PROTOCOLS.includes(/** @type {number} */ (m.protocol))) {
+        this.fail(
+          null,
+          "unsupported-protocol",
+          `this server speaks protocols ${PROTOCOLS.join(" and ")}`,
+        );
         return;
       }
       const v = validateMessage(m, { kind: "hello" });
@@ -452,10 +514,18 @@ class Connection {
         this.fail(null, "bad-request", v.errors.join("; "));
         return;
       }
+      // Protocol 1 is the full role (vimma-mcp decision 2).
+      const role = /** @type {Role} */ (m.protocol === 1 ? "full" : m.role);
+      if (!this.server.roles.includes(role)) {
+        this.fail(null, "role-off", ROLE_OFF[role]);
+        return;
+      }
+      this.role = role;
+      this.protocol = /** @type {number} */ (m.protocol);
       this.stage = "auth";
       // Domain-separated, so this answer to an unauthenticated nonce is good for nothing else.
       const proof = await hmacHex(this.server.token, CHALLENGE_CONTEXT + m.nonce);
-      this.write({ type: "challenge", protocol: CONTROL_PROTOCOL, proof });
+      this.write({ type: "challenge", protocol: this.protocol, proof });
       return;
     }
     if (!isObject(m) || m.type !== "auth") {
@@ -473,19 +543,30 @@ class Connection {
       return;
     }
     const { server: srv } = this;
+    // The role's switch may have gone off during the handshake.
+    if (!srv.roles.includes(/** @type {Role} */ (this.role))) {
+      this.fail(null, "role-off", ROLE_OFF[/** @type {Role} */ (this.role)]);
+      return;
+    }
     srv.waiting.delete(this);
     if (srv.connections.size >= MAX_CONNECTIONS) {
       srv.refuse(this, "busy", `${srv.connections.size} connections open`);
       return;
     }
+    const agents = [...srv.connections].filter((c) => c.role === "agent").length;
+    if (this.role === "agent" && agents >= MAX_AGENT_CONNECTIONS) {
+      srv.refuse(this, "busy", `${agents} agent connections open`);
+      return;
+    }
     srv.connections.add(this);
     this.authenticated = true;
-    this.arm(Services.prefs.getIntPref(IDLE_TIMEOUT_PREF, IDLE_TIMEOUT_MS), () => this.close());
+    this.armIdle();
     this.write({
       type: "welcome",
-      protocol: CONTROL_PROTOCOL,
+      protocol: this.protocol,
       app: "Vimma",
       version: lazy.AppConstants.MOZ_APP_VERSION_DISPLAY,
+      ...(this.protocol >= 2 ? { role: this.role } : {}),
     });
   }
 
@@ -504,6 +585,23 @@ class Connection {
       return;
     }
     const command = /** @type {string} */ (m.command);
+    // Only the commands of the connection's role exist for it (security.md S7, S12): an agent
+    // connection never reaches send-keys, state or open, and a full one no agent command.
+    const agent = this.role === "agent";
+    if (agent !== AGENT_COMMANDS.includes(command)) {
+      this.respond(id, {
+        error: {
+          code: "unknown-command",
+          message:
+            typeof command === "string" ? `unknown command ${command}` : "command must be a string",
+        },
+      });
+      return;
+    }
+    if (agent) {
+      await this.agentRequest(id, m);
+      return;
+    }
     if (RESERVED_COMMANDS.includes(command)) {
       this.respond(id, { error: { code: "not-implemented", message: `${command} is reserved` } });
       return;
@@ -540,6 +638,44 @@ class Connection {
     }
     // `send-keys ctrl+q` quits the app while it runs: still answer it before closing.
     if (this.stopping) this.stop();
+  }
+
+  /**
+   * An agent command: validated, then run; it may wait for the user (AgentGate) while the
+   * connection's other requests go on.
+   * @param {unknown} id @param {Record<string, unknown>} m
+   */
+  async agentRequest(id, m) {
+    const v = validateMessage(m, { kind: "request" });
+    if (!v.valid) {
+      this.respond(id, { error: { code: "invalid-args", message: v.errors.join("; ") } });
+      return;
+    }
+    const command = /** @type {string} */ (m.command);
+    if (this.inflight >= MAX_AGENT_INFLIGHT) {
+      const message = `${this.inflight} requests of this agent are already waiting or running`;
+      this.respond(id, { error: { code: "denied", message, reason: "busy" } });
+      return;
+    }
+    this.inflight++;
+    try {
+      const result = await runAgentCommand(this.id, this.agentState, command, m.args);
+      this.respond(id, { result });
+    } catch (e) {
+      if (e instanceof AgentError) {
+        const error = {
+          code: e.code,
+          message: e.message,
+          ...(e.reason ? { reason: e.reason } : {}),
+        };
+        this.respond(id, { error });
+      } else {
+        console.error("vimma control (agent):", command, e);
+        this.respond(id, { error: { code: "internal", message: "internal error" } });
+      }
+    } finally {
+      this.inflight--;
+    }
   }
 
   /** Close now, or after answering the command in flight. */
@@ -614,6 +750,11 @@ class Connection {
   close() {
     if (this.closed) return;
     this.closed = true;
+    // Its waiting questions go, and its grants end (vimma-mcp decision 22).
+    if (this.role === "agent") {
+      AgentGate.disconnect(this.id);
+      forgetAgentConnection(this.id);
+    }
     if (this.timer !== null) lazy.clearTimeout(this.timer);
     this.timer = null;
     this.input.close();
@@ -629,9 +770,11 @@ class Connection {
 // Server
 
 class Server {
-  /** @param {string} token */
-  constructor(token) {
+  /** @param {string} token @param {Role[]} roles */
+  constructor(token, roles) {
     this.token = token;
+    /** The roles served now; a hello for any other is told `role-off`. */
+    this.roles = roles;
     /** Authenticated. @type {Set<Connection>} */
     this.connections = new Set();
     /** Waiting for a hello, oldest first. @type {Set<Connection>} */
@@ -675,6 +818,18 @@ class Server {
     }
     this.closing.add(connection);
     connection.fail(null, code, message);
+  }
+
+  /**
+   * A switch flipped while running: serve `roles` from now on, and close every connection of a
+   * role that went off (`:mcp off` ends the agents' connections, and with them their grants).
+   * @param {Role[]} roles
+   */
+  setRoles(roles) {
+    this.roles = roles;
+    for (const c of [...this.connections, ...this.waiting]) {
+      if (c.role && !roles.includes(c.role)) c.stop();
+    }
   }
 
   onStopListening() {}
@@ -732,20 +887,34 @@ function removeDiscoveryFile() {
   return true;
 }
 
+/** The discovery file's contents for `s`: protocol 2 lists the roles (vimma-mcp decision 2). */
+function discoveryOf(/** @type {Server} */ s) {
+  return {
+    protocol: LATEST_PROTOCOL,
+    port: s.port,
+    token: s.token,
+    pid: Services.appinfo.processID,
+    roles: s.roles,
+  };
+}
+
 async function startServer() {
   await windowReady;
-  if (quitting || server || !Services.prefs.getBoolPref(ENABLED_PREF, false)) return;
+  const roles = enabledRoles();
+  if (quitting || !roles.length) return;
+  if (server) {
+    // Running: only the roles changed. The file says so; the token and port stay.
+    if (server.roles.join() === roles.join()) return;
+    server.setRoles(roles);
+    await writeDiscovery(discoveryOf(server));
+    return;
+  }
   if (!removeDiscoveryFile()) return;
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  const s = new Server(hex(bytes));
+  const s = new Server(hex(bytes), roles);
   try {
-    await writeDiscovery({
-      protocol: CONTROL_PROTOCOL,
-      port: s.port,
-      token: s.token,
-      pid: Services.appinfo.processID,
-    });
+    await writeDiscovery(discoveryOf(s));
   } catch (e) {
     s.stop();
     throw e;
@@ -786,9 +955,7 @@ function enqueue(step) {
 }
 
 function apply() {
-  return enqueue(() =>
-    Services.prefs.getBoolPref(ENABLED_PREF, false) ? startServer() : stopServer(),
-  );
+  return enqueue(() => (enabledRoles().length ? startServer() : stopServer()));
 }
 
 export const VimmaControl = {
@@ -823,6 +990,8 @@ export const VimmaControl = {
       removeDiscoveryFile();
     });
     Services.prefs.addObserver(ENABLED_PREF, apply);
+    Services.prefs.addObserver(MCP_ENABLED_PREF, apply);
+    Services.obs.addObserver(apply, MCP_CHANGED_TOPIC);
     watching = true;
     if (!hooksAdded) {
       hooksAdded = true;
@@ -845,6 +1014,8 @@ export const VimmaControl = {
     releaseWindowWait?.();
     if (watching) {
       Services.prefs.removeObserver(ENABLED_PREF, apply);
+      Services.prefs.removeObserver(MCP_ENABLED_PREF, apply);
+      Services.obs.removeObserver(apply, MCP_CHANGED_TOPIC);
       watching = false;
     }
     return enqueue(stopServer);

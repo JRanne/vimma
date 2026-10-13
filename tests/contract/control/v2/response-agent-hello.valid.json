@@ -1,0 +1,14 @@
+{
+  "description": "agent-hello names the agent workspace",
+  "kind": "response",
+  "command": "agent-hello",
+  "message": {
+    "type": "response",
+    "id": 1,
+    "ok": true,
+    "result": {
+      "workspace": "agent",
+      "exists": true
+    }
+  }
+}

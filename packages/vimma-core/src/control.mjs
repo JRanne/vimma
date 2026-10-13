@@ -3,19 +3,44 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
- * Control protocol, version 1: validator for every message and the discovery file
- * (docs/specs/m0-control-protocol-and-vimma-ctl.md, fixtures in tests/contract/control/v1/).
- * Pure: the browser-side server and the tests share it.
+ * Control protocol, versions 1 and 2: validator for every message and the discovery file
+ * (docs/specs/m0-control-protocol-and-vimma-ctl.md, fixtures in tests/contract/control/v1/;
+ * protocol 2's roles and agent commands: docs/specs/vimma-mcp.md, decisions 2 and 4, fixtures in
+ * tests/contract/control/v2/). Pure: the browser-side server and the tests share it.
  */
 
 import { parseKey } from "./keys.mjs";
 import { MODES } from "./modes.mjs";
 
+/** Protocol 1: what a hello without a role speaks (the `full` role). */
 export const CONTROL_PROTOCOL = 1;
+/** Protocol 2 adds the hello's `role` and the agent commands (vimma-mcp decision 2). */
+export const LATEST_PROTOCOL = 2;
+export const PROTOCOLS = Object.freeze([1, 2]);
+/** `agent`: only the agent commands, confined and confirmed. `full`: v1's commands. */
+export const ROLES = Object.freeze(["agent", "full"]);
 /** Longest accepted line in UTF-16 code units, excluding the newline. */
 export const MAX_LINE_LENGTH = 1024 * 1024;
 export const CONTROL_COMMANDS = Object.freeze(["send-keys", "state", "open", "reload-theme"]);
 export const RESERVED_COMMANDS = Object.freeze(["list-tabs", "screenshot", "reload-config"]);
+/** The agent role's commands (protocol 2; vimma-mcp decision 4). No other role runs them. */
+export const AGENT_COMMANDS = Object.freeze([
+  "agent-hello",
+  "agent-tabs",
+  "agent-read",
+  "agent-open",
+  "agent-close",
+  "agent-ping",
+]);
+/** Why an agent request was `denied` (vimma-mcp decision 4). */
+export const DENY_REASONS = Object.freeze([
+  "user",
+  "timeout",
+  "busy",
+  "muted",
+  "changed",
+  "cancelled",
+]);
 export const ERROR_CODES = Object.freeze([
   "bad-request",
   "unauthorized",
@@ -26,12 +51,30 @@ export const ERROR_CODES = Object.freeze([
   "failed",
   "internal",
   "busy",
+  "role-off",
+  "denied",
 ]);
 
 const MAX_ID = 2 ** 53 - 1;
 const MAX_CHORDS = 256;
 const MAX_URL = 65536;
 const URL_SCHEMES = ["http", "https", "file", "about"];
+/** `agent-read`'s most text, whatever `[mcp] max_read_chars` says (vimma-mcp decision 26). */
+export const MAX_READ_CHARS = 500000;
+const TAB_ID = /^[1-9][0-9]{0,15}$/;
+/**
+ * Whether code point `cp` may not appear in a label shown in the question (a client's name):
+ * control characters (C0, DEL, C1), and bidirectional marks, overrides and isolates, which
+ * could make it read as something else.
+ * @param {number} cp
+ */
+const unprintable = (cp) =>
+  cp <= 0x1f ||
+  (cp >= 0x7f && cp <= 0x9f) ||
+  cp === 0x200e ||
+  cp === 0x200f ||
+  (cp >= 0x202a && cp <= 0x202e) ||
+  (cp >= 0x2066 && cp <= 0x2069);
 const KINDS = ["hello", "challenge", "auth", "welcome", "request", "response", "discovery"];
 /** Prefix of the challenge's HMAC message, so the proof is good for nothing else. */
 export const CHALLENGE_CONTEXT = "vimma-server\0";
@@ -68,14 +111,28 @@ function checkProtocol(m, errors) {
   if (!isInt(m.protocol, 1, MAX_ID)) errors.push("protocol must be an integer >= 1");
 }
 
+/** From protocol 2 a hello and a welcome name the connection's role. @param {Obj} m */
+const hasRoles = (m) => isInt(m.protocol, 2, MAX_ID);
+
+/** @param {Obj} m @param {string[]} errors */
+function checkRole(m, errors) {
+  if (!ROLES.includes(/** @type {any} */ (m.role))) errors.push('role must be "agent" or "full"');
+}
+
 /**
  * The handshake (spec m0-control-protocol-and-vimma-ctl): hello {nonce} → challenge {proof} →
  * auth {token} → welcome. The token is sent only after the server proved it knows it.
  * @param {Obj} m @param {string[]} errors
  */
 function checkHello(m, errors) {
-  noExtraFields(m, ["type", "protocol", "nonce"], errors);
+  const roles = hasRoles(m);
+  noExtraFields(
+    m,
+    roles ? ["type", "protocol", "nonce", "role"] : ["type", "protocol", "nonce"],
+    errors,
+  );
   checkProtocol(m, errors);
+  if (roles) checkRole(m, errors);
   if (!isToken(m.nonce)) errors.push("nonce must be 64 lowercase hex characters");
 }
 
@@ -99,6 +156,7 @@ function checkWelcome(m, errors) {
   checkProtocol(m, errors);
   if (typeof m.app !== "string") errors.push("app must be a string");
   if (typeof m.version !== "string") errors.push("version must be a string");
+  if (hasRoles(m)) checkRole(m, errors);
 }
 
 /** @param {Obj} m @param {string[]} errors */
@@ -107,6 +165,15 @@ function checkDiscovery(m, errors) {
   if (!isInt(m.port, 1, 65535)) errors.push("port must be an integer from 1 to 65535");
   if (!isToken(m.token)) errors.push("token must be 64 lowercase hex characters");
   if (!isInt(m.pid, 1, MAX_ID)) errors.push("pid must be an integer >= 1");
+  if (hasRoles(m) || "roles" in m) {
+    const { roles } = m;
+    const ok =
+      Array.isArray(roles) &&
+      roles.length >= 1 &&
+      roles.every((r) => ROLES.includes(r)) &&
+      new Set(roles).size === roles.length;
+    if (!ok) errors.push('roles must be a list of "agent" and "full", each once');
+  }
 }
 
 /** @param {Obj} args @param {string[]} errors */
@@ -150,23 +217,141 @@ function checkOpenArgs(args, errors) {
   }
 }
 
+/**
+ * A label of 1 to `max` printable characters (code points).
+ * @param {unknown} v @param {number} max
+ */
+const isLabel = (v, max) =>
+  typeof v === "string" &&
+  v.length > 0 &&
+  [...v].length <= max &&
+  ![...v].some((c) => unprintable(/** @type {number} */ (c.codePointAt(0))));
+
+/** @param {Obj} args @param {string[]} errors */
+function checkTabArg(args, errors) {
+  if (typeof args.tab !== "string" || !TAB_ID.test(args.tab)) {
+    errors.push("tab must be a tab id (digits)");
+  }
+}
+
+/** @param {Obj} args @param {string[]} errors */
+function checkAgentHelloArgs(args, errors) {
+  noExtraFields(args, ["client", "via"], errors, "args.");
+  const { client } = args;
+  if (!isObject(client)) errors.push("client must be an object");
+  else {
+    noExtraFields(client, ["name", "version"], errors, "args.client.");
+    if (!isLabel(client.name, 64)) errors.push("client.name must be 1 to 64 printable characters");
+    if ("version" in client && !isLabel(client.version, 64)) {
+      errors.push("client.version must be 1 to 64 printable characters");
+    }
+  }
+  if ("via" in args && !isLabel(args.via, 32))
+    errors.push("via must be 1 to 32 printable characters");
+}
+
+/** @param {Obj} args @param {string[]} errors */
+function checkAgentReadArgs(args, errors) {
+  noExtraFields(args, ["tab", "format", "max_chars"], errors, "args.");
+  checkTabArg(args, errors);
+  if ("format" in args && args.format !== "markdown" && args.format !== "text") {
+    errors.push('format must be "markdown" or "text"');
+  }
+  if ("max_chars" in args && !isInt(args.max_chars, 1, MAX_READ_CHARS)) {
+    errors.push(`max_chars must be an integer from 1 to ${MAX_READ_CHARS}`);
+  }
+}
+
+/**
+ * An agent loads only http and https (vimma-mcp decision 4): no local files, privileged pages
+ * or script URLs through the browser.
+ * @param {Obj} args @param {string[]} errors
+ */
+function checkAgentOpenArgs(args, errors) {
+  noExtraFields(args, ["url", "tab"], errors, "args.");
+  const { url } = args;
+  if (typeof url !== "string") errors.push("url must be a string");
+  else if (url.length > MAX_URL) errors.push(`url must be at most ${MAX_URL} characters`);
+  else if ([...url].some((c) => c <= " " || c === "\u007f")) {
+    errors.push("url must not contain control characters or spaces");
+  } else if (!/^https?:/i.test(url)) errors.push("url scheme must be http or https");
+  if ("tab" in args) checkTabArg(args, errors);
+}
+
 /** @param {Obj} m @param {string[]} errors */
 function checkRequest(m, errors) {
   noExtraFields(m, ["type", "id", "command", "args"], errors);
   if (!isInt(m.id, 1, MAX_ID)) errors.push("id must be an integer from 1 to 2^53-1");
   const { command, args } = m;
-  const known =
-    typeof command === "string" && [...CONTROL_COMMANDS, ...RESERVED_COMMANDS].includes(command);
-  if (!known)
-    errors.push(`command must be one of ${[...CONTROL_COMMANDS, ...RESERVED_COMMANDS].join(", ")}`);
+  const all = [...CONTROL_COMMANDS, ...RESERVED_COMMANDS, ...AGENT_COMMANDS];
+  const known = typeof command === "string" && all.includes(command);
+  if (!known) errors.push(`command must be one of ${all.join(", ")}`);
   if (!isObject(args)) {
     errors.push("args must be an object");
     return;
   }
   if (command === "send-keys") checkSendKeysArgs(args, errors);
   else if (command === "open") checkOpenArgs(args, errors);
-  else if (command === "state" || command === "reload-theme") {
+  else if (command === "agent-hello") checkAgentHelloArgs(args, errors);
+  else if (command === "agent-read") checkAgentReadArgs(args, errors);
+  else if (command === "agent-open") checkAgentOpenArgs(args, errors);
+  else if (command === "agent-close") {
+    noExtraFields(args, ["tab"], errors, "args.");
+    checkTabArg(args, errors);
+  } else if (
+    ["state", "reload-theme", "agent-tabs", "agent-ping"].includes(/** @type {string} */ (command))
+  ) {
     noExtraFields(args, [], errors, "args.");
+  }
+}
+
+/**
+ * Fields of `result` that must be strings, booleans, or strings or null.
+ * @param {Obj} result @param {string} prefix
+ * @param {{ strings?: string[], flags?: string[], nullable?: string[] }} shape
+ * @param {string[]} errors
+ */
+function checkFields(result, prefix, { strings = [], flags = [], nullable = [] }, errors) {
+  for (const key of strings) {
+    if (typeof result[key] !== "string") errors.push(`${prefix}.${key} must be a string`);
+  }
+  for (const key of flags) {
+    if (typeof result[key] !== "boolean") errors.push(`${prefix}.${key} must be a boolean`);
+  }
+  for (const key of nullable) {
+    if (result[key] !== null && typeof result[key] !== "string") {
+      errors.push(`${prefix}.${key} must be a string or null`);
+    }
+  }
+}
+
+/** @param {Obj} result @param {string | undefined} command @param {string[]} errors */
+function checkAgentResult(result, command, errors) {
+  if (command === "agent-hello") {
+    checkFields(result, "result", { strings: ["workspace"], flags: ["exists"] }, errors);
+  } else if (command === "agent-tabs") {
+    if (!Array.isArray(result.tabs)) {
+      errors.push("result.tabs must be an array");
+      return;
+    }
+    result.tabs.forEach((tab, i) => {
+      if (!isObject(tab)) errors.push(`result.tabs[${i}] must be an object`);
+      else {
+        const shape = { strings: ["id", "url", "title"], flags: ["loading"] };
+        checkFields(tab, `result.tabs[${i}]`, shape, errors);
+      }
+    });
+  } else if (command === "agent-read") {
+    const shape = {
+      strings: ["url", "title", "text"],
+      flags: ["truncated", "background"],
+      nullable: ["selection", "language"],
+    };
+    checkFields(result, "result", shape, errors);
+  } else if (command === "agent-open") {
+    checkFields(result, "result", { strings: ["tab"] }, errors);
+  } else if (command === "agent-close" && result.closed !== true) {
+    errors.push("result.closed must be true");
   }
 }
 
@@ -225,6 +410,8 @@ function checkResult(result, command, errors) {
     errors.push("result.changed must be a boolean");
   } else if (command === "state") {
     checkStateResult(result, errors);
+  } else if (AGENT_COMMANDS.includes(/** @type {string} */ (command))) {
+    checkAgentResult(result, command, errors);
   }
 }
 
@@ -255,11 +442,17 @@ function checkResponse(m, command, errors) {
     errors.push("error must be an object");
     return;
   }
-  noExtraFields(error, ["code", "message"], errors, "error.");
+  noExtraFields(error, ["code", "message", "reason"], errors, "error.");
   if (typeof error.code !== "string" || !ERROR_CODES.includes(error.code)) {
     errors.push(`error.code must be one of ${ERROR_CODES.join(", ")}`);
   }
   if (typeof error.message !== "string") errors.push("error.message must be a string");
+  // A denial says why (protocol 2); nothing else carries a reason.
+  if (error.code === "denied") {
+    if (!DENY_REASONS.includes(/** @type {any} */ (error.reason))) {
+      errors.push(`error.reason must be one of ${DENY_REASONS.join(", ")}`);
+    }
+  } else if ("reason" in error) errors.push("error.reason is only for denied");
 }
 
 /**

@@ -1,7 +1,7 @@
 # Spec: vimma-mcp
 
-Status: sub-PR 1 merged (the agent workspace, `[mcp]`, `:mcp on|off|forget`); sub-PRs 2-4 to
-do · Milestone: queued after firefox-keys sub-PR 2 (plan §6) · Area: `tools/vimma-ctl` (`src/mcp.rs` new, `src/protocol.rs`,
+Status: sub-PR 1 merged (the agent workspace, `[mcp]`, `:mcp on|off|forget`); sub-PR 2 split:
+2a in review (protocol 2, the agent role and its gate), 2b, 3 and 4 to do · Milestone: queued after firefox-keys sub-PR 2 (plan §6) · Area: `tools/vimma-ctl` (`src/mcp.rs` new, `src/protocol.rs`,
 `src/client.rs`, `src/cli.rs`); `packages/vimma-core/src/` (`control.mjs`, `agent.mjs` new,
 `config.mjs`, `defaults.mjs`, `actions.mjs`, `cmdline.mjs`, `statusbar.mjs`,
 `workspacedefs.mjs`); `ctl/VimmaControl.sys.mjs`, `ctl/AgentGate.sys.mjs` (new),
@@ -743,7 +743,95 @@ status segment, `:mcp revoke`, `prefix+shift+a`, ADR-019, security.md §1 and §
 above says. The server must start when `McpHost.state.enabled` and stop when it and
 `vimma.control.enabled` are both off; observe `vimma.mcp.enabled` and ConfigHost's reapply.
 
-## Docs the implementation must update
+## Handover after sub-PR 2a (2026-10-13)
+
+Sub-PR 2 is split as the table allows: **2a, protocol 2 and the gate**, is in; **2b, the prompt
+and the status bar**, is next. 2a alone came to about 3,800 lines with its tests, fixtures and
+docs, so 2b stays its own PR.
+
+**In 2a.**
+
+- Core `control.mjs`: `LATEST_PROTOCOL` 2, `PROTOCOLS`, `ROLES`, `AGENT_COMMANDS`,
+  `DENY_REASONS`, `MAX_READ_CHARS`; error codes `role-off` and `denied` (a denial needs a
+  `reason`, nothing else may carry one); the v2 hello (`role` required, not allowed in v1),
+  welcome (`role`), discovery file (`roles`), the agent commands' args and results. Fixtures:
+  `tests/contract/control/v2/`. `CONTROL_PROTOCOL` stays 1 and means "a hello without a role".
+- Core `agent.mjs`: `AgentQueue` (queue 4/16, three noes or timeouts in a row mute for 60 s, `x`
+  mutes until reconnect, grants per connection and tool), `grantLength`, `AGENT_TOOLS`,
+  `wrapUntrusted`, `untrustedHeader`, `mcpActivity`, and `:mcp revoke` in `parseMcpCommand`.
+- `ctl/AgentGate.sys.mjs`: the clock around `AgentQueue` (ask timeout from `[mcp] ask_timeout`,
+  test pref `vimma.mcp.askTimeoutMs`), and the API 2b's prompt uses: `waiting` (oldest first:
+  `{ id, conn, tool, what, label, asked, deadline }`), `answer(id, { kind: "once" | "deny" |
+"mute" } | { kind: "grant", minutes })` (caps the minutes and returns `{ minutes, capped }`),
+  `grants()`, `connections`, `revoke()`, `addListener(fn)`.
+- `ctl/agent-commands.mjs`: the six commands, confined (decision 7) and asked (12) and checked
+  again after the yes (19). `what` for the question: reads and closes
+  `{ tab, title, url, index }`, opens `{ url, host }` (plus `{ tab, title, current }` with
+  `tab`), the tab list `{ count }`.
+- `ctl/VimmaControl.sys.mjs`: the two switches (it watches `vimma.mcp.enabled` and
+  `MCP_CHANGED_TOPIC`, which `McpHost.configure` sends at every config read), roles in the
+  hello, `role-off`, the discovery file's `roles`, role checks per command, agent requests side
+  by side, and switching a role off closes its connections.
+- `vimma-ctl`: speaks protocol 2 as `full` when the discovery file says 2, says the control
+  socket is off when `roles` lacks `full` (exit 3, without connecting), maps `role-off` to exit 3,
+  and decodes `role`, `roles` and `reason`. No `vimma-ctl mcp` yet (sub-PR 3).
+- ADR-019; security.md S1, S7, S12, §11's agents paragraph and §12 (M4 and M9 marked as gaps
+  until 2b and 3); the protocol 2 section in m0-control-protocol-and-vimma-ctl; the guide.
+
+**Choices 2a made where the spec was silent** (2b and 3 can revisit):
+
+- `agent-read`'s `text` comes back already inside the untrusted-content delimiters, wrapped by
+  the server, so the browser enforces it. Sub-PR 3 adds only the header text item
+  (`untrustedHeader`'s wording) and must not wrap again.
+- `agent-read`'s result also has `background` (B2 names it), in the protocol and fixtures.
+- Timeouts count towards the three denials that mute; `busy` and `muted` do not.
+- A grant also lets that connection's already-queued calls of the same tool run.
+- `x` answers the request asked about with reason `user` and the queued ones with `muted`.
+- The discovery file lists roles in `ROLES` order: `["agent", "full"]`.
+- `agent-open` loads with a null principal in the agent's container (v1's `open` uses the system
+  principal), into the most recently focused normal window, with `WindowWorkspaces#quietly` so
+  no `opened in "agent"` notice shows.
+- A lazy agent tab gets its browser when agent-tabs lists it (a lazy browser has no browserId
+  to name it by); its page loads only when it is read, from its session history's URL.
+- An agent connection with a request waiting is not closed by the 60 s idle limit.
+
+**After the security review of #176** (all fixed in 2a):
+
+- Limits: at most 4 agent connections of the server's 8 (vimma-ctl always gets in), at most 4
+  requests of one agent connection waiting or running at once (`busy` beyond, grants included),
+  and at most 10 `agent-open`s per connection a minute (core `OpenRate`, `busy` beyond).
+- `agent-read`'s `selection` is wrapped in the delimiters like the text and cut, with the text,
+  until the reply fits 1 MiB; the selection is cut by code point in the content process.
+- Every string in agent replies goes through `toWellFormed()`: a lone surrogate (a page title of
+  `"\uD800"`) would make a line vimma-ctl's strict JSON parser refuses.
+- `wrapUntrusted` NFKC-normalises the text and breaks any tag matching
+  `<\s*/?\s*untrusted[^>]{0,40}content[^>]*>` (any case) with a zero-width space after its `<`,
+  not only the exact closing tag.
+- A read collects text, selection, language and title first, then checks the tab is still as
+  asked, then replies.
+- `cancelled` is a deny reason (a request whose connection or call ended).
+
+**Next (2b): the prompt and the status bar.** All of decisions 13-15, 23-25 that need UI:
+
+- `ui/agent-prompt.mjs`: the question line (decision 13's text and keys; a count then `a`;
+  `x`; any other key ignored), an `alertdialog`, opened by a `AgentGate.addListener` hook in
+  VimmaHost for the window that should ask; armed after `security.dialog_enable_delay`, held
+  keys never count; the auto-open rule (window focused, not in a field, no key for 1,500 ms, no
+  other prompt, picker or command line, not DOM full screen; pure, in core `agent.mjs`) and the
+  question text (titles cut at 60 columns, `displayUrl`; pure, in core); focus goes back to its
+  opener; never focuses or raises the window.
+- The status segment `◇ agent`, `◇ agent 2?`, `◇ agent 14m`, `◇ agent ·` (core `statusbar.mjs`,
+  `--vimma-text-cyan`, live-region announcement), and its truncation order.
+- `prefix+shift+a` = `agent_prompt` (`mcp.answer`, group "Agents"): opens the waiting question,
+  or with none waiting asks `Revoke 2 agent grants? y/N`. A keymap change: `npm run gen-docs`,
+  the help snapshot and its CHANGELOG line, a screenshot of `ctrl+b ?`.
+- Not in front (decision 15): `window.getAttention()` once per request, and a desktop
+  notification without URL or title (`[mcp] notify`); the notice for a call made under a grant
+  (decision 23); `agent request timed out (denied)`.
+- Tests the table lists for these: the prompt keys and arming, the typing guard
+  (`browser_vimma_mcp_background.js`'s field test), the unfocused-window alert (alerts service
+  mocked), `browser_vimma_a11y.js`'s question, and the e2e screenshots of the question, the grant,
+  the waiting state and a denial. Then security.md M4 loses its gap.
 
 guide.md (new "Agents (MCP)" section after "Scripting with vimma-ctl"; the status bar's
 segments; Workspaces: the agent workspace; config.toml: `[mcp]`), README (feature list: "Local

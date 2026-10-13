@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 use vimma_ctl::json::{self, MAX_DEPTH, Value};
 use vimma_ctl::protocol::{
-    self, Command, CommandResult, ERROR_CODES, MAX_ID, MODES, Response, Where,
+    self, Command, CommandResult, DENY_REASONS, ERROR_CODES, MAX_ID, MODES, Response, Role, Where,
 };
 
 /// [`MAX_ID`] as a float (exact: it is 2^53 - 1).
@@ -32,7 +32,7 @@ fn config() -> ProptestConfig {
 }
 
 /// Keys the decoders look up, so random objects often reach the field checks.
-const KEYS: [&str; 22] = [
+const KEYS: [&str; 25] = [
     "type",
     "id",
     "ok",
@@ -55,6 +55,10 @@ const KEYS: [&str; 22] = [
     "workspace",
     "tabs",
     "panes",
+    // Protocol 2 (docs/specs/vimma-mcp.md).
+    "role",
+    "roles",
+    "reason",
 ];
 
 fn key() -> impl Strategy<Value = String> {
@@ -87,6 +91,8 @@ fn scalar() -> impl Strategy<Value = Value> {
                 MODES
                     .iter()
                     .chain(ERROR_CODES.iter())
+                    .chain(DENY_REASONS.iter())
+                    .chain(["agent", "full"].iter())
                     .chain(["welcome", "challenge", "response", "a".repeat(64).as_str()].iter())
                     .map(|s| (*s).to_string())
                     .collect::<Vec<_>>()
@@ -179,12 +185,18 @@ proptest! {
     /// The decoders return, never panic, on any value; what they accept is in range.
     #[test]
     fn decoders_never_panic_and_accept_only_the_schema(v in value(), command in command()) {
-        let _ = protocol::decode_welcome(&v);
+        if let Ok(w) = protocol::decode_welcome(&v) {
+            // Protocol 1 is always the full role; from 2 the welcome names it.
+            prop_assert!(w.protocol >= 2 || w.role == Role::Full);
+        }
         if let Ok(c) = protocol::decode_challenge(&v) {
             prop_assert!(is_token(&c.proof) && c.protocol >= 1);
         }
         if let Ok(d) = protocol::decode_discovery(&v) {
             prop_assert!(d.port >= 1 && is_token(&d.token) && (1..=MAX_ID).contains(&d.pid));
+            // One or both roles, each once.
+            prop_assert!((1..=2).contains(&d.roles.len()));
+            prop_assert!(d.roles.len() == 1 || d.roles[0] != d.roles[1]);
         }
         match protocol::decode_response(&v) {
             Ok(Response::Ok { id, result }) => {
@@ -203,6 +215,9 @@ proptest! {
             Ok(Response::Err { id, error }) => {
                 prop_assert!(id.is_none_or(|id| (1..=MAX_ID).contains(&id)));
                 prop_assert!(ERROR_CODES.contains(&error.code.as_str()));
+                // Only a denial has a reason, and always one of the protocol's.
+                prop_assert_eq!(error.code == "denied", error.reason.is_some());
+                prop_assert!(error.reason.is_none_or(|r| DENY_REASONS.contains(&r.as_str())));
             }
             Err(_) => {}
         }
