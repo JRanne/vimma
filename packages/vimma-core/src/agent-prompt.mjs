@@ -17,6 +17,8 @@ import { displayUrl, truncate } from "./statusbar.mjs";
 export const QUIET_MS = 1500;
 /** The question a new full-control connection asks while MCP is on (decision 29 C). */
 export const FULL_CONTROL = "full_control";
+/** A full-control client's code: 4 of 2-9 and A-Z without I and O (review of #177, M2). */
+export const FULL_CODE = /^[2-9A-HJ-NP-Z]{4}$/;
 /** Titles in the question are cut at this many columns (decision 13). */
 export const TITLE_COLUMNS = 60;
 /** `◇ agent ·` shows this long after a request ran (decision 24). */
@@ -105,8 +107,20 @@ export function questionLine(q, { grantMinutes }) {
   let hint = `y once · ${grantMinutes}a for ${grantMinutes} min · n deny · x mute`;
   const w = q.what ?? {};
   if (q.tool === FULL_CONTROL) {
-    parts = [{ text: `${AGENT_GLYPH} ${who} wants full control — y/N` }];
-    hint = "y allow · n deny";
+    // The code the client printed on its own terminal (review of #177, M2): the user answers
+    // the question of the vimma-ctl they ran, not one a racing client slipped in.
+    const code = typeof w.code === "string" && FULL_CODE.test(w.code) ? w.code : null;
+    if (code) {
+      parts = [
+        { text: `${AGENT_GLYPH} vimma-ctl with code ` },
+        { text: code, strong: true },
+        { text: " wants full control — y/N" },
+      ];
+      hint = "y if the code is the one vimma-ctl printed · n deny";
+    } else {
+      parts = [{ text: `${AGENT_GLYPH} a client with no code wants full control — y/N` }];
+      hint = "y allow · n deny";
+    }
   } else {
     const head = { text: `${AGENT_GLYPH} ${who} wants ${q.tool}: ` };
     if (q.tool === "vimma_open") {

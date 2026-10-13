@@ -566,7 +566,9 @@ class Connection {
     if (this.role === "full" && McpHost.state.enabled) {
       if (this.timer !== null) lazy.clearTimeout(this.timer);
       this.timer = null;
-      const outcome = await AgentGate.askFull((cancel) => (this.cancelAsk = cancel));
+      // The code the client printed, shown in the question (review of #177, M2).
+      const code = typeof m.code === "string" ? m.code : null;
+      const outcome = await AgentGate.askFull(code, (cancel) => (this.cancelAsk = cancel));
       this.cancelAsk = null;
       if (this.closed) return;
       if (!outcome.allow) {

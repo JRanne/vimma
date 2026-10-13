@@ -144,9 +144,9 @@ add_task(async function test_a_window_not_in_front_gets_attention_and_a_notifica
 });
 
 /** A full connection's handshake, up to the welcome or its refusal. */
-async function fullHandshake() {
+async function fullHandshake(auth = {}) {
   const c = new Client(/** @type {number} */ (VimmaControl.port));
-  const reply = c.handshake({ protocol: 2, role: "full" });
+  const reply = c.handshake({ protocol: 2, role: "full" }, auth);
   return { c, reply };
 }
 
@@ -164,12 +164,18 @@ add_task(async function test_full_control_asks_only_while_mcp_is_on() {
   Assert.ok(!quiet.c.closed, "a full connection open before MCP was on stays open");
   quiet.c.close();
   await calmPage();
-  const asked = await fullHandshake();
+  // Review of #177 (M2): the question shows the code the client printed.
+  const asked = await fullHandshake({ code: "7F3K" });
   await armed();
-  Assert.equal(lineText(), "◇ vimma-ctl wants full control — y/N", "MCP on: it asks");
+  Assert.equal(
+    lineText(),
+    "◇ vimma-ctl with code 7F3K wants full control — y/N",
+    "MCP on: it asks, with the client's code",
+  );
+  Assert.equal(line().querySelector("b")?.textContent, "7F3K", "the code in bold");
   Assert.equal(
     line().querySelector(".vimma-agent-prompt-hint").textContent,
-    "y allow · n deny",
+    "y if the code is the one vimma-ctl printed · n deny",
     "with no grant",
   );
   EventUtils.synthesizeKey("a");
@@ -185,6 +191,11 @@ add_task(async function test_full_control_asks_only_while_mcp_is_on() {
   await calmPage();
   const refused = await fullHandshake();
   await armed();
+  Assert.equal(
+    lineText(),
+    "◇ a client with no code wants full control — y/N",
+    "a client that sent no code is named as one",
+  );
   EventUtils.synthesizeKey("n");
   const no = await refused.reply;
   Assert.equal(no.error?.code, "denied", "n refuses it");

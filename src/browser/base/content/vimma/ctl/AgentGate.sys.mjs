@@ -193,18 +193,20 @@ export const AgentGate = {
    * A new full-control connection while MCP is on (decision 29 C): resolves once the user said
    * yes, or with the denial (no, `x`, timeout, a full queue). Nothing is remembered: the next
    * connection asks again.
+   * @param {string | null} code  the code the client printed on its terminal, shown in the
+   *   question so the user answers for the client they ran (review of #177, M2)
    * @param {(cancel: () => void) => void} [onCancel]  given a way to withdraw the question
    *   (the connection closed while it waited)
    * @returns {Promise<Outcome>}
    */
-  askFull(onCancel) {
+  askFull(code, onCancel) {
     // One connection key for every full-control question: one waits at a time, and three noes
     // in a row mute them all for a minute (decision 18), so a token holder cannot flood.
     if (!labels.has(FULL_CONN)) this.connect(FULL_CONN, { client: "vimma-ctl" });
     if (AgentGate.waiting.some((q) => q.conn === FULL_CONN)) {
       return Promise.resolve({ allow: false, reason: "busy" });
     }
-    const outcome = this.request(FULL_CONN, FULL_CONTROL, {});
+    const outcome = this.request(FULL_CONN, FULL_CONTROL, code ? { code } : {});
     const mine = [...pending.values()].find((p) => p.conn === FULL_CONN);
     if (mine) onCancel?.(() => cancel(mine.id));
     return outcome;

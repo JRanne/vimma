@@ -691,6 +691,48 @@ fn waits_for_the_users_answer_while_mcp_is_on() {
     drop(server.lines());
 }
 
+// Review of #177 (M2): while MCP is on, vimma-ctl prints a code and sends it in its auth, and
+// Vimma's question shows it, so the user answers for the vimma-ctl they ran.
+#[test]
+fn prints_and_sends_a_code_while_mcp_is_on() {
+    let server = asking_server(std::time::Duration::ZERO, WELCOME_V2);
+    let port = read_port(&server.profile);
+    write_discovery_v2(&server.profile, port, r#"["agent","full"]"#);
+    let out = vimma_ctl(&server.profile, &["state", "--json"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let err = stderr(&out);
+    let code = err
+        .split("code ")
+        .nth(1)
+        .map(|rest| rest.chars().take(4).collect::<String>())
+        .unwrap_or_default();
+    assert!(
+        code.len() == 4
+            && code
+                .chars()
+                .all(|c| matches!(c, '2'..='9' | 'A'..='H' | 'J'..='N' | 'P'..='Z')),
+        "{err}"
+    );
+    assert!(err.contains("answer y only if it shows"), "{err}");
+    let lines = server.lines();
+    assert_eq!(
+        lines[1],
+        format!(r#"{{"code":"{code}","token":"{TOKEN}","type":"auth"}}"#)
+    );
+}
+
+#[test]
+fn sends_no_code_while_mcp_is_off() {
+    let server = asking_server(std::time::Duration::ZERO, WELCOME_V2);
+    let port = read_port(&server.profile);
+    write_discovery_v2(&server.profile, port, r#"["full"]"#);
+    let out = vimma_ctl(&server.profile, &["state"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert!(!stderr(&out).contains("code"), "{}", stderr(&out));
+    let lines = server.lines();
+    assert_eq!(lines[1], format!(r#"{{"token":"{TOKEN}","type":"auth"}}"#));
+}
+
 #[test]
 fn keeps_its_timeout_for_the_welcome_while_mcp_is_off() {
     let server = asking_server(std::time::Duration::from_millis(2500), WELCOME_V2);

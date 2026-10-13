@@ -203,6 +203,17 @@ pub fn auth(token: &str) -> Value {
     object([("type", text("auth")), ("token", text(token))])
 }
 
+/// The `auth` line with the code this vimma-ctl printed, while MCP is on: Vimma's full-control
+/// question shows it (docs/specs/vimma-mcp.md decision 29 C, review of #177 M2).
+#[must_use]
+pub fn auth_with_code(token: &str, code: &str) -> Value {
+    object([
+        ("type", text("auth")),
+        ("token", text(token)),
+        ("code", text(code)),
+    ])
+}
+
 /// The proof a server must send for `nonce`:
 /// `HMAC-SHA256(key: token, message: CHALLENGE_CONTEXT + nonce)`, ASCII, in lowercase hex.
 #[must_use]
@@ -1034,6 +1045,23 @@ mod tests {
             }
         }
         assert!(seen >= 8, "only {seen} v2 server-direction fixtures");
+    }
+
+    // Review of #177 (M2): the full client's code, sent in its auth while MCP is on.
+    #[test]
+    fn encodes_v2_auth_with_a_code_exactly() {
+        let (_, fixture) = v2_fixtures()
+            .into_iter()
+            .find(|(name, _)| name == "auth-code.valid.json")
+            .expect("auth-code.valid.json");
+        let message = fixture.get("message").unwrap();
+        assert_eq!(
+            &auth_with_code(
+                str_field(message, "token").unwrap(),
+                str_field(message, "code").unwrap()
+            ),
+            message
+        );
     }
 
     #[test]

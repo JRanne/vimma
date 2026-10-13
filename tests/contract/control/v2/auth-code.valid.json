@@ -1,0 +1,9 @@
+{
+  "description": "While MCP is on, a full client sends a code it also prints, so the user can tell its question from another's (review of #177, M2)",
+  "kind": "auth",
+  "message": {
+    "type": "auth",
+    "token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "code": "7F3K"
+  }
+}

@@ -147,9 +147,16 @@ function checkChallenge(m, errors) {
 
 /** @param {Obj} m @param {string[]} errors */
 function checkAuth(m, errors) {
-  noExtraFields(m, ["type", "token"], errors);
+  noExtraFields(m, ["type", "token", "code"], errors);
   if (!isToken(m.token)) errors.push("token must be 64 lowercase hex characters");
+  // The code a full client printed, shown in Vimma's question (docs/specs/vimma-mcp.md 29 C).
+  if ("code" in m && (typeof m.code !== "string" || !AUTH_CODE.test(m.code))) {
+    errors.push("code must be 4 characters of 2-9 and A-Z without I and O");
+  }
 }
+
+/** auth's optional code (docs/specs/vimma-mcp.md, review of #177 M2). */
+export const AUTH_CODE = /^[2-9A-HJ-NP-Z]{4}$/;
 
 /** @param {Obj} m @param {string[]} errors */
 function checkWelcome(m, errors) {

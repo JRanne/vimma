@@ -100,8 +100,16 @@ describe("the question's text (decision 13)", () => {
 
   test("full control asks y/N, with no grant (decision 29)", () => {
     const line = questionLine(full, { grantMinutes: 10 });
-    expect(text(line)).toBe("◇ vimma-ctl wants full control — y/N");
+    expect(text(line)).toBe("◇ a client with no code wants full control — y/N");
     expect(line.hint).toBe("y allow · n deny");
+  });
+
+  // Review of #177 (M2): the code vimma-ctl printed, so a racing client's question is told apart.
+  test("full control shows the client's code, in bold", () => {
+    const line = questionLine({ ...full, what: { code: "7F3K" } }, { grantMinutes: 10 });
+    expect(text(line)).toBe("◇ vimma-ctl with code 7F3K wants full control — y/N");
+    expect(line.parts.filter((p) => p.strong).map((p) => p.text)).toEqual(["7F3K"]);
+    expect(line.hint).toBe("y if the code is the one vimma-ctl printed · n deny");
   });
 
   test("a hostile title of 300 characters is literal text cut at 60 columns", () => {

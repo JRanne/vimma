@@ -152,15 +152,21 @@ impl Client {
         // 3. auth: now the token; 4. welcome. While MCP is on (the `agent` role is served), Vimma
         // asks the user before it welcomes a full connection: wait for that answer, then give
         // the command its own timeout.
-        client.send(&protocol::auth(&discovery.token))?;
         let asks = protocol >= 2 && discovery.roles.contains(&Role::Agent);
         if asks {
+            let code = random_code().map_err(|e| {
+                Error::Protocol(format!("cannot read random bytes for the code: {e}"))
+            })?;
             eprintln!(
-                "vimma-ctl: MCP is on: answer y in Vimma to let this vimma-ctl in (full control)"
+                "vimma-ctl: MCP is on: answer y in Vimma to let this vimma-ctl in (full control); \
+                 Vimma asks with code {code}: answer y only if it shows {code}"
             );
+            client.send(&protocol::auth_with_code(&discovery.token, &code))?;
             if let Some(later) = Instant::now().checked_add(ASK_WAIT) {
                 client.deadline = client.deadline.max(later);
             }
+        } else {
+            client.send(&protocol::auth(&discovery.token))?;
         }
         let reply = client.handshake_reply("welcome")?;
         if asks {
@@ -306,6 +312,19 @@ fn random_nonce() -> io::Result<String> {
     let mut bytes = [0u8; 32];
     std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
     Ok(crate::hmac::hex(&bytes))
+}
+
+/// Four characters of 2-9 and A-Z without I and O: 20 bits, enough to tell this vimma-ctl's
+/// question from one another client raced in, and easy to compare by eye.
+fn random_code() -> io::Result<String> {
+    use std::io::Read;
+    const ALPHABET: &[u8; 32] = b"23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+    let mut bytes = [0u8; 4];
+    std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
+    Ok(bytes
+        .iter()
+        .map(|b| char::from(ALPHABET[usize::from(b % 32)]))
+        .collect())
 }
 
 fn protocol_error(e: protocol::DecodeError) -> Error {

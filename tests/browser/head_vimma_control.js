@@ -122,7 +122,7 @@ class Client {
    * The handshake with `hello` (protocol and role); resolves to the welcome or the error.
    * @param {{ protocol: number, role?: string }} hello
    */
-  async handshake(hello) {
+  async handshake(hello, auth = {}) {
     const { token } = await discovery();
     const nonce = "ab".repeat(32);
     this.send({ type: "hello", nonce, ...hello });
@@ -134,7 +134,7 @@ class Client {
       await hmacHex(token, `vimma-server\0${nonce}`),
       "the server proves the token",
     );
-    this.send({ type: "auth", token });
+    this.send({ type: "auth", token, ...auth });
     return this.take();
   }
 

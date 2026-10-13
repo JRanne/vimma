@@ -229,3 +229,16 @@ describe("agent commands: results and errors", () => {
     ]);
   });
 });
+
+// Review of #177 (M2): the full-control question shows a code the client printed.
+describe("auth's code", () => {
+  const auth = (extra = {}) => ({ type: "auth", token: TOKEN, ...extra });
+  test("optional; 4 characters of 2-9 and A-Z without I and O", () => {
+    expect(errorsOf(auth(), { kind: "auth" })).toEqual([]);
+    expect(errorsOf(auth({ code: "7F3K" }), { kind: "auth" })).toEqual([]);
+    expect(errorsOf(auth({ code: "A2Z9" }), { kind: "auth" })).toEqual([]);
+    for (const code of ["7f3k", "7F3", "7F3KK", "IO11", "7F 3", 1234, null]) {
+      expect(errorsOf(auth({ code }), { kind: "auth" }).join(), String(code)).toMatch(/code/);
+    }
+  });
+});
