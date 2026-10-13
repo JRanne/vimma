@@ -24,6 +24,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { ControlSessions } from "./control-client.mjs";
 import { Ctl, findVimmaCtl } from "./driver.mjs";
 import {
   DISCOVERY_FILE,
@@ -230,7 +231,34 @@ async function main() {
         await session.relaunch();
         await ctl.ready();
       };
-      return { ctl: stepCtl, screenshot, restart, teardown: quitThenTeardown };
+      // The agent steps' connections (docs/specs/vimma-mcp.md, sub-PR 2b), closed before the quit.
+      const sessions = new ControlSessions({ profile: session.profile, bin: ctlBin, signal });
+      const control = {
+        hold: () => sessions.hold(),
+        held: {
+          state: () => sessions.held.state(),
+          sendKeys: (/** @type {string} */ keys) => sessions.held.sendKeys(keys),
+          open: (/** @type {string} */ url) =>
+            sessions.held.open(fixtureUrl(url, pages?.base ?? null)),
+        },
+        agentSend: (/** @type {any} */ spec) => {
+          const url = spec.args?.url;
+          const args =
+            typeof url === "string"
+              ? { ...spec.args, url: fixtureUrl(url, pages?.base ?? null) }
+              : spec.args;
+          sessions.agentSend({ ...spec, args });
+        },
+        agentResult: (/** @type {string} */ name) => sessions.agentResult(name),
+        ctlSpawn: (/** @type {string[]} */ args, /** @type {string} */ as) =>
+          sessions.ctlSpawn(args, as),
+        ctlResult: (/** @type {string} */ name) => sessions.ctlResult(name),
+      };
+      const teardownAll = async () => {
+        sessions.close();
+        await quitThenTeardown();
+      };
+      return { ctl: stepCtl, screenshot, restart, control, teardown: teardownAll };
     };
 
     const results = await runScenarios(scenarios, {

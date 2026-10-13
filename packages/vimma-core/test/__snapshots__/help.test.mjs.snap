@@ -224,6 +224,8 @@ Config
 
 Agents
   mcp_command             (unbound)                                         Agents (MCP): :mcp on, off or forget
+  agent_prompt            ctrl+b shift+a                                    Answer the waiting agent request (none: revoke grants)
+  control_command         (unbound)                                         Full control for a while: :control on <minutes>, off
 
 Add-ons
   addon_picker            ctrl+b e                                          Add-on picker: popup, options, on/off, remove, update

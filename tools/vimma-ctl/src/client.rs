@@ -29,10 +29,17 @@ pub enum Error {
     Busy(ErrorBody),
     /// The server's welcome did not prove it knows the token: not Vimma (exit 4).
     Impostor(String),
+    /// The user said no to full control while MCP is on, or did not answer (exit 4;
+    /// docs/specs/vimma-mcp.md decision 29 C).
+    Denied(ErrorBody),
 }
 
 /// Longest allowed timeout; [`Client::connect`] clamps to it so the deadline cannot overflow.
 pub const MAX_TIMEOUT: Duration = Duration::from_secs(3600);
+
+/// How long the welcome may take while MCP is on: Vimma asks the user first, for at most
+/// `[mcp] ask_timeout` (300 s at most), and answers by then (docs/specs/vimma-mcp.md, 29 C).
+pub const ASK_WAIT: Duration = Duration::from_secs(310);
 
 impl Error {
     #[must_use]
@@ -40,7 +47,7 @@ impl Error {
         match self {
             Error::Server(_) => 1,
             Error::NotRunning(_) | Error::Busy(_) => 3,
-            Error::Auth(_) | Error::Impostor(_) => 4,
+            Error::Auth(_) | Error::Impostor(_) | Error::Denied(_) => 4,
             Error::Protocol(_) => 5,
         }
     }
@@ -52,6 +59,10 @@ impl fmt::Display for Error {
             Error::Server(e) => write!(f, "{}: {}", e.code, e.message),
             Error::NotRunning(message) | Error::Impostor(message) => f.write_str(message),
             Error::Auth(e) => write!(f, "authentication failed: {}: {}", e.code, e.message),
+            Error::Denied(e) => match &e.reason {
+                Some(reason) => write!(f, "full control refused: {} ({reason})", e.message),
+                None => write!(f, "full control refused: {}", e.message),
+            },
             Error::Protocol(message) => write!(f, "protocol error: {message}"),
             Error::Busy(e) => write!(
                 f,
@@ -138,9 +149,25 @@ impl Client {
                 discovery.port
             )));
         }
-        // 3. auth: now the token; 4. welcome.
+        // 3. auth: now the token; 4. welcome. While MCP is on (the `agent` role is served), Vimma
+        // asks the user before it welcomes a full connection: wait for that answer, then give
+        // the command its own timeout.
         client.send(&protocol::auth(&discovery.token))?;
+        let asks = protocol >= 2 && discovery.roles.contains(&Role::Agent);
+        if asks {
+            eprintln!(
+                "vimma-ctl: MCP is on: answer y in Vimma to let this vimma-ctl in (full control)"
+            );
+            if let Some(later) = Instant::now().checked_add(ASK_WAIT) {
+                client.deadline = client.deadline.max(later);
+            }
+        }
         let reply = client.handshake_reply("welcome")?;
+        if asks {
+            if let Some(deadline) = Instant::now().checked_add(timeout) {
+                client.deadline = deadline;
+            }
+        }
         let welcome = protocol::decode_welcome(&reply).map_err(protocol_error)?;
         if welcome.protocol != protocol || welcome.role != Role::Full {
             return Err(Error::Protocol(format!(
@@ -162,6 +189,7 @@ impl Client {
                 Response::Err { error, .. } if error.code == "role-off" => Err(Error::NotRunning(
                     format!("{}: {}", error.code, error.message),
                 )),
+                Response::Err { error, .. } if error.code == "denied" => Err(Error::Denied(error)),
                 Response::Err { error, .. } => Err(Error::Auth(error)),
                 Response::Ok { .. } => Err(Error::Protocol(format!(
                     "expected {expected}, got a result"
@@ -304,6 +332,7 @@ mod tests {
         assert_eq!(Error::Protocol("x".into()).exit_code(), 5);
         assert_eq!(Error::Busy(body("busy")).exit_code(), 3);
         assert_eq!(Error::Impostor("x".into()).exit_code(), 4);
+        assert_eq!(Error::Denied(body("denied")).exit_code(), 4);
     }
 
     #[test]

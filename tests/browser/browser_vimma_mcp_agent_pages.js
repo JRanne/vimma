@@ -1,0 +1,219 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// Spec: docs/specs/vimma-mcp.md decision 30 (user, 2026-10-13): pages in the agent workspace's
+// container ask for no permission and open no pop-up. Every nsIContentPermissionPrompt request
+// from the agent container is cancelled (Integration.contentPermission); camera, microphone and
+// screen are denied by a session DENY on each origin that loads there (WebRTCParent and
+// MediaManager read it); every agent tab's browsing context has SANDBOXED_AUXILIARY_NAVIGATION.
+// A tab of another workspace still asks and still opens pop-ups.
+
+"use strict";
+
+/* global PopupNotifications -- the browser window's (browser.js) */
+
+const { BrowserWindowTracker } = ChromeUtils.importESModule(
+  "resource:///modules/BrowserWindowTracker.sys.mjs",
+);
+const { WorkspaceStore } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/workspaces/WorkspaceStore.sys.mjs",
+);
+
+const DIR = getRootDirectory(gTestPath).replace(
+  "chrome://mochitests/content",
+  "https://example.com",
+);
+const PAGE = `${DIR}file_vimma_agent_page.html`;
+const SANDBOXED_AUXILIARY_NAVIGATION = 0x2;
+
+add_task(async function setup() {
+  await SpecialPowers.pushPrefEnv({
+    set: [
+      ["media.navigator.streams.fake", true],
+      // Fake devices skip the permission check unless this is set (MediaManager, askPermission).
+      ["media.navigator.permission.fake", true],
+      // No loopback devices, so only the fakes are there (browser/base/content/test/webrtc).
+      ["media.audio_loopback_dev", ""],
+      ["media.video_loopback_dev", ""],
+      ["media.navigator.permission.disabled", false],
+      ["geo.provider.testing", true],
+      ["dom.disable_open_during_load", true],
+    ],
+  });
+  registerCleanupFunction(() => Services.perms.removeAll());
+});
+
+/** A tab in `userContextId`, loaded with `url`. */
+async function tabIn(userContextId, url = PAGE) {
+  const tab = gBrowser.addTab(url, {
+    userContextId,
+    triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+  });
+  await BrowserTestUtils.browserLoaded(tab.linkedBrowser, false, url);
+  return tab;
+}
+
+/** What a page gets when it asks for each permission, without a user answering. */
+function ask(browser) {
+  return SpecialPowers.spawn(browser, [], async () => {
+    const settle = (/** @type {Promise<string>} */ p) =>
+      Promise.race([p, new Promise((r) => content.setTimeout(() => r("pending"), 1500))]);
+    const geo = await settle(
+      new Promise((resolve) =>
+        content.navigator.geolocation.getCurrentPosition(
+          () => resolve("allowed"),
+          (e) => resolve(e.code === e.PERMISSION_DENIED ? "denied" : `error ${e.code}`),
+        ),
+      ),
+    );
+    // From the page's own script: SpecialPowers' sandbox is privileged, and MediaManager does
+    // not ask a privileged caller.
+    const fromPage = (/** @type {string} */ constraints) =>
+      settle(
+        new Promise((resolve) => {
+          const key = `gum${Math.random()}`.replace(".", "");
+          const script = content.document.createElement("script");
+          script.textContent =
+            `navigator.mediaDevices.getUserMedia(${constraints}).then(` +
+            `() => (document.body.dataset.${key} = "allowed"),` +
+            `(e) => (document.body.dataset.${key} = e.name === "NotAllowedError" ? "denied" : e.name));`;
+          content.document.body.append(script);
+          const poll = () => {
+            const v = content.document.body.dataset[key];
+            if (v) resolve(v);
+            else content.setTimeout(poll, 50);
+          };
+          poll();
+        }),
+      );
+    const camera = await fromPage("{ video: true }");
+    const microphone = await fromPage("{ audio: true }");
+    content.document.notifyUserGestureActivation();
+    // A cancelled request leaves the permission at "default": nothing granted, no prompt.
+    const notification = await settle(content.Notification.requestPermission());
+    const storage = await settle(
+      content.navigator.storage.persist().then((ok) => (ok ? "allowed" : "denied")),
+    );
+    return { geo, camera, microphone, notification, storage };
+  });
+}
+
+add_task(async function test_the_agent_container_asks_for_nothing() {
+  const agent = /** @type {any} */ (WorkspaceStore.agent);
+  const tab = await tabIn(agent.userContextId);
+  const shown = [];
+  const onShown = (/** @type {Event} */ e) => shown.push(/** @type {any} */ (e.target).id);
+  PopupNotifications.panel.addEventListener("popupshowing", onShown);
+  const got = await ask(tab.linkedBrowser);
+  PopupNotifications.panel.removeEventListener("popupshowing", onShown);
+  Assert.deepEqual(
+    got,
+    {
+      geo: "denied",
+      camera: "denied",
+      microphone: "denied",
+      notification: "default",
+      storage: "denied",
+    },
+    "every permission an agent page asks for is refused",
+  );
+  for (const id of [
+    "geolocation",
+    "webRTC-shareDevices",
+    "web-notifications",
+    "persistent-storage",
+  ]) {
+    Assert.equal(
+      PopupNotifications.getNotification(id, tab.linkedBrowser),
+      null,
+      `no ${id} prompt waits on the agent tab`,
+    );
+  }
+  Assert.deepEqual(shown, [], "and no prompt was shown");
+  const principal = tab.linkedBrowser.contentPrincipal;
+  Assert.equal(
+    Services.perms.getForBrowser(principal, "camera", tab.linkedBrowser.browserId)?.capability,
+    Services.perms.DENY_ACTION,
+    "camera is denied for the agent tab",
+  );
+  for (const type of ["camera", "geo", "desktop-notification"]) {
+    Assert.equal(
+      Services.perms.testExactPermissionFromPrincipal(principal, type),
+      Services.perms.UNKNOWN_ACTION,
+      `no ${type} permission for the origin itself: permissions are shared across containers`,
+    );
+  }
+  BrowserTestUtils.removeTab(tab);
+});
+
+add_task(async function test_another_workspace_still_asks() {
+  const tab = await BrowserTestUtils.openNewForegroundTab(gBrowser, PAGE);
+  const prompt = BrowserTestUtils.waitForEvent(PopupNotifications.panel, "popupshown");
+  SpecialPowers.spawn(tab.linkedBrowser, [], () => {
+    content.navigator.geolocation.getCurrentPosition(
+      () => {},
+      () => {},
+    );
+  });
+  await prompt;
+  Assert.ok(
+    PopupNotifications.getNotification("geolocation", tab.linkedBrowser),
+    "a main tab's geolocation request shows Firefox's prompt",
+  );
+  BrowserTestUtils.removeTab(tab);
+});
+
+add_task(async function test_agent_tabs_open_no_popups() {
+  const agent = /** @type {any} */ (WorkspaceStore.agent);
+  const tab = await tabIn(agent.userContextId);
+  Assert.ok(
+    tab.linkedBrowser.browsingContext.sandboxFlags & SANDBOXED_AUXILIARY_NAVIGATION,
+    "the agent tab's browsing context is sandboxed against new windows",
+  );
+  const before = gBrowser.tabs.length;
+  const windows = BrowserWindowTracker.windowCount;
+  const opened = await SpecialPowers.spawn(tab.linkedBrowser, [], () => {
+    content.document.notifyUserGestureActivation();
+    // A sandboxed context's window.open throws InvalidAccessError, or gives null.
+    let w = null;
+    try {
+      w = content.open("https://example.com/", "_blank");
+    } catch (e) {
+      if (e.name !== "InvalidAccessError") throw e;
+    }
+    const a = content.document.createElement("a");
+    a.href = "https://example.org/";
+    a.target = "_blank";
+    content.document.body.append(a);
+    a.click();
+    return w !== null;
+  });
+  await new Promise((r) => setTimeout(r, 500));
+  Assert.ok(!opened, "window.open gives nothing, even after a click");
+  Assert.equal(gBrowser.tabs.length, before, "no tab opened");
+  Assert.equal(BrowserWindowTracker.windowCount, windows, "no window opened");
+
+  // Its browsing context keeps the flag across a navigation to another site.
+  const other = "https://example.org/browser/";
+  BrowserTestUtils.startLoadingURIString(tab.linkedBrowser, other);
+  await BrowserTestUtils.browserLoaded(tab.linkedBrowser);
+  Assert.ok(
+    tab.linkedBrowser.browsingContext.sandboxFlags & SANDBOXED_AUXILIARY_NAVIGATION,
+    "after a cross-site navigation too",
+  );
+  BrowserTestUtils.removeTab(tab);
+
+  const mine = await BrowserTestUtils.openNewForegroundTab(gBrowser, PAGE);
+  Assert.ok(
+    !(mine.linkedBrowser.browsingContext.sandboxFlags & SANDBOXED_AUXILIARY_NAVIGATION),
+    "a main tab is not sandboxed",
+  );
+  const newTab = BrowserTestUtils.waitForNewTab(gBrowser, "https://example.com/");
+  await SpecialPowers.spawn(mine.linkedBrowser, [], () => {
+    content.document.notifyUserGestureActivation();
+    content.open("https://example.com/", "_blank");
+  });
+  BrowserTestUtils.removeTab(await newTab);
+  BrowserTestUtils.removeTab(mine);
+});

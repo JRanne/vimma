@@ -1,0 +1,319 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// The agent question, run (docs/specs/vimma-mcp.md, decisions 13-16, 23-24, 29 C): AgentGate
+// holds the questions; this shows the oldest in one window, the most recent normal one. It opens
+// by itself only while that window is focused, out of fields, after 1,500 ms without a key and
+// with nothing else open (core mayOpenByItself); otherwise it waits as `◇ agent 1?` for
+// `ctrl+b shift+a` (`mcp.answer`). It never takes focus, raises the window or switches
+// workspace: VimmaHost hands it the keys from its capture listener. A window not in front gets
+// getAttention() and a desktop notification once per question, with no URL and no buttons.
+
+import {
+  agentAlertText,
+  agentState,
+  deniedNotice,
+  FULL_CONTROL,
+  grantNotice,
+  mayOpenByItself,
+  promptKey,
+  questionLine,
+  RAN_MS,
+  ranNotice,
+} from "../core/agent-prompt.mjs";
+import { chordFromEvent, formatKey } from "../core/keys.mjs";
+import { AgentGate } from "../ctl/AgentGate.sys.mjs";
+import { McpHost } from "./mcp-ops.mjs";
+
+/** @import { Question, GateEvent } from "../ctl/AgentGate.sys.mjs" */
+
+const lazy = /** @type {any} */ ({});
+ChromeUtils.defineESModuleGetters(lazy, {
+  PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
+  setTimeout: "resource://gre/modules/Timer.sys.mjs",
+});
+
+/** Firefox's own arming delay for security dialogs (modules/libpref/init/all.js). */
+const ARMING_PREF = "security.dialog_enable_delay";
+/** How often a waiting question checks whether it may open now. */
+const POLL_MS = 250;
+/** How often the status bar's grant minutes are redrawn while a grant runs. */
+const TICK_MS = 15_000;
+
+/**
+ * What the host tells the agent UI about one window.
+ * @typedef {object} AgentWindow
+ * @property {import("../ui/agent-prompt.mjs").AgentPrompt} prompt
+ * @property {() => boolean} inField  focus is in an editable field (insert mode)
+ * @property {() => boolean} otherOpen  a picker, prompt, panel or the command line is open
+ * @property {(text: string) => void} notice
+ * @property {(question: string, yes: () => void) => void} ask  a y/N on the prompt line
+ * @property {() => void} emit  redraw the status bar
+ */
+
+/** @type {Map<Window, AgentWindow>} */
+const windows = new Map();
+/** When each window last had a key. @type {WeakMap<Window, number>} */
+const lastKey = new WeakMap();
+/** The question on screen: which, where, the digits typed. */
+/** @type {{ id: number, win: Window, count: string, question: Question } | null} */
+let current = null;
+/** Questions a window not in front was told about already (decision 15: once each). */
+const alerted = new Set();
+let poll = /** @type {any} */ (null);
+let tick = /** @type {any} */ (null);
+let listening = false;
+
+/** The window that asks: the most recent normal (non-private) browser window. */
+function askingWindow() {
+  let best = null;
+  for (const win of /** @type {any} */ (Services.wm).getEnumerator("navigator:browser")) {
+    if (!windows.has(win) || lazy.PrivateBrowsingUtils.isWindowPrivate(win)) continue;
+    best = win;
+  }
+  const top = Services.wm.getMostRecentWindow("navigator:browser");
+  if (top && windows.has(top) && !lazy.PrivateBrowsingUtils.isWindowPrivate(top)) return top;
+  return best;
+}
+
+/** @param {Window} win */
+const isFocused = (win) => /** @type {any} */ (Services.focus).activeWindow === win;
+
+/** @param {Window} win */
+const isFullscreen = (win) => win.document.documentElement.hasAttribute("inDOMFullscreen");
+
+const grantMinutes = () => McpHost.config?.grantMinutes ?? 10;
+
+/** @param {Window} win @param {Question} q */
+function open(win, q) {
+  const w = windows.get(win);
+  if (!w) return false;
+  const shown = w.prompt.show(
+    questionLine(q, { grantMinutes: grantMinutes() }),
+    Services.prefs.getIntPref(ARMING_PREF, 1000),
+  );
+  if (!shown) return false;
+  current = { id: q.id, win, count: "", question: q };
+  return true;
+}
+
+/** Back to waiting: the line closes, the question stays queued. */
+function close() {
+  if (!current) return;
+  windows.get(current.win)?.prompt.hide();
+  current = null;
+}
+
+function redraw() {
+  for (const w of windows.values()) w.emit();
+}
+
+/** Show, hide or wait for the oldest question; mark a window not in front once per question. */
+function sync() {
+  const waiting = AgentGate.waiting;
+  const head = waiting[0] ?? null;
+  for (const id of alerted) if (!waiting.some((q) => q.id === id)) alerted.delete(id);
+  if (current && current.id !== head?.id) close();
+  if (head && !current) {
+    const win = askingWindow();
+    const w = win && windows.get(win);
+    if (win && w) {
+      const focused = isFocused(win);
+      const now = Date.now();
+      if (
+        mayOpenByItself({
+          focused,
+          inField: w.inField(),
+          sinceKeyMs: now - (lastKey.get(win) ?? 0),
+          otherOpen: w.otherOpen(),
+          fullscreen: isFullscreen(win),
+        })
+      ) {
+        open(win, head);
+      } else if (!focused && !alerted.has(head.id)) {
+        alerted.add(head.id);
+        attention(win, head);
+      }
+    }
+  }
+  if (head && !current) {
+    poll ??= lazy.setTimeout(() => {
+      poll = null;
+      sync();
+    }, POLL_MS);
+  }
+  if (AgentGate.grants().length) {
+    tick ??= lazy.setTimeout(() => {
+      tick = null;
+      sync();
+    }, TICK_MS);
+  }
+  redraw();
+}
+
+/**
+ * Decision 15: the urgency hint, and a desktop notification with who and what, never a URL or
+ * title, and no buttons (an approval outside Vimma's view and its arming delay).
+ * @param {Window} win @param {Question} q
+ */
+function attention(win, q) {
+  try {
+    /** @type {any} */ (win).getAttention();
+  } catch (e) {
+    console.error("vimma agent: getAttention", e);
+  }
+  if (McpHost.config?.notify === false) return;
+  try {
+    const alert = Cc["@mozilla.org/alert-notification;1"].createInstance(Ci.nsIAlertNotification);
+    alert.init(`vimma-agent-${q.id}`, "", "Vimma", agentAlertText(q), false);
+    Cc["@mozilla.org/alerts-service;1"].getService(Ci.nsIAlertsService).showAlert(alert);
+  } catch (e) {
+    console.error("vimma agent: notification", e);
+  }
+}
+
+/**
+ * The notices for what the gate did (decisions 16, 20, 23), in the window that asks.
+ * @param {GateEvent | undefined} event
+ */
+function onGate(event) {
+  const win = current?.win ?? askingWindow();
+  const w = win && windows.get(win);
+  if (event && w) {
+    if (event.kind === "answered" && event.answer === "grant" && event.length) {
+      w.notice(grantNotice(event.question, event.length));
+    } else if (event.kind === "answered" && event.answer === "deny") {
+      w.notice(deniedNotice(event.question, "user"));
+    } else if (event.kind === "answered" && event.answer === "mute") {
+      w.notice(deniedNotice(event.question, "mute"));
+    } else if (event.kind === "timeout") {
+      w.notice(deniedNotice(event.question, "timeout"));
+    } else if (event.kind === "ran") {
+      w.notice(ranNotice(event, event.until, Date.now()));
+    }
+  }
+  if (event?.kind === "ran" || (event?.kind === "answered" && event.answer !== "deny")) {
+    // `◇ agent ·` for RAN_MS, then back.
+    lazy.setTimeout(redraw, RAN_MS + 50);
+  }
+  sync();
+}
+
+export const AgentUi = {
+  /**
+   * A browser window's prompt and what the host knows about it (VimmaHost.init).
+   * @param {Window} win @param {AgentWindow} w
+   */
+  register(win, w) {
+    windows.set(win, w);
+    if (!listening) {
+      listening = true;
+      AgentGate.addListener(onGate);
+    }
+  },
+
+  /** @param {Window} win  closing (VimmaHost.uninit) */
+  unregister(win) {
+    if (current?.win === win) current = null;
+    windows.get(win)?.prompt.destroy();
+    windows.delete(win);
+    if (!windows.size && listening) {
+      listening = false;
+      AgentGate.removeListener(onGate);
+    }
+    sync();
+  },
+
+  /**
+   * Every keydown in `win`, before any binding: the open question's keys (consumed), or a
+   * timestamp for the "no key for 1,500 ms" rule. Chords with ctrl, alt or meta go on to the
+   * bindings. A held key never counts; nothing counts before the line is armed.
+   * @param {Window} win @param {KeyboardEvent} e
+   * @returns {boolean} whether the key was the question's
+   */
+  onKey(win, e) {
+    lastKey.set(win, Date.now());
+    if (!current || current.win !== win) return false;
+    const w = windows.get(win);
+    if (!w?.prompt.isOpen) return false;
+    const chord = chordFromEvent(e);
+    if (!chord) return false; // a bare modifier: shift for `Y`
+    if (chord.ctrl || chord.alt || chord.meta) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.repeat || !w.prompt.armed) return true;
+    const result = promptKey({ count: current.count }, formatKey(chord), {
+      full: current.question.tool === FULL_CONTROL,
+    });
+    if (result.kind === "count") {
+      current.count = result.count;
+      w.prompt.setCount(result.count);
+    } else if (result.kind === "answer") {
+      const { id } = current;
+      close();
+      AgentGate.answer(id, result.answer);
+    }
+    return true;
+  },
+
+  /**
+   * Focus moved in `win`: into a field, the line goes back to waiting (decision 14), so what
+   * is typed there is never an answer.
+   * @param {Window} win
+   */
+  onFocusChange(win) {
+    if (current?.win !== win) return;
+    if (windows.get(win)?.inField()) {
+      close();
+      sync();
+    }
+  },
+
+  /**
+   * `ctrl+b shift+a` (`mcp.answer`): the waiting question opens here, whatever the guards say;
+   * with none, the grants and `Revoke N agent grants? y/N`.
+   * @param {Window} win
+   */
+  answer(win) {
+    const w = windows.get(win);
+    if (!w) return;
+    if (lazy.PrivateBrowsingUtils.isWindowPrivate(win)) {
+      w.notice("agent requests are answered in a normal window");
+      return;
+    }
+    const head = AgentGate.waiting[0];
+    if (head) {
+      if (current?.win === win) return;
+      close();
+      if (!open(win, head)) w.notice("agent request: leave full screen to answer it");
+      redraw();
+      return;
+    }
+    const n = AgentGate.grants().length;
+    if (!n) {
+      w.notice("no agent requests waiting and no grants");
+      return;
+    }
+    w.ask(`Revoke ${n} agent grant${n === 1 ? "" : "s"}? y/N`, () => {
+      const ended = AgentGate.revoke();
+      w.notice(`mcp: ended ${ended} agent grant${ended === 1 ? "" : "s"}`);
+    });
+  },
+
+  /** The status bar's agent segment (decision 24), or null. */
+  status() {
+    return agentState({
+      connections: AgentGate.connections.length,
+      waiting: AgentGate.waiting.length,
+      grants: AgentGate.grants(),
+      ranAt: AgentGate.ranAt,
+      now: Date.now(),
+    });
+  },
+
+  /** Test-only: the question on screen. */
+  get _current() {
+    return current;
+  },
+};

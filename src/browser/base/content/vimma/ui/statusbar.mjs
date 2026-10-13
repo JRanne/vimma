@@ -53,7 +53,8 @@ const styled = new WeakSet();
  *   pane?: { index: number, count: number } | null,
  *   workspace?: { name: string, index: number, color?: string } | null,
  *   configErrors?: readonly ConfigError[], configFile?: string,
- *   alerts?: readonly string[] }} status
+ *   alerts?: readonly string[],
+ *   agent?: { waiting: number, minutes: number | null, ran: boolean } | null }} status
  * @property {(fn: () => void) => () => void} subscribe  host state changes; returns unsubscribe
  * @property {(tab: Element) => string | null} [labelFor]  a user's tab rename (tab rename spec)
  */
@@ -226,6 +227,7 @@ export class StatusBar {
       configErrors: status.configErrors ?? [],
       configFile: status.configFile ?? "config.toml",
       alerts: status.alerts ?? [],
+      agent: status.agent ?? null,
     };
     return input;
   }
@@ -259,6 +261,7 @@ export class StatusBar {
       mode: input.mode,
       find: input.find,
       url: input.tab?.url ?? null,
+      agentWaiting: input.agent?.waiting ?? 0,
     });
     this.announced = last;
     if (text !== null) /** @type {HTMLElement} */ (this.live).textContent = text;

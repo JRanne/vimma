@@ -133,6 +133,13 @@ export const COMMANDS = Object.freeze([
     "mcp.command",
     "Agents (MCP): on, off, revoke, forget; without: the status",
   ),
+  // docs/specs/vimma-mcp.md decision 29 D: full control (vimma.control.enabled) for a while.
+  cmd(
+    "control",
+    "optional",
+    "control.command",
+    "Full control: on <minutes>, off; without: the status",
+  ),
 ]);
 
 /**

@@ -8,11 +8,13 @@
 // adds the clock: the ask timeout (50 s, `[mcp] ask_timeout`) and the grants' expiry. One per
 // app, in memory only: nothing here is written to disk (decision 22), and a restart ends it all.
 //
-// The question itself (ui/agent-prompt.mjs, the status bar's `◇ agent 1?`, `ctrl+b shift+a`) is
-// sub-PR 2b. It watches the gate through `addListener` and answers through `answer`; until then a
-// request that is not under a grant waits for its timeout and is denied.
+// The question itself (ui/agent-prompt.mjs, host/agent-ui.mjs: the line, the status bar's
+// `◇ agent 1?`, `ctrl+b shift+a`) watches the gate through `addListener` and answers through
+// `answer`. While MCP is on, a new full-control connection asks here too (`askFull`, decision
+// 29 C), as a question of its own that no grant can cover.
 
 import { AgentQueue, grantLength } from "../core/agent.mjs";
+import { FULL_CONTROL } from "../core/agent-prompt.mjs";
 import { McpHost } from "../host/mcp-ops.mjs";
 
 /** @import { Answer, ConnId } from "../core/agent.mjs" */
@@ -34,6 +36,12 @@ const DEFAULT_GRANT = { grantMinutes: 10, grantMaxMinutes: 480 };
  * @typedef {{ client: string, version?: string, via?: string, since: number }} AgentLabel
  * @typedef {{ id: number, conn: ConnId, tool: string, what: object, label: AgentLabel,
  *   asked: number, deadline: number }} Question
+ * @typedef {{ kind: "asked", question: Question }
+ *   | { kind: "answered", question: Question, answer: string,
+ *       length: { minutes: number, capped: boolean } | null }
+ *   | { kind: "timeout", question: Question }
+ *   | { kind: "ran", conn: ConnId, tool: string, what: object, label: AgentLabel,
+ *       until: number }} GateEvent  what listeners hear, for the notices (decisions 16, 20, 23)
  */
 
 const queue = new AgentQueue();
@@ -43,18 +51,44 @@ const labels = new Map();
 /** Waiting requests: what is asked, and how to answer the agent. */
 /** @type {Map<number, Question & { resolve: (o: Outcome) => void, timer: any }>} */
 const pending = new Map();
-/** @type {Set<() => void>} */
+/** @type {Set<(event?: GateEvent) => void>} */
 const listeners = new Set();
+/** When an allowed request last ran (the status bar's `◇ agent ·`). @type {number | null} */
+let ranAt = null;
+/** The queue's key for full-control questions (decision 29 C); never an agent connection. */
+const FULL_CONN = "full";
 
-function changed() {
+/**
+ * Withdraw question `id` unanswered: its connection went away.
+ * @param {number} id
+ */
+function cancel(id) {
+  const p = pending.get(id);
+  if (!p || !queue.cancel(id)) return;
+  pending.delete(id);
+  lazy.clearTimeout(p.timer);
+  p.resolve({ allow: false, reason: "cancelled" });
+  changed();
+}
+
+/** @param {GateEvent} [event] */
+function changed(event) {
   for (const listener of listeners) {
     try {
-      listener();
+      listener(event);
     } catch (e) {
       console.error("vimma agent gate:", e);
     }
   }
 }
+
+/** @param {number} id */
+const questionOf = (id) => {
+  const p = pending.get(id);
+  if (!p) return null;
+  const { conn, tool, what, label, asked, deadline } = p;
+  return { id, conn, tool, what, label, asked, deadline };
+};
 
 function askTimeoutMs() {
   const override = Services.prefs.getIntPref(ASK_TIMEOUT_PREF, 0);
@@ -73,6 +107,7 @@ function settle(resolved, grant) {
     if (!p) continue;
     pending.delete(r.id);
     lazy.clearTimeout(p.timer);
+    if (r.allow) ranAt = Date.now();
     p.resolve(
       r.allow
         ? { allow: true, ...(grant ? { grant: { until: grant.until } } : {}) }
@@ -124,6 +159,8 @@ export const AgentGate = {
     const now = Date.now();
     const admission = queue.ask(conn, tool, now);
     if (admission.kind === "run") {
+      ranAt = now;
+      changed({ kind: "ran", conn, tool, what, label, until: admission.grant.until });
       return Promise.resolve({ allow: true, grant: { until: admission.grant.until } });
     }
     if (admission.kind === "deny") {
@@ -133,8 +170,9 @@ export const AgentGate = {
     const timeout = askTimeoutMs();
     return new Promise((resolve) => {
       const timer = lazy.setTimeout(() => {
+        const question = questionOf(id);
         settle(queue.expire(id, Date.now()).resolved);
-        changed();
+        changed(question ? { kind: "timeout", question } : undefined);
       }, timeout);
       pending.set(id, {
         id,
@@ -147,8 +185,29 @@ export const AgentGate = {
         resolve,
         timer,
       });
-      changed();
+      changed({ kind: "asked", question: /** @type {Question} */ (questionOf(id)) });
     });
+  },
+
+  /**
+   * A new full-control connection while MCP is on (decision 29 C): resolves once the user said
+   * yes, or with the denial (no, `x`, timeout, a full queue). Nothing is remembered: the next
+   * connection asks again.
+   * @param {(cancel: () => void) => void} [onCancel]  given a way to withdraw the question
+   *   (the connection closed while it waited)
+   * @returns {Promise<Outcome>}
+   */
+  askFull(onCancel) {
+    // One connection key for every full-control question: one waits at a time, and three noes
+    // in a row mute them all for a minute (decision 18), so a token holder cannot flood.
+    if (!labels.has(FULL_CONN)) this.connect(FULL_CONN, { client: "vimma-ctl" });
+    if (AgentGate.waiting.some((q) => q.conn === FULL_CONN)) {
+      return Promise.resolve({ allow: false, reason: "busy" });
+    }
+    const outcome = this.request(FULL_CONN, FULL_CONTROL, {});
+    const mine = [...pending.values()].find((p) => p.conn === FULL_CONN);
+    if (mine) onCancel?.(() => cancel(mine.id));
+    return outcome;
   },
 
   /**
@@ -159,17 +218,28 @@ export const AgentGate = {
    * @returns {{ minutes: number, capped: boolean } | null} the grant's length, for a grant
    */
   answer(id, answer) {
+    const question = questionOf(id);
     let length = null;
     /** @type {Answer} */
     let final = /** @type {Answer} */ (answer);
+    // Full control is one connection's yes or no: no grant covers it, and `x` is a plain no.
+    if (question?.tool === FULL_CONTROL) {
+      if (answer.kind === "grant") return null;
+      if (answer.kind === "mute") final = { kind: "deny" };
+    }
     if (answer.kind === "grant") {
       length = grantLength(answer.minutes, McpHost.config ?? DEFAULT_GRANT);
       final = { kind: "grant", minutes: length.minutes };
     }
     const { resolved, grant } = queue.answer(id, final, Date.now());
     settle(resolved, grant);
-    changed();
-    return resolved.length && length ? length : null;
+    const granted = resolved.length && length ? length : null;
+    changed(
+      question && resolved.length
+        ? { kind: "answered", question, answer: final.kind, length: granted }
+        : undefined,
+    );
+    return granted;
   },
 
   /**
@@ -195,22 +265,30 @@ export const AgentGate = {
     });
   },
 
+  /** When an allowed request last ran, or null. */
+  get ranAt() {
+    return ranAt;
+  },
+
   /** Grants in force, the one ending first first, with their connection's label. */
   grants() {
     return queue.grants(Date.now()).map((g) => ({ ...g, label: labels.get(g.conn) ?? null }));
   },
 
-  /** Agent connections and their labels (`:mcp`, about:vimma). */
+  /** Agent connections and their labels (`:mcp`, about:vimma); never a full-control question's. */
   get connections() {
-    return [...labels.values()];
+    return [...labels.entries()].filter(([conn]) => conn !== FULL_CONN).map(([, label]) => label);
   },
 
-  /** @param {() => void} listener  told after any change: a question, an answer, a grant */
+  /**
+   * @param {(event?: GateEvent) => void} listener  told after any change: a question, an
+   *   answer, a grant, a call under a grant
+   */
   addListener(listener) {
     listeners.add(listener);
   },
 
-  /** @param {() => void} listener */
+  /** @param {(event?: GateEvent) => void} listener */
   removeListener(listener) {
     listeners.delete(listener);
   },

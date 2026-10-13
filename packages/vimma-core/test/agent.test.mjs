@@ -128,7 +128,12 @@ describe(":mcp and its action (group Agents, no default key)", () => {
 
   test("mcp_command is in the Agents group and unbound", () => {
     expect(getAction("mcp_command")).toMatchObject({ id: "mcp.command", group: "Agents" });
-    expect(ACTIONS.filter((a) => a.group === "Agents").map((a) => a.name)).toEqual(["mcp_command"]);
+    // Sub-PR 2b adds agent_prompt (prefix+shift+a) and control_command (:control) next to it.
+    expect(ACTIONS.filter((a) => a.group === "Agents").map((a) => a.name)).toEqual([
+      "mcp_command",
+      "agent_prompt",
+      "control_command",
+    ]);
     expect(compileKeymap().bindingsFor("mcp_command")).toEqual([]);
   });
 });

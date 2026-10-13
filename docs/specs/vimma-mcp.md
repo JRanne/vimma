@@ -1,7 +1,7 @@
 # Spec: vimma-mcp
 
 Status: sub-PR 1 merged (the agent workspace, `[mcp]`, `:mcp on|off|forget`); sub-PR 2 split:
-2a merged (#176, protocol 2, the agent role and its gate); 2b in progress (the question line,
+2a merged (#176, protocol 2, the agent role and its gate); 2b in review (the question line,
 full control asks, the agent workspace's pages); 2c (downloads), 3 and 4 to do · Milestone: queued after firefox-keys sub-PR 2 (plan §6) · Area: `tools/vimma-ctl` (`src/mcp.rs` new, `src/protocol.rs`,
 `src/client.rs`, `src/cli.rs`); `packages/vimma-core/src/` (`control.mjs`, `agent.mjs` new,
 `config.mjs`, `defaults.mjs`, `actions.mjs`, `cmdline.mjs`, `statusbar.mjs`,
@@ -925,32 +925,84 @@ screenshots for agents; the client label is self-reported; Copilot and the other
 approval settings are theirs), the protocol spec (protocol 2 section), ADR-019,
 `docs/adr/README` index if there is one. CHANGELOG.md is the maintainer's at merge time.
 
+## Handover after sub-PR 2b (2026-10-13)
+
+**In 2b.** Decisions 13-15, 23-25, 29 and 30:
+
+- Core `agent-prompt.mjs` (pure): `mayOpenByItself` (decision 14, `QUIET_MS` 1,500),
+  `questionLine` (13: client label cleaned of control and bidi characters, titles cut at 60
+  columns, the host of an open in bold), `promptKey` (13, 20: `y`; `n`/`Esc`/`Enter`; `x`; a
+  count of at most 4 digits and `a`; `Backspace`; any other key ignored; full control has only
+  `y` and no), the notices (`grantNotice`, `ranNotice`, `deniedNotice`), `agentAlertText` (15),
+  `agentState` (24), and `:control` (`parseControlCommand`, `controlStatus`, `controlOnQuestion`).
+  Core `statusbar.mjs`: the `agent` segment (right side, priority 3.5, `◇ agent ·` on the normal
+  badge's colours) and its announcement when the count of waiting questions rises.
+- `ui/agent-prompt.mjs` (the line, an `alertdialog` that takes no focus, a zero-height row like
+  the command line's in `cmdline.css`), `host/agent-ui.mjs` (which window asks, the guards, the
+  keys from VimmaHost's capture listener, attention and the notification, the notices, the
+  status), `host/control-ops.mjs` (`:control`, the pref `vimma.control.enabledUntil`),
+  `ctl/AgentPages.sys.mjs` (decision 30), `AgentGate.askFull` and gate events, and the
+  full-control question in `VimmaControl`'s handshake. `vimma-ctl` waits up to 310 s for the
+  welcome when the discovery file lists `agent`, says so on stderr, and maps `denied` to exit 4
+  (`full control refused: …`).
+- The e2e harness gained `hold`, `agent`/`agent-result`, `ctl`/`ctl-result` and `sleep` steps
+  (`tools/e2e/control-client.mjs`), and `m0-mcp-agent-prompt` drives a real agent connection
+  and a full-control question through the line.
+
+**Choices 2b made where the spec was silent** (3 and 4 can revisit):
+
+- The asking window is the most recent normal window; a private window never asks
+  (`ctrl+b shift+a` there says to answer in a normal one). The status bar shows the segment in
+  every window.
+- While the line shows, plain keys are its own (consumed, whatever they are); chords with
+  `ctrl`, `alt` or meta go on to the bindings. Focus moving into a field while it shows sends it
+  back to waiting, so a click into a field and typing never answers. `ctrl+b shift+a` opens it
+  even with focus in a field, and then it takes the keys (the field gets none).
+- `◇ agent 1?` stays while the line shows (the request still waits); waiting wins over a
+  grant's minutes in the segment.
+- Full-control questions share one queue key: one waits at a time (a second new connection is
+  refused `busy` at once), and three noes in a row mute them for a minute, like an agent's. `x`
+  is a plain no there. The answer is never remembered.
+- A full connection open before MCP was turned on stays open.
+- Camera, microphone and screen are denied with a browser-scoped DENY
+  (`Services.perms.addFromPrincipalForBrowser`, per agent tab, re-set at every document
+  response), not an origin permission: `permissions.isolateBy.userContext` is false, so an
+  origin DENY would reach the same site in `work`. A cancelled `Notification.requestPermission()`
+  stays `"default"` (nothing granted, no prompt); geolocation reports `PERMISSION_DENIED`.
+- The committed e2e scenario has no screenshot baselines: the screenshots were checked from
+  throwaway scenarios (built-in theme and Omarchy's ristretto), and a baseline recorded here
+  would not match CI's fonts. Sub-PR 3's `vimma-ctl mcp` scenario records CI's images.
+- No `[mcp]` key was added; downloads' keys come with 2c.
+
 ## Sub-PR 2c: agent downloads (decision 31), the handover
 
-2b came to more than the 2,000 lines the coordinator set as the split point without downloads, so
-decision 31 is its own sub-PR. What it needs (engine paths relative to `engine/`):
+2b came to more than the 2,000 lines the coordinator set as the split point without downloads
+(about 3,000 with its tests and docs), so decision 31 is its own sub-PR. What it needs (engine paths relative to `engine/`):
 
 - **Where a download starts.** Every download is a `Download` in `DownloadCore.sys.mjs`; its
   `start()` awaits `DownloadIntegration.shouldBlockForParentalControls(this)` (`:510-514`)
-  before the saver runs, and `downloadDone(this)` (`:646`) after. `DownloadIntegration` is a
-  plain object whose methods tests already replace (`toolkit/components/downloads/test/`), but
-  replacing them from chrome would be a monkey-patch: use the public parts instead.
-  `Downloads.getList(Downloads.ALL)` and `list.addView({ onDownloadAdded, onDownloadChanged })`
-  see each download as it is created. `download.source.userContextId` (and
-  `source.isPrivate`) says whether it came from the agent container; `download.source.url` and
-  `referrerInfo` give the host; `download.contentType`, `totalBytes` (−1 unknown) and
-  `target.path` the rest.
+  before the saver runs, and `downloadDone(this)` (`:646`) after. `DownloadIntegration` is an
+  integration point: `DownloadCore` gets it through `Integration.downloads.defineESModuleGetter`
+  (`:37`), so `Integration.downloads.register(base => ({ __proto__: base, ... }))` overrides its
+  methods for every download without a patch, as 2b does for permission prompts
+  (`Integration.contentPermission`). Override `shouldBlockForParentalControls` (ask, and refuse
+  by returning true: the download fails with `becauseBlockedByParentalControls`, its part
+  removed), `getPreferredDownloadsDirectory`/`getTargetDirectory`-style choices are not enough
+  since the helper-app dialog picks the path first, so set the target in
+  `Downloads.getList(Downloads.ALL)`'s `onDownloadAdded` view before `start()` copies to it, or
+  refuse and re-create it (below). `download.source.userContextId` says whether it came from the
+  agent container; `download.source.url` and `referrerInfo` give the host; `download.contentType`,
+  `totalBytes` (−1 unknown) and `target.path` the rest.
 - **Before any byte is written** a download from the agent container must not land in the
   normal directory. The helper-app dialog (`toolkit/mozapps/downloads/HelperAppDlg.sys.mjs`,
   `nsUnknownContentTypeDialog.promptForSaveToFileAsync`) and `DownloadIntegration.getPreferredDownloadsDirectory`
-  (`:332`) choose the directory. The plan: in `onDownloadAdded`, if the source is the agent
-  container, `download.cancel()` at once (the part file is removed by `DownloadCore`), then ask
-  (decision 13's line, tool `vimma_download`, `what` = `{ name, size, type, host }`), and on a
-  yes re-create it with `Downloads.createDownload({ source: { url, userContextId, referrerInfo },
-target: { path: <quarantine>/<name>.part }, saver: "copy" })` in the agent's
-  `userContextId`, so the cookies stay the agent's. A size or type known only from the response
-  (`totalBytes`, `contentType`) is re-checked in `onDownloadChanged` and past the cap the
-  download is cancelled and its part removed (`removePartialData()`).
+  (`:332`) choose the directory. If the override cannot redirect the target, refuse it in
+  `shouldBlockForParentalControls` after the question and, on a yes, re-create it with
+  `Downloads.createDownload({ source: { url, userContextId, referrerInfo }, target: { path:
+<quarantine>/<name>.part } })` in the agent's `userContextId`, so the cookies stay the
+  agent's. A size or type known only from the response (`totalBytes`, `contentType`) is
+  re-checked in `onDownloadChanged`, and past the cap the download is cancelled and its part
+  removed (`removePartialData()`).
 - **No launching.** `launchWhenSucceeded` false, `launcherPath` null on the re-created download,
   and the file mode set to 0600 with `IOUtils.setPermissions(path, 0o600)` once it succeeded;
   `DownloadIntegration.downloadDone` already makes temp files read-only. Firefox's own launch

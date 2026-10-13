@@ -331,9 +331,13 @@ group("Config", [
 ]);
 
 // docs/specs/addon-manager.md
-// docs/specs/vimma-mcp.md: local AI agents, confined to the agent workspace. No default key;
-// `:mcp on|off|forget`.
-group("Agents", [["mcp_command", "mcp.command", "Agents (MCP): :mcp on, off or forget"]]);
+// docs/specs/vimma-mcp.md: local AI agents, confined to the agent workspace. `:mcp on|off|forget`;
+// prefix+shift+a answers the waiting question (decision 14); `:control on <minutes>` (29 D).
+group("Agents", [
+  ["mcp_command", "mcp.command", "Agents (MCP): :mcp on, off or forget"],
+  ["agent_prompt", "mcp.answer", "Answer the waiting agent request (none: revoke grants)"],
+  ["control_command", "control.command", "Full control for a while: :control on <minutes>, off"],
+]);
 
 group("Add-ons", [
   ["addon_picker", "addons.picker", "Add-on picker: popup, options, on/off, remove, update"],

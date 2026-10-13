@@ -11,6 +11,7 @@ import { findStatusText } from "./find.mjs";
 import { displayLabel } from "./tablabels.mjs";
 import { clusterWidth, graphemes, textWidth } from "./textwidth.mjs";
 import { PRIVATE_COLOR_TOKEN, PRIVATE_GLYPH, PRIVATE_NAME } from "./privatews.mjs";
+import { AGENT_GLYPH } from "./agent.mjs";
 
 export { textWidth };
 
@@ -46,6 +47,9 @@ export { textWidth };
  * @property {string} [configFile]
  * @property {readonly string[]} [alerts]  persistent errors (containers off: no workspaces)
  * @property {FindStatus | null} [find]          the current `/` or `?` find (spec m1-find)
+ * @property {{ waiting: number, minutes: number | null, ran: boolean } | null} [agent]  local AI
+ *   agents (docs/specs/vimma-mcp.md decision 24): questions waiting, the shortest grant's
+ *   minutes left, a request that just ran
  */
 
 /** `[workspaces.<name>] color` (Firefox container colours) → its readable text token. */
@@ -150,6 +154,7 @@ export function statusSegments(input) {
     configFile = "config.toml",
     alerts = [],
     find = null,
+    agent = null,
   } = input;
   /** @type {Segment[]} */
   const left = [];
@@ -276,6 +281,28 @@ export function statusSegments(input) {
       }),
     );
   }
+  if (agent) {
+    // The glyph and the word carry it without colour (decision 24), as `◆ private` does.
+    const word = `${AGENT_GLYPH} agent`;
+    const text = agent.ran
+      ? `${word} ·`
+      : agent.waiting
+        ? `${word} ${agent.waiting}?`
+        : agent.minutes !== null
+          ? `${word} ${agent.minutes}m`
+          : word;
+    right.push(
+      seg({
+        id: "agent",
+        text,
+        fg: agent.ran ? "--vimma-mode-normal-fg" : "--vimma-text-cyan",
+        bg: agent.ran ? "--vimma-mode-normal" : null,
+        side: "right",
+        // Just below the workspace's: it gives way before it, after the tab and title.
+        priority: 3.5,
+      }),
+    );
+  }
   if (tab?.url && !urlShownAsTitle) {
     right.push(
       seg({
@@ -352,8 +379,9 @@ export function renderStatusBar(input, width) {
 const SELF_ANNOUNCING = new Set(["help", "command", "panel"]);
 
 /**
- * What the status bar last said: the mode, and the failed search (page and query).
- * @typedef {{ mode: Mode | null, notFound: string | null }} Announced
+ * What the status bar last said: the mode, the failed search (page and query), and how many
+ * agent questions were waiting.
+ * @typedef {{ mode: Mode | null, notFound: string | null, agentWaiting?: number }} Announced
  */
 
 /**
@@ -363,10 +391,11 @@ const SELF_ANNOUNCING = new Set(["help", "command", "panel"]);
  * that found nothing is said once, when the line has closed. Titles and URLs are never said: a
  * screen reader reads the bar on demand (role=status).
  * @param {Announced} last
- * @param {{ mode: Mode, find?: FindStatus | null, url?: string | null }} input
+ * An agent question waiting (docs/specs/vimma-mcp.md decision 24) is said when the count rises.
+ * @param {{ mode: Mode, find?: FindStatus | null, url?: string | null, agentWaiting?: number }} input
  * @returns {{ text: string | null, last: Announced }}
  */
-export function statusAnnouncement(last, { mode, find = null, url = null }) {
+export function statusAnnouncement(last, { mode, find = null, url = null, agentWaiting = 0 }) {
   const parts = [];
   let { mode: lastMode, notFound } = last;
   if (!SELF_ANNOUNCING.has(mode) && mode !== lastMode) {
@@ -380,5 +409,15 @@ export function statusAnnouncement(last, { mode, find = null, url = null }) {
   } else if (!find?.notFound) {
     notFound = null;
   }
-  return { text: parts.length ? parts.join(". ") : null, last: { mode: lastMode, notFound } };
+  if (agentWaiting > (last.agentWaiting ?? 0)) {
+    parts.push(
+      agentWaiting === 1
+        ? "Agent request waiting: ctrl+b shift+a to answer"
+        : `${agentWaiting} agent requests waiting`,
+    );
+  }
+  return {
+    text: parts.length ? parts.join(". ") : null,
+    last: { mode: lastMode, notFound, agentWaiting },
+  };
 }

@@ -225,7 +225,7 @@ function render(d) {
   fill(
     "control",
     dl([
-      ["State", d.control.enabled ? "enabled" : "off (vimma.control.enabled)"],
+      ["State", d.control.status],
       ["Port", d.control.port === null ? "-" : String(d.control.port)],
     ]),
   );
@@ -241,6 +241,8 @@ function render(d) {
           ? `on${mcp.from === "config" ? " ([mcp] enabled in config.toml)" : " (:mcp on)"}`
           : `off${mcp.from === "config" ? " ([mcp] enabled in config.toml)" : " (:mcp on turns it on)"}`,
       ],
+      // Decision 29: while MCP is on, each new full-control connection asks first.
+      ["Full control", d.control.status],
       [
         "Agent workspace",
         mcp.workspace === null

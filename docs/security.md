@@ -93,6 +93,16 @@ only the agent workspace, and every request asks you first (§12).
   [`test_agent_role_has_its_own_switch`](../tests/browser/browser_vimma_mcp_agent.js),
   [`test_each_role_runs_only_its_commands`](../tests/browser/browser_vimma_mcp_agent.js),
   [`says_the_control_socket_is_off_when_only_mcp_is_on`](../tools/vimma-ctl/tests/cli.rs)
+- S13. While MCP is on, a new `full` connection **must** get its welcome only after the user's
+  `y` in the agent question line (no grant covers it, one waits at a time, three noes mute the
+  question for a minute); a no, a timeout or a closed connection refuses it (`denied`). An agent
+  with a shell can read the token, so the token alone **never** gives it keys in your window.
+  With MCP off nothing asks. `:control on <minutes>` **must** turn full control off when its time
+  is up, also across a restart.
+  [`test_full_control_asks_only_while_mcp_is_on`](../tests/browser/browser_vimma_mcp_control.js),
+  [`test_control_on_minutes_turns_itself_off`](../tests/browser/browser_vimma_mcp_control.js),
+  [`waits_for_the_users_answer_while_mcp_is_on`](../tools/vimma-ctl/tests/cli.rs),
+  [`reports_refused_full_control_with_exit_4`](../tools/vimma-ctl/tests/cli.rs)
 
 ## 2. Workspace routing (`workspaces/WorkspaceRouter.sys.mjs`)
 
@@ -431,10 +441,16 @@ a shell can run `vimma-ctl` itself, or speak the protocol directly.
   [`no sequence of events breaks the queue's limits or resolves a request twice`](../packages/vimma-core/test/fuzz/agent.fuzz.test.mjs),
   [`test_grants_cannot_flood`](../tests/browser/browser_vimma_mcp_agent.js),
   [`at most OPEN_RATE.max opens per connection in any OPEN_RATE.ms window`](../packages/vimma-core/test/agent-gate.test.mjs)
-- M4. The question **never** opens while you type or are in a field, is armed only after 1 s,
-  and no key but `y` or a count with `a` allows. **⚠ gap:** the question line is sub-PR 2b of
-  [vimma-mcp](specs/vimma-mcp.md); until it lands no request is asked on screen, so every
-  request without a grant times out and is denied.
+- M4. The question **never** opens by itself while you type, are in a field, or have another
+  prompt open, never takes focus, is armed only after `security.dialog_enable_delay` (1 s), a
+  held key **never** counts, and no key but `y` or a count with `a` allows; any other key
+  neither allows nor denies. A window not in front gets the urgency hint and a notification
+  with no URL, no title and no buttons.
+  [`test_the_line_opens_arms_and_ignores_stray_keys`](../tests/browser/browser_vimma_mcp_prompt.js),
+  [`test_typing_in_a_field_waits_for_ctrl_b_shift_a`](../tests/browser/browser_vimma_mcp_prompt.js),
+  [`test_a_window_not_in_front_gets_attention_and_a_notification`](../tests/browser/browser_vimma_mcp_control.js),
+  [`any other key neither allows nor denies`](../packages/vimma-core/test/agent-prompt.test.mjs),
+  [`a hostile title of 300 characters is literal text cut at 60 columns`](../packages/vimma-core/test/agent-prompt.test.mjs)
 - M5. Grants **must** be per connection and tool, capped at `[mcp] grant_max_minutes`, held in
   memory only, and end on `:mcp revoke`, when their connection closes, on `:mcp off` and at
   expiry.
@@ -460,6 +476,14 @@ a shell can run `vimma-ctl` itself, or speak the protocol directly.
   [`test_the_yes_stands_for_what_was_asked`](../tests/browser/browser_vimma_mcp_agent.js),
   [`test_the_read_checks_last`](../tests/browser/browser_vimma_mcp_agent.js),
   [`test_confinement_edges`](../tests/browser/browser_vimma_mcp_agent.js)
+- M10. Pages in the agent container **must** get no permission prompt: every
+  `nsIContentPermissionPrompt` request from it is cancelled, and camera, microphone and screen
+  are denied per agent tab (a browser-scoped DENY, never the origin's permission, which other
+  containers share); and they **must** open no new window or tab (`SANDBOXED_AUXILIARY_NAVIGATION`
+  on every agent tab). A tab of another workspace still asks and still opens pop-ups.
+  [`test_the_agent_container_asks_for_nothing`](../tests/browser/browser_vimma_mcp_agent_pages.js),
+  [`test_another_workspace_still_asks`](../tests/browser/browser_vimma_mcp_agent_pages.js),
+  [`test_agent_tabs_open_no_popups`](../tests/browser/browser_vimma_mcp_agent_pages.js)
 - M9. `vimma-ctl mcp`'s JSON-RPC parsing **never** panics. **⚠ gap:** `vimma-ctl mcp` is sub-PR
   3 of [vimma-mcp](specs/vimma-mcp.md); until then the protocol 2 decoders it will use are fuzzed
   ([`decoders_never_panic_and_accept_only_the_schema`](../tools/vimma-ctl/tests/protocol_props.rs)).
