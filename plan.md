@@ -252,6 +252,8 @@ Weeks are evenings-and-weekends ordering estimates, not dates. Each milestone en
 
 Vimma MCP (user request, 2026-10-13) is queued after firefox-keys sub-PR 2: it adds a key (`ctrl+b shift+a`), so it waits for that keymap PR. Its implementation adds ADR-019 (agents reach Vimma through a confined control-socket role).
 
+Element focus (user request, 2026-10-13; `docs/specs/element-focus.md`) is queued: a hint mode like `f` over text blocks, then `v` selects the block in copy mode and `y` copies it. The user picks its start key when implementation starts; its keymap sub-PR waits for no other keymap PR to be open.
+
 Recurring every 4 weeks from M0: the upstream rebase. Budget half a day for the first three, then it should be automatic.
 
 ---
