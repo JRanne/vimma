@@ -122,7 +122,7 @@ Decisions:
   `defaults.toml` snapshots re-recorded (the `theme_appearance` row; the `[theme]` comments).
 - Mochitest red: 10 failures (`ThemeHost.detectOmarchy is not a function`, the poll timer left
   running). Green: 35/35. Mutations: a timer that ignores the detection failed `no poll timer
-  runs` and `the poll stops`; the old about page failed the four about:vimma checks; reading
+runs` and `the poll stops`; the old about page failed the four about:vimma checks; reading
   "Omarchy shown" after setting the pref (whose observer resets it) lost the Omarchy notice.
   Full `tests/browser/` in a lane: 5445 passed before the last two tasks, 0 failed after the
   stale-warning fix (an Omarchy theme's contrast warnings stayed in `status` after the built-in
