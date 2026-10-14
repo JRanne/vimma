@@ -421,21 +421,27 @@ export function suggestAction(text) {
 
 /**
  * The candidate nearest to `text` by edit distance, if it is near enough to be a likely typo.
+ * The length difference is a lower bound on the distance, so a candidate it rules out is never
+ * measured: a text far longer than every candidate (a megabyte of hostile config) costs one
+ * comparison per candidate, not a text-by-candidate table (#196).
  * @param {string} text
  * @param {Iterable<string>} pool
  * @returns {string | undefined}
  */
 export function closest(text, pool) {
+  const near = Math.max(2, Math.floor(text.length / 3));
   let best;
   let bestD = Infinity;
   for (const cand of pool) {
+    const gap = Math.abs(text.length - cand.length);
+    if (gap > near || gap >= bestD) continue;
     const d = editDistance(text, cand);
     if (d < bestD) {
       bestD = d;
       best = cand;
     }
   }
-  return bestD <= Math.max(2, Math.floor(text.length / 3)) ? best : undefined;
+  return bestD <= near ? best : undefined;
 }
 
 /**
