@@ -57,7 +57,7 @@ reset. After moving the checkout to another path, run
 ```sh
 npm test                 # Vitest: vimma-core and tools (fast, no browser)
 npm run typecheck        # tsc --checkJs
-npm run lint             # eslint + prettier --check
+npm run lint             # eslint + prettier --check + no process wording in Markdown
 npm run mochitest -- tests/browser/                       # browser tests on your full build
 npm run mochitest -- tests/browser/browser_vimma_tabstrip.js
 npm run sites -- --filter github                          # live sites, a report (docs/runbook.md)
@@ -106,7 +106,9 @@ Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
   [docs/specs/README.md](docs/specs/README.md). A spec merges to `main` at once as a draft with
   its open questions; the maintainer answers them in the feature's issue, each answer is a small
   edit merged at once, and the spec is accepted when nothing is open (the "Lifecycle" section of
-  that page). Boundary changes and new upstream patches need an ADR in `docs/adr/`.
+  that page). Boundary changes and new upstream patches need an ADR in `docs/adr/`. Every
+  Markdown file states decisions with their reasons, never who asked for them or when;
+  `npm run lint` (`tools/md-wording`) fails on that kind of wording.
 - **Pull requests.** A pull request is only for work that is ready to merge. Work that waits on a
   decision is a question in its issue, not an open pull request.
 - **TDD.** Write the failing test and run it, then implement until it passes. Never loosen a test.

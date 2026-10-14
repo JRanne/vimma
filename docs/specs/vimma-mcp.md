@@ -103,7 +103,7 @@ answer for the user, and that never disturbs what the user is doing.
   decision 3, `??=`).
 - **The y/N line** is `RenamePrompt.ask` (`ui/rename-prompt.mjs`): any key but `y` says no, a
   held key (`e.repeat`) is ignored, the line is an `alertdialog`, refuses to open over DOM full
-  screen, and takes focus when it opens: right for a question the user asked for, wrong for one
+  screen, and takes focus when it opens: right for a question the user's own key opened, wrong for one
   an agent sends while the user types.
 - **The status bar** is pure data in core (`packages/vimma-core/src/statusbar.mjs`): segments
   with text, theme tokens and a truncation priority. The private workspace's segment carries its

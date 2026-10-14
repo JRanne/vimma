@@ -343,10 +343,10 @@ Supersedes the sections above where they differ.
   `Failed to load chrome://browser/content/vimma/…`. Chosen over a separate script: it reuses
   the launch, the socket and the CI step, and costs one ~3 s scenario.
 
-## Handover: the stale help-overlay baseline (2026-10-10)
+## Known issue: the stale help-overlay baseline (2026-10-10)
 
 `tests/e2e/baselines/m0-happy-path-help.png` still shows an old legend line; CI passes it within
-the 0.5 % tolerance. It was not re-recorded in the leftovers PR: the baseline must come from
+the 0.5 % tolerance. It has not been re-recorded, because the baseline must come from
 CI's own image (fonts differ locally: a local run differs by 18.6 % here), and `e2e.yml`
 uploads `e2e-output/` only when a step fails, while a comparison within tolerance writes no
 actual image at all. To re-record: in a branch, make CI produce the image (for example a

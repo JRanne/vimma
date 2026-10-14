@@ -9,9 +9,9 @@ Four key changes in one PR: Firefox's own shortcuts stop overlapping Vimma's key
 text-field editing keys, layout-proof matching of Option/AltGr characters, and `x` in the side
 panel.
 
-## The user's words
+## Goal
 
-- "remove those firefox default shortcuts so there is no overlapping"
+- Firefox's default shortcuts that overlap Vimma's keys are removed.
 - Text fields: `ctrl+w` deletes the previous word, `ctrl+u` to the start of the line, `ctrl+h` is
   backspace, on by default, with a config option to turn them off.
 - Option/AltGr: on macOS, Option-composed characters (`{` `}` `[` `]` `$` `@` `|` `~` on Finnish

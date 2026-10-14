@@ -18,16 +18,12 @@ is specced but not built yet; nothing here binds `ctrl+b u` or any other prefix 
 not clash and either may land first. Whichever lands second merges main and re-runs the other's
 tests.**
 
-## The user's words
+## Goal
 
-"what button we have for going to previous page and back to next and why it does not show up in
-ctrl + b ? all keyboard configurations should show up there"
-
-"firefox own shortcuts should be disabled and all the shortcuts should be configurable through
-Vimma"
-
-"dev tools keys should be exactly as they are in normal firefox, however we could probably still
-set them with config.toml?" (2026-10-12, answering open question 5)
+- Every key that does something, including going back and forward in history, shows up in the
+  `ctrl+b ?` overlay.
+- Firefox's own shortcuts are off, and every shortcut is configurable through Vimma.
+- DevTools keys stay exactly as they are in Firefox, and can still be changed in config.toml.
 
 ## User stories
 
@@ -346,13 +342,13 @@ bar, find bar, editing and scrolling, hardware keys, `Esc` in dialogs) counts as
    `responsive_design`, `devtools_inspector`, `devtools_console`, `devtools_debugger`,
    `devtools_network`, `devtools_style_editor`, `devtools_performance`, `devtools_storage`,
    `devtools_accessibility` (ids `devtools.*`). 38 new actions.
-   - **No `new_private_window`.** Firefox's `ctrl+shift+p` is already Vimma's
-     `private_workspace` (`workspace.private`, `defaults.mjs:89`, group "Workspaces"): go to the
-     private workspace, or open it. A second action that opens one more private window per press
-     would undo private-workspace decision 2 (one private workspace), so there is none; its
-     inventory row is fate a with no new binding, as private-workspace's coordination note asks.
-     The rare need for a bare private window is `:firefox Tools:PrivateBrowsing` (Decision 5),
-     and that window still joins the private workspace (private-workspace decision 4).
+   - **No `new_private_window`.** Firefox's `ctrl+shift+p` is already Vimma's `private_workspace`
+     (`workspace.private`, `defaults.mjs:89`, group "Workspaces"): go to the private workspace, or
+     open it. A second action that opens one more private window per press would undo
+     private-workspace decision 2 (one private workspace), so there is none; its inventory row is
+     fate a with no new binding, as the private-workspace spec requires. The rare need for a bare
+     private window is `:firefox Tools:PrivateBrowsing` (Decision 5), and that window still joins
+     the private workspace (private-workspace decision 4).
    - **`restore_tab` moves** from "Side panel" (`actions.mjs:259`) to "Tabs", since its key
      `ctrl+shift+t` becomes global (Decision 7) and is no longer a panel-only key.
 4. **Each runs exactly what Firefox's key ran**, through a new `host/browser-ops.mjs`: the key's
@@ -520,7 +516,7 @@ Each is its own keymap PR, in this order, one open at a time:
    group; the "Firefox (on in config.toml)" group; about:vimma; the template comment.
 3. **The coverage test** (Decision 12) and its `docs/rebase.md` line.
 
-**Sub-PR 1, as built (handover for sub-PR 2).**
+**Sub-PR 1, as built.**
 
 - **"Bound"** is the first chord of every binding in any mode (`boundChords`), so `ctrl+w`
   (Vimma's `ctrl+w h`) counts. Bound means off unless `[firefox] enable` lists the chord: then
@@ -626,20 +622,19 @@ keyboard shortcuts (`commands` in a manifest: they are the extension's, set in a
 remapping keys inside the address bar's or find bar's own handling; a Vimma action for every
 Firefox `<command>` (the c keys stay reachable through `:firefox`).
 
-## Open questions for the user
+## Decided questions
 
-1. ~~**`ctrl+f`**~~ Answered 2026-10-12: neither. It is unbound by default, so a page gets it
-   and otherwise it does nothing. `find_forward` keeps its Vimma keys, and `[keys]` can add
-   `ctrl+f`.
-2. ~~**`ctrl+[` in a text field**~~ Answered 2026-10-12: neither. In insert mode and text fields
-   it does nothing. In normal mode it is still back, as listed under "Go back".
-3. ~~**The `alt` tap that shows the menu bar**~~ Answered 2026-10-12: off
-   (`ui.key.menuAccessKeyFocuses = false`, and `F10` still opens the menus). This replaces
-   toolbar-toggle's "`alt` still shows it", and sub-PR 1 updates that spec.
-4. ~~**`F7`**~~ Answered 2026-10-12: neither. It is unbound by default, and Firefox's caret
-   browsing toggle is off with the rest. `copy_mode` keeps its Vimma keys.
-5. ~~**DevTools keys**~~ Answered 2026-10-12: exactly as in Firefox. All 12 actions are bound
-   by default on Firefox's chords, and each one can be rebound or unbound by name in `[keys]` in
-   config.toml, like any other action. The DOM panel's `ctrl+shift+w` stays unbound, as it is in
-   Firefox, where the reserved close-window key wins. The profiler and tracer keys stay
+1. **`ctrl+f`:** unbound by default, so a page that handles it gets it, and otherwise it does
+   nothing. `find_forward` keeps its Vimma keys, and `[keys]` can add `ctrl+f`.
+2. **`ctrl+[` in a text field:** in insert mode and text fields it does nothing. In normal mode it
+   is still back, as listed under "Go back".
+3. **The `alt` tap that shows the menu bar:** off (`ui.key.menuAccessKeyFocuses = false`, and `F10`
+   still opens the menus). This replaces toolbar-toggle's "`alt` still shows it", and sub-PR 1
+   updates that spec.
+4. **`F7`:** unbound by default, and Firefox's caret browsing toggle is off with the rest.
+   `copy_mode` keeps its Vimma keys.
+5. **DevTools keys:** exactly as in Firefox, so a developer's habits keep working. All 12 actions
+   are bound by default on Firefox's chords, and each one can be rebound or unbound by name in
+   `[keys]` in config.toml, like any other action. The DOM panel's `ctrl+shift+w` stays unbound, as
+   it is in Firefox, where the reserved close-window key wins. The profiler and tracer keys stay
    conditional and can be reached through `:firefox`.
