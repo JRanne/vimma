@@ -224,8 +224,10 @@ MOZ_APP_VERSION)` and keeps the copyright suffix. Both macros are already define
    logs a notice, because a `GITHUB_TOKEN` push would leave the new head without required checks.
 8. **The release side** (job `release-title`, when `release_created` is true): it checks out the
    tag, computes `versionLine` from that `surfer.json`, reads the release body, applies
-   `firefoxNotes`, and runs `gh release edit <tag> --title … --notes-file …` with `GITHUB_TOKEN`
-   (`contents: write`). Editing fires `release: edited`, which starts nothing. It transforms the
+   `firefoxNotes`, and sets the name and body with `PATCH /repos/{owner}/{repo}/releases/{id}`
+   (`gh api`) with `GITHUB_TOKEN` (`contents: write`). The ID is the action's `id` output, so the
+   edit reaches exactly the release release-please created; the job first checks that its tag is
+   `tag_name` and that the title starts with `Vimma <tag version> · `. Editing fires `release: edited`, which starts nothing. It transforms the
    body that is there rather than writing a fresh one, so it never removes text another job added.
    `release.yml`'s `publish` job, which appends the third-party notice the same way, starts after a
    build of 40 minutes or more, long after this job's few seconds.
@@ -380,7 +382,8 @@ Written first and seen to fail.
 **vitest, workflow tests** (`tools/package/test/release-workflow.test.mjs`)
 
 - `release-please.yml grants nothing by default and each job only what it needs`
-- `only release-title holds contents: write from GITHUB_TOKEN`
+- `only release-title holds contents: write from GITHUB_TOKEN besides release-please` (the
+  release-please job keeps the scopes it has today)
 - `security-release runs only on a push to main of JRanne/vimma`
 - `no job runs on pull_request or pull_request_target`
 - `nightly and release smoke checks compare --version with versionLine`

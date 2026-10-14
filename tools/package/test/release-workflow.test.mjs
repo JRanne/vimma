@@ -138,3 +138,117 @@ describe("--version smoke checks", () => {
     expect(step(workflow("release.yml"), "Smoke check")).toContain('"Vimma ${TAG#v} · Firefox "');
   });
 });
+
+// release-please.yml's post-steps (spec firefox-versions, decisions 7 and 8): the release PR's
+// CHANGELOG.md heading and the GitHub Release's title name the Firefox version. They hold write
+// tokens on every push to main, so their scopes and inputs are pinned here.
+describe("release-please.yml", () => {
+  const file = readFileSync(
+    new URL("../../../.github/workflows/release-please.yml", import.meta.url),
+    "utf8",
+  );
+  const all = new Map();
+  {
+    const body = file.slice(file.indexOf("\njobs:\n") + 7);
+    const parts = body.split(/^ {2}([a-z][a-z0-9-]*):\n/m).slice(1);
+    for (let i = 0; i < parts.length; i += 2) all.set(parts[i] ?? "", parts[i + 1] ?? "");
+  }
+  /** @param {string} id */
+  const job = (id) => /** @type {string} */ (all.get(id) ?? "");
+  /** @param {string} id job id -> its `permissions:` entries, comments dropped */
+  const permissions = (id) => {
+    const match = /^ {4}permissions:\n((?: {6}.*\n)+)/m.exec(job(id));
+    return (match?.[1] ?? "")
+      .split("\n")
+      .map((l) => l.replace(/#.*$/, "").trim())
+      .filter(Boolean);
+  };
+
+  it("has the release-please job and the two Firefox post-steps", () => {
+    expect([...all.keys()]).toEqual(["release-please", "firefox-notes", "release-title"]);
+    expect(job("firefox-notes")).toMatch(/^ {4}needs: release-please$/m);
+    expect(job("release-title")).toMatch(/^ {4}needs: release-please$/m);
+  });
+
+  it("release-please.yml grants nothing by default and each job only what it needs", () => {
+    expect(file).toMatch(/^permissions: \{\}$/m);
+    expect(permissions("release-please")).toEqual([
+      "contents: write",
+      "pull-requests: write",
+      "issues: write",
+    ]);
+    expect(permissions("firefox-notes")).toEqual(["contents: read", "pull-requests: read"]);
+    expect(permissions("release-title")).toEqual(["contents: write"]);
+  });
+
+  it("only release-title holds contents: write from GITHUB_TOKEN besides release-please", () => {
+    for (const [id, block] of all) {
+      expect(block.includes("contents: write"), id).toBe(
+        id === "release-please" || id === "release-title",
+      );
+    }
+  });
+
+  it("no job runs on pull_request or pull_request_target", () => {
+    const on = file.slice(file.indexOf("\non:\n"), file.indexOf("\npermissions:"));
+    expect(on).not.toMatch(/pull_request/);
+    expect(on).toMatch(/^ {2}push:\n {4}branches: \[main\]\n/m);
+  });
+
+  it("every action is pinned by a full commit SHA", () => {
+    const uses = [...file.matchAll(/^\s+(?:- )?uses: (\S+)/gm)].map((m) => m[1] ?? "");
+    expect(uses.length).toBeGreaterThan(3);
+    for (const u of uses) expect(u, u).toMatch(/^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/);
+  });
+
+  it("no checkout keeps a token in .git/config", () => {
+    for (const id of ["firefox-notes", "release-title"]) {
+      const checkouts = job(id).split("uses: actions/checkout@").slice(1);
+      expect(checkouts, id).toHaveLength(1);
+      expect(checkouts[0], id).toMatch(
+        /^\S+ # v[\d.]+\n {8}with:\n(?: {10}.*\n)*? {10}persist-credentials: false\n/,
+      );
+    }
+  });
+
+  it("RELEASE_PLEASE_TOKEN reaches only release-please and the changelog push", () => {
+    expect(job("release-title")).not.toContain("RELEASE_PLEASE_TOKEN");
+    const notes = job("firefox-notes");
+    expect(notes.match(/secrets\.RELEASE_PLEASE_TOKEN/g)).toHaveLength(1);
+    // as an env var of the step, never in a `with:` or the checkout
+    expect(notes).toMatch(/^ {10}PUSH_TOKEN: \$\{\{ secrets\.RELEASE_PLEASE_TOKEN \}\}$/m);
+    expect(notes).toMatch(/GH_TOKEN="\$PUSH_TOKEN" gh api --method PUT /);
+  });
+
+  it("firefox-notes reads the release branch as data and does nothing without the token", () => {
+    const notes = job("firefox-notes");
+    // main's code runs; the release branch's files come through the contents API only
+    expect(notes).not.toMatch(/^ {10}ref:/m);
+    expect(notes).toContain("BRANCH: release-please--branches--main");
+    expect(notes).toContain("node tools/release/firefox-notes.mjs");
+    expect(notes).toMatch(/if \[ -z "\$PUSH_TOKEN" \]; then\n\s+echo "::notice::/);
+    expect(notes).toContain("chore(release): firefox $firefox in the changelog heading");
+    // the push names the blob it replaces, so a force-push by release-please in between fails it
+    expect(notes).toContain("sha: $sha");
+  });
+
+  it("release-title runs only when a release was created and titles it with versionLine", () => {
+    const title = job("release-title");
+    expect(condition(title)).toBe("needs.release-please.outputs.release_created == 'true'");
+    expect(title).toContain("ref: refs/tags/${{ needs.release-please.outputs.tag_name }}");
+    expect(title).toContain("node tools/release/version-line.mjs");
+    expect(title).toContain("node tools/release/firefox-notes.mjs");
+    expect(title).toContain('"Vimma ${TAG#v} · Firefox "');
+    expect(title).toMatch(
+      /gh api --method PATCH "repos\/\$GITHUB_REPOSITORY\/releases\/\$RELEASE_ID"/,
+    );
+    // edits only the name and the body; the draft flag and the tag stay as release-please set them
+    expect(title).toContain("{name: $name, body: $body}");
+    expect(title).not.toMatch(
+      /\bdraft\s*:\s*(?:true|false|\$)|tag_name:|make_latest|gh release (?:create|delete|upload|edit)/,
+    );
+    expect(job("release-please")).toMatch(
+      /^ {6}release_created: \$\{\{ steps\.release\.outputs\.release_created \}\}$/m,
+    );
+  });
+});

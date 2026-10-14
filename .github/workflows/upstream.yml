@@ -263,7 +263,9 @@ jobs:
 
           existing=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')
           if [ -n "$existing" ]; then
-            gh pr edit "$existing" --body-file "$RUNNER_TEMP/pr.md" --add-label "$LABELS"
+            # The title too: an advisory published after the PR opened joins its subject.
+            gh pr edit "$existing" --title "$title" --body-file "$RUNNER_TEMP/pr.md" \
+              --add-label "$LABELS"
             pr="#$existing"
           elif url=$(gh pr create "${draft[@]}" --base main --head "$branch" --label "$LABELS" \
               --title "$title" --body-file "$RUNNER_TEMP/pr.md" 2> "$RUNNER_TEMP/pr-error.txt"); then

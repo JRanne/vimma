@@ -792,10 +792,12 @@ In short: every 4 h `detect` (read-only, < 1 min, no secrets) reads product-deta
 index. For a newer Firefox it opens a tracking issue labelled `upstream` (+ `security` with the
 advisory and severity, mentioning you), streams and SHA-512-verifies the source tarball, dry-runs
 our patches, runs `e2e.yml` on the new version (import, artifact build, `tests/browser/`,
-`tests/e2e/`), pushes `upstream/firefox-X.Y.Z` and opens `upstream: firefox X.Y.Z`. Each release
-is handled once (its branch exists); `gh workflow run upstream.yml -f rebuild=true` redoes it. If
-`main` is more than 3 days behind a security dot release (7 for a major, 14 otherwise), the
-`drift` job opens a `security` issue and the run fails until the bump is merged.
+`tests/e2e/`), pushes `upstream/firefox-X.Y.Z` and opens the PR
+`upstream: firefox X.Y.Z (MFSA YYYY-N)`, with the advisories that name the release, if any (a
+later run updates the title when one appears). Each release is handled once (its branch
+exists); `gh workflow run upstream.yml -f rebuild=true` redoes it. If `main` is more than 3
+days behind a security dot release (7 for a major, 14 otherwise), the `drift` job opens a
+`security` issue and the run fails until the bump is merged.
 
 Permissions: the workflow grants nothing by default; `detect` reads contents and issues, `track`
 and `drift` write issues, `patch-check` and `test` read contents only, and only `publish` can
@@ -914,8 +916,28 @@ while the release gate is closed (below). Nothing is built or uploaded by releas
   `release-workflow.test.mjs`. Publish any drafts still waiting, oldest first. Then turn on
   packaging (below, "Release packages", step 7).
 - **The changelog line is the commit subject; the body explains why** (CLAUDE.md). release-please
-  writes subjects only. Firefox bumps are `upstream: firefox X.Y.Z` (upstream.yml), so a
-  security dot release alone still produces a release PR (ADR-015: merged within 3 days).
+  writes subjects only. Firefox bumps are `upstream: firefox X.Y.Z (MFSA YYYY-N)` (upstream.yml),
+  so a security dot release alone still produces a release PR (ADR-015: merged within 3 days).
+- **The Firefox version in titles and headings** (spec firefox-versions). release-please can only
+  title a release `vX.Y.Z` and head its entry `## [X.Y.Z](compare) (date)`, so two jobs after it
+  edit both with `tools/release/firefox-notes.mjs` (idempotent: a second pass changes nothing):
+  - `firefox-notes`, on every run while the release PR is open: reads `CHANGELOG.md` and
+    `surfer.json` from `release-please--branches--main` through the API, and when the newest
+    heading lacks it, pushes one `chore(release)` commit that makes it
+    `## [X.Y.Z](compare) · Firefox <version> (date)` and turns each bump line into
+    `Firefox <version> ([MFSA YYYY-N](advisory))`. The push uses `RELEASE_PLEASE_TOKEN` (a
+    `GITHUB_TOKEN` push would leave the release PR without required checks); without the token the
+    job logs a notice and does nothing. release-please rebuilds the branch (dropping the commit)
+    only when the notes change, and the job then adds it back in the same run. The PR body keeps
+    release-please's heading.
+  - `release-title`, when a release was created: checks out its tag, titles it with
+    `node tools/release/version-line.mjs` (`Vimma X.Y.Z · Firefox <version>`, which must start
+    with the tag's version) and applies the same edit to its notes, through `GITHUB_TOKEN`
+    (`contents: write`). It changes only the name and the notes; a draft stays a draft.
+
+  Check either by hand: `node tools/release/firefox-notes.mjs CHANGELOG.md --surfer surfer.json`
+  prints the edited file, and `node tools/release/version-line.mjs` the title.
+
 - **First release (one-time).** No `v0.1.0` tag exists, and the manifest's `0.1.0` (what every
   build so far shows) counts as released, so the first release is **0.1.1**: the release PR
   `chore(main): release 0.1.1` on branch `release-please--branches--main` lists every
@@ -924,7 +946,8 @@ while the release gate is closed (below). Nothing is built or uploaded by releas
   the generated `0.1.1` list with the `[Unreleased]` sections and delete that heading. The
   generated list also has a false "BREAKING CHANGES" item (cd70146's body has a line starting
   `BREAKING CHANGE:`). release-please rewrites the branch on every push to `main`, so make the
-  edit last. From then on every entry is generated.
+  edit last, on top of the `firefox-notes` commit (pull the branch first; keep the
+  `· Firefox <version>` in the `0.1.1` heading). From then on every entry is generated.
 - **Names.** `include-component-in-tag` is off, so tags are `vX.Y.Z`, the branch is
   `release-please--branches--main` and the PR title `chore(main): release X.Y.Z`.
 
@@ -940,8 +963,11 @@ One-time setup:
    (on `release: published`) runs by itself only with `RELEASE_PLEASE_TOKEN` set; without it,
    start it by hand (see "Release packages").
 
-The job's token has `contents`, `pull-requests` and `issues: write` (labels go through the issues
-API). It runs no repository code.
+The release-please job's token has `contents`, `pull-requests` and `issues: write` (labels go
+through the issues API); it runs no repository code. `firefox-notes` reads with `contents` and
+`pull-requests: read` and writes only through `RELEASE_PLEASE_TOKEN`; `release-title` has
+`contents: write` and nothing else. Both run only `main`'s `tools/release/` (the tag is a commit
+on `main`), never code from the release branch, and keep no token in their checkout.
 
 ### Release packages (`release.yml`, spec m6-packaging)
 
