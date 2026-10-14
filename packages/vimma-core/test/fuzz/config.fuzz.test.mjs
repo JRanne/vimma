@@ -384,10 +384,17 @@ describe("config.toml fuzzing", () => {
         // Regression: the [sites] IPv6 pattern backtracked quadratically (minutes at 512 KiB).
         "a long IPv6-like site": `schema = 2\n[sites."[${":".repeat(512 * 1024)}g"]\ninsert = "auto"\n`,
         "a long bracketed site": `schema = 2\n[sites."[${"1:".repeat(256 * 1024)}]"]\ninsert = "auto"\n`,
+        // Regression (#196): an unknown key or value gets a "did you mean" suggestion, and the
+        // edit distance of a megabyte against every known name took seconds under coverage.
         "a long unknown key": `${"k".repeat(1024 * 1024)} = 1`,
+        "a long workspace colour": `[workspaces.w]\ncolor = "${"x".repeat(1024 * 1024)}"`,
+        "a long workspace icon": `[workspaces.w]\nicon = "${"x".repeat(1024 * 1024)}"`,
+        "a long theme source": `[theme]\nsource = "${"x".repeat(1024 * 1024)}"`,
+        "a long unbind mode": `[unbind.${"x".repeat(1024 * 1024)}]`,
+        "a long route key": `schema = 2\n[[routes]]\n${"x".repeat(1024 * 1024)} = "a"`,
       };
       for (const [name, text] of Object.entries(cases)) {
-        const r = within(5000, () => parseConfig(text));
+        const r = within(5000, () => parseConfig(text), name);
         expectWellFormed(r);
         expect(typeof parseToml(text).ok, name).toBe("boolean");
       }

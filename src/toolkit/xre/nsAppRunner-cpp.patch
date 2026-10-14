@@ -1,0 +1,22 @@
+diff --git a/toolkit/xre/nsAppRunner.cpp b/toolkit/xre/nsAppRunner.cpp
+index 2512c02..ed3ec8f 100644
+--- a/toolkit/xre/nsAppRunner.cpp
++++ b/toolkit/xre/nsAppRunner.cpp
+@@ -2253,14 +2253,9 @@ static void DumpHelp() {
+ }
+ 
+ static inline void DumpVersion() {
+-  if (gAppData->vendor && *gAppData->vendor) {
+-    printf("%s ", (const char*)gAppData->vendor);
+-  }
+-  printf("%s ", (const char*)gAppData->name);
+-
+-  // Use the displayed version
+-  // For example, for beta, we would display 42.0b2 instead of 42.0
+-  printf("%s", MOZ_STRINGIFY(MOZ_APP_VERSION_DISPLAY));
++  // Vimma: "Vimma <vimma> · Firefox <firefox>", the dot as UTF-8 (spec firefox-versions).
++  printf("%s %s \xC2\xB7 Firefox %s", (const char*)gAppData->name,
++         MOZ_STRINGIFY(MOZ_APP_VERSION_DISPLAY), MOZ_APP_VERSION);
+ 
+   if (gAppData->copyright && *gAppData->copyright) {
+     printf(", %s", (const char*)gAppData->copyright);

@@ -345,12 +345,14 @@ Spec: [m0-mozilla-services](specs/m0-mozilla-services.md),
   same site in another, the agent workspace included.
   [`test_site_permissions_are_per_workspace`](../tests/browser/browser_vimma_mcp_agent_pages.js)
 
-## 10. Firefox updates (the upstream autopilot, `upstream.yml`)
+## 10. Firefox updates (the upstream autopilot, `upstream.yml`; the Beta canary, `upstream-beta.yml`)
 
 Vimma is only as safe as the Firefox release under it. The autopilot finds each new release,
 rebases our patches onto it, runs the suites and opens the PR; a person reviews and merges. Spec:
 [m7-upstream-autopilot](specs/m7-upstream-autopilot.md), [ADR-015](adr/015-upstream-autopilot.md),
-playbook: [docs/rebase.md](rebase.md).
+playbook: [docs/rebase.md](rebase.md). The Beta canary tests `main` on each Firefox Beta build and
+reports in an issue, so a release's breakage is known before its deadline (spec
+[upstream-beta-canary](specs/upstream-beta-canary.md)).
 
 **Reach:** Mozilla's public feeds (product-details, the MFSA index, archive.mozilla.org, the
 Taskcluster index) and this repository. Nothing here runs code from a pull request.
@@ -408,6 +410,26 @@ Taskcluster index) and this repository. Nothing here runs code from a pull reque
   [`runs on the first day of each quarter, and by hand`](../tools/test/patch-audit-workflow.test.mjs),
   [`grants nothing by default; issues: write only in the report job`](../tools/test/patch-audit-workflow.test.mjs),
   [`the job holding the issue token never checks out or runs repository code`](../tools/test/patch-audit-workflow.test.mjs)
+- G9. The Beta canary **must never** write anything but issues: nothing granted by default,
+  `issues: write` only in the report job, which checks out and runs no repository code and runs
+  only on `main`; no secret, no push, no commit, no pull request, no change to the Firefox pin,
+  no `pull_request_target`; every job skipped in a fork. A new issue mentions the owner; an update,
+  a comment or a close never does, and test output is fenced so it cannot mention or link.
+  [`grants nothing by default and no job more than issues: write`](../tools/test/upstream-beta-workflow.test.mjs),
+  [`the job with issues: write checks out and runs no repository code`](../tools/test/upstream-beta-workflow.test.mjs),
+  [`the report job runs only on main`](../tools/test/upstream-beta-workflow.test.mjs),
+  [`no job pushes, commits or opens a pull request`](../tools/test/upstream-beta-workflow.test.mjs),
+  [`no secret reaches any job, and the e2e call passes none`](../tools/test/upstream-beta-workflow.test.mjs),
+  [`every job is skipped outside JRanne/vimma`](../tools/test/upstream-beta-workflow.test.mjs),
+  [`every action is pinned by a full commit SHA`](../tools/test/upstream-beta-workflow.test.mjs),
+  [`mentions the owner only when it opens an issue`](../tools/upstream/test/canary.test.mjs),
+  [`fences test output and cuts the body to 60,000 characters`](../tools/upstream/test/canary.test.mjs),
+  [`surfer.json on main pins a Firefox release, never a beta`](../tools/test/surfer-pin.test.mjs)
+- G10. The Beta canary **must never** build from or report on a Beta source tarball whose SHA-512
+  differs from that Beta's `SHA512SUMS`: the source check fails the run before the suites or the
+  issue (G4 for Betas).
+  [`nothing is built from a tarball whose SHA-512 Mozilla did not publish`](../tools/test/upstream-beta-workflow.test.mjs),
+  [`test_mismatch_exits_one_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py)
 
 ## 11. Out of scope and trust boundaries
 

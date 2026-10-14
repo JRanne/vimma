@@ -177,8 +177,9 @@ does not check the download's hash, which is why `e2e.yml` already checks it aga
 
 Conclusion: an artifact build of a Beta works when the tool reads the tree from
 `sourcestamp.txt`, looks the task up in that tree's index itself and passes `MOZ_ARTIFACT_TASK`.
-This was read from the source and the index, not yet run end to end; sub-PR 1 runs it on the
-current Beta and records the result in ADR-010. If Mozilla's Beta build is missing or expired,
+This was confirmed end to end on 159.0b1 on 2026-10-14 (ADR-010, "Beta tarballs"): mach installed
+task `ILGA8D1vQYmtIo0RJKNABg` through `MOZ_ARTIFACT_TASK` and the mochitests ran on the result.
+If Mozilla's Beta build is missing or expired,
 the preflight reports `artifacts=no`, the suites are skipped and the issue says so (B5); the
 patch check still runs.
 
@@ -223,7 +224,11 @@ detect ──► source-check ──► test (e2e.yml) ──► render ──�
 1. **detect** (`contents: read`, `actions: read`). `node tools/upstream/canary.mjs detect` reads
    `firefox_versions.json` and decides B1, then asks the Actions API whether an artifact named
    `upstream-beta-<version>` younger than 7 days exists (B2). Outputs: `version`, `major`,
-   `run` (true or false), `reason`, and `released-majors` for B7.
+   `run` (true or false), `reason`, `released-majors` for B7 (the highest released major: issues
+   for it and lower are closed), and `previous-artifact` and `previous-run`, the newest result of
+   `main` for the same Firefox version (any Beta build), which detect downloads with its
+   `actions: read` and hands to render as the artifact `canary-previous` for B6. Only artifacts
+   of runs on `main` of this repository count, so a manual run on a branch never delays `main`'s.
 2. **source-check** (`contents: read`). `tools/upstream/source-check.sh <version>` streams the
    tarball through `sha512sum` and `patch-check.py`, verifies the hash against `SHA512SUMS`
    (failing on a mismatch, B3), then runs `patch-audit.py` and `artifact-preflight.mjs`.
@@ -272,12 +277,22 @@ detect ──► source-check ──► test (e2e.yml) ──► render ──�
    - `bump-surfer-json.py --allow-beta` writes it into the job's own checkout (the flag is
      required, so no release path can pin a Beta by accident);
    - the check and suite steps (branding prefs, upstream prefs, mochitests, e2e) run with
-     `continue-on-error`, so each one runs and is reported, and the mochitest and e2e output is
-     teed to files;
-   - a final step writes `suite-results.json` (each step's outcome, the
-     `TEST-UNEXPECTED-* | test | message` lines of mozlog's TBPL formatter,
-     `testing/mozbase/mozlog/mozlog/formatters/tbplformatter.py:105`, and the e2e harness's
-     failed scenarios from its new `--report-json` option) and uploads it.
+     `continue-on-error`, so each one runs and is reported. The mochitests also write mozlog's
+     TBPL log (`--log-tbpl=<file>`), because `mach mochitest` prints mach's own format, which has
+     no `TEST-UNEXPECTED-*` lines (seen on e2e.yml run 38559217112); the e2e harness writes its
+     results with its new `--report-json` option;
+   - a final step (`tools/upstream/suite-results.mjs`) writes `suite-results.json` (each step's
+     outcome, the `TEST-UNEXPECTED-* | test | message` lines of that TBPL log,
+     `testing/mozbase/mozlog/mozlog/formatters/tbplformatter.py:242` in Firefox 157.0.1, and the
+     e2e harness's failed scenarios), uploads it with the e2e report, and then fails the job if
+     any step failed, so the run is red once every suite has reported. It does not run on a
+     cancelled run.
+   - A `workflow_call` input `fail-on-findings` (default `true`) lets the canary keep the job
+     green after recording findings (B9): with `false`, the final step exits 0 when
+     `suite-results.mjs` reports findings (exit 1) and still fails on a usage error. A failed
+     import or artifact build fails the job in every mode.
+   - The run's concurrency group is the ref and the version, so a manual run of a Beta on a
+     branch never cancels the canary's run of it on `main`.
 
    For a release version, including PR CI and the autopilot, `e2e.yml` behaves exactly as today:
    the first failure fails the job. Reason: one definition of "the suites" (ADR-015), and a Beta
@@ -449,8 +464,9 @@ and artifact checked by hand.
   the Beta channel without tracking it, because Firefox's two-week cycle (R1) leaves too little
   time between a release and its drift deadline to find breakage there. The rejection of
   "Beta/Nightly" as the tracked channel is unchanged.
-- ADR-010: one paragraph. The artifact build also accepts a Beta tarball (tree from
-  `sourcestamp.txt`, `MOZ_ARTIFACT_TASK`), used only by the canary, with the measured run.
+- ADR-010: one section, added with sub-PR 1. The artifact build also accepts a Beta tarball
+  (tree from `sourcestamp.txt`, `MOZ_ARTIFACT_TASK`), used only by the canary, with the measured
+  run.
 - `plan.md`: the Q-UP row gets "every Beta build" instead of "weekly" and the two-week figure.
 - `docs/guide.md`, README: no change; nothing a Vimma user sees changes.
 - `CHANGELOG.md`: none. The change is CI only (`ci:` and `docs:` commits), types that
@@ -462,13 +478,13 @@ and artifact checked by hand.
    (behaviour unchanged, its test updated); `patch-check.py` reports `tree`; the artifact build
    and preflight read the tree and use `MOZ_ARTIFACT_TASK` for a Beta;
    `bump-surfer-json.py --allow-beta`; `version-files.mjs` for Beta pins; the `surfer.json` pin
-   test. Verified by a local `npm run import` and artifact build on the current Beta with the
-   mochitests run, whose result is recorded in the ADR-010 paragraph.
+   test; the ADR-010 section with the measured run. Verified by a local `npm run import` and
+   artifact build on the current Beta with the mochitests run.
 2. **e2e.yml Beta mode** (`ci(e2e):`). `continue-on-error` in Beta mode, `suite-results.json`, the
    e2e harness's `--report-json`. A `workflow_dispatch` of `e2e.yml` on the current Beta shows the
    report; PR CI is unchanged (a release run still fails on the first failure).
 3. **The canary** (`ci(upstream):`). `upstream-beta.yml`, `canary.mjs`, their tests, the docs and
-   both ADR amendments. Merged with the schedule in place; a manual run on the current Beta is
+   the ADR-002 amendment. Merged with the schedule in place; a manual run on the current Beta is
    checked before the first scheduled one.
 4. **Bump PR link** (`ci(upstream):`). `autopilot-body.mjs` names the open `upstream-beta` issue
    (decision 11). Independent of 3 once 3 has merged.

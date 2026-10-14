@@ -82,13 +82,16 @@ export function expectNoPollution() {
  * @template T
  * @param {number} ms
  * @param {() => T} fn
+ * @param {string} [label]  names the input in the failure message
  * @returns {T}
  */
-export function within(ms, fn) {
+export function within(ms, fn, label) {
   const start = performance.now();
   const out = fn();
   const took = performance.now() - start;
-  if (took > ms) throw new Error(`took ${Math.round(took)} ms, budget ${ms} ms`);
+  if (took > ms) {
+    throw new Error(`${label ? `${label}: ` : ""}took ${Math.round(took)} ms, budget ${ms} ms`);
+  }
   return out;
 }
 

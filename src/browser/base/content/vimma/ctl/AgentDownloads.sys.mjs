@@ -57,6 +57,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   clearTimeout: "resource://gre/modules/Timer.sys.mjs",
   setInterval: "resource://gre/modules/Timer.sys.mjs",
   setTimeout: "resource://gre/modules/Timer.sys.mjs",
+  nsUnknownContentTypeDialog: "resource://gre/modules/HelperAppDlg.sys.mjs",
 });
 
 const DEFAULT_DIR = /** @type {string} */ (DEFAULT_CONFIG.mcp?.download_dir);
@@ -687,16 +688,19 @@ async function saveToQuarantine(launcher, name, ext) {
   }
 }
 
+/**
+ * Wraps Firefox's download dialog, constructing upstream's class
+ * (toolkit/mozapps/downloads/components.conf) directly: Firefox 158 removed
+ * nsIComponentManager.getClassObject, and script cannot create an instance by CID once the
+ * contract points at our factory.
+ */
 function wrapDialog() {
   const registrar = Components.manager.QueryInterface(Ci.nsIComponentRegistrar);
-  const original = registrar.contractIDToCID(DIALOG_CONTRACT);
   const factory = {
     QueryInterface: ChromeUtils.generateQI(["nsIFactory"]),
     /** @param {any} iid */
     createInstance(iid) {
-      const inner = Components.manager
-        .getClassObject(original, Ci.nsIFactory)
-        .createInstance(Ci.nsIHelperAppLauncherDialog);
+      const inner = new lazy.nsUnknownContentTypeDialog();
       const dialog = {
         QueryInterface: ChromeUtils.generateQI(["nsIHelperAppLauncherDialog"]),
         /** @param {any} launcher @param {any} context @param {number} reason */
