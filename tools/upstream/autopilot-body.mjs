@@ -40,9 +40,17 @@ export const BODY_LIMIT = 64000;
  *   runUrl: string, owner: string, error: string }} Context
  */
 
-/** @param {string} version */
-export function prTitle(version) {
-  return `upstream: firefox ${version}`;
+/**
+ * The bump PR's title, and so its squash commit's subject and changelog line (spec
+ * firefox-versions, decision 9): `upstream: firefox 158.0 (MFSA 2026-106)`. Lowercase for
+ * commitlint's subject-case; tools/release/firefox-notes.mjs capitalises it and links the IDs.
+ * Only IDs of the form `MFSA YYYY-N` reach the subject.
+ * @param {string} version
+ * @param {{ id: string }[]} [advisories] the advisories that name this release
+ */
+export function prTitle(version, advisories = []) {
+  const ids = advisories.map((a) => a.id).filter((id) => /^MFSA \d{4}-\d+$/.test(id));
+  return `upstream: firefox ${version}` + (ids.length ? ` (${ids.join(", ")})` : "");
 }
 
 /** @param {string} version */
@@ -240,7 +248,7 @@ export function fallbackBody(c) {
   const v = c.detection.release.version;
   const params = new URLSearchParams({
     expand: "1",
-    title: prTitle(v),
+    title: prTitle(v, c.detection.release.advisories),
     body: `Closes #${c.issue}. Summary: the autopilot comment on #${c.issue}.`,
   });
   const compare = `https://github.com/${c.repo}/compare/main...${c.branch}?${params}`;
@@ -402,7 +410,7 @@ function main() {
   const texts = {
     issue: () => issueBody(c),
     "issue-title": () => issueTitle(v),
-    title: () => prTitle(v),
+    title: () => prTitle(v, detection.release.advisories),
     pr: () => (values["draft-only"] ? String(draftDecision(c).draft) : prBody(c)),
     fallback: () => fallbackBody(c),
     drift: () => driftBody(c),

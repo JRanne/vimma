@@ -331,9 +331,9 @@ add_task(async function test_a_sweep_reloads_agent_tabs_that_loaded_unsandboxed(
 });
 
 // Review of #177 (L3): an agent page cannot launch another app through an external protocol
-// (zoommtg:, mailto: …; Firefox's "always open" choice is shared across containers), and until
-// sub-PR 2c every download from the agent container is blocked.
-add_task(async function test_agent_pages_launch_no_app_and_download_nothing() {
+// (zoommtg:, mailto: …; Firefox's "always open" choice is shared across containers). Its
+// downloads are asked and quarantined: browser_vimma_mcp_downloads.js (sub-PR 2c).
+add_task(async function test_agent_pages_launch_no_app() {
   const { AgentPages } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/ctl/AgentPages.sys.mjs",
   );
@@ -375,52 +375,11 @@ add_task(async function test_agent_pages_launch_no_app_and_download_nothing() {
   Assert.deepEqual(launched, ["vimmatest:from-main"], "the agent page launched nothing");
   BrowserTestUtils.removeTab(mine);
 
-  const dir = await IOUtils.createUniqueDirectory(PathUtils.tempDir, "vimma-dl");
-  registerCleanupFunction(() => IOUtils.remove(dir, { recursive: true }));
-  await SpecialPowers.pushPrefEnv({
-    set: [
-      ["browser.download.always_ask_before_handling_new_types", false],
-      ["browser.download.useDownloadDir", true],
-      ["browser.download.folderList", 2],
-      ["browser.download.dir", dir],
-      ["browser.download.start_downloads_in_tmp_dir", false],
-    ],
-  });
-  const { Downloads } = ChromeUtils.importESModule("resource://gre/modules/Downloads.sys.mjs");
-  const list = await Downloads.getList(Downloads.ALL);
-  const added = new Promise((resolve) => {
-    const view = {
-      onDownloadAdded(d) {
-        list.removeView(view);
-        resolve(d);
-      },
-    };
-    list.addView(view);
-  });
-  BrowserTestUtils.startLoadingURIString(
-    agentTab.linkedBrowser,
-    `${DIR}file_vimma_agent_download.sjs`,
+  // Without the test's stand-in, the wrapper makes Firefox's own chooser for every other load.
+  AgentPages._chooserForTests = null;
+  const chooser = Cc["@mozilla.org/content-dispatch-chooser;1"].createInstance(
+    Ci.nsIContentDispatchChooser,
   );
-  // Forbidden before it starts (the sandbox), or failing as blocked (the integration hook):
-  // either way it never succeeds and leaves no file.
-  const download = await Promise.race([added, new Promise((r) => setTimeout(r, 3000))]);
-  if (download) {
-    await TestUtils.waitForCondition(() => download.stopped, "the download stopped");
-    Assert.ok(!download.succeeded, "a download from the agent container does not succeed");
-  }
-  Assert.deepEqual(await IOUtils.getChildren(dir), [], "and nothing is written");
-  // A download made another way (not a page's navigation) is blocked by Firefox's own hook.
-  const { Integration } = ChromeUtils.importESModule("resource://gre/modules/Integration.sys.mjs");
-  const { DownloadIntegration } = ChromeUtils.importESModule(
-    "resource://gre/modules/DownloadIntegration.sys.mjs",
-  );
-  const combined = Integration.downloads.getCombined(DownloadIntegration);
-  Assert.ok(
-    await combined.shouldBlockForParentalControls({
-      source: { userContextId: agent.userContextId },
-    }),
-    "any download from the agent container is blocked",
-  );
-  await list.removeFinished();
+  Assert.equal(typeof chooser.handleURI, "function", "Firefox's chooser is reached");
   BrowserTestUtils.removeTab(agentTab);
 });

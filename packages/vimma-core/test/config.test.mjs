@@ -412,6 +412,8 @@ describe("mergeWithDefaults", () => {
         grantMaxMinutes: 480,
         maxReadChars: 200000,
         notify: true,
+        downloadDir: "~/Downloads/vimma-agent",
+        downloadMaxMb: 200,
       },
     });
   });
