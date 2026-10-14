@@ -1,6 +1,6 @@
 # Spec: upstream-beta-canary
 
-Status: draft · Area: `.github/workflows/upstream-beta.yml` (new), `.github/workflows/e2e.yml`,
+Status: accepted · Area: `.github/workflows/upstream-beta.yml` (new), `.github/workflows/e2e.yml`,
 `.github/workflows/upstream.yml` (one step moves into a shared script),
 `tools/upstream/canary.mjs` (new), `tools/upstream/source-check.sh` (new),
 `tools/upstream/patch-check.py`, `tools/upstream/artifact-preflight.mjs`,
@@ -68,10 +68,11 @@ it never does.
    artifacts are missing, or a check or test fails, the workflow opens an issue titled
    `Firefox N beta: canary findings`, labelled `upstream-beta`, or updates the open one for that
    `N`. The issue lists the Beta build, the `main` commit tested, the run link, the patches that
-   do not apply with their hunks, and the failed checks and tests with their messages.
+   do not apply with their hunks, and the failed checks and tests with their messages. A newly
+   opened issue mentions the repository owner; an update, a comment and a close never do.
 6. **B6. Tracks progress on the issue.** A later run on the same Firefox version replaces the
-   issue body with the latest results and adds a comment listing what is new and what is fixed
-   since the previous run.
+   issue body with the latest results. When the results differ from the previous run's, it also
+   adds a comment listing what is new and what is fixed; when they do not, it adds no comment.
 7. **B7. Closes the issue when the work is done.** A run that passes completely on Firefox `N`'s
    Beta closes that issue with a comment. Once Firefox `N` is released, the next run closes any
    open `upstream-beta` issue for `N` or lower with a comment that links the autopilot's tracking
@@ -257,7 +258,10 @@ detect ──► source-check ──► test (e2e.yml) ──► render ──�
    release. Detection costs under a minute; the suites run once per Beta build (about every two
    or three days), and again only when a build stays current for more than 7 days, so fixes on
    `main` are re-tested. Later Betas matter as well as b1, because changes are uplifted to Beta
-   during the cycle. Rejected: once a week (too late); once per Firefox version on b1 only
+   during the cycle. The extra runs add no noise to the issue, because a run comments only when
+   its results differ from the previous run's (B6), and runner minutes are free for a public
+   repository (R9). Rejected: once a week, as `plan.md` first described the canary (too late:
+   under the two-week cycle it cannot report two weeks ahead); once per Firefox version on b1 only
    (misses uplifts).
 3. **The tested-build record is the run's own artifact.** The detect job asks the Actions API for
    an artifact named `upstream-beta-<version>`, which needs only `actions: read`. Rejected: a
@@ -315,6 +319,23 @@ detect ──► source-check ──► test (e2e.yml) ──► render ──�
     the open `upstream-beta` issue for the release's major, if one exists, so the release-day
     reviewer sees what was already known. The lookup runs in `upstream.yml`'s `detect` job, which
     already holds `issues: read`; no job gains a permission.
+12. **A new issue mentions the owner; nothing else does.** The `open` body ends with a line
+    mentioning the repository owner (`github.repository_owner`), so a new finding reaches someone
+    the day it is found instead of waiting in the label's list. Updated bodies, progress comments
+    and close comments carry no mention, because a cycle has up to five Beta builds and each
+    mention would be one more notification about work that is already known. A green run that
+    opens nothing mentions no one. Rejected: no mention at all (a finding can sit unread for the
+    whole two weeks it was meant to buy); a mention on every update (notification noise).
+13. **Beta only, not Nightly.** Nightly (`FIREFOX_NIGHTLY`, `160.0a1` in R2) would give about two
+    more weeks of notice, but its builds are indexed on `mozilla-central` with shorter retention,
+    and it changes every day, so most findings would be churn that never reaches a release: the
+    reason ADR-002 rejects tracking Nightly. A Beta change is, with rare backouts, the change the
+    release ships. Nightly can be added later if Beta findings regularly arrive too late to fix.
+14. **An open canary issue does not block or warn on merges to `main`.** Blocking, or a warning
+    check on pull requests while an `upstream-beta` issue is open, would make the canary part of
+    the release path, which B8 excludes, and would hold unrelated work behind a Firefox change
+    that may take the whole cycle to fix. The issue and the bump-PR link (decision 11) are how a
+    finding reaches the people who fix it.
 
 ### Beta to release
 
@@ -372,6 +393,8 @@ network):
 - `opens an issue titled "Firefox 159 beta: canary findings" when a patch fails`
 - `lists failed patches with hunks, failed checks, mochitest and e2e failures`
 - `updates the open issue and comments what is new and what is fixed`
+- `adds no comment when the results are unchanged`
+- `mentions the owner only when it opens an issue`
 - `closes the issue when every patch, check and test passes`
 - `closes issues of released versions and links the tracking issue`
 - `says the suites did not run when Mozilla's beta build is not indexed`
@@ -454,20 +477,4 @@ Each sub-PR is mergeable alone and leaves PR CI and `upstream.yml` working as be
 
 ## Open questions
 
-1. **Test every Beta build, or once a week as `plan.md` describes?** Every build (decision 2)
-   meets the acceptance criterion of reporting two weeks ahead, which a weekly run cannot under
-   the two-week cycle (R1), and the minutes are free. Once a week is quieter, with fewer issue
-   comments. Recommendation: every build, as designed; the issue comments only when results
-   change, so the extra runs add no noise.
-2. **Should a Beta finding mention the owner?** A mention sends a notification for each new
-   issue; without one, the issue waits in the label's list. Recommendation: mention the owner
-   when an issue is opened, not on updates, and never on a green run.
-3. **Should the canary also test Nightly?** Nightly (`FIREFOX_NIGHTLY`, `160.0a1` today) would
-   give another two weeks of notice, but its artifacts are indexed on `mozilla-central` with
-   shorter retention, and it changes daily, so most findings would be churn that never reaches a
-   release (the reason ADR-002 rejects tracking it). Recommendation: no; revisit if Beta findings
-   regularly arrive too late to fix.
-4. **Should a finding on b1 hold back merges to `main`?** It could block, or warn on, pull requests
-   while an `upstream-beta` issue is open. That would make the canary part of the release path,
-   which B8 excludes. Recommendation: no blocking; the issue and the bump-PR link (decision 11)
-   are enough.
+None.
