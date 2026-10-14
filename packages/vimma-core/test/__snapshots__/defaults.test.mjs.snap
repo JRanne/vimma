@@ -346,5 +346,16 @@ download_max_mb = 200
 # [[routes]]
 # domain = "github.com"
 # workspace = "work"
+
+# Search engines. default: an installed engine's name (as in Settings > Search), or
+# "@alias" of a URL below. Each alias is typed as @alias before the words, in the URL bar
+# and in :open and :tabnew. A URL with one %s becomes an engine; a name gives that engine
+# the alias. Set here, the default wins at every start; delete the line to choose it in
+# Settings. None by default.
+# [search]
+# default = "DuckDuckGo"
+# [search.aliases]
+# gh = "https://github.com/search?q=%s"
+# w = "Wikipedia (en)"
 "
 `;

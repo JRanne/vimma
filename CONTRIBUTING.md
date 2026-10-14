@@ -1,7 +1,7 @@
 # Developing Vimma
 
-How to build, run and test Vimma, and how changes get in. For what Vimma is and does, see the
-[README](README.md); for using it, the [user guide](docs/guide.md).
+How to build, run and test Vimma, and how changes get in. For why Vimma exists, see the
+[README](README.md); for what it does and how to use it, the [user guide](docs/guide.md).
 
 ## Requirements
 
@@ -23,7 +23,13 @@ npm run import          # apply Vimma's files and patches, select the vimma bran
 npx surfer build        # full build
 ```
 
-Run it:
+Google Safe Browsing (phishing and malware protection) needs an API key, which is not in this
+repository. A build without one works but shows the protection as off. To turn it on, get a free
+key from Google and save it as `~/.config/vimma/keys/safebrowsing` before building
+([runbook](docs/runbook.md#google-safe-browsing-key-spec-m0-safebrowsing-key)). Release packages
+are built with a key.
+
+Run it, then press `ctrl+b ?` to see every binding:
 
 ```sh
 npm start               # full build if present, else the artifact build; ~/.cache/vimma-dev-profile
@@ -57,7 +63,7 @@ reset. After moving the checkout to another path, run
 ```sh
 npm test                 # Vitest: vimma-core and tools (fast, no browser)
 npm run typecheck        # tsc --checkJs
-npm run lint             # eslint + prettier --check
+npm run lint             # eslint + prettier --check + no process wording in Markdown
 npm run mochitest -- tests/browser/                       # browser tests on your full build
 npm run mochitest -- tests/browser/browser_vimma_tabstrip.js
 npm run sites -- --filter github                          # live sites, a report (docs/runbook.md)
@@ -94,6 +100,13 @@ mochitest run on a full build.
 | `tools/`                          | Build, upstream-bump, licence and commitlint helpers.                                                                                            |
 | `docs/`                           | [User guide](docs/guide.md), [bindings](docs/bindings.md), [limits](docs/limits.md), specs, ADRs, [runbook](docs/runbook.md).                    |
 
+## How Vimma is built
+
+Vimma is built with AI coding agents (Claude Code). Features start as written specs, are built
+test-first by the agents, reviewed, and checked by CI and by the security model in
+[docs/security.md](docs/security.md). [CLAUDE.md](CLAUDE.md) holds the rules the agents follow.
+The author tries each change in daily use before it goes into a release.
+
 ## Workflow
 
 Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
@@ -106,16 +119,19 @@ Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
   [docs/specs/README.md](docs/specs/README.md). A spec merges to `main` at once as a draft with
   its open questions; the maintainer answers them in the feature's issue, each answer is a small
   edit merged at once, and the spec is accepted when nothing is open (the "Lifecycle" section of
-  that page). Boundary changes and new upstream patches need an ADR in `docs/adr/`.
+  that page). Boundary changes and new upstream patches need an ADR in `docs/adr/`. Every
+  Markdown file states decisions with their reasons, never who asked for them or when;
+  `npm run lint` (`tools/md-wording`) fails on that kind of wording.
 - **Pull requests.** A pull request is only for work that is ready to merge. Work that waits on a
   decision is a question in its issue, not an open pull request.
 - **TDD.** Write the failing test and run it, then implement until it passes. Never loosen a test.
 - **Commits.** Use Conventional Commits with a body: the subject is the changelog line; the body
   explains why.
-  `npx commitlint --from origin/main` checks this, and CI rejects `feat` and `fix` commits
-  without a body.
-- **Docs.** A user-visible change updates [docs/guide.md](docs/guide.md), and the README's
-  status if it changes what works. See [docs/review-checklist.md](docs/review-checklist.md).
+  `npx commitlint --from origin/main` checks this, and CI rejects `feat`, `fix` and `revert`
+  commits without a body.
+- **Docs.** A user-visible change updates [docs/guide.md](docs/guide.md) (its "Features at a
+  glance" too when it changes what works), and the README's status line if it changes that. See
+  [docs/review-checklist.md](docs/review-checklist.md).
 - **Agents.** [CLAUDE.md](CLAUDE.md) sets the rules for AI coding agents. They apply to human
   contributors too.
 

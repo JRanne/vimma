@@ -1,6 +1,6 @@
 # Spec: upstream-beta-canary
 
-Status: accepted · Area: `.github/workflows/upstream-beta.yml` (new), `.github/workflows/e2e.yml`,
+Status: accepted (sub-PRs 1 to 3 implemented, #192, #197 and #206; sub-PR 4: [#218](https://github.com/JRanne/vimma/issues/218)) · Area: `.github/workflows/upstream-beta.yml` (new), `.github/workflows/e2e.yml`,
 `.github/workflows/upstream.yml` (one step moves into a shared script),
 `tools/upstream/canary.mjs` (new), `tools/upstream/source-check.sh` (new),
 `tools/upstream/patch-check.py`, `tools/upstream/artifact-preflight.mjs`,
@@ -9,6 +9,8 @@ Status: accepted · Area: `.github/workflows/upstream-beta.yml` (new), `.github/
 `docs/security.md`, `docs/runbook.md` · Upstream patches: none · ADR: amends
 [ADR-002](../adr/002-upstream-release-channel.md) and
 [ADR-010](../adr/010-pr-artifact-builds.md) (one paragraph each); no new ADR
+
+Issue: [#218](https://github.com/JRanne/vimma/issues/218)
 
 ## Summary
 
@@ -144,17 +146,17 @@ product is used only by `surfer update` and the update-check notice (`dist/comma
 does not check the download's hash, which is why `e2e.yml` already checks it against
 `SHA512SUMS` after the download.
 
-**R5. Vimma's own version handling.** Three places assume a release:
+**R5. Vimma's own version handling.** Before sub-PR 1, three places assumed a release:
 
-- `tools/upstream/bump-surfer-json.py` accepts only `\d+(?:\.\d+)*`, so it refuses `159.0b1`.
-- `tools/version-files/version-files.mjs` accepts `bN` but writes the whole value into
+- `tools/upstream/bump-surfer-json.py` accepted only `\d+(?:\.\d+)*`, so it refused `159.0b1`.
+- `tools/version-files/version-files.mjs` accepted `bN` but wrote the whole value into
   `version.txt`, which becomes `MOZ_APP_VERSION`. Mozilla's Beta has `159.0` there (R3), and
   `tests/browser/browser_vimma_app_version.js` asserts that `Services.appinfo.version` equals
   `Services.appinfo.platformVersion`; with `159.0b1` that assertion would fail on every Beta run
   for a reason that is not a Firefox change.
-- `tools/artifact-build/artifact-build.mjs` looks Mozilla's build up only under
+- `tools/artifact-build/artifact-build.mjs` looked Mozilla's build up only under
   `gecko.v2.mozilla-release.shippable.revision.<rev>.firefox.linux64-opt` (`indexNamespace`)
-  and passes the revision to mach as `MOZ_ARTIFACT_REVISION`.
+  and passed the revision to mach as `MOZ_ARTIFACT_REVISION`.
 
 **R6. Artifact builds of a Beta.** Checked against Firefox 157.0.1's
 `python/mozbuild/mozbuild/artifacts.py` and the live Taskcluster index on 2026-10-14:
@@ -187,7 +189,7 @@ patch check still runs.
 
 - `upstream.yml` (ADR-015): its `patch-check` job streams a release tarball once through
   `sha512sum` and `patch-check.py`, verifies the hash, runs `patch-audit.py` and the artifact
-  preflight. All of it works on a Beta URL except the preflight's fixed `mozilla-release`
+  preflight. All of it worked on a Beta URL except the preflight's fixed `mozilla-release`
   namespace (R5). It calls `e2e.yml` through `workflow_call` with `firefox-version`, so the suites
   have one definition.
 - `e2e.yml` (ADR-010): `contents: read`, no secrets, `ubuntu-24.04`, 45-minute limit. The
@@ -195,7 +197,9 @@ patch check still runs.
   at the first failed step, so after a mochitest failure the e2e scenarios do not run.
 - `nightly.yml`: a full build on a self-hosted runner that does nothing until `NIGHTLY_ENABLED`
   is set; it is not live. A full build does not fit a hosted runner (ADR-010: 22 GB, 39 min on 16
-  threads), so the canary, like PR CI, cannot exercise compiled-in build configuration.
+  threads), so the canary, like PR CI, cannot exercise compiled-in build configuration. (Since
+  changed: spec build-supply-chain, R9-R10, finds a full build fits a standard hosted runner,
+  and [#224](https://github.com/JRanne/vimma/issues/224) moves the nightly there; the canary still runs artifact builds only.)
 - `patch-audit.yml`: the pattern for a scheduled report. The job that holds `issues: write`
   checks out and runs no repository code; it only calls `gh` with files an earlier read-only job
   produced.

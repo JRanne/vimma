@@ -6,11 +6,11 @@ Status: implemented · Area: `packages/vimma-core/src/` (`theme.mjs`, `config.mj
 No upstream patch, no new dependency. Builds on [m5-omarchy-theme](m5-omarchy-theme.md) and
 [m5-core-config-and-theme](m5-core-config-and-theme.md).
 
-## The user's words (2026-10-13)
+## Goal
 
-- A: "This should not look for omarchy, when installed to other Linux systems."
-- B: "There should be option to choose built-in or system settings" and "There should be easy
-  keyboard option to change it for first time users".
+- A: installed on a Linux system without Omarchy, Vimma does not look for Omarchy.
+- B: the built-in palette's appearance can be fixed or follow the system's setting, and a first-time
+  user can change it easily from the keyboard.
 
 ## A. Omarchy only where Omarchy is
 
@@ -43,10 +43,10 @@ Decisions:
 4. **With Omarchy**: unchanged. The poll, the hook, the "missing theme" rule all stay.
 5. Also the same when `vimma.theme.source = builtin` or `[theme] source = "file"`: no timer runs
    while nothing would be read (today the timer ticked and returned).
-6. **macOS** (spec PR #156, `docs/spec-macos-build`, sub-PR 2 "the theme poll stops on macOS while
-   Omarchy is absent"): this covers it, on every platform. Its decision 8 asked `about:vimma` to
-   say "Omarchy theme: not found"; the user's later words above override that: no Omarchy wording
-   off Omarchy.
+6. **macOS** ([macos-build](macos-build.md)): the theme poll stops on macOS while Omarchy is
+   absent, because this spec stops it on every platform. `about:vimma` does not say "Omarchy
+   theme: not found" there (macos-build decision 11): no Omarchy wording off Omarchy, because a
+   missing Omarchy is not a problem to report on a system that never had it.
 
 ## B. Built-in appearance: dark, light or the system's
 
@@ -80,9 +80,8 @@ Decisions:
    `:theme light/dark` while the built-in palette is in use (hidden when Vimma follows Omarchy);
    `about:vimma`'s Theme section shows `Appearance` (value, where it comes from, and how to
    change it). The guide's theming section is rewritten for non-Omarchy users first.
-7. The keymap PR (firefox-keys sub-PR 1) runs in parallel on `actions.mjs` and `defaults.mjs`:
-   this PR adds one row to `actions.mjs` and touches only the `[theme]` lines of `defaults.mjs`,
-   then merges `origin/main` and regenerates `docs/bindings.md` and the snapshots before merging.
+7. **Keymap footprint:** this change adds one row to `actions.mjs` and touches only the `[theme]`
+   lines of `defaults.mjs`; `docs/bindings.md` and the snapshots are regenerated from them.
 
 ## Tests (written first)
 

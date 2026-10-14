@@ -41,11 +41,14 @@ line open and tells me what I probably meant. Nothing I type into it reaches the
 - `:open example.com` loads `http(s)://example.com/` through fixup; `:tabnew example.com` does so
   in a new tab.
 - `:vsplit` shows m2-tab-keys' "Split right: not implemented yet"; `:workspace work` (pending)
-  shows "… not available yet"; `:map` and `:help` open the bindings overlay.
+  shows "… not available yet"; `:map` and `:help` open the bindings overlay. (Every command
+  runs since M4 and m3-workspaces: the test now runs `:sidebar`, and `:workspace work` reports
+  `no workspace "work"`.)
 - `:` in a text field (insert) is typed into it; the line does not open.
 - The page sees none of the keys typed into the line (head.js race-free helpers).
 
-`packages/vimma-core/test/cmdline.test.mjs`: `PENDING_ACTIONS` is `["workspace.switch"]`;
+`packages/vimma-core/test/cmdline.test.mjs`: `PENDING_ACTIONS` is `["workspace.switch"]` (empty
+since m3-workspaces);
 `:open x` parses to `page.open`; `:help`, `:h` → `help.show`.
 
 ## Out of scope
@@ -109,7 +112,7 @@ completion list.
   line prefilled with `open `.
 - **`:q` → `pane.close`** closes the tab with m2-tab-keys' `closeTab` (pinned: selects the first
   unpinned tab; the last tab closes the window unless `closeWindowWithLastTab` is false). M4
-  replaces the runner with "close the pane; the last pane closes the tab". `prefix+x` gets the
+  replaced the runner with "close the pane; the last pane closes the tab". `prefix+x` gets the
   same runner, so it is no longer dimmed.
 - **Insert mode:** `:` is not bound in `insert`, so it is typed. In chrome text fields (URL bar)
   the mode is `insert` too.
@@ -117,8 +120,8 @@ completion list.
   `--vimma-accent`, `--vimma-selection`, `--vimma-error`, `--vimma-font`) with `Canvas` /
   `CanvasText` fallbacks; the status bar (#34) loads the token sheet once per window.
 - **Notice, fullscreen (review round 1).** The which-key layering (the line dropping to
-  `z-index: 4` while a prefix was pending) went with the strip (maintainer decision 2026-10-09,
-  m2-statusbar-whichkey Settled). While the line is open (`:root[vimma-cmdline-open]`)
+  `z-index: 4` while a prefix was pending) went with the strip (removed on 2026-10-09; see
+  m2-statusbar-whichkey, Settled). While the line is open (`:root[vimma-cmdline-open]`)
   the notice moves above it: a `ResizeObserver` on the panel sets `--vimma-cmdline-height` on
   the root. In DOM fullscreen (`:root[inDOMFullscreen]`) `:` does not open the line and an open
   one is hidden, as the status bar is; entering DOM fullscreen needs focus in the page, which

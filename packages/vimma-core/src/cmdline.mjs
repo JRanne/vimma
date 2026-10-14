@@ -34,6 +34,13 @@ import { LAYOUTS } from "./layouts.mjs";
  * @typedef {{ value: string, kind: "command" | "action" | "argument", description: string,
  *   label?: string }} Candidate
  */
+/** @typedef {{ name: string, description: string }} AliasCompletion */
+/**
+ * What arguments complete to: names by `ARGUMENT_KINDS` key, and `search`, the `@aliases`
+ * `:open` completes, as AliasCompletion.
+ * @typedef {Readonly<Record<string, readonly string[] | readonly AliasCompletion[]>>}
+ *   CompletionArgs
+ */
 /**
  * @typedef {object} History
  * @property {readonly string[]} entries oldest first
@@ -340,6 +347,9 @@ const CANDIDATES = [
  */
 const ARGUMENT_KINDS = Object.freeze({
   addon: { names: "addon", kind: "add-on" },
+  // docs/specs/search-engines.md, decision 11: `@alias`, while it is the only word.
+  open: { names: "search", kind: "search engine" },
+  tabnew: { names: "search", kind: "search engine" },
   layout: { names: "layout", kind: "layout", fixed: LAYOUTS },
   private: { names: "private", kind: "private workspace", fixed: ["close"] },
   // The two a first-time user wants first, then back to following the system.
@@ -381,10 +391,34 @@ function argumentCandidates(command, kind, text, names) {
 }
 
 /**
+ * `:open @g` → `open @gh ` (search-engines decision 11): the aliases starting with the one word
+ * typed, each with its engine, the words to follow after the space.
+ * @param {string} command
+ * @param {string} text
+ * @param {readonly AliasCompletion[]} aliases  from searchCompletions
+ * @returns {Candidate[]}
+ */
+function aliasCandidates(command, text, aliases) {
+  if (!/^@\S*$/.test(text)) return [];
+  const typed = text.toLowerCase();
+  return aliases
+    .filter((a) => a.name.startsWith(typed))
+    .map((a) =>
+      Object.freeze({
+        value: `${command} ${a.name} `,
+        kind: /** @type {const} */ ("argument"),
+        description: a.description,
+        label: a.name,
+      }),
+    );
+}
+
+/**
  * Completion candidates for the command word, or for the argument of a command that completes
- * one, from the names the host passes in `args` (`{ addon: [...], workspace: [...] }`).
+ * one, from the names the host passes in `args` (`{ addon: [...], workspace: [...] }`, and
+ * `search`: the `@aliases` with their engines).
  * @param {string} line
- * @param {{ limit?: number, args?: Readonly<Record<string, readonly string[]>> }} [options]
+ * @param {{ limit?: number, args?: CompletionArgs }} [options]
  * @returns {{ word: string, candidates: Candidate[] }}
  */
 export function completeCommandLine(line, { limit = 20, args = {} } = {}) {
@@ -395,9 +429,21 @@ export function completeCommandLine(line, { limit = 20, args = {} } = {}) {
     const command = byWord.get(word)?.name;
     const spec = command && Object.hasOwn(ARGUMENT_KINDS, command) ? ARGUMENT_KINDS[command] : null;
     const names =
-      spec && Object.hasOwn(args, spec.names) ? args[spec.names] : (spec?.fixed ?? undefined);
+      spec && Object.hasOwn(args, spec.names)
+        ? /** @type {readonly string[]} */ (args[spec.names])
+        : (spec?.fixed ?? undefined);
     if (!spec || !names) return { word, candidates: [] };
     const text = rest.slice(/** @type {string} */ (m[1]).length + 1);
+    if (spec.names === "search") {
+      return {
+        word,
+        candidates: aliasCandidates(
+          word,
+          text,
+          /** @type {readonly AliasCompletion[]} */ (args.search ?? []),
+        ).slice(0, limit),
+      };
+    }
     return {
       word,
       candidates: argumentCandidates(word, spec.kind, text, names).slice(0, limit),

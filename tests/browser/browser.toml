@@ -106,6 +106,9 @@ support-files = [
 ["browser_vimma_statusbar.js"]
 support-files = ["file_vimma_title.html"]
 
+["browser_vimma_search.js"]
+support-files = ["file_vimma_search_post.sjs"]
+
 ["browser_vimma_cmdline.js"]
 
 ["browser_vimma_find.js"]

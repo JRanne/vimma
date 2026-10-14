@@ -194,8 +194,17 @@ link targets for hints, which chrome must treat as untrusted.
 - U4. `:open` and `:tabnew` **never** open `javascript:` or `data:` URLs, however disguised (case,
   tabs, newlines, leading controls, `view-source:`)
   ([#98](https://github.com/JRanne/vimma/issues/98)). No length cap applies to text typed there.
+  A search alias or bookmark keyword at the start resolves as the URL bar resolves it
+  (`UrlbarUtils.getShortcutOrURIAndPostData`), and the URL it resolves to is checked again, so a
+  keyword bookmarklet is refused; the bookmark's principal is never inherited. Other schemes a
+  keyword resolves to (`file:`, `about:`) load as they would if typed: there is no allowlist like
+  the bookmarks panel's. The query goes to the tab it was typed in (or a new tab in its
+  container), even when the workspace changes while the keyword is looked up.
   [`javascript_urls_are_blocked_with_a_notice`](../tests/browser/browser_vimma_cmdline.js),
-  [`data_urls_are_blocked_with_a_notice`](../tests/browser/browser_vimma_cmdline.js)
+  [`data_urls_are_blocked_with_a_notice`](../tests/browser/browser_vimma_cmdline.js),
+  [`bookmark_keywords_work_and_refused_ones_never_run`](../tests/browser/browser_vimma_search.js),
+  [`a_keyword_page_never_inherits_the_current_page`](../tests/browser/browser_vimma_search.js),
+  [`a_workspace_switch_during_the_lookup_keeps_the_query_where_it_was_typed`](../tests/browser/browser_vimma_search.js)
 - U5. Every Vimma open of text with the system principal (`p`, `P`, `:open`, `:tabnew`) **must**
   refuse those schemes through one shared check (`refusedScheme`, `core/pageurl.mjs`); bookmarks
   and the socket's `open` go further and allow only http, https, file and about.
@@ -348,7 +357,7 @@ Spec: [m0-mozilla-services](specs/m0-mozilla-services.md),
   [`test_keyed_build_fetches_google_lists`](../tests/browser/browser_vimma_safebrowsing.js),
   [`test_keyless_build_is_honestly_off`](../tests/browser/browser_vimma_safebrowsing.js)
 - P7. Site permissions (camera, location, notifications …) **must** be kept per container, so
-  per workspace (`permissions.isolateBy.userContext`; user decision "Per workspace",
+  per workspace (`permissions.isolateBy.userContext`;
   [vimma-mcp](specs/vimma-mcp.md) decision 30): one given in one workspace never applies to the
   same site in another, the agent workspace included.
   [`test_site_permissions_are_per_workspace`](../tests/browser/browser_vimma_mcp_agent_pages.js)
@@ -469,6 +478,12 @@ one workspace, **agent**, through the control socket's `agent` role. Spec:
 while MCP is on (`:mcp on`). Every check runs in the browser, never in the client: an agent with
 a shell can run `vimma-ctl` itself, or speak the protocol directly.
 
+**Planned:** [mcp-drive](specs/mcp-drive.md) adds `vimma_show` and `vimma_keys` (the agent shows
+a page, and runs Vimma's own page keys in an agent tab) and makes full control's questions say
+that it reaches beyond the agent workspace while MCP is on. Its rules M16-M23 (key whitelist,
+background-only, follows as loads, show always asked, limits, delimited link lists, full
+control's wording, the audit) enter this section with their tests in the sub-PR that builds each.
+
 - M1. Every agent command but `agent-hello`, `agent-ping` and `agent-cancel` **must** wait for
   your yes, or run under an unexpired grant of that connection and tool.
   [`test_grants_per_connection_and_tool`](../tests/browser/browser_vimma_mcp_agent.js),
@@ -534,9 +549,9 @@ a shell can run `vimma-ctl` itself, or speak the protocol directly.
   [`test_the_read_checks_last`](../tests/browser/browser_vimma_mcp_agent.js),
   [`test_confinement_edges`](../tests/browser/browser_vimma_mcp_agent.js)
 - M10. Pages in the agent container **must** get no permission prompt and no permission given
-  elsewhere: site permissions are kept per container (`permissions.isolateBy.userContext`, user
-  decision "Per workspace"), every `nsIContentPermissionPrompt` request from the agent
-  container is cancelled, and camera, microphone and screen are denied per agent tab (a
+  elsewhere: site permissions are kept per container (`permissions.isolateBy.userContext`,
+  [vimma-mcp](specs/vimma-mcp.md) decision 30), every `nsIContentPermissionPrompt` request from
+  the agent container is cancelled, and camera, microphone and screen are denied per agent tab (a
   browser-scoped DENY, set on each HTTP response and when each document's window global is
   created, so a page a service worker serves is covered). They **must** open no new window or
   tab (`SANDBOXED_AUXILIARY_NAVIGATION` on every agent tab, which is reloaded if it had loaded
@@ -550,16 +565,15 @@ a shell can run `vimma-ctl` itself, or speak the protocol directly.
   [`test_a_page_from_a_service_worker_is_denied_too`](../tests/browser/browser_vimma_mcp_agent_pages.js),
   [`test_a_sweep_reloads_agent_tabs_that_loaded_unsandboxed`](../tests/browser/browser_vimma_mcp_agent_pages.js),
   [`test_agent_pages_launch_no_app`](../tests/browser/browser_vimma_mcp_agent_pages.js)
-- M11. A download from the agent workspace (by its container, its tab's container, or being
-  written to the quarantine folder) **must** ask in the question line first (its name, size,
-  type and host, **never** the URL). It is the `vimma_download` of an agent connection only when
-  it is the very load that connection's `agent-open` started (its URL before redirects, within a
-  minute, once, and never after the tab showed a page); anything else, a page's own download
-  under a grant included, asks as "a page in the agent workspace" (no grant, `x` a plain no).
-  Only `https:` is downloaded, nothing over
-  `[mcp] download_max_mb` (refused when the size is known, stopped and deleted once it grows past
-  it), and a refused download leaves no file. The user's own Save Page, Save Link As and Save
-  Image As are the user's (an agent cannot press them) and ask nothing. Another workspace's
+- M11. A download from the agent workspace (by its container, its tab's container, or being written
+  to the quarantine folder) **must** ask in the question line first (its name, size, type and host,
+  **never** the URL). It is the `vimma_download` of an agent connection only when it is the very
+  load that connection's `agent-open` started (its URL before redirects, within a minute, once, and
+  never after the tab showed a page); anything else, a page's own download under a grant included,
+  asks as "a page in the agent workspace" (no grant, `x` a plain no). Only `https:` is downloaded,
+  nothing over `[mcp] download_max_mb` (refused when the size is known, stopped and deleted once it
+  grows past it), and a refused download leaves no file. The user's own Save Page, Save Link As and
+  Save Image As are the user's (an agent cannot press them) and ask nothing. Another workspace's
   downloads are untouched.
   [`test_the_question_then_yes_saves_to_the_quarantine_0600_unopened`](../tests/browser/browser_vimma_mcp_downloads.js),
   [`test_no_saves_nothing`](../tests/browser/browser_vimma_mcp_downloads.js),
@@ -596,9 +610,9 @@ a shell can run `vimma-ctl` itself, or speak the protocol directly.
   (`--alert-encrypted=yes --alert-exceeds-max=yes`), and deleted when ClamAV flags it; when
   ClamAV fails, takes over five minutes, or could not look inside (encrypted, over its limits),
   keeping the file unscanned is asked (y/N, no grant), and a no deletes it. The notice says
-  scanned, not fully scanned or not scanned. Vimma has no download reputation service of its own: Firefox's Safe Browsing
-  checks downloads only in a build with a Google key (P6), so in a keyless build these checks
-  and ClamAV are all there is.
+  scanned, not fully scanned or not scanned. Vimma has no download reputation service of its
+  own: Firefox's Safe Browsing checks downloads only in a build with a Google key (P6), so in a
+  keyless build these checks and ClamAV are all there is.
   [`test_a_dangerous_file_needs_bang_for_that_one_file`](../tests/browser/browser_vimma_mcp_downloads.js),
   [`test_dangerous_content_asks_again_and_no_deletes_it`](../tests/browser/browser_vimma_mcp_downloads.js),
   [`test_a_different_danger_in_the_bytes_asks_again`](../tests/browser/browser_vimma_mcp_downloads.js),

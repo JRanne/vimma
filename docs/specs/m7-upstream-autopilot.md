@@ -8,8 +8,7 @@ Status: implemented · Milestone: M7 · Area: upstream (`tools/upstream/`,
 As the maintainer, when Firefox ships a release, and above all a security release, I get within
 hours a PR that has already rebased Vimma onto it and run the whole suite, with the advisory and
 its severity, so all I do is review and merge. If I do not, a check fails loudly and an issue
-mentions me, so drift cannot go unnoticed. ("Security is very important and we hope to automate
-it as far as possible.")
+mentions me, so drift cannot go unnoticed.
 
 ## What was there (m0-pipeline, m0-rebase-playbook)
 
@@ -61,7 +60,10 @@ One workflow, six jobs; the heavy ones run once per release (`upstream.yml` has 
    - **No artifacts** (404 or expired in the index): the suites are skipped and the PR says so.
      The full-build path is the build machine: `npx surfer build` and
      `npm run mochitest -- tests/browser/` (docs/rebase.md, step 4), and after merge the nightly.
-     A hosted runner cannot do a full build (22 GB, 39 min on 16 threads; ADR-010).
+     A hosted runner cannot do a full build (22 GB, 39 min on 16 threads; ADR-010). (Since
+     changed: the full-build path is a developer's machine, and the nightly moves to a
+     GitHub-hosted runner with [#224](https://github.com/JRanne/vimma/issues/224); spec build-supply-chain, decision 6, and its
+     research R9-R10 show the build fits one.)
    - `publish` (`contents`/`pull-requests`/`issues: write`): bump `surfer.json`, commit
      `upstream: firefox X.Y.Z`, push the branch, open the PR with `autopilot-body.mjs`'s body:
      a table (tarball, patches clean/offset/fuzz/failed, register, artifacts, suites), the
@@ -89,8 +91,8 @@ One workflow, six jobs; the heavy ones run once per release (`upstream.yml` has 
   releases tightens to 3 for dot releases.
 - **Every 4 h**: 6 runs a day. A release has a PR within ≈ 4 h 30 min (worst case, plus GitHub's
   cron delay), inside G1's 6 hours. Every 2 h would cost 360 min a month for at most 2 h earlier.
-- **Commit type `upstream:`**, not `chore(upstream):` as first proposed: release-please hides
-  `chore` (`release-please-config.json`), so a Firefox security bump would neither appear in the
+- **Commit type `upstream:`**, not `chore(upstream):`: release-please hides `chore`
+  (`release-please-config.json`), so a Firefox security bump would neither appear in the
   changelog nor trigger a release PR. `upstream` is a listed commitlint type shown under "Changed".
 - **Node, not Python**, for the new logic: tests in Vitest beside the other tools, and the
   runner's Node needs no setup. `check-release.py` and its tests are gone (`detect.mjs` replaces
@@ -106,13 +108,15 @@ One workflow, six jobs; the heavy ones run once per release (`upstream.yml` has 
 | ----------------------------------------------------------- | --------------------------------------------- |
 | `detect`, nothing new (6 a day)                             | 1 each → **≈ 180 a month**                    |
 | A release: detect 1, track 1, patch-check 2                 | 4                                             |
-| `test` (e2e.yml: vimma-ctl, import, artifact build, suites) | ≈ 11 (10 min 21 s on this PR's e2e run)       |
+| `test` (e2e.yml: vimma-ctl, import, artifact build, suites) | ≈ 11 (10 min 21 s in a measured e2e run)      |
 | `publish`                                                   | 1                                             |
 | **Per release**                                             | **≈ 16** (+ ≈ 14 when marked ready: ci + e2e) |
 | `drift` while overdue                                       | +1 per run                                    |
 
 About 3 releases a month (one major, one or two dot releases): ≈ 180 + 3 × 30 = **≈ 270 a
 month**, 14 % of the budget (was ≈ 130). Once the repo is public, hosted minutes are free.
+(Since changed: the repository is public, so these minutes cost nothing; `docs/runbook.md`,
+"Actions minutes budget".)
 
 ## Tests (written first)
 

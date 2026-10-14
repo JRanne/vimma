@@ -445,7 +445,7 @@ describe("workspace lifecycle", () => {
   });
 });
 
-// docs/specs/bookmarks.md, decision 11 (user decision, 2026-10-10): a workspace's bookmarks
+// docs/specs/bookmarks.md, decision 11: a workspace's bookmarks
 // folder is linked by its Places guid, kept in the definitions file.
 describe("bookmarksFolder", () => {
   const base = () => reconcileDefinitions(emptyDefinitions(), [cfg("work")], minter()).definitions;
@@ -506,8 +506,8 @@ describe("deleteBookmarksQuestion", () => {
   });
 });
 
-// docs/specs/vimma-mcp.md, decisions 8, 9 and 11 (user decision, 2026-10-13: "Each profile
-// should get agent workspace"): the reconcile ensures the agent workspace, last.
+// docs/specs/vimma-mcp.md, decisions 8, 9 and 11: every profile has an agent workspace; the
+// reconcile ensures it, last.
 describe("the agent workspace", () => {
   const agent = { agent: "agent" };
   const names = (/** @type {{ workspaces: { name: string }[] }} */ d) =>

@@ -13,6 +13,8 @@ the update manifest before Firefox parses it (m6a-updater)") · ADR: ADR-016 (ne
 update channel"; the number is free on `main` and reserved for this spec), ADR-003 (three register
 lines), ADR-010 (the artifact-build gap, unchanged)
 
+Issue: [#217](https://github.com/JRanne/vimma/issues/217)
+
 Prerequisites: m0-updater (whose `--disable-updater` this reverses for release and nightly
 builds), m6-packaging (the artifacts), m7-upstream-autopilot (the security bump PRs) and
 firefox-versions (the version line and the release half of the security path).

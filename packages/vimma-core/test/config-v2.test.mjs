@@ -376,7 +376,7 @@ describe("[modal] insert_editing", () => {
   });
 });
 
-// docs/specs/bookmarks.md, decision 2 (user decision, 2026-10-10).
+// docs/specs/bookmarks.md, decision 2.
 describe("[bookmarks] root", () => {
   test('defaults to "workspace"', () => {
     expect(ok(v2()).bookmarks).toEqual({ root: "workspace" });
@@ -505,7 +505,7 @@ describe("[theme] appearance", () => {
   });
 });
 
-// docs/specs/private-swap.md, decision 1 (user decision, 2026-10-12).
+// docs/specs/private-swap.md, decision 1.
 describe("[private] placement", () => {
   test('defaults to "swap"', () => {
     expect(ok(v2()).private).toEqual({ placement: "swap" });

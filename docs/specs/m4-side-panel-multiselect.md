@@ -1,16 +1,15 @@
 # Spec: m4-side-panel-multiselect
 
-Status: done · Milestone: after M4 (builds on [tiling-layouts](tiling-layouts.md) and
+Status: implemented · Milestone: after M4 (builds on [tiling-layouts](tiling-layouts.md) and
 the side panel of [m3-workspaces](m3-workspaces.md) sub-spec 6) · Area:
 `packages/vimma-core/src/sidepanel.mjs`, `layouts.mjs`, `defaults.mjs`, `actions.mjs`;
 `ui/side-panel.mjs`, `split/PaneView.mjs`, `host/VimmaHost.sys.mjs`, `side-panel.css`. No
 upstream patch.
 
-## The user's words
+## Goal
 
-"A feature that allows selecting tabs from the side panel, and then when pressing a key the
-panels should be shown in the same view. Select two tabs and show them in split view, select
-three and show them split or dwindle etc."
+Select tabs in the side panel, then press one key to show them together in the same view: two
+selected tabs become a split, three or more are arranged as a split or dwindle layout, and so on.
 
 ## User stories
 
@@ -111,8 +110,8 @@ three and show them split or dwindle etc."
     mark-aware `panel.open` / `panel.close`, a `together` effect (`ids` in row order, `focus`),
     `markedRows`/`inRange`, and `markSummary` for the header text. `layouts.mjs` gains
     `togetherRefusal(ids, options)` and `showTogether(ids, options)`, which compose `createRow`
-    and `arrange` (no new tree builder) and `togetherLayout(panes, mode)`. `PaneView.showTabs`
-    applies it; the host wires the effect.
+    and `arrange` (no new tree builder) and pick the preset from the stored one or
+    `[panes] layout`. `PaneView.showTabs` applies it; the host wires the effect.
 16. **`:` command:** not in this change. `:split` is taken (split down); a `:panes 2 5 7` that
     picks rows by number is a follow-up.
 
@@ -125,7 +124,7 @@ three and show them split or dwindle etc."
   switch clears; `markSummary`. Default keys reach the actions through the dispatcher.
   `layouts.test.mjs`: `showTogether` for 2, 3, 4 tabs in dwindle (shapes), a preset kept and
   used (main-vertical with the focus as main, tiled), manual is a row, focus, `layout` stored only
-  for a preset; `togetherRefusal` over max and with no space; `togetherLayout`.
+  for a preset; `togetherRefusal` over max and with no space.
 - **Mochitest** `browser_vimma_side_panel_marks.js`: marking with `space` / `V`, the `●` gutter,
   `aria-checked`, the header count; `Esc` order; `Enter` with 2, 3 and 4 marks (pane count, tree
   shape, focus, panel closed); a tab of the old split not marked leaves it and stays open; no

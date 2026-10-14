@@ -11,6 +11,12 @@ Status: accepted · Area: `package.json`, `package-lock.json`, `.npmrc` (new),
 none · ADR: ADR-021 (new, "Mozilla's release key is the trust anchor for the Firefox source");
 [ADR-001](../adr/001-engine-firefox-surfer.md) gains one paragraph on how Surfer is pinned
 
+Issues: [#221](https://github.com/JRanne/vimma/issues/221),
+[#222](https://github.com/JRanne/vimma/issues/222),
+[#223](https://github.com/JRanne/vimma/issues/223),
+[#224](https://github.com/JRanne/vimma/issues/224),
+[#225](https://github.com/JRanne/vimma/issues/225)
+
 ## Summary
 
 Vimma's binaries are built from three inputs: Mozilla's Firefox source tarball, Vimma's own
@@ -34,7 +40,7 @@ on, what they produce is packaged, signed with cosign and given an SBOM by GitHu
 those jobs sign whatever the build job produced: a signature proves that `release.yml` at the
 release tag published the file, not that the file was built from Mozilla's source and Vimma's
 code alone. Once security releases ship with no person in the loop
-([firefox-versions](firefox-versions.md), ADR-020), nothing but the build pipeline stands between
+([firefox-versions](firefox-versions.md); ADR-020, planned with its sub-PR 4), nothing but the build pipeline stands between
 a tampered input and every user. Today:
 
 1. **The release and nightly builds do not verify the Firefox source.** `release.yml` (lines
@@ -619,8 +625,8 @@ repository, and GitHub's hosted runners. Each rule links its tests (Tests, below
 §10's G4 changes to cite B1 ("whose SHA-512 differs from a signed `SHA512SUMS`, B1"). §11, "Out
 of scope and trust boundaries", gains a **Build infrastructure** entry with decision 20's
 boundary (GitHub's hosted runners and Mozilla's toolchains are trusted) and what a cosign
-signature does and does not attest. `docs/rebase.md` and `verify-sha512.py`'s docstring drop
-"HTTPS from archive.mozilla.org is the trust anchor".
+signature does and does not attest. `docs/rebase.md` drops "HTTPS from archive.mozilla.org is
+the trust anchor", and `verify-sha512.py`'s docstring drops "its GPG signature is not checked".
 
 ## Tests
 
@@ -707,10 +713,11 @@ No mochitest or e2e scenario: nothing in the browser changes.
 
 - `docs/security.md`: §13 with B1 to B7 and their test links; G4 amended; §11 gains "Build
   infrastructure".
-- `docs/runbook.md`: "Nightly build runner" becomes "Full builds (`nightly.yml`, `release.yml`)":
-  they run on GitHub-hosted runners, the measured time and disk from sub-PR 4, the disk guard,
-  `sha_pinning_required`, and the `build` environment with the steps to move the secret into it;
-  the self-hosted runner setup and the "Runner rule" paragraph in "Releases" go; a new
+- `docs/runbook.md`, "Full builds (`nightly.yml`, `release.yml`)" (already says they run on
+  GitHub-hosted runners, with the self-hosted label as a known gap): the measured time and disk
+  from sub-PR 4, the disk guard, `sha_pinning_required`, the steps to switch both builds on, and
+  the `build` environment with the steps to move the secret into it; the known-gap paragraph
+  goes; a new
   "Mozilla's release key" section (how to update the pinned key from Mozilla's announcement and
   `KEY` file, what the issue from decision 21 asks for); the `engine/.vimma-firefox-version`
   paragraph goes.

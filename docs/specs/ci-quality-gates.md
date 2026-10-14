@@ -63,7 +63,8 @@ Two rows of plan §5 and issue #17:
   CPU models, and a ratio measured on one microarchitecture is not comparable with another.
 - **A step in ci.yml, not nightly.** Nightly runs on the self-hosted build runner (not enabled
   yet, and a different machine class); the plan wants the gate on PRs. The step costs seconds and
-  no extra job minute.
+  no extra job minute. (Since changed: no self-hosted runner is planned; the nightly moves
+  to a hosted runner with [#224](https://github.com/JRanne/vimma/issues/224).)
 
 ## Review changes (2026-10-09)
 
@@ -74,8 +75,10 @@ Two rows of plan §5 and issue #17:
   margin was 6 points first; CI then drew a third CPU (EPYC 7763) on which unchanged code
   measured +19 % suite, +30 % per case against the 9V74 entry, and failed. Recorded it too.
 - **Node pinned exactly** in `.nvmrc` (22.23.3, what CI recorded on); the baseline key carries
-  the exact version; Renovate's `nvm` manager bumps it in a PR that never automerges.
-- **Samples per entry:** `cases` is the per-case median of `samples` (EPYC 9V74 2, Xeon 8573C 1, EPYC 7763 1 so far).
+  the exact version; no Dependabot ecosystem covers `.nvmrc`, so it is bumped by hand
+  (docs/runbook.md, "Bench baseline").
+- **Samples per entry:** `cases` is the per-case median of `samples` (in `baseline.json` now:
+  EPYC 7763 30, EPYC 9V74 12, EPYC 9V45 11, Xeon 8573C 5, Xeon 8370C 2).
 - mutation.yml reuses results only from main's scheduled or manual runs; `GH_TOKEN` is scoped to
   the download step.
 

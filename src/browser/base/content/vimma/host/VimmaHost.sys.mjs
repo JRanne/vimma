@@ -36,12 +36,14 @@ import { quickAdd, runBookmarkEffect } from "./bookmark-actions.mjs";
 import { bookmarksRoot, loadTree, observeBookmarks, setBookmarksRoot } from "./bookmark-ops.mjs";
 import { gotoItems, pickerWorkspaces, tabById } from "./goto.mjs";
 import { getTabLabel, setTabLabel } from "./tab-labels.mjs";
+import { SearchHost } from "../search/SearchHost.sys.mjs";
+import { refusedScheme } from "../core/pageurl.mjs";
 import {
   BLOCKED_URL_TEXT,
   closeTab,
   closeTabById,
   newTab,
-  openUrl,
+  openTyped,
   restoreTab,
   selectTab,
 } from "./tab-ops.mjs";
@@ -230,7 +232,17 @@ function renameTab(s, text) {
  * @param {"current" | "tab"} where
  */
 function openOrSay(s, text, where) {
-  if (!openUrl(s.win, text, where)) s.notice.show(BLOCKED_URL_TEXT, { error: true });
+  const refused = () => s.notice.show(BLOCKED_URL_TEXT, { error: true });
+  // Said at once for the text as typed; a keyword resolving to one is known after the lookup.
+  if (refusedScheme(text)) {
+    refused();
+    return;
+  }
+  openTyped(s.win, text, where)
+    .then((opened) => {
+      if (!opened) refused();
+    })
+    .catch((e) => console.error("vimma: cannot open", e));
 }
 
 /**
@@ -1005,7 +1017,11 @@ export const VimmaHost = {
       cmdline: new CommandLine(win, {
         run: (result) => this._runCommand(state, result),
         changed: () => this._emit(state),
-        args: () => ({ addon: addonNames(), workspace: workspaceNames(win) }),
+        args: () => ({
+          addon: addonNames(),
+          workspace: workspaceNames(win),
+          search: SearchHost.completions,
+        }),
       }),
       tabStrip: null,
       toolbar: null,

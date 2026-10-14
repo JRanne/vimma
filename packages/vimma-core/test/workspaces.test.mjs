@@ -665,8 +665,8 @@ describe("the alternate workspace (Vim's ctrl+^)", () => {
   });
 });
 
-// docs/specs/vimma-mcp.md, decision 9 (user, 2026-10-13: "You are correct to skip it when
-// cycling"): the agent workspace is in the picker, never in the cycle or the alternate.
+// docs/specs/vimma-mcp.md, decision 9: the agent workspace is in the picker, never in the cycle
+// or the alternate.
 describe("skipped workspaces (the agent workspace)", () => {
   const withAgent = () =>
     addWorkspace(

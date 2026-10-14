@@ -8,6 +8,8 @@ Status: draft · Area: `packages/vimma-core/src/hints.mjs`, `blocks.mjs` (new), 
 [m1-hints](m1-hints.md) (collection, labels, overlay, hint mode) and
 [m1-copy-mode](m1-copy-mode.md) (caret, selection, yank).
 
+Issue: [#213](https://github.com/JRanne/vimma/issues/213)
+
 The key that starts element focus is not fixed by this spec (decision 2; open question 1). Until
 it is, the spec writes it as `<element-hint key>`.
 
@@ -386,8 +388,8 @@ solve "point at something on screen in two keys" for links; text blocks have no 
 
 ## Security and privacy
 
-- The child replies only rects, a kind from a closed list, a length and, for `y`, the text the
-  Vimma user asked to copy. `parseHintReply` gains `kind: "block"` with a `blockKind` from that
+- The child replies only rects, a kind from a closed list, a length and, for `y`, the text being
+  copied. `parseHintReply` gains `kind: "block"` with a `blockKind` from that
   list; `Vimma:Block` replies get a strict check in core (`parseBlockReply`) like
   `parseHintReply`. The child acts only for the current `gen` and only in the frame that was
   asked; anything else is refused.

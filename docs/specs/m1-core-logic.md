@@ -254,8 +254,11 @@ starting with the draft are recalled, newest first; at the oldest match it stays
 
 ### Missing actions (for the host spec; the dispatcher contract is unchanged)
 
-m1-cmdline (2026-10-09) added `page.open` to `actions.mjs` as `open_url` and runs it, so
-`PENDING_ACTIONS` is now `["workspace.switch"]`; `:help` (`:h`) joined the table.
+m1-cmdline added `page.open` to `actions.mjs` as `open_url` and runs it, so `PENDING_ACTIONS`
+became `["workspace.switch"]`; `:help` (`:h`) joined the table. m3-workspaces then added
+`workspace.switch`, and `PENDING_ACTIONS` is now empty. Later specs also added commands and
+aliases (`COMMANDS` in `cmdline.mjs`), among them `ws` for `:workspace`, `wsn` for `:wsnext` and
+`:bug`; the tables and tests here describe this spec's version.
 
 - `page.open` (`:open url`) and `workspace.switch` (`:workspace name`) are not in
   `actions.mjs`. `PENDING_ACTIONS` lists them and a test pins the list, so adding them to
@@ -265,7 +268,8 @@ m1-cmdline (2026-10-09) added `page.open` to `actions.mjs` as `open_url` and run
 - Free-text arguments (`:open url`, `:tabnew url`, `:tabrename name`, `:workspace name`) ride
   on `CommandResult.text`, not on `Action`: the dispatcher's `Action = { id, count?, arg? }`
   (numeric `arg`) is untouched. The host spec decides whether `Action` grows a `text`.
-- `:bug` (plan §4, M6) and `:set` (not in plan) are not commands yet.
+- `:bug` (plan §4, M6; since added by m5-about-vimma) and `:set` (not in plan) were not
+  commands yet.
 - `:q` → `pane.close`. Host semantic (plan §2: `:q` closes the tab, and closes a pane in a
   pane): closing the last pane closes the tab, as `prefix+x` does. `close_pane`'s description
   in `actions.mjs` now says so ("Close pane; the last pane closes the tab"); `docs/bindings.md`
@@ -275,16 +279,16 @@ m1-cmdline (2026-10-09) added `page.open` to `actions.mjs` as `open_url` and run
 
 `resolveEscape({ mode, pending = false, previous = "normal" })`, plan §2:
 
-| State                                             | Result                                                                          |
-| ------------------------------------------------- | ------------------------------------------------------------------------------- |
-| a prefix, sequence or count is pending (any mode) | `{ kind: "cancel", mode }`: pending cleared, mode unchanged                     |
-| `insert`                                          | `{ kind: "action", action: { id: "mode.normal" }, mode: "normal", blur: true }` |
-| `visual`                                          | `mode.normal`, `mode: "normal"`, `collapseSelection: true`                      |
-| `command`                                         | `command.cancel`, `mode: "normal"`                                              |
-| `hint`                                            | `hint.cancel`, `mode: "normal"`                                                 |
-| `help`                                            | `help.close`, `mode: previous` (the overlay returns where it was opened)        |
-| `panel`                                           | `panel.close`, `mode: previous`                                                 |
-| `normal`, nothing pending                         | `{ kind: "pass" }`: the page gets `Esc`                                         |
+| State                                             | Result                                                                                       |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| a prefix, sequence or count is pending (any mode) | `{ kind: "cancel", mode }`: pending cleared, mode unchanged                                  |
+| `insert`                                          | `{ kind: "action", action: { id: "mode.normal" }, mode: "normal", blur: true }`              |
+| `visual`                                          | `mode.normal`, `mode: "normal"`, `collapseSelection: true`                                   |
+| `command`                                         | `command.cancel`, `mode: "normal"`                                                           |
+| `hint`                                            | `hint.cancel`, `mode: "normal"`                                                              |
+| `help`                                            | `help.close`, `mode: previous` (the overlay returns where it was opened)                     |
+| `panel`                                           | `panel.close`, `mode: previous`                                                              |
+| `normal`, nothing pending                         | `{ kind: "pass" }`: the page gets `Esc` (since firefox-keys: `page.stop`, `afterPage: true`) |
 
 Pending wins: `ctrl+b` in `insert` then `Esc` cancels the prefix and stays in `insert`. `blur`
 tells the actor to blur the editable element (Vimium and Tridactyl both blur); the focus report

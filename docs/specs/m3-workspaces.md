@@ -1,6 +1,8 @@
 # Spec: m3-workspaces
 
-Status: done; split into sub-specs (see Breakdown). Sub-specs 1 (store), 2a (routing), 2b
+Status: implemented, except the leftovers in [#260](https://github.com/JRanne/vimma/issues/260)
+(the pinned-tab notice of decision 11, `lostContainers` in the status bar, a key to move a
+background tab); split into sub-specs (see Breakdown). Sub-specs 1 (store), 2a (routing), 2b
 (switching), 3 (persistence), 4a (lifecycle), 4b (move), 5 (picker), 6 (side panel), 7 (e2e
 restart scenario) and the 4a/4b/5 leftovers are merged; the 200-tab measurement is in
 `browser_vimma_perf.js` (runbook, "Key-to-paint timings") ·
@@ -33,9 +35,9 @@ relative to `engine/` (Firefox 157.0.1); Zen paths are relative to `zen-browser/
   history and form state are lost.
 - As a user, `prefix+shift+n` / `prefix+shift+w` / `prefix+shift+d` create, rename and close a
   workspace. Closing asks first when it has tabs, and says whether the site data goes too.
-- As a user, `<leader>n` (or `prefix+b`) opens a panel on the left headed by the current workspace
+- As a user, `prefix+b` opens a panel on the left headed by the current workspace
   (name, colour, `prefix+(` / `prefix+)` neighbours), listing its tabs as numbered rows; `1-9`, `j/k`,
-  Enter pick a tab; `<leader>n` / `Esc` close it.
+  Enter pick a tab; `prefix+b` / `Esc` close it.
 - As a user, `[workspaces]` in `config.toml` defines my workspaces, their order, colour, icon and
   home page; without it I get one workspace and can add more at runtime.
 - As a user, quitting and restarting vimma brings back every workspace, every tab in the right
@@ -297,7 +299,9 @@ copying it across would leak data between containers. We do not.
      0 ("Open in No Container", an extension's `cookieStoreId`), an opener's container and an
      adopted tab's container stay as upstream computes them. Both call one function of ours,
      imported on use so script order does not matter:
-     `ChromeUtils.importESModule("chrome://browser/content/vimma/workspaces/WorkspaceStore.sys.mjs").WorkspaceStore.defaultUserContextId(window)`.
+     `ChromeUtils.importESModule("chrome://browser/content/vimma/workspaces/WorkspaceStore.sys.mjs").WorkspaceStore.defaultUserContextId(window)`
+     (hunk 2 now calls `firstTabUserContextId`, which applies the rules of
+     [workspace-routing](workspace-routing.md) before falling back to it).
      It returns the active workspace's container of that window, or for a window still being set
      up, of the most recently focused browser window, or at startup the definitions file's
      `lastActive` workspace (read synchronously on first use, as `ContextualIdentityService`
@@ -321,7 +325,7 @@ copying it across would leak data between containers. We do not.
 5. **Starter workspaces: only the commented example** (answers plan §9). Without `[workspaces]`,
    first run creates one workspace, `main` (gray, circle). Creating `work`/`admin`/`personal`
    presumes a life layout, adds three containers to Firefox's Settings and, being config-defined,
-   could not be deleted (decision 7). `defaults.toml` keeps the three as a commented example.
+   could not be deleted (decision 7). `defaults.toml` keeps a commented example (`work`).
 6. **Moving a tab = reopen by URL in the target container** (Firefox's "Reopen in Container"),
    then close the original. History, form data, scroll and POST data are lost; the tab's rename
    label and mute state carry over. Restoring the session history across containers is rejected
@@ -555,7 +559,7 @@ allowed).
   `foreign` and sound-playing tabs marked.
 - Mode `panel` while open (exists in `MODES`, keys in `defaults.mjs`): `1-9` selects that tab and
   closes the panel; `j`/`k` move the highlight; `Enter` selects the highlighted tab and closes;
-  `Esc` and `toggle_sidebar` (`<leader>n`, `prefix+b`) close. `prefix+)`/`prefix+(` switch workspace
+  `Esc` and `toggle_sidebar` (`prefix+b`) close. `prefix+)`/`prefix+(` switch workspace
   with the panel open and it re-renders. Focus stays in the chrome document; closing returns focus
   to the selected browser.
 - A web page in the panel is out of scope for M3; when needed it is a nested
@@ -563,12 +567,12 @@ allowed).
 
 ## Upstream patches
 
-| Patch                                                        | Hunks | Why                                                                                                                                                                                                                                 |
-| ------------------------------------------------------------ | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/browser/components/tabbrowser/Tabbrowser-sys-mjs.patch` | 2     | `addTab`, after `openerTab` (3767-3772): `userContextId ??= openerTab?.userContextId ?? <our default>`. `#setupInitialBrowserAndTab`, after the `openWindowInfo` override (698-700): `userContextId ??= <our default>`. Decision 3. |
-| `src/browser/modules/BrowserDOMWindow-sys-mjs.patch`         | 1     | `#getContentWindowOrOpenURI` (256-259): no container guess for an external link → `null`, not 0, so `addTab` routes it. Decision 3, found in 2a.                                                                                    |
-| `src/browser/modules/URILoadingHelper-sys-mjs.patch`         | 1     | `openLinkIn`, before `updatePrincipals`: a new window with no container takes the opening page's, else the workspace's. Found in 2a's review.                                                                                       |
-| `src/browser/base/content/browser-init-js.patch`             | 1     | `_handleURIToLoad`: no `arguments[5]` → the first tab's container, not 0. Found in 2a's review.                                                                                                                                     |
+| Patch                                                        | Hunks | Why                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/browser/components/tabbrowser/Tabbrowser-sys-mjs.patch` | 2     | `addTab`, after `openerTab` (3767-3772), unless `pinned`: `userContextId ??= openerTab?.userContextId ?? <our default>`. `#setupInitialBrowserAndTab`, after the `openWindowInfo` override (698-700): `userContextId ??= <our default>`. Decision 3. |
+| `src/browser/modules/BrowserDOMWindow-sys-mjs.patch`         | 1     | `#getContentWindowOrOpenURI` (256-259): no container guess for an external link → `null`, not 0, so `addTab` routes it. Decision 3, found in 2a.                                                                                                     |
+| `src/browser/modules/URILoadingHelper-sys-mjs.patch`         | 1     | `openLinkIn`, before `updatePrincipals`: a new window with no container takes the opening page's, else the workspace's. Found in 2a's review.                                                                                                        |
+| `src/browser/base/content/browser-init-js.patch`             | 1     | `_handleURIToLoad`: no `arguments[5]` → the first tab's container, not 0. Found in 2a's review.                                                                                                                                                      |
 
 ADR-003 register line, added by sub-spec 2a with the patch: "`Tabbrowser-sys-mjs.patch`: tabs
 and a window's first tab opened with no container take the active workspace's container
@@ -590,6 +594,10 @@ Upstream's split view, on which M4 builds (m4-split-panes), is hidden as a unit 
 ## Test plan
 
 Mochitests (`tests/browser/`, one per acceptance criterion; the gate's two first):
+
+(Since changed: the sub-specs named their test files differently. The `browser_vimma_workspaces_*.js`
+names below were never created; the tests are in `tests/browser/browser_vimma_workspace_*.js`,
+listed in each sub-spec's Settled section.)
 
 - `browser_vimma_workspaces_isolation.js` (**gate 1**): Given workspaces `work` and `personal`
   (test containers), when a page on `https://example.com` in `work` sets a cookie
@@ -637,7 +645,7 @@ Mochitests (`tests/browser/`, one per acceptance criterion; the gate's two first
 - `browser_vimma_workspaces_move.js`: moving a tab reopens its URL in the target container (cookie
   of the target applies), keeps label and mute, closes the original, and stays in the current
   workspace; a lazy tab moves by its saved URL.
-- `browser_vimma_side_panel.js`: `<leader>n` opens the panel on the left listing the workspace's
+- `browser_vimma_side_panel.js`: `prefix+b` opens the panel on the left listing the workspace's
   tabs; `j`/`k`/`1-9`/Enter/Esc; `prefix+)` re-renders it; it stays leftmost when
   `sidebar.position_start` flips; focus returns to the page on close.
 - **Limits as tests**: a permission granted in `work` is visible in `personal`; HSTS is shared.
@@ -1002,7 +1010,7 @@ dependency for 4b, 5 and parts of 4a.
   the panel's `order` fails "still the leftmost box".
 - **Left:** a mouse (clicking a row); a configurable width in `config.toml`; a web page in the
   panel stays out of scope.
-- **Later (2026-10-10):** the leader defaults were removed by maintainer decision: `toggle_sidebar` is
+- **Later (2026-10-10):** the leader has no default bindings: `toggle_sidebar` is
   `prefix+b` only, and `space n` does nothing by default. The leader option and `<leader>`
   bindings in `[keys]` stay (a user's `toggle_sidebar = ["prefix+b", "<leader>n"]` still opens
   and closes the panel, in `normal` and `panel` mode). The side-panel mochitest presses
@@ -1079,10 +1087,10 @@ dependency for 4b, 5 and parts of 4a.
   folded into the M4 e2e gate. It has the same blocker as M4's key-to-paint timing: a paint
   timestamp from the control socket (a protocol addition, its own spec with the perf gate).
 
-## Settled: workspace keys move to `prefix+(` / `prefix+)` (maintainer decision, 2026-10-10)
+## Settled: workspace keys move to `prefix+(` / `prefix+)` (2026-10-10)
 
-- **Decision** (the maintainer): "ctrl + d and ctrl + u keybinds from vim are not there yet" and "we
-  need to find other keys for switching workspaces as those are vim defaults". `next_workspace`
+- **Decision:** normal mode lacked Vim's `ctrl+d` and `ctrl+u`, and those keys are Vim defaults, so
+  workspace switching moves to other keys. `next_workspace`
   is `prefix+)` and `previous_workspace` `prefix+(` (tmux's `switch-client -n` / `-p` keys),
   global like every `[keys]` binding, so they work from normal, insert, visual and panel mode as
   `ctrl+i` / `ctrl+u` did. The `prefix+w` picker stays. Normal mode gains vim's `ctrl+d` /
@@ -1128,9 +1136,9 @@ dependency for 4b, 5 and parts of 4a.
   not recur in 20 more runs, 6 of them on two busy CPUs, and CI passed. If it recurs, quarantine
   it with an issue (plan §5) and look at keys sent while a restored split's tabs load.
 
-## Settled: workspaces as Vim buffers (maintainer request, 2026-10-10)
+## Settled: workspaces as Vim buffers (2026-10-10)
 
-- **Request:** "make workspace switching feel like Vim buffers": an alternate workspace as
+- **Goal:** workspace switching works like Vim buffers: an alternate workspace as
   `ctrl+^`, unimpaired-style `]w` / `[w`, and short commands like the buffer commands.
 - **Alternate (`last_workspace`, `workspace.last`):** core's model gains an optional
   `alternate` (Vim's `#`): every change of `active` through `updateState` records the workspace
@@ -1185,7 +1193,7 @@ the link, through the same three patch hunks as decision 3); isolating permissio
 (`permissions.isolateBy.userContext` is a possible later opt-in, untested by us); pinned tabs;
 config reload of `[workspaces]` while running (M5 host: it reuses the definitions reconcile).
 
-## Cross-reference: bookmarks per workspace (user decision, 2026-10-10)
+## Cross-reference: bookmarks per workspace
 
 Each workspace owns a folder in the Bookmarks Toolbar, kept in its definition as
 `bookmarksFolder` (the folder's Places guid; a folder made outside Vimma is found by the

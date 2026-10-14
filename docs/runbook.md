@@ -28,11 +28,11 @@ npm start                  # tools/start.mjs: the build with ~/.cache/vimma-dev-
 
 ```sh
 bin=engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma
-$bin --version   # "Vimma 0.1.0 · Firefox 157.0.1" (node tools/release/version-line.mjs prints the same)
+$bin --version   # "Vimma 0.1.0 · Firefox 158.0" (node tools/release/version-line.mjs prints the same)
 grep '^Version=' engine/obj-x86_64-pc-linux-gnu/dist/bin/application.ini
-                 # "Version=157.0.1": appinfo.version is the Firefox version (spec m0-app-version)
-# navigator.userAgent stays Firefox's: "Mozilla/5.0 (X11; Linux x86_64; rv:157.0) Gecko/20100101
-# Firefox/157.0", no Vimma token (spec m0-user-agent; browser_vimma_user_agent.js checks it)
+                 # "Version=158.0": appinfo.version is the Firefox version (spec m0-app-version)
+# navigator.userAgent stays Firefox's: "Mozilla/5.0 (X11; Linux x86_64; rv:158.0) Gecko/20100101
+# Firefox/158.0", no Vimma token (spec m0-user-agent; browser_vimma_user_agent.js checks it)
 p=$(mktemp -d)
 timeout 20 $bin --headless --no-remote --profile "$p" about:blank || true   # first run: profile + bookmarks; timeout exits 124
 $bin --headless --no-remote --profile "$p" --screenshot /tmp/shot.png "data:text/html,<h1>ok</h1>"
@@ -52,7 +52,7 @@ If the files are missing (a fresh clone without `npm run import`, or after `git 
 mozconfig stops the build with "browser/config/vimma/version.txt is missing; run 'npm run import'"
 rather than letting configure fall back to Surfer's 0.1.0.
 
-Profiles are stamped with the Firefox version (157.0.1), so a build from before m0-app-version
+Profiles are stamped with the Firefox version (158.0), so a build from before m0-app-version
 (appinfo.version 0.1.0) sees any profile opened by a newer build as a downgrade and refuses it
 (`MOZ_BLOCK_PROFILE_DOWNGRADE`). When testing old and new builds side by side, give each its own
 `--profile`, or pass `--allow-downgrade`.
@@ -80,7 +80,7 @@ Placeholder artwork: `configs/branding/vimma/*.svg`, rendered by `tools/branding
 old version left in `engine/`, so the forward apply fails ("Exiting due to error") on a file
 that still carries the old hunks. `npm run import` therefore runs
 `tools/import/restore-patched.mjs` first: it reads the `+++ b/<path>` line of each header pair in
-`src/**/*.patch` and runs `git -C engine checkout -- <those files>` (10 files today), so every
+`src/**/*.patch` and runs `git -C engine checkout -- <those files>` (11 files today), so every
 import starts from upstream. It touches only those files: never `git checkout .`, never a
 clean. A file a patch creates (`--- /dev/null`) is skipped, as is a path upstream does not track.
 
@@ -382,20 +382,21 @@ Limits:
 
 ## CI and automation (spec m0-pipeline)
 
-| Workflow                   | Trigger                          | Runner                    | Needs from you                             |
-| -------------------------- | -------------------------------- | ------------------------- | ------------------------------------------ |
-| `ci.yml`                   | push to `main`, PRs, manual      | `ubuntu-latest`           | nothing                                    |
-| `e2e.yml`                  | PRs, manual, upstream.yml        | `ubuntu-24.04`            | nothing (ADR-010)                          |
-| `nightly.yml`              | 03:00 UTC, manual                | self-hosted `vimma-build` | register the runner, set `NIGHTLY_ENABLED` |
-| `upstream.yml`             | every 4 h (`:17`), manual        | `ubuntu-latest` + e2e.yml | allow Actions to open PRs; optional token  |
-| `claude.yml`               | `@claude`, `spec`+`claude:go`    | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
-| `release-please.yml`       | push to `main`, manual           | `ubuntu-latest`           | Actions may open PRs; optional token       |
-| `release.yml`              | release published, manual        | `vimma-build` + hosted    | see "Release packages" (gated off)         |
-| `mutation.yml`             | Sundays 04:23 UTC, manual        | `ubuntu-latest`           | nothing (creates its `mutation` label)     |
-| `semgrep.yml`              | push to `main`, PRs, Mon, manual | `ubuntu-latest`           | nothing                                    |
-| `codeql.yml`               | push to `main`, PRs, Mon, manual | `ubuntu-latest`           | nothing; skipped while the repo is private |
-| `dependabot-automerge.yml` | Dependabot's PRs                 | `ubuntu-latest`           | nothing (Dependabot, below)                |
-| `site-dispatch.yml`        | `docs/bindings.json` on `main`   | `ubuntu-latest`           | a token secret (vimma.dev, below)          |
+| Workflow                   | Trigger                            | Runner                    | Needs from you                             |
+| -------------------------- | ---------------------------------- | ------------------------- | ------------------------------------------ |
+| `ci.yml`                   | push to `main`, PRs, manual        | `ubuntu-latest`           | nothing                                    |
+| `e2e.yml`                  | PRs, manual, upstream.yml          | `ubuntu-24.04`            | nothing (ADR-010)                          |
+| `nightly.yml`              | 03:00 UTC, manual                  | hosted (after #224)       | off until #224; then `NIGHTLY_ENABLED`     |
+| `upstream.yml`             | every 4 h (`:17`), manual          | `ubuntu-latest` + e2e.yml | allow Actions to open PRs; optional token  |
+| `claude.yml`               | `@claude`, `spec`+`claude:go`      | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
+| `release-please.yml`       | push to `main`, manual             | `ubuntu-latest`           | Actions may open PRs; optional token       |
+| `release.yml`              | release published, manual          | hosted (after #224)       | see "Release packages" (gated off)         |
+| `mutation.yml`             | Sundays 04:23 UTC, manual          | `ubuntu-latest`           | nothing (creates its `mutation` label)     |
+| `semgrep.yml`              | push to `main`, PRs, Mon, manual   | `ubuntu-latest`           | nothing                                    |
+| `codeql.yml`               | push to `main`, PRs, Mon, manual   | `ubuntu-latest`           | nothing; skipped while the repo is private |
+| `dependabot-automerge.yml` | Dependabot's PRs                   | `ubuntu-latest`           | nothing (Dependabot, below)                |
+| `site-dispatch.yml`        | `docs/bindings.json` on `main`     | `ubuntu-latest`           | a token secret (vimma.dev, below)          |
+| `spec-status.yml`          | daily, issue closed, specs, manual | `ubuntu-latest`           | nothing (creates its `spec-status` label)  |
 
 Locally, before pushing: `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:py`,
 `npm run license-check`, `npx surfer license-check`, `npx commitlint --from main`.
@@ -419,7 +420,8 @@ these workflows has a `paths` filter; a job or step skipped by `if:` reports suc
 (next section).
 
 **Residual risk:** any job token with `contents: write` (`spec-pr` in claude.yml, upstream.yml,
-nightly.yml, release-please.yml) could push to `main`, since nothing protects it. Mitigations: those jobs run no
+nightly.yml, release-please.yml) can push branches and tags; the ruleset has no bypass actors, so
+none of them can push to `main` itself. Mitigations: those jobs run no
 Claude-written code with that token (claude.yml's Claude job is read-only), Claude runs only for
 the owner (`claude:go` added by the owner; `@claude` from owner/member/collaborator), and GitHub
 Actions minutes and logs show every push. Check `git log origin/main` if anything looks off.
@@ -442,7 +444,8 @@ request cannot change the classifier that judges it.
 
 A workflow, a script, `package.json` or any other file in the same pull request runs everything.
 
-Still runs on a docs-only pull request: prettier, commitlint, `npm run security-links`,
+Still runs on a docs-only pull request: prettier, commitlint, `npm run md-wording`,
+`npm run security-links`,
 `npm run test:py` (it reads ADR-003), the gen-docs freshness step, the Vitest files listed in
 `MARKDOWN_TESTS`, Semgrep and CodeQL.
 
@@ -494,8 +497,9 @@ fails, the message names the revision from `engine/sourcestamp.txt` and the expi
 `surfer.json` points at a real release. It also refuses a display version ending in `aN`/`bN`
 or containing `esr`, which would make mach search the wrong tree.
 
-Fork PRs (once public) run the same job with a read-only token and no secrets; GitHub asks you
-to approve the first run of a first-time contributor (Settings → Actions → General).
+Fork PRs run the same job with a read-only token and no secrets; GitHub asks you to approve
+every run from an external contributor (Settings → Actions → General; the approval policy is
+`all_external_contributors`).
 
 ### Actions minutes budget
 
@@ -508,8 +512,9 @@ min, e2e ≈ 6 min (5.5 min wall, ADR-010), Semgrep ≈ 1 min, CodeQL a few minu
 e2e.yml has no paths filter: "mochitest (artifact build)" is a required check, so the workflow
 starts on every PR, and on a docs-only one the job skips by `if:` in seconds (above). The upstream autopilot runs 6 × 1 min a day, plus ≈ 16 min (issue, patch check, the
 e2e suites, PR) when a release is found (spec m7-upstream-autopilot); claude.yml only when
-triggered. `nightly.yml` uses the self-hosted runner, which is not a GitHub-hosted runner and
-never was billed. Usage is still listed in Settings → Billing → Usage.
+triggered. `nightly.yml` and `release.yml` run their full builds on GitHub-hosted runners too
+once [#224](https://github.com/JRanne/vimma/issues/224) lands (until then both are off; "Full
+builds" below). Usage is listed in Settings → Billing → Usage.
 
 The bench step adds about half a minute to each CI run. `mutation.yml` is the largest scheduled
 cost: a full run (first Sunday of the month) is estimated at 60–90 min on the 2-CPU runner
@@ -684,10 +689,11 @@ Why it does not flake (plan §5: no retries; flaky means quarantine):
 If the step does fail without a slowing change, that is a flake: quarantine per plan §5 (open an
 issue with the log; do not re-run to green), and look at the numbers before touching thresholds.
 
-**Node is pinned exactly** in `.nvmrc`; ci, e2e, mutation and claude use
-`node-version-file: .nvmrc`. Exceptions, none of which runs the bench: release.yml's package job
+**Node is pinned exactly** in `.nvmrc`; ci, e2e, mutation, fuzz, sites, release-please and claude
+use `node-version-file: .nvmrc`. Exceptions, none of which runs the bench: release.yml's package job
 checks out a release tag (tags from before `.nvmrc` lack it) and stays on major 22; the
-self-hosted nightly and release build jobs use the runner's own Node for Surfer. The baseline is keyed on the exact version because a V8 patch can move these numbers. A
+nightly and release build jobs, as written today, use the runner's own Node for Surfer
+(#224 rewrites both). The baseline is keyed on the exact version because a V8 patch can move these numbers. A
 Node bump is therefore its own PR, by hand (Dependabot has no `.nvmrc` support): its bench
 step falls back to the previous version's entries with a warning, and that PR records the new key.
 
@@ -754,40 +760,26 @@ a headless run whose paints come every ~35 ms; the closest gated reading is the 
 numbers only, with a changelog line in the commit body; two CI samples back them so far, so add
 later runs' `VIMMA_PERF` lines here before tightening anything.
 
-### Nightly build runner (`nightly.yml`)
+### Full builds (`nightly.yml`, `release.yml`)
 
-A full build does not fit a GitHub-hosted runner (22 GB `engine/`, 39 min on 16 threads), so it
-runs on a self-hosted runner, e.g. a developer's machine or a dedicated one. Only while the repo
-is private: never attach a self-hosted runner to a public repo that takes fork PRs.
+Full builds, the nightly and every release, run on GitHub-hosted runners. Vimma has no
+self-hosted runner and none is planned: on a public repository that takes pull requests from
+forks, a self-hosted runner is a machine anyone who opens a pull request could run code on, and
+it would hold the Safe Browsing key between runs (spec
+[build-supply-chain](specs/build-supply-chain.md), decisions 6 and 7). Do not register one.
 
-**Keep the runner stopped outside the nightly window.** Any branch of this repo can add a
-workflow with `runs-on: vimma-build` and run code on the machine while the runner is online.
-Runner groups, which could restrict it to `nightly.yml`, exist only for organisations (extra
-groups need the Team plan), not for a personal repo like this one. So: start the runner service
-shortly before 03:00 UTC and stop it after the build (e.g. two systemd timers calling
-`./svc.sh start` / `./svc.sh stop`), or keep it stopped and start it only for a manual run. Jobs
-queued while it is offline wait (up to 24 h) and run when it comes back, so check the queue
-(Actions → filter by "Queued") before starting it.
+**Known gap.** The build jobs of `nightly.yml` and `release.yml` still name
+`[self-hosted, linux, x64, vimma-build]`, a label no runner serves, and keep `engine/` between
+runs (`clean: false`, `engine/.vimma-firefox-version`). Both workflows stay switched off
+(`NIGHTLY_ENABLED` and `RELEASE_ENABLED` unset) until build-supply-chain sub-PR 4,
+[#224](https://github.com/JRanne/vimma/issues/224), moves them to `ubuntu-24.04` with a fresh,
+verified extraction of the Firefox source, measures a cold build there, and records the time,
+disk and the steps to switch them on in this section. Until then a full build runs only on a
+developer's machine ("First Firefox build" above).
 
-1. Prerequisites on the machine: Node 22, Python 3, git, `gh`, ~60 GB free disk, and the Firefox
-   toolchains (`npx surfer bootstrap` once, as in "First Firefox build"; they live in
-   `~/.mozbuild`).
-2. Settings → Actions → Runners → New self-hosted runner → Linux x64; follow the download step,
-   then configure it with the extra label:
-
-   ```sh
-   ./config.sh --url https://github.com/JRanne/vimma --token <token> --labels vimma-build
-   ```
-
-3. Run it as a service: `sudo ./svc.sh install && sudo ./svc.sh start` (or `./run.sh` to try).
-4. Test once by hand: Actions → nightly → Run workflow (manual runs ignore the variable).
-5. Enable the schedule: `gh variable set NIGHTLY_ENABLED --body true`
-   (disable: `gh variable delete NIGHTLY_ENABLED`). Until then the 03:00 run is skipped at no cost.
-
-The job keeps `engine/` between runs (`clean: false`) and re-downloads Firefox only when
-`surfer.json` pins a new version (`engine/.vimma-firefox-version`). It publishes the rolling
-`nightly` pre-release; on failure it uploads the log and opens (or comments on) an issue labelled
-`nightly-failure`. Comment `@claude` on that issue to hand it to Claude Code.
+What the nightly does once it runs: a full build of `main`, the full mochitest suite on it, the
+rolling `nightly` pre-release, and on failure the log as an artifact and an issue labelled
+`nightly-failure` (comment `@claude` on it to hand it to Claude Code).
 
 ### Google Safe Browsing key (spec m0-safebrowsing-key)
 
@@ -1057,9 +1049,10 @@ on `main`), never code from the release branch, and keep no token in their check
 
 ### Release packages (`release.yml`, spec m6-packaging)
 
-When a GitHub Release is published (release-please, above), `release.yml` builds Vimma on the
-`vimma-build` runner, packages it on a hosted runner, signs, uploads to that release and pushes
-AUR `vimma-bin`. **Every job is off until `RELEASE_ENABLED` is `true`**, manual runs included.
+When a GitHub Release is published (release-please, above), `release.yml` builds Vimma, packages
+it on a hosted runner, signs, uploads to that release and pushes AUR `vimma-bin`. Its `build` job
+still names the self-hosted label that no runner serves; it moves to a hosted runner with
+[#224](https://github.com/JRanne/vimma/issues/224) ("Full builds" above). **Every job is off until `RELEASE_ENABLED` is `true`**, manual runs included.
 
 | Asset                             | What                                                            |
 | --------------------------------- | --------------------------------------------------------------- |
@@ -1070,7 +1063,7 @@ AUR `vimma-bin`. **Every job is off until `RELEASE_ENABLED` is `true`**, manual 
 | `SHA256SUMS`                      | checksums of the four files above                               |
 | `*.sigstore.json`                 | cosign keyless bundles, one per file above (when signing is on) |
 
-Jobs: `build` (self-hosted, read-only token, no secrets) → `package` (AppImage, `.deb`, AUR
+Jobs: `build` (read-only token, no secrets) → `package` (AppImage, `.deb`, AUR
 files, checksums; installs the `.deb` and starts it headless) → `sign` (only job with
 `id-token: write`) → `publish` (only job with `contents: write`) → `aur` (no GitHub token; the
 SSH key only) → `failure` (opens a `release-failure` issue). Locally, from a mach tarball:
@@ -1085,9 +1078,8 @@ node tools/package/sbom.mjs --engine engine --out dist/vimma-$(node -p 'require(
 
 **Enable it (one time):**
 
-1. Runner: the nightly's `vimma-build` runner ("Nightly build runner" above) must be online
-   when a release is published. With the runner stopped outside the nightly window, start it
-   before merging the release PR (the job waits up to 24 h in the queue).
+1. Hosted build: [#224](https://github.com/JRanne/vimma/issues/224) merged ("Full builds"
+   above). Until then the `build` job has no runner and the release stays off.
 2. Trigger: `gh secret set RELEASE_PLEASE_TOKEN` (fine-grained, this repo only: Contents, Pull
    requests and Issues read/write), so the release release-please creates starts `release.yml`.
    Without it, run it by hand after each release: `gh workflow run release.yml -f tag=vX.Y.Z`.
@@ -1111,12 +1103,9 @@ node tools/package/sbom.mjs --engine engine --out dist/vimma-$(node -p 'require(
 RELEASE_ENABLED`). Try it on the next release, or re-run the last one with
    `gh workflow run release.yml -f tag=vX.Y.Z` (assets are replaced, `--clobber`).
 
-**Runner rule:** until Settings → Actions → General has "Require approval for all outside
-collaborators" set, the `vimma-build` runner must stay offline outside nightly and release
-builds (fork PRs could add a workflow with `runs-on: vimma-build`). Release jobs themselves
-cannot be started from a fork, and a manual run does nothing unless started from `main`. The
-release build uses its own fresh objdir (`engine/obj-release`) and an empty sccache directory,
-so nothing left on the runner by a nightly or another job reaches signed binaries.
+Release jobs cannot be started from a fork, and a manual run does nothing unless started from
+`main`. The release build uses its own fresh objdir (`engine/obj-release`) and an empty sccache
+directory, so nothing left by a nightly or another job reaches signed binaries.
 
 **Verify a release** (the user guide's "Installing" points here):
 
@@ -1179,10 +1168,11 @@ them in our own CI.
 
 **CodeQL** (`javascript-typescript` and `rust`, `build-mode: none`, `security-extended`, config in
 `.github/codeql/codeql-config.yml`) is gated with `if: github.event.repository.private == false`,
-so the run shows it as skipped. This is for two reasons. Code scanning on a private repo needs a
-paid GitHub Code Security licence. The CodeQL CLI licence also allows CI analysis only of an
-open source codebase, and it names a private repo as not one. The job starts by itself once the
-repo is public. Its alerts then appear under Security → Code scanning.
+so on a private repository (a private fork) the run shows it as skipped. This is for two
+reasons. Code scanning on a private repo needs a paid GitHub Code Security licence. The CodeQL
+CLI licence also allows CI analysis only of an open source codebase, and it names a private repo
+as not one. This repository is public, so the job runs; its alerts appear under Security → Code
+scanning.
 
 ### Licences
 

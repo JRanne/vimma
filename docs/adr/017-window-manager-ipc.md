@@ -1,18 +1,18 @@
 # ADR-017: Vimma talks to the window manager (Hyprland only, over its socket)
 
-- Status: Proposed
+- Status: Accepted (built by spec [private-swap](../specs/private-swap.md))
 - Date: 2026-10-12
 
 ## Context
 
 The private workspace is Firefox's private window (private-workspace.md), and on Hyprland it
-showed up as a second tile. The user wants it to replace the Vimma window in place
-([private-swap](../specs/private-swap.md)). A Wayland client cannot place its own windows, so
-only the compositor can do that. Until now Vimma ran no window-manager commands
-(private-workspace.md, decided question 1, which the coordinator had assumed without asking).
-The user has now chosen "swap in place". With a Lua config, Hyprland 0.56's `dispatch` runs
-its argument as Lua in the compositor, and `hl.exec_cmd` starts any shell command. So
-whatever Vimma sends is code.
+showed up as a second tile. It should replace the Vimma window in place instead
+([private-swap](../specs/private-swap.md)), so that entering and leaving the private workspace
+feels like switching workspaces. A Wayland client cannot place its own windows, so only the
+compositor can do that. Until now Vimma ran no window-manager commands (private-workspace.md,
+decided question 1); "swap in place" reverses that. With a Lua config, Hyprland 0.56's
+`dispatch` runs its argument as Lua in the compositor, and `hl.exec_cmd` starts any shell
+command. So whatever Vimma sends is code.
 
 ## Decision
 
@@ -53,8 +53,8 @@ execution out of reach of anything a page or a config file can say.
   enough.
 - **Window rules in the user's Hyprland config** (Vimma writing `~/.config/hypr`): changes the
   user's files and cannot express "this window's slot".
-- **Keep the `SUPER+G` group recipe only:** the user asked for the window itself to change, with
-  no setup.
+- **Keep the `SUPER+G` group recipe only:** it needs setup in the user's config, and the goal is
+  for the window itself to change with no setup.
 - **A generic WM abstraction** (Sway IPC, KWin scripts): no user asks for it. It can be a later
   ADR with its own threat model.
 

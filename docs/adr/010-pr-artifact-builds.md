@@ -9,11 +9,13 @@ Plan §9 left open how PRs get a browser to test: `surfer build --ui` on a cache
 Firefox artifact build, and which works with the release source tarballs Surfer uses (ADR-002).
 Until now `e2e.yml` was a no-op and every mochitest had run only on the maintainer's machine.
 A full build is 22 GB of `engine/` and 39 min on 16 threads, far beyond a hosted runner (14 GB
-disk). The repo becomes public (MPL-2.0); until then Actions minutes are limited.
+disk). The repo becomes public (MPL-2.0); until then Actions minutes are limited. (Since changed:
+the repository is public; a hosted runner has about 85 GB free in practice, and full builds move
+to hosted runners with [#224](https://github.com/JRanne/vimma/issues/224), spec build-supply-chain, R9-R10 and decision 6.)
 
 ## Decision
 
-`e2e.yml` runs on `ubuntu-24.04` (GitHub-hosted) for PRs touching the browser or its tests:
+`e2e.yml` runs on `ubuntu-24.04` (GitHub-hosted) for every PR that is not docs-only:
 `CI_SKIP_INIT=1 surfer download` (release tarball, no history) → `git init` of an empty
 `engine/.git` → `npm run import` → `node tools/artifact-build/artifact-build.mjs` →
 `npm run mochitest -- --artifact tests/browser/`.
@@ -107,8 +109,8 @@ runtime only through `application.ini` on Linux (its C++ uses are Windows-only).
 
 ## Consequences
 
-- Every PR touching the browser runs the browser-chrome suite; PRs touching only docs or CI
-  tooling skip it (paths filter), to save minutes while private.
+- Every PR runs the browser-chrome suite except a docs-only PR, which skips the job with `if:`
+  (`tools/ci/docs-only.mjs`, issue #245).
 - A test that needs a compiled-in define marks itself `skip-if = ["artifact"]` with a reason
   comment. It runs only on full builds: locally (PR template checkbox) and, once live, in the
   nightly. Keep that list short; review it in the patch audit.
@@ -118,8 +120,8 @@ runtime only through `application.ini` on Linux (its C++ uses are Windows-only).
   a different revision.
 - A patch to C++ or to compiled-in build config is not exercised by PRs, only by local full
   builds (and the nightly once live). Such a patch needs an ADR line anyway (ADR-003).
-- The job is path-filtered, so it does not report on docs-only PRs. Making it a required status
-  check (once branch protection exists) needs handling for skipped runs, or those PRs hang.
+- The job is a required status check on `main`, so it has no `paths` filter: a docs-only PR skips
+  it with `if:`, which GitHub reports as success (issue #245).
 - `engine/obj-artifact` also works locally, next to the full objdir: a front-end check in about
   half a minute instead of a full rebuild.
 
@@ -137,10 +139,10 @@ picks its trees from Vimma's `0.x` display version and so never reaches mozilla-
 Firefox 157.0.1). `version.txt` gets Mozilla's Beta value (`159.0` for `159.0b1`).
 
 Measured on 2026-10-14 on 159.0b1 (mozilla-beta `c0c03f3f8990`, task `ILGA8D1vQYmtIo0RJKNABg`),
-with the patch set re-exported for Firefox 158 (#186), because `moz-build.patch` on `main` (for
-157.0.1) does not apply to 159: the SHA-512 matched `SHA512SUMS`, `npm run import` applied every
-patch, the artifact build took 34 s with a warm `~/.mozbuild`, and `tests/browser/` ran in
-7 min 10 s with 6,128 passed and 16 failed. Fourteen failures are in
+with the patch set re-exported for Firefox 158 (#186), because the `moz-build.patch` then on
+`main` (for 157.0.1) does not apply to 159: the SHA-512 matched `SHA512SUMS`, `npm run import`
+applied every patch, the artifact build took 34 s with a warm `~/.mozbuild`, and `tests/browser/`
+ran in 7 min 10 s with 6,128 passed and 16 failed. Fourteen failures are in
 `browser_vimma_sidebar_theme.js` (the history and bookmarks sidebars' search field no longer
 takes `--vimma-bg` and `--vimma-muted`), a Firefox 159 change of the kind the canary exists to
 report; two are `browser_vimma_perf.js` medians 0.5 to 1.7 ms over the 25 ms budget on a busy

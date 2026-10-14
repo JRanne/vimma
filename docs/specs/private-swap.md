@@ -1,6 +1,7 @@
 # Spec: private-swap
 
-Status: implemented (hand checks on Hyprland pending) · Milestone: after
+Status: implemented (Results records the hand checks run so far; the rest of the Test plan's
+hand-check list is not recorded) · Milestone: after
 [private-workspace](private-workspace.md) (merged, #142) · Area: `packages/vimma-core/src/`
 (`hyprswap.mjs` new, `config.mjs`, `defaults.mjs`); `host/hypr/HyprIpc.sys.mjs` (new),
 `host/private-swap.mjs` (new), `host/private-ops.mjs`, `about/AboutVimma.sys.mjs`,
@@ -10,21 +11,20 @@ question 1). No upstream patch. ADR: [017-window-manager-ipc](../adr/017-window-
 Engine paths are relative to `engine/` (Firefox 157.0.1). Hyprland facts were checked on this
 machine: Hyprland 0.56.2 (commit `efb5099`, Lua config, Omarchy), read-only commands only.
 
-## The user's words
+## Goal
 
-2026-10-12, after using the private workspace: "it did open in its own window instead of just
-workspace within normal window". Asked how to get closer, the user chose **"Swap in place"** on
-Hyprland. Going to the private workspace hides the normal Vimma window in a Hyprland special
-workspace and puts the private window exactly where the normal one was: the same Hyprland
-workspace, the same tiling slot, size and position, and the same fullscreen or floating state.
-Going back swaps again. The user sees one window whose contents change. Hyprland only; other
-window managers and X11 keep today's behaviour.
+The private workspace opens in a window of its own, where it should feel like a workspace within the
+normal window. On Hyprland, Vimma closes that gap with **swap in place**. Going to the private
+workspace hides the normal Vimma window in a Hyprland special workspace and puts the private window
+exactly where the normal one was: the same Hyprland workspace, the same tiling slot, size and
+position, and the same fullscreen or floating state. Going back swaps again. The user sees one
+window whose contents change. Hyprland only; other window managers and X11 keep today's behaviour.
 
 This reverses decision 7 and decided question 1 of private-workspace.md ("Vimma runs no WM
-command"). That answer was a proposal the coordinator accepted without asking the user. The
-user has now chosen otherwise. Per-tab private browsing in one window is still infeasible
-(private-workspace.md, option C): Firefox decides privacy per window, so the private workspace
-stays a private window. This spec changes where that window is shown.
+command"): a window of its own tiled beside the normal one does not read as a workspace, and on
+Hyprland the compositor can place it where the normal window was. Per-tab private browsing in one
+window is still infeasible (private-workspace.md, option C): Firefox decides privacy per window, so
+the private workspace stays a private window. This spec changes where that window is shown.
 
 ## User stories
 
@@ -50,8 +50,8 @@ stays a private window. This spec changes where that window is shown.
 
 - **Two Unix sockets** live in `$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/`:
   `.socket.sock` takes one request per connection and replies, and `.socket2.sock` streams events
-  as `name>>data` lines. On this machine the directory is `drwx------ juuso`, so only the user's
-  own processes can reach it. The path is 95 bytes long, under the 107-byte `sun_path` limit
+  as `name>>data` lines. On this machine the directory is `drwx------` and owned by the user, so
+  only the user's own processes can reach it. The path is 95 bytes long, under the 107-byte `sun_path` limit
   that `nsSocketTransport::InitWithName` checks (`netwerk/base/nsSocketTransport2.cpp:846-849`).
 - **Request format** (checked with a Python client on `.socket.sock`): `j/<cmd>` returns JSON
   (`j/version`, `j/clients`, `j/getoption misc:focus_on_activate`). `[[BATCH]]a;b` runs several
@@ -434,12 +434,12 @@ design); per-tab private browsing (private-workspace.md option C); changing the 
 config or adding window rules; showing both windows side by side on purpose (that is
 `placement = "window"`); remembering the pair across a restart.
 
-## Decided questions (user, 2026-10-12)
+## Decided questions
 
 1. **Neutral private window title:** yes. Vimma defaults `privacy.exposeContentTitleInWindow.pbm`
    to `false`, so the private window's title is only `Vimma Private Browsing`, never the page
    title, in the bar, screen-sharing pickers and Hyprland's event stream. It stays changeable in
    `about:config`, and the guide's "Privacy defaults" table lists it.
 2. **A link from another app while the private workspace is shown:** Vimma swaps the normal
-   window back into place, so you see the link at once, as Firefox's own focus would have done
+   window back into place, so the link shows at once, as Firefox's own focus would have done
    (decision 7). The private workspace stays parked and one key away.

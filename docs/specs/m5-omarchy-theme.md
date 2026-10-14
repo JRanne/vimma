@@ -11,7 +11,8 @@ As an Omarchy user, Vimma's chrome UI (status bar, command line, pickers, hints,
 borders, start page) has my current Omarchy theme's colours, and when I switch theme with
 `omarchy-theme-set` every open window and start page follows within 2 seconds, with no restart
 (at once through the theme-set hook Vimma installs, "Instant reload by default" below).
-Without Omarchy I get the built-in Tokyo Night, and I can force it.
+Without Omarchy I get the built-in palette (`[theme] name`, Vimma's own by default), and I can
+force it.
 
 ## Scope
 
@@ -29,8 +30,8 @@ Without Omarchy I get the built-in Tokyo Night, and I can force it.
   `light.mode` exists; then core's `resolveTheme({ theme: { source: "omarchy", font: "monospace",
 colors: {} }, omarchy, omarchyLightMode })` and `tokensToCss` (strict validation; nothing else
   reaches the sheet).
-- **Startup never waits:** the module starts with Tokyo Night's CSS (computed synchronously from
-  core, no I/O); the first check runs async and swaps when it completes.
+- **Startup never waits:** the module starts with the built-in palette's CSS (computed
+  synchronously from core, no I/O); the first check runs async and swaps when it completes.
 - **Poll:** every `vimma.theme.pollMs` (default 2000, a test knob) an async `IOUtils.stat` of
   `colors.toml` plus `IOUtils.exists(light.mode)`. The signature is the path, `lastModified`,
   `creationTime`, `size` and the light flag; the file is read only when it changes. The stat
@@ -41,15 +42,17 @@ colors: {} }, omarchy, omarchyLightMode })` and `tokensToCss` (strict validation
 - **Errors:** a file `resolveTheme` rejects keeps the last good theme; one `console.warn` listing
   each error with its line, and `vimma-theme-error` is notified. The signature is kept, so the
   same broken file is not re-read or re-logged. Contrast warnings go to `console.info`.
-- **Missing theme:** no `colors.toml` means Tokyo Night, unless an Omarchy theme was applied since
-  startup or the last `vimma.theme.*` change: then the theme stays (omarchy-theme-set's `rm -rf`
-  before its `mv` would otherwise flash Tokyo Night for one poll).
+- **Missing theme:** no `colors.toml` means the built-in palette, unless an Omarchy theme was
+  applied since startup or the last `vimma.theme.*` change: then the theme stays
+  (omarchy-theme-set's `rm -rf` before its `mv` would otherwise flash the built-in palette for one
+  poll).
 - **Prefs:** `vimma.theme.source` = `omarchy` (default) or `builtin`; `vimma.theme.omarchyPath`.
   A change to either re-checks at once. `vimma-theme-changed` is notified after new tokens apply.
 - **Hermetic tests:** `tests/browser/browser.toml` sets `vimma.theme.source=builtin` for the
   directory, so a developer's own Omarchy theme never reaches other tests' colour assertions;
-  `browser_vimma_theme.js` turns it back on. The e2e harness already gives the browser a `HOME`
-  inside its temp profile, so its baselines stay Tokyo Night.
+  `browser_vimma_theme.js` turns it back on. The e2e harness gives the browser a `HOME` inside
+  its temp profile and sets `vimma.theme.source=builtin` (`tools/e2e/launcher.mjs`), so its
+  baselines use the built-in palette.
 
 ## Tests (written first)
 
@@ -64,7 +67,8 @@ colors: {} }, omarchy, omarchyLightMode })` and `tokensToCss` (strict validation
   polls;
 - `ln -sfn` of `current/theme` to another theme dir updates;
 - a theme without a `mode` key and with `light.mode` gives `--vimma-color-scheme: light`;
-- a path with no Omarchy theme gives Tokyo Night (`#13141c`), and back; `builtin` forces it.
+- a path with no Omarchy theme gives the built-in palette (now Vimma's, `#070b0d`; Tokyo Night's
+  `#13141c` when this was written), and back; `builtin` forces it.
 
 Red (before the host existed): 4 of 5 tasks failed (`timed out` waiting for the fixture's
 colours). Green: 11/11. Mutation check: dropping the `return` after a rejected file made
@@ -124,9 +128,9 @@ did not compile (`no variant named ReloadTheme`). Green: control mochitest 258/2
 (`poll()` for `await poll()`) failed three assertions (`{"changed":false}` vs `true`, the bar
 still `rgb(16, 24, 32)`); reverted.
 
-## Instant reload by default (2026-10-10)
+## Instant reload by default
 
-The user wants instant reload on by default. The control socket stays off by default (a loopback
+Instant reload is on by default, so a theme switch reaches Vimma with no setup. The control socket stays off by default (a loopback
 TCP port any local user can reach); the hook uses Firefox's command-line remoting instead, which
 is always on.
 
