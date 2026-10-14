@@ -158,67 +158,20 @@ jobs:
     permissions:
       contents: read
     outputs:
-      result: ${{ steps.patches.outputs.result }}
-      artifacts: ${{ steps.preflight.outputs.artifacts }}
-      artifacts-note: ${{ steps.preflight.outputs.artifacts-note }}
+      result: ${{ steps.check.outputs.result }}
+      artifacts: ${{ steps.check.outputs.artifacts }}
+      artifacts-note: ${{ steps.check.outputs.artifacts-note }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Dry-run our patches on the new release's source
-        id: patches
+      - name: Check the new release's source (SHA-512, patches, audit, artifact preflight)
+        id: check
         env:
           VERSION: ${{ needs.detect.outputs.version }}
-        run: |
-          base="https://archive.mozilla.org/pub/firefox/releases/$VERSION"
-          name="source/firefox-$VERSION.source.tar.xz"
-          # Streamed once: tee feeds sha512sum (through a FIFO) and patch-check, which extracts
-          # only the patched files and, with --drain, reads to the end so the hash is whole.
-          # patch-check's status is the verdict: 0 all apply, 1 some do not, 2 did not run.
-          mkfifo tarball.fifo
-          sha512sum < tarball.fifo > tarball.sha512 &
-          hasher=$!
-          set +e
-          curl -fsSL --retry 3 "$base/$name" | tee tarball.fifo |
-            python3 tools/upstream/patch-check.py --tarball - --drain \
-              --json patch-check.json --markdown patch-check.md
-          status=${PIPESTATUS[2]}
-          wait "$hasher"
-          set -e
-          case "$status" in
-            0 | 1)
-              # Hard failure on a mismatch: never report on a tarball Mozilla did not publish.
-              curl -fsSL --retry 3 "$base/SHA512SUMS" -o SHA512SUMS
-              python3 tools/upstream/verify-sha512.py --sums SHA512SUMS --name "$name" \
-                --actual tarball.sha512 || {
-                echo "::error::SHA-512 of $name does not match $base/SHA512SUMS"
-                exit 1
-              }
-              [ "$status" -eq 0 ] && result=ok || result=fail
-              ;;
-            *)
-              result=norun
-              # patch-check writes its own "did not run" file; a crash before that may not.
-              [ -s patch-check.md ] || printf '### Patch check did not run\n\nExit %s; %s.\n' \
-                "$status" "see the upstream.yml run log" > patch-check.md
-              ;;
-          esac
-          case "$result" in
-            ok) ;;
-            fail) echo "::warning::some patches do not apply to Firefox $VERSION (summary)" ;;
-            norun) echo "::warning::the patch check did not run for Firefox $VERSION (no verdict)" ;;
-          esac
-          echo "result=$result" >> "$GITHUB_OUTPUT"
-          cat patch-check.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Patch-size audit (ADR-003 register)
-        run: python3 tools/upstream/patch-audit.py > patch-audit.txt || true
-
-      - name: Are Mozilla's artifacts for this revision indexed?
-        id: preflight
-        if: steps.patches.outputs.result == 'ok'
-        run: node tools/upstream/artifact-preflight.mjs patch-check.json --github-output "$GITHUB_OUTPUT"
+        # Shared with the Beta canary (spec upstream-beta-canary); fails on a SHA-512 mismatch.
+        run: tools/upstream/source-check.sh "$VERSION"
 
       - name: Upload the patch-check report
         if: always()

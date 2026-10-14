@@ -122,3 +122,26 @@ runtime only through `application.ini` on Linux (its C++ uses are Windows-only).
   check (once branch protection exists) needs handling for skipped runs, or those PRs hang.
 - `engine/obj-artifact` also works locally, next to the full objdir: a front-end check in about
   half a minute instead of a full rebuild.
+
+## Beta tarballs (amendment, spec upstream-beta-canary)
+
+The Firefox Beta canary ([upstream-beta-canary](../specs/upstream-beta-canary.md)) runs the same
+artifact build on a Firefox Beta source tarball, in its own CI checkout; `main` still pins a
+release. `tools/artifact-build/artifact-build.mjs` and `tools/upstream/artifact-preflight.mjs`
+read the tree from `sourcestamp.txt` and accept only `releases/mozilla-release` and
+`releases/mozilla-beta`. A release is unchanged (`MOZ_ARTIFACT_REVISION`). For a Beta the tool
+looks up `gecko.v2.mozilla-beta.shippable.revision.<rev>.firefox.linux64-opt` and passes the task
+id as `MOZ_ARTIFACT_TASK` with `MOZ_ARTIFACT_REVISION` unset, because mach's revision search
+picks its trees from Vimma's `0.x` display version and so never reaches mozilla-beta
+(`select_candidate_trees` and `install_from` in `python/mozbuild/mozbuild/artifacts.py`,
+Firefox 157.0.1). `version.txt` gets Mozilla's Beta value (`159.0` for `159.0b1`).
+
+Measured on 2026-10-14 on 159.0b1 (mozilla-beta `c0c03f3f8990`, task `ILGA8D1vQYmtIo0RJKNABg`),
+with the patch set re-exported for Firefox 158 (#186), because `moz-build.patch` on `main` (for
+157.0.1) does not apply to 159: the SHA-512 matched `SHA512SUMS`, `npm run import` applied every
+patch, the artifact build took 34 s with a warm `~/.mozbuild`, and `tests/browser/` ran in
+7 min 10 s with 6,128 passed and 16 failed. Fourteen failures are in
+`browser_vimma_sidebar_theme.js` (the history and bookmarks sidebars' search field no longer
+takes `--vimma-bg` and `--vimma-muted`), a Firefox 159 change of the kind the canary exists to
+report; two are `browser_vimma_perf.js` medians 0.5 to 1.7 ms over the 25 ms budget on a busy
+local machine. `browser_vimma_app_version.js` passed with `version.txt` at `159.0`.

@@ -3,7 +3,8 @@
  * Writes the app version files configure reads through `--with-version-file-path`
  * (configs/common/mozconfig, spec m0-app-version):
  *   version.txt         surfer.json version.version (the Firefox version) -> MOZ_APP_VERSION,
- *                       appinfo.version
+ *                       appinfo.version; a Beta pin (`159.0b1`, the Beta canary) writes
+ *                       `159.0`, as Mozilla's own Beta tree does
  *   version_display.txt brands.<brand>.release.displayVersion (Vimma's) -> MOZ_APP_VERSION_DISPLAY,
  *                       `vimma --version`, the About dialog
  *   patches.json        every src/**\/*.patch with its hunk count, for about:vimma
@@ -64,8 +65,11 @@ export function surferVersions(config, brand = "vimma") {
  */
 export function versionFiles(config, brand = "vimma") {
   const { firefox, display } = surferVersions(config, brand);
+  // Mozilla's Beta has 159.0 in version.txt and 159.0b1 only in its display version (spec
+  // upstream-beta-canary, R3), so appinfo.version keeps matching platformVersion on a Beta.
+  const appVersion = firefox.replace(/b\d+$/, "");
   return {
-    "version.txt": `${HEADER}${firefox}\n`,
+    "version.txt": `${HEADER}${appVersion}\n`,
     "version_display.txt": `${HEADER}${display}\n`,
   };
 }
