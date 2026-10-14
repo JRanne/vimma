@@ -89,6 +89,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - The side panel's scrollbar takes the theme's colours instead of Firefox's white track; the bookmarks panel's too (#146).
 - Firefox's own sidebar (history, bookmarks, synced tabs and the launcher strip) follows the theme, live, with the theme's focus ring instead of Firefox's blue (#148).
 - The address bar's focus ring, the focused pane's outline in a split and other focus rings in the browser's own UI take the theme's accent instead of Firefox's blue, a shade darker or lighter where the accent would miss 3:1 contrast.
+- Vimma's side panel, bookmarks panel, pickers and help overlay draw their focus ring in the theme accent instead of Firefox's blue. The e2e baseline `m0-happy-path-help` changed for the help overlay's ring.
 - `npm run import` no longer fails after a patch changes: it restores the Firefox files our patches touch before re-applying them. `tools/relocate-checkout.mjs` repairs a checkout that was moved.
 - Switching workspaces with `ctrl+b (`, `ctrl+b )` or `:workspace` no longer shows "no workspaces in this window" after a successful switch.
 - Sites see Firefox's user agent (`… Gecko/20100101 Firefox/158.0`), not `Vimma/0.1.0`.
