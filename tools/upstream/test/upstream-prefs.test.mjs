@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CFR, SB_LISTS, checkPrefs, prefLine, readPref } from "../upstream-prefs.mjs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 const script = fileURLToPath(new URL("../upstream-prefs.mjs", import.meta.url));
 const ours = readFileSync(
@@ -72,7 +72,7 @@ describe("upstream prefs we carry copies of", () => {
   });
 
   it("the CLI exits 0 when current, 1 with the fix when stale", () => {
-    const engine = mkdtempSync(join(tmpdir(), "prefs-"));
+    const engine = tempDir("prefs-");
     mkdirSync(join(engine, "browser/app/profile"), { recursive: true });
     mkdirSync(join(engine, "modules/libpref/init"), { recursive: true });
     writeFileSync(join(engine, "browser/app/profile/firefox.js"), firefoxJs);
