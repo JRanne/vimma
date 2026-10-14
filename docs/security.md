@@ -465,6 +465,12 @@ one workspace, **agent**, through the control socket's `agent` role. Spec:
 while MCP is on (`:mcp on`). Every check runs in the browser, never in the client: an agent with
 a shell can run `vimma-ctl` itself, or speak the protocol directly.
 
+**Planned:** [mcp-drive](specs/mcp-drive.md) adds `vimma_show` and `vimma_keys` (the agent shows
+a page, and runs Vimma's own page keys in an agent tab) and makes full control's questions say
+that it reaches beyond the agent workspace while MCP is on. Its rules M16-M23 (key whitelist,
+background-only, follows as loads, show always asked, limits, delimited link lists, full
+control's wording, the audit) enter this section with their tests in the sub-PR that builds each.
+
 - M1. Every agent command but `agent-hello`, `agent-ping` and `agent-cancel` **must** wait for
   your yes, or run under an unexpired grant of that connection and tool.
   [`test_grants_per_connection_and_tool`](../tests/browser/browser_vimma_mcp_agent.js),
