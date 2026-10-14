@@ -1,6 +1,6 @@
 # Spec: tab-search
 
-Status: draft (queued after Vimma MCP, plan §6) · Area: `packages/vimma-core/src/` (`picker.mjs`,
+Status: draft · Area: `packages/vimma-core/src/` (`picker.mjs`,
 `tabsearch.mjs` new, `actions.mjs`, `defaults.mjs`, `cmdline.mjs`, `help.mjs`);
 `src/browser/base/content/vimma/` (`host/goto.mjs`, `host/tab-search.mjs` new,
 `host/VimmaHost.sys.mjs`, `ui/picker.mjs`); `src/browser/themes/shared/vimma/picker.css` ·
