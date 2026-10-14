@@ -4,13 +4,11 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
-  mkdtempSync,
   readlinkSync,
   statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   assertLane,
@@ -26,13 +24,14 @@ import {
 } from "../lanes.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync, rmSync } from "node:fs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 /**
  * A main checkout with an imported engine, and a worktree under its .claude/worktrees/, the
  * layout the lanes run in.
  */
 function fakeCheckouts() {
-  const base = mkdtempSync(join(tmpdir(), "vimma-lanes-"));
+  const base = tempDir("vimma-lanes-");
   const main = join(base, "main");
   const lane = join(main, ".claude", "worktrees", "agent-x");
   const engine = join(main, "engine");

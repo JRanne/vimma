@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 // tools/upstream/source-check.sh: the source check upstream.yml runs on a release and the Beta
 // canary runs on a Beta (spec upstream-beta-canary, B3 and Design step 2). The archive is a
@@ -18,7 +18,7 @@ const TREE = fileURLToPath(new URL("../fixtures/patch-check/tree", import.meta.u
  * @param {{ sums?: (hash: string, name: string) => string }} [opts]
  */
 function archive(version, opts = {}) {
-  const root = mkdtempSync(join(tmpdir(), "source-check-"));
+  const root = tempDir("source-check-");
   const dir = join(root, "releases", version);
   mkdirSync(join(dir, "source"), { recursive: true });
   const name = `source/firefox-${version}.source.tar.xz`;

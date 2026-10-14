@@ -53,6 +53,8 @@ const browserWindows = () => [...Services.wm.getEnumerator("navigator:browser")]
 
 add_task(async function test_remote_reload_theme() {
   const dir = await IOUtils.createUniqueDirectory(PathUtils.tempDir, "vimma-remote-reload");
+  // Also when an assertion fails before the end (#207).
+  registerCleanupFunction(() => IOUtils.remove(dir, { recursive: true, ignoreAbsent: true }));
   const colors = PathUtils.join(dir, "colors.toml");
   await IOUtils.writeUTF8(colors, colorsToml("#102030"));
   await SpecialPowers.pushPrefEnv({
@@ -104,6 +106,8 @@ add_task(async function test_remote_reload_theme() {
 /** A temporary HOME; nothing here ever touches the real one. */
 async function tempHome(/** @type {boolean} */ omarchy) {
   const home = await IOUtils.createUniqueDirectory(PathUtils.tempDir, "vimma-hook-home");
+  // Also when an assertion fails before the test removes it (#207).
+  registerCleanupFunction(() => IOUtils.remove(home, { recursive: true, ignoreAbsent: true }));
   if (omarchy) await IOUtils.makeDirectory(PathUtils.join(home, ".config", "omarchy", "hooks"));
   return home;
 }

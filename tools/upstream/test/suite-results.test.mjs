@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mochitestFailures, suiteResults } from "../suite-results.mjs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 // tools/upstream/suite-results.mjs: e2e.yml's Beta mode writes suite-results.json from each
 // step's outcome, the mochitest log and the e2e harness's --report-json (spec
@@ -123,7 +123,7 @@ describe("suiteResults", () => {
 
 describe("node tools/upstream/suite-results.mjs", () => {
   it("writes suite-results.json from the steps context and exits 1 when a suite failed", () => {
-    const dir = mkdtempSync(join(tmpdir(), "suite-results-"));
+    const dir = tempDir("suite-results-");
     writeFileSync(join(dir, "mochitest.tbpl.log"), LOG);
     writeFileSync(
       join(dir, "e2e-report.json"),
@@ -161,7 +161,7 @@ describe("node tools/upstream/suite-results.mjs", () => {
   });
 
   it("missing log and report files are recorded, not an error", () => {
-    const dir = mkdtempSync(join(tmpdir(), "suite-results-"));
+    const dir = tempDir("suite-results-");
     const out = join(dir, "suite-results.json");
     const r = spawnSync(
       process.execPath,

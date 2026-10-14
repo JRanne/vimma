@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ALLOWED, checkLock, packageName, spdxAllowed } from "../license-check.mjs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 const script = fileURLToPath(new URL("../license-check.mjs", import.meta.url));
 
@@ -122,7 +122,7 @@ describe("checkLock", () => {
 describe("CLI", () => {
   /** @param {object} data */
   function runOn(data) {
-    const dir = mkdtempSync(join(tmpdir(), "licence-"));
+    const dir = tempDir("licence-");
     const file = join(dir, "package-lock.json");
     writeFileSync(file, JSON.stringify(data));
     return spawnSync(process.execPath, [script, file, "--exceptions", join(dir, "none.json")], {
