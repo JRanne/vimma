@@ -44,9 +44,10 @@ permissions:
   contents: read
 
 concurrency:
-  # A call from upstream.yml runs on main's ref: keyed on the version so it never cancels, or
-  # is cancelled by, a manual run on main.
-  group: e2e-${{ inputs.firefox-version || github.ref }}
+  # Keyed on the ref and the version: a call from upstream.yml or the Beta canary runs on main's
+  # ref, and must never cancel, or be cancelled by, a manual run on main without a version or a
+  # manual run of the same version on another branch. A new push to a PR cancels its older run.
+  group: e2e-${{ github.ref }}-${{ inputs.firefox-version }}
   cancel-in-progress: true
 
 jobs:
@@ -200,7 +201,7 @@ jobs:
       # too). Exits 1 when any step did not succeed, so the run fails once everything reported.
       - name: suite-results.json (Beta mode, tools/upstream/suite-results.mjs)
         id: suite-results
-        if: always() && steps.mode.outputs.beta == 'true'
+        if: "!cancelled() && steps.mode.outputs.beta == 'true'"
         env:
           VERSION: ${{ inputs.firefox-version }}
           STEPS: ${{ toJSON(steps) }}
@@ -210,7 +211,7 @@ jobs:
             --e2e-report "$RUNNER_TEMP/e2e-report.json" --out "$RUNNER_TEMP/suite-results.json"
 
       - name: Upload suite-results.json (Beta mode)
-        if: always() && steps.mode.outputs.beta == 'true'
+        if: "!cancelled() && steps.mode.outputs.beta == 'true'"
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: suite-results

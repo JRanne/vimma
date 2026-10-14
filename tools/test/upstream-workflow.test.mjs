@@ -219,14 +219,14 @@ describe("e2e.yml Beta mode", () => {
     expect(script(step(e2e, "e2e"))).toContain('--report-json "$RUNNER_TEMP/e2e-report.json"');
   });
 
-  it("writes and uploads suite-results.json only in beta mode, even after a failed step", () => {
+  it("writes and uploads suite-results.json only in beta mode, even after a failed step, never on a cancelled run", () => {
     const write = step(e2e, "suite-results");
-    expect(write).toContain("if: always() && steps.mode.outputs.beta == 'true'");
+    expect(write).toContain(`if: "!cancelled() && steps.mode.outputs.beta == 'true'"`);
     expect(write).toContain("STEPS: ${{ toJSON(steps) }}");
     expect(write).toContain("node tools/upstream/suite-results.mjs");
     const upload = e2e.slice(e2e.indexOf("id: suite-results"));
     expect(upload).toMatch(
-      /- name: Upload suite-results\.json[^]*?if: always\(\) && steps\.mode\.outputs\.beta == 'true'[^]*?name: suite-results\n/,
+      /- name: Upload suite-results\.json[^]*?if: "!cancelled\(\) && steps\.mode\.outputs\.beta == 'true'"[^]*?name: suite-results\n/,
     );
   });
 
@@ -234,5 +234,15 @@ describe("e2e.yml Beta mode", () => {
     expect(e2e).toContain(
       "if: failure() || (steps.mode.outputs.beta == 'true' && steps.e2e.outcome == 'failure')",
     );
+  });
+});
+
+describe("e2e.yml concurrency", () => {
+  it("a run cancels only an older run of the same ref and version", () => {
+    // A manual Beta run on a branch must not cancel the canary's run of that Beta on main, nor
+    // the autopilot's run on main a manual run without a version; a new push to a PR still
+    // cancels that PR's older run.
+    expect(e2e).toContain("group: e2e-${{ github.ref }}-${{ inputs.firefox-version }}");
+    expect(e2e).toContain("cancel-in-progress: true");
   });
 });
