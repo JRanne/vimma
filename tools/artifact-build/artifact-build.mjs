@@ -229,10 +229,10 @@ async function main(root) {
     );
   }
   // sourceStamp already checked both; repeated here, where the file data meets the request.
-  if (!/^[0-9a-f]{40}$/.test(stamp.revision) || !TREES.includes(stamp.tree)) {
-    throw new Error("engine/sourcestamp.txt: unexpected tree or revision");
-  }
-  const res0 = await fetch(INDEX_URL + indexNamespace(stamp));
+  const { tree: stampTree, revision } = stamp;
+  if (!TREES.includes(stampTree)) throw new Error(`unexpected tree ${stampTree}`);
+  if (!/^[0-9a-f]{40}$/.test(revision)) throw new Error("the source revision is not 40 hex");
+  const res0 = await fetch(INDEX_URL + indexNamespace({ tree: stampTree, revision }));
   const { taskId, expires } = indexTask(stamp, res0.status, await res0.json(), new Date());
   const artifactEnv = machArtifactEnv(stamp, taskId);
   console.log(
