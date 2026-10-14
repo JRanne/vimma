@@ -12,7 +12,7 @@
 // Problems that depend on the profile's engines come back as config errors with their line.
 // It also keeps the `@aliases` the URL bar knows, for `:open @` completion.
 
-import { planSearch, searchCompletions } from "../core/search.mjs";
+import { parseSearchState, planSearch, searchCompletions } from "../core/search.mjs";
 import { formatPath } from "../core/toml.mjs";
 
 /** @import { ConfigError } from "../core/config.mjs" */
@@ -60,11 +60,10 @@ let onErrors = () => {};
 
 /** @returns {SearchState | null} */
 function readState() {
-  try {
-    return JSON.parse(Services.prefs.getStringPref(STATE_PREF, "null"));
-  } catch {
-    return null;
-  }
+  const { state, problem } = parseSearchState(Services.prefs.getStringPref(STATE_PREF, ""));
+  // Discarded whole: [search] then applies as on a first run, and the next apply rewrites it.
+  if (problem) console.warn(`vimma: ${problem}`);
+  return state;
 }
 
 /** @param {SearchState | null} state */
@@ -308,10 +307,12 @@ export const SearchHost = {
     return {
       default: engine?.name ?? null,
       fromConfig: !!config?.default && !!state?.default && state.default.set === engine?.id,
+      // An engine Vimma made is named after its template's host: the report names the alias.
+      template: state?.created.find((c) => c.id === engine?.id)?.alias ?? null,
       aliases: (config?.aliases ?? []).map((a) => ({
         alias: `@${a.alias}`,
         engine: a.kind === "engine" ? a.name : a.host,
-        unencrypted: a.kind === "template" && a.url.startsWith("http://"),
+        unencrypted: a.kind === "template" && /^http:/i.test(a.url),
       })),
     };
   },

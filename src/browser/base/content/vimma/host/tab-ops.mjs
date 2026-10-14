@@ -149,13 +149,31 @@ export function openUrl(win, text, where) {
  */
 export async function openTyped(win, text, where) {
   if (refusedScheme(text)) return false;
+  // The tab it was typed in, before the lookup yields: a workspace switch meanwhile (into the
+  // agent workspace, say) must not send the query, or a POST body, to another tab.
+  const gBrowser = /** @type {any} */ (win).gBrowser;
+  const typedIn = gBrowser.selectedBrowser;
   /** @type {{ url: string, postData: unknown }} */
   const r = await lazy.UrlbarUtils.getShortcutOrURIAndPostData(text);
-  if (!r.url || r.url === text) return openUrl(win, text, where);
-  if (refusedScheme(r.url)) return false;
+  const moved = gBrowser.selectedBrowser !== typedIn;
+  if (!r.url || r.url === text) {
+    if (!moved) return openUrl(win, text, where);
+    r.url = text;
+  } else if (refusedScheme(r.url)) return false;
+  /** @type {Record<string, unknown>} */
+  const params = { postData: r.postData, inBackground: false };
+  if (r.url === text) params.allowThirdPartyFixup = true;
+  if (moved) {
+    // Where it was typed: that tab, or a new tab in its container, left in the background.
+    if (where === "current") params.targetBrowser = typedIn;
+    else {
+      params.userContextId = typedIn.browsingContext?.originAttributes.userContextId ?? 0;
+      params.inBackground = true;
+    }
+  }
   /** @type {{ openTrustedLinkIn: (url: string, where: string, params: object) => void }} */ (
     /** @type {unknown} */ (win)
-  ).openTrustedLinkIn(r.url, where, { postData: r.postData, inBackground: false });
+  ).openTrustedLinkIn(r.url, where, params);
   return true;
 }
 

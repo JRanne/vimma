@@ -393,3 +393,39 @@ export function searchCompletions(list) {
     .map((e) => ({ name: e.alias.toLowerCase(), description: e.engine }))
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
+
+const STATE_PREF_NAME = "vimma.search.applied";
+
+/**
+ * The state the host recorded (decision 6), read back from its pref. Anything not in the shape
+ * Vimma writes is discarded whole, with the reason: a hand-edited or corrupt value must neither
+ * stop `[search]` from applying nor name engines for Vimma to remove.
+ * @param {string} text  the pref's value; "" when unset
+ * @returns {{ state: SearchState | null, problem?: string }}
+ */
+export function parseSearchState(text) {
+  if (text === "" || text === "null") return { state: null };
+  /** @param {string} why */
+  const bad = (why) => ({ state: null, problem: `${STATE_PREF_NAME} ${why}; discarded` });
+  /** @type {unknown} */
+  let v;
+  try {
+    v = JSON.parse(text);
+  } catch {
+    return bad("is not JSON");
+  }
+  const isString = (/** @type {unknown} */ x) => typeof x === "string";
+  /** @param {unknown} x @param {string[]} keys */
+  const record = (x, keys) =>
+    isTable(x) && keys.every((k) => isString(/** @type {Record<string, unknown>} */ (x)[k]));
+  if (!isTable(v)) return bad("is not an object");
+  const { created, aliased, default: d } = /** @type {Record<string, unknown>} */ (v);
+  if (!Array.isArray(created) || !created.every((c) => record(c, ["alias", "id", "name", "url"]))) {
+    return bad('has a malformed "created" list');
+  }
+  if (!Array.isArray(aliased) || !aliased.every((a) => record(a, ["alias", "id", "replaced"]))) {
+    return bad('has a malformed "aliased" list');
+  }
+  if (d !== null && !record(d, ["set", "previous"])) return bad('has a malformed "default"');
+  return { state: /** @type {SearchState} */ (v) };
+}

@@ -196,10 +196,15 @@ link targets for hints, which chrome must treat as untrusted.
   ([#98](https://github.com/JRanne/vimma/issues/98)). No length cap applies to text typed there.
   A search alias or bookmark keyword at the start resolves as the URL bar resolves it
   (`UrlbarUtils.getShortcutOrURIAndPostData`), and the URL it resolves to is checked again, so a
-  keyword bookmarklet is refused; the bookmark's principal is never inherited.
+  keyword bookmarklet is refused; the bookmark's principal is never inherited. Other schemes a
+  keyword resolves to (`file:`, `about:`) load as they would if typed: there is no allowlist like
+  the bookmarks panel's. The query goes to the tab it was typed in (or a new tab in its
+  container), even when the workspace changes while the keyword is looked up.
   [`javascript_urls_are_blocked_with_a_notice`](../tests/browser/browser_vimma_cmdline.js),
   [`data_urls_are_blocked_with_a_notice`](../tests/browser/browser_vimma_cmdline.js),
-  [`bookmark_keywords_work_and_bookmarklets_are_refused`](../tests/browser/browser_vimma_search.js)
+  [`bookmark_keywords_work_and_refused_ones_never_run`](../tests/browser/browser_vimma_search.js),
+  [`a_keyword_page_never_inherits_the_current_page`](../tests/browser/browser_vimma_search.js),
+  [`a_workspace_switch_during_the_lookup_keeps_the_query_where_it_was_typed`](../tests/browser/browser_vimma_search.js)
 - U5. Every Vimma open of text with the system principal (`p`, `P`, `:open`, `:tabnew`) **must**
   refuse those schemes through one shared check (`refusedScheme`, `core/pageurl.mjs`); bookmarks
   and the socket's `open` go further and allow only http, https, file and about.

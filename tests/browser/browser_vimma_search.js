@@ -26,6 +26,15 @@ const { SearchService } = ChromeUtils.importESModule(
 const { SearchTestUtils } = ChromeUtils.importESModule(
   "resource://testing-common/SearchTestUtils.sys.mjs",
 );
+const { WorkspaceStore } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/workspaces/WorkspaceStore.sys.mjs",
+);
+const { WindowWorkspaces } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/workspaces/WindowWorkspaces.sys.mjs",
+);
+const { UrlbarUtils } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
+);
 const { UrlbarTestUtils } = ChromeUtils.importESModule(
   "resource://testing-common/UrlbarTestUtils.sys.mjs",
 );
@@ -98,6 +107,30 @@ async function openFrom(tab, line, url) {
   Assert.equal(tab.linkedBrowser.currentURI.spec, url, `:${line} loads ${url}`);
   await focusContent(tab.linkedBrowser);
 }
+
+/** The address of file_vimma_search_post.sjs, which echoes a request's method and body. */
+const postEcho = () =>
+  `${getRootDirectory(gTestPath).replace(
+    "chrome://mochitests/content",
+    "https://example.com",
+  )}file_vimma_search_post.sjs`;
+
+/** Bookmarks `url` under `keyword` (with `postData`, if any) until the file ends. */
+async function keyword(name, url, postData) {
+  const bookmark = await PlacesUtils.bookmarks.insert({
+    parentGuid: PlacesUtils.bookmarks.unfiledGuid,
+    url,
+  });
+  await PlacesUtils.keywords.insert({ keyword: name, url, ...(postData ? { postData } : {}) });
+  registerCleanupFunction(async () => {
+    await PlacesUtils.keywords.remove(name);
+    await PlacesUtils.bookmarks.remove(bookmark);
+  });
+}
+
+/** The text of `tab`'s page. */
+const pageText = (tab) =>
+  SpecialPowers.spawn(tab.linkedBrowser, [], () => content.document.body?.textContent.trim());
 
 let installed;
 let originalDefault;
@@ -189,10 +222,7 @@ add_task(async function aliases_make_an_engine_and_alias_an_installed_one() {
 });
 
 add_task(async function a_post_engine_gets_its_body() {
-  const sjs = `${getRootDirectory(gTestPath).replace(
-    "chrome://mochitests/content",
-    "https://example.com",
-  )}file_vimma_search_post.sjs`;
+  const sjs = postEcho();
   await SearchTestUtils.installSearchExtension({
     name: "Vimma Post",
     keyword: "@vpost",
@@ -263,31 +293,99 @@ add_task(async function the_url_bar_knows_the_alias() {
   await until(async () => !(await engineByAlias("@t")), "the template's engine is removed");
 });
 
-add_task(async function bookmark_keywords_work_and_bookmarklets_are_refused() {
-  const bookmarks = [
-    await PlacesUtils.bookmarks.insert({
-      parentGuid: PlacesUtils.bookmarks.unfiledGuid,
-      url: "https://example.com/?k=%s",
-    }),
-    await PlacesUtils.bookmarks.insert({
-      parentGuid: PlacesUtils.bookmarks.unfiledGuid,
-      url: "javascript:void(%s)",
-    }),
-  ];
-  await PlacesUtils.keywords.insert({ keyword: "vk", url: "https://example.com/?k=%s" });
-  await PlacesUtils.keywords.insert({ keyword: "vj", url: "javascript:void(%s)" });
-  registerCleanupFunction(async () => {
-    await PlacesUtils.keywords.remove("vk");
-    await PlacesUtils.keywords.remove("vj");
-    for (const b of bookmarks) await PlacesUtils.bookmarks.remove(b);
-  });
+add_task(async function bookmark_keywords_work_and_refused_ones_never_run() {
+  await keyword("vk", "https://example.com/?k=%s");
+  // A bookmarklet that would show it ran: the page's title changes.
+  await keyword("vj", "javascript:void(document.title='ran-%s')");
+  await keyword("vd", "data:text/html,<title>ran-%s</title>");
+  await keyword("vv", "view-source:javascript:document.title='ran-%s'");
 
   const tab = await openPage();
   await openFrom(tab, "open vk fish", "https://example.com/?k=fish");
-  runCommand("open vj 1");
-  await until(() => noticeText() === BLOCKED, "the bookmarklet is refused with the notice");
-  Assert.equal(tab.linkedBrowser.currentURI.spec, "https://example.com/?k=fish", "nothing ran");
+  const title = tab.linkedBrowser.contentTitle;
+  for (const [line, what] of [
+    ["open vj 1", "a javascript: keyword"],
+    ["open vd 1", "a data: keyword"],
+    ["open vv 1", "a view-source:javascript: keyword"],
+  ]) {
+    const notice = document.getElementById("vimma-notice");
+    if (notice?.matches(":popover-open")) notice.hidePopover();
+    runCommand(line);
+    await until(() => noticeText() === BLOCKED, `${what} is refused with the notice`);
+    // A load or a script would have had the time to start while the notice opened.
+    await TestUtils.waitForTick();
+    Assert.equal(
+      tab.linkedBrowser.currentURI.spec,
+      "https://example.com/?k=fish",
+      `${what}: nothing loaded`,
+    );
+    Assert.equal(
+      await SpecialPowers.spawn(tab.linkedBrowser, [], () => content.document.title),
+      title,
+      `${what}: nothing ran in the page`,
+    );
+    await focusContent(tab.linkedBrowser);
+  }
   BrowserTestUtils.removeTab(tab);
+});
+
+add_task(async function a_keyword_page_never_inherits_the_current_page() {
+  await keyword("vb", "about:blank#%s");
+  const tab = await openPage();
+  const loaded = BrowserTestUtils.browserLoaded(tab.linkedBrowser, false, "about:blank#x");
+  runCommand("open vb x");
+  await loaded;
+  const principal = await SpecialPowers.spawn(tab.linkedBrowser, [], () => ({
+    origin: content.document.nodePrincipal.origin,
+    system: content.document.nodePrincipal.isSystemPrincipal,
+  }));
+  Assert.notEqual(principal.origin, "https://example.org", "not the page it replaced");
+  Assert.ok(!principal.system, "and never the system principal");
+  BrowserTestUtils.removeTab(tab);
+});
+
+add_task(async function a_keyword_with_post_data_sends_its_body() {
+  const url = postEcho();
+  await keyword("vp", url, "q=%s");
+  const tab = await openPage();
+  const loaded = BrowserTestUtils.browserLoaded(tab.linkedBrowser, false, url);
+  runCommand("open vp owls");
+  await loaded;
+  Assert.equal(await pageText(tab), "POST q=owls", "the bookmark's POST body is sent");
+  BrowserTestUtils.removeTab(tab);
+});
+
+add_task(async function the_bug_report_never_names_a_template_host() {
+  await writeConfig(
+    "[search]",
+    'default = "@corp"',
+    "[search.aliases]",
+    'corp = "https://wiki.corp.example.net/search?q=%s"',
+    'lan = "HTTP://searx.lan/?q=%s"',
+  );
+  await until(() => SearchService.defaultEngine.name === "wiki.corp.example.net", "it applies");
+  const data = await AboutVimma.collect(window);
+  const report = AboutVimma.report(data);
+  Assert.ok(!report.includes("corp.example"), "the report has no template host");
+  Assert.stringContains(report, "Search: default a config.toml template (@corp)", "but says so");
+  Assert.ok(
+    data.search.aliases.find((a) => a.alias === "@lan")?.unencrypted,
+    "an HTTP:// template is marked unencrypted, whatever its case",
+  );
+  await writeConfig("[search]");
+  await until(
+    () => SearchService.defaultEngine.id === originalDefault.id,
+    "the previous default is back",
+  );
+});
+
+add_task(async function a_malformed_state_is_discarded_and_search_still_applies() {
+  Services.prefs.setStringPref(STATE_PREF, JSON.stringify({ created: "x" }));
+  await writeConfig("[search.aliases]", `t = "${TEMPLATE}"`);
+  await until(() => engineByAlias("@t"), "[search] applies over a malformed record");
+  await until(() => Array.isArray(applied()?.created), "and a well-formed one replaces it");
+  await writeConfig("[search]");
+  await until(async () => !(await engineByAlias("@t")), "the template's engine is removed");
 });
 
 add_task(async function an_unknown_engine_is_a_config_error_and_the_rest_applies() {
@@ -333,6 +431,82 @@ add_task(async function a_private_window_opens_aliases_too() {
   runCommand("open @t owls", win);
   await loaded;
   await BrowserTestUtils.closeWindow(win);
+  await writeConfig("[search]");
+  await until(async () => !(await engineByAlias("@t")), "the template's engine is removed");
+});
+
+/**
+ * Holds `:open`'s alias lookup until the returned `release` is called, so a test can act while
+ * the command line waits for it.
+ */
+function holdLookup() {
+  const original = UrlbarUtils.getShortcutOrURIAndPostData;
+  let release;
+  const held = new Promise((resolve) => (release = resolve));
+  let started = false;
+  UrlbarUtils.getShortcutOrURIAndPostData = async function (text) {
+    started = true;
+    await held;
+    return original.call(this, text);
+  };
+  registerCleanupFunction(() => (UrlbarUtils.getShortcutOrURIAndPostData = original));
+  return {
+    started: () => started,
+    release() {
+      UrlbarUtils.getShortcutOrURIAndPostData = original;
+      release();
+    },
+  };
+}
+
+add_task(async function a_workspace_switch_during_the_lookup_keeps_the_query_where_it_was_typed() {
+  await writeConfig("[search.aliases]", `t = "${TEMPLATE}"`);
+  await until(() => engineByAlias("@t"), "the template's engine is made");
+  const ww = WindowWorkspaces.get(window);
+  const byName = (name) => WorkspaceStore.definitions.workspaces.find((w) => w.name === name);
+  const agent = byName("agent");
+  Assert.ok(agent, "sanity: the agent workspace exists");
+  const tab = await openPage();
+  const typedIn = tab.userContextId;
+
+  // :open: the query loads in the tab it was typed in, not in the agent workspace's.
+  let hold = holdLookup();
+  runCommand("open @t cats");
+  await until(hold.started, "the lookup started");
+  ww.switchTo({ id: agent.id });
+  await until(() => gBrowser.selectedTab !== tab, "the agent workspace is shown");
+  const agentBrowser = gBrowser.selectedBrowser;
+  const loaded = BrowserTestUtils.browserLoaded(
+    tab.linkedBrowser,
+    false,
+    "https://example.com/?t=cats",
+  );
+  hold.release();
+  await loaded;
+  // The agent's tab may still be loading its start page; it must never get the query.
+  Assert.ok(
+    !agentBrowser.currentURI.spec.startsWith("https://example.com/"),
+    `the agent's tab is left alone (${agentBrowser.currentURI.spec})`,
+  );
+
+  // :tabnew: the new tab takes the container it was typed in.
+  ww.switchTo({ id: byName("main").id });
+  await until(() => gBrowser.selectedTab === tab, "back in the first workspace");
+  await focusContent(tab.linkedBrowser);
+  hold = holdLookup();
+  runCommand("tabnew @t dogs");
+  await until(hold.started, "the lookup started");
+  ww.switchTo({ id: agent.id });
+  await until(() => gBrowser.selectedTab !== tab, "the agent workspace is shown");
+  const opened = BrowserTestUtils.waitForEvent(gBrowser.tabContainer, "TabOpen");
+  hold.release();
+  const newTab = (await opened).target;
+  Assert.equal(newTab.userContextId, typedIn, "in the container :tabnew was typed in");
+  Assert.notEqual(newTab.userContextId, agent.userContextId, "never the agent workspace's");
+
+  ww.switchTo({ id: byName("main").id });
+  BrowserTestUtils.removeTab(newTab);
+  BrowserTestUtils.removeTab(tab);
   await writeConfig("[search]");
   await until(async () => !(await engineByAlias("@t")), "the template's engine is removed");
 });

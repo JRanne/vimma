@@ -3,7 +3,13 @@ import { describe, test, expect } from "vitest";
 import { parseConfig } from "../src/config.mjs";
 import { completeCommandLine } from "../src/cmdline.mjs";
 import { formatConfigTemplate, formatDefaultsToml } from "../src/defaults.mjs";
-import { planSearch, resolveSearch, searchCompletions, toFirefoxTemplate } from "../src/search.mjs";
+import {
+  parseSearchState,
+  planSearch,
+  resolveSearch,
+  searchCompletions,
+  toFirefoxTemplate,
+} from "../src/search.mjs";
 
 /** @param {string[]} lines */
 const v2 = (...lines) => ["schema = 2", ...lines].join("\n") + "\n";
@@ -556,5 +562,47 @@ describe(":open @ completion", () => {
     expect(complete("open @gh foo")).toEqual([]);
     expect(complete("open example.com")).toEqual([]);
     expect(complete("open ")).toEqual([]);
+  });
+});
+
+describe("parseSearchState", () => {
+  const good = {
+    created: [{ alias: "gh", id: "u1", name: "github.com", url: GH }],
+    aliased: [{ alias: "w", id: "wiki", replaced: "" }],
+    default: { set: "u1", previous: "google" },
+  };
+
+  test("a recorded state comes back as it was", () => {
+    expect(parseSearchState(JSON.stringify(good))).toEqual({ state: good });
+    expect(parseSearchState(JSON.stringify({ created: [], aliased: [], default: null }))).toEqual({
+      state: { created: [], aliased: [], default: null },
+    });
+  });
+
+  test("nothing recorded is no state and no problem", () => {
+    expect(parseSearchState("")).toEqual({ state: null });
+    expect(parseSearchState("null")).toEqual({ state: null });
+  });
+
+  test.each([
+    ["not JSON", "{"],
+    ["created not a list", JSON.stringify({ ...good, created: "x" })],
+    ["a created entry without an id", JSON.stringify({ ...good, created: [{ alias: "gh" }] })],
+    [
+      "a created id that is null",
+      JSON.stringify({ ...good, created: [{ ...good.created[0], id: null }] }),
+    ],
+    ["aliased not a list", JSON.stringify({ ...good, aliased: {} })],
+    [
+      "an aliased entry with a number",
+      JSON.stringify({ ...good, aliased: [{ alias: "w", id: 1, replaced: "" }] }),
+    ],
+    ["default not an object", JSON.stringify({ ...good, default: "u1" })],
+    ["default without previous", JSON.stringify({ ...good, default: { set: "u1" } })],
+    ["a list at the top", "[]"],
+  ])("%s is discarded with the reason", (_why, text) => {
+    const r = parseSearchState(text);
+    expect(r.state).toBeNull();
+    expect(r.problem).toMatch(/^vimma\.search\.applied /);
   });
 });
