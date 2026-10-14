@@ -4,7 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Is this pull request docs-only? (Issue #245, docs/runbook.md "Docs-only pull requests".)
-// ci.yml, e2e.yml and codeql.yml skip their heavy steps and jobs on a docs-only pull request
+// ci.yml and e2e.yml skip their heavy steps and jobs on a docs-only pull request
 // with `if:`, not with a workflow `paths` filter: a required check whose workflow never runs
 // blocks the merge, while a job or step skipped by `if:` reports success.
 //
