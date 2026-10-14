@@ -9,6 +9,38 @@ Vimma is pre-alpha, so the guide is precise about what works **today** on `main`
 everything else as **planned**, with the milestone that brings it ([plan.md](../plan.md) §6).
 Known gaps are listed in [limits.md](limits.md).
 
+## Features at a glance
+
+What works today, each with the section that explains it:
+
+- **Vim on the page** ([the two layers](#the-two-layers)): `j`/`k`/`h`/`l` scroll, `d`/`u`
+  half a page, `gg`/`G` top and bottom, `H`/`L` back and forward; `f` link hints (`F` in a
+  background tab); `/` find as you type, in frames and PDFs too; `v` copy mode with Vim motions
+  and `y`; insert mode in text fields, `Esc` to leave; `:` a [command line](#the-command-line)
+  with completion and history.
+- **tmux for the window** (prefix `ctrl+b`, [keys](#keys)): tabs (`c` new, `n`/`p`, `1..9`,
+  renamed with the [goto picker](#goto-picker-and-tab-rename)); up to 4 split panes (`v`, `-`,
+  `h/j/k/l`, `z` zoom, swap, resize); tiling [layouts](#layouts) (`enter` dwindle, `space`
+  cycles tmux's presets); `ctrl+b ?` lists every binding, searchable.
+- **[Workspaces](#workspaces):** each one a container with its own logins and cookies, kept
+  with its tabs and split layout across restarts; `ctrl+^` goes back to the last one; a
+  [private workspace](#private-workspace) (`ctrl+b shift+p`); a [side panel](#side-panel)
+  (`ctrl+b b`) that shows marked tabs together as panes.
+- **[Every key is yours](#every-key-is-yours):** any binding, the prefix and the leader remap
+  in [config.toml](#configtoml), which applies on save; Firefox's own shortcuts are Vimma
+  bindings too ([Firefox's own shortcuts](#firefoxs-own-shortcuts)).
+- **[Search engines](#search-engines)** and `@aliases` from `config.toml`, such as `@gh vimma`.
+- **[Theming](#colours-and-themes):** the bars, pickers, hints, start page and sidebar follow
+  your desktop theme and change with it, or take your own colours.
+- **[Accessible](#accessibility):** Vimma's own UI works with a screen reader and meets WCAG AA
+  contrast in dark and light themes.
+- **Firefox underneath** ([privacy defaults](#privacy-defaults)): the same user agent and
+  [add-on](#add-ons) compatibility as Firefox; no studies, sponsored content or telemetry
+  uploads; Safe Browsing on.
+- **Scriptable** ([vimma-ctl](#scripting-with-vimma-ctl)): a token-protected control socket;
+  local AI agents reach one [agent workspace](#agent-workspace) through MCP, and every request
+  asks you first.
+
 ## Every key is yours
 
 The keys in this guide are defaults, not decisions. Every binding, the `ctrl+b` prefix and the
@@ -34,7 +66,7 @@ details, and [bindings.md](bindings.md) lists every action's config name with it
 ### Install
 
 There are no packages or binaries yet. Tarballs, an AppImage, a `.deb` and AUR `vimma-bin` are
-planned for M6. Until then, build from source as the [README](../README.md#getting-started)
+planned for M6. Until then, build from source as [CONTRIBUTING.md](../CONTRIBUTING.md#build-and-run)
 describes: `npm ci`, `npx surfer download`, `npx surfer bootstrap`, `npm run import`,
 `npx surfer build`. The first build takes about 40 minutes on a 16-thread machine and needs
 about 35 GB of disk space (`engine/` 27 GB, the sccache compiler cache 6.8 GB, `~/.mozbuild`
