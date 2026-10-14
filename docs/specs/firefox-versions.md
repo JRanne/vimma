@@ -1,6 +1,6 @@
 # Spec: firefox-versions
 
-Status: draft · Area: `tools/release/` (new: `version-line.mjs`, `firefox-notes.mjs`,
+Status: accepted · Area: `tools/release/` (new: `version-line.mjs`, `firefox-notes.mjs`,
 `security-release.mjs`), `.github/workflows/release-please.yml`, `nightly.yml`, `release.yml`,
 `tools/upstream/autopilot-body.mjs`, `src/browser/branding/vimma/pref/firefox-branding.js`,
 `docs/runbook.md`, `docs/security.md`, `docs/review-checklist.md`, `CONTRIBUTING.md` · Upstream
@@ -268,9 +268,12 @@ MOZ_APP_VERSION)` and keeps the copyright suffix. Both macros are already define
 14. **The release carries what is on `main`.** Commits merged after the bump and before the checks
     finish are included, because release-please rebuilds the PR and the token's pushes keep
     auto-merge on. This is the intended behaviour (decision 16), not a race to close.
-15. **The switch.** `AUTO_SECURITY_RELEASE` is unset until the maintainer turns it on. Turning it
-    on before the release gate opens is safe, because releases are still drafts (behaviour 9).
-    Turning it off, or `gh pr merge --disable-auto <n>`, stops the chain.
+15. **The switch.** `AUTO_SECURITY_RELEASE` stays unset until the first release (0.1.1) has been
+    cut by hand as a draft; it is turned on then, so the next Firefox security release proves the
+    chain on drafts. Turning it on before the release gate opens is safe, because releases are
+    still drafts (behaviour 9) and the path publishes nothing, and the exit test is then met
+    before anyone depends on it. Rejected: waiting for the release gate (the chain would first run
+    on a public release). Turning it off, or `gh pr merge --disable-auto <n>`, stops the chain.
 
 ### `main` stays releasable
 
@@ -281,6 +284,26 @@ MOZ_APP_VERSION)` and keeps the copyright suffix. Both macros are already define
     when any `vimma.feature.*` default is not `false`. `docs/review-checklist.md` and
     `CONTRIBUTING.md` state the rule. Rejected: maintenance branches before `1.0.0` (one more line
     to bump on every Firefox release, for no user who needs it yet).
+
+### Ownership and credentials
+
+17. **This spec owns the release half; m6a-updater (PR #143) owns only the bump half.** The job in
+    decisions 11 to 15 releases whatever is on `main` after a merged security bump. m6a-updater
+    keeps only auto-merging a green security bump PR, under its own variable
+    `AUTO_SECURITY_BUMP`. Releasing whatever is on `main` follows from releasing from `main` only
+    (decision 16). Separate variables let the release half be proven on drafts before bumps merge
+    themselves. Rejected: m6a-updater owning both halves and auto-merging the release PR only
+    when every entry in it is an `upstream:` line (a security fix would wait for a person
+    whenever any feature had merged since the last release).
+18. **The existing `RELEASE_PLEASE_TOKEN` makes the merge.** It is a fine-grained personal token,
+    so merges appear as the maintainer and it expires. Vimma moves to a GitHub App installation
+    token (short-lived, belonging to no person) when a second maintainer joins or the token's
+    expiry first breaks a release. Rejected for now: an App today (an App, its private key as a
+    secret and a token step, for one maintainer).
+19. **G2 keeps measuring the Firefox on `main` while releases are drafts.** Once drafts are turned
+    off, what users run is the latest release, and G2's deadline is measured against it. That
+    change is a follow-up to m7-upstream-autopilot, not part of this spec, because before then
+    every security bump would fail the drift check: drafts are not releases users get.
 
 ### What is not changed
 
@@ -399,8 +422,8 @@ appears. The draft and its tag are deleted afterwards, and the version moves on.
   `<vendor> <name> <version>` format.
 - `docs/security.md` §10: G9 and G10 with their tests; the "a person reviews and merges" paragraph
   says a person still merges every bump, and a security bump's release follows on its own.
-- `docs/adr/020-security-release-without-a-person.md` (decisions 11 to 15) and ADR-015's
-  Consequences pointing to it; ADR-003 register: the new patch's line.
+- `docs/adr/020-security-release-without-a-person.md` (decisions 11 to 15, 17 and 18) and
+  ADR-015's Consequences pointing to it; ADR-003 register: the new patch's line.
 - `docs/review-checklist.md`, `CONTRIBUTING.md`: the `vimma.feature.*` rule.
 - README: no feature-list change.
 - `CHANGELOG.md` [Unreleased], Changed: "`vimma --version` prints `Vimma 0.1.0 · Firefox
@@ -424,25 +447,4 @@ Each is independently mergeable; 4 depends on 2 only for the job order in `relea
 
 ## Open questions
 
-1. **Who owns auto-merging the release PR, this spec or m6a-updater (#143)?** #143's Design §7
-   sets the release PR to auto-merge only when every changelog entry is an `upstream:` line, under
-   the same variable name, and also auto-merges green security bump PRs. Options: (a) this spec
-   owns the release half, with any content on `main` (decision 14), and #143 keeps only the bump
-   half under its own variable, such as `AUTO_SECURITY_BUMP`; (b) #143 owns both, upstream-only.
-   **Recommendation: (a).** Releasing whatever is on `main` follows from "release from `main`
-   only"; with (b) a security fix waits for a person whenever any feature merged since the last
-   release. Separate variables let the release half be proven before bumps merge themselves.
-2. **Fine-grained token or a GitHub App?** `RELEASE_PLEASE_TOKEN` is a personal token: merges
-   appear as the maintainer, and it expires. A GitHub App installation token is short-lived and
-   belongs to no person, but needs an App, its private key as a secret and a token step.
-   **Recommendation: the existing token now**, an App when a second maintainer joins or the token's
-   expiry first breaks a release.
-3. **When to turn `AUTO_SECURITY_RELEASE` on.** (a) Once the first release (0.1.1) has been cut by
-   hand as a draft, so the next Firefox security release proves the chain on drafts; (b) only when
-   the release gate opens. **Recommendation: (a).** It publishes nothing, and the exit test is met
-   before users depend on it.
-4. **Should G2's deadline count against the latest release rather than `main`?** Today it measures
-   the Firefox on `main`. Once releases are public, what users run is the latest release.
-   **Recommendation: yes, but only when drafts are turned off**; before that every security bump
-   would fail the drift check, because drafts are not releases users get. A follow-up to
-   m7-upstream-autopilot, not part of this spec.
+None.
