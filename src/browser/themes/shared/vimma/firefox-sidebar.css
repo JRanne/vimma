@@ -26,7 +26,8 @@
   --sidebar-launcher-surface-color: var(--vimma-bg-dark) !important;
   --toolbarbutton-icon-fill: var(--vimma-fg);
   --button-text-color-ghost: var(--vimma-fg);
-  /* The open panel's button is a pressed moz-button: Firefox fills it with the system accent
+  /* The open panel's button is a selected moz-button (aria-selected since Firefox 158, which
+   * moz-button styles as it does aria-pressed): Firefox fills it with the system accent
    * (AccentColor at 30%, Nova's --button-background-color-active, a dark blue) and hovers a
    * non-ghost button with AccentColor at 20%. The pressed button is a selected row in Vimma's
    * terms (side-panel.css): --vimma-selection; hover and press tint the text colour as Firefox's
