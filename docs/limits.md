@@ -341,8 +341,8 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
 
 ## Platforms and packaging
 
-- Only Linux x86_64 is built and tested. aarch64, macOS and Windows ("when cheap") come later
-  ([plan.md](../plan.md) §6).
+- Only Linux x86_64 is built and tested. aarch64 and macOS come later
+  ([plan.md](../plan.md) §6, [macos-build](specs/macos-build.md)); Windows is not planned.
 - No binaries, packages or releases: build from source. Tarball, AppImage, `.deb` and AUR are M6
   ([plan.md](../plan.md) §6).
 - The smol-toml BSD-3-Clause notice is not in `about:license` yet (M6, issue #16).

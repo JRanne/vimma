@@ -1,0 +1,515 @@
+# Spec: macos-build
+
+Status: draft · Area: `configs/macos/mozconfig`, `configs/macos/entitlements/` (new),
+`configs/branding/vimma/`, `tools/artifact-build/`, `tools/e2e/`, `tools/mochitest.mjs`,
+`tools/start.mjs`, `tools/vimma-ctl/src/discovery.rs`, `.github/workflows/ci.yml`, `e2e.yml`,
+`macos.yml` (new); `docs/guide.md`, `docs/limits.md`, `CONTRIBUTING.md`, `docs/runbook.md` ·
+Upstream patches: none (decision 7) · ADR: ADR-018 (new, "macOS: cross-compiled on Linux, arm64
+first"), with sub-PR 3
+
+Engine paths are relative to `engine/` and were checked against Firefox 158.0. Surfer paths
+(`S/`) are relative to `node_modules/@zen-browser/surfer`, version 1.14.9. Zen Browser
+references are `zen-browser/desktop`, branch `dev` at commit b53d568. GitHub and Apple facts come
+from their documentation as cited; anything not confirmed from a primary source is marked
+**unverified**.
+
+## Summary
+
+Vimma is built and tested on Linux x86_64 only. This spec makes macOS on Apple Silicon the second
+platform: a `.dmg` cross-compiled on a GitHub-hosted Linux runner, ad hoc signed, smoke-tested on
+a GitHub-hosted Mac, and Vimma's front-end tests run on a Mac on every pull request. It costs
+nothing until a Developer ID is bought, needs no Mac to build, and publishes nothing until the
+release gate opens. Windows is not a target platform.
+
+## Problem
+
+- Vimma's audience, keyboard-first developers, is largely on Linux and macOS, and Vimma cannot be
+  run on a Mac at all.
+- `configs/macos/mozconfig` exists but has never been used: it is the Linux file plus `-j4`, with
+  no target, no SDK and no signing.
+- Nothing tests Vimma's code on macOS. Several parts assume Linux and fail or behave differently
+  there: `vimma-ctl` cannot find a running Vimma's profile on macOS without `--profile`
+  (`tools/vimma-ctl/src/discovery.rs:57-72`), the developer tools read `/proc/locks` and Linux
+  objdir paths (`tools/start.mjs:40, 197`), and the e2e harness starts Xvfb
+  (`tools/e2e/launcher.mjs:269-382`).
+- A change that breaks macOS shows no red check, so the Linux-only assumptions accumulate.
+- `plan.md` and `docs/limits.md` still listed Windows as "when cheap", which no longer reflects the
+  platform order.
+
+## Behaviour
+
+1. A `.dmg` for Apple Silicon (`aarch64-apple-darwin`) is built by CI from the same commit and the
+   same Firefox release as the Linux build, and is available as a workflow artifact.
+2. The app in that `.dmg` launches on Apple Silicon. Before a Developer ID exists it is ad hoc
+   signed, and macOS asks once, in System Settings > Privacy & Security, before it first opens.
+3. Every Vimma key works as on Linux: `ctrl+b` is the prefix, and the modal layer, hints,
+   workspaces, panes, the side panel, the status bar and `ctrl+b ?` behave the same.
+4. `cmd+q` quits, as `ctrl+q` does on Linux: Firefox's `accel` is `cmd` (meta) on macOS, and
+   `[firefox] disable = "all"` keeps `cmd+q` (`ALL_KEEP`, firefox-keys).
+5. A character typed with Option matches a binding for that character: Option+shift+8 on a Finnish
+   layout types `{` and fires a `{` binding. An `alt+<letter>` binding does not fire on a Mac
+   (open question 6).
+6. Without Omarchy, Vimma uses its built-in palette and follows the system's light or dark
+   setting live. Nothing mentions Omarchy or Hyprland, and no Omarchy path is polled.
+7. The private workspace opens as its own window, as on any non-Hyprland system.
+8. `vimma-ctl` with no `--profile` and no `VIMMA_PROFILE` finds the running Vimma, whose profiles
+   live in `~/Library/Application Support/Vimma/`. A discovery file left by a crashed Vimma is
+   reported as stale, as on Linux.
+9. `config.toml` is read from `$XDG_CONFIG_HOME/vimma/config.toml`, else
+   `~/.config/vimma/config.toml`, as on Linux (open question 4).
+10. `vimma --version` prints the same line as on Linux, `Vimma <vimma> · Firefox <firefox>`
+    (firefox-versions).
+11. A pull request that breaks Vimma's front end on macOS shows a failing check from a hosted Mac.
+12. Nothing macOS-related is published: no GitHub Release asset, no Homebrew cask, no download on
+    vimma.dev, until the release gate opens.
+
+## Research
+
+### Surfer on macOS
+
+- **Platform.** `process.surferPlatform` is `SURFER_PLATFORM`, else `process.platform`
+  (`S/dist/index.js:5-11`); `darwin` maps to `macos` (`S/dist/commands/build.js:19-23`), which
+  selects `configs/macos/mozconfig`.
+- **mozconfig.** `applyConfig` (`build.js:50-66`) concatenates `configs/common/mozconfig`,
+  `configs/<os>/mozconfig`, an optional root `mozconfig` and Surfer's own block, whose only Mac
+  line is `MOZ_MACBUNDLE_NAME="<brand>.app"` (`S/dist/constants/mozconfig.js:59`).
+- **Ours.** `configs/macos/mozconfig` is the Linux file plus `-j4`. `configs/common/mozconfig`
+  already has what a Mac build needs: `--enable-bootstrap` (line 20), `--disable-crashreporter`
+  (24), `--disable-updater` (44), and a Safe Browsing key only when a key file exists, so keyless
+  builds work and default Safe Browsing off (46-59).
+- **`surfer build --ui`** is `./mach build faster` on every OS (`build.js:89`).
+- **Packaging.** Vimma's workflows call `./mach package` directly (`nightly.yml:104-111`,
+  `release.yml:134-138`). For a cocoa target `MOZ_PKG_FORMAT` defaults to `DMG`
+  (`toolkit/moz.configure:3699-3707`), and the package is named
+  `<app>-<firefox version>.<locale>.mac.dmg` (`toolkit/mozapps/installer/package-name.mk:18`;
+  `mac` from `toolkit/moz.configure:3637`).
+- **Not in Surfer:** no signing, no universal build, no `--target` option. Surfer's update code
+  names a macOS MAR `macos.mar` and maps Apple Silicon to the update platform
+  `Darwin_aarch64-gcc3` (`S/dist/commands/updates/browser.js:22-31, 54`).
+- **Icons.** Surfer converts `configs/branding/<brand>/logo-mac.png` into `firefox.icns` only
+  when `process.platform` is `darwin` (`S/dist/commands/patches/branding-patch.js:68-81`), so a
+  Linux cross build needs the `.icns` committed. Vimma's `.icns` and DMG background are still
+  Surfer's `unofficial` copies (`docs/limits.md`, "Branding").
+- **Download on a Mac.** `surfer download` requires GNU tar (`gtar`) on macOS
+  (`S/dist/commands/download/firefox.js:49-52`).
+
+### Firefox's macOS build requirements
+
+- **SDK.** The minimum is macOS SDK 26.5 (`build/moz.configure/toolchain.configure:254-255`);
+  configure stops on an older one (311-315). With `--enable-bootstrap` and no `--with-macos-sdk`,
+  configure fetches `MacOSX26.5.sdk` from Mozilla's toolchain tasks (258-264;
+  `taskcluster/kinds/toolchain/macos-sdk.yml`, task `macosx64-sdk-26.5`). The SDK minimum can
+  rise with any Firefox release; bootstrap then fetches the new one. Whether redistributing the
+  SDK is permitted is **unverified**; Vimma only fetches it, as every Firefox contributor does.
+- **Deployment target** defaults to 11.0 for aarch64 and 10.15 for x86_64
+  (`toolchain.configure:197-208`).
+- **Mozilla builds macOS on Linux.** Its macOS build tasks run on `b-linux-docker-amd` workers
+  (`taskcluster/kinds/build/macosx.yml:8`) with `build/macosx/cross-mozconfig.common` (cctools on
+  `PATH`, the DMG tools, `--target=x86_64-apple-darwin`, lines 8-23), and notarise on Linux with
+  rcodesign (`taskcluster/docs/kinds.md:51-56`).
+- **Linker and DMG tools.** With clang 15 or newer the macOS linker is lld; ld64 from cctools is
+  the fallback when cross-compiling (`toolchain.configure:1822-1827`). `make_dmg` uses
+  `DMG_TOOL`, `HFS_TOOL` and `MKFSHFS` when configure found them, and otherwise fetches
+  `dmg/dmg`, `dmg/hfsplus` and `hfsplus/newfs_hfs` with `bootstrap_toolchain`
+  (`python/mozbuild/mozbuild/action/make_dmg.py:49-53`). Zen fetches cctools, libdmg and hfsplus
+  explicitly instead (below); whether bootstrap alone is enough is confirmed in sub-PR 3.
+- **Building on a Mac** needs Xcode or the command line tools (`mach bootstrap` checks
+  `xcode-select --print-path`, `python/mozboot/mozboot/osx.py:90-111`) and "at least 30GB of free
+  disk space" (firefox-source-docs, "Building Firefox On macOS").
+- **Signing tool.** `mach macos-sign` (`tools/signing/macos/mach_commands.py:24`) signs ad hoc by
+  default, or with a p12 through rcodesign (`--use_rcodesign`, line 106). It is limited to Firefox
+  by `conditions=[conditions.is_firefox]` (line 40), which Zen patches out. Ad hoc signing with
+  `-e production` is refused because production entitlements need a team ID and the bundle
+  "will not be launchable" (204-245). An unsigned build therefore uses the `developer`
+  entitlements (`security/mac/hardenedruntime/developer/`).
+- **Production entitlements** (`security/mac/hardenedruntime/production/firefox.browser.xml`) name
+  Mozilla's team ID in `com.apple.application-identifier` (lines 31-32) and request passkeys
+  (`com.apple.developer.web-browser.public-key-credential`, line 35), which need a provisioning
+  profile. A signed Vimma needs its own copy with its own team ID.
+- **Universal binaries** are made by Mozilla's `toolkit/mozapps/installer/unify.py` (with
+  `python/mozbuild/mozpack/unify.py`) from two `.app` bundles, not by plain `lipo`.
+- **Artifact builds** support a Mac host: mach picks the job `macosx64-aarch64` from
+  `TARGET_CPU` (`python/mozbuild/mozbuild/artifacts.py:1459-1464`), and `MacArtifactJob` fetches
+  `public/build/target.dmg` (774-775).
+
+### Zen Browser's macOS pipeline
+
+Zen cross-compiles both architectures on Linux and uses Macs only to profile, unify, sign and
+notarise (`zen-browser/desktop`, `dev` at b53d568):
+
+- **Cross build** (`.github/workflows/macos-release-build.yml`): runs on
+  `blacksmith-8vcpu-ubuntu-2404`, a third-party runner service (line 39), matrix
+  `[x86_64, aarch64]` (47), frees disk with `jlumbroso/free-disk-space` (51), fetches
+  `linux64-cctools-port`, `linux64-libdmg` and `linux64-hfsplus` with `mach artifact toolchain`
+  (105-113), and builds with `SURFER_PLATFORM=darwin` (132-141).
+- **PGO**: an instrumented build is profiled on hosted Macs (`macos-profile-build.yml`).
+- **Unify, sign, notarise** (`macos-universal-release-build.yml`, on `macos-26`): `unify`,
+  `cargo install apple-codesign`, the p12 from a secret, `mach macos-sign -r -c release -e
+production`, `make_dmg`, `xcrun notarytool submit --wait`, `xcrun stapler staple`.
+- **Measured times** (GitHub API, Zen runs 37900069684 and 37495693564): one architecture's cross
+  build 28-53 minutes on 8 vCPU; signing 29 s; notarising and stapling 6.5 minutes.
+
+### GitHub-hosted runners
+
+From GitHub's "GitHub-hosted runners" reference
+(`docs.github.com/en/actions/reference/runners/github-hosted-runners`), "Actions limits"
+(`docs.github.com/en/actions/reference/limits`), "Larger runners"
+(`docs.github.com/en/actions/reference/runners/larger-runners`) and "Actions runner pricing"
+(`docs.github.com/en/billing/reference/actions-runner-pricing`), read October 2026:
+
+| Runner (public repository)                     | CPU    | RAM   | Documented SSD | Price per minute |
+| ---------------------------------------------- | ------ | ----- | -------------- | ---------------- |
+| Standard Linux x64, `ubuntu-24.04`             | 4      | 16 GB | 14 GB          | free             |
+| Standard macOS arm64, `macos-15`, `macos-26`   | 3 (M1) | 7 GB  | 14 GB          | free             |
+| Standard macOS Intel, `macos-15-intel`         | 4      | 14 GB | 14 GB          | free             |
+| Larger Linux, 16-core                          | 16     | 64 GB | 600 GB         | $0.042           |
+| Larger macOS arm64, `macos-15-xlarge` (M2 Pro) | 5      | 14 GB | 14 GB          | $0.102           |
+
+- "Each job in a workflow can run for up to 6 hours of execution time." The free plan allows at
+  most 5 concurrent macOS jobs. Cache storage is 10 GB per repository.
+- "Larger runners are only available for organizations and enterprises using the GitHub Team or
+  GitHub Enterprise Cloud plans" and "are not free for public repositories". Vimma's repository
+  belongs to a user account, so larger runners would need a move to an organisation.
+- The standard Linux runner has far more free disk than documented: [build-supply-chain](build-supply-chain.md)
+  (R9) measured 85 GB free on `ubuntu-24.04` before the Firefox source is
+  downloaded. A Firefox build needs about 30 GB (R10 there). The free disk on hosted Macs beyond
+  the documented 14 GB is **not measured**.
+- GitHub announced that Intel macOS images end when the macOS 15 image retires in fall 2027
+  (GitHub changelog, 2025-09-19); `macos-26-intel` is listed with no end date.
+- **Consequence.** A native Firefox build does not fit a hosted Mac by its documented limits
+  (14 GB against Mozilla's 30 GB), including the paid `xlarge`. A cross build on the standard
+  Linux runner fits its measured disk and, by the estimate below, its time limit. Hosted Macs are
+  for running a build, not making one.
+
+### Apple: Developer ID, notarisation, unsigned builds
+
+- **Apple Developer Program**: 99 USD per membership year (developer.apple.com/programs/enroll,
+  read from the search result; the page is script-rendered). It provides the Developer ID
+  Application certificate that notarisation needs.
+- **Notarisation** needs Developer ID signing, the hardened runtime and a secure timestamp
+  ("Notarizing macOS software before distribution"); `xcrun notarytool submit … --wait`, then
+  `xcrun stapler staple`. With an Apple ID it needs an app-specific password ("Customizing the
+  notarization workflow"). API-key authentication and rcodesign's notarisation from Linux are
+  **unverified** from the documents read.
+- **Apple Silicon runs nothing unsigned**: "any executable must be signed before it's allowed to
+  run … a simple ad-hoc signature is sufficient", but ad hoc binaries "cannot pass through
+  Gatekeeper" (macOS Big Sur 11.0.1 universal apps release notes).
+- **What a tester sees** with an ad hoc build downloaded in a browser: macOS refuses to open it.
+  Since Sequoia, "users will no longer be able to Control-click to override Gatekeeper … They'll
+  need to visit System Settings > Privacy & Security" (Apple developer news, 2024-08-06) and choose
+  **Open Anyway** once. Removing the quarantine attribute
+  (`xattr -dr com.apple.quarantine /Applications/Vimma.app`) is common practice (**unverified**
+  against an Apple page). macOS 26 is assumed to behave as Sequoia (**unverified**). A file
+  fetched with `gh run download` or `curl` carries no quarantine attribute.
+- **Secrets in CI** (GitHub's "Sign Xcode applications" guide): the p12 as a base64 secret and its
+  password in a temporary keychain deleted in an `always()` step. With rcodesign the p12 needs no
+  keychain.
+
+### Homebrew
+
+- Homebrew 5.0 (brew.sh, 2025-11-12): "Casks without codesigning are deprecated. We will disable
+  all Homebrew/homebrew-cask casks that fail Gatekeeper checks in September 2026." The official
+  cask repository also requires notability (Homebrew's Acceptable Casks policy).
+- "You don't need to sign software to put it in your own tap" (Homebrew discussion 6334), but
+  Gatekeeper still stops an unsigned app on first open.
+
+### Vimma's Linux-specific parts and their macOS behaviour
+
+Paths under `vimma/` are `src/browser/base/content/vimma/`.
+
+| Part                    | Where                                                                                                     | On macOS today                                                                                                                                                                                                   | Needed                                                                                             |
+| ----------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Omarchy theme           | `vimma/ui/theme-host.mjs`: `lookForOmarchy` 102-107, `syncTimer` 286-293                                  | Omarchy is looked for once per process; without it no poll timer runs and the built-in palette follows the system appearance (theme-appearance, implemented). `about:vimma` shows no Omarchy rows                | Nothing                                                                                            |
+| Omarchy hook            | `vimma/omarchy/OmarchyHook.sys.mjs:108-109, 134-140`                                                      | Runs only where Omarchy was found; otherwise returns `"no-omarchy"` without looking                                                                                                                              | Nothing                                                                                            |
+| Hyprland private swap   | `vimma/host/private-swap.mjs:138-141` (gate), `vimma/host/hypr/HyprIpc.sys.mjs:104-110`                   | `isWayland` is false, so the gate answers "not on Wayland" (or "headless" under `MOZ_HEADLESS`); the private workspace opens as its own window, with nothing logged (158)                                        | A test that the gate holds on macOS                                                                |
+| Private window position | `vimma/host/private-ops.mjs:155-156`                                                                      | Not Wayland, so `screenX` and `screenY` are passed and the window opens over the normal one                                                                                                                      | Nothing                                                                                            |
+| Wake lock               | `vimma/services/WakeLock.sys.mjs:27-33`                                                                   | Returns unless the platform is `linux`; macOS uses Firefox's `IOPMAssertion` wake lock (`widget/cocoa/nsAppShell.mm:74-80`)                                                                                      | Nothing                                                                                            |
+| `config.toml` path      | `vimma/config/ConfigHost.sys.mjs:5-6, 57`                                                                 | `$XDG_CONFIG_HOME/vimma/config.toml`, else `~/.config/vimma/config.toml`; works as is                                                                                                                            | Decision per open question 4                                                                       |
+| Profile directory       | Firefox: `toolkit/xre/nsXREDirProvider.cpp:1122-1134` (Application Support), 1591-1594 (vendor ignored)   | Profiles live in `~/Library/Application Support/Vimma/`, beside `profiles.ini`                                                                                                                                   | `vimma-ctl` must look there                                                                        |
+| vimma-ctl discovery     | `tools/vimma-ctl/src/discovery.rs:57-72`                                                                  | Looks only in `$XDG_CONFIG_HOME/vimma/vimma` (default `~/.config/vimma/vimma`) and `~/.vimma/vimma`: **cannot find the profile** without `--profile` or `VIMMA_PROFILE`                                          | The macOS root under `cfg(target_os = "macos")`                                                    |
+| vimma-ctl stale check   | `discovery.rs:210-229`                                                                                    | `/proc/<pid>` on Linux only; elsewhere every discovery file counts as live. The handshake still protects the token (210-213)                                                                                     | `kill(pid, 0)` on every Unix                                                                       |
+| Control socket          | `vimma/ctl/VimmaControl.sys.mjs:8, 815-817`                                                               | TCP on 127.0.0.1 with a discovery file in the profile: portable                                                                                                                                                  | Nothing                                                                                            |
+| vimma-ctl in CI         | `.github/workflows/ci.yml:65-81`                                                                          | Built and tested on `ubuntu-latest` only                                                                                                                                                                         | A macOS cargo job                                                                                  |
+| Agent attention         | `vimma/host/agent-ui.mjs:180-188` (vimma-mcp)                                                             | `getAttention()` bounces the Dock icon (`widget/cocoa/nsCocoaWindow.mm:7338-7341`); `nsIAlertsService` posts through `widget/cocoa/MacOSNotificationCenter.mm`. Whether an ad hoc app may post is **unverified** | A hand check                                                                                       |
+| `vimma-ctl mcp` caller  | vimma-mcp spec, `agent-hello`: `/proc/<ppid>/comm` (not built yet)                                        | No `/proc` on macOS                                                                                                                                                                                              | The macOS process name (`proc_name` in libproc), in the vimma-mcp sub-PR that adds `vimma-ctl mcp` |
+| Keys: accel             | `vimma/host/firefox-keys.mjs:55-57`; `packages/vimma-core/src/firefox-keys.mjs:692-693, 720-731, 784`     | `accel` is meta; `disable = "all"` keeps `cmd+q`                                                                                                                                                                 | Nothing in core; a macOS key inventory                                                             |
+| Keys: Option characters | `packages/vimma-core/src/keys.mjs:376-406`; `widget/cocoa/nsCocoaUtils.mm:725-731` (Option sets AltGraph) | Option+shift+8 is `{` and matches a `{` binding (key-handling-batch). Option+j types `∆`, so an `alt+j` binding never fires                                                                                      | Open question 6                                                                                    |
+| Keys: text bindings     | `packages/vimma-core/src/editable.mjs:119-121`; `vimma/host/VimmaHost.sys.mjs:144, 1691-1696`             | On macOS Vimma leaves `ctrl+h` to Cocoa, which already deletes backward (`widget/cocoa/NativeKeyBindings.mm:87`)                                                                                                 | Nothing                                                                                            |
+| Keys: native menu bar   | `widget/cocoa/nsMenuItemX.mm:316-357`                                                                     | Each menu item takes its key equivalent from its `<key>` element. Whether turning a `<key>` off (firefox-keys) also clears the menu's equivalent is **unverified**                                               | A hand check; the macOS key inventory                                                              |
+| Dev tools               | `tools/start.mjs:40` (Linux objdir), 197 (`/proc/locks`); `tools/mochitest.mjs:53` (`dist/bin/…`)         | Wrong paths on a Mac                                                                                                                                                                                             | Platform paths                                                                                     |
+| Artifact builds         | `tools/artifact-build/artifact-build.mjs:143` (`…firefox.linux64-opt`), 255 (`dist/bin` launcher symlink) | mach supports a Mac host (research above)                                                                                                                                                                        | The macOS namespace and the `.app` layout                                                          |
+| e2e harness             | `tools/e2e/launcher.mjs:29, 161-182` (Linux paths), 269-382 (Xvfb); `tools/e2e/e2e.mjs:139`               | Starts Xvfb whenever `DISPLAY` is unset, which is always on a Mac; screenshots come from Xvfb's framebuffer (`screenshot.mjs`, `xwd.mjs`)                                                                        | `MOZ_HEADLESS=1`, the `.app` binary, no screenshots                                                |
+| Packaging               | `tools/package/` (tarball, AppImage, `.deb`, AUR)                                                         | Linux only                                                                                                                                                                                                       | The `.dmg` from `mach package`                                                                     |
+
+## Design
+
+### Platforms
+
+1. **Windows is not a target platform.** Vimma's audience is keyboard-first developers on Linux
+   and macOS; a Windows build would add a third toolchain, signing scheme and key model for few of
+   them. `docs/limits.md` and the roadmap in `plan.md` §6 say "not planned".
+2. **Linux first, macOS next.** Linux x86_64 stays the platform every feature is built and
+   gated on. macOS is the second platform and gets this spec's CI; features may be Linux-only
+   (decision 11), never Mac-only.
+3. **arm64 only, until open question 1 says otherwise.** Every Mac sold since 2023 is Apple
+   Silicon, GitHub's Intel macOS images end in 2027, and one architecture halves the build. The
+   cross build sets `--target=aarch64-apple-darwin`, so the deployment target is 11.0.
+
+### Where the build runs
+
+4. **No self-hosted build machine.** None is registered, none is planned, and on a public
+   repository a self-hosted runner reachable from pull requests is a machine anyone can run code
+   on (build-supply-chain R7 and decision 7). The macOS build must not name a
+   self-hosted runner. Rejected: the earlier plan to build on a `vimma-build` runner beside the
+   Linux nightly, because that runner does not exist and build-supply-chain removes it from both workflows.
+5. **Cross-compile on a GitHub-hosted Linux runner; never build on a hosted Mac.** This is what
+   Mozilla and Zen do. `configs/macos/mozconfig` gains `--target=aarch64-apple-darwin`; the SDK,
+   clang (lld) and the DMG tools come through `--enable-bootstrap` and `bootstrap_toolchain`, and
+   sub-PR 3 adds an explicit `mach artifact toolchain` fetch of cctools, libdmg and hfsplus only if
+   bootstrap proves insufficient. The file stays usable on a Mac host for a contributor who builds
+   natively. The runner type follows build-supply-chain decision 6 (open question 8 confirms it for macOS):
+   - The standard `ubuntu-24.04` runner first: free, 16 GB RAM, and about 85 GB free disk
+     measured against the 30 GB a build needs. A disk guard fails the job before the download when
+     less than 40 GB is free (build-supply-chain decision 9). Freeing disk (`jlumbroso/free-disk-space`, as Zen
+     does) is the fallback if the image shrinks; it is not needed today.
+   - A cold cross build on 4 CPUs is estimated at 1.5 to 3 hours (from build-supply-chain's estimate of at least
+     116 minutes for a Linux build on 4 CPUs, and Zen's 28-53 minutes on 8 vCPU); not measured.
+     Sub-PR 3 measures it. If it exceeds build-supply-chain's 4-hour threshold, the macOS build follows the
+     Linux release to a larger hosted Linux runner, which needs an organisation on the GitHub Team
+     plan (paid, about $0.042 per minute for 16 cores).
+   - Rejected: building on a hosted Mac. The documented 14 GB SSD is under half of what a build
+     needs, on the free runner and on the paid `xlarge` alike, and the free arm64 Mac has 3 cores
+     and 7 GB RAM.
+   - Rejected: a third-party runner service (Zen's Blacksmith). It adds a party that runs the
+     build, outside build-supply-chain's trust boundary (build-supply-chain decision 6).
+6. **The macOS build follows the build-supply-chain rules.** It verifies the Firefox source against
+   Mozilla's signed `SHA512SUMS` and extracts it afresh, restores nothing from the Actions cache
+   and uses no shared compiler cache, so every build is cold (build-supply-chain decisions 1-5 and 8). Sub-PR 3 reuses that spec's
+   source-verification step once it is implemented, rather than adding a second one.
+
+### Testing on Macs without building on them
+
+7. **No upstream patch for signing.** Instead of patching `conditions.is_firefox` out of
+   `mach macos-sign` (Zen's approach), the workflow runs `rcodesign sign` directly (ad hoc now, a
+   p12 later) with Vimma's own entitlements files in `configs/macos/entitlements/`. If that proves
+   unworkable in sub-PR 3, the patch gets its line in the ADR-003 register and ADR-018.
+8. **Hosted Macs run what was built.** A `macos-15` job downloads the `.dmg` artifact, mounts it,
+   verifies the signature, launches Vimma headless and runs a smoke e2e through `vimma-ctl`. It is
+   free on a public repository.
+9. **Front-end tests on a Mac without a Firefox build.** `tools/artifact-build` learns the macOS
+   namespace (`gecko.v2.mozilla-release.shippable.revision.<rev>.firefox.macosx64-aarch64-opt`,
+   confirmed in sub-PR 1) and the `.app` layout, so a `macos-15` runner gets Mozilla's build of
+   the same release with Vimma's chrome on top, as ADR-010 does on Linux. That runs Vitest and the
+   mochitests (headless) on a real Mac on every pull request, with no Apple account.
+
+### Signing, publishing and updates
+
+10. **Ad hoc signed until a Developer ID exists** (open question 2). The build is ad hoc signed
+    with the `developer` entitlements, which is enough to run on Apple Silicon (`mach macos-sign`
+    refuses ad hoc with `production`). `docs/guide.md` tells testers about Open Anyway and
+    `xattr`. Passkeys need the production entitlements and do not work in these builds.
+11. **Linux-only features stay Linux-only and fail quietly.** Omarchy theming, the Omarchy hook and
+    the Hyprland private swap are inactive on macOS, as the table above shows, without warnings.
+    No Omarchy wording appears where Omarchy is absent (theme-appearance), so `about:vimma` adds no
+    "Omarchy theme: not found" line; this supersedes the earlier idea of one.
+12. **Release gate.** No macOS build is published until the maintainer has daily-driven Vimma.
+    Before that, the `.dmg` is a `macos.yml` workflow artifact (90-day retention); once the Linux
+    nightly is switched on (`NIGHTLY_ENABLED`), the `.dmg` may join the same nightly. `release.yml`
+    gets no macOS job in this spec; when it does (sub-PR 6), the job must run with no manual step,
+    because a Firefox security release ships without a person (firefox-versions, ADR-020).
+13. **macOS never blocks a Linux release.** `macos.yml` is its own workflow, not a step of
+    `nightly.yml`, `release.yml` or the Firefox bump, so a macOS-only breakage cannot hold back a
+    Linux security release. It runs weekly, on `workflow_dispatch`, and on pull requests that touch
+    `configs/macos/` or the workflow itself. A Firefox bump that breaks macOS (for example a new
+    SDK minimum) shows within a week.
+14. **Test builds are keyless.** `macos.yml` builds without the Safe Browsing key, so Safe
+    Browsing is off by default in those builds (`configs/common/mozconfig:46-59`). The key stays in
+    as few jobs as possible; a macOS build that joins the nightly or the release uses the key as
+    build-supply-chain prescribes for those.
+15. **Artifact names carry both versions.** `mach package` names the file
+    `vimma-<firefox>.en-US.mac.dmg`; the workflow uploads it as
+    `vimma-<vimma>-firefox-<firefox>-macos-aarch64`, matching the version line of
+    firefox-versions.
+16. **Updater (M6a) on macOS: later, and only for signed builds.** Firefox's macOS updater uses the
+    same `update.xml` and MAR format, and Surfer already names the platform `Darwin_aarch64-gcc3`
+    and the MAR `macos.mar`. An update rewrites files inside the signed bundle, so updating an ad
+    hoc app would break its signature (**unverified**, to confirm in M6a). Unsigned macOS builds
+    therefore get no updater: testers reinstall the `.dmg`. The updater spec (PR #143, pending)
+    lists macOS manifests as out of scope and decides the rest.
+17. **Branding.** `configs/branding/vimma/firefox.icns`, generated from `logo-mac.png`, and a Vimma
+    DMG background are committed, replacing the `unofficial` copies, because Surfer generates the
+    `.icns` only on a Mac host.
+
+### Not in this spec
+
+A public macOS release, a Homebrew cask or tap, a vimma.dev download (decision 12); x86_64 and
+universal builds (decision 3); PGO and LTO tuning; the macOS updater beyond decision 16; Mac App
+Store distribution; the Firefox Beta canary on macOS (upstream-beta-canary tests Linux only);
+Mac-native integrations such as Handoff, the Services menu or a global hotkey.
+
+## Security and privacy
+
+- **Build trust.** The macOS build runs on a GitHub-hosted runner under the same rules as the
+  Linux builds in build-supply-chain: verified Firefox source, no restored caches, toolchains from Mozilla's
+  Taskcluster through `mach` as trusted inputs. No self-hosted runner exists for pull request
+  code to reach.
+- **Secrets.** The unsigned sub-PRs need none: no Safe Browsing key (decision 14), no Apple
+  credentials. Sub-PR 6 adds the Developer ID p12, its password and the notarisation credentials
+  to a protected `macos-signing` environment, limited to `main` and release tags, with the
+  maintainer as required reviewer. With rcodesign the p12 never enters a keychain.
+- **Ad hoc builds.** An ad hoc signature proves nothing about who built the app. Testers get the
+  `.dmg` from a workflow run of this repository, and the guide says so. Open Anyway lowers Gatekeeper for that one app only.
+- **Entitlements.** The `developer` entitlements allow loading unsigned libraries (Firefox's
+  developer set, `security/mac/hardenedruntime/developer/`). They are acceptable for test builds
+  and replaced by Vimma's own production set before anything is published.
+- **Privacy.** No new data leaves the machine. Keyless test builds have Safe Browsing off by
+  default, which the guide's macOS section states.
+
+## Tests
+
+Gate for calling a macOS build working: unit tests, a build that launches, and a smoke e2e, all on
+a hosted Mac, plus the hand checks.
+
+**Vitest (`vimma-core`), on `macos-15` (sub-PR 1):** the whole suite, unchanged. Core is pure, so
+any failure is a test that assumes Linux.
+
+**cargo test (`tools/vimma-ctl`), on Linux and macOS (sub-PR 2):**
+
+- `profiles_root finds Application Support/Vimma on macOS`
+- `an explicit XDG_CONFIG_HOME profile root still wins on macOS` (if open question 4 keeps XDG)
+- `a discovery file whose pid has exited is stale on every unix`
+
+**Mochitests, headless, artifact build, on `macos-15` (sub-PRs 1 and 2):**
+
+- the existing suite; each failure is fixed, or marked `skip-if` for macOS in
+  `tests/browser/browser.toml` with an issue, never loosened
+- `browser_vimma_private_swap.js`: `the swap gate answers not on wayland on macos`
+- `browser_vimma_theme_appearance.js`: the existing "no poll timer runs" detection test, run on
+  macOS unchanged
+- `browser_vimma_firefox_keys.js`: `accel is cmd and disable all keeps cmd+q on macos`
+
+**Build and smoke, on `macos-15` (sub-PRs 3 and 4):**
+
+- `the dmg mounts and codesign --verify --deep passes`
+- `vimma --version prints the vimma and firefox versions`
+- `vimma starts headless with the control socket and vimma-ctl version answers`
+- e2e `m0-happy-path` and `m0-content-actor` under `MOZ_HEADLESS=1`; no screenshot baselines on
+  macOS
+
+**Hand checks on a real Mac (open question 5):** Open Anyway on the current macOS; `ctrl+b` and
+every `ctrl+b` key; Option-composed `{` `}` `[` `]` `@` `|` `~` on a Finnish layout; `cmd+q`,
+`cmd+w`, `cmd+t`, `cmd+l` with `[firefox] disable = "all"` and with the defaults; the native menu
+bar's key equivalents after firefox-keys turns keys off; fullscreen and split panes; system dark
+and light switching the built-in palette live; `vimma-ctl` with no flags; the agent workspace's
+Dock bounce and notification.
+
+## Docs and changelog
+
+With this spec: `docs/limits.md` "Platforms and packaging" says macOS comes later, links this spec
+and says Windows is not planned; the roadmap in `plan.md` §6 says the same.
+
+With the sub-PRs:
+
+- `docs/guide.md` "Getting started": a macOS section (where the `.dmg` comes from, Open Anyway,
+  `xattr`, Apple Silicon only, unsigned so no passkeys, Safe Browsing off in test builds);
+  "Keys": Option and alt on a Mac, `cmd` as accel; "config.toml": the macOS path; "Scripting with
+  vimma-ctl": the profile location.
+- `docs/limits.md`: macOS limits (unsigned, no updater, no Omarchy, no Hyprland swap, no Intel
+  build); the `.icns` line under "Branding" goes with sub-PR 3.
+- README "Status": "Linux x86_64; macOS arm64 in CI" once sub-PR 4 is green.
+- `CONTRIBUTING.md`: building on a Mac (Xcode or the command line tools, `brew install gnu-tar`,
+  30 GB disk) and the cross build.
+- `docs/runbook.md`: `macos.yml`, its measured time and disk; later, enrolling, rotating the
+  certificate and the signing environment.
+- ADR-018 with sub-PR 3.
+- `CHANGELOG.md` `[Unreleased]`: one line per sub-PR that changes what a user can run (sub-PRs 2,
+  3 and 6); CI-only sub-PRs need none.
+
+## Delivery
+
+Each sub-PR is independently mergeable and tested. Sub-PRs 1 and 2 need no Mac, no money and no
+full build.
+
+1. **`ci(macos): front-end tests on a mac runner`.** `artifact-build.mjs` picks the namespace and
+   `.app` layout by platform; `mochitest.mjs` and `start.mjs` learn the macOS paths and skip
+   `/proc/locks` on macOS. A new `macos-15` job in `e2e.yml`: `npm ci`, Vitest, artifact build,
+   the mochitests headless, and a `df` line recording the free disk. Not required at first (open
+   question 7).
+2. **`fix(macos): platform fallbacks`.** vimma-ctl's macOS profile root and `kill(pid, 0)` stale
+   check, with tests; a macOS cargo job in `ci.yml` (the file's one-job note dates from the
+   private-repository billing and no longer applies); the config path per open question 4; the
+   swap-gate and keys tests on macOS.
+3. **`build(macos): an arm64 cross build`.** ADR-018. `configs/macos/mozconfig` for the cross
+   build; `macos.yml` on `ubuntu-24.04` (decision 5) with build-supply-chain's source verification and disk
+   guard; `npm run import`, `surfer build`, `./mach package`, ad hoc `rcodesign` with the
+   developer entitlements, upload as an artifact. Measures the cold build time and sets
+   `timeout-minutes`. Branding `.icns` and DMG background. After the build-supply-chain
+   source-verification sub-PR.
+4. **`test(macos): smoke the dmg on a mac`.** A `macos-15` job after the build: mount, verify,
+   launch with `MOZ_HEADLESS=1`, `vimma --version`, the two smoke scenarios through `vimma-ctl`.
+   The e2e launcher learns `MOZ_HEADLESS` instead of Xvfb on macOS, the `.app` binary path and
+   "no screenshots".
+5. **`docs(macos): keys inventory`.** The macOS column of the firefox-keys inventory, the native
+   menu bar check, and Option/alt behaviour in `docs/guide.md`.
+6. **Gated: `build(macos): developer id and notarisation`.** Only after enrolment (open question
+   2). Secrets in the `macos-signing` environment; `rcodesign sign` with Vimma's production
+   entitlements (own team ID, provisioning profile for passkeys); `notarytool submit --wait`;
+   `stapler staple`. A release `.dmg` in `release.yml` only when the release gate opens.
+
+Time and cost per run:
+
+| Item                                              | Time per run                                      | Cost                          |
+| ------------------------------------------------- | ------------------------------------------------- | ----------------------------- |
+| Sub-PR 1 job (Vitest, artifact build, mochitests) | 20-30 min (estimate; the Linux job's limit is 45) | $0 (public repo)              |
+| Sub-PR 2 cargo job on macOS                       | about 3 min                                       | $0                            |
+| Sub-PR 3 cold cross build on `ubuntu-24.04`       | 1.5-3 h (estimate; measured in sub-PR 3)          | $0                            |
+| Same on a 16-core larger Linux runner (fallback)  | about 40 min (estimate)                           | about $1.70, plus a Team plan |
+| Sub-PR 4 smoke on `macos-15`                      | about 10 min                                      | $0                            |
+| Sub-PR 6 signing and notarisation                 | about 7 min more (Zen: 29 s and 6.5 min)          | 99 USD a year                 |
+
+## Open questions
+
+1. **arm64 only, or universal?** (a) arm64 only: one build, a smaller download, matches every
+   current Mac; Intel Mac owners cannot run it. (b) universal via `unify.py`: covers Intel Macs,
+   but doubles the build time and the download and needs a Mac (or a Linux port of the unify
+   step) to merge. (c) separate x86_64 `.dmg`: covers Intel without unify, doubles the builds.
+   **Recommendation: (a)**, and add x86_64 only if a tester has an Intel Mac, since GitHub's
+   Intel images end in 2027.
+2. **Buy the Apple Developer ID (99 USD a year) now, or ship unsigned test builds first?**
+   (a) unsigned first: free, enough for the maintainer and a few testers who press Open Anyway
+   once; no passkeys, no updater. (b) enrol now: notarised builds from the start, but a yearly
+   cost before anyone outside uses the build. **Recommendation: (a)**, and start enrolment a few
+   weeks before the release gate opens, because a public Mac download without notarisation is a
+   poor first impression and the Homebrew cask requires it.
+3. **Change the roadmap order?** (a) macOS entirely after M6: nothing competes with the updater
+   and the daily-driver work. (b) sub-PRs 1 and 2 now, as a parallel lane, the rest after M6a:
+   they cost nothing, need no full build and find Linux assumptions while the code is fresh.
+   (c) all of it now: earliest Mac build, but competes with M6a. **Recommendation: (b)**, so the
+   updater's MAR and manifest work is designed with a second platform in view; sub-PR 6 when the
+   gate nears.
+4. **`config.toml` on macOS: `~/.config/vimma/config.toml` or
+   `~/Library/Application Support/Vimma/config.toml`?** (a) `~/.config`, honouring
+   `XDG_CONFIG_HOME`: where developers' Neovim, tmux, Ghostty and Alacritty configs already live
+   on a Mac, one dotfiles repository works on both platforms, no code change. (b) Application
+   Support: the Apple convention, beside the profile, but hidden from most dotfiles setups.
+   **Recommendation: (a)**; the profile stays where Firefox puts it.
+5. **Is a Mac available for the hand checks?** (a) the maintainer's Apple Silicon Mac: enough.
+   (b) none: CI covers launch and smoke, but keys, Gatekeeper and the menu bar need a person, so a
+   trusted tester runs the list. (c) a rented cloud Mac: last resort, slow for interactive key
+   testing. **Recommendation: (a) if available, else (b)**, before a macOS build is called
+   working.
+6. **`alt+<letter>` bindings on a Mac.** Option+j types `∆`, so a user's `alt+j` never fires.
+   (a) document it: Option is for characters on a Mac, as in Mac terminals by default. (b) an
+   "Option as alt" setting matching the physical key: more code and a second matching rule.
+   **Recommendation: (a)** now; no default binding uses alt, and (b) can follow if users ask.
+7. **Is the macOS front-end job required for merging?** (a) required at once: catches every
+   macOS break, but a new and possibly flaky job blocks all pull requests. (b) informational,
+   then required once green and not flaky for two weeks, as the Linux e2e job was.
+   **Recommendation: (b).**
+8. **Which hosted runner runs the cross build?** No self-hosted machine is planned (decision 4).
+   (a) the standard `ubuntu-24.04` runner: free, 85 GB measured free disk, 1.5-3 hours estimated,
+   within the 6-hour limit. (b) a larger hosted Linux runner: about 40 minutes, but paid and only
+   for organisations on the Team plan. (c) a hosted Mac, natively: documented 14 GB disk, too
+   small for a 30 GB build even on the paid `xlarge`. **Recommendation: (a)**, as build-supply-chain decides for
+   Linux, moving to (b) together with the Linux release only if sub-PR 3 measures more than 4
+   hours.
