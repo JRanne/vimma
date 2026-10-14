@@ -1,6 +1,6 @@
 # Rebase playbook: moving to a new Firefox release
 
-We track Firefox **release**: every 4-weekly release and every dot release (ADR-002). Our upstream
+We track Firefox **release**: every major release (every two weeks) and every dot release (ADR-002). Our upstream
 surface is the `.patch` files under `src/` (ADR-003 lists each one and why). The **upstream
 autopilot** (`upstream.yml`, ADR-015) does the mechanical part on its own: it notices the release,
 rebases our patches onto it, runs the PR suites and opens the PR. This page is what it does, what
@@ -181,7 +181,7 @@ Expected, when all is well:
 patch-check: …/engine at HEAD (Firefox X.Y)
   clean    src/browser/base/content/browser-xhtml.patch
   …
-6 patches: 6 clean
+11 patches: 11 clean
 ```
 
 Exit status: 0 every patch imports, 1 at least one does not, 2 the check could not run (an
@@ -436,8 +436,8 @@ python3 tools/upstream/patch-audit.py      # --json FILE for machines
 Patch                                                                      Files  Hunks  +  -  Chars  Register
 src/browser/base/content/browser-xhtml.patch                                   1      1  1  0    651  yes
 …
-Total: 6 patches, 6 hunks, +10 -5
-Register matches src/ (6 patches).
+Total: 11 patches, 13 hunks, +49 -15
+Register matches src/ (11 patches).
 ```
 
 Exit 1 means a patch is not in the ADR-003 register, a register line has no patch, a patch is

@@ -24,17 +24,17 @@ process of the user's.
 2. **Control protocol 2 adds roles.** The hello names its role: `full` (protocol 1's commands;
    protocol 1 is always `full`) or `agent` (only the agent commands: `agent-hello`,
    `agent-tabs`, `agent-read`, `agent-open`, `agent-close`, `agent-ping`, and `agent-cancel`,
-   which withdraws one of the connection's own waiting questions). A connection's role
-   is fixed by its hello, and the server checks every command against it. Each role has its own
-   switch: `vimma.control.enabled` serves `full`, and `:mcp on` (the pref `vimma.mcp.enabled`,
-   or `[mcp] enabled`) serves `agent`. A hello for a role that is off gets `role-off`. The discovery file
-   lists the roles served.
-3. **Confinement and confirmation are enforced in the browser**, never trusted to the client.
-   Agent commands see only tabs of the agent workspace in its container, checked when each
-   command runs. Every one but hello and ping waits for the user's answer in Vimma, or runs
-   under a grant the user gave that connection for that tool, for as many minutes as the user picked. A
-   timeout, a full queue and a muted connection deny. The yes stands for the tab and URL asked
-   about. Page text comes back between untrusted-content delimiters the page cannot close.
+   which withdraws one of the connection's own waiting questions). A connection's role is fixed
+   by its hello, and the server checks every command against it. Each role has its own switch:
+   `vimma.control.enabled` serves `full`, and `:mcp on` (the pref `vimma.mcp.enabled`, or
+   `[mcp] enabled`) serves `agent`. A hello for a role that is off gets `role-off`. The
+   discovery file lists the roles served.
+3. **Confinement and confirmation are enforced in the browser**, never trusted to the client. Agent
+   commands see only tabs of the agent workspace in its container, checked when each command runs.
+   Every one but hello and ping waits for the user's answer in Vimma, or runs under a grant the user
+   gave that connection for that tool, for as many minutes as the user picked. A timeout, a full
+   queue and a muted connection deny. The yes stands for the tab and URL asked about. Page text
+   comes back between untrusted-content delimiters the page cannot close.
 
 ## Rejected
 

@@ -42,11 +42,12 @@ explicitly.
 - Unbound bare keys in normal mode reach the page.
 - The actor reaches Settings (search box focused: insert, `Esc`: normal) and the PDF viewer; a
   `data:` page has none and stays in insert.
-- Review round 1: clicking into a `designMode` page, or a cross-origin `designMode` iframe,
-  enters insert (`j` is typed, nothing scrolls) and `Esc` leaves it. An unfocused frame's report
-  is ignored. Malformed descriptors are dropped. A page locked with `overflow: hidden` does not
-  scroll: its modal's list does, or nothing does. `i` on a page with no text field lets `j`
-  through. `ctrl+w` closes the tab in normal mode, and `g` (the first key of `gg`) is
+- Review round 1: clicking into a `designMode` page, or a cross-origin `designMode` iframe, enters
+  insert (`j` is typed, nothing scrolls) and `Esc` leaves it. An unfocused frame's report is
+  ignored. Malformed descriptors are dropped. A page locked with `overflow: hidden` does not scroll:
+  its modal's list does, or nothing does. `i` on a page with no text field lets `j` through.
+  `ctrl+w` passes in normal mode with one pane (it closed the tab until key-handling-batch turned
+  Firefox's close-tab `ctrl+w` off; the page now gets it), and `g` (the first key of `gg`) is
   consumed. Each mode change calls `onModeChange` once. Fixtures: `file_vimma_design.html`,
   `file_vimma_design_host.html`, `file_vimma_plain.html`.
 
@@ -71,7 +72,8 @@ actions that are not implemented yet (parallel spec).
   `vimma.js` calls it before `VimmaHost.init`. `allFrames: true`; message manager group
   `browsers` (tabs only, not the sidebar or devtools); matches `http://*/*`, `https://*/*`,
   `file:///*` and `about:*` (`JSWindowActorProtocol` builds the patterns with
-  `restrictSchemes = false`, so `about:` works). Modules live under
+  `restrictSchemes = false`, so `about:` works), and since the start-page spec Vimma's own
+  `chrome://browser/content/vimma/start/start.html`. Modules live under
   `chrome://browser/content/vimma/actors/`; content processes load chrome:// modules
   (`NetErrorChild` imports one). `safeForUntrustedWebProcess: true` is required for web content
   processes (`JSActorProtocol::RemoteTypeMatches`); the parent takes only a well-formed
@@ -116,15 +118,16 @@ actions that are not implemented yet (parallel spec).
   (Vimium's `scrollStepSize`) times the count; `d`/`u` half the target's client height, rounded
   to a whole pixel so `d` then `u` returns to the same place, times the count; `gg`/`G` to 0 and the end. `behavior` is `smooth` when `general.smoothScroll` is
   true, else `instant`.
-- **"Pass if not runnable", revisited.** Unbound bare keys in normal mode pass to the page: plan
-  §3 ("keys the dispatcher returns `pass` for continue untouched") and plan §2's `[unbind]`, which
+- **"Pass if not runnable", revisited.** Unbound bare keys in normal mode pass to the page: plan §3
+  ("keys the dispatcher returns `pass` for continue untouched") and plan §2's `[unbind]`, which
   would be pointless if unbound keys were swallowed; sites' own single-key shortcuts (GitHub `s`,
-  YouTube `m`) keep working wherever Vimma has no binding. Bound actions the host cannot run
-  yet keep M0's rule (the first key passes, a later key in a sequence is consumed); the parallel
-  "not implemented" spec owns that rule. One addition: the **first key of a normal-mode
-  sequence passes when no action under it is runnable**. Without it `ctrl+w` (the `<C-w>h`
-  pane family, M4) would wait forever and Firefox's `ctrl+w` would stop closing tabs, which plan
-  §2 says it keeps by default. `ctrl+b` and `g` lead to runnable actions and stay ours.
+  YouTube `m`) keep working wherever Vimma has no binding. Bound actions the host cannot run yet
+  keep M0's rule (the first key passes, a later key in a sequence is consumed); the parallel "not
+  implemented" spec owns that rule. One addition: the **first key of a normal-mode sequence passes
+  when no action under it is runnable**. Without it `ctrl+w` (the `<C-w>h` pane family, M4) would
+  wait forever and Firefox's `ctrl+w` would have stopped closing tabs, which plan §2 said it kept by
+  default (key-handling-batch later turned that off). `ctrl+b` and `g` lead to runnable actions and
+  stay ours.
 - **Content-only actions in chrome.** `scroll.*`, `mode.normal` and `mode.insert` run only when a
   content browser has focus; elsewhere (URL bar) they count as not runnable, so `Esc` still
   reverts the URL bar.
@@ -163,8 +166,9 @@ actions that are not implemented yet (parallel spec).
     no-op until the status bar emits from it.
   - **`3x`** (a count, then an action the host cannot run yet) is consumed silently. The "not
     implemented" notice from the tab-keys spec (PR #28) will cover it when it lands.
-  - **Esc in a field** stays Vimma's (it leaves insert). A second `Esc` reaches the page, since
-    `Esc` is unbound in normal mode (`esc_in_normal_mode_reaches_the_page`).
+  - **Esc in a field** stays Vimma's (it leaves insert). A second `Esc` reaches the page
+    (`esc_in_normal_mode_reaches_the_page`): normal-mode `Esc` was unbound then, and its later
+    `page.stop` binding (firefox-keys) runs only after the page has had the key.
 
 ## Follow-up: navigation keys (supersedes PR #51)
 
@@ -172,7 +176,8 @@ actions that are not implemented yet (parallel spec).
 page's `<browser>`: in a split that is the focused pane's, and the other panes do not move. One
 step uses `goBack` / `goForward` (as the toolbar does); a count (`3H`) uses `gotoIndex`, clamped
 to the first or last entry. The bindings are normal-only, so in insert mode the keys are the
-page's. No hard reload or stop: neither is an action in `actions.mjs`.
+page's. No hard reload or stop: neither was an action in `actions.mjs` then (firefox-keys later
+added `page.reload_hard` and `page.stop`).
 
 With these, every action is built. The notice and dimmed-row tests keep an unbuilt action
 through the test-only `VimmaHost._withhold(id)` (`head.js` `bindUnbuiltPrefixKey` withholds

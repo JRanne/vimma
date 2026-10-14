@@ -23,7 +23,8 @@ takes back a key and `Esc` leaves hint mode. The page cannot tell that hints wer
 - `ui/hint-overlay.mjs`, `themes/shared/vimma/hints.css`: labels drawn in chrome.
 - `host/VimmaHost.sys.mjs`: `hint.follow` (`f`), `hint.follow_new_tab` (`F`), `hint.cancel`
   (`Esc`, the dispatcher's `hint` mode); every other key in hint mode goes to core `hintKey`.
-- Charset `asdfghjkl` (core `DEFAULT_HINT_CHARS`); `[modal] hint_chars` waits for config (M5).
+- Charset `asdfghjkl` (core `DEFAULT_HINT_CHARS`); `[modal] hint_chars` waited for config (M5),
+  which now hands it to the host (`VimmaHost` `settings.hintChars`).
 
 ## Tests (written first)
 
@@ -193,5 +194,5 @@ href? }], frames: [{ id, rect }], ms }`, and `Vimma:ActivateHint { gen, id }`. B
 
 ## Out of scope
 
-Yank-link and focus-input hint modes, `[modal] hint_chars` (M5 config), the "no links" notice
-(M2 status bar), hints in pages without our actor (extension pages, `data:`).
+Yank-link and focus-input hint modes, `[modal] hint_chars` (M5 config, since built), the "no links"
+notice (M2 status bar), hints in pages without our actor (extension pages, `data:`).

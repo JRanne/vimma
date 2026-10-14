@@ -296,6 +296,6 @@ file (the policy's `Remove`).
 ## Decided questions
 
 1. **The file wins at every start** (decision 7), because `config.toml` is the source of truth.
-2. **Private browsing's default** is not a separate `[search] private` key. Vimma replaces
-   private windows with a private workspace (spec in progress, private-workspace); its search
-   default is decided there. Until then decision 12 stands.
+2. **Private browsing's default** is not a separate `[search] private` key. Vimma's private
+   workspace ([private-workspace](private-workspace.md)) lives in a private window, so decision
+   12 covers it.

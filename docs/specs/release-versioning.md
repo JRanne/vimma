@@ -49,8 +49,8 @@ Releases count up by the patch version: 0.1.1, 0.1.2, 0.1.3 and so on.
   `bump-minor-pre-major`; add `draft` and `force-tag-creation` (both `true`); remove
   `"release-as"`.
 - Tests (vitest, `tools/package/test/release-workflow.test.mjs`): the config has those options,
-  no `bump-*-pre-major` and no `release-as`; the manifest matches `surfer.json`'s `displayVersion`; `release.yml` has
-  only the `published` release type.
+  no `bump-*-pre-major` and no `release-as`; the manifest matches `surfer.json`'s
+  `displayVersion`; `release.yml` has only the `published` release type.
 - Runbook "Releases": bumps, moving to 0.2.0, drafts, the first release, and how to switch drafts
   off when the gate opens.
 
@@ -66,8 +66,8 @@ depends on the tag existing, which `force-tag-creation` guarantees for drafts to
 
 No `v0.1.0` tag exists. The manifest's `0.1.0` is what every build so far shows, so
 release-please treats it as released and the first release is **0.1.1**; its changelog lists
-every `feat`/`fix` since the first commit (as #127 does today). The open release PR #127
-(`chore(main): release 0.1.0`) is rewritten on the next push to `main` after this merges:
+every `feat`/`fix` since the first commit. The release PR #127, opened as
+`chore(main): release 0.1.0`, was rewritten on the next push to `main` after this change merged:
 `chore(main): release 0.1.1`, same branch and number.
 
 ## Decided questions

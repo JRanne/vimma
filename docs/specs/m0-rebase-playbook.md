@@ -107,7 +107,7 @@ the script itself was missing. Green: `Ran 63 tests … OK`.
 - Claude Code resolving conflicts on the bump PR (plan §4: ≤3 pushes). claude.yml's `@claude`
   job is read-only today; the summary and the JSON artifact are its inputs once it can push.
 - Auto-merge of clean bumps and the `security` flag and auto-approval (plan §4); `maintenance.yml`
-  (the Sunday run would call `patch-audit.py`).
+  (the Sunday run would call `patch-audit.py`; the quarterly `patch-audit.yml` now runs it).
 - An automated cfr provider comparison: the playbook has a one-line check instead.
 
 ## Settled

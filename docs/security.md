@@ -542,8 +542,8 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   [`test_confinement_edges`](../tests/browser/browser_vimma_mcp_agent.js)
 - M10. Pages in the agent container **must** get no permission prompt and no permission given
   elsewhere: site permissions are kept per container (`permissions.isolateBy.userContext`,
-  [vimma-mcp](specs/vimma-mcp.md) decision 30), every `nsIContentPermissionPrompt` request from the agent
-  container is cancelled, and camera, microphone and screen are denied per agent tab (a
+  [vimma-mcp](specs/vimma-mcp.md) decision 30), every `nsIContentPermissionPrompt` request from
+  the agent container is cancelled, and camera, microphone and screen are denied per agent tab (a
   browser-scoped DENY, set on each HTTP response and when each document's window global is
   created, so a page a service worker serves is covered). They **must** open no new window or
   tab (`SANDBOXED_AUXILIARY_NAVIGATION` on every agent tab, which is reloaded if it had loaded
@@ -557,16 +557,15 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   [`test_a_page_from_a_service_worker_is_denied_too`](../tests/browser/browser_vimma_mcp_agent_pages.js),
   [`test_a_sweep_reloads_agent_tabs_that_loaded_unsandboxed`](../tests/browser/browser_vimma_mcp_agent_pages.js),
   [`test_agent_pages_launch_no_app`](../tests/browser/browser_vimma_mcp_agent_pages.js)
-- M11. A download from the agent workspace (by its container, its tab's container, or being
-  written to the quarantine folder) **must** ask in the question line first (its name, size,
-  type and host, **never** the URL). It is the `vimma_download` of an agent connection only when
-  it is the very load that connection's `agent-open` started (its URL before redirects, within a
-  minute, once, and never after the tab showed a page); anything else, a page's own download
-  under a grant included, asks as "a page in the agent workspace" (no grant, `x` a plain no).
-  Only `https:` is downloaded, nothing over
-  `[mcp] download_max_mb` (refused when the size is known, stopped and deleted once it grows past
-  it), and a refused download leaves no file. The user's own Save Page, Save Link As and Save
-  Image As are the user's (an agent cannot press them) and ask nothing. Another workspace's
+- M11. A download from the agent workspace (by its container, its tab's container, or being written
+  to the quarantine folder) **must** ask in the question line first (its name, size, type and host,
+  **never** the URL). It is the `vimma_download` of an agent connection only when it is the very
+  load that connection's `agent-open` started (its URL before redirects, within a minute, once, and
+  never after the tab showed a page); anything else, a page's own download under a grant included,
+  asks as "a page in the agent workspace" (no grant, `x` a plain no). Only `https:` is downloaded,
+  nothing over `[mcp] download_max_mb` (refused when the size is known, stopped and deleted once it
+  grows past it), and a refused download leaves no file. The user's own Save Page, Save Link As and
+  Save Image As are the user's (an agent cannot press them) and ask nothing. Another workspace's
   downloads are untouched.
   [`test_the_question_then_yes_saves_to_the_quarantine_0600_unopened`](../tests/browser/browser_vimma_mcp_downloads.js),
   [`test_no_saves_nothing`](../tests/browser/browser_vimma_mcp_downloads.js),
@@ -603,9 +602,9 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   (`--alert-encrypted=yes --alert-exceeds-max=yes`), and deleted when ClamAV flags it; when
   ClamAV fails, takes over five minutes, or could not look inside (encrypted, over its limits),
   keeping the file unscanned is asked (y/N, no grant), and a no deletes it. The notice says
-  scanned, not fully scanned or not scanned. Vimma has no download reputation service of its own: Firefox's Safe Browsing
-  checks downloads only in a build with a Google key (P6), so in a keyless build these checks
-  and ClamAV are all there is.
+  scanned, not fully scanned or not scanned. Vimma has no download reputation service of its
+  own: Firefox's Safe Browsing checks downloads only in a build with a Google key (P6), so in a
+  keyless build these checks and ClamAV are all there is.
   [`test_a_dangerous_file_needs_bang_for_that_one_file`](../tests/browser/browser_vimma_mcp_downloads.js),
   [`test_dangerous_content_asks_again_and_no_deletes_it`](../tests/browser/browser_vimma_mcp_downloads.js),
   [`test_a_different_danger_in_the_bytes_asks_again`](../tests/browser/browser_vimma_mcp_downloads.js),

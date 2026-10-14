@@ -64,7 +64,7 @@ Read plan.md once per milestone; read docs/specs/<current>.md every session.
 - src/.../vimma/ui: status bar, help overlay, command line, side panel, pickers, prompts, agent line
 - src/.../vimma/ctl: control socket server (protocol 2, full and agent roles), AgentGate, agent pages
 - src/.../vimma/workspaces, split, config, omarchy, services, about, start
-- tools/vimma-ctl: Rust CLI for the control socket (`vimma-ctl mcp` lands with vimma-mcp sub-PR 3)
+- tools/vimma-ctl: Rust CLI for the control socket, and `vimma-ctl mcp` (an MCP server over stdio)
 - tools/: e2e harness, artifact builds, upstream autopilot, packaging, lanes, bench, sites
 - tests/browser: mochitests; tests/e2e: socket scenarios + baselines; tests/contract: protocol fixtures
 - docs: guide.md (users), security.md, limits.md, runbook.md, rebase.md, adr/, specs/

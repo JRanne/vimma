@@ -15,4 +15,4 @@ and keeping the SPDX list at the version the CycloneDX schema's `spdx.schema.jso
 | `../notices/LGPL-2.1.txt`                  | `https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt`                                     | 2.1     | verbatim copying permitted | `20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95` |
 
 The schemas are validated with ajv 8 (MIT, a direct devDependency; it was already in the lockfile
-through eslint): `node tools/package/validate-sbom.mjs <sbom>`.
+through commitlint): `node tools/package/validate-sbom.mjs <sbom>`.

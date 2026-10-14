@@ -150,7 +150,7 @@ between tab groups, as in tab search, instead of building a multi-selection (dec
   and runs in the parent; it is not a text search.
 - **Tab search** ([tab-search](tab-search.md), issue #215, draft) grows the goto picker into one
   list of every tab, every window and recently closed, matched on title, URL and rename, opened
-  with `prefix+f` and `:tabsearch`. Its decision 13 puts page content out of scope, because
+  with `prefix+f f` and `:tabsearch`. Its decision 13 puts page content out of scope, because
   Firefox has no index of it and loading lazy tabs to search them breaks its decision 9.
 - **Find** (`/`, `?`, `n`, `N`; `defaults.mjs:186-189`) drives Firefox's find bar and finder
   (m1-find), with smartcase from `isCaseSensitive` (`packages/vimma-core/src/find.mjs:24`:

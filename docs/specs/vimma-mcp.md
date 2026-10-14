@@ -101,10 +101,10 @@ answer for the user, and that never disturbs what the user is doing.
   `open` calls `gBrowser.addTab` directly and is not routed. An open with an explicit
   `userContextId` keeps it: the `Tabbrowser` hunks only fill a missing value (m3-workspaces
   decision 3, `??=`).
-- **The y/N line** is `RenamePrompt.ask` (`ui/rename-prompt.mjs`): any key but `y` says no, a
-  held key (`e.repeat`) is ignored, the line is an `alertdialog`, refuses to open over DOM full
-  screen, and takes focus when it opens: right for a question the user's own key opened, wrong for one
-  an agent sends while the user types.
+- **The y/N line** is `RenamePrompt.ask` (`ui/rename-prompt.mjs`): any key but `y` says no, a held
+  key (`e.repeat`) is ignored, the line is an `alertdialog`, refuses to open over DOM full screen,
+  and takes focus when it opens: right for a question the user's own key opened, wrong for one an
+  agent sends while the user types.
 - **The status bar** is pure data in core (`packages/vimma-core/src/statusbar.mjs`): segments
   with text, theme tokens and a truncation priority. The private workspace's segment carries its
   meaning by glyph and word as well as colour. `prefix+shift+a` was free (`defaults.mjs`;
@@ -686,10 +686,10 @@ grant_max_minutes` (default 480, at most 1440) caps both the count and the confi
     taken off the downloads list with a notice saying why. Firefox keeps that placeholder itself:
     its `shouldKeepBlockedData` is true for Firefox's app ID, which Vimma keeps, and takes no
     download, so it cannot be false for agent downloads alone (`DownloadCore.sys.mjs`,
-    `_checkReputationAndMove`, Firefox 158.0; issue #204). Every agent tab gets the quarantine folder as its
-    `downloadFolderOverride` at each `browsing-context-attached`, and the helper-app dialog is
-    wrapped so an agent tab's download never shows "open with" and its final name is in the
-    quarantine too; the original channel and the agent's cookies are kept. An agent download is
+    `_checkReputationAndMove`, Firefox 158.0; issue #204). Every agent tab gets the quarantine
+    folder as its `downloadFolderOverride` at each `browsing-context-attached`, and the helper-app
+    dialog is wrapped so an agent tab's download never shows "open with" and its final name is in
+    the quarantine too; the original channel and the agent's cookies are kept. An agent download is
     also recognised by its tab's container and by being written to the quarantine (or refusal)
     folder.
 
@@ -1001,7 +1001,7 @@ m7-a11y.
 ## Delivery
 
 One sub-PR at a time, after firefox-keys sub-PR 2 (both change the keymap; this adds
-`prefix+shift+a`). Issue #229 tracks sub-PR 3.
+`prefix+shift+a`).
 
 | #   | PR                                                                 | Contents                                                                                                                                                                                                                                                              | State         |
 | --- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
@@ -1013,9 +1013,8 @@ One sub-PR at a time, after firefox-keys sub-PR 2 (both change the keymap; this 
 | 4   | `docs(guide): set up Claude Code, Codex, opencode and Copilot`     | The guide's "Agents (MCP)" in full: the threat model in plain words, each tool's setup run against a real install with the version tested, timeouts, grants, sharing a tab, revoking, why `vimma.control.enabled` stays off; README feature line; limits.md.          | to do         |
 
 Out of scope: Agent `send-keys`, clicks, form filling and screenshots (later specs, decision 6;
-showing pages and page keys are [mcp-drive](mcp-drive.md)); `:pipe
-<cmd>` sending page context to a local tool; MCP over HTTP or a listener inside the browser; MCP
-resources, prompts, sampling and elicitation; several agent workspaces (one per agent); macOS
+showing pages and page keys are [mcp-drive](mcp-drive.md)); `:pipe <cmd>` sending page context to a local tool; MCP over HTTP or a listener inside the browser;
+MCP resources, prompts, sampling and elicitation; several agent workspaces (one per agent); macOS
 (`/proc` parent name and notifications differ; the macOS spec takes it up); Windows.
 
 ## Open questions

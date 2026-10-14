@@ -17,7 +17,7 @@ quieter still.
 ## Scope
 
 - **Asset.** The Vimma logo (`Mint Brushstroke V Browser Logo.png`, 1254×1254), resized to 512 px
-  and stripped of metadata with ImageMagick (`magick … -strip -resize 512x512`), 201 KB, at
+  and stripped of metadata with ImageMagick (`magick … -strip -resize 512x512`), 82 KB, at
   `vimma/start/vimma-logo.png`. `docs/assets/vimma-logo.png` (the README's) stays.
 - **The page:** `chrome://browser/content/vimma/start/start.html`, registered in our `jar.mn`.
   Mechanism chosen after grepping the engine: Firefox's own blank new tab and blank home page are
@@ -25,11 +25,11 @@ quieter still.
   `HomePage.get`, `home-startup.mjs`), so a chrome page in a tab is a supported path. An
   `about:vimma-start` would need an `AboutRedirector` patch or a runtime `nsIAboutModule`
   registration, and a `resource:` page cannot use our chrome theme module. It loads in the parent
-  process, with a CSP that allows only `chrome:` scripts, styles and images. Its one script
-  (`start.mjs`) sets the theme tokens from `core/theme.mjs` as the status bar does;
-  `start.css` (`chrome://browser/skin/vimma/start.css`) falls back to the same built-in values,
-  so the first paint has them. Logo `40vmin`, `object-fit: contain`; hint in `--vimma-muted` with
-  the keys in `--vimma-fg`; background `--vimma-bg`. No animation.
+  process, with a CSP that allows only `chrome:` scripts and images, and `chrome:` or inline
+  styles. Its one script (`start.mjs`) sets the theme tokens from `core/theme.mjs` as the status
+  bar does; `start.css` (`chrome://browser/skin/vimma/start.css`) falls back to the same built-in
+  values, so the first paint has them. Logo `40vmin`, `object-fit: contain`; hint in
+  `--vimma-fg-dim` with the keys in `--vimma-fg`; background `--vimma-bg`. No animation.
 - **Version line:** a `<footer>` under `<main>`, `position: fixed` at the bottom centre, so the logo
   and hint stay where they were and nothing scrolls. `start.mjs` fills in `#vimma-version` from
   `AppConstants.MOZ_APP_VERSION_DISPLAY` and `#firefox-version` from `Services.appinfo.version`;
@@ -77,6 +77,6 @@ and a timeout waiting for the new tab. Mutation check: without the actor match, 
 
 ## Settled
 
-- `browser.startup.page` stays Firefox's 1 until M3 sets 3.
+- `browser.startup.page` stayed Firefox's 1 until M3 set it to 3.
 - Settings → Home's "New tabs" menu (`browser.newtabpage.enabled`) does not change our override;
   `vimma.startpage.newtab` = `false` gives Firefox's new tab back (guide).

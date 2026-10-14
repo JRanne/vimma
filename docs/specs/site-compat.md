@@ -1,6 +1,6 @@
 # Spec: site-compat
 
-Status: sub-PR 1 implemented (in review); sub-PRs 2 and 3 open · Milestone: after private-swap (testing infrastructure, no
+Status: sub-PR 1 implemented (#157); sub-PRs 2 and 3 open · Milestone: after private-swap (testing infrastructure, no
 user-visible change) · Area: `tools/sites/` (new), `tools/e2e/launcher.mjs` (one option),
 `.github/workflows/sites.yml` (new), `package.json` (one script). No upstream patch, no product
 code, no new dependency.

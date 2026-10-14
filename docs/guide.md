@@ -1507,7 +1507,7 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:map`, `:help`, `:h`                 | Shows every binding (the `ctrl+b ?` overlay).                                                                                               |
 | `:scroll_down`, `:tab.next`…          | Any action by its name in [bindings.md](bindings.md), or by its dotted id. Actions take no argument.                                        |
 | `:tabrename [name]`                   | Renames the tab; without a name, opens the rename prompt.                                                                                   |
-| `:ls`, `:b`                           | Opens the goto picker.                                                                                                                      |
+| `:ls`                                 | Opens the goto picker.                                                                                                                      |
 | `:vsplit`/`:vs`, `:split`/`:sp`       | Splits the pane right / down, as `ctrl+b v` / `ctrl+b -`.                                                                                   |
 | `:layout [name]`                      | Arranges the panes in the named preset ([Layouts](#layouts)); Tab completes the names. Without one, the next preset.                        |
 | `:wsnext`/`:wn`, `:wsprev`/`:wp`      | Next / previous workspace, as `ctrl+b )` / `ctrl+b (`.                                                                                      |
@@ -1523,6 +1523,7 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:source path`                        | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                                             |
 | `:config`                             | Opens `config.toml` in a new tab (read-only view); creates it from a commented template when it is missing.                                 |
 | `:mcp [on\|off\|revoke\|forget]`      | Agents and the [agent workspace](#agent-workspace): the status, on (asks `y/N`), off, revoke the grants, or forget its logins (asks `y/N`). |
+| `:control [on N\|off]`                | Full control for `vimma-ctl`: the status, on for `N` minutes (asks `y/N`), or off now ([below](#agent-workspace)).                          |
 | `:theme [dark\|light\|system]`        | The built-in palette dark, light or as the system is; bare, the other of dark and light (see [Colours](#colours-and-themes)).               |
 | `:about`, `:vimma`                    | Opens [about:vimma](#aboutvimma) in a new tab.                                                                                              |
 | `:addons`                             | Opens the [add-on picker](#add-ons), as `ctrl+b e`.                                                                                         |
@@ -1642,11 +1643,11 @@ accent = "#ff9e64"
   `enabled`, which wins over `:mcp on|off`; `workspace`, the [agent workspace](#agent-workspace)'s
   name, default `"agent"`, never `"private"`; `ask_timeout`, 10 to 300 seconds, default 50;
   `grant_minutes`, default 10, at most `grant_max_minutes`, 1 to 1440, default 480;
-  `max_read_chars`, 1,000 to 500,000, default 200,000; `notify`, default `true`. Only
-  `workspace` and `enabled` do anything until the agent connection lands); `[search]` (the
-  default engine and `@aliases`, [below](#search-engines)).
-- **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]`, `[firefox]`, `[bookmarks]`,
-  `[private]`, `[mcp]`, `[search]`,
+  `max_read_chars`, 1,000 to 500,000, default 200,000; `notify`, default `true`;
+  `download_dir` and `download_max_mb`, [above](#downloads-from-the-agent-workspace)); `[search]`
+  (the default engine and `@aliases`, [below](#search-engines)).
+- **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]`, `[[routes]]`, `[firefox]`,
+  `[bookmarks]`, `[private]`, `[mcp]`, `[search]`,
   `hint_chars`, `insert_editing`, `[theme] name` and `appearance`; every key,
   its type and default are in [m5-core-config-and-theme](specs/m5-core-config-and-theme.md#schema-v1)
   and [m3-m4-core-prep](specs/m3-m4-core-prep.md#config-schema-2), and
@@ -1878,7 +1879,7 @@ it does not help. Mozilla's tracking-protection lists update either way.
 
 **Does Vimma update itself?** No. There are no releases yet, so build a newer `main` yourself.
 Firefox's updater is not built into Vimma, so it never asks Mozilla's update server
-(`aus5.mozilla.org`) for a Firefox build. An updater of Vimma's own is planned for M6
+(`aus5.mozilla.org`) for a Firefox build. An updater of Vimma's own is planned for M6a
 ([limits.md](limits.md)).
 
 **I want the tab strip back.** Set `vimma.ui.tabstrip.hidden` to `false` in `about:config`.

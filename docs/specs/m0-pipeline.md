@@ -14,20 +14,24 @@ new Firefox releases arrive as PRs.
   `package-lock.json` (allowlist: MIT, ISC, BSD-2/3, Apache-2.0, MPL-2.0), and a custom
   commitlint rule: `feat`/`fix` require a non-empty body.
 - `e2e.yml` (PR): skeleton job that runs only once the M0 build-strategy ADR picks
-  UI-only vs artifact build; until then it is a no-op with a TODO naming the ADR.
+  UI-only vs artifact build; until then it is a no-op with a TODO naming the ADR. (ADR-010 and
+  m0-build-strategy have since made it the artifact-build mochitest job.)
 - `nightly.yml` (03:00 UTC): full Linux x86_64 build via Surfer on a large or self-hosted runner,
   publish rolling `nightly` release; on failure open an issue with logs.
 - `upstream.yml` (every 6 h): `tools/upstream/check-release.py` polls
   `https://product-details.mozilla.org/1.0/firefox_versions.json` (`LATEST_FIREFOX_VERSION`);
-  on change, `bump-surfer-json.py` + PR `chore(upstream): Firefox X.Y`.
+  on change, `bump-surfer-json.py` + PR `chore(upstream): Firefox X.Y`. (Since replaced by the
+  upstream autopilot, spec m7-upstream-autopilot: `tools/upstream/detect.mjs` every 4 h.)
 - `claude.yml`: `@claude` mentions; `spec` + `claude:go` labelled issues → draft PR. Scoped token.
-- `renovate.json`: npm + GitHub Actions; automerge patch/minor after CI.
+- `renovate.json`: npm + GitHub Actions; automerge patch/minor after CI. (Since replaced by
+  Dependabot: `.github/dependabot.yml` and `dependabot-automerge.yml`.)
 - ~~Branch protection on `main`~~: dropped, see Settled.
 
 ## Tests (write first)
 
 - `tools/upstream/test_check_release.py`: given a fixture JSON with a newer version, outputs it;
-  same version → no output; malformed JSON → non-zero exit.
+  same version → no output; malformed JSON → non-zero exit. (Removed with `check-release.py` when
+  the upstream autopilot replaced it.)
 - `bump-surfer-json.py`: fixture `surfer.json` in, expected out.
 - A deliberately failing commit message (`feat: x` without body) is rejected by commitlint.
 
@@ -42,7 +46,8 @@ new Firefox releases arrive as PRs.
   `workflow_dispatch` bypasses the gate so the runner can be tested first. `clean: false` keeps
   `engine/` between runs; Firefox is re-downloaded only when `surfer.json` changes. Full e2e on
   the nightly waits for the build-strategy ADR (TODO in the workflow).
-- **e2e.yml** is a no-op job naming the build-strategy ADR (to be `docs/adr/010-*`).
+- **e2e.yml** was a no-op job naming the build-strategy ADR until `docs/adr/010-*` and
+  m0-build-strategy.
 - **claude.yml** follows anthropics/claude-code-action v1.0.247 (`examples/claude.yml`,
   `docs/setup.md`, `docs/security.md`), hardened after review:
   - `github_token: github.token` on every job, so the job `permissions:` block is the token Claude
@@ -62,20 +67,21 @@ status`, `gh issue view`); no `Bash(git:*)`, `Bash(node:*)`, `Bash(npm:*)`. Its 
     runs on `ready_for_review` and `workflow_dispatch`: the owner marks the draft ready (or runs
     `gh workflow run ci.yml --ref <branch>`). Accepts `ANTHROPIC_API_KEY` or
     `CLAUDE_CODE_OAUTH_TOKEN`; without either, steps skip and the run is green.
-  - **Residual risk:** with no branch protection, any job token with `contents: write`
-    (`spec-pr`, upstream.yml, nightly.yml) could push to `main`. Mitigated by owner-only
-    triggers and by never running Claude or Claude-written code with a write token. Tests Claude
-    writes do run (`npm test`) on the read-only `spec` runner.
+  - **Residual risk** (before the ruleset): with no branch protection, any job token with
+    `contents: write` (`spec-pr`, upstream.yml, nightly.yml) could push to `main`. Mitigated by
+    owner-only triggers and by never running Claude or Claude-written code with a write token.
+    Tests Claude writes do run (`npm test`) on the read-only `spec` runner.
 - **upstream.yml** needs no `npm ci` (Python stdlib scripts) to stay cheap. It does not run
   `surfer import` + build: that needs the self-hosted runner; the PR body says to, and the nightly
   does it after merge. It skips only when a PR for `upstream/firefox-X.Y` is open; a leftover
   branch from a failed or closed run is rebuilt and force-pushed, so failures are retried. The
   PR is a draft; marking it ready starts CI (optional `UPSTREAM_PR_TOKEN` secret instead).
 - **Licence check is a small script**, not a dependency: `tools/license-check/license-check.mjs`
-  (SPDX `AND`/`OR`, spec allowlist). Four permissive dev-only packages are outside the allowlist
-  and listed with reasons in `tools/license-check/exceptions.json`, pinned to `name@version`:
-  argparse (Python-2.0), minimatch (BlueOak-1.0.0), os-shim (MIT in its LICENSE, none in the
-  lockfile), pako (MIT AND Zlib). Stale exceptions fail the check.
+  (SPDX `AND`/`OR`, spec allowlist). At first, four permissive dev-only packages were outside the
+  allowlist and listed with reasons in `tools/license-check/exceptions.json`, pinned to
+  `name@version`: argparse (Python-2.0), minimatch (BlueOak-1.0.0), os-shim (MIT in its LICENSE,
+  none in the lockfile), pako (MIT AND Zlib); later dependencies added more. Stale exceptions
+  fail the check.
 - **commitlint rule** `body-required-for-types` lives in `tools/commitlint/body-required.mjs` as
   a local plugin; every commit on `main` passes it. It applies to `feat`, `fix` and `revert`.
   Footers and trailers (`Closes #3`, `BREAKING CHANGE: …`, `Co-Authored-By: …`) do not count as
@@ -83,11 +89,12 @@ status`, `gh issue view`); no `Bash(git:*)`, `Bash(node:*)`, `Bash(npm:*)`. Its 
   (`defaultIgnores: false`, `ignores: [ignoreCommit]`): a git-style revert is linted unless it
   has a body, merges and fixup!/squash!/amend! stay ignored. Vitest now also runs `tools/**/test/`.
 - **CI also runs** `npm run test:py` and `npx surfer license-check` (MPL headers, exits 1 on a
-  missing header). Actions are pinned to commit SHAs; Renovate keeps them pinned.
-- **Renovate** uses `platformAutomerge: false` so Renovate itself waits for green checks (with no
-  branch protection, GitHub auto-merge has nothing to wait on). `@zen-browser/surfer`, majors and
-  the whole `github-actions` manager never automerge (workflows hold write tokens and the
-  Claude secret).
+  missing header). Actions are pinned to commit SHAs; Dependabot keeps them pinned.
+- **Renovate** (since replaced by Dependabot) used `platformAutomerge: false` so Renovate itself
+  waited for green checks (with no branch protection, GitHub auto-merge had nothing to wait on).
+  `@zen-browser/surfer`, majors and the whole `github-actions` manager never automerge
+  (workflows hold write tokens and the Claude secret); `dependabot-automerge.yml` keeps that
+  rule.
 - **Self-hosted runner exposure:** any branch can add a workflow with `runs-on: vimma-build`.
   Runner groups (which could restrict it to nightly.yml) exist only for organisations, so the
   runbook says to keep the runner stopped outside the nightly window.
