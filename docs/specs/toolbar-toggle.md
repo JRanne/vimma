@@ -1,6 +1,6 @@
 # Spec: toolbar-toggle
 
-Status: accepted (not implemented) · Area: `packages/vimma-core/src/actions.mjs`, `defaults.mjs`,
+Status: accepted · Area: `packages/vimma-core/src/actions.mjs`, `defaults.mjs`,
 `config.mjs`, `cmdline.mjs`, `statusbar.mjs`; `ui/toolbar.mjs` (new), `ui/statusbar.mjs`,
 `host/VimmaHost.sys.mjs`, `host/addon-ops.mjs`, `config/ConfigHost.sys.mjs`,
 `browser/themes/shared/vimma/toolbar.css` (new) · Upstream patches: none · ADR: none
