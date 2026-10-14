@@ -1,7 +1,6 @@
 # Spec: m6a-updater
 
-Status: draft (design chosen; not to be implemented until the open questions on the signing key
-are decided) · Area: `configs/common/mozconfig`, `src/browser/branding/vimma/pref/firefox-branding.js`,
+Status: draft · Area: `configs/common/mozconfig`, `src/browser/branding/vimma/pref/firefox-branding.js`,
 `src/browser/base/content/vimma/updates/` (new), `packages/vimma-core/src/updates.mjs` (new),
 `config.mjs`, `actions.mjs`, `cmdline.mjs`, `statusbar.mjs`, `tools/package/`, `tools/update/`
 (new), `.github/workflows/{release,nightly,upstream}.yml`, `update-publish.yml` (new),
