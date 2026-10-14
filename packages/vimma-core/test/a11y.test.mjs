@@ -37,6 +37,10 @@ const THEMES = {
     theme,
     omarchy: fixture("light.colors.toml"),
   }),
+  "a base-only theme (Event Horizon)": resolveTheme({
+    theme,
+    omarchy: fixture("event-horizon.colors.toml"),
+  }),
 };
 
 describe("statusAnnouncement: the mode, said once, and only where nothing else says it", () => {

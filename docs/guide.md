@@ -434,9 +434,14 @@ light theme) and checks it every 2 seconds, so `omarchy-theme-set` (or picking a
 Omarchy menu) recolours every open window and start page within 2 seconds, without a restart.
 The Omarchy theme decides dark or light itself; `:theme` then applies to the built-in palette,
 which shows when you set `[theme] source = "file"` (or `vimma.theme.source` to `builtin`). A
-`colors.toml` Vimma cannot read (a value that is not a `#rrggbb` colour, a missing key) is
-ignored: the colours stay as they were, and the Browser Console (`ctrl+shift+j`) says which line
-is wrong.
+theme whose `colors.toml` has only the terminal colours (`accent`, `foreground`, `background`,
+`selection_background` and `color0` to `color15`, as older and third-party themes ship it) works
+too: Vimma fills in the rest as Omarchy does, so the shades and the bright colours match your
+terminal; only the selected-row colour is darkened (or lightened) until its text reads. A
+`colors.toml` Vimma cannot read (a value that is not a `#rrggbb` colour, or no `accent`,
+`foreground`, `background` or one of the six colours, by name or as `color0` to `color7`) is
+ignored: the colours stay as they were, and `about:vimma` and the Browser Console
+(`ctrl+shift+j`) say which key is wrong.
 
 ```toml
 schema = 2

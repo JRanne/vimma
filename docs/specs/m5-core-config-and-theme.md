@@ -112,6 +112,10 @@ bright_red bright_yellow bright_green bright_cyan bright_blue bright_magenta`. O
 (default `"dark"`; or `"light"` when the host reports a `light.mode` file), `orange` (else
 `yellow`), `brown` (else `dark_foreground`). Other keys in an Omarchy file (`hyprland_*`,
 `active_border_color`, …) are ignored; in `[theme.colors]` they are errors.
+(Since changed: an Omarchy file now needs only the base set, `accent background foreground red
+yellow green cyan blue magenta` or their ANSI stand-ins, and every other key is derived; the
+rules are in [m5-omarchy-theme](m5-omarchy-theme.md), "Base-only colors.toml". `[theme.colors]`
+keeps this list.)
 
 | Token                                                  | From                                                                                                                                                                                                                     |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
