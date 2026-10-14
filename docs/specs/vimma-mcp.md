@@ -1088,8 +1088,12 @@ where the spec was silent (3 and 4 can revisit):
   measured every 250 ms and the question withdrawn past the cap. `shouldBlockForReputationCheck`
   runs on the finished `.part` before `_checkReputationAndMove` renames it: the first 512 bytes,
   the zip central directory, then ClamAV. A refused one returns `VERDICT_DANGEROUS` with its part
-  deleted and `shouldKeepBlockedData` false for it, and is taken off the downloads list (the
-  notice says why, not Firefox's "blocked by parental controls").
+  and the empty placeholder at its name already deleted, so nothing of it is on disk once the
+  download has stopped, and is taken off the downloads list (the notice says why, not Firefox's
+  "blocked by parental controls"). Firefox keeps that placeholder itself: its
+  `shouldKeepBlockedData` is true for Firefox's app ID, which Vimma keeps, and takes no download,
+  so it cannot be false for agent downloads alone (`DownloadCore.sys.mjs`,
+  `_checkReputationAndMove`, Firefox 158.0; issue #204).
 - **Whose download it is.** `vimma_download` is a gate tool (the grant key), not a new protocol
   command or MCP tool: an agent downloads by `vimma_open`ing a file's URL, and the download is
   that connection's when the tab was opened or loaded by it (`agent-open`) and it is still
