@@ -624,7 +624,11 @@ Why it does not flake (plan §5: no retries; flaky means quarantine):
   max−min; 9V74: 6 jobs, 1 %); single cases within a few per cent. With the old method the same
   class moved from −18 % to +11 % against its baseline on unchanged code. So 10 % on the suite
   and 25 % per case are a wide margin over the noise, and a 20 % slower dispatcher fails the gate
-  (`tools/bench/test/bench.test.mjs`).
+  (`tools/bench/test/bench.test.mjs`). That test measures the baseline, an unchanged copy and the
+  slowed code as variants of one `measure()` call, sample by sample in rotating order, so all
+  three see the same JIT state and the same load from the parallel test pool, and gates the
+  median of three such runs, as the bench does over its 15 processes (issue #202: measured one
+  after the other, unchanged code read from −16 % to +17 % on the suite under coverage).
 - **The budget has headroom.** The slowest case is about 17 µs on CI, the key cases under 1 µs.
 
 If the step does fail without a slowing change, that is a flake: quarantine per plan §5 (open an
