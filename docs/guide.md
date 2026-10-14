@@ -1822,3 +1822,5 @@ over Vimma's choice.
 
 **Where are crash reports?** Nothing is sent anywhere. Use `coredumpctl list vimma`, then
 `coredumpctl info` on the entry.
+
+Throwaway line for #245; do not merge.
