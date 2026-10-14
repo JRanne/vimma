@@ -1,6 +1,6 @@
 # Spec: build-supply-chain
 
-Status: draft · Area: `package.json`, `package-lock.json`, `.npmrc` (new),
+Status: accepted · Area: `package.json`, `package-lock.json`, `.npmrc` (new),
 `.github/dependabot.yml`, `.github/workflows/dependabot-automerge.yml`,
 `.github/workflows/release.yml`, `.github/workflows/nightly.yml`, `.github/workflows/e2e.yml`,
 `.github/workflows/sites.yml`, `.github/workflows/upstream.yml`,
@@ -39,11 +39,12 @@ a tampered input and every user. Today:
 
 1. **The release and nightly builds do not verify the Firefox source.** `release.yml` (lines
    82–89) and `nightly.yml` (lines 44–52) run `npx surfer download --force` and nothing else.
-   Surfer checks no hash (Research, R3). Only `upstream.yml`, `e2e.yml` and `sites.yml` compare
-   the tarball with Mozilla's `SHA512SUMS`, and none of them checks the signature on
-   `SHA512SUMS`: `tools/upstream/verify-sha512.py`'s docstring and `docs/rebase.md` ("We do not
-   check the GPG signature on `SHA512SUMS`: HTTPS from archive.mozilla.org is the trust anchor")
-   say so.
+   Surfer checks no hash (Research, R3). Only `e2e.yml`, `sites.yml` and
+   `tools/upstream/source-check.sh` (run by `upstream.yml` and the Beta canary,
+   `upstream-beta.yml`) compare the tarball with Mozilla's `SHA512SUMS`, and none of them checks
+   the signature on `SHA512SUMS`: `tools/upstream/verify-sha512.py`'s docstring and
+   `docs/rebase.md` ("We do not check the GPG signature on `SHA512SUMS`: HTTPS from
+   archive.mozilla.org is the trust anchor") say so.
 2. **A cached engine is trusted by its label.** Both workflows check out with `clean: false` and
    skip the download when `engine/.vimma-firefox-version` matches `surfer.json`, a design for a
    persistent machine. Anything that changed a file under `engine/` or `.surfer/` between runs
@@ -177,7 +178,7 @@ for most of the 12.5 minutes `docs/runbook.md` records for `surfer download`; wi
   `fractal`, last modified 2022-06-27.
 
 **R5. What runs in the release build job, and whether it needs install scripts.** From
-`package-lock.json` at `origin/main` (30bf67e):
+`package-lock.json` at `main` (7fc0226; the lockfile is unchanged since 30bf67e):
 
 - The build job runs `tools/package/package.mjs`, `tools/sync-core.mjs`,
   `tools/version-files/version-files.mjs`, `tools/import/restore-patched.mjs` and
@@ -309,12 +310,12 @@ entries, so a cache shared with the release is an input the release cannot verif
 
 **R13. How `mach` fetches its toolchains.** With `--enable-bootstrap` (`configs/common/mozconfig`)
 configure resolves each toolchain (clang, Rust, cbindgen, the sysroot and others) to a task in
-Mozilla's Taskcluster index (`build/moz.configure/bootstrap.configure:188-225`, Firefox
-157.0.1) and downloads it with `mach artifact toolchain`, which checks the artifact against the
-digest in that task's `public/chain-of-trust.json`, fetched from the same Taskcluster queue over
-HTTPS (`python/mozbuild/mozbuild/artifact_commands.py:344-379`). The signature on the
-chain-of-trust file is not checked. On a fresh hosted runner every build downloads the
-toolchains anew.
+Mozilla's Taskcluster index (`build/moz.configure/bootstrap.configure:188-225`) and downloads it
+with `mach artifact toolchain`, which checks the artifact against the digest in that task's
+`public/chain-of-trust.json`, fetched from the same Taskcluster queue over HTTPS
+(`python/mozbuild/mozbuild/artifact_commands.py:344-379`). Both files were read in Firefox
+157.0.1 and are byte-identical in 158.0. The signature on the chain-of-trust file is not
+checked. On a fresh hosted runner every build downloads the toolchains anew.
 
 ## Design
 
@@ -343,10 +344,10 @@ toolchains anew.
    `gpg --verify` (same exit status, and it needs a writable `GNUPGHOME`); Sequoia's `sqv` (not
    installed on Ubuntu runners; `gpgv` is, R7).
 3. **Two scripts are the only ways to get Firefox source.**
-   - `tools/upstream/source-check.sh VERSION` (from the Beta canary,
-     [upstream-beta-canary](upstream-beta-canary.md), PR #192) streams the tarball through
-     `sha512sum` and `patch-check.py` for `upstream.yml` and the canary. It now also downloads
-     `SHA512SUMS.asc` and passes it to `verify-sha512.py`.
+   - `tools/upstream/source-check.sh VERSION` (spec
+     [upstream-beta-canary](upstream-beta-canary.md)) streams the tarball through `sha512sum` and
+     `patch-check.py` for `upstream.yml` and the Beta canary (`upstream-beta.yml`). It also
+     downloads `SHA512SUMS.asc` and passes it to `verify-sha512.py`.
    - `tools/upstream/firefox-source.sh` (new) materialises a verified `engine/` for builds. It
      reads the version from `surfer.json`, downloads
      `.surfer/engine/firefox-<version>.source.tar.xz` with `curl` when absent, downloads
@@ -381,17 +382,39 @@ toolchains anew.
 
 ### Where full builds run
 
-6. **Neither build workflow names a self-hosted runner; both target the standard hosted runner,
-   `ubuntu-24.04`.** No build machine exists (R7), and this spec does not add one. The self-hosted
-   target is removed rather than kept switched off, because it is the only part of the workflows
-   that would need a machine-specific security design (a persistent workspace, a runner
-   identity, a machine that holds the Safe Browsing key between runs), and keeping it would leave
-   `clean: false` and the cached-engine shortcut (Problem 2) in place for a machine nobody runs.
-   The change is inert until `NIGHTLY_ENABLED` or `RELEASE_ENABLED` is set. Whether the standard
-   runner is fast enough, or a larger one is needed, is open question 1; the measurement that
-   answers it is part of sub-PR 4. A self-hosted machine, if one is ever wanted, comes with its
-   own spec and its own `docs/security.md` rules; the guard in decision 7 stays in force either
-   way.
+6. **Full builds run on GitHub-hosted runners: the standard `ubuntu-24.04` runner when a cold
+   build, the nightly's mochitests and packaging finish in under 4 hours on it; otherwise a
+   larger hosted runner, at least for the release.** Sub-PR 4 measures that time. Neither build
+   workflow names a self-hosted runner.
+   - The standard runner comes first because it is free for a public repository and already
+     exceeds what the build needs: 16 GB RAM is twice Mozilla's recommendation, and 85 GB of
+     free disk is almost three times the build's 30 GB, though only 14 GB is documented (R9,
+     R10). Its only open point is time: at least 116 minutes of compiling on 4 CPUs by the
+     thread-minute estimate (R10). A release, built with an empty cache, takes the full cold
+     time; the nightly runs unattended at 03:00 UTC, so a long build costs only latency.
+   - The 4-hour threshold leaves the 1.5× margin of decision 10 inside GitHub's 6-hour job limit
+     (R9).
+   - Above the threshold, a larger hosted runner is preferred because it keeps the trust boundary
+     of decision 20 and needs no machine. A 16-core runner (64 GB RAM, 600 GB SSD) would build in
+     roughly the reference machine's 39 minutes, about $1.60 per build at $0.042 per minute
+     (estimated from R11's prices, not measured). Only the release, built a few times a month,
+     has to move there; the nightly may stay on the standard runner if it fits there. Larger
+     runners require the repository to move to an organisation on the GitHub Team plan (R7,
+     R11), which changes its URL, settings and rulesets.
+   - Rejected: a third-party runner service, as Zen Browser uses for non-release builds (R11). It
+     is faster and cheaper than a larger hosted runner, but adds a party that runs the build and
+     holds the Safe Browsing key, outside the trust boundary of decision 20.
+   - Rejected: a self-hosted machine. No build machine exists (R7). It is the fastest per build,
+     but it is the only option that needs a machine-specific security design (a persistent
+     workspace, a runner identity, a machine that holds the Safe Browsing key between runs) and
+     an always-available machine. The self-hosted target is removed from both workflows rather
+     than kept switched off, because keeping it would leave `clean: false` and the cached-engine
+     shortcut (Problem 2) in place for a machine nobody runs. A self-hosted machine, if one is
+     ever wanted, comes with its own spec and its own `docs/security.md` rules; the guard in
+     decision 7 stays in force either way.
+
+   The change is inert until `NIGHTLY_ENABLED` or `RELEASE_ENABLED` is set.
+
 7. **Nothing an outsider can trigger runs on a self-hosted runner.** A test
    (`tools/test/self-hosted-runner.test.mjs`) reads every workflow and fails when a job of a
    workflow triggered by `pull_request`, `pull_request_target`, `pull_request_review`,
@@ -407,7 +430,8 @@ toolchains anew.
    workflow runs before a person approves that run. `docs/security.md` records that setting as
    **⚠ setting** with the `gh api` command that shows it, because no test can read an admin
    setting with the workflow token.
-8. **Build jobs restore nothing from the Actions cache, and the release uses no compiler cache.**
+8. **Build jobs restore nothing from the Actions cache, and neither build uses a shared compiler
+   cache.**
    `release.yml` and `nightly.yml` check out with the default `clean: true`, set up Node with
    `actions/setup-node` without its `cache` input, use no `actions/cache` step, and do not set
    `SCCACHE_GHA_ENABLED`. On a hosted runner every build therefore starts from a fresh virtual
@@ -415,8 +439,18 @@ toolchains anew.
    empty `SCCACHE_DIR` (`release.yml` lines 64–72), so the rule holds on any runner. Reason: a
    release run restores caches written on `main` (R12), and any job on `main` with the runtime
    token can write them, so a shared cache is an unverified input; `npm ci` would verify npm's
-   cache by integrity, but the release gains nothing from it worth the exception. Whether the
-   nightly should use the Actions cache for sccache is open question 2.
+   cache by integrity, but the release gains nothing from it worth the exception.
+
+   The nightly does not keep sccache in the Actions cache either, while a cold nightly fits its
+   runner (decision 6). A shared cache could shorten nightlies that change little, but: the
+   cache a full build produces is not measured (R10) and may exceed the 10 GB free per
+   repository, so it would thrash and evict the npm caches the pull request jobs use, or cost
+   $0.07 per GiB-month beyond that (R12); rate limits can drop its writes (R12); and every job on
+   `main` can write it, so a nightly built from it is only as trustworthy as every such job. The
+   release could not use it in any case. If nightly time becomes the constraint, a later change
+   revisits this with the measured cache size, a cache key prefix only `nightly.yml` writes, and
+   R12's eviction behaviour checked against that size.
+
 9. **A disk guard before the download.** Both build jobs check free space on the workspace's
    file system and fail when it is under 40 GB, naming the measured need (about 30 GB, R10). The
    guard comes before the download, so a runner image that shrinks fails in seconds, not after an
@@ -533,8 +567,8 @@ toolchains anew.
     gate, and `RELEASE_ENABLED` and `NIGHTLY_ENABLED` stay unset until then. Every sub-PR is
     therefore safe to merge with the builds switched off: the source verification and package
     rules protect PR CI and the autopilot at once, and the build workflows are correct before they
-    first run. The measurement build in sub-PR 4 publishes nothing and reads no secret. Where full
-    builds run (open question 1) has to be settled before the gate, not before this spec lands.
+    first run. The measurement build in sub-PR 4 publishes nothing and reads no secret. Its
+    result selects the runner under decision 6, and that runner is in place before the gate.
 
 ## Security and privacy
 
@@ -624,7 +658,7 @@ same key without the 2026-08-06 subkey and revocation):
 - `a tampered tarball already on disk fails like a downloaded one`
 - `a missing tarball is downloaded by the script, never by Surfer`
 
-**vitest, `tools/upstream/test/source-check.test.mjs`** (extends the file from PR #192):
+**vitest, `tools/upstream/test/source-check.test.mjs`** (extends the existing file):
 
 - `the source check fails on a SHA512SUMS whose signature is not good`
 
@@ -695,9 +729,9 @@ No mochitest or e2e scenario: nothing in the browser changes.
 ## Delivery
 
 Each sub-PR adds its `docs/security.md` rules together with the tests they link, so the link
-check (`npm run security-links`) holds at every step. None needs a build machine or a build variable,
-and only sub-PR 5 needs a repository setting changed; the order puts first what protects
-something that runs today.
+check (`npm run security-links`) holds at every step. None needs a build machine or a build
+variable, and only sub-PR 5 needs a repository setting changed; the order puts first what
+protects something that runs today.
 
 1. **`build(deps): pin surfer, no install scripts, no self-hosted runner for outsiders`.** Exact
    Surfer pin; `.npmrc`; `npm ci --ignore-scripts` and `npx --no` in `release.yml` and
@@ -710,10 +744,10 @@ something that runs today.
    auto-merges now, and Problems 4 and 5's runner half.
 2. **`ci(upstream): verify mozilla's signature on SHA512SUMS`.** Pinned key,
    `verify-sha512.py --signature`, `source-check.sh` and the `e2e.yml` and `sites.yml` checks
-   use it; ADR-021; G4 amended; `docs/rebase.md`. Depends on PR #192 (which adds
-   `source-check.sh`); if that is not merged first, this sub-PR changes `upstream.yml`'s inline
-   step instead and #192 moves it. B1 for PR CI and the autopilot, which run today and open
-   pull requests that may merge without a person (ADR-020).
+   use it; ADR-021; G4 amended; `docs/rebase.md`. Because `upstream.yml` and the Beta canary both
+   run `source-check.sh`, one change covers both. B1 for PR CI, the autopilot and the canary,
+   which run today, and the autopilot opens pull requests that may merge without a person
+   (ADR-020).
 3. **`ci(deps): hold every release-path change for review, with the package diff`.**
    `release-path.mjs`, the `classify` job and the `npm diff` summary. Completes B3.
 4. **`ci(release): full builds on hosted runners, from verified, freshly extracted source`.**
@@ -722,10 +756,10 @@ something that runs today.
    goes. Before merging, a temporary job in the pull request's own CI (hosted runner, no secret,
    keyless, publishes nothing) runs `firefox-source.sh`, `npm run import` and a full build, and
    records wall time, peak disk and peak memory; the numbers go into `docs/runbook.md`, set
-   `timeout-minutes` (decision 10), and answer open question 1; the job is removed before merge.
-   ADR-010 and ADR-015 corrected. B1 for builds, B2. If the build does not fit (open question 1),
-   the sub-PR still lands, with both builds still switched off, and the measurement goes into
-   open question 1 for a choice between options (b) to (d).
+   `timeout-minutes` (decision 10), and select the runner (decision 6); the job is removed before
+   merge. ADR-010 and ADR-015 corrected. B1 for builds, B2. If the measured time is 4 hours or
+   more, the sub-PR still lands with both builds switched off, and the release job moves to a
+   larger hosted runner (decision 6) before the release gate.
 5. **`ci(release): the safe browsing key in a build environment; key rotation watch`.** The
    `build` environment (created and the secret moved by a repository administrator before
    merging, steps in the runbook), `environment: build` in both jobs, `mozilla-key-check.py` in
@@ -733,37 +767,4 @@ something that runs today.
 
 ## Open questions
 
-1. **Where do full builds run?** Options:
-   - (a) **The standard hosted runner, `ubuntu-24.04`.** Free for a public repository. 16 GB RAM
-     is twice Mozilla's recommendation and 85 GB of free disk is almost three times the build's
-     30 GB, though only 14 GB is documented (R9, R10). The open point is time: at least 116
-     minutes of compiling on 4 CPUs by the thread-minute estimate (R10), against a 6-hour job
-     limit. A release, built with an empty cache, takes the full cold time; the nightly runs
-     unattended at 03:00 UTC, so a long build costs nothing but latency.
-   - (b) **A larger hosted runner.** A 16-core runner (64 GB RAM, 600 GB SSD) would build in
-     roughly the reference machine's 39 minutes; at $0.042 per minute that is about $1.60 per
-     build and about $50 a month for a nightly (estimates from R11's prices, not measured).
-     Larger runners need the repository to move to an organisation on the GitHub Team plan
-     (R7, R11), which changes its URL, settings and rulesets.
-   - (c) **A third-party runner service**, as Zen Browser uses for non-release builds (R11).
-     Faster and cheaper than (b), but adds a party that runs the build and holds the Safe
-     Browsing key, outside GitHub's and Mozilla's trust boundary (decision 20).
-   - (d) **A self-hosted machine.** Fastest per build and free to run, but it needs its own
-     security design (Problem 5, R7) and an always-available machine.
-
-   Recommended: (a), confirmed by the sub-PR 4 measurement. Accept it if a cold build plus the
-   nightly's mochitests and packaging finishes in under 4 hours, which leaves the 1.5× margin of
-   decision 10 inside the 6-hour limit. If it does not, prefer (b) over (c) and (d), because it
-   keeps the trust boundary of decision 20 and needs no machine; and only the release, built a
-   few times a month, has to run there. None of this delays anything: no build publishes before
-   the release gate (decision 22).
-
-2. **Should the nightly use sccache with the Actions cache?** It could shorten nightlies that
-   change little. Against it: a full build's cache size is not measured (R10) and may exceed the
-   10 GB free per repository, so it would thrash and evict the npm caches the PR jobs use, or
-   cost $0.07 per GiB-month beyond that (R12); rate limits can drop writes; and the cache is
-   writable by every job on `main`, so a nightly built from it is only as trustworthy as every
-   such job. The release could not use it in any case (decision 8). Recommended: no, while a cold
-   nightly fits (open question 1); revisit with the measured cache size if nightly time becomes
-   the constraint, and then with a key prefix only `nightly.yml` writes and a read of R12's
-   eviction behaviour against the measured size.
+None.
