@@ -8,6 +8,7 @@ const dir = new URL("../../.github/workflows/", import.meta.url);
 const workflow = (name) => readFileSync(new URL(name, dir), "utf8");
 const upstream = workflow("upstream.yml");
 const e2e = workflow("e2e.yml");
+const source = readFileSync(new URL("../upstream/source-check.sh", import.meta.url), "utf8");
 
 /**
  * @param {string} text a workflow
@@ -93,7 +94,20 @@ describe("upstream autopilot workflow", () => {
     expect(download).toBeGreaterThan(0);
     expect(verify).toBeGreaterThan(download);
     expect(imp).toBeGreaterThan(verify);
-    expect(job(upstream, "patch-check")).toContain("tools/upstream/verify-sha512.py");
+    expect(source).toContain('python3 "$here/verify-sha512.py"');
+    expect(job(upstream, "patch-check")).toContain("tools/upstream/source-check.sh");
+  });
+
+  it("upstream.yml checks the source through source-check.sh", () => {
+    // One script for the release autopilot and the Beta canary, so their checks cannot drift.
+    const block = job(upstream, "patch-check");
+    expect(block).toContain('run: tools/upstream/source-check.sh "$VERSION"');
+    expect(block).not.toContain("curl ");
+    expect(block).toContain("result: ${{ steps.check.outputs.result }}");
+    expect(block).toContain("artifacts: ${{ steps.check.outputs.artifacts }}");
+    expect(source).toContain(`patch-check.py" --tarball - --drain`);
+    expect(source).toContain("patch-audit.py");
+    expect(source).toContain(`artifact-preflight.mjs" patch-check.json`);
   });
 
   it("falls back to a compare link when Actions may not open PRs", () => {
