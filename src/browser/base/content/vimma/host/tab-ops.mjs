@@ -11,6 +11,11 @@ import { tabTarget } from "../core/tabs.mjs";
 
 /** @import { Action } from "../core/dispatcher.mjs" */
 
+const lazy = /** @type {any} */ ({});
+ChromeUtils.defineESModuleGetters(lazy, {
+  UrlbarUtils: "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
+});
+
 /**
  * @typedef {object} TabBrowser  the part of gBrowser these keys use
  * @property {Element[]} visibleTabs
@@ -126,6 +131,31 @@ export function openUrl(win, text, where) {
   /** @type {{ openTrustedLinkIn: (url: string, where: string, params: object) => void }} */ (
     /** @type {unknown} */ (win)
   ).openTrustedLinkIn(text, where, { allowThirdPartyFixup: true, inBackground: false });
+  return true;
+}
+
+/**
+ * `:open text` and `:tabnew text` (docs/specs/search-engines.md, decision 5): a search alias
+ * (`@gh cats`, Vimma's or Firefox's own `@google`) or a Places bookmark keyword at the start
+ * resolves as the URL bar resolves it, with Firefox's own function; anything else goes through
+ * `openUrl` as before. The resolved URL is checked again (a keyword bookmarklet is a
+ * `javascript:` URL) and loaded without fixup, its POST data passed on. The principal is never
+ * inherited (`mayInheritPrincipal` is ignored). `? @gh cats` searches the default engine for
+ * the literal text, as URIFixup's `?` prefix does.
+ * @param {Window} win
+ * @param {string} text
+ * @param {"current" | "tab"} where
+ * @returns {Promise<boolean>} false when refused; nothing is loaded
+ */
+export async function openTyped(win, text, where) {
+  if (refusedScheme(text)) return false;
+  /** @type {{ url: string, postData: unknown }} */
+  const r = await lazy.UrlbarUtils.getShortcutOrURIAndPostData(text);
+  if (!r.url || r.url === text) return openUrl(win, text, where);
+  if (refusedScheme(r.url)) return false;
+  /** @type {{ openTrustedLinkIn: (url: string, where: string, params: object) => void }} */ (
+    /** @type {unknown} */ (win)
+  ).openTrustedLinkIn(r.url, where, { postData: r.postData, inBackground: false });
   return true;
 }
 

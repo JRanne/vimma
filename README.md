@@ -79,6 +79,8 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
   and `ctrl+b ?` lists them with the rest.
 - `~/.config/vimma/config.toml` sets options, key bindings and workspaces, and applies on save.
   `about:vimma` shows the version and what is in force.
+- Search engines and `@aliases` from `config.toml`: `@gh vimma` in the URL bar or `:open`
+  searches GitHub, and the default engine is set from the file.
 - Theming: the bars, pickers, hints, start page and Firefox's own sidebar take their colours
   from your desktop theme and switch at once when it changes, or from your own colours in
   `config.toml` (by default Vimma's own vimma.dev palette, light or dark as your system is, or

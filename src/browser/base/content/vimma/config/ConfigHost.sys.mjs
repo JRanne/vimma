@@ -19,10 +19,12 @@ import {
   resolveSourcePath,
 } from "../core/config.mjs";
 import { formatConfigTemplate } from "../core/defaults.mjs";
+import { locateKeys } from "../core/toml.mjs";
 import { CONFIG_EDIT_TOPIC, CONFIG_RELOAD_TOPIC, VimmaHost } from "../host/VimmaHost.sys.mjs";
 import { openUrl } from "../host/tab-ops.mjs";
 import { McpHost } from "../host/mcp-ops.mjs";
 import { PrivateSwap } from "../host/private-swap.mjs";
+import { SearchHost } from "../search/SearchHost.sys.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
 import { WorkspaceRouter } from "../workspaces/WorkspaceRouter.sys.mjs";
@@ -107,8 +109,11 @@ function applyToWindow(win, config) {
   view.mainSize = config.panes.mainSize;
 }
 
-/** @param {ActiveConfig} next */
-function apply(next) {
+/**
+ * @param {ActiveConfig} next
+ * @param {string} text  the file it was read from, to locate `[search]`'s problems
+ */
+function apply(next, text) {
   const { config, keymap } = next;
   VimmaHost.configure({
     keymap,
@@ -123,6 +128,10 @@ function apply(next) {
   PrivateSwap.configure(config.private.placement);
   WorkspaceRouter.setRoutes(config.routes);
   McpHost.configure(config.mcp);
+  // docs/specs/search-engines.md: its problems arrive later and join the file's (showErrors).
+  SearchHost.setConfig(config.search, locateKeys(text)).catch((e) =>
+    console.error("vimma: [search] not applied", e),
+  );
   // `[mcp] workspace` names the agent workspace the reconcile ensures (vimma-mcp decision 8).
   WorkspaceStore.setConfig(config.workspaces, { agent: config.mcp.workspace }).catch((e) =>
     console.error("vimma: [workspaces] not applied", e),
@@ -147,8 +156,20 @@ function report(path, list, kept) {
       }:\n  ${lines.join("\n  ")}`,
     );
   }
-  VimmaHost.configure({ configErrors: errors, configFile: PathUtils.filename(path) });
+  showErrors();
 }
+
+/**
+ * The status bar's errors: the last read's, then `[search]`'s, which only the profile's engines
+ * reveal once the file is applied (search-engines decision 9).
+ */
+function showErrors() {
+  VimmaHost.configure({
+    configErrors: [...errors, ...SearchHost.errors],
+    configFile: PathUtils.filename(errorsPath || configPath()),
+  });
+}
+SearchHost.onErrors = showErrors;
 
 /**
  * Applies `text` (the contents of `path`) when it is valid, else reports its errors.
@@ -160,7 +181,7 @@ function use(path, text) {
   const previous = active;
   const r = reloadConfig(active, text);
   active = r.active;
-  if (active !== previous) apply(active);
+  if (active !== previous) apply(active, text);
   report(path, r.errors, previous !== null);
   return r.errors.length === 0;
 }

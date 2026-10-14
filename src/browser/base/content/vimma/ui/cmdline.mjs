@@ -65,8 +65,8 @@ function isPrivate(win) {
  * @typedef {object} Callbacks
  * @property {(result: Extract<CommandResult, { kind: "run" }>) => void} run
  * @property {() => void} [changed]  after it opens or closes (the status bar's mode)
- * @property {() => Readonly<Record<string, readonly string[]>>} [args]  what commands' arguments
- *   complete to (`{ addon: names }`)
+ * @property {() => import("../core/cmdline.mjs").CompletionArgs} [args]  what commands'
+ *   arguments complete to (`{ addon: names }`)
  */
 
 export class CommandLine {

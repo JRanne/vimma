@@ -194,8 +194,12 @@ link targets for hints, which chrome must treat as untrusted.
 - U4. `:open` and `:tabnew` **never** open `javascript:` or `data:` URLs, however disguised (case,
   tabs, newlines, leading controls, `view-source:`)
   ([#98](https://github.com/JRanne/vimma/issues/98)). No length cap applies to text typed there.
+  A search alias or bookmark keyword at the start resolves as the URL bar resolves it
+  (`UrlbarUtils.getShortcutOrURIAndPostData`), and the URL it resolves to is checked again, so a
+  keyword bookmarklet is refused; the bookmark's principal is never inherited.
   [`javascript_urls_are_blocked_with_a_notice`](../tests/browser/browser_vimma_cmdline.js),
-  [`data_urls_are_blocked_with_a_notice`](../tests/browser/browser_vimma_cmdline.js)
+  [`data_urls_are_blocked_with_a_notice`](../tests/browser/browser_vimma_cmdline.js),
+  [`bookmark_keywords_work_and_bookmarklets_are_refused`](../tests/browser/browser_vimma_search.js)
 - U5. Every Vimma open of text with the system principal (`p`, `P`, `:open`, `:tabnew`) **must**
   refuse those schemes through one shared check (`refusedScheme`, `core/pageurl.mjs`); bookmarks
   and the socket's `open` go further and allow only http, https, file and about.
