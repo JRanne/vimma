@@ -1056,8 +1056,11 @@ export const VimmaHost = {
           if (isPrivateWorkspace(win)) return privatePanel(pickerWorkspaces(win)).model;
           return WindowWorkspaces.get(win)?.model ? pickerWorkspaces(win) : null;
         },
+        // The header names the cycle's targets, past the agent workspace (vimma-mcp decision 9).
         where: () =>
-          isPrivateWorkspace(win) ? privatePanel(pickerWorkspaces(win)).options : undefined,
+          isPrivateWorkspace(win)
+            ? privatePanel(pickerWorkspaces(win)).options
+            : { skip: WindowWorkspaces.get(win)?.cycleSkip },
         info: (tabId) => {
           const tab = /** @type {any} */ (tabById(win, tabId));
           if (!tab) return undefined;

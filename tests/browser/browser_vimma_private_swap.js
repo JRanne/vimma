@@ -925,3 +925,18 @@ add_task(async function a_window_hyprland_never_names_is_shown_as_a_window_and_s
   );
   Assert.ok(!lines.some((l) => l.includes(EVENT_TITLE)), "no event title in the console");
 });
+
+// A reset while Hyprland has not named a window yet (the next task's start(), here at once):
+// the naming in flight must end, give the window its title back, and not stand in for the next
+// one, or every later swap waits forever for an address (seen on #186's CI, where a slow run
+// ended nothing_is_sent_before_the_config_says_where mid-naming).
+add_task(async function a_reset_while_a_window_is_being_named_names_it_afresh() {
+  await start({ mode: "nameless" }, undefined, { configured: false });
+  PrivateSwap.configure("swap");
+  const nonce = /^vimma-[0-9a-f]{32}$/;
+  await until(() => nonce.test(document.title), "the normal window carries its nonce title");
+  await start();
+  await until(() => !nonce.test(document.title), "the window gets its own title back");
+  const priv = await enter();
+  Assert.ok(inSlot(priv) && parked(window), "both windows are named afresh and the swap runs");
+});
