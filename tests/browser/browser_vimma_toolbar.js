@@ -594,6 +594,20 @@ add_task(async function the_status_bar_says_not_secure_and_private() {
 // indicator. It keeps the registrable domain in view, is never replaced by a title, names an
 // opener-controlled about:blank, shows what the page uses, and reads the security state from
 // the browser, not from the hidden address bar.
+/**
+ * The host as the status bar shows it: the URL up to its path, without a cut's ellipses.
+ * @param {string | null} url
+ */
+function hostShown(url) {
+  if (!url) return null;
+  return (
+    url
+      .replace(/^https?:\/\//, "")
+      .split(/[/…]/)
+      .find(Boolean) ?? null
+  );
+}
+
 add_task(async function the_status_bar_keeps_the_registrable_domain() {
   const deep =
     "https://sub1.test1.example.com/browser/browser/base/zen-components/tests/browser/file_vimma_plain.html?a-very-long-query-that-pushes-the-host-out";
@@ -603,9 +617,12 @@ add_task(async function the_status_bar_keeps_the_registrable_domain() {
   try {
     for (const width of ["40ch", "60ch", "90ch"]) {
       bar.style.width = width;
-      await until(() => segText("url")?.includes("example.com"), `${width}: the base domain shows`);
-      const url = segText("url");
-      Assert.ok(/example\.com(…|\/|$)/.test(url), `${width}: it ends the host (${url})`);
+      await until(() => !!hostShown(segText("url")), `${width}: the host shows`);
+      const host = hostShown(segText("url"));
+      Assert.ok(
+        host === "example.com" || host.endsWith(".example.com"),
+        `${width}: it ends with the base domain (${segText("url")})`,
+      );
     }
     // A page that titles itself with an address does not take the URL's place.
     await SpecialPowers.spawn(tab.linkedBrowser, [], () => {
@@ -613,7 +630,7 @@ add_task(async function the_status_bar_keeps_the_registrable_domain() {
     });
     bar.style.width = "60ch";
     await until(
-      () => segText("url")?.includes("example.com"),
+      () => hostShown(segText("url"))?.endsWith(".example.com"),
       "the URL stays next to such a title",
     );
   } finally {
@@ -706,9 +723,16 @@ add_task(async function not_secure_comes_from_the_browser_state() {
   await until(() => segText("security") === "not secure", "a certificate error page");
   gBrowser.removeTab(bad);
   // Mixed active content.
-  const mixed = await BrowserTestUtils.openNewForegroundTab(
-    gBrowser,
-    DIR + "file_vimma_mixed.html",
+  const mixed = await BrowserTestUtils.openNewForegroundTab(gBrowser, PLAIN);
+  // The test page loads a script over http: mixed active content, allowed above.
+  await SpecialPowers.spawn(
+    mixed.linkedBrowser,
+    [HTTP_PLAIN.replace(/[^/]*$/, "file_vimma_mixed.js")],
+    (src) => {
+      const script = content.document.createElement("script");
+      script.src = src;
+      content.document.head.append(script);
+    },
   );
   await until(() => mixed.linkedBrowser.contentTitle === "mixed loaded", "the http script ran");
   await until(() => segText("security") === "not secure", "mixed active content");
