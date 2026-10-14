@@ -1,7 +1,7 @@
 // Issue #16: the third-party code Vimma vendors ships its notice in about:license, which is in
 // omni.ja and so in every release artefact (tarball, AppImage, .deb, AUR). The page is Firefox's
-// toolkit/content/license.html, preprocessed with the product-specific blocks that
-// src/browser/base/moz-build.patch points at our licence/*.html.
+// toolkit/content/license.html.mako, rendered with the product-specific blocks that
+// src/browser/base/moz-build.patch passes in from our licence/*.html.
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -18,15 +18,18 @@ const squash = (s) => s.replace(/\s+/g, " ").trim();
 const read = (path) => readFileSync(join(ROOT, path), "utf8");
 
 describe("about:license notices", () => {
-  it("moz-build.patch defines the product-specific licence blocks, each an existing file", () => {
+  it("moz-build.patch passes the product-specific licence blocks to license.html, in order", () => {
+    // Firefox 158 renders about:license with toolkit/content/gen_license_html.py, which takes the
+    // app blocks as extra GENERATED_FILES inputs after app-license.html, in its APP_BLOCKS order:
+    // list, body, product name (they were #includesubst DEFINES up to Firefox 157).
     const patch = read("src/browser/base/moz-build.patch");
-    for (const [define, file] of [
-      ["APP_LICENSE_PRODUCT_NAME", "product-name.html"],
-      ["APP_LICENSE_LIST_BLOCK", "list.html"],
-      ["APP_LICENSE_BODY_BLOCK", "body.html"],
-    ]) {
-      const line = `+DEFINES["${define}"] = "%s/content/vimma/licence/${file}" % SRCDIR`;
-      expect(patch).toContain(line);
+    const files = ["list.html", "body.html", "product-name.html"];
+    const lines = [
+      ' "content/overrides/app-license.html",',
+      ...files.map((file) => `+    "content/vimma/licence/${file}",`),
+    ];
+    expect(patch).toContain(lines.join("\n"));
+    for (const file of files) {
       expect(existsSync(join(ROOT, "src", LICENCE_DIR, file)), file).toBe(true);
     }
   });
