@@ -1,6 +1,11 @@
 // Declarative e2e scenarios (spec m0-e2e-harness, "Scenario format"): one JSON file per
 // scenario in tests/e2e/scenarios/, steps open / keys / wait-for-state / assert-state /
-// screenshot / restart, and optional `prefs` overriding the harness profile's. Names carry the
+// screenshot / restart, and optional `prefs` overriding the harness profile's. For the agent
+// question line (docs/specs/vimma-mcp.md, sub-PR 2b): `hold` keeps one full connection for the
+// rest of the scenario (opened while MCP is off, so later keys never ask), `agent` sends an
+// agent request without waiting and `agent-result` checks its answer, `ctl` runs vimma-ctl
+// without waiting (a new full connection, which asks while MCP is on) and `ctl-result` checks
+// how it ended, and `sleep` waits for a time-based rule (the 1.5 s quiet, the 1 s arming). Names carry the
 // milestone (m<N>-…) or, for regression tests, the issue (issue-<N>-…).
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -10,8 +15,21 @@ import { setTimeout as sleep } from "node:timers/promises";
  * @typedef {{
  *   open?: string, keys?: string, "wait-for-state"?: Record<string, unknown>,
  *   "assert-state"?: Record<string, unknown>, screenshot?: string, restart?: "quit" | "kill",
- *   timeoutSeconds?: number,
+ *   timeoutSeconds?: number, hold?: true, sleep?: number, agent?: AgentSend,
+ *   "agent-result"?: { of: string, expect: unknown }, ctl?: { run: string[], as: string },
+ *   "ctl-result"?: { of: string, expect: unknown },
  * }} Step
+ * @typedef {{ send: string, args?: Record<string, unknown>, as: string, client?: string }}
+ *   AgentSend
+ * @typedef {{
+ *   hold: () => Promise<void>,
+ *   held: { state: () => Promise<any>, sendKeys: (keys: string) => Promise<void>,
+ *     open: (url: string) => Promise<string> },
+ *   agentSend: (spec: AgentSend) => void,
+ *   agentResult: (name: string) => Promise<unknown>,
+ *   ctlSpawn: (args: string[], as: string) => void,
+ *   ctlResult: (name: string) => Promise<{ exitCode: number | null, stderr: string }>,
+ * }} Control
  * @typedef {{
  *   name: string, description: string, issue?: number, pending?: string,
  *   timeoutSeconds?: number, prefs?: Record<string, boolean | number | string | null>,
@@ -22,6 +40,7 @@ import { setTimeout as sleep } from "node:timers/promises";
  *     open: (url: string) => Promise<string> },
  *   screenshot: (name: string) => Promise<void>,
  *   restart?: (how: "quit" | "kill") => Promise<void>,
+ *   control?: Control,
  *   pollMs?: number,
  *   signal?: AbortSignal,
  * }} StepContext
@@ -34,7 +53,19 @@ export const STEP_KINDS = Object.freeze([
   "assert-state",
   "screenshot",
   "restart",
+  "hold",
+  "sleep",
+  "agent",
+  "agent-result",
+  "ctl",
+  "ctl-result",
 ]);
+/** The agent commands an `agent` step may send (control protocol 2). */
+const AGENT_SENDS = ["agent-tabs", "agent-read", "agent-open", "agent-close", "agent-ping"];
+const AGENT_FIELDS = new Set(["send", "args", "as", "client"]);
+const RESULT_NAME = /^[a-z0-9]+$/;
+/** The longest `sleep`, seconds: a wait for a rule's time, not a flake's. */
+const MAX_SLEEP_SECONDS = 30;
 const FIELDS = new Set([
   "name",
   "description",
@@ -115,6 +146,10 @@ export function validateScenario(s, fileName) {
     errors.push("steps must be an array with at least one step");
     return errors;
   }
+  /** @type {Set<string>} */
+  const agentNames = new Set();
+  /** @type {Set<string>} */
+  const ctlNames = new Set();
   s.steps.forEach((step, i) => {
     const at = `step ${i + 1}`;
     if (!isObject(step)) return void errors.push(`${at}: must be an object`);
@@ -138,6 +173,61 @@ export function validateScenario(s, fileName) {
     }
     if (kind === "restart" && !RESTARTS.includes(/** @type {string} */ (value))) {
       errors.push(`${at}: restart is one of ${RESTARTS.join(", ")}`);
+    }
+    if (kind === "hold" && value !== true) errors.push(`${at}: hold is true`);
+    if (
+      kind === "sleep" &&
+      (!positive(value) || /** @type {number} */ (value) > MAX_SLEEP_SECONDS)
+    ) {
+      errors.push(
+        `${at}: sleep is a number of seconds, more than 0 and at most ${MAX_SLEEP_SECONDS}`,
+      );
+    }
+    if (kind === "agent") {
+      if (!isObject(value)) {
+        errors.push(`${at}: agent needs { send, args?, as }`);
+      } else {
+        const extra = Object.keys(value).filter((k) => !AGENT_FIELDS.has(k));
+        if (extra.length) errors.push(`${at}: agent: unknown field(s) ${extra.join(", ")}`);
+        if (!AGENT_SENDS.includes(/** @type {string} */ (value.send))) {
+          errors.push(`${at}: agent: send is an agent command (${AGENT_SENDS.join(", ")})`);
+        }
+        if ("args" in value && !isObject(value.args))
+          errors.push(`${at}: agent: args is an object`);
+        if (typeof value.as !== "string" || !RESULT_NAME.test(value.as)) {
+          errors.push(`${at}: agent: as names the answer ([a-z0-9]+)`);
+        } else if (agentNames.has(value.as)) {
+          errors.push(`${at}: agent: "${value.as}" is taken`);
+        } else {
+          agentNames.add(value.as);
+        }
+      }
+    }
+    if (kind === "ctl") {
+      const ok =
+        isObject(value) &&
+        Array.isArray(value.run) &&
+        value.run.length > 0 &&
+        value.run.every((a) => typeof a === "string");
+      if (!ok) errors.push(`${at}: ctl: run is vimma-ctl's arguments, as a non-empty array`);
+      else if (typeof value.as !== "string" || !RESULT_NAME.test(value.as)) {
+        errors.push(`${at}: ctl: as names the run ([a-z0-9]+)`);
+      } else if (ctlNames.has(value.as)) {
+        errors.push(`${at}: ctl: "${value.as}" is taken`);
+      } else {
+        ctlNames.add(value.as);
+      }
+    }
+    for (const [k, names, what] of /** @type {const} */ ([
+      ["agent-result", agentNames, "agent"],
+      ["ctl-result", ctlNames, "ctl"],
+    ])) {
+      if (kind !== k) continue;
+      if (!isObject(value) || typeof value.of !== "string" || !("expect" in value)) {
+        errors.push(`${at}: ${k} needs { of, expect }`);
+      } else if (!names.has(value.of)) {
+        errors.push(`${at}: ${k}: no ${what} step before it is named "${value.of}"`);
+      }
     }
     if ("timeoutSeconds" in step && (kind !== "wait-for-state" || !positive(step.timeoutSeconds))) {
       errors.push(`${at}: timeoutSeconds is a positive number, on wait-for-state only`);
@@ -212,13 +302,46 @@ function checkAborted(signal) {
  * @param {Scenario} scenario
  * @param {StepContext} context
  */
-export async function runSteps(scenario, { ctl, screenshot, restart, pollMs = 100, signal }) {
+export async function runSteps(
+  scenario,
+  { ctl: own, screenshot, restart, control, pollMs = 100, signal },
+) {
+  /** Agent answers so far, for `$name.path` in later args. @type {Record<string, unknown>} */
+  const answers = {};
+  let ctl = own;
+  /** @param {string} what */
+  const needControl = (what) => {
+    if (!control) throw new Error(`this session cannot run ${what} steps`);
+    return control;
+  };
   for (const [i, step] of scenario.steps.entries()) {
     const kind = /** @type {string} */ (Object.keys(step).find((k) => k !== "timeoutSeconds"));
     const at = `step ${i + 1} (${kind})`;
     checkAborted(signal);
     try {
-      if (step.open !== undefined) await ctl.open(step.open);
+      if (step.hold !== undefined) {
+        const c = needControl("hold");
+        await c.hold();
+        ctl = c.held;
+      } else if (step.sleep !== undefined) {
+        await sleep(step.sleep * 1000, undefined, signal ? { signal } : undefined);
+      } else if (step.agent !== undefined) {
+        const args = substitute(step.agent.args ?? {}, answers);
+        needControl("agent").agentSend({ ...step.agent, args });
+      } else if (step["agent-result"] !== undefined) {
+        const { of, expect } = step["agent-result"];
+        const answer = await needControl("agent-result").agentResult(of);
+        answers[of] = answer;
+        const mismatches = matchState(expect, answer, of);
+        if (mismatches.length) throw new Error(mismatches.join("; "));
+      } else if (step.ctl !== undefined) {
+        needControl("ctl").ctlSpawn(step.ctl.run, step.ctl.as);
+      } else if (step["ctl-result"] !== undefined) {
+        const { of, expect } = step["ctl-result"];
+        const ended = await needControl("ctl-result").ctlResult(of);
+        const mismatches = matchState(expect, ended, of);
+        if (mismatches.length) throw new Error(mismatches.join("; "));
+      } else if (step.open !== undefined) await ctl.open(step.open);
       else if (step.keys !== undefined) await ctl.sendKeys(step.keys);
       else if (step.screenshot !== undefined) await screenshot(step.screenshot);
       else if (step.restart !== undefined) {
@@ -244,4 +367,28 @@ export async function runSteps(scenario, { ctl, screenshot, restart, pollMs = 10
       throw new Error(`${at}: ${/** @type {Error} */ (e).message}`, { cause: e });
     }
   }
+}
+
+/**
+ * `args` with each string `$name.a.b` replaced by that path in the answer `name` (an
+ * `agent-result` before it): `{ tab: "$open1.result.tab" }`.
+ * @param {Record<string, unknown>} args @param {Record<string, unknown>} answers
+ */
+function substitute(args, answers) {
+  /** @type {Record<string, unknown>} */
+  const out = {};
+  for (const [k, v] of Object.entries(args)) {
+    if (typeof v !== "string" || !v.startsWith("$")) {
+      out[k] = v;
+      continue;
+    }
+    const [name, ...path] = v.slice(1).split(".");
+    /** @type {any} */
+    let value = answers[/** @type {string} */ (name)];
+    if (value === undefined) throw new Error(`${v}: no agent-result named ${name} yet`);
+    for (const p of path) value = value?.[p];
+    if (value === undefined) throw new Error(`${v}: not in the answer`);
+    out[k] = value;
+  }
+  return out;
 }

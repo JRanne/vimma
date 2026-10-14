@@ -16,7 +16,7 @@
 
 import { planWorkspaceSwitch } from "../core/switchplan.mjs";
 import { canWrite, readSnapshot, toSnapshot } from "../core/snapshot.mjs";
-import { closePane, leaves } from "../core/panes.mjs";
+import { closePane, leaves, showView } from "../core/panes.mjs";
 import {
   activeWorkspace,
   addWorkspace,
@@ -25,6 +25,7 @@ import {
   deleteWorkspace,
   findWorkspace,
   lastWorkspace,
+  leaveSkipped,
   moveTab,
   nextWorkspace,
   openTab,
@@ -75,7 +76,15 @@ export const TAB_WORKSPACE_KEY = "vimma-workspace";
  * @property {(text: string) => void} [notify]  a status message (`opened in "work"`)
  */
 
-const TAB_EVENTS = ["TabOpen", "TabClose", "TabSelect", "TabPinned", "TabUnpinned", LABEL_EVENT];
+const TAB_EVENTS = [
+  "TabOpen",
+  "TabClose",
+  "TabSelect",
+  "TabPinned",
+  "TabUnpinned",
+  "SSTabRestored",
+  LABEL_EVENT,
+];
 const SESSION_EVENTS = ["SSWindowStateBusy", "SSWindowStateReady", "SSWindowClosing"];
 
 /** A new uuid, without braces. */
@@ -128,6 +137,8 @@ export class WindowWorkspacesImpl {
   /** @type {Map<string, Tab>} */
   #byId = new Map();
   #switching = false;
+  /** While `quietly` runs: tabs it opens get no `opened in` notice. */
+  #quiet = false;
   /** While moveTab opens the copy: the tab it replaces and the target workspace. */
   /** @type {{ from: string, to: string } | null} */
   #moving = null;
@@ -152,6 +163,7 @@ export class WindowWorkspacesImpl {
     this.#onChange = onChange;
     this.#notify = notify;
     for (const type of [...TAB_EVENTS, ...SESSION_EVENTS]) win.addEventListener(type, this);
+    win.addEventListener("focus", this.#onFocus, true);
     Services.obs.addObserver(this.#observer, CHANGED_TOPIC);
     this.ready = this.#start().catch((e) => console.error("vimma: no workspaces", e));
   }
@@ -160,6 +172,8 @@ export class WindowWorkspacesImpl {
     for (const type of [...TAB_EVENTS, ...SESSION_EVENTS]) {
       this.#win.removeEventListener(type, this);
     }
+    this.#win.removeEventListener("focus", this.#onFocus, true);
+    this.#restoring = null;
     Services.obs.removeObserver(this.#observer, CHANGED_TOPIC);
     this.#win.gBrowser?.removeTabsProgressListener(this.#progress);
     const view = PaneViews.get(this.#win);
@@ -226,6 +240,22 @@ export class WindowWorkspacesImpl {
    */
   tabOf(id) {
     return this.#tab(id);
+  }
+
+  /**
+   * Runs `open`, which opens tabs, with no `opened in` notice for them: an agent's background
+   * open, which its question already named (docs/specs/vimma-mcp.md, decision 10).
+   * @template T
+   * @param {() => T} open
+   * @returns {T}
+   */
+  quietly(open) {
+    this.#quiet = true;
+    try {
+      return open();
+    } finally {
+      this.#quiet = false;
+    }
   }
 
   /** @param {Tab} tab */
@@ -346,17 +376,27 @@ export class WindowWorkspacesImpl {
     return principal;
   }
 
-  /** ctrl+b ); wraps. */
+  /**
+   * The workspaces the cycle and the alternate skip: the agent workspace (docs/specs/vimma-mcp.md,
+   * decision 9), reached on purpose through the picker or `:ws agent`.
+   * @returns {ReadonlySet<string>}
+   */
+  #skip() {
+    const agent = WorkspaceStore.agent;
+    return new Set(agent ? [agent.id] : []);
+  }
+
+  /** ctrl+b ); wraps, past the agent workspace. */
   next() {
     if (!this.#model) return "no workspaces in this window";
-    this.#show(this.#model, nextWorkspace(this.#model));
+    this.#show(this.#model, nextWorkspace(this.#model, this.#skip()));
     return null;
   }
 
-  /** ctrl+b (; wraps. */
+  /** ctrl+b (; wraps, past the agent workspace. */
   previous() {
     if (!this.#model) return "no workspaces in this window";
-    this.#show(this.#model, previousWorkspace(this.#model));
+    this.#show(this.#model, previousWorkspace(this.#model, this.#skip()));
     return null;
   }
 
@@ -367,7 +407,7 @@ export class WindowWorkspacesImpl {
   last() {
     const model = this.#model;
     if (!model) return "no workspaces in this window";
-    const next = lastWorkspace(model);
+    const next = lastWorkspace(model, this.#skip());
     if (next === model) return "no previous workspace in this window";
     this.#show(model, next);
     return null;
@@ -388,6 +428,12 @@ export class WindowWorkspacesImpl {
         return;
       case "SSWindowClosing":
         this.#save();
+        return;
+      case "TabSelect":
+        this.#win.queueMicrotask(() => this.#guardFocus());
+        break;
+      case "SSTabRestored":
+        this.#onRestored(/** @type {Tab} */ (e.target));
         return;
     }
     // Tab events inside a restore are not applied: the Ready reconcile reads the live tabs.
@@ -728,7 +774,10 @@ export class WindowWorkspacesImpl {
       if (moving.to !== model.active) this.#gBrowser.hideTab(tab);
     } else {
       // Decision 12: a background open into another workspace never switches; it says where.
-      this.#adopt(tab, (hiddenIn) => this.#notify(`opened in "${hiddenIn}"`));
+      const quiet = this.#quiet;
+      this.#adopt(tab, (hiddenIn) => {
+        if (!quiet) this.#notify(`opened in "${hiddenIn}"`);
+      });
     }
     this.#changed();
   }
@@ -788,13 +837,16 @@ export class WindowWorkspacesImpl {
       model = state;
       orphans = [...orphans, ...closedTabs];
     }
+    const agentId = WorkspaceStore.agent?.id;
     for (const d of defs) {
       const w = findWorkspace(model, { id: d.id });
       if (!w) {
+        // The agent workspace sorts last (vimma-mcp decision 9): a new one goes before it.
+        const before = agentId && agentId !== d.id ? agentId : undefined;
         model = addWorkspace(
           model,
           { id: d.id, name: d.name, container: String(d.userContextId) },
-          { activate: false },
+          { activate: false, before },
         );
       } else {
         if (w.name !== d.name) model = renameWorkspace(model, { id: d.id }, d.name);
@@ -852,6 +904,8 @@ export class WindowWorkspacesImpl {
    * @param {Workspaces} next
    */
   #show(prev, next) {
+    // Leaving the agent workspace, the alternate stays the one before it (vimma-mcp 9).
+    next = leaveSkipped(prev, next, this.#skip());
     const gBrowser = this.#gBrowser;
     const view = PaneViews.get(this.#win);
     this.#model = next;
@@ -887,6 +941,51 @@ export class WindowWorkspacesImpl {
     const active = /** @type {Workspaces} */ (this.#model).active;
     if (active !== prev.active) WorkspaceStore.setActive(this.#win, active);
     this.#changed();
+  }
+
+  /**
+   * The selected tab's browser while SessionStore restores a page into it in the parent process
+   * (the start page), kept without focus until it has restored (#guardFocus).
+   * @type {any}
+   */
+  #restoring = null;
+
+  /** Focus moved: it may have gone into a restoring page (#guardFocus), after this event. */
+  #onFocus = () => {
+    if (!this.#win.closed) this.#win.queueMicrotask(() => this.#guardFocus());
+  };
+
+  /**
+   * Keeps focus out of the selected tab's page while SessionStore restores it in the parent
+   * process (the start page, and every lazy tab a workspace switch selects after a restart):
+   * until that page's layout starts, Gecko drops every key aimed at it before any listener sees
+   * it (PresShell's GetFrameForHandlingEventWith finds no frame for the focused document), so a
+   * ctrl+b typed right after the switch was lost (issue #140). Firefox's tab switch, and
+   * #focusPane after ours, focus the page at once; focus goes back to the window instead, where
+   * the keys reach VimmaHost, and to the page once it has restored (#onRestored). A page in a
+   * content process gets every key through the window first, so it keeps its focus.
+   */
+  #guardFocus() {
+    const gBrowser = this.#gBrowser;
+    if (this.#win.closed || !gBrowser) return;
+    const browser = /** @type {any} */ (gBrowser.selectedBrowser);
+    if (this.#win.document.activeElement !== browser || browser.isRemoteBrowser) return;
+    if (!lazy.SessionStore.isTabRestoring(gBrowser.selectedTab)) return;
+    this.#restoring = browser;
+    Services.focus.clearFocus(this.#win);
+  }
+
+  /**
+   * `tab` has restored: its page gets the focus #guardFocus kept from it, unless it is no longer
+   * selected or something else has taken focus meanwhile.
+   * @param {Tab} tab
+   */
+  #onRestored(tab) {
+    const browser = tab.linkedBrowser;
+    if (!browser || browser !== this.#restoring) return;
+    this.#restoring = null;
+    const el = this.#win.document.activeElement;
+    if (tab.selected && (!el || el === this.#win.document.body)) browser.focus();
   }
 
   /**
@@ -953,8 +1052,13 @@ export class WindowWorkspacesImpl {
           return id && w.tabs.includes(id) ? id : undefined;
         });
       if (!tree) return w;
+      // A hidden view keeps the tab shown alone as the selected one; core's snapshot writes it
+      // as `alone` (docs/specs/side-panel-unsplit.md decision 24).
+      const alone = tree.hidden && w.activeTab && !leaves(tree).some((l) => l.tab === w.activeTab);
+      if (alone) return { ...w, panes: tree };
+      const shown = showView(tree);
       const focus = leaves(tree).find((l) => l.pane === tree.focus)?.tab;
-      return focus ? { ...w, panes: tree, activeTab: focus } : w;
+      return focus ? { ...w, panes: shown, activeTab: focus } : w;
     });
     return { ...model, workspaces };
   }

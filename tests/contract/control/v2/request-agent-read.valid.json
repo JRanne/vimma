@@ -1,0 +1,14 @@
+{
+  "description": "Read an agent tab as plain text",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 3,
+    "command": "agent-read",
+    "args": {
+      "tab": "12",
+      "format": "text",
+      "max_chars": 5000
+    }
+  }
+}

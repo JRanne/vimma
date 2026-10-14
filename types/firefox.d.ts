@@ -33,6 +33,7 @@ declare const Services: {
   focus: {
     readonly focusedElement: Element | null;
     readonly focusedContentBrowsingContext: any;
+    clearFocus(window: Window): void;
   };
   // engine/caps/nsIScriptSecurityManager.idl
   scriptSecurityManager: {
@@ -123,6 +124,7 @@ declare const IOUtils: {
     options?: { createAncestors?: boolean; ignoreExisting?: boolean; permissions?: number },
   ): Promise<void>;
   readUTF8(path: string): Promise<string>;
+  read(path: string, options?: { offset?: number; maxBytes?: number }): Promise<Uint8Array>;
   stat(path: string): Promise<{
     size: number;
     lastModified: number;
@@ -219,6 +221,8 @@ interface Window {
     readonly AUTHOR_SHEET: number;
     loadSheetUsingURIString(sheetURI: string, type: number): void;
     removeSheetUsingURIString(sheetURI: string, type: number): void;
+    /** True while an event the user caused (a key, a click) is being handled. */
+    readonly isHandlingUserInput: boolean;
     nodesFromRect(
       x: number,
       y: number,

@@ -26,18 +26,23 @@ you.
 ## 1. Control socket (`ctl/VimmaControl.sys.mjs`)
 
 Lets `vimma-ctl` and scripts drive Vimma: send keys, read state, open a URL, reload the theme.
+Since protocol 2 it also lets local AI agents use the agent workspace (the `agent` role, §12).
 Specs: [m0-control-server](specs/m0-control-server.md),
 [m0-control-protocol-and-vimma-ctl](specs/m0-control-protocol-and-vimma-ctl.md),
-[ADR-007](adr/007-control-socket.md).
+[vimma-mcp](specs/vimma-mcp.md), [ADR-007](adr/007-control-socket.md),
+[ADR-019](adr/019-agents-over-mcp.md).
 
 **Reach:** any local process can connect to the port; only one that can read the token file
 (you, or root) gets past the handshake. Pages and extensions cannot speak the protocol (an HTTP
-request is refused). Whoever holds the token is treated as you: `send-keys` can do anything your
-keyboard can.
+request is refused). A connection's hello picks its role. With the `full` role, whoever holds the
+token is treated as you: `send-keys` can do anything your keyboard can. The `agent` role reaches
+only the agent workspace, and every request asks you first (§12).
 
 - S1. The socket **must** be off by default and start or stop only with the pref
-  `vimma.control.enabled`.
-  [`test_pref_starts_and_stops_the_server`](../tests/browser/browser_vimma_control.js)
+  `vimma.control.enabled` or `vimma.mcp.enabled` (`:mcp on`, `[mcp] enabled`). Either one starts
+  it, and it stops when both are off.
+  [`test_pref_starts_and_stops_the_server`](../tests/browser/browser_vimma_control.js),
+  [`test_agent_role_has_its_own_switch`](../tests/browser/browser_vimma_mcp_agent.js)
 - S2. It **must** listen on 127.0.0.1 only, never on another interface.
   [`test_pref_starts_and_stops_the_server`](../tests/browser/browser_vimma_control.js)
 - S3. The token file **must** be mode 0600 from its first byte, and `vimma-ctl` **must** refuse
@@ -50,14 +55,18 @@ keyboard can.
   [`test_handshake`](../tests/browser/browser_vimma_control.js),
   [`challenge.valid's proof is HMAC-SHA256(token, vimma-server NUL nonce)`](../packages/vimma-core/test/control.test.mjs),
   [`a_squatter_gets_neither_the_token_nor_a_command`](../tools/vimma-ctl/tests/cli.rs)
-- S5. It **must** cap connections (8 open, 2 waiting for a hello), line length (1 MiB) and
-  handshake and idle time. [`test_limits`](../tests/browser/browser_vimma_control.js)
+- S5. It **must** cap connections (8 open, of which at most 4 agents; 2 waiting for a hello),
+  line length (1 MiB) and handshake and idle time.
+  [`test_limits`](../tests/browser/browser_vimma_control.js),
+  [`test_agents_cannot_take_every_connection`](../tests/browser/browser_vimma_mcp_agent.js)
 - S6. A token file left by a crash **must** be removed at start; a symlink or directory in its
   place is never followed. [`test_stale_discovery_file_removed_at_start`](../tests/browser/browser_vimma_control.js)
-- S7. Only the four commands in the protocol **must** run; anything else, and any unknown
-  argument, is refused.
+- S7. Only the commands of the connection's role **must** run (`full`: the four of protocol 1;
+  `agent`: the six agent commands); anything else, and any unknown argument, is refused.
   [`test_handshake`](../tests/browser/browser_vimma_control.js),
-  [`protocol version 1 with the commands of ADR-007`](../packages/vimma-core/test/control.test.mjs)
+  [`protocol version 1 with the commands of ADR-007`](../packages/vimma-core/test/control.test.mjs),
+  [`protocols 1 and 2, two roles, the agent commands apart from v1's`](../packages/vimma-core/test/control-v2.test.mjs),
+  [`test_each_role_runs_only_its_commands`](../tests/browser/browser_vimma_mcp_agent.js)
 - S8. `reload-theme` **never** takes an argument; it reads only the theme folder Vimma's own
   prefs name. [`test_reload_theme`](../tests/browser/browser_vimma_control.js),
   [`takes no args`](../packages/vimma-core/test/control.test.mjs)
@@ -75,7 +84,33 @@ keyboard can.
   [`every valid message validates; one changed or added field makes it invalid`](../packages/vimma-core/test/fuzz/control.fuzz.test.mjs),
   [`send-keys passes only keys the server can parse; open only short http(s), file and about URLs`](../packages/vimma-core/test/fuzz/control.fuzz.test.mjs),
   [`a type that is not a string is an error, never a throw`](../packages/vimma-core/test/control.test.mjs),
+  [`agent-open passes only short http(s) URLs; agent labels never carry control or bidi characters`](../packages/vimma-core/test/fuzz/control.fuzz.test.mjs),
   [`test_handshake`](../tests/browser/browser_vimma_control.js)
+- S12. The `full` role **must** run only with `vimma.control.enabled`, and the `agent` role only
+  with MCP on; a hello for a role that is off is refused (`role-off`) and closed, and turning a
+  switch off closes that role's connections. An agent connection **never** reaches `send-keys`,
+  `state` or protocol 1's `open`.
+  [`test_agent_role_has_its_own_switch`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`test_each_role_runs_only_its_commands`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`says_the_control_socket_is_off_when_only_mcp_is_on`](../tools/vimma-ctl/tests/cli.rs)
+- S13. While MCP is on, a new `full` connection **must** get its welcome only after the user's
+  `y` in the agent question line (no grant covers it, one waits at a time, three noes mute the
+  question for a minute); a no, a timeout or a closed connection refuses it (`denied`). An agent
+  with a shell can read the token, so the token alone **never** gives it keys in your window.
+  With MCP off nothing asks. While MCP is on, `vimma-ctl` sends a 4-character code in its auth
+  and only then prints it, so a process reading your terminal learns it too late to race it in,
+  and the question shows it (`vimma-ctl with code 7F3K wants full control`; a client
+  without one is "a client with no code"), so a racing client's question is told from the one
+  the user ran. `:control on <minutes>` **must** turn full control off when its time is up, also
+  across a restart, and **must** fail closed: an end time that is not a time ahead within 1441
+  minutes turns it off.
+  [`test_full_control_asks_only_while_mcp_is_on`](../tests/browser/browser_vimma_mcp_control.js),
+  [`prints_and_sends_a_code_while_mcp_is_on`](../tools/vimma-ctl/tests/cli.rs),
+  [`the_code_is_shown_only_after_its_auth_was_sent`](../tools/vimma-ctl/src/client.rs),
+  [`a time ahead, within 1440 minutes and a minute: control stays on until then`](../packages/vimma-core/test/agent-prompt.test.mjs),
+  [`test_control_on_minutes_turns_itself_off`](../tests/browser/browser_vimma_mcp_control.js),
+  [`waits_for_the_users_answer_while_mcp_is_on`](../tools/vimma-ctl/tests/cli.rs),
+  [`reports_refused_full_control_with_exit_4`](../tools/vimma-ctl/tests/cli.rs)
 
 ## 2. Workspace routing (`workspaces/WorkspaceRouter.sys.mjs`)
 
@@ -208,8 +243,12 @@ text that pages, add-ons and bookmarks choose.
   [`toggles_in_the_side_panels_slot_one_panel_at_a_time`](../tests/browser/browser_vimma_bookmarks.js),
   [`never parses strings as HTML: page titles, add-on and bookmark names stay text`](../tools/security/test/chrome-source.test.mjs)
 - C2. Chrome code **never** builds code from text (`eval`, `Function`) and **never** starts a
-  process. [`never builds code from text: no eval, Function or sandbox evaluation`](../tools/security/test/chrome-source.test.mjs),
-  [`never starts a process`](../tools/security/test/chrome-source.test.mjs)
+  process, with one exception: the system's `clamscan` (only `/usr/bin/clamscan` or
+  `/usr/local/bin/clamscan`, never a `PATH` search, and only a regular file another user (root)
+  owns that the user cannot write, in a folder the user cannot write), in one call with fixed
+  arguments, the path after `--` and no shell, on an agent download in the quarantine folder
+  (M13; [vimma-mcp](specs/vimma-mcp.md) decision 31 g; the security review of #182). [`never builds code from text: no eval, Function or sandbox evaluation`](../tools/security/test/chrome-source.test.mjs),
+  [`never starts a process, but clamscan on an agent download`](../tools/security/test/chrome-source.test.mjs)
 
 ## 7. Omarchy hook and the `vimma-open` launcher
 
@@ -300,6 +339,11 @@ Spec: [m0-mozilla-services](specs/m0-mozilla-services.md),
   says so) in one without.
   [`test_keyed_build_fetches_google_lists`](../tests/browser/browser_vimma_safebrowsing.js),
   [`test_keyless_build_is_honestly_off`](../tests/browser/browser_vimma_safebrowsing.js)
+- P7. Site permissions (camera, location, notifications …) **must** be kept per container, so
+  per workspace (`permissions.isolateBy.userContext`; user decision "Per workspace",
+  [vimma-mcp](specs/vimma-mcp.md) decision 30): one given in one workspace never applies to the
+  same site in another, the agent workspace included.
+  [`test_site_permissions_are_per_workspace`](../tests/browser/browser_vimma_mcp_agent_pages.js)
 
 ## 10. Firefox updates (the upstream autopilot, `upstream.yml`)
 
@@ -377,5 +421,166 @@ Taskcluster index) and this repository. Nothing here runs code from a pull reque
   config.toml, and drive any app you run. Vimma does not defend against it; file modes keep out
   other local users, not your own processes.
 - **Root and physical access** are out of scope.
+- **What agents do outside Vimma.** Vimma bounds what a local AI agent can do _through Vimma_
+  (§12): the agent workspace only, each request asked. It cannot bound what the agent does with
+  its own shell, files and network, or what its host lets it do unasked; that is the agent
+  host's matter. A prompt-injected agent with a shell can also read the control token like any
+  process of yours, which is why the `full` role is a separate switch to keep off.
 - **What you type.** Commands you type yourself (`:open`, `:source`, the control socket with your
   token) act with your authority; the rules above stop text from others from doing the same.
+
+## 12. Agents (MCP) (`ctl/AgentGate.sys.mjs`, `ctl/agent-commands.mjs`)
+
+Lets local AI agents (Claude Code, Codex, opencode, Copilot) list, read, open and close tabs of
+one workspace, **agent**, through the control socket's `agent` role. Spec:
+[vimma-mcp](specs/vimma-mcp.md), [ADR-019](adr/019-agents-over-mcp.md).
+
+**Reach:** any local process that can read the token file, an agent's own shell included,
+while MCP is on (`:mcp on`). Every check runs in the browser, never in the client: an agent with
+a shell can run `vimma-ctl` itself, or speak the protocol directly.
+
+- M1. Every agent command but `agent-hello` and `agent-ping` **must** wait for your yes, or run
+  under an unexpired grant of that connection and tool.
+  [`test_grants_per_connection_and_tool`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`15 min for (conn 1, read): reads run unasked until 15:00; opens and conn 2 ask`](../packages/vimma-core/test/agent-gate.test.mjs)
+- M2. Agent commands **must** see only tabs of the agent workspace in its container, checked
+  when each command runs; **never** another workspace's tab, a foreign or pinned tab, or a
+  private window's.
+  [`test_agent_sees_only_the_agent_workspace`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`test_confinement_edges`](../tests/browser/browser_vimma_mcp_agent.js)
+- M3. No answer within `[mcp] ask_timeout`, a full queue (4 per connection, 16 in all), more
+  than 4 requests of one connection waiting or running at once (grants included), more than 10
+  opens of one connection in a minute (grants included) and a muted connection (three noes in a
+  row, for 60 s; `x`, until it reconnects) **must** deny.
+  [`test_denials_timeouts_queue_and_mute`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`two connections sending 5 each: 4 of each wait in order, the 5th of each is busy`](../packages/vimma-core/test/agent-gate.test.mjs),
+  [`three denials in a row mute a connection for 60 s, without asking`](../packages/vimma-core/test/agent-gate.test.mjs),
+  [`no sequence of events breaks the queue's limits or resolves a request twice`](../packages/vimma-core/test/fuzz/agent.fuzz.test.mjs),
+  [`test_grants_cannot_flood`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`at most OPEN_RATE.max opens per connection in any OPEN_RATE.ms window`](../packages/vimma-core/test/agent-gate.test.mjs)
+- M4. The question **never** opens by itself while you type, are in a field, or have another
+  prompt open, never takes focus, is armed only after `security.dialog_enable_delay` (1 s), a
+  held key **never** counts, and no key but `y` or a count with `a` allows; any other key
+  neither allows nor denies. It **must** arm again whenever its window is activated or
+  deactivated, focused or blurred, hidden or shown, and when a key arrives before it is armed,
+  so a window brought to the front (by the user, or by a process that can focus windows) never
+  takes a key meant for another; a just-focused window counts as one being typed in. With a
+  prompt, picker, panel or the command line open over it, and for the rest of a key sequence,
+  the keys are theirs. Text an agent or a page chooses (the client name, which is the agent's own
+  claim and proves nothing, and titles) is drawn as a bidi isolate (`<bdi>`), URLs as
+  left-to-right isolates. A window not in front gets the urgency hint and a notification with no
+  URL, no title and no buttons.
+  [`test_the_line_opens_arms_and_ignores_stray_keys`](../tests/browser/browser_vimma_mcp_prompt.js),
+  [`test_focus_changes_and_early_keys_rearm_the_line`](../tests/browser/browser_vimma_mcp_prompt_guards.js),
+  [`test_other_ui_opened_over_the_line_gets_the_keys`](../tests/browser/browser_vimma_mcp_prompt_guards.js),
+  [`test_names_titles_and_urls_are_bidi_isolates`](../tests/browser/browser_vimma_mcp_prompt_guards.js),
+  [`test_typing_in_a_field_waits_for_ctrl_b_shift_a`](../tests/browser/browser_vimma_mcp_prompt.js),
+  [`test_a_window_not_in_front_gets_attention_and_a_notification`](../tests/browser/browser_vimma_mcp_control.js),
+  [`any other key neither allows nor denies`](../packages/vimma-core/test/agent-prompt.test.mjs),
+  [`a hostile title of 300 characters is literal text cut at 60 columns`](../packages/vimma-core/test/agent-prompt.test.mjs)
+- M5. Grants **must** be per connection and tool, capped at `[mcp] grant_max_minutes`, held in
+  memory only, and end on `:mcp revoke`, when their connection closes, on `:mcp off` and at
+  expiry.
+  [`grants end on revoke and on disconnect, and are listed shortest first`](../packages/vimma-core/test/agent-gate.test.mjs),
+  [`the length: a count, or the default for a bare a, capped at grant_max_minutes`](../packages/vimma-core/test/agent-gate.test.mjs),
+  [`test_grants_per_connection_and_tool`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`test_agent_role_has_its_own_switch`](../tests/browser/browser_vimma_mcp_agent.js)
+- M6. `agent-open` **must** load only http and https, in the agent container, never routed and
+  never in the foreground: your window keeps its workspace, selected tab and focus.
+  [`test_agent_open_is_background_and_checked`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`agent-open: only http and https, at most 65536 characters, an optional tab`](../packages/vimma-core/test/control-v2.test.mjs)
+- M7. Page text and the page's selection **must** be capped (`[mcp] max_read_chars`, and the
+  1 MiB line), well-formed Unicode, and returned inside the untrusted-content delimiters, which
+  the page cannot close early, not even with a look-alike tag (other spacing or separators,
+  full-width letters, attributes; matched after NFKC).
+  [`test_agent_read_returns_marked_text_of_a_hidden_tab`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`any page text comes out with exactly one opening and one closing delimiter`](../packages/vimma-core/test/fuzz/agent.fuzz.test.mjs),
+  [`test_the_selection_is_marked_and_fits_the_line`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`test_replies_are_well_formed_unicode`](../tests/browser/browser_vimma_mcp_agent.js)
+- M8. A yes **must** stand only for the tab and URL asked about: if the tab left the agent
+  workspace or navigated since, the request is denied (`changed`) and nothing is read, loaded
+  or closed; a read checks again after collecting everything, just before it replies.
+  [`test_the_yes_stands_for_what_was_asked`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`test_the_read_checks_last`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`test_confinement_edges`](../tests/browser/browser_vimma_mcp_agent.js)
+- M10. Pages in the agent container **must** get no permission prompt and no permission given
+  elsewhere: site permissions are kept per container (`permissions.isolateBy.userContext`, user
+  decision "Per workspace"), every `nsIContentPermissionPrompt` request from the agent
+  container is cancelled, and camera, microphone and screen are denied per agent tab (a
+  browser-scoped DENY, set on each HTTP response and when each document's window global is
+  created, so a page a service worker serves is covered). They **must** open no new window or
+  tab (`SANDBOXED_AUXILIARY_NAVIGATION` on every agent tab, which is reloaded if it had loaded
+  without it) and launch no other app through an external protocol (Firefox's chooser is
+  wrapped for the agent container). Their downloads follow M11-M13. A tab of another workspace
+  still asks, opens pop-ups and downloads as before.
+  [`test_the_agent_container_asks_for_nothing`](../tests/browser/browser_vimma_mcp_agent_pages.js),
+  [`test_another_workspace_still_asks`](../tests/browser/browser_vimma_mcp_agent_pages.js),
+  [`test_agent_tabs_open_no_popups`](../tests/browser/browser_vimma_mcp_agent_pages.js),
+  [`test_site_permissions_are_per_workspace`](../tests/browser/browser_vimma_mcp_agent_pages.js),
+  [`test_a_page_from_a_service_worker_is_denied_too`](../tests/browser/browser_vimma_mcp_agent_pages.js),
+  [`test_a_sweep_reloads_agent_tabs_that_loaded_unsandboxed`](../tests/browser/browser_vimma_mcp_agent_pages.js),
+  [`test_agent_pages_launch_no_app`](../tests/browser/browser_vimma_mcp_agent_pages.js)
+- M11. A download from the agent workspace (by its container, its tab's container, or being
+  written to the quarantine folder) **must** ask in the question line first (its name, size,
+  type and host, **never** the URL). It is the `vimma_download` of an agent connection only when
+  it is the very load that connection's `agent-open` started (its URL before redirects, within a
+  minute, once, and never after the tab showed a page); anything else, a page's own download
+  under a grant included, asks as "a page in the agent workspace" (no grant, `x` a plain no).
+  Only `https:` is downloaded, nothing over
+  `[mcp] download_max_mb` (refused when the size is known, stopped and deleted once it grows past
+  it), and a refused download leaves no file. The user's own Save Page, Save Link As and Save
+  Image As are the user's (an agent cannot press them) and ask nothing. Another workspace's
+  downloads are untouched.
+  [`test_the_question_then_yes_saves_to_the_quarantine_0600_unopened`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_no_saves_nothing`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_http_is_refused`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_the_size_cap`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_an_agents_download_is_its_and_a_grant_covers_it`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_a_grant_never_covers_the_pages_own_downloads`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_classified_by_tab_and_by_place_too`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_the_dialog_the_launch_path_a_frame_and_a_blob`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_the_users_save_page_in_an_agent_tab_is_the_users`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_another_workspace_downloads_as_before`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`name, size, type and extension, and the host in bold; no URL`](../packages/vimma-core/test/agent-prompt.test.mjs)
+- M12. An agent download **must** be written only to the quarantine folder (`[mcp] download_dir`,
+  never home, `/`, the Downloads folder itself, a hidden folder of home, `/tmp`, `/var/tmp` or
+  `/dev/shm`; made if missing and chmod 0700, which fails on a folder that is not the user's:
+  then, or with any other problem, every agent download is refused with a notice, and the tab's
+  bytes go to the profile's own refusal folder), as its `.part` and under its name
+  (the agent tab's `downloadFolderOverride`, and Firefox's download dialog wrapped so it never
+  offers "open with"), saved with mode 0600 (no exec bit), and **never** opened by Vimma, then or
+  later from the downloads list.
+  [`test_agent_tabs_may_download_again`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_the_question_then_yes_saves_to_the_quarantine_0600_unopened`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`download_dir is ~ or absolute, never home, / or the Downloads folder itself`](../packages/vimma-core/test/config-v2.test.mjs),
+  [`download_dir is never in a hidden folder of home or in /tmp, /var/tmp, /dev/shm`](../packages/vimma-core/test/config-v2.test.mjs),
+  [`test_a_folder_that_is_not_private_is_refused`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`[mcp] download_dir and download_max_mb are refused or a quarantine folder in bounds`](../packages/vimma-core/test/fuzz/config.fuzz.test.mjs)
+- M13. A dangerous file (an executable or library by name, type or first bytes; a script, a `#!`
+  line, an installer or package; Firefox's executable list; an archive Vimma cannot list; a zip
+  whose central directory names one of these, or holds an entry with an exec bit, a symbolic
+  link or a path that leaves its folder) **must** be allowed only by `!` for that one file: no
+  grant covers it and `y` does nothing. Found only in the finished `.part`, and of another kind
+  than the one a `!` allowed, it asks again before the file gets its name, and a no deletes it.
+  With the system's `clamscan` (C2) the `.part` is scanned before it gets its name
+  (`--alert-encrypted=yes --alert-exceeds-max=yes`), and deleted when ClamAV flags it; when
+  ClamAV fails, takes over five minutes, or could not look inside (encrypted, over its limits),
+  keeping the file unscanned is asked (y/N, no grant), and a no deletes it. The notice says
+  scanned, not fully scanned or not scanned. Vimma has no download reputation service of its own: Firefox's Safe Browsing
+  checks downloads only in a build with a Google key (P6), so in a keyless build these checks
+  and ClamAV are all there is.
+  [`test_a_dangerous_file_needs_bang_for_that_one_file`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_dangerous_content_asks_again_and_no_deletes_it`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`test_a_different_danger_in_the_bytes_asks_again`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`an entry with an exec bit is an executable, whatever its name`](../packages/vimma-core/test/agent-downloads.test.mjs),
+  [`a symbolic link is dangerous`](../packages/vimma-core/test/agent-downloads.test.mjs),
+  [`encrypted or over ClamAV's limits: not fully scanned, not infected`](../packages/vimma-core/test/agent-downloads.test.mjs),
+  [`the arguments: fixed, alerting on what it cannot open, the path after --`](../packages/vimma-core/test/agent-downloads.test.mjs),
+  [`test_clamav_clean_infected_error_and_missing`](../tests/browser/browser_vimma_mcp_downloads.js),
+  [`a grant of the tool does not run it: it waits`](../packages/vimma-core/test/agent-gate.test.mjs),
+  [`! allows a dangerous one; y, a and counts do nothing there`](../packages/vimma-core/test/agent-prompt.test.mjs),
+  [`a dangerous name inside makes the zip dangerous, and says which`](../packages/vimma-core/test/agent-downloads.test.mjs),
+  [`any bytes: the zip lister and the magic check never throw, and stay inside the file`](../packages/vimma-core/test/fuzz/agent-downloads.fuzz.test.mjs)
+- M9. `vimma-ctl mcp`'s JSON-RPC parsing **never** panics. **⚠ gap:** `vimma-ctl mcp` is sub-PR
+  3 of [vimma-mcp](specs/vimma-mcp.md); until then the protocol 2 decoders it will use are fuzzed
+  ([`decoders_never_panic_and_accept_only_the_schema`](../tools/vimma-ctl/tests/protocol_props.rs)).

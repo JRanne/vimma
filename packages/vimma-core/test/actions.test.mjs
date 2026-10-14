@@ -61,14 +61,18 @@ describe("actions", () => {
     /** @type {Record<string, string[]>} */
     const want = {
       show_keybinds: ["prefix+?"],
-      new_tab: ["prefix+c", "t"],
-      next_tab: ["prefix+n", "gt"],
-      previous_tab: ["prefix+p", "gT"],
+      // Firefox's own tab keys too (docs/specs/firefox-keys.md).
+      new_tab: ["prefix+c", "ctrl+t", "t"],
+      next_tab: ["prefix+n", "ctrl+tab", "ctrl+pagedown", "gt"],
+      previous_tab: ["prefix+p", "ctrl+shift+tab", "ctrl+pageup", "gT"],
       ...Object.fromEntries(
-        Array.from({ length: 9 }, (_, i) => [`select_tab_${i + 1}`, [`prefix+${i + 1}`]]),
+        Array.from({ length: 9 }, (_, i) => [
+          `select_tab_${i + 1}`,
+          i < 8 ? [`prefix+${i + 1}`, `alt+${i + 1}`] : [`prefix+${i + 1}`],
+        ]),
       ),
       rename_tab: ["prefix+shift+t"],
-      close_tab: ["prefix+shift+x", "x"],
+      close_tab: ["prefix+shift+x", "ctrl+f4", "x"],
       goto_picker: ["prefix+g", "b"],
     };
     for (const [name, bindings] of Object.entries(want)) {
@@ -76,5 +80,31 @@ describe("actions", () => {
       expect(km.bindingsFor(name), name).toEqual(bindings);
     }
     expect(getAction("select_tab_3")).toMatchObject({ id: "tab.goto", arg: 3 });
+  });
+
+  // docs/specs/vimma-mcp.md decisions 14 and 25: answer the waiting agent question.
+  test("agent_prompt: prefix+shift+a, in every mode, in the Agents group (vimma-mcp)", () => {
+    const km = compileKeymap();
+    expect(getAction("agent_prompt")).toMatchObject({ id: "mcp.answer", group: "Agents" });
+    expect(getAction("control_command")).toMatchObject({ id: "control.command", group: "Agents" });
+    expect(km.bindingsFor("agent_prompt")).toEqual(["prefix+shift+a"]);
+    expect(km.bindingsFor("control_command")).toEqual([]);
+    for (const mode of /** @type {const} */ (["normal", "insert", "visual", "panel", "help"])) {
+      const node = km.trie(mode).children.get("ctrl+b")?.children.get("shift+a");
+      expect(node?.action?.id, mode).toBe("mcp.answer");
+    }
+  });
+
+  test("private_workspace: prefix+shift+p and ctrl+shift+p, in every mode (private-workspace)", () => {
+    const km = compileKeymap();
+    expect(getAction("private_workspace")).toMatchObject({
+      id: "workspace.private",
+      group: "Workspaces",
+    });
+    expect(km.bindingsFor("private_workspace")).toEqual(["prefix+shift+p", "ctrl+shift+p"]);
+    for (const mode of /** @type {const} */ (["normal", "insert", "visual", "panel", "help"])) {
+      const node = km.trie(mode).children.get("ctrl+shift+p");
+      expect(node?.action?.id, mode).toBe("workspace.private");
+    }
   });
 });

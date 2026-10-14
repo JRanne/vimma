@@ -14,7 +14,7 @@ import { isMode } from "./modes.mjs";
  * @typedef {{ kind: "pass" }
  *   | { kind: "cancel", mode: Mode }
  *   | { kind: "action", action: { id: string }, mode: Mode, blur?: true,
- *       collapseSelection?: true }} EscapeResult
+ *       collapseSelection?: true, afterPage?: true }} EscapeResult
  */
 
 /** Per mode: the action Esc runs, and whether it returns to the mode an overlay came from. */
@@ -38,7 +38,16 @@ const EXITS = {
 export function resolveEscape({ mode, pending = false, previous = "normal" }) {
   for (const m of [mode, previous]) if (!isMode(m)) throw new Error(`unknown mode "${m}"`);
   if (pending) return Object.freeze({ kind: "cancel", mode });
-  if (mode === "normal") return Object.freeze({ kind: "pass" });
+  // Firefox's stop, once the page has had Esc and left it alone (docs/specs/firefox-keys.md
+  // decisions 6 and 7).
+  if (mode === "normal") {
+    return Object.freeze({
+      kind: "action",
+      action: Object.freeze({ id: "page.stop" }),
+      mode,
+      afterPage: true,
+    });
+  }
   const exit = EXITS[mode];
   return Object.freeze({
     kind: "action",

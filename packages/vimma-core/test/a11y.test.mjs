@@ -46,7 +46,8 @@ describe("statusAnnouncement: the mode, said once, and only where nothing else s
   /**
    * Feeds `inputs` one after another; the texts spoken.
    * @param {Array<{ mode: import("../src/modes.mjs").Mode,
-   *   find?: import("../src/find.mjs").FindStatus | null, url?: string | null }>} inputs
+   *   find?: import("../src/find.mjs").FindStatus | null, url?: string | null,
+   *   agentWaiting?: number }>} inputs
    */
   const speak = (inputs, last = start) => {
     const said = [];
@@ -105,6 +106,23 @@ describe("statusAnnouncement: the mode, said once, and only where nothing else s
   test("a mode change and a failed search at once are one message", () => {
     expect(speak([{ mode: "insert", find: { query: "q", notFound: true }, url: "u" }])).toEqual([
       "insert mode. Pattern not found: q",
+    ]);
+  });
+
+  // docs/specs/vimma-mcp.md decision 24: a question that waits is said once.
+  test("an agent question waiting is spoken when the count rises, not again while it waits", () => {
+    expect(
+      speak([
+        { mode: "normal", agentWaiting: 1 },
+        { mode: "normal", agentWaiting: 1 },
+        { mode: "normal", agentWaiting: 2 },
+        { mode: "normal", agentWaiting: 0 },
+        { mode: "normal", agentWaiting: 1 },
+      ]),
+    ).toEqual([
+      "Agent request waiting: ctrl+b shift+a to answer",
+      "2 agent requests waiting",
+      "Agent request waiting: ctrl+b shift+a to answer",
     ]);
   });
 

@@ -134,17 +134,19 @@ export function parsePath(text) {
     const c = text[i];
     if (c === ".") {
       i++;
-    } else if (c === "[") {
+    } else if (c === "[" && /^\[\d+\]/.test(text.slice(i))) {
       const end = text.indexOf("]", i);
       out.push(Number(text.slice(i + 1, end)));
       i = end + 1;
-    } else if (c === '"') {
+    } else if (c === '"' && /^"(?:[^"\\]|\\.)*"/.test(text.slice(i))) {
       let j = i + 1;
       while (text[j] !== '"') j += text[j] === "\\" ? 2 : 1;
       out.push(JSON.parse(text.slice(i, j + 1)));
       i = j + 1;
     } else {
-      const m = /^[^.[]+/.exec(text.slice(i));
+      // A bare segment, or text formatPath does not write (an unclosed `[` or `"`): up to the
+      // next separator, at least one character, so the loop always ends (issue #134).
+      const m = /^[\s\S][^.[]*/.exec(text.slice(i));
       const seg = /** @type {RegExpExecArray} */ (m)[0];
       out.push(seg);
       i += seg.length;

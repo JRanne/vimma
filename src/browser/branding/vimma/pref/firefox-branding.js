@@ -123,6 +123,12 @@ pref("accessibility.typeaheadfind.casesensitive", 2);
 // Firefox only uses a preloaded about:newtab for tabs in no container, so it would never be used.
 pref("browser.newtab.preload", false);
 
+// Site permissions per workspace (docs/specs/vimma-mcp.md, user decision 2026-10-13: "Per
+// workspace"): each container keeps its own permissions, as it keeps its own logins, so a camera
+// or location you allowed in `work` never applies to the same site in the agent workspace.
+// Permissions stored before this stay with the default container (no container).
+pref("permissions.isolateBy.userContext", true);
+
 // Workspaces (spec m3-workspaces, decision 9): closing the last visible tab must not close a
 // window whose other workspaces' tabs are hidden; Firefox opens a new tab in the workspace instead.
 pref("browser.tabs.closeWindowWithLastTab", false);
@@ -131,6 +137,11 @@ pref("browser.tabs.closeWindowWithLastTab", false);
 // hides Firefox's tab and link context-menu items and alt-click; the split-view API keeps
 // working. split.css hides the URL bar button.
 pref("browser.tabs.splitView.enabled", false);
+
+// The private workspace (spec private-swap, decided question 1): a private window's title is
+// "Vimma Private Browsing" without the page's title, which the window manager, its bar, screen-
+// sharing pickers and Hyprland's event stream would otherwise see. true shows page titles again.
+pref("privacy.exposeContentTitleInWindow.pbm", false);
 
 // Workspaces (spec m3-workspaces, decision 9): a restart restores the session, so each window's
 // workspaces, tabs, pane layouts and scroll positions come back. Firefox Sync must not turn that

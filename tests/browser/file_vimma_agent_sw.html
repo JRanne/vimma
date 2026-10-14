@@ -1,0 +1,19 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Fixture for browser_vimma_mcp_agent_pages.js: registers a service worker that serves
+   - file_vimma_agent_sw_page.html itself, so that page loads with no HTTP response. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>sw register</title>
+  </head>
+  <body>
+    <script>
+      navigator.serviceWorker
+        .register("file_vimma_agent_sw.js")
+        .then(() => navigator.serviceWorker.ready.then(() => (document.title = "sw ready")));
+    </script>
+  </body>
+</html>

@@ -255,7 +255,7 @@ toolbar when it's hidden? there should be some minimalistic bar that shows what 
    - **Untouched:**
      - `#notifications-toolbar`: notification bars ("this site was prevented from opening a
        popup", crash and update bars) stay where they are and move to the top edge.
-     - The menu bar: `alt` still shows it.
+     - The menu bar: `alt` does not show it (firefox-keys Q3: the `alt` tap is off); `F10` does.
      - The tab strip, which keeps its own pref.
    - **Excluded:** like `tabstrip.css`, the rules do not apply to:
      - customize mode (`[customizing]`);

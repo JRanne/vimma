@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expectSafeBrowsingKey, mochitestCommand } from "../mochitest.mjs";
+import { childEnv, expectSafeBrowsingKey, mochitestCommand } from "../mochitest.mjs";
 
 const ENGINE = "/repo/engine/";
 const TESTS = "browser/base/zen-components/tests/browser/";
@@ -69,5 +69,17 @@ describe("expectSafeBrowsingKey", () => {
     expect(
       expectSafeBrowsingKey({ VIMMA_EXPECT_SAFEBROWSING_KEY: "0" }, HOME, exists([DEFAULT])),
     ).toBe(false);
+  });
+});
+
+// docs/specs/private-swap.md: a test browser must never reach the developer's own Hyprland,
+// even with --headed; browser_vimma_private_swap.js brings its own fake.
+describe("childEnv", () => {
+  it("drops HYPRLAND_INSTANCE_SIGNATURE and keeps the rest", () => {
+    const env = childEnv(
+      { HOME: "/home/u", HYPRLAND_INSTANCE_SIGNATURE: "abc_1", XDG_RUNTIME_DIR: "/run/user/1" },
+      { MOZCONFIG: "/m" },
+    );
+    expect(env).toEqual({ HOME: "/home/u", XDG_RUNTIME_DIR: "/run/user/1", MOZCONFIG: "/m" });
   });
 });

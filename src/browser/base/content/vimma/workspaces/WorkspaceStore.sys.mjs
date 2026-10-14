@@ -48,6 +48,13 @@ export const CONTAINERS_OFF_ALERT =
 const DELETED_TOPIC = "contextual-identity-deleted";
 /** `lastActive`'s container, so a start routes its first tab without reading the file. */
 const STARTUP_PREF = "vimma.workspaces.startupUserContextId";
+/**
+ * The id of the agent workspace Vimma made (docs/specs/vimma-mcp.md, decision 8): one of that
+ * name with another id is the user's own, adopted, and `:mcp on` warns about it.
+ */
+export const AGENT_ID_PREF = "vimma.mcp.agentWorkspaceId";
+/** `[mcp] workspace`'s default. */
+export const DEFAULT_AGENT_WORKSPACE = "agent";
 
 /** @param {string} code @param {string} message */
 const storeError = (code, message) => Object.assign(new Error(message), { code });
@@ -85,15 +92,24 @@ export class WorkspaceStoreImpl {
   /** Active workspace id per window (WindowWorkspaces sets it, sub-spec 2b). */
   /** @type {WeakMap<object, string>} */
   #active = new WeakMap();
+  /** `[mcp] workspace`: the agent workspace's name, or null (a test's store has none). */
+  /** @type {string | null} */
+  #agent;
+  /** Where the store records the id of an agent workspace it made, or null. */
+  /** @type {string | null} */
+  #agentPref;
 
   /**
    * @param {{ path?: string, config?: readonly Workspace[],
    *   enabled?: () => boolean, saveDelayMs?: number, cachePref?: string | null,
-   *   watch?: boolean }} [options]
+   *   watch?: boolean, agent?: string | null, agentPref?: string | null }} [options]
    *   `config` is the resolved `[workspaces]` (core `mergeWithDefaults(...).workspaces`); the M5
    *   host passes it once it reads `config.toml`. `enabled` reads the containers pref.
    *   `cachePref` (the app's store only) caches `lastActive`'s container for the next start.
    *   `watch` (the app's store only) replaces a workspace's container deleted outside Vimma.
+   *   `agent` is the agent workspace's name (`[mcp] workspace`), ensured at every reconcile
+   *   (docs/specs/vimma-mcp.md, decision 8); null for none. `agentPref` records the id of one
+   *   the store made.
    */
   constructor({
     path = PathUtils.join(PathUtils.profileDir, DEFINITIONS_FILE),
@@ -102,7 +118,11 @@ export class WorkspaceStoreImpl {
     saveDelayMs,
     cachePref = null,
     watch = false,
+    agent = null,
+    agentPref = null,
   } = {}) {
+    this.#agent = agent;
+    this.#agentPref = agentPref;
     this.#cachePref = cachePref;
     this.#watch = watch;
     this.#path = path;
@@ -129,10 +149,16 @@ export class WorkspaceStoreImpl {
     const file = this.#open();
     await file.load();
     this.definitions = await this.#parse(file.data);
-    const { definitions, changed } = reconcileDefinitions(this.definitions, this.#config, mintId);
+    const { definitions, changed, agentCreated } = reconcileDefinitions(
+      this.definitions,
+      this.#config,
+      mintId,
+      { agent: this.#agent },
+    );
     // Read-only: keep what was read (lenient) plus config, in memory only, with no containers.
     this.definitions = definitions;
     if (this.readOnly) return;
+    this.#recordAgent(agentCreated);
     const containersChanged = this.#checkContainers();
     if (changed || containersChanged) this.#save();
     if (this.#watch && !this.#watching) {
@@ -246,6 +272,32 @@ export class WorkspaceStoreImpl {
     }
   }
 
+  /** @param {string | null} id  the agent workspace the reconcile made, if it made one */
+  #recordAgent(id) {
+    if (id && this.#agentPref) Services.prefs.setStringPref(this.#agentPref, id);
+  }
+
+  /** `[mcp] workspace`, the agent workspace's name, or null. */
+  get agentName() {
+    return this.#agent;
+  }
+
+  /** The agent workspace's definition, or null (none, or containers off). */
+  get agent() {
+    if (!this.#agent || this.disabled) return null;
+    return this.definitions.workspaces.find((w) => w.name === this.#agent) ?? null;
+  }
+
+  /**
+   * Whether the agent workspace is one the store made (its id is the one recorded), rather than
+   * a workspace of yours of that name it adopted (vimma-mcp decision 8).
+   */
+  agentIsOurs() {
+    const w = this.agent;
+    if (!w || !this.#agentPref) return false;
+    return Services.prefs.getStringPref(this.#agentPref, "") === w.id;
+  }
+
   /** @param {string[]} ids */
   #notify(ids) {
     Services.obs.notifyObservers(null, CHANGED_TOPIC, JSON.stringify(ids));
@@ -267,7 +319,7 @@ export class WorkspaceStoreImpl {
     this.#writable();
     const id = mintId();
     // Validates first, so a bad name never leaves a stray container behind.
-    this.definitions = addRuntimeWorkspace(this.definitions, { ...w, id });
+    this.definitions = addRuntimeWorkspace(this.definitions, { ...w, id }, { agent: this.#agent });
     this.#createContainer(this.#def(id));
     this.#save();
     this.#notify([id]);
@@ -287,7 +339,9 @@ export class WorkspaceStoreImpl {
       throw storeError("not-confirmed", "deleting a workspace needs the user's confirmation");
     }
     this.#writable();
-    const { definitions, removed } = removeWorkspaceDefinition(this.definitions, id);
+    const { definitions, removed } = removeWorkspaceDefinition(this.definitions, id, {
+      agent: this.#agent,
+    });
     const CIS = lazy.ContextualIdentityService;
     const ucid = removed.userContextId;
     // Never 0: closeContainerTabs(0) closes every container tab in every window.
@@ -325,7 +379,7 @@ export class WorkspaceStoreImpl {
   renameWorkspace(id, name) {
     this.#writable();
     const before = this.definitions;
-    this.definitions = renameWorkspaceDefinition(before, id, name);
+    this.definitions = renameWorkspaceDefinition(before, id, name, { agent: this.#agent });
     if (this.definitions === before) return;
     const w = this.#def(id);
     const CIS = lazy.ContextualIdentityService;
@@ -381,31 +435,69 @@ export class WorkspaceStoreImpl {
         `"${asked.name}" changed since you were asked (config.toml reloaded?); nothing was closed`,
       );
     }
-    if (w?.source !== "config") return this.deleteWorkspace(id, { confirmed });
-    if (this.definitions.workspaces.length === 1) {
+    // The agent workspace is only emptied, as a config one (docs/specs/vimma-mcp.md, decision 8).
+    const agent = !!w && w.name === this.#agent;
+    if (w?.source !== "config" && !agent) return this.deleteWorkspace(id, { confirmed });
+    const others = this.definitions.workspaces.filter((d) => d.name !== this.#agent);
+    if (!agent && others.length === 1) {
       throw storeError("last-workspace", "cannot close the last workspace");
     }
     // Never 0: that would close every container tab in every window.
-    if (w.userContextId !== null && w.userContextId > 0) {
-      await lazy.ContextualIdentityService.closeContainerTabs(w.userContextId);
+    const ucid = /** @type {WorkspaceDefinition} */ (w).userContextId;
+    if (ucid !== null && ucid > 0) {
+      await lazy.ContextualIdentityService.closeContainerTabs(ucid);
     }
     return { cleared: false };
   }
 
   /**
+   * `:mcp forget` after the user said yes (docs/specs/vimma-mcp.md, decision 8): deletes the
+   * agent workspace's cookies and site data, as deleting a runtime workspace's container does
+   * (ContextualIdentityService.remove), and keeps the workspace and its container. The yes
+   * stands for the workspace and container asked about (`asked`), else `changed`.
+   * @param {{ confirmed?: boolean, asked?: { id: string, userContextId: number | null } }} [options]
+   */
+  forgetAgent({ confirmed = false, asked } = {}) {
+    if (confirmed !== true) {
+      throw storeError("not-confirmed", "forgetting needs the user's confirmation");
+    }
+    this.#writable();
+    const w = this.agent;
+    if (!w) throw storeError("no-agent", "there is no agent workspace");
+    if (asked && (asked.id !== w.id || asked.userContextId !== w.userContextId)) {
+      throw storeError("changed", `"${w.name}" changed since you were asked; nothing was deleted`);
+    }
+    const ucid = w.userContextId;
+    // Never 0: that pattern would be the default container's data, not the agent's.
+    if (ucid === null || ucid <= 0) return;
+    /** @type {any} */ (Services).clearData.deleteDataFromOriginAttributesPattern({
+      userContextId: ucid,
+    });
+  }
+
+  /**
    * The config's `[workspaces]` changed (ConfigHost, m5-config-load): reconciles the definitions
    * with it as init does (a workspace gone from the file becomes runtime; nothing is removed),
-   * gives new ones a container, saves and tells the windows.
+   * gives new ones a container, saves and tells the windows. `agent` is `[mcp] workspace`: a new
+   * name makes that workspace the agent's, and the old one an ordinary one (vimma-mcp 8).
    * @param {readonly Workspace[]} config  core `mergeWithDefaults(...).workspaces`
+   * @param {{ agent?: string | null }} [options]  left out: the agent name stays
    */
-  async setConfig(config) {
+  async setConfig(config, { agent } = {}) {
     this.#config = config;
+    if (agent !== undefined) this.#agent = agent;
     if (!this.#ready) return; // init() reads it
     await this.#ready;
     if (this.disabled || this.readOnly) return;
     const before = this.definitions;
-    const { definitions, changed } = reconcileDefinitions(before, this.#config, mintId);
+    const { definitions, changed, agentCreated } = reconcileDefinitions(
+      before,
+      this.#config,
+      mintId,
+      { agent: this.#agent },
+    );
     this.definitions = definitions;
+    this.#recordAgent(agentCreated);
     const containersChanged = this.#checkContainers();
     if (!changed && !containersChanged) return;
     this.#save();
@@ -489,4 +581,9 @@ export class WorkspaceStoreImpl {
 }
 
 /** The app's store. */
-export const WorkspaceStore = new WorkspaceStoreImpl({ cachePref: STARTUP_PREF, watch: true });
+export const WorkspaceStore = new WorkspaceStoreImpl({
+  cachePref: STARTUP_PREF,
+  watch: true,
+  agent: DEFAULT_AGENT_WORKSPACE,
+  agentPref: AGENT_ID_PREF,
+});

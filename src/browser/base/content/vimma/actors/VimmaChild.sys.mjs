@@ -127,6 +127,11 @@ function selectionOnScreen(sel, win) {
   return r.bottom > 0 && r.top < win.innerHeight;
 }
 
+/** nsISelectionController.SELECTION_ATTENTION: the find's highlight of its match. */
+const SELECTION_ATTENTION = 3;
+/** nsISelectionController.SELECTION_NORMAL */
+const SELECTION_NORMAL = 1;
+
 /** nsISelectionListener reasons (spec m1-copy-mode, mouse selection). */
 const MOUSEUP_REASON = 4;
 const JS_REASON = 256;
@@ -151,6 +156,8 @@ export class VimmaChild extends JSWindowActorChild {
   #watched = null;
   /** A drag and drop started since the last mousedown: its end is no selection gesture. */
   #dragging = false;
+  /** This actor is focusing an element (`i`, a hint): the focus is the user's, not the find's. */
+  #focusing = false;
   /** Tells the parent about a selection the user made with the mouse (spec m1-copy-mode). */
   #selectionListener = {
     QueryInterface: ChromeUtils.generateQI(["nsISelectionListener"]),
@@ -214,6 +221,10 @@ export class VimmaChild extends JSWindowActorChild {
         this.#emptySearchAt = 0;
         // Unretargeted: the element itself, also inside an open or closed shadow root.
         const target = /** @type {Element | null} */ (event.originalTarget);
+        if (target && this.#focusedByFind(target)) {
+          this.#unfocusFindMatch(/** @type {HTMLInputElement} */ (target));
+          return;
+        }
         this.#report(target?.nodeType === 1 ? target : deepActiveElement(doc), "focusin");
         return;
       }
@@ -242,6 +253,62 @@ export class VimmaChild extends JSWindowActorChild {
       }
       case "dragstart":
         this.#dragging = true;
+    }
+  }
+
+  /**
+   * Whether Firefox's finder focused `el`, a text field its match is in (#164): when the find
+   * bar closes on it (Finder.focusContent) or `n` reaches it while the page has focus
+   * (nsTypeAheadFind focuses the field itself). No user input is being handled then, and the
+   * finder's last match is in this very field.
+   * @param {Element} el
+   */
+  #focusedByFind(el) {
+    if (this.#focusing || this.contentWindow?.windowUtils.isHandlingUserInput) return false;
+    let finder;
+    try {
+      // Only a frame that has searched has a Finder; reading it must not create one.
+      finder = /** @type {any} */ (this.manager.getActor("Finder"))._finder;
+    } catch {
+      return false;
+    }
+    return !!finder && finder._fastFind?.foundEditable === el;
+  }
+
+  /**
+   * Gives back the focus a find put into a text field, and keeps its match highlighted: the
+   * tab stays in normal mode, `n` and `N` go on from the match (the finder starts from the
+   * field's selection), and no key types into the field.
+   * @param {HTMLInputElement} el
+   */
+  #unfocusFindMatch(el) {
+    // Where the find bar's close focuses the field, it then collapses the field's selection
+    // (Finder.focusContent): the match is the selection now, before that.
+    const { selectionStart: start, selectionEnd: end } = el;
+    // After the finder is done: `n` focuses the field in the middle of its search.
+    Services.tm.dispatchToMainThread(() => {
+      if (!el.isConnected || deepActiveElement(this.document) !== el) return;
+      if (el.selectionStart === el.selectionEnd && start !== null && end !== null && start < end) {
+        el.setSelectionRange(start, end);
+      }
+      el.blur();
+      // Blurring hides the field's selection; the finder shows its match as ATTENTION.
+      const controller = /** @type {any} */ (el).editor?.selectionController;
+      controller?.setDisplaySelection(SELECTION_ATTENTION);
+      controller?.repaintSelection(SELECTION_NORMAL);
+    });
+  }
+
+  /**
+   * Focuses `el` for the user: a find's match in it does not stop its focusin report.
+   * @param {HTMLElement} el
+   */
+  #focus(el) {
+    this.#focusing = true;
+    try {
+      el.focus();
+    } finally {
+      this.#focusing = false;
     }
   }
 
@@ -299,6 +366,14 @@ export class VimmaChild extends JSWindowActorChild {
       }
       case "Vimma:FindAnchor":
         return this.#findAnchor();
+      case "Vimma:Selection": {
+        // An agent's read (docs/specs/vimma-mcp.md, decision 4): the page's selected text, if
+        // any, cut at `max` characters; a copy, nothing in the page changes.
+        const max = Math.max(0, Math.min(Number(msg.data?.max) || 0, 500000));
+        const text = this.contentWindow?.getSelection()?.toString() ?? "";
+        // By code point: a cut through a surrogate pair would leave half a character.
+        return text ? [...text].slice(0, max).join("") : null;
+      }
       case "Vimma:ScrollTo": {
         const x = Number(msg.data?.x);
         const y = Number(msg.data?.y);
@@ -394,7 +469,7 @@ export class VimmaChild extends JSWindowActorChild {
     if (!el?.isConnected) return false;
     const html = /** @type {HTMLElement} */ (el);
     if (el.localName !== "a" && isEditable(describe(el)).editable) {
-      html.focus();
+      this.#focus(html);
       return true;
     }
     if (el.localName === "select") {
@@ -446,7 +521,7 @@ export class VimmaChild extends JSWindowActorChild {
     const el = /** @type {HTMLElement | undefined} */ (
       fields[inputIndex(Number(count) || undefined, fields.length)]
     );
-    el?.focus();
+    if (el) this.#focus(el);
     return !!el;
   }
 

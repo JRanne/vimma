@@ -1,0 +1,11 @@
+{
+  "description": "agent-ping answers an empty object",
+  "kind": "response",
+  "command": "agent-ping",
+  "message": {
+    "type": "response",
+    "id": 6,
+    "ok": true,
+    "result": {}
+  }
+}

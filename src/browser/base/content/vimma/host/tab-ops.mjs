@@ -87,7 +87,7 @@ export function closeTabById(win, tab) {
 }
 
 /**
- * `tab.restore` (ctrl+shift+t in the side panel): Firefox's own command for its ctrl+shift+t,
+ * `tab.restore` (ctrl+shift+t, in every mode): Firefox's own command for its ctrl+shift+t,
  * which reopens the last closed tab (or window, or the last session).
  * @param {Window} win
  */

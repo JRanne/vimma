@@ -4,7 +4,9 @@
 import { describe, expect, test } from "vitest";
 import fc from "fast-check";
 import {
+  AGENT_COMMANDS,
   CONTROL_COMMANDS,
+  DENY_REASONS,
   ERROR_CODES,
   LineFramer,
   RESERVED_COMMANDS,
@@ -15,10 +17,27 @@ import { parseKey } from "../../src/keys.mjs";
 import { MODES } from "../../src/modes.mjs";
 import { FUZZ_TIMEOUT, PROTO_NAMES, fuzz, nastyString, within } from "./harness.mjs";
 
-const FIELDS = ["type", "id", "command", "args", "ok", "result", "error", "protocol", "nonce"];
+const FIELDS = [
+  "type",
+  "id",
+  "command",
+  "args",
+  "ok",
+  "result",
+  "error",
+  "protocol",
+  "nonce",
+  "role",
+  "roles",
+  "reason",
+  "tab",
+  "url",
+  "client",
+];
 const KINDS = ["hello", "challenge", "auth", "welcome", "request", "response", "discovery"];
 const hex64 = fc.stringMatching(/^[0-9a-f]{64}$/);
 const id = fc.integer({ min: 1, max: Number.MAX_SAFE_INTEGER });
+const tabId = fc.integer({ min: 1, max: 2 ** 40 }).map(String);
 const chord = fc.constantFrom("a", "ctrl+b", "G", "esc", "shift+tab", "<", "minus", "ctrl+plus");
 const url = fc.oneof(
   fc.webUrl(),
@@ -52,11 +71,89 @@ const validMessage = fc.oneof(
     .tuple(id, fc.constantFrom("state", "reload-theme", ...RESERVED_COMMANDS))
     .map(([i, command]) => ({ m: { type: "request", id: i, command, args: {} }, o: {} })),
   fc
-    .tuple(fc.option(id, { nil: null }), fc.constantFrom(...ERROR_CODES), fc.string())
-    .map(([i, code, message]) => ({
-      m: { type: "response", id: i, ok: false, error: { code, message } },
+    .tuple(
+      fc.option(id, { nil: null }),
+      fc.constantFrom(...ERROR_CODES),
+      fc.string(),
+      fc.constantFrom(...DENY_REASONS),
+    )
+    .map(([i, code, message, reason]) => ({
+      m: {
+        type: "response",
+        id: i,
+        ok: false,
+        // Protocol 2: a denial says why, and only a denial carries a reason.
+        error: code === "denied" ? { code, message, reason } : { code, message },
+      },
       o: {},
     })),
+  // Protocol 2 (docs/specs/vimma-mcp.md): roles, the agent commands and their results.
+  fc.tuple(hex64, fc.constantFrom("agent", "full")).map(([nonce, role]) => ({
+    m: { type: "hello", protocol: 2, nonce, role },
+    o: {},
+  })),
+  fc.constantFrom("agent", "full").map((role) => ({
+    m: { type: "welcome", protocol: 2, app: "Vimma", version: "1", role },
+    o: {},
+  })),
+  fc
+    .tuple(hex64, fc.constantFrom(["agent"], ["full"], ["agent", "full"]))
+    .map(([token, roles]) => ({
+      m: { protocol: 2, port: 4000, token, pid: 7, roles },
+      o: { kind: "discovery" },
+    })),
+  fc
+    .tuple(id, tabId, fc.constantFrom("markdown", "text"), fc.integer({ min: 1, max: 500000 }))
+    .map(([i, tab, format, max]) => ({
+      m: { type: "request", id: i, command: "agent-read", args: { tab, format, max_chars: max } },
+      o: {},
+    })),
+  fc.tuple(id, fc.webUrl(), fc.option(tabId, { nil: undefined })).map(([i, u, tab]) => ({
+    m: {
+      type: "request",
+      id: i,
+      command: "agent-open",
+      args: tab === undefined ? { url: u } : { url: u, tab },
+    },
+    o: {},
+  })),
+  fc.tuple(id, tabId).map(([i, tab]) => ({
+    m: { type: "request", id: i, command: "agent-close", args: { tab } },
+    o: {},
+  })),
+  fc.tuple(id, fc.constantFrom("agent-tabs", "agent-ping")).map(([i, command]) => ({
+    m: { type: "request", id: i, command, args: {} },
+    o: {},
+  })),
+  fc.tuple(id, fc.constantFrom("claude-code", "codex", "opencode")).map(([i, name]) => ({
+    m: { type: "request", id: i, command: "agent-hello", args: { client: { name } } },
+    o: {},
+  })),
+  fc
+    .array(fc.record({ id: tabId, url: fc.string(), title: fc.string(), loading: fc.boolean() }), {
+      maxLength: 3,
+    })
+    .map((tabs) => ({
+      m: { type: "response", id: 1, ok: true, result: { tabs } },
+      o: { command: "agent-tabs" },
+    })),
+  fc.tuple(fc.string(), fc.boolean()).map(([text, truncated]) => ({
+    m: {
+      type: "response",
+      id: 1,
+      ok: true,
+      result: {
+        url: "https://a/",
+        title: "A",
+        text,
+        truncated,
+        selection: null,
+        language: "en",
+        background: true,
+      },
+    },
+    o: { command: "agent-read" },
+  })),
   fc.tuple(id, fc.nat()).map(([i, sent]) => ({
     m: { type: "response", id: i, ok: true, result: { sent } },
     o: { command: "send-keys" },
@@ -104,7 +201,7 @@ const wrongValue = fc.oneof(
 /** @param {unknown} v */
 const jsonType = (v) => (v === null ? "null" : Array.isArray(v) ? "array" : typeof v);
 /** Fields that take more than one JSON type: `string | null`, `integer | null`, anything. */
-const UNION_FIELDS = ["pending", "workspace", "panes"];
+const UNION_FIELDS = ["pending", "workspace", "panes", "selection", "language"];
 
 describe("control protocol fuzzing", () => {
   test(
@@ -180,14 +277,16 @@ describe("control protocol fuzzing", () => {
                 fc.constantFrom(...FIELDS, ...PROTO_NAMES),
                 fc.oneof(
                   wrongValue,
-                  fc.constantFrom(...KINDS, ...CONTROL_COMMANDS),
+                  fc.constantFrom(...KINDS, ...CONTROL_COMMANDS, ...AGENT_COMMANDS),
                   fc.dictionary(fc.constantFrom(...FIELDS, ...PROTO_NAMES), wrongValue),
                 ),
               )
               .map((o) => new TextEncoder().encode(JSON.stringify(o))),
           ),
           fc.option(fc.constantFrom(...KINDS, ...PROTO_NAMES), { nil: undefined }),
-          fc.option(fc.constantFrom(...CONTROL_COMMANDS, ...PROTO_NAMES), { nil: undefined }),
+          fc.option(fc.constantFrom(...CONTROL_COMMANDS, ...AGENT_COMMANDS, ...PROTO_NAMES), {
+            nil: undefined,
+          }),
           (bytes, kind, command) => {
             let message;
             try {
@@ -312,6 +411,72 @@ describe("control protocol fuzzing", () => {
               expect([...u].some((c) => c <= " " || c === "\x7f")).toBe(false);
               expect(u).toMatch(/^(?:https?|file|about):/i);
             }
+          },
+        ),
+        { weight: 20 },
+      ),
+    FUZZ_TIMEOUT,
+  );
+
+  test(
+    "agent-open passes only short http(s) URLs; agent labels never carry control or bidi characters",
+    () =>
+      fuzz(
+        "control-agent-args",
+        fc.property(
+          fc.oneof(
+            url,
+            nastyString,
+            fc.constantFrom(
+              "javascript:alert(1)",
+              "data:,x",
+              "file:///etc/passwd",
+              "https://a/\u0000",
+            ),
+          ),
+          fc.oneof(
+            nastyString,
+            fc.string({ maxLength: 70 }),
+            fc.constantFrom("a\u202eb", "a\u2066"),
+          ),
+          fc.oneof(nastyString, fc.constantFrom("1", "01", "12", "-3", "1e2")),
+          (u, label, tab) => {
+            const op = validateMessage({
+              type: "request",
+              id: 1,
+              command: "agent-open",
+              args: { url: u },
+            });
+            if (op.valid) {
+              expect(u.length).toBeLessThanOrEqual(65536);
+              expect([...u].some((c) => c <= " " || c === "\x7f")).toBe(false);
+              expect(u).toMatch(/^https?:/i);
+            }
+            const hi = validateMessage({
+              type: "request",
+              id: 1,
+              command: "agent-hello",
+              args: { client: { name: label } },
+            });
+            if (hi.valid) {
+              expect([...label].length).toBeLessThanOrEqual(64);
+              for (const c of label) {
+                const cp = /** @type {number} */ (c.codePointAt(0));
+                const bad =
+                  cp <= 0x1f ||
+                  (cp >= 0x7f && cp <= 0x9f) ||
+                  (cp >= 0x202a && cp <= 0x202e) ||
+                  (cp >= 0x2066 && cp <= 0x2069);
+                expect(bad, `U+${cp.toString(16)}`).toBe(false);
+              }
+            }
+            const close = validateMessage({
+              type: "request",
+              id: 1,
+              command: "agent-close",
+              args: { tab },
+            });
+            if (close.valid) expect(tab).toMatch(/^[1-9][0-9]*$/);
           },
         ),
         { weight: 20 },

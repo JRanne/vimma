@@ -280,3 +280,60 @@ describe("canWrite: never overwrite a file from a newer vimma", () => {
     expect(canWrite(existing)).toBe(expected);
   });
 });
+
+// docs/specs/side-panel-unsplit.md decision 24: a hidden view and the tab shown alone over it.
+describe("panes.hidden and alone: optional, no schema bump", () => {
+  /** w1's split hidden, tab-z shown alone; activeTab stays the focused pane's tab (tab-c). */
+  const hidden = (/** @type {(w: any) => void} */ more = () => {}) =>
+    mutated((r) => {
+      const w = r.workspaces[0];
+      w.tabs.push("tab-z");
+      w.panes.hidden = true;
+      w.alone = "tab-z";
+      more(w);
+    });
+  const w1 = (/** @type {any} */ raw) => /** @type {any} */ (fromSnapshot(raw)).workspaces[0];
+
+  test("a hidden view reads with the alone tab as the active one, and writes back", () => {
+    const raw = hidden();
+    const w = w1(raw);
+    expect(w.panes.hidden).toBe(true);
+    expect(w.activeTab).toBe("tab-z");
+    expect(toSnapshot(fromSnapshot(raw))).toEqual(raw);
+    expect(raw.schema).toBe(SCHEMA_VERSION);
+  });
+
+  test("the file keeps activeTab on the focused pane, so an older reader shows the split", () => {
+    const raw = hidden();
+    expect(raw.workspaces[0].activeTab).toBe("tab-c");
+    const written = toSnapshot(fromSnapshot(raw));
+    expect(written.workspaces[0].activeTab).toBe("tab-c");
+    expect(written.workspaces[0].alone).toBe("tab-z");
+  });
+
+  test.each([
+    ["no alone tab", (/** @type {any} */ w) => delete w.alone],
+    ["an alone tab not in the workspace", (/** @type {any} */ w) => (w.alone = "tab-d")],
+    ["an alone tab that is a pane's", (/** @type {any} */ w) => (w.alone = "tab-a")],
+    ["hidden not true", (/** @type {any} */ w) => (w.panes.hidden = "yes")],
+  ])("%s: the view reads as shown, without failing", (_, change) => {
+    const w = w1(hidden(change));
+    expect("hidden" in w.panes).toBe(false);
+    expect(w.activeTab).toBe("tab-c");
+  });
+
+  test("a one-pane tree is never hidden", () => {
+    const raw = mutated((r) => {
+      r.workspaces[1].panes.hidden = true;
+    });
+    expect("hidden" in /** @type {any} */ (fromSnapshot(raw)).workspaces[1].panes).toBe(false);
+  });
+
+  test("a snapshot without them reads as before", () => {
+    const w = w1(JSON.parse(fixture("valid.json")));
+    expect("hidden" in w.panes).toBe(false);
+    expect(toSnapshot(fromSnapshot(fixture("valid.json"))).workspaces[0]).not.toHaveProperty(
+      "alone",
+    );
+  });
+});

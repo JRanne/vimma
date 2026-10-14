@@ -1,0 +1,13 @@
+{
+  "description": "The hello asked for a role that is off",
+  "kind": "response",
+  "message": {
+    "type": "response",
+    "id": null,
+    "ok": false,
+    "error": {
+      "code": "role-off",
+      "message": "MCP is off in Vimma: run :mcp on"
+    }
+  }
+}

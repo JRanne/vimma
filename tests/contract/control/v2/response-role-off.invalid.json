@@ -1,0 +1,14 @@
+{
+  "description": "Only a denial carries a reason",
+  "kind": "response",
+  "message": {
+    "type": "response",
+    "id": null,
+    "ok": false,
+    "error": {
+      "code": "role-off",
+      "message": "MCP is off in Vimma: run :mcp on",
+      "reason": "user"
+    }
+  }
+}

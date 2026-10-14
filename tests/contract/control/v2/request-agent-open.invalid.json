@@ -1,0 +1,12 @@
+{
+  "description": "Agents load only http and https",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 4,
+    "command": "agent-open",
+    "args": {
+      "url": "file:///etc/passwd"
+    }
+  }
+}

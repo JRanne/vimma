@@ -63,6 +63,11 @@ group("Tabs", [
   ...numbered("select_tab", "tab.goto", (n) => `Jump to tab ${n} in this workspace`),
   ["rename_tab", "tab.rename", "Rename tab"],
   ["close_tab", "tab.close", "Close tab"],
+  // docs/specs/firefox-keys.md decision 3: Firefox's tab keys, by name.
+  ["select_last_tab", "tab.goto_last", "Jump to the last tab in this workspace"],
+  ["move_tab_left", "tab.move_left", "Move the tab left"],
+  ["move_tab_right", "tab.move_right", "Move the tab right"],
+  ["restore_tab", "tab.restore", "Reopen the last closed tab"],
 ]);
 
 group("Panes", [
@@ -124,6 +129,12 @@ group("Workspaces", [
     "workspace.route",
     "Routing rules: list them; :route add [workspace], :route move",
   ],
+  // docs/specs/private-workspace.md: Firefox's private window, as a workspace.
+  [
+    "private_workspace",
+    "workspace.private",
+    "Private workspace (a private window); again goes back",
+  ],
 ]);
 
 group("Navigation", [
@@ -143,7 +154,7 @@ group("Navigation", [
   ["open_url", "page.open", "Open a URL or search in this tab"],
   ["url_up", "page.url_up", "Go up a level in the URL path"],
   ["url_root", "page.url_root", "Go to the site's root"],
-  ["focus_urlbar", "urlbar.focus", "Focus the address bar (as ctrl+l)"],
+  ["focus_urlbar", "urlbar.focus", "Focus the address bar, its text selected"],
 ]);
 
 group("Page", [
@@ -156,6 +167,49 @@ group("Page", [
   ],
   ["focus_input", "page.focus_input", "Focus the first text field (with a count: the Nth)"],
   ["view_source", "page.view_source", "View the page's source in a new tab"],
+]);
+
+// docs/specs/firefox-keys.md decision 3: Firefox's own features on Firefox's keys, each running
+// what Firefox's key ran (host/browser-ops.mjs).
+group("Browser", [
+  ["new_window", "window.new", "New window"],
+  ["close_window", "window.close", "Close the window"],
+  ["restore_window", "window.restore", "Reopen the last closed window"],
+  ["quit", "app.quit", "Quit (asks first)"],
+  ["reload_hard", "page.reload_hard", "Reload, bypassing the cache"],
+  ["stop_loading", "page.stop", "Stop loading the page"],
+  ["go_home", "page.home", "Go to the home page"],
+  ["page_zoom_in", "page.zoom_in", "Zoom the page in"],
+  ["page_zoom_out", "page.zoom_out", "Zoom the page out"],
+  ["page_zoom_reset", "page.zoom_reset", "Reset the page's zoom"],
+  ["toggle_fullscreen", "window.fullscreen", "Full screen, or leave it"],
+  ["save_page", "page.save", "Save the page"],
+  ["print_page", "page.print", "Print the page"],
+  ["downloads", "browser.downloads", "Downloads (the Library)"],
+  ["addons_manager", "browser.addons", "Add-ons manager (about:addons)"],
+  ["history_library", "browser.history", "History (the Library)"],
+  ["bookmarks_library", "browser.bookmarks", "Bookmarks (the Library)"],
+  ["mute_tab", "tab.mute", "Mute or unmute the tab"],
+  ["picture_in_picture", "page.picture_in_picture", "Picture-in-Picture"],
+  ["reader_view", "page.reader_view", "Reader View"],
+  ["screenshot", "page.screenshot", "Take a screenshot"],
+  ["clear_history", "browser.clear_history", "Clear recent history"],
+]);
+
+// The DevTools keys, exactly as in Firefox (docs/specs/firefox-keys.md, open question 5).
+group("Developer tools", [
+  ["devtools", "devtools.toggle", "Open / close the developer tools"],
+  ["browser_toolbox", "devtools.browser_toolbox", "Browser Toolbox"],
+  ["browser_console", "devtools.browser_console", "Browser Console"],
+  ["responsive_design", "devtools.responsive_design", "Responsive Design Mode"],
+  ["devtools_inspector", "devtools.inspector", "Developer tools: Inspector"],
+  ["devtools_console", "devtools.console", "Developer tools: Web Console"],
+  ["devtools_debugger", "devtools.debugger", "Developer tools: Debugger"],
+  ["devtools_network", "devtools.network", "Developer tools: Network"],
+  ["devtools_style_editor", "devtools.style_editor", "Developer tools: Style Editor"],
+  ["devtools_performance", "devtools.performance", "Developer tools: Performance"],
+  ["devtools_storage", "devtools.storage", "Developer tools: Storage"],
+  ["devtools_accessibility", "devtools.accessibility", "Developer tools: Accessibility"],
 ]);
 
 group("Hints", [
@@ -237,12 +291,19 @@ group("Side panel", [
   ...numbered("panel_select", "panel.select", (n) => `Select row ${n}`),
   ["panel_down", "panel.down", "Next row"],
   ["panel_up", "panel.up", "Previous row"],
-  ["panel_open", "panel.open", "Open the selected row, or show the marked tabs as panes"],
-  ["panel_close", "panel.close", "End the range, clear the marks, or close the side panel"],
+  [
+    "panel_open",
+    "panel.open",
+    "Apply the marks (the marked tabs become the panes), then go to the selected row",
+  ],
+  [
+    "panel_close",
+    "panel.close",
+    "End the range, clear or restore the marks, or close the side panel",
+  ],
   ["panel_close_tab", "panel.close_tab", "Close the selected tab; the panel stays open"],
   ["panel_mark", "panel.mark", "Mark or unmark the selected tab and move down"],
   ["panel_visual", "panel.visual", "Start a range of rows to mark, or mark it"],
-  ["restore_tab", "tab.restore", "Reopen the last closed tab (Firefox's ctrl+shift+t)"],
 ]);
 
 group("Bookmarks", [
@@ -265,9 +326,19 @@ group("Bookmarks", [
 group("Config", [
   ["reload_config", "config.reload", "Reload config"],
   ["edit_config", "config.edit", "Open config.toml in a tab"],
+  // docs/specs/theme-appearance.md: no default key; `:theme dark|light|system`.
+  ["theme_appearance", "theme.appearance", "Built-in theme: dark, light or the system's (:theme)"],
 ]);
 
 // docs/specs/addon-manager.md
+// docs/specs/vimma-mcp.md: local AI agents, confined to the agent workspace. `:mcp on|off|forget`;
+// prefix+shift+a answers the waiting question (decision 14); `:control on <minutes>` (29 D).
+group("Agents", [
+  ["mcp_command", "mcp.command", "Agents (MCP): :mcp on, off or forget"],
+  ["agent_prompt", "mcp.answer", "Answer the waiting agent request (none: revoke grants)"],
+  ["control_command", "control.command", "Full control for a while: :control on <minutes>, off"],
+]);
+
 group("Add-ons", [
   ["addon_picker", "addons.picker", "Add-on picker: popup, options, on/off, remove, update"],
   ["addon_popup", "addons.popup", "Open an add-on's popup by name (:addon name)"],

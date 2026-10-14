@@ -7,7 +7,8 @@
 // `-vimma-reload-theme` through Firefox's command-line remoting, the D-Bus call a second
 // `vimma <args>` makes, and the handler registered here reloads the theme and opens nothing.
 // Registered at runtime, once per process, like about:vimma: no upstream patch. The hook itself
-// is installed here when Omarchy is found (pref vimma.theme.omarchyHook).
+// is installed here when Omarchy is found (pref vimma.theme.omarchyHook): ThemeHost looks for
+// Omarchy once (docs/specs/theme-appearance.md, A); without it nothing here touches the disk.
 
 const lazy = /** @type {any} */ ({});
 ChromeUtils.defineESModuleGetters(lazy, {
@@ -129,10 +130,21 @@ async function sync(home) {
   return current === null ? "installed" : "updated";
 }
 
+/**
+ * `sync`, but only where ThemeHost found Omarchy: elsewhere not even its hooks directory is
+ * looked for.
+ * @param {string} home
+ * @param {boolean} installed  ThemeHost's detection
+ */
+function syncIfInstalled(home, installed) {
+  return installed ? sync(home) : Promise.resolve(/** @type {const} */ ("no-omarchy"));
+}
+
 export const OmarchyHook = {
   HOOK_URL,
   render,
   sync,
+  syncIfInstalled,
 
   /** Why startup leaves the user's files alone, or null when it may sync them. */
   get startupBlocked() {
@@ -165,8 +177,11 @@ export const OmarchyHook = {
     const home = Services.dirsvc.get("Home", Ci.nsIFile).path;
     const run = () =>
       sync(home).catch((e) => console.warn("vimma: Omarchy theme hook not synced", e));
-    // Live: turning the pref off removes Vimma's unedited hook at once, on writes it again.
-    Services.prefs.addObserver(ENABLED_PREF, run);
-    run();
+    lazy.ThemeHost.omarchyDetected.then((/** @type {boolean} */ installed) => {
+      if (!installed) return; // syncIfInstalled's rule
+      // Live: turning the pref off removes Vimma's unedited hook at once, on writes it again.
+      Services.prefs.addObserver(ENABLED_PREF, run);
+      run();
+    });
   },
 };

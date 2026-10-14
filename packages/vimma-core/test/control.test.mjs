@@ -171,9 +171,9 @@ describe("validateMessage: envelopes", () => {
   });
 
   test.each(ERROR_CODES)("error code %s is accepted", (code) => {
-    expect(errorsOf({ type: "response", id: 1, ok: false, error: { code, message: "m" } })).toEqual(
-      [],
-    );
+    // A protocol 2 denial also says why (control-v2.test.mjs).
+    const error = { code, message: "m", ...(code === "denied" ? { reason: "user" } : {}) };
+    expect(errorsOf({ type: "response", id: 1, ok: false, error })).toEqual([]);
   });
 
   test("error must be an object without extra fields", () => {
@@ -317,6 +317,21 @@ describe("validateMessage: state", () => {
       "result.tabs[1] must be an object",
       "result.panes must be present (null before split view)",
     ]);
+  });
+
+  test("a private window's state withholds every url and title (private-workspace 8d)", () => {
+    const hidden = { id: "1", url: null, title: null, selected: true };
+    const priv = { ...state, private: true, workspace: "private", tabs: [hidden] };
+    expect(errorsOf(ok(priv), { command: "state" })).toEqual([]);
+    const leaked = { ...priv, tabs: [{ ...hidden, url: "https://a.example/", title: "A" }] };
+    expect(errorsOf(ok(leaked), { command: "state" })).toEqual([
+      "result.tabs[0].url must be null in a private window",
+      "result.tabs[0].title must be null in a private window",
+    ]);
+    expect(errorsOf(ok({ ...state, private: "yes" }), { command: "state" })).toEqual([
+      "result.private must be a boolean",
+    ]);
+    expect(errorsOf(ok({ ...state, private: false }), { command: "state" })).toEqual([]);
   });
 
   test("tabs must be an array with at most one selected tab", () => {

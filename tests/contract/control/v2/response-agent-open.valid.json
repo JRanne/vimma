@@ -1,0 +1,13 @@
+{
+  "description": "agent-open answers the new tab's id",
+  "kind": "response",
+  "command": "agent-open",
+  "message": {
+    "type": "response",
+    "id": 4,
+    "ok": true,
+    "result": {
+      "tab": "13"
+    }
+  }
+}

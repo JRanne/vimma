@@ -11,3 +11,24 @@ const { ThemeHost } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/ui/theme-host.mjs",
 );
 ThemeHost.attachDocument(document);
+
+// The way to switch the built-in palette, for a first-time user (docs/specs/theme-appearance.md
+// B6); left out when the colours are an Omarchy theme's, which `:theme` does not change.
+const tip = document.getElementById("vimma-theme-tip");
+ThemeHost.followsOmarchy().then((/** @type {boolean} */ omarchy) => {
+  if (!tip) return;
+  tip.hidden = omarchy;
+  tip.dataset.ready = "true";
+});
+
+// The versions in the footer, read from the running app, never written into the page: Vimma's
+// own (surfer.json displayVersion -> MOZ_APP_VERSION_DISPLAY, what `vimma --version` prints)
+// and the Firefox it is built on (appinfo.version, spec m0-app-version).
+const { AppConstants } = ChromeUtils.importESModule("resource://gre/modules/AppConstants.sys.mjs");
+/** @param {string} id @param {string} text */
+const fill = (id, text) => {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+};
+fill("vimma-version", `Vimma ${AppConstants.MOZ_APP_VERSION_DISPLAY}`);
+fill("firefox-version", `Firefox ${Services.appinfo.version}`);

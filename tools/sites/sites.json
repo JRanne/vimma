@@ -1,0 +1,137 @@
+[
+  {
+    "id": "github-repo",
+    "name": "GitHub repo",
+    "url": "https://github.com/neovim/neovim",
+    "find": "neovim"
+  },
+  {
+    "id": "github-file",
+    "name": "GitHub file",
+    "url": "https://github.com/neovim/neovim/blob/master/README.md",
+    "find": "install"
+  },
+  {
+    "id": "github-pr",
+    "name": "GitHub PR",
+    "url": "https://github.com/neovim/neovim/pull/30000",
+    "find": "findfile"
+  },
+  {
+    "id": "github-issues",
+    "name": "GitHub issues",
+    "url": "https://github.com/neovim/neovim/issues"
+  },
+  {
+    "id": "stackoverflow",
+    "name": "Stack Overflow",
+    "url": "https://stackoverflow.com/questions/11828270/how-do-i-exit-vim",
+    "find": "quit",
+    "search": "input[name=q]"
+  },
+  {
+    "id": "mdn",
+    "name": "MDN",
+    "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array",
+    "find": "length"
+  },
+  {
+    "id": "docs-rs",
+    "name": "docs.rs",
+    "url": "https://docs.rs/serde/latest/serde/",
+    "find": "serialize"
+  },
+  {
+    "id": "npm",
+    "name": "npmjs.com",
+    "url": "https://www.npmjs.com/package/vitest",
+    "find": "vitest"
+  },
+  {
+    "id": "pypi",
+    "name": "PyPI",
+    "url": "https://pypi.org/project/requests/",
+    "find": "requests"
+  },
+  {
+    "id": "rust-std",
+    "name": "doc.rust-lang.org",
+    "url": "https://doc.rust-lang.org/std/vec/struct.Vec.html",
+    "find": "capacity"
+  },
+  {
+    "id": "python-docs",
+    "name": "docs.python.org",
+    "url": "https://docs.python.org/3/library/pathlib.html",
+    "find": "path"
+  },
+  {
+    "id": "hacker-news",
+    "name": "Hacker News",
+    "url": "https://news.ycombinator.com/",
+    "find": "comments"
+  },
+  {
+    "id": "reddit",
+    "name": "Reddit",
+    "url": "https://www.reddit.com/r/vim/",
+    "find": "vim"
+  },
+  {
+    "id": "youtube",
+    "name": "YouTube",
+    "url": "https://www.youtube.com/results?search_query=neovim",
+    "search": "input[name=search_query]",
+    "notes": "Search results, not a video page, so nothing autoplays."
+  },
+  {
+    "id": "wikipedia",
+    "name": "Wikipedia",
+    "url": "https://en.wikipedia.org/wiki/Vim_(text_editor)",
+    "find": "Moolenaar"
+  },
+  {
+    "id": "google",
+    "name": "Google search",
+    "url": "https://www.google.com/search?q=neovim",
+    "search": "textarea[name=q]",
+    "find": "neovim"
+  },
+  {
+    "id": "duckduckgo",
+    "name": "DuckDuckGo",
+    "url": "https://duckduckgo.com/?q=neovim",
+    "search": "input[name=q]",
+    "find": "neovim"
+  },
+  {
+    "id": "vercel-docs",
+    "name": "Vercel docs",
+    "url": "https://vercel.com/docs",
+    "find": "deploy"
+  },
+  {
+    "id": "cloudflare-docs",
+    "name": "Cloudflare docs",
+    "url": "https://developers.cloudflare.com/workers/",
+    "find": "workers"
+  },
+  {
+    "id": "codepen",
+    "name": "CodePen",
+    "url": "https://codepen.io/pen/",
+    "notes": "The editor without an account: it autofocuses its HTML pane; the insert check uses the code editor, as there is no search field.",
+    "search": ".CodeMirror textarea, .cm-content"
+  },
+  {
+    "id": "regex101",
+    "name": "regex101",
+    "url": "https://regex101.com/"
+  },
+  {
+    "id": "excalidraw",
+    "name": "Excalidraw",
+    "url": "https://excalidraw.com/",
+    "notes": "A canvas app: nothing scrolls, few links."
+  }
+]

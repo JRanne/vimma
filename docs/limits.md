@@ -180,7 +180,13 @@ These are the trade-offs the workspaces' design accepts on purpose
 - Firefox Sync no longer syncs `browser.startup.page` or `privacy.userContext.enabled` to Vimma.
 - After 3 minutes without input, the session is saved hourly, so a crash can lose an hour of
   changes made by pages (tabs they opened), as in Firefox.
-- Private windows and pop-ups have no workspaces.
+- Pop-ups have no workspaces. Private windows have no normal workspaces: together they are the
+  one [private workspace](guide.md#private-workspace), a second window-manager window (Firefox
+  keeps privacy per window), not a part of the Vimma window. On Hyprland, Vimma hides the one you
+  are not using in `special:vimma`, but Hyprland's event stream and other tools (`hyprctl
+clients`) still see both windows; elsewhere both are visible windows. There is one private
+  workspace, not several; all private windows share one cookie jar. Links from other apps never
+  open in it.
 - Firefox's sidebar keys (`ctrl+alt+x`, `ctrl+alt+u`, `ctrl+alt+z`; `ctrl+h` is off) still open its own
   sidebar beside Vimma's side panel; Firefox's four default containers stay in Settings.
 - Extensions that hide or show tabs (`tabs.hide`) conflict with workspace visibility.

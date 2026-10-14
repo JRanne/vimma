@@ -3,15 +3,17 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Firefox's own shortcuts that overlap Vimma's keys, off (spec: docs/specs/key-handling-batch.md
-// § 1). No patch: the `<key>` elements of the window's #mainKeyset get `disabled="true"`, which
-// dom/events/GlobalKeyListener.cpp reads at key time (CanHandle → KeyElementIsDisabled), so a
-// disabled shortcut neither runs nor is reserved: the page gets the chord. Core firefox-keys.mjs
-// decides which; this reads the elements and writes the attribute.
+// § 1, docs/specs/firefox-keys.md decision 2). No patch: the `<key>` elements of every keyset of
+// the window (#mainKeyset, the DevTools' #devtoolsKeyset, the conditional ones) get
+// `disabled="true"`, which dom/events/GlobalKeyListener.cpp reads at key time (CanHandle →
+// KeyElementIsDisabled), so a disabled shortcut neither runs nor is reserved: the page gets the
+// chord. Core firefox-keys.mjs decides which; this reads the elements and writes the attribute.
 
 import { OVERLAP_CHORDS, planFirefoxKeys, xulKeyChord } from "../core/firefox-keys.mjs";
 
 /** @import { FirefoxKeySetting } from "../core/config.mjs" */
 
+/** Firefox's own keyset: a window without it (not a browser window) is left alone. */
 const KEYSET_ID = "mainKeyset";
 /** Marks a key we disabled, so we only ever re-enable our own. */
 const MARK = "vimma-disabled";
@@ -35,10 +37,13 @@ export class FirefoxKeys {
   /**
    * @param {Window} win  a browser window
    * @param {FirefoxKeySetting} setting
+   * @param {ReadonlySet<string>} [bound]  the chords Vimma binds (core boundChords)
    */
-  constructor(win, setting) {
+  constructor(win, setting, bound = new Set()) {
     this.win = win;
     this.setting = setting;
+    /** @type {ReadonlySet<string>} chords Vimma binds: their Firefox keys are off (bound means off) */
+    this.bound = bound;
     /** @type {string[]} chords of the setting that no key has */
     this.unmatched = [];
     /** @type {MutationObserver | null} */
@@ -51,9 +56,14 @@ export class FirefoxKeys {
     return lazy.AppConstants.platform === "macosx";
   }
 
-  /** The window's keyset, or null (a window without Firefox's keys). */
+  /** The window's main keyset, or null (a window without Firefox's keys). */
   get keyset() {
     return this.win.document.getElementById(KEYSET_ID);
+  }
+
+  /** Every keyset of the window: DevTools and others add theirs after startup. */
+  keysets() {
+    return /** @type {Element[]} */ ([...this.win.document.querySelectorAll("keyset")]);
   }
 
   /**
@@ -72,27 +82,64 @@ export class FirefoxKeys {
       /** @type {unknown} */ (this.win)
     );
     const observer = new MutationObserver((records) => {
+      // A keyset added (DevTools hook their keys in late) or re-inserted: watch it too.
+      const keysetMoved = records.some(
+        (r) =>
+          r.type === "childList" &&
+          [...r.addedNodes, ...r.removedNodes].some(
+            (n) => /** @type {Element} */ (n).localName === "keyset",
+          ),
+      );
+      if (keysetMoved) this.watch(observer);
       // Our own writes come back as records too; apply() writes only what differs, so this ends.
-      if (records.some((r) => r.type === "childList" || r.attributeName !== MARK)) this.apply();
+      // The body and the root report every child they gain: only a keyset there matters.
+      const { body, documentElement } = this.win.document;
+      const keyChange = records.some(
+        (r) =>
+          r.target !== body &&
+          r.target !== documentElement &&
+          (r.type === "childList" || r.attributeName !== MARK),
+      );
+      if (keysetMoved || keyChange) this.apply();
     });
     this.observer = observer;
-    observer.observe(keyset, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: [...WATCHED, MARK],
-    });
+    this.watch(observer);
   }
 
-  /** @param {FirefoxKeySetting} setting */
-  set(setting) {
+  /**
+   * Watches every keyset's keys, and where keysets are added (the body, the root element).
+   * @param {MutationObserver} observer
+   */
+  watch(observer) {
+    const doc = this.win.document;
+    for (const parent of [doc.body, doc.documentElement]) {
+      if (parent) observer.observe(parent, { childList: true });
+    }
+    for (const keyset of this.keysets()) {
+      observer.observe(keyset, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: [...WATCHED, MARK],
+      });
+    }
+  }
+
+  /**
+   * @param {FirefoxKeySetting} setting
+   * @param {ReadonlySet<string>} [bound]  absent keeps the current one
+   */
+  set(setting, bound) {
     this.setting = setting;
+    if (bound) this.bound = bound;
     this.apply();
   }
 
-  /** Every `<key>` of the keyset with its chord, as the plan reads them. */
+  /** Every `<key>` of the window's keysets with its chord, as the plan reads them. */
   keys() {
-    const els = /** @type {Element[]} */ ([...(this.keyset?.querySelectorAll("key") ?? [])]);
+    const els = /** @type {Element[]} */ (
+      this.keyset ? [...this.win.document.querySelectorAll("keyset key")] : []
+    );
     return els.map((el) => ({
       el,
       chord: xulKeyChord(
@@ -115,7 +162,7 @@ export class FirefoxKeys {
     const plan = planFirefoxKeys(
       keys.filter((k) => !k.firefoxOff),
       this.setting,
-      { mac: this.mac },
+      { mac: this.mac, bound: this.bound },
     );
     const off = new Set(plan.off.map((k) => k.el));
     for (const { el } of keys) {

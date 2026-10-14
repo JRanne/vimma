@@ -47,7 +47,9 @@ const noticeText = () => document.getElementById(NOTICE_ID)?.textContent ?? "";
 registerCleanupFunction(async () => {
   if (isOpen()) EventUtils.synthesizeKey("KEY_Escape");
   ww().switchTo({ id: def("main").id });
-  for (const w of WorkspaceStore.definitions.workspaces.filter((d) => d.name !== "main")) {
+  for (const w of WorkspaceStore.definitions.workspaces.filter(
+    (d) => d.name !== "main" && d.id !== WorkspaceStore.agent?.id,
+  )) {
     await WorkspaceStore.deleteWorkspace(w.id, { confirmed: true });
   }
   while (gBrowser.tabs.length > 1) BrowserTestUtils.removeTab(gBrowser.tabs.at(-1));
@@ -103,7 +105,8 @@ function browserBoxOrder() {
 add_task(async function setup_two_workspaces() {
   await ww().ready;
   if (!def("alpha")) WorkspaceStore.newWorkspace("alpha");
-  await until(() => ww().model.workspaces.length === 2, "main and alpha");
+  // docs/specs/vimma-mcp.md decision 8: the agent workspace too, last.
+  await until(() => ww().model.workspaces.length === 3, "main, alpha and agent");
   ww().switchTo({ id: def("alpha").id });
   await openPage("alpha-one");
   ww().switchTo({ id: def("main").id });

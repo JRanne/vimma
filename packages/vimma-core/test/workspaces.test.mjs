@@ -24,6 +24,7 @@ import {
   lastWorkspace,
   alternateWorkspace,
   setAlternate,
+  leaveSkipped,
 } from "../src/workspaces.mjs";
 import { closePane, focus, leaves, resize, setPaneTab, swap, toggleZoom } from "../src/panes.mjs";
 import { toSnapshot, fromSnapshot } from "../src/snapshot.mjs";
@@ -661,5 +662,90 @@ describe("the alternate workspace (Vim's ctrl+^)", () => {
       const back = fromSnapshot({ ...snap, alternate: bad });
       expect(back.alternate).toBeUndefined();
     }
+  });
+});
+
+// docs/specs/vimma-mcp.md, decision 9 (user, 2026-10-13: "You are correct to skip it when
+// cycling"): the agent workspace is in the picker, never in the cycle or the alternate.
+describe("skipped workspaces (the agent workspace)", () => {
+  const withAgent = () =>
+    addWorkspace(
+      createWorkspaces([
+        { id: "main", name: "main", container: "1" },
+        { id: "work", name: "work", container: "2" },
+      ]),
+      { id: "agent", name: "agent", container: "3" },
+      { activate: false },
+    );
+  const skip = new Set(["agent"]);
+
+  test("next from work is main, previous from main is work: never agent", () => {
+    const fromWork = switchWorkspace(withAgent(), { id: "work" });
+    expect(ws(nextWorkspace(fromWork, skip)).name).toBe("main");
+    expect(ws(previousWorkspace(withAgent(), skip)).name).toBe("work");
+    let s = withAgent();
+    const seen = [];
+    for (let i = 0; i < 3; i++) {
+      s = nextWorkspace(s, skip);
+      seen.push(ws(s).name);
+    }
+    expect(seen).toEqual(["work", "main", "work"]);
+    // Without a skip set, the cycle is every workspace, as before.
+    expect(ws(nextWorkspace(fromWork)).name).toBe("agent");
+  });
+
+  test("from inside agent, next and previous go to the neighbouring cycled workspaces", () => {
+    const inAgent = switchWorkspace(withAgent(), { id: "agent" });
+    expect(ws(nextWorkspace(inAgent, skip)).name).toBe("main");
+    expect(ws(previousWorkspace(inAgent, skip)).name).toBe("work");
+  });
+
+  test("only skipped workspaces besides the active one: the cycle stays put", () => {
+    const s = createWorkspaces([
+      { id: "main", name: "main", container: "1" },
+      { id: "agent", name: "agent", container: "3" },
+    ]);
+    expect(nextWorkspace(s, skip)).toBe(s);
+    expect(previousWorkspace(s, skip)).toBe(s);
+  });
+
+  test("from agent, the alternate is where you came from", () => {
+    const s = switchWorkspace(switchWorkspace(withAgent(), { id: "work" }), { id: "agent" });
+    expect(alternateWorkspace(s, skip)?.name).toBe("work");
+    expect(ws(lastWorkspace(s, skip)).name).toBe("work");
+  });
+
+  test("leaving agent keeps the alternate of before: work's alternate is main, never agent", () => {
+    // main → agent → work
+    const inAgent = switchWorkspace(withAgent(), { id: "agent" });
+    const raw = switchWorkspace(inAgent, { id: "work" });
+    const s = leaveSkipped(inAgent, raw, skip);
+    expect(alternateWorkspace(s, skip)?.name).toBe("main");
+    expect(ws(lastWorkspace(s, skip)).name).toBe("main");
+    // A switch that does not leave a skipped workspace is returned as it is.
+    const onward = nextWorkspace(raw, skip);
+    expect(leaveSkipped(raw, onward, skip)).toBe(onward);
+  });
+
+  test("an alternate that is skipped is never landed on from a cycled workspace", () => {
+    const inAgent = switchWorkspace(withAgent(), { id: "agent" });
+    const s = switchWorkspace(inAgent, { id: "work" }); // alternate agent, not fixed up
+    expect(alternateWorkspace(s, skip)).toBeUndefined();
+    expect(lastWorkspace(s, skip)).toBe(s);
+    expect(alternateWorkspace(s)?.name).toBe("agent");
+  });
+
+  test("addWorkspace `before` puts a new workspace ahead of another (agent stays last)", () => {
+    const s = addWorkspace(
+      withAgent(),
+      { id: "shop", name: "shop", container: "4" },
+      {
+        activate: false,
+        before: "agent",
+      },
+    );
+    expect(s.workspaces.map((w) => w.name)).toEqual(["main", "work", "shop", "agent"]);
+    const end = addWorkspace(withAgent(), { name: "x", container: "5" }, { before: "nope" });
+    expect(end.workspaces.map((w) => w.name)).toEqual(["main", "work", "agent", "x"]);
   });
 });
