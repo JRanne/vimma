@@ -491,18 +491,42 @@ Numbered decisions, each with its reason and the alternatives rejected.
       - `neutral` is `about:`, `file:`, the start page and similar;
       - `secure` shows nothing, as Firefox's lock is quiet.
 
-      The host reads the level from the identity box's classes (`#identity-box`, which
-      `browser-siteIdentity.js` keeps current whether or not the bar is shown), so the status bar
-      warns exactly where Firefox's address bar would.
+      The host reads the level from the browser's own state, as `browser-siteIdentity.js` does:
+      the `STATE_IS_SECURE`, `STATE_IS_BROKEN` and `STATE_CERT_USER_OVERRIDDEN` bits of
+      `browser.securityUI.state`, a certificate or HTTPS-Only error page (`documentURI`), and
+      whether the page is a secure context (http on localhost is). Not from the identity box's
+      classes: those would turn the warning off silently if Firefox renamed one, and an unsent
+      edit in the hidden address bar (its `pageproxystate` invalid) would clear it.
 
       Text, not only colour, so it reads without colour vision (m7-a11y).
 
     - **`private`:** a new segment in a private window, as the toolbar's indicator did, unless
       the workspace segment already says `◆ private` (the private workspace,
       [private-workspace](private-workspace.md)): one word, not two.
-    - **URL priority:** the `url` segment's priority rises from 8 to 4.9, just above the title's
-      5, so the address outlasts the title in a narrow window (on equal priorities the fitter
-      drops the later segment first, and the URL comes after the title). `http://` is no longer dropped by `displayUrl` for an `http:`
+    - **The URL is the origin indicator.** With the toolbar hidden, only the status bar says
+      which site the page is, so:
+      - **The registrable domain is never cut.** The host passes the host and its registrable
+        domain (eTLD+1 from `Services.eTLD`, counted in labels and taken from the display form so
+        an IDN host keeps its Unicode; an IP address is its own). In a narrow bar the path and
+        query go first, then the scheme with the leftmost labels of the host, whole labels at a
+        time, as Firefox's address bar keeps the base domain in view
+        (`_ensureFormattedHostVisible`). Middle truncation could show
+        `accounts.google.com.secure-login…mail.google.com` and hide the real site.
+      - **A title never stands in for the URL.** A page that titles itself with an address does
+        not suppress the `url` segment.
+      - **Priority:** the `url` segment's priority rises from 8 to 4.9, just above the title's
+        5, so the title gives way first (on equal priorities the fitter drops the later segment
+        first, and the URL comes after the title).
+      - **An about:blank a page controls is named.** Firefox's address bar shows an initial page
+        (about:blank, the start page) as empty only when `BrowserUIUtils.checkEmptyPageOrigin`
+        passes; otherwise it shows `about:blank`. The status bar does the same, and adds the
+        origin of the page that opened it: `about:blank from evil.example`. (A page written with
+        `document.write` takes its opener's address, which the bar shows as it is.)
+    - **What the page uses:** a `using camera, mic` segment (camera, mic, screen, location, XR,
+      serial; `paused` where Firefox says so), priority 2, in `--vimma-text-error`. Firefox
+      marks these on the address bar's sharing icons and on the tab; Vimma hides both the tab
+      strip and, here, the address bar. Read from the tab's sharing state
+      (`browser._sharingState`), as `gPermissionPanel.updateSharingIndicator` reads it. `http://` is no longer dropped by `displayUrl` for an `http:`
       page: the scheme is part of the warning.
     - **Toolbar shown:** the bar is exactly as today, with the same inputs and no new segments.
       This keeps every existing screenshot baseline unchanged.
@@ -518,6 +542,10 @@ Numbered decisions, each with its reason and the alternatives rejected.
       A user is never left with keys that go nowhere. This should never happen, and a test forces
       it.
 
+    - **Prompts too:** if a doorhanger's anchor is still not visible after its reveal (reason
+      c), the same happens before Firefox picks a fallback anchor ("toolbar shown: a prompt's
+      icon could not be revealed"). With the tab strip hidden, that fallback would be no anchor
+      at all, the prompt at the window's top-left.
     - **Customize mode** shows the toolbar (decision 5).
 14. **Hiding with focus inside the bar.** `ctrl+b u` (or `:toolbar hide`) while focus is in the
     URL bar or a toolbar button first focuses the selected browser, then hides. Focus never
@@ -566,11 +594,25 @@ Numbered decisions, each with its reason and the alternatives rejected.
 
 - **Site attribution.** Hiding the toolbar must not weaken anti-spoofing. Decision 7c reveals the
   minimal bar before any permission prompt anchors, so a prompt always hangs from its icon next
-  to the identity box and the page's address, as in stock Firefox. Decision 6 collapses the bar
-  rather than making it transparent, so nothing anchors to an invisible icon. Popup windows keep
+  to the identity box and the page's address, as in stock Firefox. Decision 6 hides the bar
+  rather than making it transparent, so nothing anchors to an invisible icon, and decision 13
+  brings the toolbar back if a prompt's icon could still not be revealed. Popup windows keep
   their read-only URL bar (decision 5).
-- **Security state.** While the bar is hidden, the status bar shows `not secure` and `private`
-  in text (decision 12), so the cues the toolbar carried stay visible.
+- **The status bar is the origin indicator.** While the bar is hidden, nothing else on screen
+  says which site the page is: the page reaches the window's top edge, where it can draw a fake
+  address bar, so there is no line of death. The status bar therefore always shows the real
+  address with its registrable domain whole, never replaced by a title, an opener-controlled
+  about:blank by name, `not secure` from the browser's own security state, `private`, and
+  the devices the page uses (decision 12). Hiding the toolbar is opt-in for this reason.
+- **A page can time a reveal (accepted, low).** A page can make the bar appear at a moment it
+  chooses, by asking for a permission (the minimal bar) or starting a download (the downloads
+  panel, the full toolbar), so a click meant for the page's top strip can land on the address
+  field, an icon or a toolbar button. Doorhanger buttons keep Firefox's
+  `security.notification_enable_delay`, and everything else a stray click reaches opens a panel
+  or focuses the field, so the risk is accepted. The hover reveal is not reachable by a page:
+  the edge is a chrome element, and content cannot synthesize chrome mouse events.
+- **Security state.** While the bar is hidden, the status bar shows `not secure`, `private` and
+  the devices in use in text (decision 12), so the cues the toolbar carried stay visible.
 - **No suppression.** Vimma delays or suppresses no prompt; Firefox's
   `security.notification_enable_delay` and `shouldSuppress` still apply (decision 11).
 - **Pages cannot reach it.** All of it is chrome CSS and chrome event listeners; a page sees no

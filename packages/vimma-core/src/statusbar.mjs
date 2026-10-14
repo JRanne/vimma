@@ -28,7 +28,14 @@ export { textWidth };
  * @property {"left" | "right"} side
  * @property {number} priority      0 = most important; higher gives way first
  * @property {number} min           shortest width it may be shrunk to
- * @property {"end" | "middle" | "none"} cut
+ * @property {"end" | "middle" | "url" | "none"} cut  "url": truncateUrl with `origin`
+ * @property {UrlOrigin | null} [origin]  for `cut: "url"`
+ */
+
+/**
+ * The host of a URL as the bar shows it, and its registrable domain (eTLD+1; the whole host for
+ * an IP address), both in display form, from the host (`Services.eTLD`).
+ * @typedef {{ host: string, base: string }} UrlOrigin
  */
 
 /**
@@ -38,7 +45,7 @@ export { textWidth };
  * @property {{ name: string, index: number, color?: string, private?: boolean } | null} [workspace]
  *   `private`: the private workspace (docs/specs/private-workspace.md), `◆ private`
  * @property {{ index: number, count: number, title?: string | null, url?: string | null,
- *   label?: string | null } | null} [tab]
+ *   label?: string | null, origin?: UrlOrigin | null } | null} [tab]
  * @property {{ index: number, count: number, hidden?: boolean } | null} [pane]  `hidden`: the
  *   split is kept as a view that is not shown (docs/specs/side-panel-unsplit.md decision 27)
  * @property {boolean} [loading]
@@ -52,42 +59,65 @@ export { textWidth };
  *   minutes left, a request that just ran
  * @property {boolean} [toolbarHidden]  Firefox's toolbar is hidden (docs/specs/toolbar-toggle.md):
  *   the bar then carries its security and private-browsing cues; shown, those are left out
- * @property {SecurityLevel} [security]  the selected page's connection (securityLevel)
+ * @property {SecurityLevel} [security]  the selected page's connection (securityFromState)
  * @property {boolean} [privateWindow]  a private browsing window
+ * @property {readonly string[]} [sharing]  devices the page uses (sharingCues)
  */
 
 /** @typedef {"secure" | "insecure" | "neutral"} SecurityLevel */
 
 /**
- * Classes Firefox's identity box (`#identity-box`, browser-siteIdentity.js
- * `_refreshIdentityIcons`) carries when it shows a warning: the "not secure" icon or text, a
- * certificate error page or exception, or a broken connection (mixed content, a weak cipher).
- */
-const INSECURE_CLASSES = new Set([
-  "notSecure",
-  "certErrorPage",
-  "certUserOverridden",
-  "httpsOnlyErrorPage",
-  "mixedActiveContent",
-  "mixedDisplayContent",
-  "mixedDisplayContentLoadedActiveBlocked",
-  "weakCipher",
-]);
-
-/**
- * The selected page's connection from its identity box's classes: "secure" for a verified
- * connection (Firefox's quiet lock), "insecure" for anything the box warns about, "neutral" for
- * the rest (about: pages, files, add-on pages, the start page). Firefox hides the box while
- * its `pageproxystate` is not valid (a blank page, an address being edited): neutral then too.
- * @param {Iterable<string>} classes
- * @param {{ pageProxyValid?: boolean }} [options]
+ * The selected page's connection, decided as Firefox's identity block decides it
+ * (browser-siteIdentity.js `_refreshIdentityIcons`), from the browser's own state rather than
+ * from any element: "secure" for a verified connection (Firefox's quiet lock); "insecure" for a
+ * certificate error page, a certificate exception, a broken connection (mixed content, a weak
+ * cipher) or a page not served over a secure connection; "neutral" for the rest (about: pages,
+ * files, add-on pages, the start page, http on localhost, which Firefox counts as secure).
+ * @param {{ scheme: string, secure: boolean, broken: boolean, certOverride: boolean,
+ *   errorPage: boolean, secureContext: boolean }} state  `secure`, `broken`, `certOverride`:
+ *   the STATE_IS_SECURE, STATE_IS_BROKEN and STATE_CERT_USER_OVERRIDDEN bits of
+ *   `browser.securityUI.state`; `errorPage`: a certificate or HTTPS-Only error page;
+ *   `secureContext`: the page's window is a secure context
  * @returns {SecurityLevel}
  */
-export function securityLevel(classes, { pageProxyValid = true } = {}) {
-  if (!pageProxyValid) return "neutral";
-  const list = [...classes];
-  if (list.some((c) => INSECURE_CLASSES.has(c))) return "insecure";
-  return list.includes("verifiedDomain") ? "secure" : "neutral";
+export function securityFromState({
+  scheme,
+  secure,
+  broken,
+  certOverride,
+  errorPage,
+  secureContext,
+}) {
+  if (errorPage) return "insecure";
+  if (scheme !== "http" && scheme !== "https") return "neutral";
+  if (certOverride || broken) return "insecure";
+  if (secure) return "secure";
+  return secureContext ? "neutral" : "insecure";
+}
+
+/**
+ * What the page is using, from Firefox's per-tab sharing state (`browser._sharingState`, as
+ * browser-sitePermissionPanel.js `updateSharingIndicator` reads it), in the address bar's order.
+ * @param {{ webRTC?: { camera?: unknown, microphone?: unknown, screen?: unknown } | null,
+ *   geo?: unknown, xr?: unknown, serial?: unknown } | null | undefined} state
+ * @returns {string[]}
+ */
+export function sharingCues(state) {
+  if (!state) return [];
+  /** @type {string[]} */
+  const out = [];
+  /** @param {string} name @param {unknown} value */
+  const add = (name, value) => {
+    if (!value) return;
+    out.push(typeof value === "string" && value.includes("Paused") ? `${name} paused` : name);
+  };
+  add("camera", state.webRTC?.camera);
+  add("mic", state.webRTC?.microphone);
+  add("screen", state.webRTC?.screen);
+  add("location", state.geo);
+  add("XR", state.xr);
+  add("serial", state.serial);
+  return out;
 }
 
 /** `[workspaces.<name>] color` (Firefox container colours) → its readable text token. */
@@ -155,6 +185,83 @@ export function truncate(text, width, how) {
 }
 
 /**
+ * Where the host is in `text` (a URL as the bar shows it), with an IPv6 host's brackets.
+ * @param {string} text
+ * @param {string} host
+ * @returns {{ start: number, end: number } | null}
+ */
+function findHost(text, host) {
+  const scheme = text.indexOf("://");
+  const from = scheme >= 0 ? scheme + 3 : 0;
+  let start = text.indexOf(host, from);
+  if (start < 0) start = text.lastIndexOf(host);
+  if (start < 0) return null;
+  let end = start + host.length;
+  if (text[start - 1] === "[" && text[end] === "]") {
+    start -= 1;
+    end += 1;
+  }
+  return { start, end };
+}
+
+/**
+ * The URL cut to `width` columns without ever cutting its registrable domain (security review
+ * of #268, finding 1): the path and query go first, then the scheme with the leftmost labels of
+ * the host, whole labels at a time, as Firefox's address bar keeps the base domain in view. Null
+ * when even `…<base domain>…` does not fit. Without an origin (about:, file:) the end is cut.
+ * @param {string} text
+ * @param {number} width
+ * @param {UrlOrigin | null | undefined} origin
+ * @returns {string | null}
+ */
+export function truncateUrl(text, width, origin) {
+  if (textWidth(text) <= width) return text;
+  const at = origin ? findHost(text, origin.host) : null;
+  if (!origin || !at) return width > 0 ? truncate(text, width, "end") : null;
+  const pre = text.slice(0, at.start);
+  const host = text.slice(at.start, at.end);
+  const rest = text.slice(at.end);
+  const head = pre + host;
+  const room = width - textWidth(head);
+  if (room >= 2) return head + truncate(rest, room, "end");
+  if (room === 1) return head + ELLIPSIS;
+  const tail = rest ? ELLIPSIS : "";
+  for (const candidate of hostTails(host, origin.base, pre !== "")) {
+    if (textWidth(candidate + tail) <= width) return candidate + tail;
+  }
+  return null;
+}
+
+/**
+ * The host with ever more of its leftmost labels cut, down to its registrable domain.
+ * @param {string} host  as in the text (an IPv6 host with its brackets)
+ * @param {string} base
+ * @param {boolean} cutBefore  something before the host (the scheme) was cut
+ */
+function* hostTails(host, base, cutBefore) {
+  if (host === base || host === `[${base}]` || !host.endsWith(`.${base}`)) {
+    yield `${ELLIPSIS}${host}`;
+    return;
+  }
+  const labels = host.split(".");
+  const keep = base.split(".").length;
+  for (let k = 0; k <= labels.length - keep; k++) {
+    const lead = k > 0 || cutBefore ? ELLIPSIS : "";
+    yield lead + labels.slice(k).join(".");
+  }
+}
+
+/** The narrowest truncateUrl result for `text`, in columns. @param {string} text @param {UrlOrigin} origin */
+function urlMinWidth(text, origin) {
+  const at = findHost(text, origin.host);
+  if (!at) return Math.min(12, textWidth(text));
+  const host = text.slice(at.start, at.end);
+  const rest = text.slice(at.end) ? 1 : 0;
+  const tails = [...hostTails(host, origin.base, at.start > 0)];
+  return Math.min(textWidth(text), textWidth(/** @type {string} */ (tails.at(-1))) + rest);
+}
+
+/**
  * The URL as the bar shows it: no `http(s)://`, no lone trailing `/`. `keepHttp` keeps
  * `http://`, which is part of the warning while the toolbar is hidden (toolbar-toggle 12).
  * @param {string} url
@@ -198,6 +305,7 @@ export function statusSegments(input) {
     toolbarHidden = false,
     security = "neutral",
     privateWindow = false,
+    sharing = [],
   } = input;
   /** @type {Segment[]} */
   const left = [];
@@ -274,7 +382,8 @@ export function statusSegments(input) {
   }
   if (tab) {
     const title = displayLabel(tab);
-    urlShownAsTitle = !!tab.url && title === tab.url;
+    // Toolbar hidden: the URL is the origin indicator, so a title cannot stand in for it.
+    urlShownAsTitle = !toolbarHidden && !!tab.url && title === tab.url;
     left.push(
       seg({ id: "title", text: title, fg: "--vimma-fg-bright", priority: 5, min: 8, cut: "end" }),
     );
@@ -359,6 +468,18 @@ export function statusSegments(input) {
       }),
     );
   }
+  if (toolbarHidden && sharing.length) {
+    // The address bar's and the tab's "in use" icons (review of #268, finding 3).
+    right.push(
+      seg({
+        id: "sharing",
+        text: `using ${sharing.join(", ")}`,
+        fg: "--vimma-text-error",
+        side: "right",
+        priority: 2,
+      }),
+    );
+  }
   if (toolbarHidden && privateWindow && !workspace?.private) {
     // The toolbar's private-browsing indicator; the private workspace's segment says it already.
     right.push(
@@ -371,7 +492,22 @@ export function statusSegments(input) {
       }),
     );
   }
-  if (tab?.url && !urlShownAsTitle) {
+  if (tab?.url && !urlShownAsTitle && toolbarHidden && tab.origin) {
+    // The origin indicator while the toolbar is hidden: never cut inside the registrable domain.
+    const text = displayUrl(tab.url, { keepHttp: true });
+    right.push(
+      seg({
+        id: "url",
+        text,
+        fg: "--vimma-fg-dim",
+        side: "right",
+        priority: 4.9,
+        min: urlMinWidth(text, tab.origin),
+        cut: "url",
+        origin: tab.origin,
+      }),
+    );
+  } else if (tab?.url && !urlShownAsTitle) {
     right.push(
       seg({
         id: "url",
@@ -424,8 +560,11 @@ export function fitStatus(segments, width) {
           : { ...s, text: truncate(s.text, room, s.cut === "middle" ? "middle" : "end") };
       continue;
     }
-    if (s.cut !== "none" && w - Math.min(s.min, w) >= excess) {
-      out[i] = { ...s, text: truncate(s.text, w - excess, s.cut) };
+    if (s.cut === "url" && w - Math.min(s.min, w) >= excess) {
+      const text = truncateUrl(s.text, w - excess, s.origin);
+      out[i] = text === null ? null : { ...s, text };
+    } else if (s.cut !== "none" && w - Math.min(s.min, w) >= excess) {
+      out[i] = { ...s, text: truncate(s.text, w - excess, s.cut === "url" ? "end" : s.cut) };
     } else {
       out[i] = null;
     }

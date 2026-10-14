@@ -18,6 +18,7 @@ export const REVEALED_ATTR = "vimma-toolbar-revealed";
 export const MINIMAL_ATTR = "vimma-toolbar-minimal";
 export const EDGE_ID = "vimma-toolbar-edge";
 export const REVEAL_FAILED = "toolbar shown: the address bar could not be revealed";
+export const PROMPT_REVEAL_FAILED = "toolbar shown: a prompt's icon could not be revealed";
 const STYLESHEET = "chrome://browser/skin/vimma/toolbar.css";
 /** The pointer rests at the edge this long before the bar shows, and leaves it this long. */
 const HOVER_SHOW_MS = 150;
@@ -283,10 +284,20 @@ export class Toolbar {
     // Focus can fail or not happen at all: drop the reason once things settle.
     this.win.setTimeout(() => this.focusChanged(), 0);
     if (!this.applies || urlbar.checkVisibility(VISIBLE)) return;
-    this.host.log(REVEAL_FAILED);
-    console.error(`vimma: ${REVEAL_FAILED}`);
+    this.revealFailed(REVEAL_FAILED);
+  }
+
+  /**
+   * The safety net (decision 13): what had to be revealed is still not visible, so the toolbar
+   * comes back for good, before Firefox focuses or anchors to it.
+   * @private
+   * @param {string} text
+   */
+  revealFailed(text) {
+    this.host.log(text);
+    console.error(`vimma: ${text}`);
     Toolbar.setHidden(false);
-    this.host.say(REVEAL_FAILED);
+    this.host.say(text);
   }
 
   /**
@@ -332,6 +343,9 @@ export class Toolbar {
     this.anchoring = true;
     try {
       this.hold("doorhanger", anchor.closest("#urlbar") ? "minimal" : "full");
+      // A prompt must never open unanchored (docs/security.md C3): if its icon is still not
+      // visible, the toolbar comes back before Firefox picks a fallback anchor.
+      if (this.applies && !anchor.checkVisibility(VISIBLE)) this.revealFailed(PROMPT_REVEAL_FAILED);
     } finally {
       this.anchoring = false;
     }

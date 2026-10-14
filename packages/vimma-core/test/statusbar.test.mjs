@@ -5,7 +5,9 @@ import {
   displayUrl,
   fitStatus,
   renderStatusBar,
-  securityLevel,
+  securityFromState,
+  sharingCues,
+  truncateUrl,
   statusSegments,
   statusWidth,
   textWidth,
@@ -401,31 +403,183 @@ describe("status bar with the toolbar hidden", () => {
   });
 });
 
-describe("securityLevel: the identity box's classes as secure, insecure or neutral", () => {
-  test.each([
-    [["verifiedDomain"], "secure"],
-    [["verifiedDomain", "mixedActiveBlocked"], "secure"],
-    [["verifiedDomain", "certUserOverridden"], "insecure"],
-    [["notSecure"], "insecure"],
-    [["notSecure", "notSecureText"], "insecure"],
-    [["certErrorPage", "notSecureText"], "insecure"],
-    [["unknownIdentity", "mixedActiveContent"], "insecure"],
-    [["unknownIdentity", "mixedDisplayContent"], "insecure"],
-    [["unknownIdentity", "weakCipher"], "insecure"],
-    [["unknownIdentity"], "neutral"],
-    [["localResource"], "neutral"],
-    [["chromeUI"], "neutral"],
-    [["extensionPage"], "neutral"],
-    [["httpsOnlyErrorPage"], "insecure"],
-    [["unknownIdentity", "mixedDisplayContentLoadedActiveBlocked"], "insecure"],
-    [[], "neutral"],
-  ])("%j is %s", (classes, level) => {
-    expect(securityLevel(classes)).toBe(level);
+// Security review of #268, finding 1: with the toolbar hidden the status bar is the only origin
+// indicator, so the URL never loses its registrable domain to truncation.
+describe("the URL keeps its registrable domain while the toolbar is hidden", () => {
+  const SPOOF =
+    "https://accounts.google.com.secure-login-verification-session-0123456789.evil.example/signin/v2/identifier?continue=https%3A%2F%2Fmail.google.com%2Fmail%2F&service=mail&flowName=GlifWebSignIn";
+  const SPOOF_HOST =
+    "accounts.google.com.secure-login-verification-session-0123456789.evil.example";
+  const spoofTab = {
+    index: 1,
+    count: 1,
+    title: "Sign in",
+    url: SPOOF.replace("https://", ""),
+    origin: { host: SPOOF_HOST, base: "evil.example" },
+  };
+  const hiddenInput = { mode: /** @type {const} */ ("normal"), toolbarHidden: true, tab: spoofTab };
+
+  test.each([[80], [120], [160]])("the reviewer's spoof URL at %i columns", (width) => {
+    const url = texts(renderStatusBar(hiddenInput, width)).url;
+    expect(url).toBeDefined();
+    // The base domain is whole and ends the host: what follows is the path or nothing.
+    expect(url).toMatch(/evil\.example(…|\/|$)/);
+    // Anything that reads like another site comes after the real host, in the path.
+    const google = url.indexOf("mail.google.com");
+    if (google >= 0) expect(google).toBeGreaterThan(url.indexOf("evil.example"));
   });
 
-  test("neutral while the address bar shows no page identity (a blank page, an edited address)", () => {
-    expect(securityLevel(["notSecure"], { pageProxyValid: false })).toBe("neutral");
-    expect(securityLevel(["verifiedDomain"], { pageProxyValid: false })).toBe("neutral");
-    expect(securityLevel(["notSecure"], { pageProxyValid: true })).toBe("insecure");
+  test("the path goes first, then the leftmost labels, never the base domain", () => {
+    const o = { host: "a.b.example.com", base: "example.com" };
+    const t = "a.b.example.com/some/long/path";
+    expect(truncateUrl(t, 100, o)).toBe(t);
+    expect(truncateUrl(t, 20, o)).toBe("a.b.example.com/som…");
+    expect(truncateUrl(t, 16, o)).toBe("a.b.example.com…");
+    expect(truncateUrl(t, 15, o)).toBe("…b.example.com…");
+    expect(truncateUrl(t, 13, o)).toBe("…example.com…");
+    expect(truncateUrl(t, 12, o)).toBeNull();
+  });
+
+  test("a scheme is kept while it fits, then goes with the leftmost labels", () => {
+    const o = { host: "www.example.org", base: "example.org" };
+    const t = "http://www.example.org/path/to/page";
+    expect(truncateUrl(t, 26, o)).toBe("http://www.example.org/pa…");
+    expect(truncateUrl(t, 23, o)).toBe("http://www.example.org…");
+    expect(truncateUrl(t, 20, o)).toBe("…www.example.org…");
+    expect(truncateUrl(t, 13, o)).toBe("…example.org…");
+  });
+
+  test("IDN, IP, IPv6 and long public suffixes", () => {
+    const idn = { host: "pääsy.kirjaudu.esimerkki.fi", base: "esimerkki.fi" };
+    expect(truncateUrl("pääsy.kirjaudu.esimerkki.fi/a/b/c", 18, idn)).toBe("…esimerkki.fi…");
+    const ip = { host: "192.168.100.200", base: "192.168.100.200" };
+    expect(truncateUrl("http://192.168.100.200:8080/admin", 17, ip)).toBe("…192.168.100.200…");
+    expect(truncateUrl("http://192.168.100.200:8080/admin", 16, ip)).toBeNull();
+    const v6 = { host: "2001:db8::1", base: "2001:db8::1" };
+    expect(truncateUrl("http://[2001:db8::1]/index.html", 22, v6)).toBe("http://[2001:db8::1]/…");
+    expect(truncateUrl("http://[2001:db8::1]/index.html", 15, v6)).toBe("…[2001:db8::1]…");
+    const jp = { host: "login.city.kawasaki.jp", base: "city.kawasaki.jp" };
+    expect(truncateUrl("login.city.kawasaki.jp/x/y", 18, jp)).toBe("…city.kawasaki.jp…");
+  });
+
+  test("without an origin (about:, file:) the end is cut", () => {
+    expect(truncateUrl("about:preferences#privacy", 12, null)).toBe("about:prefe…");
+  });
+
+  test("property: at any width the URL is whole, keeps its base domain, or is gone with the title", () => {
+    const label = fc.stringMatching(/^[a-z0-9-]{1,12}$/);
+    fc.assert(
+      fc.property(
+        fc.array(label, { minLength: 0, maxLength: 6 }),
+        fc.array(label, { minLength: 1, maxLength: 2 }),
+        fc.string({ maxLength: 60 }),
+        fc.string({ maxLength: 40 }),
+        fc.integer({ min: 1, max: 200 }),
+        (subs, baseLabels, path, title, width) => {
+          const base = baseLabels.join(".") + ".example";
+          const host = [...subs, base].join(".");
+          const url = `${host}/${path}`;
+          const input = {
+            mode: /** @type {const} */ ("normal"),
+            toolbarHidden: true,
+            tab: { index: 1, count: 1, title, url, origin: { host, base } },
+          };
+          const out = texts(renderStatusBar(input, width));
+          if (out.url !== undefined) {
+            expect(out.url).toContain(base);
+            const at = out.url.lastIndexOf(base);
+            expect(["", "…", "/"]).toContain(out.url.slice(at + base.length, at + base.length + 1));
+          } else {
+            expect(out.title).toBeUndefined();
+          }
+        },
+      ),
+      { seed: 20261014, numRuns: 1000 },
+    );
+  });
+
+  test("a title equal to the URL does not take the URL's place", () => {
+    const url = "accounts.google.com.evil.example/signin";
+    const input = {
+      ...hiddenInput,
+      tab: {
+        ...spoofTab,
+        title: url,
+        url,
+        origin: { host: "accounts.google.com.evil.example", base: "evil.example" },
+      },
+    };
+    const segs = statusSegments(input);
+    expect(texts(segs).url).toBe(url);
+    expect(texts(renderStatusBar(input, 50)).url).toMatch(/evil\.example/);
+    expect(texts(renderStatusBar(input, 30)).url).toMatch(/evil\.example/);
+  });
+});
+
+// Finding 5: the security state comes from the browser's security flags, as Firefox's own
+// browser-siteIdentity.js reads them, not from a hidden element's classes.
+describe("securityFromState", () => {
+  const base = {
+    scheme: "https",
+    secure: false,
+    broken: false,
+    certOverride: false,
+    errorPage: false,
+    secureContext: false,
+  };
+  test.each([
+    ["a verified https page", { secure: true, secureContext: true }, "secure"],
+    ["mixed content (broken)", { secure: false, broken: true }, "insecure"],
+    [
+      "a certificate exception",
+      { secure: true, certOverride: true, secureContext: true },
+      "insecure",
+    ],
+    ["a certificate error page", { errorPage: true }, "insecure"],
+    ["plain http", { scheme: "http" }, "insecure"],
+    ["http on localhost (a secure context)", { scheme: "http", secureContext: true }, "neutral"],
+    ["about:", { scheme: "about", secureContext: true }, "neutral"],
+    ["a cert error under about:", { scheme: "about", errorPage: true }, "insecure"],
+    ["file:", { scheme: "file" }, "neutral"],
+    ["an add-on page", { scheme: "moz-extension", secureContext: true }, "neutral"],
+    ["a blank page", { scheme: "about", secureContext: false }, "neutral"],
+  ])("%s", (_name, over, level) => {
+    expect(securityFromState({ ...base, ...over })).toBe(level);
+  });
+});
+
+// Finding 3: what the page uses (camera, microphone, screen, location, XR, serial), which the
+// hidden address bar and tab strip showed.
+describe("sharing: devices in use while the toolbar is hidden", () => {
+  test("sharingCues reads Firefox's per-tab sharing state", () => {
+    expect(sharingCues(null)).toEqual([]);
+    expect(sharingCues({})).toEqual([]);
+    expect(sharingCues({ webRTC: { camera: true, microphone: true } })).toEqual(["camera", "mic"]);
+    expect(sharingCues({ webRTC: { screen: "Screen" } })).toEqual(["screen"]);
+    expect(sharingCues({ webRTC: { camera: "CameraPaused" } })).toEqual(["camera paused"]);
+    expect(sharingCues({ geo: true, xr: true, serial: true })).toEqual([
+      "location",
+      "XR",
+      "serial",
+    ]);
+  });
+
+  test("a segment as important as `not secure`, only while hidden", () => {
+    const tab = { index: 1, count: 1, title: "Call", url: "meet.example/x" };
+    const segs = statusSegments({
+      mode: "normal",
+      toolbarHidden: true,
+      tab,
+      sharing: ["camera", "mic"],
+    });
+    expect(segs.find((s) => s.id === "sharing")).toMatchObject({
+      text: "using camera, mic",
+      fg: "--vimma-text-error",
+      side: "right",
+      priority: 2,
+    });
+    expect(
+      statusSegments({ mode: "normal", tab, sharing: ["camera"] }).some((s) => s.id === "sharing"),
+    ).toBe(false);
   });
 });

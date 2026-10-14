@@ -258,14 +258,34 @@ text that pages, add-ons and bookmarks choose.
   arguments, the path after `--` and no shell, on an agent download in the quarantine folder
   (M13; [vimma-mcp](specs/vimma-mcp.md) decision 31 g; the security review of #182). [`never builds code from text: no eval, Function or sandbox evaluation`](../tools/security/test/chrome-source.test.mjs),
   [`never starts a process, but clamscan on an agent download`](../tools/security/test/chrome-source.test.mjs)
-- C3. With Firefox's toolbar hidden ([toolbar-toggle](specs/toolbar-toggle.md)), a permission
-  prompt **must** hang from its own icon in the address bar, next to the site's identity and
-  address, as with the toolbar shown, and **never** open unanchored; pop-up windows **must** keep
-  their read-only address bar; and the status bar **must** say `not secure` where the address bar
-  would. Nothing anchors to a hidden icon: the bar is revealed before it does.
-  [`a_permission_prompt_shows_the_minimal_bar`](../tests/browser/browser_vimma_toolbar.js),
-  [`exclusions`](../tests/browser/browser_vimma_toolbar.js),
-  [`the_status_bar_says_not_secure_and_private`](../tests/browser/browser_vimma_toolbar.js)
+- C3. With Firefox's toolbar hidden ([toolbar-toggle](specs/toolbar-toggle.md)), the status bar
+  is the only origin indicator: the page reaches the window's top, so there is no line of death.
+  - The status bar **must** always show the selected page's real address with its registrable
+    domain whole: truncation **never** cuts inside it (the path, then the leftmost labels go
+    first), a page title **never** takes the address's place, and an about:blank a page opened or
+    controls **must** read `about:blank from <its origin>`, never nothing.
+    [`the URL keeps its registrable domain while the toolbar is hidden`](../packages/vimma-core/test/statusbar.test.mjs),
+    [`the_status_bar_keeps_the_registrable_domain`](../tests/browser/browser_vimma_toolbar.js),
+    [`an_about_blank_a_page_wrote_says_so`](../tests/browser/browser_vimma_toolbar.js)
+  - It **must** say `not secure` wherever Firefox's address bar would warn (plain http, a
+    certificate error page or exception, mixed content), read from the browser's security state,
+    never from the hidden address bar, and `private` in a private window.
+    [`securityFromState`](../packages/vimma-core/test/statusbar.test.mjs),
+    [`not_secure_comes_from_the_browser_state`](../tests/browser/browser_vimma_toolbar.js),
+    [`the_status_bar_says_not_secure_and_private`](../tests/browser/browser_vimma_toolbar.js)
+  - It **must** say which devices the page uses (camera, microphone, screen, location, XR,
+    serial), the cues the hidden address bar and tab strip carried.
+    [`sharing: devices in use while the toolbar is hidden`](../packages/vimma-core/test/statusbar.test.mjs),
+    [`the_status_bar_shows_camera_and_mic_in_use`](../tests/browser/browser_vimma_toolbar.js)
+  - A permission prompt **must** hang from its own icon in the address bar, next to the site's
+    identity and address, as with the toolbar shown, and **never** open unanchored: if its icon
+    cannot be revealed, the toolbar comes back first. Pop-up windows **must** keep their
+    read-only address bar.
+    [`a_permission_prompt_shows_the_minimal_bar`](../tests/browser/browser_vimma_toolbar.js),
+    [`a_failed_reveal_for_a_prompt_shows_the_toolbar`](../tests/browser/browser_vimma_toolbar.js),
+    [`exclusions`](../tests/browser/browser_vimma_toolbar.js)
+  - Accepted, low: a page can time a reveal under the pointer (a permission request or a
+    download shows the bar); see the spec's Security section.
 
 ## 7. Omarchy hook and the `vimma-open` launcher
 

@@ -331,16 +331,19 @@ with `F11` keeps it. From the left:
   has 14 minutes left, and `◇ agent ·` for a moment after a request ran;
 - `loading` while the page loads, then its **URL** without `https://`;
 - with the [toolbar hidden](#hiding-the-toolbar), `not secure` in red for a page Firefox's
-  address bar would warn about (an `http:` page keeps its `http://`), and `private` in a private
-  window that is not the [private workspace](#private-workspace) (which says `◆ private`
-  already).
+  address bar would warn about (an `http:` page keeps its `http://`), `using camera, mic` (or
+  screen, location, XR, serial) while the page uses them, and `private` in a private window that
+  is not the [private workspace](#private-workspace) (which says `◆ private` already).
 
 On a narrow window the least important parts give way first: the URL is shortened in the middle,
 then dropped, then the title is shortened, and so on. The mode badge always stays. Screen
 readers announce the mode when it changes, including when focus moves into or out of a text
 field, but not every title change.
 
-With the toolbar hidden the URL is the only place the address shows, so it outlasts the title.
+With the toolbar hidden the URL is the only place the address shows, so it outlasts the title,
+a title never takes its place, and in a narrow window it loses its path and then its leftmost
+subdomains, never the site's own domain: `…evil.example…`, not `accounts.google.com…`. A blank
+page another page opened says so: `about:blank from example.com`.
 
 After `ctrl+b` (or any key that starts a longer sequence) only the pending keys show in the bar;
 no list of next keys pops up. To see the bindings, press `ctrl+b ?` (`ctrl+b shift+?` on a

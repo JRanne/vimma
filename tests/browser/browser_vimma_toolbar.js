@@ -590,6 +590,177 @@ add_task(async function the_status_bar_says_not_secure_and_private() {
   gBrowser.removeTab(tab);
 });
 
+// Security review of #268: with the toolbar hidden the status bar is the only origin
+// indicator. It keeps the registrable domain in view, is never replaced by a title, names an
+// opener-controlled about:blank, shows what the page uses, and reads the security state from
+// the browser, not from the hidden address bar.
+add_task(async function the_status_bar_keeps_the_registrable_domain() {
+  const deep =
+    "https://sub1.test1.example.com/browser/browser/base/zen-components/tests/browser/file_vimma_plain.html?a-very-long-query-that-pushes-the-host-out";
+  const tab = await openPage(deep);
+  await hide();
+  const bar = $("vimma-statusbar");
+  try {
+    for (const width of ["40ch", "60ch", "90ch"]) {
+      bar.style.width = width;
+      await until(() => segText("url")?.includes("example.com"), `${width}: the base domain shows`);
+      const url = segText("url");
+      Assert.ok(/example\.com(…|\/|$)/.test(url), `${width}: it ends the host (${url})`);
+    }
+    // A page that titles itself with an address does not take the URL's place.
+    await SpecialPowers.spawn(tab.linkedBrowser, [], () => {
+      content.document.title = "accounts.google.com/signin";
+    });
+    bar.style.width = "60ch";
+    await until(
+      () => segText("url")?.includes("example.com"),
+      "the URL stays next to such a title",
+    );
+  } finally {
+    bar.style.removeProperty("width");
+  }
+  gBrowser.removeTab(tab);
+  await show();
+});
+
+add_task(async function an_about_blank_a_page_wrote_says_so() {
+  const tab = await openPage();
+  await hide();
+  const opened = BrowserTestUtils.waitForNewTab(gBrowser, "about:blank");
+  // The page itself opens and writes the tab, as a phishing page would.
+  await SpecialPowers.spawn(tab.linkedBrowser, [], () => {
+    const script = content.document.createElement("script");
+    // DOM calls keep the address about:blank (document.write would give the tab the opener's
+    // address, which the bar then shows as it is).
+    script.textContent = `
+      const w = window.open();
+      w.document.title = "accounts.google.com/signin";
+      w.document.body.innerHTML = "<form><input type=password></form>";`;
+    content.document.body.append(script);
+  });
+  const blank = await opened;
+  await until(() => gBrowser.selectedTab === blank, "the new tab is selected");
+  await until(
+    () => segText("url") === "about:blank from example.com",
+    `the status bar says about:blank and who wrote it (${segText("url")})`,
+  );
+  gBrowser.removeTab(blank);
+  gBrowser.removeTab(tab);
+  await show();
+});
+
+add_task(async function the_status_bar_shows_camera_and_mic_in_use() {
+  await SpecialPowers.pushPrefEnv({
+    set: [
+      ["media.navigator.streams.fake", true],
+      ["media.navigator.permission.fake", true],
+      ["media.getusermedia.window.focus_source.enabled", false],
+    ],
+  });
+  const tab = await openPage();
+  // Allowed, as after a "remember" answer, so no prompt comes between.
+  const principal = tab.linkedBrowser.contentPrincipal;
+  for (const type of ["camera", "microphone"]) {
+    Services.perms.addFromPrincipal(principal, type, Services.perms.ALLOW_ACTION);
+  }
+  registerCleanupFunction(() => {
+    for (const type of ["camera", "microphone"])
+      Services.perms.removeFromPrincipal(principal, type);
+  });
+  await hide();
+  Assert.equal(segText("sharing"), null, "nothing in use yet");
+  await SpecialPowers.spawn(tab.linkedBrowser, [], async () => {
+    content.wrappedJSObject.vimmaStream = await content.navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
+  });
+  await until(
+    () => segText("sharing") === "using camera, mic",
+    `the status bar says camera and mic (${segText("sharing")})`,
+  );
+  await SpecialPowers.spawn(tab.linkedBrowser, [], () => {
+    for (const t of content.wrappedJSObject.vimmaStream.getTracks()) t.stop();
+  });
+  await until(() => segText("sharing") === null, "stopped: gone");
+  gBrowser.removeTab(tab);
+  await show();
+  await SpecialPowers.popPrefEnv();
+});
+
+add_task(async function not_secure_comes_from_the_browser_state() {
+  await SpecialPowers.pushPrefEnv({
+    set: [
+      ["security.mixed_content.block_active_content", false],
+      ["security.mixed_content.upgrade_display_content", false],
+    ],
+  });
+  await hide();
+  // A certificate error page.
+  const bad = await BrowserTestUtils.openNewForegroundTab(
+    gBrowser,
+    "https://expired.example.com/",
+    false,
+  );
+  await BrowserTestUtils.waitForErrorPage(bad.linkedBrowser);
+  await until(() => segText("security") === "not secure", "a certificate error page");
+  gBrowser.removeTab(bad);
+  // Mixed active content.
+  const mixed = await BrowserTestUtils.openNewForegroundTab(
+    gBrowser,
+    DIR + "file_vimma_mixed.html",
+  );
+  await until(() => mixed.linkedBrowser.contentTitle === "mixed loaded", "the http script ran");
+  await until(() => segText("security") === "not secure", "mixed active content");
+  gBrowser.removeTab(mixed);
+  // An unsent edit in the hidden address bar changes nothing.
+  const tab = await openPage(HTTP_PLAIN);
+  await until(() => segText("security") === "not secure", "an http: page");
+  EventUtils.synthesizeKey("I", { shiftKey: true });
+  await until(() => gURLBar.focused, "I");
+  EventUtils.sendString("something typed");
+  gBrowser.selectedBrowser.focus();
+  await until(() => !gURLBar.focused, "focus back in the page, the edit unsent");
+  await new Promise((r) => setTimeout(r, 300));
+  Assert.equal(segText("security"), "not secure", "still not secure");
+  gBrowser.removeTab(tab);
+  await show();
+  await SpecialPowers.popPrefEnv();
+});
+
+add_task(async function a_failed_reveal_for_a_prompt_shows_the_toolbar() {
+  const tab = await openPage();
+  await hide();
+  const t = toolbarOf();
+  const reveal = t.reveal;
+  t.reveal = () => {};
+  try {
+    const shown = BrowserTestUtils.waitForEvent(PopupNotifications.panel, "popupshown");
+    await SpecialPowers.spawn(tab.linkedBrowser, [], () => {
+      content.navigator.geolocation.getCurrentPosition(
+        () => {},
+        () => {},
+      );
+    });
+    await shown;
+    Assert.ok(!Services.prefs.getBoolPref(PREF), "the toolbar is back");
+    Assert.equal(
+      PopupNotifications.panel.anchorNode?.id,
+      "geo-notification-icon",
+      "the prompt hangs from its icon, never unanchored",
+    );
+    Assert.ok(shows(PopupNotifications.panel.anchorNode), "which is visible");
+    await until(() => noticeText().startsWith("toolbar shown:"), "the notice says why");
+    const hidden = BrowserTestUtils.waitForEvent(PopupNotifications.panel, "popuphidden");
+    PopupNotifications.panel.firstElementChild.secondaryButton.click();
+    await hidden;
+  } finally {
+    t.reveal = reveal;
+  }
+  gBrowser.removeTab(tab);
+  await show();
+});
+
 // 12: [ui] toolbar from config.toml; a toggle lasts until that line changes.
 add_task(async function config_sets_the_toolbar() {
   await SpecialPowers.pushPrefEnv({
