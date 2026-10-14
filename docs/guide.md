@@ -1702,8 +1702,9 @@ updates are off, so neither asks Mozilla's update server. The one remaining requ
 the OpenH264 and Widevine plugins, which video calls and DRM video need.
 
 Sites see Firefox 157's user agent, with no Vimma token, and add-ons see Firefox's version
-(`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. `vimma --version`, the About
-dialog and the start page show Vimma's own version (`0.1.0`).
+(`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. The About dialog shows Vimma's own
+version (`0.1.0`); `vimma --version` and the start page show it with the Firefox release it is
+built on, `Vimma 0.1.0 · Firefox 157.0.1`.
 
 ### Safe Browsing
 
