@@ -1,0 +1,41 @@
+{
+  "name": "m0-mcp-agent-prompt",
+  "description": "docs/specs/vimma-mcp.md, sub-PR 2b: a real agent connection through the question line, on a real build. The window stays on main with a page focused while the agent works in the hidden agent workspace. A full connection is held before MCP is on (so its keys never ask); :mcp on and y; the agent's vimma_open asks in the line, y allows it, and main and its selected page are unchanged; a read with 15a grants 15 minutes and the next read runs unasked; then, MCP on, a new vimma-ctl asks for full control, y lets it in; :mcp off at the end, so the harness's own quit does not ask.",
+  "timeoutSeconds": 60,
+  "steps": [
+    { "wait-for-state": { "workspace": "main" }, "timeoutSeconds": 20 },
+    { "open": "fixture:long.html" },
+    { "wait-for-state": { "tabs": [{}, { "selected": true, "title": "long top navigate" }] } },
+    { "hold": true },
+    { "keys": ": m c p space o n enter" },
+    { "sleep": 0.5 },
+    { "keys": "y" },
+    { "sleep": 1.8 },
+    { "agent": { "send": "agent-open", "args": { "url": "fixture:cookie.html" }, "as": "open1" } },
+    { "sleep": 1.5 },
+    { "keys": "y" },
+    { "agent-result": { "of": "open1", "expect": { "ok": true } } },
+    {
+      "assert-state": {
+        "workspace": "main",
+        "tabs": [{}, { "selected": true, "title": "long top navigate" }]
+      }
+    },
+    { "sleep": 1.8 },
+    { "agent": { "send": "agent-read", "args": { "tab": "$open1.result.tab" }, "as": "read1" } },
+    { "sleep": 1.5 },
+    { "keys": "1 5 a" },
+    {
+      "agent-result": { "of": "read1", "expect": { "ok": true, "result": { "background": true } } }
+    },
+    { "agent": { "send": "agent-read", "args": { "tab": "$open1.result.tab" }, "as": "read2" } },
+    { "agent-result": { "of": "read2", "expect": { "ok": true } } },
+    { "sleep": 1.8 },
+    { "ctl": { "run": ["state"], "as": "full1" } },
+    { "sleep": 1.5 },
+    { "keys": "y" },
+    { "ctl-result": { "of": "full1", "expect": { "exitCode": 0 } } },
+    { "keys": ": m c p space o f f enter" },
+    { "assert-state": { "workspace": "main" } }
+  ]
+}

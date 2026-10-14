@@ -26,6 +26,7 @@ import { copyModeRunners } from "./copy-mode.mjs";
 import { pageRunners } from "./page-ops.mjs";
 import { Notice } from "../ui/notice.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
+import { ThemeHost } from "../ui/theme-host.mjs";
 import { AddonPicker, GotoPicker, WorkspacePicker } from "../ui/picker.mjs";
 import { RenamePrompt } from "../ui/rename-prompt.mjs";
 import { SidePanel } from "../ui/side-panel.mjs";
@@ -44,6 +45,8 @@ import {
   selectTab,
 } from "./tab-ops.mjs";
 import { DEFAULT_FIREFOX_KEYS, FirefoxKeys } from "./firefox-keys.mjs";
+import { boundChords, pageFirst } from "../core/firefox-keys.mjs";
+import { browserRunners } from "./browser-ops.mjs";
 import { focusedChromeField, runChromeEdit } from "./edit-keys.mjs";
 import { runRoute } from "./route-ops.mjs";
 import {
@@ -53,7 +56,9 @@ import {
   layoutPanes,
   newPane,
   resizePane,
+  showAlone,
   showTabs,
+  shownSplit,
   splitPane,
   swapPane,
   zoomPane,
@@ -71,9 +76,30 @@ import {
   newWorkspace,
   renameWorkspace,
   workspaceNames,
-  workspacePickerItems,
   workspaceRef,
 } from "./workspace-ops.mjs";
+import {
+  MOVE_OUT_REFUSED,
+  PRIVATE_WORKSPACE_ID,
+  closePrivate,
+  cycleOutOfPrivate,
+  isPrivateBrowsing,
+  isPrivateWorkspace,
+  leavePrivate,
+  pickerItemsWithPrivate,
+  pickerMove,
+  pickerSelect,
+  privatePanel,
+  privateStatus,
+  switchFromPrivate,
+  togglePrivate,
+} from "./private-ops.mjs";
+import { McpHost } from "./mcp-ops.mjs";
+import { ControlHost } from "./control-ops.mjs";
+import { AgentUi } from "./agent-ui.mjs";
+import { AgentPrompt } from "../ui/agent-prompt.mjs";
+import { parsePrivateCommand } from "../core/privatews.mjs";
+import { findWorkspace } from "../core/workspaces.mjs";
 import { KeyLog } from "../about/key-log.mjs";
 import {
   addonNames,
@@ -118,6 +144,11 @@ const MODIFIERS = /** @type {const} */ (["ctrl", "alt", "shift", "meta"]);
 const MAC = /** @type {{ OS?: string }} */ (Services.appinfo).OS === "Darwin";
 /** After the page, as Firefox's own key handlers (Tabbrowser's, the keysets). */
 const SYSTEM_GROUP = /** @type {AddEventListenerOptions} */ ({ mozSystemGroup: true });
+/** Before the page and before every chrome handler, as GlobalKeyListener's reply request. */
+const SYSTEM_GROUP_CAPTURE = /** @type {AddEventListenerOptions} */ ({
+  mozSystemGroup: true,
+  capture: true,
+});
 
 /**
  * A keydown with Gecko's chrome-only members for keys that went to a page in another process.
@@ -126,11 +157,27 @@ const SYSTEM_GROUP = /** @type {AddEventListenerOptions} */ ({ mozSystemGroup: t
  */
 
 /**
+ * A binding on a chord Firefox let the page override (docs/specs/firefox-keys.md decision 6):
+ * its keydown went to the page, and it runs on the keypress after the page had it, unless the
+ * page called preventDefault. `awaiting`: its keypress went to a remote page, whose reply runs it.
+ * @typedef {{ key: string, result: DispatchResult, pressed: boolean, awaiting: boolean }} PageFirst
+ */
+
+/** The most page-first keys kept waiting (a page that never replies cannot grow the queue). */
+const PAGE_FIRST_MAX = 16;
+
+/**
  * @typedef {object} WindowState
  * @property {Window} win
  * @property {Keymap} keymap
  * @property {(e: KeyboardEvent) => void} onKeyDown
  * @property {(e: KeyboardEvent) => void} onKeyDownAfter  after the page: text-field keys
+ * @property {(e: KeyboardEvent) => void} onKeyPress  a page-first binding's keypress, before
+ *   the page: asks a remote page for its reply, or takes the reply (firefox-keys decision 6)
+ * @property {(e: KeyboardEvent) => void} onKeyPressAfter  the same keypress after a
+ *   parent-process page or a chrome field had it
+ * @property {PageFirst[]} pageFirst  bindings waiting for the page to leave their key alone,
+ *   oldest first: keys typed fast (or held down) each wait for their own reply
  * @property {FirefoxKeys | null} firefoxKeys  Firefox's own shortcuts off (key-handling-batch)
  * @property {() => void} onTabSelect
  * @property {ReturnType<typeof createDispatcher>} dispatcher
@@ -148,10 +195,13 @@ const SYSTEM_GROUP = /** @type {AddEventListenerOptions} */ ({ mozSystemGroup: t
  * @property {WorkspacePicker} wsPicker  the prefix+w overlay (m3-workspaces 5)
  * @property {AddonPicker} addonPicker  the prefix+e overlay (docs/specs/addon-manager.md)
  * @property {RenamePrompt} rename  the prefix+shift+t prompt (m2-picker-rename)
+ * @property {AgentPrompt} agentPrompt  the agent question line (docs/specs/vimma-mcp.md)
+ * @property {() => void} onFocus  focus moved in the window: the agent line may go back to waiting
  * @property {SidePanel} panel  prefix+b, `panel` mode while open (m3-workspaces 6)
  * @property {BookmarksPanel} bookmarks  prefix+shift+b, in the side panel's slot
  *   and `panel` mode (docs/specs/bookmarks.md)
  * @property {Find} find  `/`, `?`, `n`, `N` over Firefox's find bar (m1-find)
+ * @property {boolean} private  a private window: its keys are not logged (private-workspace)
  * @property {boolean} resize  in resize mode (`prefix+r`, m4-split-panes sub-spec 5, ADR-014)
  */
 
@@ -217,6 +267,15 @@ function switchWorkspace(s, text) {
     s.cmdline.open("workspace ");
     return;
   }
+  // docs/specs/private-workspace.md: from private, `:ws name` is the normal window's workspace.
+  if (isPrivateWorkspace(s.win)) {
+    const back = text === "#";
+    const refused = back
+      ? leavePrivate()
+      : switchFromPrivate((m) => findWorkspace(m, workspaceRef(text, m))?.id ?? null, text);
+    if (refused) s.notice.show(refused);
+    return;
+  }
   const ww = WindowWorkspaces.get(s.win);
   const alternate = text === "#" && !ww?.model?.workspaces.some((w) => w.name === "#");
   // null is success, not "no model": `?? NO_WORKSPACES` would show it after every switch.
@@ -246,12 +305,39 @@ function workspaceRunner(op, prompt) {
 }
 
 /**
+ * `workspace.move_tab` in a normal window: `:wsmove name`, or its key asks. A move into the agent
+ * workspace asks y/N first (docs/specs/vimma-mcp.md, decision 11).
+ * @param {WindowState} s
+ * @param {Action} a
+ * @param {string} [text]
+ */
+const moveTab = (s, a, text) =>
+  workspaceRunner(
+    (win, t) =>
+      moveTabToWorkspace(
+        win,
+        t,
+        (question, yes) => s.rename.ask(question, yes),
+        (said) => s.notice.show(said),
+      ),
+    () => "wsmove ",
+  )(s, a, text);
+
+/**
  * A workspace step (ctrl+b ) / ctrl+b (, ]w / [w, ctrl+^); shows its refusal, if any.
  * @param {"next" | "previous" | "last"} step
  * @returns {(state: WindowState) => void}
  */
 function workspaceStep(step) {
   return (s) => {
+    // docs/specs/private-workspace.md decision 5: from private, ) and ( go to the first and
+    // last normal workspace, ctrl+^ back to the one left; in a normal window private is never
+    // a target.
+    if (isPrivateWorkspace(s.win)) {
+      const refused = step === "last" ? leavePrivate() : cycleOutOfPrivate(step);
+      if (refused) s.notice.show(refused);
+      return;
+    }
     const ww = WindowWorkspaces.get(s.win);
     const refused = ww ? ww[step]() : NO_WORKSPACES;
     if (refused) s.notice.show(refused);
@@ -409,6 +495,8 @@ export const RUNNERS = Object.freeze({
   "tab.next": (/** @type {WindowState} */ s, /** @type {Action} */ a) => selectTab(s.win, a),
   "tab.previous": (/** @type {WindowState} */ s, /** @type {Action} */ a) => selectTab(s.win, a),
   "tab.goto": (/** @type {WindowState} */ s, /** @type {Action} */ a) => selectTab(s.win, a),
+  // Firefox's alt+9: the workspace's last visible tab (docs/specs/firefox-keys.md).
+  "tab.goto_last": (/** @type {WindowState} */ s, /** @type {Action} */ a) => selectTab(s.win, a),
   "tab.close": (/** @type {WindowState} */ s) => closeTab(s.win),
   // The focused pane; the last pane closes the tab (`:q`, prefix+x; m4-split-panes).
   "pane.close": paneRunner(closePane),
@@ -466,7 +554,8 @@ export const RUNNERS = Object.freeze({
   // m3-workspaces 5: prefix+w (and `:workspace` without a name).
   "workspace.picker": (/** @type {WindowState} */ s) => {
     s.notice.hide();
-    if (WindowWorkspaces.get(s.win)?.model) s.wsPicker.open();
+    // The private workspace lists the normal ones too (private-workspace decision 5).
+    if (WindowWorkspaces.get(s.win)?.model || isPrivateWorkspace(s.win)) s.wsPicker.open();
     else s.notice.show(NO_WORKSPACES);
   },
   // m3-workspaces 2b: one workspace's tabs visible at a time (WindowWorkspaces).
@@ -482,7 +571,27 @@ export const RUNNERS = Object.freeze({
     renameWorkspace,
     (win) => `wsrename ${activeWorkspaceName(win) ?? ""}`,
   ),
-  "workspace.move_tab": workspaceRunner(moveTabToWorkspace, () => "wsmove "),
+  "workspace.move_tab": (/** @type {WindowState} */ s, /** @type {Action} */ a, text) => {
+    // private-workspace decision 5: a private tab never leaves the private workspace.
+    if (isPrivateWorkspace(s.win)) s.notice.show(MOVE_OUT_REFUSED);
+    else moveTab(s, a, text);
+  },
+  // docs/specs/private-workspace.md: toggles; `:private close` closes it after y/N.
+  "workspace.private": (
+    /** @type {WindowState} */ s,
+    _a,
+    /** @type {string | undefined} */ text,
+  ) => {
+    s.notice.hide();
+    const command = parsePrivateCommand(text);
+    const said =
+      command.kind === "refuse"
+        ? command.text
+        : command.kind === "close"
+          ? closePrivate((q, yes) => s.rename.ask(q, yes))
+          : togglePrivate(s.win);
+    if (said) s.notice.show(said);
+  },
   // workspace-routing: `:route` lists the rules (about:vimma); `add [workspace]`, `move`.
   "workspace.route": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) => {
     s.notice.hide();
@@ -491,6 +600,12 @@ export const RUNNERS = Object.freeze({
   },
   "workspace.close": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) => {
     s.notice.hide();
+    // In private, ctrl+b shift+d and `:wd` close the private workspace (decision 3).
+    if (!text && isPrivateWorkspace(s.win)) {
+      const refused = closePrivate((q, yes) => s.rename.ask(q, yes));
+      if (refused) s.notice.show(refused);
+      return;
+    }
     const refused = closeWorkspace(
       s.win,
       text,
@@ -525,8 +640,11 @@ export const RUNNERS = Object.freeze({
   "panel.visual": (/** @type {WindowState} */ s, /** @type {Action} */ a) => {
     if (!s.bookmarks.isOpen) s.panel.action(a);
   },
-  // Firefox's ctrl+shift+t, which panel mode would otherwise consume.
+  // Firefox's ctrl+shift+t, in every mode (docs/specs/firefox-keys.md decision 7).
   "tab.restore": (/** @type {WindowState} */ s) => restoreTab(s.win),
+  // docs/specs/firefox-keys.md decision 4: the Browser and Developer tools actions, each what
+  // Firefox's key ran (browser-ops.mjs).
+  ...browserRunners((win, text) => states.get(win)?.notice.show(text)),
   // docs/specs/bookmarks.md: the bookmarks panel, in the side panel's slot and mode.
   "bookmarks.toggle": (/** @type {WindowState} */ s) => {
     s.notice.hide();
@@ -570,6 +688,37 @@ export const RUNNERS = Object.freeze({
   // `:config`: ConfigHost opens config.toml in a tab of this window (creating it if missing).
   "config.edit": (/** @type {WindowState} */ s) =>
     Services.obs.notifyObservers(/** @type {any} */ (s.win), CONFIG_EDIT_TOPIC),
+  // `:mcp [on|off|forget]` (docs/specs/vimma-mcp.md): agents and the agent workspace.
+  "mcp.command": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) => {
+    s.notice.hide();
+    const said = McpHost.run(
+      text,
+      (question, yes) => s.rename.ask(question, yes),
+      (t) => s.notice.show(t),
+    );
+    if (said) s.notice.show(said);
+  },
+  // prefix+shift+a (docs/specs/vimma-mcp.md decision 14): the waiting agent question, or with
+  // none, revoke the grants after y/N.
+  "mcp.answer": (/** @type {WindowState} */ s) => {
+    s.notice.hide();
+    AgentUi.answer(s.win);
+  },
+  // `:control [on <minutes>|off]` (decision 29 D): full control for a while.
+  "control.command": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ t) => {
+    s.notice.hide();
+    const said = ControlHost.run(
+      t,
+      (question, yes) => s.rename.ask(question, yes),
+      (text) => s.notice.show(text),
+    );
+    if (said) s.notice.show(said);
+  },
+  // `:theme [dark|light|system]` (docs/specs/theme-appearance.md): the built-in palette.
+  "theme.appearance": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ t) => {
+    const said = ThemeHost.setAppearance(s.win, t);
+    s.notice.show(said.text, { error: said.error });
+  },
 });
 
 /**
@@ -674,6 +823,19 @@ function findOf(browser) {
   return (win && states.get(win))?.find ?? undefined;
 }
 
+/**
+ * Content actions that Firefox's keys also run where no page of ours has focus (the address bar,
+ * a page without our actor): `alt+left`, `F5`, `ctrl+g` act on the selected tab's page then, as
+ * Firefox's did (docs/specs/firefox-keys.md).
+ */
+const ON_SELECTED = new Set([
+  "history.back",
+  "history.forward",
+  "page.reload",
+  "find.next",
+  "find.previous",
+]);
+
 /** Every action id the host implements. */
 const BUILT = Object.freeze([...Object.keys(RUNNERS), ...Object.keys(CONTENT_RUNNERS)]);
 
@@ -746,7 +908,12 @@ function paneStatus(win) {
   const panes = PaneViews.get(win)?.panes;
   if (!panes) return null;
   const order = leaves(panes);
-  return { index: order.findIndex((l) => l.pane === panes.focus) + 1, count: order.length };
+  return {
+    index: order.findIndex((l) => l.pane === panes.focus) + 1,
+    count: order.length,
+    // A split kept as a hidden view (docs/specs/side-panel-unsplit.md decision 27).
+    ...(panes.hidden ? { hidden: true } : {}),
+  };
 }
 
 /** @param {Event} e */
@@ -792,7 +959,11 @@ export const VimmaHost = {
       keymap,
       onKeyDown: (e) => this._onKeyDown(win, state, e),
       onKeyDownAfter: (e) => this._onKeyDownAfter(state, e),
+      onKeyPress: (e) => this._onKeyPress(state, e),
+      onKeyPressAfter: (e) => this._onKeyPressAfter(state, e),
+      pageFirst: [],
       firefoxKeys: null,
+      private: isPrivateBrowsing(win),
       // The overlay is modal, but tabs can still change underneath it (a script closes the
       // selected tab): close it and focus the newly selected browser.
       onTabSelect: () => {
@@ -835,14 +1006,26 @@ export const VimmaHost = {
           ).gBrowser.selectedTab = tab;
         },
       }),
+      // The private workspace is the last row (docs/specs/private-workspace.md decision 5).
       wsPicker: new WorkspacePicker(win, {
-        items: () => workspacePickerItems(win),
-        activeId: () => WindowWorkspaces.get(win)?.model?.active ?? null,
+        items: () => pickerItemsWithPrivate(win),
+        activeId: () =>
+          isPrivateWorkspace(win)
+            ? PRIVATE_WORKSPACE_ID
+            : (WindowWorkspaces.get(win)?.model?.active ?? null),
         select: (id) => {
-          const refused = WindowWorkspaces.get(win)?.switchTo({ id });
+          const said = pickerSelect(win, id);
+          const refused = said === undefined ? WindowWorkspaces.get(win)?.switchTo({ id }) : said;
           if (refused) state.notice.show(refused);
         },
         move: (id) => {
+          const ask = (/** @type {string} */ q, /** @type {() => void} */ yes) =>
+            state.rename.ask(q, yes);
+          const said = pickerMove(win, id, ask, (text) => state.notice.show(text));
+          if (said !== undefined) {
+            if (said) state.notice.show(said);
+            return;
+          }
           const refused = moveTabFromPicker(
             win,
             id,
@@ -865,8 +1048,19 @@ export const VimmaHost = {
         changed: () => this._emit(state),
       }),
       find: new Find(win, () => this._emit(state)),
+      agentPrompt: new AgentPrompt(win),
+      onFocus: () => AgentUi.onFocusChange(win),
       panel: new SidePanel(win, {
-        model: () => (WindowWorkspaces.get(win)?.model ? pickerWorkspaces(win) : null),
+        // A private window lists its tabs as the private workspace (private-workspace 6).
+        model: () => {
+          if (isPrivateWorkspace(win)) return privatePanel(pickerWorkspaces(win)).model;
+          return WindowWorkspaces.get(win)?.model ? pickerWorkspaces(win) : null;
+        },
+        // The header names the cycle's targets, past the agent workspace (vimma-mcp decision 9).
+        where: () =>
+          isPrivateWorkspace(win)
+            ? privatePanel(pickerWorkspaces(win)).options
+            : { skip: WindowWorkspaces.get(win)?.cycleSkip },
         info: (tabId) => {
           const tab = /** @type {any} */ (tabById(win, tabId));
           if (!tab) return undefined;
@@ -893,7 +1087,10 @@ export const VimmaHost = {
           ).gBrowser.selectedTab = tab;
         },
         say: (text) => state.notice.show(text),
-        together: (tabIds, focus) => showTabs(win, tabIds, focus),
+        together: (tabIds, focus, alone) => showTabs(win, tabIds, focus, alone),
+        // docs/specs/side-panel-unsplit.md: the split's panes start marked.
+        split: () => shownSplit(win),
+        alone: (tabId) => showAlone(win, tabId),
       }),
       bookmarks: new BookmarksPanel(win, {
         load: () => loadTree(win),
@@ -904,13 +1101,39 @@ export const VimmaHost = {
     states.set(win, state);
     windows.add(win);
     win.addEventListener("keydown", state.onKeyDown, true);
+    win.addEventListener("focus", state.onFocus, true);
+    // The agent question (docs/specs/vimma-mcp.md decisions 13-15): shown here when this is
+    // the most recent normal window and the user is not typing.
+    AgentUi.register(win, {
+      prompt: state.agentPrompt,
+      inField: () => this._mode(state) === "insert",
+      otherOpen: () =>
+        state.help.isOpen ||
+        state.picker.isOpen ||
+        state.wsPicker.isOpen ||
+        state.addonPicker.isOpen ||
+        state.cmdline.isOpen ||
+        state.rename.isOpen ||
+        state.panel.isOpen ||
+        state.bookmarks.isOpen ||
+        state.find.typing,
+      pending: () => state.dispatcher.pending().length > 0,
+      notice: (text) => state.notice.show(text),
+      ask: (question, yes) => state.rename.ask(question, yes),
+      emit: () => this._emit(state),
+    });
     // After the page and in the system group, as Tabbrowser's own key handling: text-field keys
     // the page left alone (key-handling-batch § 2).
     win.addEventListener("keydown", state.onKeyDownAfter, SYSTEM_GROUP);
+    // A page-first binding (firefox-keys decision 6) acts on the keypress, as Firefox's keysets
+    // do: before every chrome handler to ask a remote page for its reply, after a
+    // parent-process page or a chrome field (the system group's bubble) for the others.
+    win.addEventListener("keypress", state.onKeyPress, SYSTEM_GROUP_CAPTURE);
+    win.addEventListener("keypress", state.onKeyPressAfter, SYSTEM_GROUP);
     win.addEventListener("TabSelect", state.onTabSelect, true);
     // After the keys too: Firefox's shortcuts that overlap ours, off (key-handling-batch § 1).
     try {
-      const firefoxKeys = new FirefoxKeys(win, settings.firefox);
+      const firefoxKeys = new FirefoxKeys(win, settings.firefox, boundChords(keymap));
       firefoxKeys.init();
       state.firefoxKeys = firefoxKeys;
     } catch (e) {
@@ -969,7 +1192,11 @@ export const VimmaHost = {
     if (!state) return;
     this._cancelPending(win, state);
     win.removeEventListener("keydown", state.onKeyDown, true);
+    win.removeEventListener("focus", state.onFocus, true);
+    AgentUi.unregister(win);
     win.removeEventListener("keydown", state.onKeyDownAfter, SYSTEM_GROUP);
+    win.removeEventListener("keypress", state.onKeyPress, SYSTEM_GROUP_CAPTURE);
+    win.removeEventListener("keypress", state.onKeyPressAfter, SYSTEM_GROUP);
     win.removeEventListener("TabSelect", state.onTabSelect, true);
     state.firefoxKeys?.destroy();
     win.removeEventListener("resize", state.onCancelHints);
@@ -1002,7 +1229,8 @@ export const VimmaHost = {
    * @returns {{ mode: Mode, pending: string[], find?: FindStatus | null,
    *   pane?: { index: number, count: number } | null, configErrors?: readonly ConfigError[],
    *   configFile?: string, alerts?: readonly string[],
-   *   workspace?: { name: string, index: number, color?: string } | null }}
+   *   workspace?: { name: string, index: number, color?: string, private?: boolean } | null,
+   *   agent?: { waiting: number, minutes: number | null, ran: boolean } | null }}
    */
   status(win) {
     const state = states.get(win);
@@ -1013,11 +1241,13 @@ export const VimmaHost = {
       pending: state.dispatcher.pending(),
       find: browser ? state.find.status(browser) : null,
       pane: paneStatus(win),
-      workspace: WindowWorkspaces.get(win)?.status() ?? null,
+      workspace: privateStatus(win) ?? WindowWorkspaces.get(win)?.status() ?? null,
       configErrors: settings.configErrors,
       configFile: settings.configFile,
       // Persistent, unlike a notice: containers off at startup (m3-workspaces).
       alerts: WorkspaceStore.alert ? [WorkspaceStore.alert] : [],
+      // docs/specs/vimma-mcp.md decision 24: `◇ agent`, `◇ agent 2?`, `◇ agent 14m`.
+      agent: AgentUi.status(),
     };
   },
 
@@ -1054,10 +1284,7 @@ export const VimmaHost = {
     if (next.bookmarksRoot) setBookmarksRoot(next.bookmarksRoot);
     if (next.hintChars !== undefined) settings.hintChars = next.hintChars;
     if (next.insertEditing !== undefined) settings.insertEditing = next.insertEditing;
-    if (next.firefox) {
-      settings.firefox = next.firefox;
-      for (const win of windows) states.get(win)?.firefoxKeys?.set(next.firefox);
-    }
+    if (next.firefox) settings.firefox = next.firefox;
     if (next.sites) settings.sites = next.sites;
     if (next.configErrors) settings.configErrors = next.configErrors;
     if (next.configFile) settings.configFile = next.configFile;
@@ -1072,6 +1299,9 @@ export const VimmaHost = {
         state.dispatcher = createDispatcher(keymap);
         state.help.setKeymap(keymap);
       }
+      // Firefox's keys on chords the keymap binds are off (firefox-keys decision 2).
+      if (keymap || next.firefox)
+        state.firefoxKeys?.set(settings.firefox, boundChords(state.keymap));
       if (rootChanged) state.bookmarks.scheduleReload();
       this._emit(state);
     }
@@ -1140,6 +1370,8 @@ export const VimmaHost = {
     const win = browser?.ownerDocument?.defaultView;
     const state = win && states.get(win);
     if (state) VimmaHost._emit(state);
+    // Into a field: the agent question goes back to waiting (vimma-mcp decision 14).
+    if (state) AgentUi.onFocusChange(win);
   },
 
   /**
@@ -1193,7 +1425,15 @@ export const VimmaHost = {
     if (!RUNNABLE.has(id)) return false;
     if (MULTI_PANE.has(id)) return hasPanes(state.win);
     if (id in RUNNERS) return true;
-    return !!this._contentBrowser(state);
+    return !!this._contentBrowser(state) || (ON_SELECTED.has(id) && !!this._selectedBrowser(state));
+  },
+
+  /**
+   * The selected tab's <browser> (the focused pane's), or null.
+   * @param {WindowState} state
+   */
+  _selectedBrowser(state) {
+    return /** @type {any} */ (state.win).gBrowser?.selectedBrowser ?? null;
   },
 
   /**
@@ -1228,14 +1468,25 @@ export const VimmaHost = {
     // A key the page has had, back for chrome's shortcuts (requestReplyFromRemoteContent): it
     // was dispatched once already, before the page.
     if (/** @type {ChromeKeyEvent} */ (e).isReplyEventFromRemoteContent) return;
+    // The agent question takes its keys first, and only while it shows (vimma-mcp 13-14).
+    if (AgentUi.onKey(win, e)) {
+      this._emit(state);
+      return;
+    }
     const chord = chordFromEvent(e);
     if (!chord) return; // a bare modifier
     const key = formatKey(chord);
+    // A page-first binding whose keypress never came (the page took the keydown) is dropped.
+    // One whose keypress stayed in this process was settled during that keypress.
+    state.pageFirst = state.pageFirst.filter((p) => p.awaiting);
     // Focus left the page the hints are on (URL bar, another pane): they no longer apply.
     if (state.hint && state.hint.browser !== this._focusedBrowser(win)) this._cancelHints(state);
     const mode = this._mode(state);
-    this._lastChords.push(key);
-    if (this._lastChords.length > MAX_RECORDED) this._lastChords.shift();
+    // Keys typed in a private window are never kept (private-workspace decision 8b).
+    if (!state.private) {
+      this._lastChords.push(key);
+      if (this._lastChords.length > MAX_RECORDED) this._lastChords.shift();
+    }
     if (Services.prefs.getBoolPref(DEBUG_PREF, false)) {
       const mods = MODIFIERS.filter((m) => chord[m]);
       console.debug("vimma key", { key, mods, mode });
@@ -1273,7 +1524,8 @@ export const VimmaHost = {
     const first = state.dispatcher.pending().length === 0;
     this._clearTimer(win, state);
     const result = state.dispatcher.dispatch(mode, chord);
-    if (!("replay" in result)) KeyLog.record(mode, chord, result); // about:vimma's last keys
+    // about:vimma's last keys; never a private window's (private-workspace decision 8b).
+    if (!("replay" in result) && !state.private) KeyLog.record(mode, chord, result);
     // The overlay is modal: in help mode every key is ours, handled or not, so nothing reaches
     // the browser underneath (ctrl+w would close the tab behind it). Hint mode too: every key
     // is a label key or ignored, never the page's. Resize mode too (ADR-014), and the side panel.
@@ -1318,12 +1570,116 @@ export const VimmaHost = {
           return;
         }
         if (first && !modal && !this._runnable(state, result.action.id)) return;
+        // Firefox let the page have this chord first: so does Vimma (firefox-keys decision 6).
+        // The keydown goes on; the keypress after the page runs the action (_onKeyPress).
+        if (first && !modal && this._pageFirst(state, chord, mode)) {
+          state.pageFirst.push({ key: formatKey(chord), result, pressed: false, awaiting: false });
+          if (state.pageFirst.length > PAGE_FIRST_MAX) state.pageFirst.shift();
+          return;
+        }
         consume(e);
         // Another binding in hint mode (a ctrl+b sequence) leaves hint mode first.
         if (mode === "hint" && result.action.id !== "hint.cancel") this._cancelHints(state);
         this._run(state, result);
       }
     }
+  },
+
+  /**
+   * Whether the page has `chord` before Vimma (docs/specs/firefox-keys.md decision 6): a chord
+   * Firefox let the page override (core pageFirst), unless the site's "Override keyboard
+   * shortcuts" permission is Block. With the fullscreen Keyboard Lock on, Firefox's other keys
+   * go to the page too, all but the one that leaves full screen. A chord `[firefox] enable`
+   * keeps Firefox's is Vimma's first, so Firefox's key and Vimma's binding never both run.
+   * @param {WindowState} state
+   * @param {Chord} chord
+   * @param {Mode} mode
+   */
+  _pageFirst(state, chord, mode) {
+    const key = formatKey(chord);
+    if (settings.firefox.enable.includes(key)) return false;
+    const win = /** @type {any} */ (state.win);
+    let keyboardLock = false;
+    try {
+      keyboardLock = (win.document.fullscreenKeyboardLock ?? "none") !== "none";
+    } catch {
+      // Not in this build: no Keyboard Lock.
+    }
+    if (!pageFirst(key, { fullScreen: !!win.fullScreen, keyboardLock, mode })) return false;
+    if (keyboardLock) return true;
+    return !this._shortcutsBlocked(state);
+  },
+
+  /**
+   * The focused page's site blocks "Override keyboard shortcuts" (Firefox's
+   * nsContentUtils::ShouldBlockReservedKeys): its keys are Vimma's first.
+   * @param {WindowState} state
+   */
+  _shortcutsBlocked(state) {
+    const browser = /** @type {any} */ (this._focusedBrowser(state.win));
+    const principal = browser?.contentPrincipal;
+    if (!principal) return false;
+    try {
+      const perms = /** @type {any} */ (Services).perms;
+      return perms.testPermissionFromPrincipal(principal, "shortcuts") === perms.DENY_ACTION;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * A page-first binding's keypress, before the page (system group, capture). A remote page:
+   * ask for its reply, and stop the event here, as GlobalKeyListener does, so no chrome handler
+   * runs before the page had it; the reply comes back here and runs the action unless the page
+   * called preventDefault. A parent-process page or a chrome field: `_onKeyPressAfter`.
+   * @param {WindowState} state
+   * @param {KeyboardEvent} e
+   */
+  _onKeyPress(state, e) {
+    if (!state.pageFirst.length) return;
+    const chord = chordFromEvent(e);
+    const key = chord && formatKey(chord);
+    const ev = /** @type {ChromeKeyEvent} */ (e);
+    if (ev.isReplyEventFromRemoteContent) {
+      const at = state.pageFirst.findIndex((p) => p.awaiting && p.key === key);
+      if (at === -1) return;
+      const [pending] = state.pageFirst.splice(at, 1);
+      if (e.defaultPrevented || !pending) return;
+      consume(e);
+      this._run(state, pending.result);
+      this._emit(state);
+      return;
+    }
+    const pending = state.pageFirst.find((p) => !p.pressed && p.key === key);
+    if (!pending) return;
+    pending.pressed = true;
+    if (/** @type {any} */ (e.target)?.isRemoteBrowser) {
+      pending.awaiting = true;
+      e.stopPropagation();
+      ev.requestReplyFromRemoteContent();
+    }
+  },
+
+  /**
+   * A page-first binding's keypress after a parent-process page (about:preferences) or a chrome
+   * field (the address bar) had it, in the system group's bubble phase as Firefox's keysets:
+   * runs the action unless something called preventDefault (a field's own edit command, such as
+   * redo on ctrl+shift+z).
+   * @param {WindowState} state
+   * @param {KeyboardEvent} e
+   */
+  _onKeyPressAfter(state, e) {
+    if (/** @type {ChromeKeyEvent} */ (e).isReplyEventFromRemoteContent) return;
+    const chord = chordFromEvent(e);
+    const key = chord && formatKey(chord);
+    // The one `_onKeyPress` just marked: a local keypress settles in its own dispatch.
+    const at = state.pageFirst.findIndex((p) => p.pressed && !p.awaiting && p.key === key);
+    if (at === -1) return;
+    const [pending] = state.pageFirst.splice(at, 1);
+    if (e.defaultPrevented || !pending) return;
+    e.preventDefault();
+    this._run(state, pending.result);
+    this._emit(state);
   },
 
   /**
@@ -1405,7 +1761,9 @@ export const VimmaHost = {
     }
     const contentRunner = CONTENT_RUNNERS[action.id];
     if (contentRunner) {
-      const browser = this._contentBrowser(state);
+      const browser =
+        this._contentBrowser(state) ??
+        (ON_SELECTED.has(action.id) ? this._selectedBrowser(state) : null);
       if (browser) contentRunner(browser, action);
       return;
     }

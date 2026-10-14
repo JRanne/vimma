@@ -1,0 +1,11 @@
+{
+  "description": "The welcome repeats the role",
+  "kind": "welcome",
+  "message": {
+    "type": "welcome",
+    "protocol": 2,
+    "app": "Vimma",
+    "version": "157.0.1",
+    "role": "agent"
+  }
+}

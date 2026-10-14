@@ -30,8 +30,9 @@ The vendored parser is **smol-toml 1.9.0, BSD-3-Clause**, in
 - We keep the BSD notice: the header in `smol-toml.mjs` and the `LICENSE` file next to it.
 - Binary releases must include the notice in their third-party licences: it is in
   `about:license` (issue #16), through the product-specific blocks Firefox's `license.html`
-  already has for non-Firefox apps. `src/browser/base/moz-build.patch` points
-  `APP_LICENSE_{PRODUCT_NAME,LIST_BLOCK,BODY_BLOCK}` at `src/browser/base/content/vimma/licence/`,
+  already has for non-Firefox apps. `src/browser/base/moz-build.patch` passes
+  `src/browser/base/content/vimma/licence/` to them (extra inputs of the generated `license.html`
+  since Firefox 158; the `APP_LICENSE_{PRODUCT_NAME,LIST_BLOCK,BODY_BLOCK}` DEFINES before),
   whose `body.html` carries `LICENSE` verbatim and says the copy is modified (the modules joined
   into one file; `smol-toml.mjs`'s header says so too). `about:license` is in `omni.ja`, so every
   release artefact has it; `tools/package/test/licence-notices.test.mjs` and

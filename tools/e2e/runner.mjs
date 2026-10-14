@@ -10,6 +10,7 @@ import { runSteps } from "./scenario.mjs";
  *   ctl: import("./scenario.mjs").StepContext["ctl"],
  *   screenshot: (name: string) => Promise<void>,
  *   restart?: (how: "quit" | "kill") => Promise<void>,
+ *   control?: import("./scenario.mjs").Control,
  *   teardown: () => Promise<void>,
  * }} Session
  */
@@ -120,6 +121,7 @@ async function runOne(scenario, { startSession, timeoutMs, pollMs, settleMs }) {
       ctl: s.ctl,
       screenshot: s.screenshot,
       restart: s.restart,
+      control: s.control,
       pollMs,
       signal: controller.signal,
     });
@@ -200,6 +202,28 @@ export function formatReport(results) {
     `${count("pass")} passed, ${count("fail", "timeout", "skipped")} failed, ${count("pending")} pending`,
   );
   return lines.join("\n");
+}
+
+/**
+ * The results for `--report-json` (spec upstream-beta-canary, decision 4): e2e.yml's Beta mode
+ * puts the failures into suite-results.json. Failed means what exitCode counts as failed.
+ * @param {Result[]} results
+ * @returns {{
+ *   passed: number,
+ *   failed: Array<{ name: string, status: Status, error: string }>,
+ *   pending: Array<{ name: string, reason: string }>,
+ * }}
+ */
+export function reportJson(results) {
+  return {
+    passed: results.filter((r) => r.status === "pass").length,
+    failed: results
+      .filter((r) => r.status === "fail" || r.status === "timeout" || r.status === "skipped")
+      .map((r) => ({ name: r.name, status: r.status, error: r.error ?? r.status })),
+    pending: results
+      .filter((r) => r.status === "pending")
+      .map((r) => ({ name: r.name, reason: r.error ?? "" })),
+  };
 }
 
 /**

@@ -101,10 +101,11 @@ describe("parseOmarchyColors", () => {
 });
 
 describe("resolveTheme", () => {
-  test("the default source without an Omarchy file is the built-in vimma, with a warning", () => {
+  // theme-appearance A: no Omarchy is not a problem to report, so no warning names it.
+  test("the default source without an Omarchy file is the built-in vimma, without a warning", () => {
     const r = resolveTheme({ theme: themeCfg() });
     expect(r.errors).toEqual([]);
-    expect(r.warnings).toEqual([expect.stringMatching(/Omarchy theme not found.*built-in vimma/)]);
+    expect(r.warnings).toEqual([]);
     expect(r.mode).toBe("dark");
     expect(r.tokens["--vimma-bg"]).toBe("#0a0f12");
     expect(r.tokens["--vimma-fg"]).toBe("#c4cec8");
@@ -113,10 +114,10 @@ describe("resolveTheme", () => {
     expect(r.tokens["--vimma-font"]).toBe("monospace");
   });
 
-  test('name = "tokyo-night" without an Omarchy file is Tokyo Night, named in the warning', () => {
+  test('name = "tokyo-night" without an Omarchy file is Tokyo Night, without a warning', () => {
     const r = resolveTheme({ theme: tokyoCfg() });
     expect(r.errors).toEqual([]);
-    expect(r.warnings).toEqual([expect.stringMatching(/Omarchy theme not found.*Tokyo Night/)]);
+    expect(r.warnings).toEqual([]);
     expect(r.tokens["--vimma-bg"]).toBe("#1a1b26");
     expect(r.tokens["--vimma-accent"]).toBe("#7aa2f7");
   });
@@ -186,6 +187,77 @@ describe("resolveTheme", () => {
       scheme: "light",
     });
     expect(d.tokens["--vimma-bg"]).toBe("#0a0f12");
+  });
+
+  // docs/specs/theme-appearance.md, B.
+  describe("[theme] appearance", () => {
+    const VIMMA_DARK_BG = "#0a0f12";
+    const VIMMA_LIGHT_BG = "#f5f4ef";
+    test.each([
+      ["dark", "light", VIMMA_DARK_BG, "dark"],
+      ["light", "dark", VIMMA_LIGHT_BG, "light"],
+      ["system", "light", VIMMA_LIGHT_BG, "light"],
+      ["system", "dark", VIMMA_DARK_BG, "dark"],
+    ])("appearance %s under a %s scheme is the %s palette", (appearance, scheme, bg, mode) => {
+      const r = resolveTheme({
+        theme: themeCfg({ source: "file", appearance }),
+        scheme: /** @type {"dark" | "light"} */ (scheme),
+      });
+      expect(r.errors).toEqual([]);
+      expect(r.tokens["--vimma-bg"]).toBe(bg);
+      expect(r.mode).toBe(mode);
+      expect(r.adaptive).toBe(appearance === "system");
+    });
+
+    test("left out, it is system: the scheme decides", () => {
+      const r = resolveTheme({ theme: themeCfg({ source: "file" }), scheme: "light" });
+      expect(r.tokens["--vimma-bg"]).toBe(VIMMA_LIGHT_BG);
+      expect(r.adaptive).toBe(true);
+    });
+
+    test("[theme.colors] mode wins over appearance", () => {
+      const r = resolveTheme({
+        theme: themeCfg({ source: "file", appearance: "light", colors: { mode: "dark" } }),
+        scheme: "light",
+      });
+      expect(r.tokens["--vimma-bg"]).toBe(VIMMA_DARK_BG);
+      expect(r.mode).toBe("dark");
+    });
+
+    test("Tokyo Night has no light variant: light stays dark", () => {
+      const r = resolveTheme({ theme: tokyoCfg({ source: "file", appearance: "light" }) });
+      expect(r.tokens["--vimma-bg"]).toBe("#1a1b26");
+      expect(r.mode).toBe("dark");
+    });
+
+    test("an Omarchy theme decides its own: appearance changes nothing", () => {
+      const text = fixture("tokyo-night.colors.toml");
+      const plain = resolveTheme({ theme: themeCfg(), omarchy: text });
+      const light = resolveTheme({ theme: themeCfg({ appearance: "light" }), omarchy: text });
+      expect(light.tokens).toEqual(plain.tokens);
+    });
+
+    test("dark or light is one block in the stylesheet, without @media", () => {
+      for (const appearance of ["dark", "light"]) {
+        const r = themeStylesheet({ theme: themeCfg({ source: "file", appearance }) });
+        expect(r.css, appearance).not.toContain("@media");
+        const tokens = resolveTheme({
+          theme: themeCfg({ source: "file", appearance }),
+        }).tokens;
+        expect(r.css).toBe(tokensToCss(tokens, ":root"));
+      }
+    });
+
+    test("an unknown value from a caller is an error, and system applies", () => {
+      const r = resolveTheme({
+        theme: themeCfg({ source: "file", appearance: "blue" }),
+        scheme: "light",
+      });
+      expect(r.errors).toEqual([
+        { path: "theme.appearance", message: 'must be "system", "dark" or "light", got "blue"' },
+      ]);
+      expect(r.tokens["--vimma-bg"]).toBe(VIMMA_LIGHT_BG);
+    });
   });
 
   test("Omarchy Tokyo Night has the expected tokens and passes every contrast check", () => {
@@ -461,7 +533,7 @@ describe("themeStylesheet", () => {
   test("the fallback vimma (source omarchy, no Omarchy file) follows the scheme too", () => {
     const r = themeStylesheet({ theme: themeCfg() });
     expect(r.css).toContain("@media (prefers-color-scheme: light)");
-    expect(r.warnings).toEqual([expect.stringMatching(/Omarchy theme not found/)]);
+    expect(r.warnings).toEqual([]);
   });
 
   test("Tokyo Night, an Omarchy theme and a pinned mode are one block", () => {

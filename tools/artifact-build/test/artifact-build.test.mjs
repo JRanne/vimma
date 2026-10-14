@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   ARTIFACT_OBJDIR,
@@ -9,12 +8,18 @@ import {
   candidateTree,
   indexNamespace,
   indexTask,
+  machArtifactEnv,
   refreshAppIni,
-  sourceRevision,
+  sourceStamp,
   uaName,
 } from "../artifact-build.mjs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 const REV = "737ec77d798755890b062aab541a90d6c75afd19";
+/** Firefox 159.0b1's source tarball (docs/specs/upstream-beta-canary.md, R3). */
+const BETA_REV = "c0c03f3f899017ae4b7e56c0713f1ada51173c41";
+const RELEASE = { tree: "releases/mozilla-release", revision: REV };
+const BETA = { tree: "releases/mozilla-beta", revision: BETA_REV };
 
 /** The shape of engine/mozconfig as `npm run import` writes it (configs/common + linux + Surfer). */
 const GENERATED = [
@@ -95,10 +100,24 @@ describe("artifactMozconfig", () => {
   });
 });
 
-describe("sourceRevision", () => {
-  it("reads the mozilla-release revision from a release tarball's sourcestamp.txt", () => {
-    const stamp = `20261005135250\nhttps://hg.mozilla.org/releases/mozilla-release/rev/${REV}\n`;
-    expect(sourceRevision(stamp)).toBe(REV);
+describe("sourceStamp", () => {
+  it("reads the tree from sourcestamp.txt", () => {
+    const release = `20261005135250\nhttps://hg.mozilla.org/releases/mozilla-release/rev/${REV}\n`;
+    expect(sourceStamp(release)).toEqual(RELEASE);
+    const beta = `20261012000000\nhttps://hg.mozilla.org/releases/mozilla-beta/rev/${BETA_REV}\n`;
+    expect(sourceStamp(beta)).toEqual(BETA);
+  });
+
+  it("refuses a tree other than mozilla-release or mozilla-beta", () => {
+    for (const tree of [
+      "mozilla-central",
+      "releases/mozilla-esr140",
+      "try",
+      "releases/mozilla-beta/../x",
+    ]) {
+      const stamp = `20261005135250\nhttps://hg.mozilla.org/${tree}/rev/${REV}\n`;
+      expect(() => sourceStamp(stamp), tree).toThrow(/mozilla-release or .*mozilla-beta/);
+    }
   });
 
   it.each([
@@ -109,7 +128,7 @@ describe("sourceRevision", () => {
       "20261005135250\nhttps://hg.mozilla.org/releases/mozilla-release/rev/737ec77\n",
     ],
   ])("throws on %s", (_name, stamp) => {
-    expect(() => sourceRevision(stamp)).toThrow(/sourcestamp/);
+    expect(() => sourceStamp(stamp)).toThrow(/sourcestamp/);
   });
 });
 
@@ -182,16 +201,38 @@ describe("candidateTree (mirrors select_candidate_trees in mozbuild/artifacts.py
 
 describe("indexNamespace", () => {
   it("is the namespace artifacts.py searches for a linux64-opt release build", () => {
-    expect(indexNamespace(REV)).toBe(
+    expect(indexNamespace(RELEASE)).toBe(
       `gecko.v2.mozilla-release.shippable.revision.${REV}.firefox.linux64-opt`,
     );
+  });
+
+  it("is the mozilla-beta namespace for a beta tarball", () => {
+    expect(indexNamespace(BETA)).toBe(
+      `gecko.v2.mozilla-beta.shippable.revision.${BETA_REV}.firefox.linux64-opt`,
+    );
+  });
+});
+
+describe("machArtifactEnv", () => {
+  it("a release tarball passes MOZ_ARTIFACT_REVISION, as mach finds mozilla-release itself", () => {
+    expect(machArtifactEnv(RELEASE, "KpoROUtgTjWRzky1Y6nIAg")).toEqual({
+      MOZ_ARTIFACT_REVISION: REV,
+    });
+  });
+
+  it("a beta tarball uses the mozilla-beta index and MOZ_ARTIFACT_TASK, not MOZ_ARTIFACT_REVISION", () => {
+    // artifacts.py reads MOZ_ARTIFACT_TASK only when MOZ_ARTIFACT_REVISION is unset, and its
+    // revision search never reaches mozilla-beta for Vimma's 0.x display version (spec R6).
+    const env = machArtifactEnv(BETA, "ILGA8D1vQYmtIo0RJKNABg");
+    expect(env).toEqual({ MOZ_ARTIFACT_TASK: "ILGA8D1vQYmtIo0RJKNABg" });
+    expect("MOZ_ARTIFACT_REVISION" in env).toBe(false);
   });
 });
 
 describe("indexTask (Taskcluster index findTask response)", () => {
   const NOW = new Date("2026-10-09T12:00:00Z");
   const FOUND = {
-    namespace: indexNamespace(REV),
+    namespace: indexNamespace(RELEASE),
     taskId: "KpoROUtgTjWRzky1Y6nIAg",
     rank: 1791208370,
     data: {},
@@ -200,33 +241,37 @@ describe("indexTask (Taskcluster index findTask response)", () => {
   const NOT_FOUND = { code: "ResourceNotFound", message: "Indexed task not found" };
 
   it("returns the task and its expiry", () => {
-    expect(indexTask(REV, 200, FOUND, NOW)).toEqual({
+    expect(indexTask(RELEASE, 200, FOUND, NOW)).toEqual({
       taskId: "KpoROUtgTjWRzky1Y6nIAg",
       expires: "2027-10-05T13:54:14.263Z",
     });
   });
 
+  it("names the beta tree when a beta build is missing", () => {
+    expect(() => indexTask(BETA, 404, NOT_FOUND, NOW)).toThrow(/mozilla-beta/);
+  });
+
   it("explains a missing build with the revision and a remedy", () => {
-    expect(() => indexTask(REV, 404, NOT_FOUND, NOW)).toThrow(
+    expect(() => indexTask(RELEASE, 404, NOT_FOUND, NOW)).toThrow(
       new RegExp(`${REV}[\\s\\S]*not in the Taskcluster index[\\s\\S]*surfer\\.json`),
     );
   });
 
   it("explains an expired build with its expiry date", () => {
     const old = { ...FOUND, expires: "2026-10-01T00:00:00.000Z" };
-    expect(() => indexTask(REV, 200, old, NOW)).toThrow(/expired 2026-10-01T00:00:00.000Z/);
+    expect(() => indexTask(RELEASE, 200, old, NOW)).toThrow(/expired 2026-10-01T00:00:00.000Z/);
   });
 
   it("throws on another HTTP status or a malformed body", () => {
-    expect(() => indexTask(REV, 500, {}, NOW)).toThrow(/HTTP 500/);
-    expect(() => indexTask(REV, 200, { taskId: 1 }, NOW)).toThrow(/unexpected/);
+    expect(() => indexTask(RELEASE, 500, {}, NOW)).toThrow(/HTTP 500/);
+    expect(() => indexTask(RELEASE, 200, { taskId: 1 }, NOW)).toThrow(/unexpected/);
   });
 });
 
 describe("refreshAppIni", () => {
   /** A minimal engine/ with an artifact objdir after `mach build`. */
   const engine = () => {
-    const dir = mkdtempSync(join(tmpdir(), "vimma-artifact-"));
+    const dir = tempDir("vimma-artifact-");
     mkdirSync(join(dir, ARTIFACT_OBJDIR, "dist", "bin", "browser"), { recursive: true });
     mkdirSync(join(dir, "browser"));
     writeFileSync(

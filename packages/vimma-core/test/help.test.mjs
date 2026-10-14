@@ -1,6 +1,13 @@
 import { describe, test, expect } from "vitest";
 import { compileKeymap } from "../src/keymap.mjs";
-import { bindingTable, filterBindings, keyLegend, renderHelpText } from "../src/help.mjs";
+import {
+  bindingTable,
+  bindingsJson,
+  filterBindings,
+  keyLegend,
+  renderHelpText,
+} from "../src/help.mjs";
+import { MODES } from "../src/modes.mjs";
 import { ACTIONS } from "../src/actions.mjs";
 import { DEFAULT_CONFIG } from "../src/defaults.mjs";
 
@@ -24,7 +31,7 @@ describe("help table", () => {
     const keys = (name) => rows.find((r) => r.name === name)?.bindings;
     expect(keys("show_keybinds")).toContain("ctrl+b ?");
     expect(keys("toggle_sidebar")).toEqual(["ctrl+b b", "space n"]);
-    expect(keys("close_tab")).toEqual(["ctrl+b shift+x", "x"]);
+    expect(keys("close_tab")).toEqual(["ctrl+b shift+x", "ctrl+f4", "x"]);
     expect(keys("focus_pane_left")).toEqual(["ctrl+b h", "ctrl+w h"]);
     for (const r of rows) {
       for (const b of r.bindings) expect(b, r.name).not.toMatch(/prefix|<leader>|<[a-z]/i);
@@ -104,5 +111,89 @@ describe("help table", () => {
   test("help text marks overrides with an asterisk", () => {
     const txt = renderHelpText(bindingTable(compileKeymap({ keys: { new_tab: ["ctrl+alt+c"] } })));
     expect(txt).toMatch(/\* new_tab/);
+  });
+});
+
+describe("bindingsJson (docs/bindings.json, mirrored by vimma.dev)", () => {
+  test("groups and actions keep ACTIONS order, one entry per action", () => {
+    const data = bindingsJson(compileKeymap());
+    expect(data.version).toBe(1);
+    expect(data.groups.flatMap((g) => g.actions.map((a) => a.name))).toEqual(
+      ACTIONS.map((a) => a.name),
+    );
+    expect(data.groups.map((g) => g.name)).toEqual([...new Set(ACTIONS.map((a) => a.group))]);
+    const help = ACTIONS.find((a) => a.name === "help_close");
+    const row = data.groups.flatMap((g) => g.actions).find((a) => a.name === "help_close");
+    expect(row?.description).toBe(help?.description);
+  });
+
+  test("keys are the overlay's, with the mode split off and chords split on spaces", () => {
+    const km = compileKeymap();
+    const data = bindingsJson(km);
+    const table = bindingTable(km);
+    for (const a of data.groups.flatMap((g) => g.actions)) {
+      const shown = a.keys.map((k) => (k.mode ? `${k.keys} [${k.mode}]` : k.keys));
+      expect(shown, a.name).toEqual(table.find((r) => r.name === a.name)?.bindings);
+      for (const k of a.keys) {
+        expect(k.chords).toEqual(k.keys.split(" "));
+        if (k.mode) expect(MODES).toContain(k.mode);
+      }
+    }
+    const keysOf = (name) =>
+      data.groups.flatMap((g) => g.actions).find((a) => a.name === name)?.keys;
+    expect(keysOf("help_close")).toContainEqual({ keys: "esc", chords: ["esc"], mode: "help" });
+    expect(keysOf("rename_tab")).toEqual([
+      { keys: "ctrl+b shift+t", chords: ["ctrl+b", "shift+t"] },
+    ]);
+  });
+
+  test("names the prefix, the legend and the modes", () => {
+    const data = bindingsJson(compileKeymap({ keys: { prefix: "ctrl+a" } }));
+    expect(data.prefix).toBe("ctrl+a");
+    expect(data.legend).toMatch(/^prefix = ctrl\+a\b/);
+    expect(data.modes).toEqual([...MODES]);
+    const all = data.groups.flatMap((g) => g.actions).flatMap((a) => a.keys);
+    expect(all.map((k) => k.keys)).toContain("ctrl+a ?");
+  });
+});
+
+// docs/specs/firefox-keys.md decisions 3 and 7.
+describe("Firefox's keys in the overlay", () => {
+  const rows = bindingTable(compileKeymap());
+  const row = (name) => rows.find((r) => r.name === name);
+
+  test("Browser comes after Page, Developer tools after it", () => {
+    const groups = [...new Set(rows.map((r) => r.group))];
+    expect(groups.indexOf("Browser")).toBe(groups.indexOf("Page") + 1);
+    expect(groups.indexOf("Developer tools")).toBe(groups.indexOf("Browser") + 1);
+  });
+
+  test("restore_tab is a Tabs action now, on ctrl+shift+t in every mode", () => {
+    expect(row("restore_tab")).toMatchObject({ group: "Tabs", bindings: ["ctrl+shift+t"] });
+  });
+
+  test("Go back lists H, ctrl+o, alt+left and ctrl+[", () => {
+    expect(row("history_back")?.bindings).toEqual(["alt+left", "H", "ctrl+o", "ctrl+["]);
+    expect(row("history_forward")?.bindings).toEqual(["alt+right", "L", "ctrl+i", "ctrl+]"]);
+  });
+
+  test("the tab keys list Firefox's", () => {
+    expect(row("new_tab")?.bindings).toEqual(["ctrl+b c", "ctrl+t", "t"]);
+    expect(row("next_tab")?.bindings).toEqual(["ctrl+b n", "ctrl+tab", "ctrl+pagedown", "gt"]);
+    expect(row("select_tab_1")?.bindings).toEqual(["ctrl+b 1", "alt+1"]);
+    expect(row("select_tab_9")?.bindings).toEqual(["ctrl+b 9"]);
+    expect(row("select_last_tab")).toMatchObject({ group: "Tabs", bindings: ["alt+9"] });
+  });
+
+  test("the developer tools keys are Firefox's own", () => {
+    expect(row("devtools")).toMatchObject({
+      group: "Developer tools",
+      bindings: ["ctrl+shift+i", "f12"],
+    });
+    expect(row("devtools_style_editor")?.bindings).toEqual(["shift+f7"]);
+  });
+
+  test("stop_loading is normal-mode esc", () => {
+    expect(row("stop_loading")).toMatchObject({ group: "Browser", bindings: ["esc"] });
   });
 });

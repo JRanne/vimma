@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -78,7 +78,8 @@ origin:
 `;
 
 /**
- * An engine tree with Cargo.lock, vendored crates and moz.yaml files.
+ * An engine tree with Cargo.lock, vendored crates and moz.yaml files, in a temp dir the caller
+ * removes.
  * @returns {string}
  */
 function fakeEngine() {
@@ -152,18 +153,25 @@ describe("parseMozYaml", () => {
 });
 
 describe("buildSbom", () => {
+  // Built once while the describe is collected, outside any test: the engine goes right after.
   const engine = fakeEngine();
-  const bom = buildSbom({
-    engineDir: engine,
-    config: {
-      version: { product: "firefox", version: "157.0.1" },
-      brands: { vimma: { release: { displayVersion: "0.1.0" } } },
-    },
-    repo: "JRanne/vimma",
-    vimmaRoot: ROOT,
-    serialNumber: "urn:uuid:00000000-0000-4000-8000-000000000000",
-    timestamp: "2026-10-09T00:00:00Z",
-  });
+  /** @type {ReturnType<typeof buildSbom>} */
+  let bom;
+  try {
+    bom = buildSbom({
+      engineDir: engine,
+      config: {
+        version: { product: "firefox", version: "157.0.1" },
+        brands: { vimma: { release: { displayVersion: "0.1.0" } } },
+      },
+      repo: "JRanne/vimma",
+      vimmaRoot: ROOT,
+      serialNumber: "urn:uuid:00000000-0000-4000-8000-000000000000",
+      timestamp: "2026-10-09T00:00:00Z",
+    });
+  } finally {
+    rmSync(engine, { recursive: true, force: true });
+  }
   /** @param {string} name */
   const component = (name) => bom.components.find((c) => c.name === name);
 

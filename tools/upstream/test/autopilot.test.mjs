@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +21,7 @@ import {
   testsLine,
 } from "../autopilot-body.mjs";
 import { ADVISORIES_URL, RELEASES_URL, VERSIONS_URL } from "../releases.mjs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 const fixtures = fileURLToPath(new URL("fixtures/", import.meta.url));
 const read = (/** @type {string} */ name) => readFileSync(join(fixtures, name), "utf8");
@@ -245,7 +246,7 @@ describe("detect", () => {
   });
 
   it("the CLI reads --feeds, prints a summary and appends step outputs (no network)", () => {
-    const dir = mkdtempSync(join(tmpdir(), "detect-"));
+    const dir = tempDir("detect-");
     const surfer = join(dir, "surfer.json");
     writeFileSync(surfer, JSON.stringify({ version: { product: "firefox", version: "156.0" } }));
     const out = join(dir, "out");
@@ -284,6 +285,40 @@ describe("autopilot body", () => {
     expect(prTitle("157.0.2")).toBe("upstream: firefox 157.0.2");
     expect(branchName("157.0.2")).toBe("upstream/firefox-157.0.2");
     expect(issueTitle("157.0.2")).toBe("Firefox 157.0.2 released");
+  });
+
+  // Spec firefox-versions, decision 9: the subject is the changelog line, so it names the
+  // advisories; tools/release/firefox-notes.mjs capitalises Firefox and links them.
+  it('the PR title lists the advisories: "upstream: firefox 158.0 (MFSA 2026-106)"', () => {
+    const a = (/** @type {string} */ id) => ({ id, url: "", severity: "high" });
+    expect(prTitle("158.0", [a("MFSA 2026-106")])).toBe("upstream: firefox 158.0 (MFSA 2026-106)");
+    expect(prTitle("157.0.3", [a("MFSA 2026-104"), a("MFSA 2026-105")])).toBe(
+      "upstream: firefox 157.0.3 (MFSA 2026-104, MFSA 2026-105)",
+    );
+    expect(prTitle("157.0.2", [])).toBe("upstream: firefox 157.0.2");
+    // An ID that is not an MFSA ID never reaches the subject.
+    expect(prTitle("158.0", [a("MFSA 2026-106"), a("x) evil")])).toBe(
+      "upstream: firefox 158.0 (MFSA 2026-106)",
+    );
+    expect(securityRelease.release.advisories.map((x) => x.id)).toEqual(["MFSA 2026-105"]);
+  });
+
+  it("the PR title passes commitlint with zero, one and three advisories", () => {
+    const a = (/** @type {string} */ id) => ({ id, url: "", severity: "high" });
+    const titles = [
+      prTitle("157.0.2", []),
+      prTitle("158.0", [a("MFSA 2026-106")]),
+      prTitle("158.0.1", [a("MFSA 2026-107"), a("MFSA 2026-108"), a("MFSA 2026-109")]),
+    ];
+    for (const title of titles) {
+      // The squash commit: the title with GitHub's PR number, then the PR body.
+      const run = spawnSync("npx", ["--no-install", "commitlint"], {
+        cwd: fileURLToPath(new URL("../../..", import.meta.url)),
+        input: `${title} (#200)\n\nBumps Firefox.\n`,
+        encoding: "utf8",
+      });
+      expect(run.status, title + run.stdout + run.stderr).toBe(0);
+    }
   });
 
   it("a ready PR only when patches apply, suites pass and a token starts CI", () => {
@@ -420,7 +455,7 @@ describe("autopilot body", () => {
       context({ error: "GitHub Actions is not permitted to create or approve pull requests" }),
     );
     expect(body).toContain(
-      "https://github.com/JRanne/vimma/compare/main...upstream/firefox-157.0.2?expand=1&title=upstream%3A+firefox+157.0.2&body=Closes+%2342.",
+      "https://github.com/JRanne/vimma/compare/main...upstream/firefox-157.0.2?expand=1&title=upstream%3A+firefox+157.0.2+%28MFSA+2026-105%29&body=Closes+%2342.",
     );
     expect(body).toContain("Allow GitHub Actions to create and approve pull requests");
     expect(body).toContain("GitHub said: `GitHub Actions is not permitted");
@@ -449,12 +484,12 @@ describe("autopilot body", () => {
   });
 
   it("the CLI renders from files", () => {
-    const dir = mkdtempSync(join(tmpdir(), "body-"));
+    const dir = tempDir("body-");
     const det = join(dir, "d.json");
     writeFileSync(det, JSON.stringify(securityRelease));
     const run = (/** @type {string[]} */ args) =>
       spawnSync(process.execPath, [bodyScript, ...args, "--detection", det], { encoding: "utf8" });
-    expect(run(["title"]).stdout).toBe("upstream: firefox 157.0.2\n");
+    expect(run(["title"]).stdout).toBe("upstream: firefox 157.0.2 (MFSA 2026-105)\n");
     expect(run(["pr", "--draft-only", "--patch-result", "ok", "--tests", "success"]).stdout).toBe(
       "true\n",
     );

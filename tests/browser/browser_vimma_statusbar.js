@@ -67,9 +67,10 @@ add_task(async function bar_is_visible_at_the_window_bottom() {
   const b = bar();
   Assert.ok(b, "#vimma-statusbar exists");
   Assert.ok(hasSize(b), "the bar has a size");
-  // Only our zero-height prompt rows (the command line, the rename prompt) may sit between.
+  // Only our zero-height prompt rows (the command line, the rename prompt, the agent question)
+  // may sit between.
   let prev = b.previousElementSibling;
-  while (prev && ["vimma-cmdline", "vimma-rename"].includes(prev.id)) {
+  while (prev && ["vimma-cmdline", "vimma-rename", "vimma-agent-prompt"].includes(prev.id)) {
     Assert.equal(prev.getBoundingClientRect().height, 0, `#${prev.id} takes no height`);
     prev = prev.previousElementSibling;
   }

@@ -59,3 +59,18 @@ describe("describeAction", () => {
     expect(notImplementedText({ id: "pane.zoom" })).toBe("Zoom pane: not implemented yet");
   });
 });
+
+// docs/specs/firefox-keys.md: alt+9, Firefox's last tab, counts the workspace's visible tabs.
+describe("tab.goto_last", () => {
+  test.each([
+    [0, 5, 4],
+    [4, 5, 4],
+    [0, 1, 0],
+  ])("from tab %i of %i goes to %i", (current, length, want) => {
+    expect(tabTarget({ id: "tab.goto_last" }, current, length)).toBe(want);
+  });
+
+  test("no tabs: nothing", () => {
+    expect(tabTarget({ id: "tab.goto_last" }, 0, 0)).toBeNull();
+  });
+});

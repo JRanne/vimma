@@ -3,6 +3,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["packages/**/test/**/*.test.mjs", "tools/**/test/**/*.test.mjs"],
+    // A temp dir per run, removed after it; the run fails if a test left anything in it (#207).
+    globalSetup: ["tools/test/tmp-guard.mjs"],
     coverage: {
       provider: "v8",
       include: ["packages/vimma-core/src/**/*.mjs"],

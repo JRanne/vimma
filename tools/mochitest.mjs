@@ -58,6 +58,18 @@ export function mochitestCommand(argv, engine, expectKey) {
   };
 }
 
+/**
+ * The test browser's environment: ours plus `extra`, without HYPRLAND_INSTANCE_SIGNATURE, so no
+ * test (even --headed) talks to the developer's own Hyprland (docs/specs/private-swap.md).
+ * @param {Record<string, string | undefined>} env
+ * @param {Record<string, string>} extra
+ */
+export function childEnv(env, extra) {
+  const out = { ...env, ...extra };
+  delete out.HYPRLAND_INSTANCE_SIGNATURE;
+  return out;
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const engine = new URL("../engine/", import.meta.url).pathname;
   const expectKey = expectSafeBrowsingKey(process.env, homedir(), existsSync);
@@ -67,7 +79,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const res = spawnSync("./mach", args, {
     cwd: engine,
     stdio: "inherit",
-    env: { ...process.env, ...env },
+    env: childEnv(process.env, env),
   });
   process.exit(res.status ?? 1);
 }

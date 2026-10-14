@@ -167,6 +167,22 @@ export const VimmaActors = {
   },
 
   /**
+   * The top frame's selected text, at most `max` characters, or null (an agent's read,
+   * docs/specs/vimma-mcp.md decision 4).
+   * @param {any} browser XULBrowserElement
+   * @param {number} max
+   * @returns {Promise<string | null>}
+   */
+  async selection(browser, max) {
+    try {
+      const text = await actorFor(browser.browsingContext)?.sendQuery("Vimma:Selection", { max });
+      return typeof text === "string" && text ? text : null;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
    * Blurs the focused element of the focused frame (Esc in insert).
    * @param {any} browser XULBrowserElement
    */

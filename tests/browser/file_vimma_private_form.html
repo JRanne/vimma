@@ -1,0 +1,23 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Fixture for browser_vimma_private_workspace.js: sets a cookie and a localStorage key,
+   - has a form to type into and submit, and a link to a download. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vimma private page</title>
+    <script>
+      document.cookie = "vimmaprivate=1; path=/; SameSite=Lax";
+      localStorage.setItem("vimmaprivate", "1");
+    </script>
+  </head>
+  <body>
+    <form id="form" action="file_vimma_private_form.html" method="get">
+      <input id="field" name="vimmaprivatefield" autocomplete="on" />
+      <button id="submit" type="submit">send</button>
+    </form>
+    <a id="download" href="file_vimma_private_download.txt">download</a>
+  </body>
+</html>

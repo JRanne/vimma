@@ -1,0 +1,14 @@
+{
+  "description": "The user said no in Vimma",
+  "kind": "response",
+  "message": {
+    "type": "response",
+    "id": 3,
+    "ok": false,
+    "error": {
+      "code": "denied",
+      "message": "the user denied this request in Vimma",
+      "reason": "user"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "description": "The reason is spelt as the protocol spells it",
+  "kind": "response",
+  "message": {
+    "type": "response",
+    "id": 4,
+    "ok": false,
+    "error": { "code": "denied", "message": "the request was cancelled", "reason": "canceled" }
+  }
+}

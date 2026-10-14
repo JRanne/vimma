@@ -42,7 +42,9 @@ registerCleanupFunction(async () => {
   const ww = WindowWorkspaces.get(window);
   const main = WorkspaceStore.definitions.workspaces.find((w) => w.name === "main");
   if (ww && main) ww.switchTo({ id: main.id });
-  for (const w of WorkspaceStore.definitions.workspaces.filter((d) => d.name !== "main")) {
+  for (const w of WorkspaceStore.definitions.workspaces.filter(
+    (d) => d.name !== "main" && d.id !== WorkspaceStore.agent?.id,
+  )) {
     await WorkspaceStore.deleteWorkspace(w.id, { confirmed: true });
   }
   while (gBrowser.tabs.length > 1) gBrowser.removeTab(gBrowser.tabs.at(-1));
@@ -467,6 +469,44 @@ add_task(async function yes_no_question_is_an_alertdialog_that_returns_focus() {
   Assert.equal(document.activeElement, document.getElementById("vimma-rename-input"), "focus");
   EventUtils.synthesizeKey("KEY_Escape");
   await focusBackOn(browser, "y/N question");
+});
+
+// docs/specs/vimma-mcp.md decisions 13-14: the agent question is an alertdialog named by its
+// question, and it takes no focus.
+add_task(async function agent_question_is_a_named_alertdialog_that_takes_no_focus() {
+  const { VimmaControl } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/ctl/VimmaControl.sys.mjs",
+  );
+  const { AgentGate } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/ctl/AgentGate.sys.mjs",
+  );
+  const { MCP_ENABLED_PREF } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/host/mcp-ops.mjs",
+  );
+  Services.prefs.setBoolPref(MCP_ENABLED_PREF, true);
+  await VimmaControl.settled();
+  const tab = await openPage();
+  await new Promise((r) => setTimeout(r, 1600)); // no key for 1,500 ms: it may open by itself
+  // The gate directly, as an agent connection's request would (browser_vimma_mcp_prompt.js
+  // drives it over the socket).
+  AgentGate.connect("a11y", { client: "claude-code" });
+  const asked = AgentGate.request("a11y", "vimma_tabs", { count: 2 });
+  const line = () => document.getElementById("vimma-agent-prompt");
+  await until(() => line()?.hidden === false, "the agent question opens");
+  const acc = await accOf(line(), "the agent question");
+  expectRole(
+    acc,
+    Role.ROLE_DIALOG,
+    "◇ claude-code wants vimma_tabs: the list of agent tabs (2)",
+    "agent question",
+  );
+  Assert.equal(attr(acc, "xml-roles"), "alertdialog", "an alertdialog");
+  Assert.equal(document.activeElement, tab.linkedBrowser, "focus stays on the page");
+  AgentGate.disconnect("a11y");
+  Assert.equal((await asked).allow, false, "the request goes with its connection");
+  await until(() => line().hidden, "and the line closes");
+  Services.prefs.clearUserPref(MCP_ENABLED_PREF);
+  await VimmaControl.settled();
 });
 
 // ---- the start page and about:vimma -----------------------------------------------------------

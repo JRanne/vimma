@@ -19,6 +19,9 @@ import { redactReport } from "../core/report.mjs";
 import { ConfigHost } from "../config/ConfigHost.sys.mjs";
 import { ENABLED_PREF, VimmaControl } from "../ctl/VimmaControl.sys.mjs";
 import { VimmaHost } from "../host/VimmaHost.sys.mjs";
+import { McpHost } from "../host/mcp-ops.mjs";
+import { ControlHost } from "../host/control-ops.mjs";
+import { PrivateSwap } from "../host/private-swap.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
@@ -30,6 +33,7 @@ const lazy = /** @type {any} */ ({});
 ChromeUtils.defineESModuleGetters(lazy, {
   AppConstants: "resource://gre/modules/AppConstants.sys.mjs",
   BrowserWindowTracker: "resource:///modules/BrowserWindowTracker.sys.mjs",
+  PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
 });
 
 export const ABOUT_URL = "about:vimma";
@@ -47,12 +51,19 @@ const CONTRACT = "@mozilla.org/network/protocol/about;1?what=vimma";
  * @property {{ path: string, file: "pending" | "missing" | "read", schema: number | null,
  *   errors: string[] }} config
  * @property {{ name: string, group: string, bindings: string[], overridden: boolean }[]} bindings
- * @property {{ source: string, builtin: string, path: string, state: string,
- *   mtime: number | null, lastError: string | null, warnings: string[], name: string | null }} theme
+ * @property {{ source: string, omarchy: boolean | null, polling: boolean, builtin: string,
+ *   appearance: { value: string, from: "config" | "pref" | "default" }, path: string,
+ *   state: string, mtime: number | null, lastError: string | null, warnings: string[],
+ *   name: string | null }} theme
  *   name: the Omarchy theme's, or the built-in palette's when that is shown
  * @property {{ count: number, window: { name: string, active: boolean, tabs: number,
  *   panes: number }[] }} workspaces
- * @property {{ enabled: boolean, port: number | null }} control
+ * @property {{ enabled: boolean, port: number | null, status: string }} control  `status`:
+ *   full control's state with the minutes `:control on` left (docs/specs/vimma-mcp.md 29 D)
+ * @property {{ enabled: boolean, from: "config" | "pref", workspace: string | null,
+ *   adopted: boolean, tabs: number }} mcp  agents (docs/specs/vimma-mcp.md): the switch and the
+ *   agent workspace, with its tab count; never its URLs or titles
+ * @property {string} windowManager  Hyprland and the private placement (private-swap)
  * @property {{ off: { chord: string, id: string, command: string }[], unmatched: string[] }}
  *   firefoxKeys  Firefox's own shortcuts that are off (docs/specs/key-handling-batch.md)
  * @property {RoutesData} routes
@@ -66,6 +77,29 @@ const CONTRACT = "@mozilla.org/network/protocol/about;1?what=vimma";
  * @property {{ host: string, workspace: string, rule: number | null, target: string | null }
  *   | null} tab
  */
+
+/**
+ * The agents section (docs/specs/vimma-mcp.md, decision 27): on or off and why, and the agent
+ * workspace with its tab count. Connections and grants come with the agent role (sub-PR 2).
+ * @returns {AboutData["mcp"]}
+ */
+function mcpOf() {
+  const agent = WorkspaceStore.agent;
+  const ucid = agent?.userContextId ?? null;
+  let tabs = 0;
+  if (ucid !== null) {
+    for (const w of /** @type {any} */ (Services.wm).getEnumerator("navigator:browser")) {
+      if (lazy.PrivateBrowsingUtils.isWindowPrivate(w)) continue;
+      tabs += [...(w.gBrowser?.tabs ?? [])].filter((t) => t.userContextId === ucid).length;
+    }
+  }
+  return {
+    ...McpHost.state,
+    workspace: agent?.name ?? null,
+    adopted: !!agent && !WorkspaceStore.agentIsOurs(),
+    tabs,
+  };
+}
 
 /** An nsIAboutModule that is its own nsIFactory; XPCOM types are untyped here (types/). */
 const aboutModule = /** @type {any} */ ({
@@ -203,7 +237,10 @@ export const AboutVimma = {
     const keymap = ConfigHost.keymap ?? compileKeymap();
     const configPath = ConfigHost.path;
     const theme = ThemeHost.status;
-    const windows = /** @type {Window[]} */ (lazy.BrowserWindowTracker.orderedWindows);
+    // A normal window's page lists no private window (private-workspace decision 8b).
+    const windows = /** @type {Window[]} */ (lazy.BrowserWindowTracker.orderedWindows).filter(
+      (w) => w === win || !lazy.PrivateBrowsingUtils.isWindowPrivate(w),
+    );
     return {
       version: {
         vimma: app.MOZ_APP_VERSION_DISPLAY,
@@ -244,9 +281,12 @@ export const AboutVimma = {
       control: {
         enabled: Services.prefs.getBoolPref(ENABLED_PREF, false),
         port: VimmaControl.port,
+        status: ControlHost.status(),
       },
+      mcp: mcpOf(),
       routes: routesOf(win, tab),
       firefoxKeys: VimmaHost.firefoxKeys(win),
+      windowManager: PrivateSwap.status,
     };
   },
 
@@ -284,6 +324,9 @@ export const AboutVimma = {
       `Routes: ${data.routes.rules.length}` +
         ` (${data.routes.rules.filter((r) => r.skipped).length} skipped)`,
       `Control socket: ${data.control.enabled ? `enabled, port ${data.control.port ?? "-"}` : "off"}`,
+      `Agents (MCP): ${data.mcp.enabled ? "on" : "off"} (${data.mcp.from}), workspace ` +
+        `${data.mcp.workspace ?? "none"}${data.mcp.adopted ? " (adopted)" : ""}, ${data.mcp.tabs}t`,
+      `Window manager: ${data.windowManager}`,
       `Firefox shortcuts off: ${data.firefoxKeys.off.map((k) => k.chord).join(" ") || "none"}`,
     ];
     const home = Services.dirsvc.get("Home", Ci.nsIFile).path;

@@ -1,0 +1,14 @@
+{
+  "description": "A denial's reason is one the protocol names",
+  "kind": "response",
+  "message": {
+    "type": "response",
+    "id": 3,
+    "ok": false,
+    "error": {
+      "code": "denied",
+      "message": "no",
+      "reason": "bored"
+    }
+  }
+}

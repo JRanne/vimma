@@ -1,5 +1,6 @@
 import { describe, test, expect } from "vitest";
-import { ACTIONS, getAction, resolveActionName } from "../src/actions.mjs";
+import fc from "fast-check";
+import { ACTIONS, closest, getAction, resolveActionName } from "../src/actions.mjs";
 import { compileKeymap } from "../src/keymap.mjs";
 
 describe("actions", () => {
@@ -61,14 +62,18 @@ describe("actions", () => {
     /** @type {Record<string, string[]>} */
     const want = {
       show_keybinds: ["prefix+?"],
-      new_tab: ["prefix+c", "t"],
-      next_tab: ["prefix+n", "gt"],
-      previous_tab: ["prefix+p", "gT"],
+      // Firefox's own tab keys too (docs/specs/firefox-keys.md).
+      new_tab: ["prefix+c", "ctrl+t", "t"],
+      next_tab: ["prefix+n", "ctrl+tab", "ctrl+pagedown", "gt"],
+      previous_tab: ["prefix+p", "ctrl+shift+tab", "ctrl+pageup", "gT"],
       ...Object.fromEntries(
-        Array.from({ length: 9 }, (_, i) => [`select_tab_${i + 1}`, [`prefix+${i + 1}`]]),
+        Array.from({ length: 9 }, (_, i) => [
+          `select_tab_${i + 1}`,
+          i < 8 ? [`prefix+${i + 1}`, `alt+${i + 1}`] : [`prefix+${i + 1}`],
+        ]),
       ),
       rename_tab: ["prefix+shift+t"],
-      close_tab: ["prefix+shift+x", "x"],
+      close_tab: ["prefix+shift+x", "ctrl+f4", "x"],
       goto_picker: ["prefix+g", "b"],
     };
     for (const [name, bindings] of Object.entries(want)) {
@@ -76,5 +81,88 @@ describe("actions", () => {
       expect(km.bindingsFor(name), name).toEqual(bindings);
     }
     expect(getAction("select_tab_3")).toMatchObject({ id: "tab.goto", arg: 3 });
+  });
+
+  // docs/specs/vimma-mcp.md decisions 14 and 25: answer the waiting agent question.
+  test("agent_prompt: prefix+shift+a, in every mode, in the Agents group (vimma-mcp)", () => {
+    const km = compileKeymap();
+    expect(getAction("agent_prompt")).toMatchObject({ id: "mcp.answer", group: "Agents" });
+    expect(getAction("control_command")).toMatchObject({ id: "control.command", group: "Agents" });
+    expect(km.bindingsFor("agent_prompt")).toEqual(["prefix+shift+a"]);
+    expect(km.bindingsFor("control_command")).toEqual([]);
+    for (const mode of /** @type {const} */ (["normal", "insert", "visual", "panel", "help"])) {
+      const node = km.trie(mode).children.get("ctrl+b")?.children.get("shift+a");
+      expect(node?.action?.id, mode).toBe("mcp.answer");
+    }
+  });
+
+  test("private_workspace: prefix+shift+p and ctrl+shift+p, in every mode (private-workspace)", () => {
+    const km = compileKeymap();
+    expect(getAction("private_workspace")).toMatchObject({
+      id: "workspace.private",
+      group: "Workspaces",
+    });
+    expect(km.bindingsFor("private_workspace")).toEqual(["prefix+shift+p", "ctrl+shift+p"]);
+    for (const mode of /** @type {const} */ (["normal", "insert", "visual", "panel", "help"])) {
+      const node = km.trie(mode).children.get("ctrl+shift+p");
+      expect(node?.action?.id, mode).toBe("workspace.private");
+    }
+  });
+});
+
+// The "did you mean" suggestion for config keys and values (config.mjs, routes.mjs, cmdline.mjs).
+describe("closest", () => {
+  /** Plain Levenshtein distance, the reference closest() must agree with. @param {string} a @param {string} b */
+  function distance(a, b) {
+    let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) {
+      const cur = [i];
+      for (let j = 1; j <= b.length; j++) {
+        cur[j] = Math.min(
+          /** @type {number} */ (prev[j]) + 1,
+          /** @type {number} */ (cur[j - 1]) + 1,
+          /** @type {number} */ (prev[j - 1]) + (a[i - 1] === b[j - 1] ? 0 : 1),
+        );
+      }
+      prev = cur;
+    }
+    return /** @type {number} */ (prev[b.length]);
+  }
+  /** @param {string} text @param {string[]} pool */
+  function reference(text, pool) {
+    let best;
+    let bestD = Infinity;
+    for (const cand of pool) {
+      const d = distance(text, cand);
+      if (d < bestD) [best, bestD] = [cand, d];
+    }
+    return bestD <= Math.max(2, Math.floor(text.length / 3)) ? best : undefined;
+  }
+
+  test("suggests the nearest candidate, first one on a tie, only when near enough", () => {
+    expect(closest("colr", ["color", "icon", "home"])).toBe("color");
+    expect(closest("ab", ["ax", "ay"])).toBe("ax");
+    expect(closest("zzzzzz", ["color", "icon"])).toBeUndefined();
+    expect(closest("x", [])).toBeUndefined();
+  });
+
+  test("agrees with a plain edit-distance search, for any text and pool", () => {
+    const word = fc.string({ unit: fc.constantFrom("a", "b", "c", "-", "é"), maxLength: 12 });
+    fc.assert(
+      fc.property(word, fc.array(word, { maxLength: 8 }), (text, pool) => {
+        expect(closest(text, pool)).toBe(reference(text, pool));
+      }),
+      { seed: 20261014, numRuns: 2000 },
+    );
+  });
+
+  // Regression (#196): a 1 MiB unknown config key ran a full edit-distance table against every
+  // known key (seconds under coverage) for a suggestion that can never be close enough.
+  test("costs nothing for a text far longer than every candidate", () => {
+    const pool = ACTIONS.map((a) => a.name);
+    const huge = "k".repeat(4 * 1024 * 1024);
+    const start = performance.now();
+    expect(closest(huge, pool)).toBeUndefined();
+    expect(performance.now() - start).toBeLessThan(50);
   });
 });

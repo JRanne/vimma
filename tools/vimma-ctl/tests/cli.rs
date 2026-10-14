@@ -36,7 +36,24 @@ fn challenge(hello: &str) -> String {
     challenge_with_key(hello, TOKEN)
 }
 
-fn temp_profile() -> PathBuf {
+/// A temp dir that is removed when dropped, also when the test panics: one left behind per test
+/// and run filled a tmpfs's inodes (#207). std only, like the crate (ADR-011).
+struct TempDir(PathBuf);
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+impl std::ops::Deref for TempDir {
+    type Target = Path;
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+fn temp_profile() -> TempDir {
     static N: AtomicUsize = AtomicUsize::new(0);
     let dir = std::env::temp_dir().join(format!(
         "vimma-ctl-it-{}-{}",
@@ -45,23 +62,56 @@ fn temp_profile() -> PathBuf {
     ));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
-    dir
+    TempDir(dir)
+}
+
+#[test]
+fn temp_profiles_are_removed_after_the_test_passed_or_panicked() {
+    let passed = {
+        let dir = temp_profile();
+        fs::write(dir.join("f"), "x").unwrap();
+        dir.to_path_buf()
+    };
+    assert!(!passed.exists());
+    let seen = std::sync::Mutex::new(PathBuf::new());
+    let result = std::panic::catch_unwind(|| {
+        let dir = temp_profile();
+        *seen.lock().unwrap() = dir.to_path_buf();
+        panic!("a failing test");
+    });
+    assert!(result.is_err());
+    let panicked = seen.into_inner().unwrap();
+    assert!(panicked.starts_with(std::env::temp_dir()));
+    assert!(!panicked.exists());
 }
 
 fn write_discovery(profile: &Path, port: u16, mode: u32) {
+    write_discovery_text(
+        profile,
+        &format!(r#"{{"protocol":1,"port":{port},"token":"{TOKEN}","pid":1}}"#),
+        mode,
+    );
+}
+
+fn write_discovery_text(profile: &Path, text: &str, mode: u32) {
     use std::os::unix::fs::PermissionsExt;
     let path = profile.join("vimma-control.json");
-    fs::write(
-        &path,
-        format!(r#"{{"protocol":1,"port":{port},"token":"{TOKEN}","pid":1}}"#),
-    )
-    .unwrap();
+    fs::write(&path, text).unwrap();
     fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
+}
+
+/// A protocol 2 discovery file serving `roles` (docs/specs/vimma-mcp.md, decision 2).
+fn write_discovery_v2(profile: &Path, port: u16, roles: &str) {
+    write_discovery_text(
+        profile,
+        &format!(r#"{{"protocol":2,"port":{port},"token":"{TOKEN}","pid":1,"roles":{roles}}}"#),
+        0o600,
+    );
 }
 
 /// One accepted connection: the lines it read, in order.
 struct Server {
-    profile: PathBuf,
+    profile: TempDir,
     handle: JoinHandle<Vec<String>>,
 }
 
@@ -397,8 +447,8 @@ fn finds_the_default_profile_through_profiles_ini() {
     .unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_vimma-ctl"))
         .args(["send-keys", "j"])
-        .env("XDG_CONFIG_HOME", &config)
-        .env("HOME", &config)
+        .env("XDG_CONFIG_HOME", config.as_os_str())
+        .env("HOME", config.as_os_str())
         .env_remove("VIMMA_PROFILE")
         .output()
         .unwrap();
@@ -564,4 +614,207 @@ fn reports_a_discovery_file_whose_process_has_exited() {
         "{}",
         stderr(&out)
     );
+}
+
+// Protocol 2 (docs/specs/vimma-mcp.md, decision 2): against a Vimma whose discovery file says 2,
+// vimma-ctl's commands use the `full` role; with only MCP on, it says the control socket is off.
+
+#[test]
+fn speaks_protocol_2_as_full_against_a_protocol_2_vimma() {
+    let server = Server::start(|n, line| match n {
+        0 => {
+            let proof = vimma_ctl::protocol::challenge_proof(TOKEN, &nonce_of(line));
+            Some(vec![format!(
+                r#"{{"type":"challenge","protocol":2,"proof":"{proof}"}}"#
+            )])
+        }
+        1 => Some(vec![
+            r#"{"type":"welcome","protocol":2,"app":"Vimma","version":"0.1.0","role":"full"}"#
+                .into(),
+        ]),
+        2 => Some(vec![
+            r#"{"type":"response","id":1,"ok":true,"result":{"sent":1}}"#.into(),
+        ]),
+        _ => None,
+    });
+    let port = read_port(&server.profile);
+    write_discovery_v2(&server.profile, port, r#"["full","agent"]"#);
+    let out = vimma_ctl(&server.profile, &["send-keys", "j"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let lines = server.lines();
+    let nonce = nonce_of(&lines[0]);
+    assert_eq!(
+        lines[0],
+        format!(r#"{{"nonce":"{nonce}","protocol":2,"role":"full","type":"hello"}}"#)
+    );
+}
+
+#[test]
+fn says_the_control_socket_is_off_when_only_mcp_is_on() {
+    let server = Server::start(|_, _| None);
+    let port = read_port(&server.profile);
+    write_discovery_v2(&server.profile, port, r#"["agent"]"#);
+    let out = vimma_ctl(&server.profile, &["state"]);
+    assert_eq!(out.status.code(), Some(3), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("set the pref vimma.control.enabled to true"),
+        "{}",
+        stderr(&out)
+    );
+    // Nothing was sent: it did not even connect. Unblock the fake server's accept.
+    drop(TcpStream::connect(("127.0.0.1", port)));
+    assert_eq!(server.lines(), Vec::<String>::new());
+}
+
+#[test]
+fn reports_role_off_with_exit_3() {
+    let server = Server::start(|_, _| {
+        Some(vec![
+            r#"{"type":"response","id":null,"ok":false,"error":{"code":"role-off","message":"the control socket is off: set the pref vimma.control.enabled to true"}}"#
+                .into(),
+        ])
+    });
+    let port = read_port(&server.profile);
+    write_discovery_v2(&server.profile, port, r#"["full"]"#);
+    let out = vimma_ctl(&server.profile, &["state"]);
+    assert_eq!(out.status.code(), Some(3), "{}", stderr(&out));
+    assert_eq!(
+        stderr(&out),
+        "vimma-ctl: role-off: the control socket is off: set the pref vimma.control.enabled to true\n"
+    );
+    drop(server.lines());
+}
+
+/// A protocol 2 server that holds the welcome back `delay` after the auth, then answers `state`.
+fn asking_server(delay: std::time::Duration, after_auth: &'static str) -> Server {
+    Server::start(move |n, line| {
+        match n {
+        0 => {
+            let proof = vimma_ctl::protocol::challenge_proof(TOKEN, &nonce_of(line));
+            Some(vec![format!(
+                r#"{{"type":"challenge","protocol":2,"proof":"{proof}"}}"#
+            )])
+        }
+        1 => {
+            thread::sleep(delay);
+            Some(vec![after_auth.into()])
+        }
+        2 => Some(vec![
+            r#"{"type":"response","id":1,"ok":true,"result":{"mode":"normal","pending":null,"workspace":"main","tabs":[],"panes":null}}"#
+                .into(),
+        ]),
+        _ => None,
+    }
+    })
+}
+
+const WELCOME_V2: &str =
+    r#"{"type":"welcome","protocol":2,"app":"Vimma","version":"0.1.0","role":"full"}"#;
+
+// docs/specs/vimma-mcp.md decision 29 C: while MCP is on, Vimma asks before it welcomes a full
+// connection; vimma-ctl waits for that answer past its own --timeout, and says so.
+#[test]
+fn waits_for_the_users_answer_while_mcp_is_on() {
+    let server = asking_server(std::time::Duration::from_millis(2500), WELCOME_V2);
+    let port = read_port(&server.profile);
+    write_discovery_v2(&server.profile, port, r#"["agent","full"]"#);
+    let out = vimma_ctl(&server.profile, &["--timeout", "1", "state", "--json"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("MCP is on: answer y in Vimma to let this vimma-ctl in"),
+        "{}",
+        stderr(&out)
+    );
+    drop(server.lines());
+}
+
+// Review of #177 (M2): while MCP is on, vimma-ctl prints a code and sends it in its auth, and
+// Vimma's question shows it, so the user answers for the vimma-ctl they ran.
+#[test]
+fn prints_and_sends_a_code_while_mcp_is_on() {
+    let server = asking_server(std::time::Duration::ZERO, WELCOME_V2);
+    let port = read_port(&server.profile);
+    write_discovery_v2(&server.profile, port, r#"["agent","full"]"#);
+    let out = vimma_ctl(&server.profile, &["state", "--json"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let err = stderr(&out);
+    let code = err
+        .split("code ")
+        .nth(1)
+        .map(|rest| rest.chars().take(4).collect::<String>())
+        .unwrap_or_default();
+    assert!(
+        code.len() == 4
+            && code
+                .chars()
+                .all(|c| matches!(c, '2'..='9' | 'A'..='H' | 'J'..='N' | 'P'..='Z')),
+        "{err}"
+    );
+    assert!(err.contains("answer y only if it shows"), "{err}");
+    let lines = server.lines();
+    assert_eq!(
+        lines[1],
+        format!(r#"{{"code":"{code}","token":"{TOKEN}","type":"auth"}}"#)
+    );
+}
+
+#[test]
+fn sends_no_code_while_mcp_is_off() {
+    let server = asking_server(std::time::Duration::ZERO, WELCOME_V2);
+    let port = read_port(&server.profile);
+    write_discovery_v2(&server.profile, port, r#"["full"]"#);
+    let out = vimma_ctl(&server.profile, &["state"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert!(!stderr(&out).contains("code"), "{}", stderr(&out));
+    let lines = server.lines();
+    assert_eq!(lines[1], format!(r#"{{"token":"{TOKEN}","type":"auth"}}"#));
+}
+
+#[test]
+fn keeps_its_timeout_for_the_welcome_while_mcp_is_off() {
+    let server = asking_server(std::time::Duration::from_millis(2500), WELCOME_V2);
+    let port = read_port(&server.profile);
+    write_discovery_v2(&server.profile, port, r#"["full"]"#);
+    let out = vimma_ctl(&server.profile, &["--timeout", "1", "state"]);
+    assert_eq!(out.status.code(), Some(5), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("no reply within 1 s"),
+        "{}",
+        stderr(&out)
+    );
+    assert!(!stderr(&out).contains("answer y"), "{}", stderr(&out));
+    drop(server.lines());
+}
+
+#[test]
+fn reports_refused_full_control_with_exit_4() {
+    let server = asking_server(
+        std::time::Duration::ZERO,
+        r#"{"type":"response","id":null,"ok":false,"error":{"code":"denied","message":"the user refused full control in Vimma","reason":"user"}}"#,
+    );
+    let port = read_port(&server.profile);
+    write_discovery_v2(&server.profile, port, r#"["agent","full"]"#);
+    let out = vimma_ctl(&server.profile, &["state"]);
+    assert_eq!(out.status.code(), Some(4), "{}", stderr(&out));
+    assert!(
+        stderr(&out).ends_with(
+            "vimma-ctl: full control refused: the user refused full control in Vimma (user)\n"
+        ),
+        "{}",
+        stderr(&out)
+    );
+    drop(server.lines());
+}
+
+/// The port the fake server's discovery file names.
+fn read_port(profile: &Path) -> u16 {
+    let text = fs::read_to_string(profile.join("vimma-control.json")).unwrap();
+    let value = vimma_ctl::json::parse(&text).unwrap();
+    u16::try_from(
+        value
+            .get("port")
+            .and_then(vimma_ctl::json::Value::as_u64)
+            .unwrap(),
+    )
+    .unwrap()
 }

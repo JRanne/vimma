@@ -1,0 +1,56 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* Firefox's own sidebar in the theme's colours (docs/specs/firefox-sidebar-theme.md), loaded by
+ * ui/theme-host.mjs into every window next to the token sheet. Firefox paints the panel, its edge
+ * and its trees from three tokens of its own; pointing them at Vimma's tokens is enough for those.
+ * The same surface as Vimma's side panel: --vimma-bg-dark. firefox-sidebar-page.css does the same
+ * inside the documents the panel loads.
+ * !important: a Firefox theme (the built-in dark one too) sets these inline on the root
+ * (LightweightThemeConsumer) or on more specific selectors (sidebar.css). */
+
+:root {
+  --sidebar-background-color: var(--vimma-bg-dark) !important;
+  --sidebar-text-color: var(--vimma-fg) !important;
+  --sidebar-border-color: var(--vimma-muted) !important;
+  --lwt-sidebar-highlight-background-color: var(--vimma-selection) !important;
+  --lwt-sidebar-highlight-text-color: var(--vimma-fg) !important;
+}
+
+/* The launcher strip has no background of its own: it shows the toolbox colour behind it
+ * (browser-shared.css body), or --sidebar-launcher-surface-color when it expands on hover. Its
+ * buttons are ghost moz-buttons: text inherited, icons --toolbarbutton-icon-fill
+ * (sidebar-main.css). */
+#sidebar-container {
+  --sidebar-launcher-surface-color: var(--vimma-bg-dark) !important;
+  --toolbarbutton-icon-fill: var(--vimma-fg);
+  --button-text-color-ghost: var(--vimma-fg);
+  /* The open panel's button is a selected moz-button (aria-selected since Firefox 158, which
+   * moz-button styles as it does aria-pressed): Firefox fills it with the system accent
+   * (AccentColor at 30%, Nova's --button-background-color-active, a dark blue) and hovers a
+   * non-ghost button with AccentColor at 20%. The pressed button is a selected row in Vimma's
+   * terms (side-panel.css): --vimma-selection; hover and press tint the text colour as Firefox's
+   * ghost buttons do. */
+  --button-background-color-selected: var(--vimma-selection) !important;
+  --button-text-color-selected: var(--vimma-fg-bright) !important;
+  --button-background-color-hover: color-mix(in srgb, currentColor 17%, transparent) !important;
+  --button-background-color-active: color-mix(in srgb, currentColor 30%, transparent) !important;
+  /* Nova also borders a non-ghost button in --color-accent-primary, resolved on the root, so
+   * the button's own border tokens are reset here: the fill alone marks the open panel. */
+  --button-border-color: transparent !important;
+  --button-border-color-hover: transparent !important;
+  --button-border-color-active: transparent !important;
+  --button-border-color-selected: transparent !important;
+  scrollbar-color: var(--vimma-muted) var(--vimma-bg-dark);
+  background-color: var(--vimma-bg-dark) !important;
+  color: var(--vimma-fg) !important;
+  color-scheme: var(--vimma-color-scheme) !important;
+}
+
+/* The panel: its colour scheme comes from the theme's lwt-sidebar attribute, and under Nova its
+ * edge is --chrome-content-separator-color without a Firefox theme (sidebar.css). */
+#sidebar-box {
+  color-scheme: var(--vimma-color-scheme) !important;
+  border-color: var(--vimma-muted) !important;
+}

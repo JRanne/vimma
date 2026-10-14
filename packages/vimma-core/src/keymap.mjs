@@ -17,6 +17,7 @@ import {
   parseKey,
 } from "./keys.mjs";
 import { MODES, isMode } from "./modes.mjs";
+import { formatPath } from "./toml.mjs";
 
 /** @import { Chord } from "./keys.mjs" */
 /** @import { BindingElement } from "./keys.mjs" */
@@ -138,22 +139,27 @@ export function compileKeymap(user = {}) {
   const keyTable = { ...defKeys };
   for (const [name, value] of Object.entries(userKeys)) {
     if (name === "prefix") continue;
-    const action = resolveOrThrow(name, `keys.${name}`);
-    asList(value, `keys.${name}`);
+    const path = formatPath(["keys", name]);
+    const action = resolveOrThrow(name, path);
+    asList(value, path);
     delete keyTable[action.name];
     keyTable[name] = value;
     overridden.add(action.name);
   }
   for (const [name, value] of Object.entries(keyTable)) {
     if (name === "prefix") continue;
-    const action = resolveOrThrow(name, `keys.${name}`);
-    asList(value, `keys.${name}`).forEach((text, i) => {
-      const path = Array.isArray(value) ? `keys.${name}[${i}]` : `keys.${name}`;
+    const action = resolveOrThrow(name, formatPath(["keys", name]));
+    asList(value, formatPath(["keys", name])).forEach((text, i) => {
+      const path = formatPath(Array.isArray(value) ? ["keys", name, i] : ["keys", name]);
       const els = notation(() => parseBinding(text), path);
       const first = els[0];
+      // A chord with ctrl, alt or meta, or a function key (firefox-keys decision 7), works in
+      // every mode, as Firefox's own keys do.
       const global =
         !!first &&
-        ("special" in first ? first.special === "prefix" : first.ctrl || first.alt || first.meta);
+        ("special" in first
+          ? first.special === "prefix"
+          : first.ctrl || first.alt || first.meta || /^f\d+$/.test(first.key));
       // A leader binding works in the side panel too: `<leader>n` closes what it opened
       // (m3-workspaces 6). The panel takes plain keys itself, so a leader there types nothing.
       const leader = !!first && "special" in first && first.special === "leader";
@@ -178,7 +184,7 @@ export function compileKeymap(user = {}) {
     if (!isMode(key)) {
       throw new KeymapError(
         `unknown mode "${key}"`,
-        `modal.${key}`,
+        formatPath(["modal", key]),
         MODES.find((m) => m[0] === key[0]),
       );
     }
@@ -224,9 +230,10 @@ export function compileKeymap(user = {}) {
 
   // [unbind]
   for (const [mode, list] of Object.entries(user.unbind ?? {})) {
-    if (!isMode(mode)) throw new KeymapError(`unknown mode "${mode}"`, `unbind.${mode}`);
-    asList(list, `unbind.${mode}`).forEach((text, i) => {
-      const els = notation(() => parseBinding(text), `unbind.${mode}[${i}]`);
+    const path = formatPath(["unbind", mode]);
+    if (!isMode(mode)) throw new KeymapError(`unknown mode "${mode}"`, path);
+    asList(list, path).forEach((text, i) => {
+      const els = notation(() => parseBinding(text), formatPath(["unbind", mode, i]));
       const seq = concretise(els).chords.map(formatKey).join(" ");
       for (const e of entries) {
         if (e.seq === seq && e.modes.delete(mode)) overridden.add(e.action.name);

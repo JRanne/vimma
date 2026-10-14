@@ -82,13 +82,16 @@ export function expectNoPollution() {
  * @template T
  * @param {number} ms
  * @param {() => T} fn
+ * @param {string} [label]  names the input in the failure message
  * @returns {T}
  */
-export function within(ms, fn) {
+export function within(ms, fn, label) {
   const start = performance.now();
   const out = fn();
   const took = performance.now() - start;
-  if (took > ms) throw new Error(`took ${Math.round(took)} ms, budget ${ms} ms`);
+  if (took > ms) {
+    throw new Error(`${label ? `${label}: ` : ""}took ${Math.round(took)} ms, budget ${ms} ms`);
+  }
   return out;
 }
 
@@ -110,6 +113,23 @@ export function throwsOnly(fn, allowed) {
     );
   }
   return undefined;
+}
+
+/** The running test's own title (vitest's current name ends with it, after the describes). */
+function testTitle() {
+  return (expect.getState().currentTestName ?? "").split(" > ").at(-1) ?? "";
+}
+
+/**
+ * The shell command that replays one failing case. `-t` takes a pattern matched against test
+ * titles, so the title is regex-escaped, and single-quoted so the shell passes it on as written.
+ * @param {number} seed
+ * @param {string | null} path  fast-check's counterexample path
+ * @param {string} title  the failing test's title
+ */
+export function replayCommand(seed, path, title) {
+  const pattern = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replaceAll("'", "'\\''");
+  return `VIMMA_FUZZ_SEED=${seed} VIMMA_FUZZ_PATH=${path} npx vitest run packages/vimma-core/test/fuzz -t '${pattern}'`;
 }
 
 /**
@@ -138,7 +158,7 @@ export function fuzz(name, property, { weight = 1 } = {}) {
       path: details.counterexamplePath,
       counterexample: fc.stringify(details.counterexample),
       error: String(details.errorInstance),
-      replay: `VIMMA_FUZZ_SEED=${details.seed} VIMMA_FUZZ_PATH=${details.counterexamplePath} npx vitest run packages/vimma-core/test/fuzz -t ${JSON.stringify(name)}`,
+      replay: replayCommand(details.seed, details.counterexamplePath, testTitle()),
     };
     writeFileSync(file, `${JSON.stringify(failure, null, 2)}\n`);
   }

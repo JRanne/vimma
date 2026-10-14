@@ -1,0 +1,16 @@
+{
+  "description": "The agent's first command: labels for the question",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 1,
+    "command": "agent-hello",
+    "args": {
+      "client": {
+        "name": "claude-code",
+        "version": "2.1.0"
+      },
+      "via": "claude"
+    }
+  }
+}

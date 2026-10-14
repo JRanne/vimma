@@ -45,11 +45,17 @@ support-files = ["file_vimma_copy_motions.html"]
 
 ["browser_vimma_safebrowsing.js"]
 
+["browser_vimma_wake_lock.js"]
+
 ["browser_vimma_crash_reporter.js"]
 # Artifact builds run Mozilla's libxul, built with the crash reporter (ADR-010).
 skip-if = ["artifact"]
 
 ["browser_vimma_app_version.js"]
+
+["browser_vimma_version_line.js"]
+# The --version line is C++ (nsAppRunner-cpp.patch); artifact builds run Mozilla's libxul (ADR-010).
+skip-if = ["artifact"]
 
 ["browser_vimma_tabstrip.js"]
 
@@ -102,6 +108,7 @@ support-files = ["file_vimma_title.html"]
 ["browser_vimma_find.js"]
 support-files = [
   "file_vimma_find.html",
+  "file_vimma_find_field.html",
   "file_vimma_find_frame.html",
   "file_vimma_test.pdf",
 ]
@@ -123,15 +130,55 @@ support-files = ["file_vimma_cookie.html"]
 
 ["browser_vimma_workspace_ops.js"]
 
+["browser_vimma_mcp.js"]
+
+["browser_vimma_mcp_agent.js"]
+support-files = ["file_vimma_agent_page.html", "head_vimma_control.js"]
+
+["browser_vimma_mcp_prompt.js"]
+support-files = ["file_vimma_agent_page.html", "head_vimma_control.js"]
+
+["browser_vimma_mcp_prompt_guards.js"]
+support-files = ["file_vimma_agent_page.html", "head_vimma_control.js"]
+
+["browser_vimma_mcp_control.js"]
+support-files = ["file_vimma_agent_page.html", "head_vimma_control.js"]
+
+["browser_vimma_mcp_agent_pages.js"]
+support-files = [
+  "file_vimma_agent_page.html",
+  "file_vimma_agent_sw.html",
+  "file_vimma_agent_sw.js",
+]
+
+["browser_vimma_mcp_downloads.js"]
+support-files = [
+  "file_vimma_agent_page.html",
+  "file_vimma_agent_download.sjs",
+  "head_vimma_control.js",
+]
+
 ["browser_vimma_workspace_picker.js"]
 
 ["browser_vimma_workspace_edges.js"]
 
 ["browser_vimma_workspace_buffer_keys.js"]
 
+["browser_vimma_private_workspace.js"]
+support-files = [
+  "file_vimma_private_form.html",
+  "file_vimma_private_download.txt",
+  "file_vimma_private_download.txt^headers^",
+]
+
+["browser_vimma_private_swap.js"]
+support-files = ["file_vimma_title.html"]
+
 ["browser_vimma_side_panel.js"]
 
 ["browser_vimma_side_panel_marks.js"]
+
+["browser_vimma_side_panel_unsplit.js"]
 
 ["browser_vimma_firefox_keys.js"]
 support-files = ["file_vimma_plain.html"]
@@ -153,6 +200,11 @@ support-files = ["file_vimma_insert_scroll.html"]
 ["browser_vimma_theme.js"]
 run-if = ["os == 'linux'"] # ln -s for the omarchy-theme-set symlink swap
 
+["browser_vimma_theme_appearance.js"]
+
+["browser_vimma_sidebar_theme.js"]
+run-if = ["os == 'linux'"] # ln -s for the omarchy-theme-set symlink swap
+
 ["browser_vimma_about.js"]
 
 ["browser_vimma_licence.js"]
@@ -171,3 +223,6 @@ support-files = ["file_vimma_addon_updates.json"]
 ["browser_vimma_perf.js"]
 
 ["browser_vimma_a11y.js"]
+
+["browser_vimma_browser_keys.js"]
+support-files = ["file_vimma_plain.html", "file_vimma_slow.sjs"]

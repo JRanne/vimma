@@ -2,10 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Spec: docs/specs/key-handling-batch.md § 1. Firefox's own shortcuts on Vimma's keys are off:
-// ctrl+w, ctrl+u, ctrl+h, ctrl+d, ctrl+o, ctrl+i, ctrl+k, ctrl+b never run Firefox's action,
-// in any mode. ctrl+t, ctrl+l and ctrl+tab stay Firefox's. [firefox] disable / enable in
-// config.toml change the set; about:vimma lists it.
+// Spec: docs/specs/key-handling-batch.md § 1, docs/specs/firefox-keys.md (sub-PR 1). Firefox's
+// own shortcuts on Vimma's keys are off: ctrl+w, ctrl+u, ctrl+h, ctrl+d, ctrl+o, ctrl+i, ctrl+k,
+// ctrl+b never run Firefox's action, in any mode. ctrl+t, ctrl+l and ctrl+tab are Vimma
+// bindings now, with Firefox's meaning, and every Firefox key on a chord Vimma binds is off
+// (bound means off). [firefox] disable / enable in config.toml change the rest; about:vimma
+// lists it.
 
 "use strict";
 
@@ -51,6 +53,22 @@ async function useConfig(text) {
 }
 
 /**
+ * Counts the command events that reach the `<key>` element itself (not its <command>): what
+ * GlobalKeyListener sends when Firefox's shortcut runs. Vimma's actions run the <command>
+ * directly, so this counts Firefox's key only.
+ * @param {string} id
+ */
+function spyKeyElement(id) {
+  const key = document.getElementById(id);
+  Assert.ok(key, `#${id} exists`);
+  const spy = { count: 0 };
+  const listener = () => spy.count++;
+  key.addEventListener("command", listener, true);
+  registerCleanupFunction(() => key.removeEventListener("command", listener, true));
+  return spy;
+}
+
+/**
  * Counts the commands a `<key>` runs: a `command` event on the key, or on its <command>.
  * @param {string} id
  */
@@ -91,11 +109,33 @@ add_task(async function setup() {
   await ConfigHost.reload();
 });
 
-add_task(async function the_overlapping_keys_are_disabled_and_ctrl_q_is_not() {
+add_task(async function the_overlapping_and_the_bound_keys_are_disabled_the_others_not() {
   for (const id of Object.values(OVERLAP)) {
     Assert.equal(document.getElementById(id).getAttribute("disabled"), "true", `#${id} is off`);
   }
-  for (const id of ["key_newNavigatorTab", "focusURLBar", "key_quitApplication", "key_find"]) {
+  // Bound means off (firefox-keys decision 2): Vimma binds these chords, in every keyset.
+  for (const id of [
+    "key_newNavigatorTab",
+    "focusURLBar",
+    "key_quitApplication",
+    "goBackKb",
+    "key_reload2",
+    "key_fullZoomEnlarge",
+    "key_privatebrowsing",
+    "key_restoreLastClosedTabOrWindowOrSession",
+  ]) {
+    Assert.equal(document.getElementById(id).getAttribute("disabled"), "true", `#${id} is off`);
+  }
+  await TestUtils.waitForCondition(
+    () => document.getElementById("key_toggleToolbox"),
+    "the DevTools keys are hooked in",
+  );
+  await TestUtils.waitForCondition(
+    () => document.getElementById("key_toggleToolbox").getAttribute("disabled") === "true",
+    "the DevTools' keyset is watched too: ctrl+shift+i is Vimma's devtools",
+  );
+  // Not bound by Vimma, not on the default list: still Firefox's in sub-PR 1.
+  for (const id of ["key_find", "key_search2", "viewBookmarksToolbarKb"]) {
     Assert.ok(!document.getElementById(id).hasAttribute("disabled"), `#${id} stays on`);
   }
 });
@@ -139,9 +179,10 @@ add_task(async function ctrl_w_in_normal_mode_with_one_pane_closes_nothing() {
   BrowserTestUtils.removeTab(tab);
 });
 
-add_task(async function ctrl_t_ctrl_l_and_ctrl_tab_stay_firefoxs() {
+add_task(async function ctrl_t_ctrl_l_and_ctrl_tab_are_vimmas_with_firefoxs_meaning() {
   const first = gBrowser.selectedTab;
   const tab = await insertModePage();
+  const spies = ["key_newNavigatorTab", "focusURLBar"].map(spyKeyElement);
   const opened = BrowserTestUtils.waitForEvent(gBrowser.tabContainer, "TabOpen");
   EventUtils.synthesizeKey("t", { ctrlKey: true });
   const { target: fresh } = await opened;
@@ -158,6 +199,11 @@ add_task(async function ctrl_t_ctrl_l_and_ctrl_tab_stay_firefoxs() {
   EventUtils.synthesizeKey("KEY_Tab", { ctrlKey: true });
   await selected;
   Assert.notEqual(gBrowser.selectedTab, tab, "ctrl+tab switched tabs");
+  Assert.deepEqual(
+    spies.map((s) => s.count),
+    [0, 0],
+    "Vimma's bindings ran, not Firefox's keys",
+  );
   gBrowser.selectedTab = first;
   BrowserTestUtils.removeTab(tab);
 });
@@ -172,30 +218,45 @@ add_task(async function about_vimma_lists_what_is_off() {
   Assert.stringContains(AboutVimma.report(data), "Firefox shortcuts off: ", "the report says so");
 });
 
-add_task(async function disable_all_keeps_only_ctrl_q_and_what_enable_lists() {
+add_task(async function disable_all_turns_off_the_unbound_ones_and_enable_keeps_one() {
   await useConfig(`[firefox]\ndisable = "all"\nenable = ["ctrl+t"]`);
   Assert.equal(document.getElementById("focusURLBar").getAttribute("disabled"), "true");
   Assert.equal(document.getElementById("key_find").getAttribute("disabled"), "true");
-  Assert.ok(!document.getElementById("key_quitApplication").hasAttribute("disabled"), "ctrl+q");
+  Assert.equal(
+    document.getElementById("key_quitApplication").getAttribute("disabled"),
+    "true",
+    "ctrl+q is Vimma's quit now",
+  );
   Assert.ok(!document.getElementById("key_newNavigatorTab").hasAttribute("disabled"), "enabled");
 
   const tab = await insertModePage();
-  const spy = spyKey("focusURLBar");
-  EventUtils.synthesizeKey("l", { ctrlKey: true });
-  Assert.ok(await waitForPageKey(tab.linkedBrowser, ["l", "!l"]), "the page got ctrl+l");
-  Assert.equal(spy.count, 0, "ctrl+l no longer focuses the URL bar");
-  Assert.ok(!gURLBar.focused, "the URL bar has no focus");
+  const spy = spyKeyElement("key_find");
+  EventUtils.synthesizeKey("f", { ctrlKey: true });
+  Assert.ok(await waitForPageKey(tab.linkedBrowser, ["f", "!f"]), "the page got ctrl+f");
+  Assert.equal(spy.count, 0, "ctrl+f no longer opens Firefox's find bar");
+
+  // ctrl+t: Firefox's key is on, and Vimma binds it too: Vimma takes the keydown, so exactly
+  // one tab opens.
+  const tabs = gBrowser.tabs.length;
   const opened = BrowserTestUtils.waitForEvent(gBrowser.tabContainer, "TabOpen");
   EventUtils.synthesizeKey("t", { ctrlKey: true });
   const { target: fresh } = await opened;
+  await new Promise((r) => setTimeout(r, 300));
+  Assert.equal(gBrowser.tabs.length, tabs + 1, "one tab, not two");
   BrowserTestUtils.removeTab(fresh);
   BrowserTestUtils.removeTab(tab);
 });
 
 add_task(async function enable_gives_one_back_and_a_list_replaces_the_default() {
   await useConfig(`[firefox]\ndisable = ["ctrl+u"]\nenable = []`);
-  Assert.ok(!document.getElementById("focusURLBar").hasAttribute("disabled"), "all is undone");
-  Assert.ok(!document.getElementById("key_close").hasAttribute("disabled"), "ctrl+w is back");
+  Assert.ok(!document.getElementById("key_find").hasAttribute("disabled"), "all is undone");
+  Assert.ok(!document.getElementById("key_search2").hasAttribute("disabled"), "ctrl+j too");
+  Assert.equal(
+    document.getElementById("key_close").getAttribute("disabled"),
+    "true",
+    "ctrl+w starts Vimma's ctrl+w h: bound, so off whatever the list says",
+  );
+  Assert.equal(document.getElementById("focusURLBar").getAttribute("disabled"), "true", "bound");
   Assert.equal(document.getElementById("key_viewSource").getAttribute("disabled"), "true");
 
   await useConfig(`[firefox]\nenable = ["ctrl+w"]`);

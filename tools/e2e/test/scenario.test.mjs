@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { decodePng } from "../png.mjs";
 import { loadScenarios, matchState, runSteps, validateScenario } from "../scenario.mjs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 const SCENARIOS = fileURLToPath(new URL("../../../tests/e2e/scenarios/", import.meta.url));
 
@@ -58,6 +58,45 @@ describe("validateScenario", () => {
     expect(validateScenario(scenario(over), undefined).join("\n")).toMatch(message);
   });
 
+  // docs/specs/vimma-mcp.md, sub-PR 2b: a held full connection, an agent connection and an
+  // asynchronous vimma-ctl, for the agent question line.
+  it("accepts the agent steps", () => {
+    expect(
+      validateScenario(
+        scenario({
+          steps: [
+            { hold: true },
+            { sleep: 1.6 },
+            { agent: { send: "agent-open", args: { url: "https://example.com/" }, as: "open1" } },
+            { "agent-result": { of: "open1", expect: { ok: true } } },
+            { agent: { send: "agent-read", args: { tab: "$open1.result.tab" }, as: "read1" } },
+            { ctl: { run: ["state"], as: "c1" } },
+            { "ctl-result": { of: "c1", expect: { exitCode: 0 } } },
+          ],
+        }),
+        undefined,
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [[{ hold: false }], /step 1: hold is true/],
+    [[{ sleep: 0 }], /step 1: sleep/],
+    [[{ sleep: 31 }], /step 1: sleep/],
+    [[{ agent: { send: "send-keys", as: "a" } }], /step 1: agent: send is an agent command/],
+    [[{ agent: { send: "agent-tabs" } }], /step 1: agent: as names/],
+    [[{ agent: { send: "agent-tabs", as: "a", extra: 1 } }], /step 1: agent: unknown/],
+    [[{ "agent-result": { of: "nope", expect: {} } }], /step 1: agent-result: no agent step/],
+    [[{ ctl: { run: "state", as: "c" } }], /step 1: ctl: run is/],
+    [[{ "ctl-result": { of: "c", expect: {} } }], /step 1: ctl-result: no ctl step/],
+    [
+      [{ agent: { send: "agent-tabs", as: "a" } }, { agent: { send: "agent-tabs", as: "a" } }],
+      /step 2: agent: "a" is taken/,
+    ],
+  ])("rejects agent steps %o", (steps, message) => {
+    expect(validateScenario(scenario({ steps }), undefined).join("\n")).toMatch(message);
+  });
+
   it("wants the file named after the scenario", () => {
     expect(validateScenario(scenario({}), "m0-other.json").join("\n")).toMatch(/file name/);
   });
@@ -70,14 +109,13 @@ describe("loadScenarios", () => {
   });
 
   it("filters by substring and fails loudly on an invalid file", () => {
-    const dir = mkdtempSync(join(tmpdir(), "vimma-e2e-scn-"));
+    const dir = tempDir("vimma-e2e-scn-");
     writeFileSync(join(dir, "m0-a.json"), JSON.stringify(scenario({ name: "m0-a" })));
     writeFileSync(join(dir, "m1-b.json"), JSON.stringify(scenario({ name: "m1-b" })));
     expect(loadScenarios(dir, { filter: "m1" }).map((s) => s.name)).toEqual(["m1-b"]);
     expect(() => loadScenarios(dir, { filter: "zzz" })).toThrow(/no scenario matches "zzz"/);
     writeFileSync(join(dir, "m2-c.json"), "{");
     expect(() => loadScenarios(dir)).toThrow(/m2-c\.json/);
-    rmSync(dir, { recursive: true, force: true });
   });
 });
 
@@ -188,6 +226,96 @@ describe("runSteps", () => {
       },
     };
   };
+
+  /** A fake ControlSessions: records what the agent steps ask of it. */
+  const fakeControl = () => {
+    /** @type {string[]} */
+    const calls = [];
+    /** @type {Record<string, any>} */
+    const replies = { open1: { ok: true, result: { tab: "42" } }, read1: { ok: true } };
+    return {
+      calls,
+      control: {
+        hold: async () => void calls.push("hold"),
+        held: {
+          state: async () => (calls.push("held state"), { mode: "normal" }),
+          sendKeys: async (/** @type {string} */ k) => void calls.push(`held keys ${k}`),
+          open: async (/** @type {string} */ u) => (calls.push(`held open ${u}`), "3"),
+        },
+        agentSend: (/** @type {any} */ spec) =>
+          void calls.push(`agent ${spec.send} ${JSON.stringify(spec.args ?? {})} as ${spec.as}`),
+        agentResult: async (/** @type {string} */ name) => replies[name],
+        ctlSpawn: (/** @type {string[]} */ args, /** @type {string} */ as) =>
+          void calls.push(`ctl ${args.join(" ")} as ${as}`),
+        ctlResult: async () => ({ exitCode: 0, stderr: "" }),
+      },
+    };
+  };
+
+  it("after hold, keys, state and open go through the held connection", async () => {
+    const { ctl, calls } = fakeCtl([{ mode: "normal" }]);
+    const fake = fakeControl();
+    await runSteps(
+      scenario({
+        steps: [
+          { keys: "esc" },
+          { hold: true },
+          { keys: "j" },
+          { "assert-state": { mode: "normal" } },
+          { open: "about:blank" },
+        ],
+      }),
+      { ctl, control: fake.control, screenshot: async () => {} },
+    );
+    expect(calls).toEqual(["keys esc"]);
+    expect(fake.calls).toEqual(["hold", "held keys j", "held state", "held open about:blank"]);
+  });
+
+  it("agent steps send, then check the answer, with $name.path from earlier answers", async () => {
+    const { ctl } = fakeCtl([{ mode: "normal" }]);
+    const fake = fakeControl();
+    await runSteps(
+      scenario({
+        steps: [
+          { agent: { send: "agent-open", args: { url: "https://a/" }, as: "open1" } },
+          { "agent-result": { of: "open1", expect: { ok: true, result: { tab: "42" } } } },
+          { agent: { send: "agent-read", args: { tab: "$open1.result.tab" }, as: "read1" } },
+          { "agent-result": { of: "read1", expect: { ok: true } } },
+          { ctl: { run: ["state"], as: "c1" } },
+          { "ctl-result": { of: "c1", expect: { exitCode: 0 } } },
+        ],
+      }),
+      { ctl, control: fake.control, screenshot: async () => {} },
+    );
+    expect(fake.calls).toEqual([
+      'agent agent-open {"url":"https://a/"} as open1',
+      'agent agent-read {"tab":"42"} as read1',
+      "ctl state as c1",
+    ]);
+  });
+
+  it("an agent answer that does not match fails the step", async () => {
+    const { ctl } = fakeCtl([{ mode: "normal" }]);
+    const fake = fakeControl();
+    await expect(
+      runSteps(
+        scenario({
+          steps: [
+            { agent: { send: "agent-open", args: { url: "https://a/" }, as: "open1" } },
+            { "agent-result": { of: "open1", expect: { ok: false } } },
+          ],
+        }),
+        { ctl, control: fake.control, screenshot: async () => {} },
+      ),
+    ).rejects.toThrow(/step 2 \(agent-result\): open1\.ok: expected false, got true/);
+  });
+
+  it("sleep waits", async () => {
+    const { ctl } = fakeCtl([{ mode: "normal" }]);
+    const started = Date.now();
+    await runSteps(scenario({ steps: [{ sleep: 0.05 }] }), { ctl, screenshot: async () => {} });
+    expect(Date.now() - started).toBeGreaterThanOrEqual(45);
+  });
 
   it("runs each step in order", async () => {
     const { ctl, calls } = fakeCtl([{ mode: "insert" }, { mode: "insert" }, { mode: "help" }]);

@@ -3,7 +3,8 @@
  * Writes the app version files configure reads through `--with-version-file-path`
  * (configs/common/mozconfig, spec m0-app-version):
  *   version.txt         surfer.json version.version (the Firefox version) -> MOZ_APP_VERSION,
- *                       appinfo.version
+ *                       appinfo.version; a Beta pin (`159.0b1`, the Beta canary) writes
+ *                       `159.0`, as Mozilla's own Beta tree does
  *   version_display.txt brands.<brand>.release.displayVersion (Vimma's) -> MOZ_APP_VERSION_DISPLAY,
  *                       `vimma --version`, the About dialog
  *   patches.json        every src/**\/*.patch with its hunk count, for about:vimma
@@ -16,7 +17,7 @@ import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** A Firefox version as configure parses it: x.y or x.y.z, optionally a beta (`bN`). */
-const FIREFOX = /^\d+\.\d+(?:\.\d+)?(?:[ab]\d+)?$/;
+export const FIREFOX = /^\d+\.\d+(?:\.\d+)?(?:[ab]\d+)?$/;
 /** SemVer with an optional pre-release (plan §7: `0.x.y`, nightlies `0.x.y-nightly.<date>`). */
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
@@ -35,11 +36,13 @@ const HEADER = [
  */
 
 /**
+ * The two versions in surfer.json, checked: the Firefox version and the brand's display version.
+ * tools/release/version-line.mjs uses the same check.
  * @param {SurferConfig} config parsed surfer.json
  * @param {string} [brand]
- * @returns {{ "version.txt": string, "version_display.txt": string }}
+ * @returns {{ firefox: string, display: string }}
  */
-export function versionFiles(config, brand = "vimma") {
+export function surferVersions(config, brand = "vimma") {
   const firefox = config.version?.version;
   if (typeof firefox !== "string" || !FIREFOX.test(firefox)) {
     throw new Error(`surfer.json version.version is not a Firefox version: ${String(firefox)}`);
@@ -52,8 +55,21 @@ export function versionFiles(config, brand = "vimma") {
       `surfer.json brands.${brand}.release.displayVersion is not SemVer: ${String(display)}`,
     );
   }
+  return { firefox, display };
+}
+
+/**
+ * @param {SurferConfig} config parsed surfer.json
+ * @param {string} [brand]
+ * @returns {{ "version.txt": string, "version_display.txt": string }}
+ */
+export function versionFiles(config, brand = "vimma") {
+  const { firefox, display } = surferVersions(config, brand);
+  // Mozilla's Beta has 159.0 in version.txt and 159.0b1 only in its display version (spec
+  // upstream-beta-canary, R3), so appinfo.version keeps matching platformVersion on a Beta.
+  const appVersion = firefox.replace(/b\d+$/, "");
   return {
-    "version.txt": `${HEADER}${firefox}\n`,
+    "version.txt": `${HEADER}${appVersion}\n`,
     "version_display.txt": `${HEADER}${display}\n`,
   };
 }

@@ -3,7 +3,9 @@
 
 The edit is textual so that key order, indentation and the trailing newline stay as Surfer wrote
 them; the result is re-parsed to prove only version.version changed. Prints "OLD -> NEW".
-Used by .github/workflows/upstream.yml (ADR-002). Python stdlib only.
+Used by .github/workflows/upstream.yml (ADR-002). A Firefox Beta (`159.0b1`) is refused unless
+--allow-beta is given, which only e2e.yml's Beta mode passes for the Beta canary in its own
+checkout (spec upstream-beta-canary); main always pins a release. Python stdlib only.
 """
 
 import argparse
@@ -13,11 +15,14 @@ import sys
 from pathlib import Path
 
 RELEASE = re.compile(r"\d+(?:\.\d+)*")
+BETA = re.compile(r"\d+\.0b\d+")
 
 
-def bump(text, new):
+def bump(text, new, allow_beta=False):
     """Return (old_version, new_text) for surfer.json text `text` bumped to `new`."""
-    if not RELEASE.fullmatch(new):
+    if BETA.fullmatch(new) and not allow_beta:
+        raise ValueError(f"{new!r} is a Firefox Beta; only the Beta canary pins one (--allow-beta)")
+    if not RELEASE.fullmatch(new) and not BETA.fullmatch(new):
         raise ValueError(f"not a Firefox release version: {new!r}")
     data = json.loads(text)
     pin = data.get("version") if isinstance(data, dict) else None
@@ -44,12 +49,17 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("version", help="new Firefox release version, e.g. 158.0")
     parser.add_argument("--file", default="surfer.json", help="path to surfer.json")
+    parser.add_argument(
+        "--allow-beta",
+        action="store_true",
+        help="accept a Beta version such as 159.0b1 (e2e.yml's Beta mode only)",
+    )
     args = parser.parse_args(argv)
 
     path = Path(args.file)
     try:
         text = path.read_text(encoding="utf-8")
-        old, new_text = bump(text, args.version)
+        old, new_text = bump(text, args.version, allow_beta=args.allow_beta)
     except (OSError, ValueError) as err:
         print(f"bump-surfer-json: {err}", file=sys.stderr)
         return 2

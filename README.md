@@ -13,7 +13,8 @@ and workspaces, and your hands never leave the keyboard.
 - **tmux for the window:** `ctrl+b`, tmux's default prefix, then `c` for a new tab, `v` to split,
   `w` to switch workspace. If your fingers know tmux, they already know Vimma.
 - **Every key is yours:** every binding, the prefix and the leader can be remapped in
-  `config.toml`.
+  `config.toml`, Firefox's own keys too: `ctrl+t`, `alt+left` and `F12` are Vimma bindings
+  with Firefox's meaning, listed in `ctrl+b ?`.
 
 ### The name
 
@@ -28,7 +29,7 @@ work the same way. Pages get Vim's modes. Tabs and splits answer to tmux's `ctrl
 Each workspace is a container of its own, so the session you are signed in to at work stays out
 of your personal one. The whole window can follow your desktop theme and change with it.
 
-Underneath is Firefox (currently 157), a foundation you can trust: sites and add-ons work as they
+Underneath is Firefox (currently 158), a foundation you can trust: sites and add-ons work as they
 do in Firefox, and Vimma starts with quieter defaults for your privacy.
 
 ## Features
@@ -58,20 +59,30 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
   `ctrl+b (` switch, `ctrl+^` goes back to the last one as Vim's alternate buffer does,
   `ctrl+b w` picks one by name, and tabs move between them. Every workspace keeps its tabs and
   split layout across restarts.
+- Private workspace: `ctrl+b shift+p` (or `ctrl+shift+p`) goes to Firefox's private window as
+  if it were one more workspace, and back; closing it discards its data. On Hyprland it replaces
+  the Vimma window in place.
 - Side panel: `ctrl+b b` lists the workspace's tabs; pick one with `j`/`k`, or mark several
-  with `space` / `V` and `Enter` shows them together as panes in the current layout.
+  with `space` / `V` and `Enter` shows them together as panes in the current layout. With a
+  split, its panes start marked: unmark one to take it out, or down to one to end the split.
+- Going to a tab outside a split shows it alone and keeps the split, hidden, until you go to one
+  of its tabs again (`split 3 hidden` in the status bar); a new tab still opens in the focused
+  pane.
 - `ctrl+b ?` lists every binding, searchable.
 
 **Yours to configure**
 
 - Every key is yours: any binding, the `ctrl+b` prefix and the `space` leader can be remapped in
   `~/.config/vimma/config.toml`, e.g. `keys.prefix = "ctrl+a"`
-  ([guide](docs/guide.md#every-key-is-yours)).
+  ([guide](docs/guide.md#every-key-is-yours)). Firefox's own shortcuts (`ctrl+t`, `ctrl+l`,
+  `alt+1..9`, `ctrl+plus`, the DevTools keys) are Vimma bindings too, with Firefox's meaning,
+  and `ctrl+b ?` lists them with the rest.
 - `~/.config/vimma/config.toml` sets options, key bindings and workspaces, and applies on save.
   `about:vimma` shows the version and what is in force.
-- Theming: the bars, pickers, hints and start page take their colours from your desktop theme
-  and switch at once when it changes, or from your own colours in `config.toml` (by default
-  Vimma's own vimma.dev palette, light or dark as your system is; Tokyo Night by name).
+- Theming: the bars, pickers, hints, start page and Firefox's own sidebar take their colours
+  from your desktop theme and switch at once when it changes, or from your own colours in
+  `config.toml` (by default Vimma's own vimma.dev palette, light or dark as your system is, or
+  as you pick with `:theme`; Tokyo Night by name).
 - Accessible: Vimma's own UI works with a screen reader, keeps focus where you left it, and its
   text meets WCAG AA contrast in dark and light themes
   ([guide](docs/guide.md#accessibility)).
@@ -92,7 +103,7 @@ The [user guide](docs/guide.md) covers every key and option,
 
 **Pre-alpha.** Everything above works today, and Vimma is being used as a daily browser ahead of
 its first release. There are no packages or binaries yet: you build it from source, on Linux
-x86_64 only. Version `0.1.0`, on Firefox 157.0.1.
+x86_64 only. Version `0.1.0`, on Firefox 158.0.
 
 ### How it is built
 

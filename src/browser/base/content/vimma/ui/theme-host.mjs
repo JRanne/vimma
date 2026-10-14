@@ -12,6 +12,8 @@
 // vimma palette's sheet carries its light variant under @media (prefers-color-scheme: light):
 // chrome documents match it by browser.theme.toolbar-theme and the system, the start pages by
 // the content scheme (layout/style/PreferenceSheet.cpp), and both switch live with no script.
+// Omarchy is looked for once (docs/specs/theme-appearance.md, A): without it nothing is polled.
+// `[theme] appearance` or the pref `:theme` sets fixes the built-in palette dark or light (B).
 
 import { DEFAULT_THEME_NAME, themeStylesheet } from "../core/theme.mjs";
 
@@ -23,9 +25,17 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 /** Points Firefox's focus colour at --vimma-focus (focus rings, the focused pane's outline). */
 const FOCUS_SHEET = "chrome://browser/skin/vimma/focus.css";
+/** Firefox's own sidebar in the tokens: the window's launcher and panel, and each panel document
+ * (spec firefox-sidebar-theme). */
+const SIDEBAR_SHEET = "chrome://browser/skin/vimma/firefox-sidebar.css";
+const SIDEBAR_PAGE_SHEET = "chrome://browser/skin/vimma/firefox-sidebar-page.css";
 const SOURCE_PREF = "vimma.theme.source";
 const PATH_PREF = "vimma.theme.omarchyPath";
 const POLL_PREF = "vimma.theme.pollMs";
+/** What `:theme` sets when config.toml has no `[theme] appearance` (theme-appearance B4). */
+const APPEARANCE_PREF = "vimma.theme.appearance";
+/** @type {readonly string[]} */
+const APPEARANCE_WORDS = ["system", "dark", "light"];
 const DEFAULT_PATH = "~/.local/state/omarchy/current/theme";
 const DEFAULT_POLL_MS = 2000;
 /** Notified after new tokens reach the windows, and when a theme file is rejected. */
@@ -43,7 +53,7 @@ let configTheme = { source: "omarchy", name: DEFAULT_THEME_NAME, font: "monospac
 function cssFor(omarchy, lightMode = false) {
   const source = omarchy === null ? "file" : "omarchy";
   return themeStylesheet({
-    theme: { ...configTheme, source },
+    theme: { ...configTheme, source, appearance: appearance().value },
     omarchy,
     omarchyLightMode: lightMode,
     selector: ":root",
@@ -57,26 +67,88 @@ function cssFor(omarchy, lightMode = false) {
 function builtinCss() {
   const r = cssFor(null);
   for (const e of r.errors) console.warn(`vimma: [theme.colors] ${e.path} ${e.message}`);
+  // The palette shown is the built-in one: an Omarchy theme's warnings no longer apply.
+  warnings = r.warnings;
   return r.css;
 }
 
 /** @param {string} css */
 const sheetUri = (css) => `data:text/css;charset=utf-8,${encodeURIComponent(css)}`;
 
+/** The user's home directory: where Omarchy is looked for and `~` resolves to. */
+const systemHome = () => Services.dirsvc.get("Home", Ci.nsIFile).path;
+/** The HOME the last detection looked in (tests pass a temporary one); null before one. */
+/** @type {string | null} */
+let home = null;
+/** Omarchy found under `home` (theme-appearance A1); null while not looked for yet. */
+/** @type {boolean | null} */
+let omarchyInstalled = null;
+/** @type {Promise<boolean> | null} the detection in force */
+let detection = null;
+
 /** The theme directory from the pref, `~` resolved against the home directory. */
 function themeDir() {
   const path = Services.prefs.getStringPref(PATH_PREF, DEFAULT_PATH);
   if (path !== "~" && !path.startsWith("~/")) return path;
-  const home = Services.dirsvc.get("Home", Ci.nsIFile).path;
-  return PathUtils.join(home, ...path.slice(2).split("/").filter(Boolean));
+  return PathUtils.join(home ?? systemHome(), ...path.slice(2).split("/").filter(Boolean));
+}
+
+/**
+ * Omarchy is installed when its install (`~/.local/share/omarchy`, a symlink to
+ * /usr/share/omarchy on a packaged Omarchy 4) or its state (`~/.local/state/omarchy`, where
+ * omarchy-theme-set keeps the current theme) exists. IOUtils.exists follows symlinks.
+ * @param {string} dir  the HOME to look in
+ */
+async function lookForOmarchy(dir) {
+  for (const sub of [".local/share/omarchy", ".local/state/omarchy"]) {
+    if (await IOUtils.exists(PathUtils.join(dir, ...sub.split("/")))) return true;
+  }
+  return false;
+}
+
+/** The pref or config.toml's source = "file" force the built-in palette. */
+const forcedBuiltin = () =>
+  Services.prefs.getStringPref(SOURCE_PREF, "omarchy") === "builtin" ||
+  configTheme.source === "file";
+
+/**
+ * Whether there is an Omarchy theme to follow: not forced off, and Omarchy found, or a theme
+ * directory set by hand (vimma.theme.omarchyPath: an explicit opt-in, for tests and e2e too).
+ */
+const followsOmarchy = () =>
+  !forcedBuiltin() && (omarchyInstalled === true || Services.prefs.prefHasUserValue(PATH_PREF));
+
+/**
+ * The built-in palette's appearance and where it comes from: config.toml wins, then the pref
+ * `:theme` sets, then "system".
+ * @returns {{ value: string, from: "config" | "pref" | "default" }}
+ */
+function appearance() {
+  if (configTheme.appearance !== undefined)
+    return { value: configTheme.appearance, from: "config" };
+  const pref = Services.prefs.getStringPref(APPEARANCE_PREF, "");
+  if (APPEARANCE_WORDS.includes(pref) && Services.prefs.prefHasUserValue(APPEARANCE_PREF)) {
+    return { value: pref, from: "pref" };
+  }
+  return { value: "system", from: "default" };
 }
 
 /** IOUtils rejects with a DOMException named NotFoundError for a missing file. */
 const notFound = (/** @type {unknown} */ e) => /** @type {any} */ (e)?.name === "NotFoundError";
 
+/** @type {string[]} the applied theme's warnings (contrast), for about:vimma */
+let warnings = [];
 let css = builtinCss();
 /** @type {Map<Window, string>} each window's token sheet (a data: URI of `css`) */
 const windows = new Map();
+/**
+ * @type {Map<Document, string>} the token sheet of each document in Firefox's sidebar (spec
+ * firefox-sidebar-theme), by document: the sidebar's window object outlives its documents
+ */
+const pages = new Map();
+/** Sidebar documents are found by this topic (onDocumentInserted) while a window is themed. */
+const DOCUMENT_TOPIC = "document-element-inserted";
+let observingDocuments = false;
 /** @type {Set<WeakRef<HTMLStyleElement>>} start pages' token <style> elements */
 const styles = new Set();
 /** What the theme file looked like at the last check; "" forces a read. */
@@ -88,12 +160,12 @@ let generation = 0;
 /** The last rejected colors.toml as one line (about:vimma), null once one applies. */
 /** @type {string | null} */
 let lastError = null;
-/** @type {string[]} the applied theme's warnings (contrast), for about:vimma */
-let warnings = [];
 /** @type {Promise<void> | null} */
 let running = null;
 /** @type {unknown} */
 let timer = null;
+/** A window is themed: the prefs are observed, and the poll may run. */
+let started = false;
 
 /** @param {string} next */
 function apply(next) {
@@ -105,6 +177,17 @@ function apply(next) {
     win.windowUtils.loadSheetUsingURIString(uri, win.windowUtils.AUTHOR_SHEET);
     win.windowUtils.removeSheetUsingURIString(old, win.windowUtils.AUTHOR_SHEET);
     windows.set(win, uri);
+  }
+  for (const [doc, old] of pages) {
+    const win = doc.defaultView;
+    if (!win || win.document !== doc) {
+      pages.delete(doc);
+      continue;
+    }
+    const uri = sheetUri(css);
+    win.windowUtils.loadSheetUsingURIString(uri, win.windowUtils.AUTHOR_SHEET);
+    win.windowUtils.removeSheetUsingURIString(old, win.windowUtils.AUTHOR_SHEET);
+    pages.set(doc, uri);
   }
   for (const ref of styles) {
     const style = ref.deref();
@@ -133,12 +216,10 @@ async function stat(dir) {
 
 async function check() {
   const started = generation;
-  // The pref (tests, about:config) and config.toml's source = "file" both mean "no Omarchy".
-  if (
-    Services.prefs.getStringPref(SOURCE_PREF, "omarchy") === "builtin" ||
-    configTheme.source === "file"
-  ) {
+  // No Omarchy, the pref (tests, about:config) or config.toml's source = "file": nothing to read.
+  if (!followsOmarchy()) {
     signature = "builtin";
+    lastError = null;
     apply(builtinCss());
     return;
   }
@@ -203,13 +284,41 @@ function stopTimer() {
   timer = null;
 }
 
+/** The poll runs only while a window is open and there is an Omarchy theme to follow. */
+function syncTimer() {
+  if (started && windows.size && followsOmarchy()) {
+    if (timer === null) startTimer();
+  } else {
+    stopTimer();
+  }
+}
+
 /** Reads the theme again from scratch once the running check (with the old settings) is done. */
 function recheck() {
   // A check in flight read the old settings: it must not apply them over this reset.
   generation++;
   signature = "";
   loaded = false;
+  syncTimer();
   (running ?? Promise.resolve()).then(poll);
+}
+
+/**
+ * Looks for Omarchy under `dir` and checks the theme again with the answer.
+ * @param {string} dir
+ * @returns {Promise<boolean>}
+ */
+function detect(dir) {
+  const looking = lookForOmarchy(dir).then((found) => {
+    // A later detection (tests) wins over one still looking.
+    if (detection !== looking) return found;
+    home = dir;
+    omarchyInstalled = found;
+    recheck();
+    return found;
+  });
+  detection = looking;
+  return looking;
 }
 
 /**
@@ -225,29 +334,107 @@ function onPref(_subject, _topic, pref) {
   recheck();
 }
 
+const OBSERVED = [SOURCE_PREF, PATH_PREF, POLL_PREF, APPEARANCE_PREF];
+
 function start() {
-  if (timer !== null) return;
-  Services.prefs.addObserver(SOURCE_PREF, onPref);
-  Services.prefs.addObserver(PATH_PREF, onPref);
-  Services.prefs.addObserver(POLL_PREF, onPref);
-  startTimer();
-  // Never blocks startup: the windows already show the built-in palette; this swaps when read.
-  poll();
+  if (started) return;
+  started = true;
+  for (const pref of OBSERVED) Services.prefs.addObserver(pref, onPref);
+  // Never blocks startup: the windows already show the built-in palette. Omarchy is looked for
+  // once per process (theme-appearance A2); with it, the theme swaps in when read.
+  if (detection === null) detect(systemHome());
+  else recheck();
 }
 
 function stopIfIdle() {
-  if (windows.size || timer === null) return;
+  if (windows.size || !started) return;
+  started = false;
   stopTimer();
-  Services.prefs.removeObserver(SOURCE_PREF, onPref);
-  Services.prefs.removeObserver(PATH_PREF, onPref);
-  Services.prefs.removeObserver(POLL_PREF, onPref);
+  for (const pref of OBSERVED) Services.prefs.removeObserver(pref, onPref);
+  if (observingDocuments) Services.obs.removeObserver(onDocumentInserted, DOCUMENT_TOPIC);
+  observingDocuments = false;
+}
+
+/**
+ * A XUL <tree> (the bookmarks sidebar's) keeps two parts in its shadow root, where no document
+ * sheet reaches, so one sheet adopted into each tree's shadow root gives them the tokens (custom
+ * properties inherit into it), following them on a theme change:
+ * - its vertical <scrollbar>, which the UA sheet resets to initial values (scrollbars.css,
+ *   `all: initial`, for its style cache): it inherits neither scrollbar-color nor color-scheme,
+ *   so it shows a white track on any theme. It gets the side panel's colours (side-panel.css).
+ * - its rename-in-place field (`.tree-input`, tree.css), which the UA fills with Field and
+ *   FieldText (a grey #2b2a33, or white) and whose selected text is Highlight. It takes the
+ *   sidebar search box's colours (firefox-sidebar-page.css) and a selected row's (side-panel.css).
+ *   Its ring is already --vimma-focus (focus.css in the document).
+ */
+const TREE_RULES = `
+scrollbar { scrollbar-color: var(--vimma-muted) var(--vimma-bg-dark) !important; }
+.tree-input {
+  background-color: var(--vimma-bg) !important;
+  color: var(--vimma-fg) !important;
+}
+.tree-input::selection {
+  background-color: var(--vimma-selection) !important;
+  color: var(--vimma-fg-bright) !important;
+}`;
+
+/** @param {Document} doc  a sidebar document, once parsed */
+function colourTrees(doc) {
+  const win = /** @type {any} */ (doc.defaultView);
+  if (!win) return;
+  for (const tree of doc.querySelectorAll("tree")) {
+    const root = tree.shadowRoot;
+    if (!root) continue;
+    const sheet = new win.CSSStyleSheet();
+    sheet.replaceSync(TREE_RULES);
+    root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
+  }
+}
+
+/**
+ * A document in Firefox's sidebar (history, bookmarks, ...): a separate chrome document the
+ * window's sheets do not reach, and whose CSP refuses a data: <style>. It gets the tokens,
+ * focus.css and firefox-sidebar-page.css as author sheets, which its CSP does not apply to, and
+ * its trees' scrollbars and rename fields their colours once it is parsed.
+ * @param {Document | null | undefined} doc
+ */
+function attachSidebarPage(doc) {
+  const win = doc?.defaultView;
+  if (!doc || !win || pages.has(doc) || doc.documentURI === "about:blank") return;
+  const uri = sheetUri(css);
+  win.windowUtils.loadSheetUsingURIString(uri, win.windowUtils.AUTHOR_SHEET);
+  win.windowUtils.loadSheetUsingURIString(FOCUS_SHEET, win.windowUtils.AUTHOR_SHEET);
+  win.windowUtils.loadSheetUsingURIString(SIDEBAR_PAGE_SHEET, win.windowUtils.AUTHOR_SHEET);
+  pages.set(doc, uri);
+  win.addEventListener("unload", () => pages.delete(doc), { once: true });
+  if (doc.readyState === "loading") {
+    doc.addEventListener("DOMContentLoaded", () => colourTrees(doc), { once: true });
+  } else {
+    colourTrees(doc);
+  }
+}
+
+/**
+ * "document-element-inserted": a document got its root element, before it is styled or painted.
+ * The sidebar documents' events do not reach the window, so this observer, not a listener on
+ * <browser id="sidebar">, is how they are found: the panel's own document (not a frame inside it)
+ * in a window this module themes.
+ * @param {unknown} subject
+ */
+function onDocumentInserted(subject) {
+  const doc = /** @type {Document} */ (subject);
+  const frame = doc.defaultView?.browsingContext?.embedderElement;
+  if (frame?.id !== "sidebar") return;
+  const owner = frame.ownerDocument.defaultView;
+  if (owner && windows.has(owner)) attachSidebarPage(doc);
 }
 
 export const ThemeHost = {
   /**
    * Once per browser window (vimma.js), before its UI is built: the current tokens as an author
-   * sheet, swapped in place on every theme change, and focus.css, which gives Firefox's focus
-   * colour the tokens' --vimma-focus.
+   * sheet, swapped in place on every theme change; focus.css, which gives Firefox's focus colour
+   * the tokens' --vimma-focus; and firefox-sidebar.css, which gives Firefox's sidebar the tokens.
+   * Every document the sidebar's browser loads gets the tokens too (spec firefox-sidebar-theme).
    * @param {Window} win
    */
   init(win) {
@@ -255,6 +442,7 @@ export const ThemeHost = {
     const uri = sheetUri(css);
     win.windowUtils.loadSheetUsingURIString(uri, win.windowUtils.AUTHOR_SHEET);
     win.windowUtils.loadSheetUsingURIString(FOCUS_SHEET, win.windowUtils.AUTHOR_SHEET);
+    win.windowUtils.loadSheetUsingURIString(SIDEBAR_SHEET, win.windowUtils.AUTHOR_SHEET);
     windows.set(win, uri);
     win.addEventListener(
       "unload",
@@ -264,6 +452,12 @@ export const ThemeHost = {
       },
       { once: true },
     );
+    if (!observingDocuments) {
+      Services.obs.addObserver(onDocumentInserted, DOCUMENT_TOPIC);
+      observingDocuments = true;
+    }
+    // A panel already open (restored with the window) has missed its document's insertion.
+    attachSidebarPage(/** @type {any} */ (win.document.getElementById("sidebar"))?.contentDocument);
     start();
   },
 
@@ -288,6 +482,7 @@ export const ThemeHost = {
     const next = {
       source: theme.source,
       name: theme.name ?? DEFAULT_THEME_NAME,
+      ...(theme.appearance === undefined ? {} : { appearance: theme.appearance }),
       font: theme.font,
       colors: { ...theme.colors },
     };
@@ -297,21 +492,23 @@ export const ThemeHost = {
   },
 
   /**
-   * What about:vimma shows: the source in force ("builtin": the pref, or config.toml's
-   * source = "file"), the built-in palette's name (`[theme] name`), the Omarchy theme directory, what the last check found ("pending" before
-   * one, "builtin", "missing", "loaded", or "rejected" when that file's errors kept the theme
-   * shown), the colors.toml mtime (ms) it saw, the last rejected file's errors, and the applied
-   * theme's warnings.
+   * What about:vimma shows: the source in force ("builtin": no Omarchy, the pref, or
+   * config.toml's source = "file"), whether Omarchy is installed (null: not looked for yet),
+   * whether the poll runs, the built-in palette's name (`[theme] name`) and appearance, the
+   * Omarchy theme directory, what the last check found ("pending" before one, "builtin",
+   * "missing", "loaded", or "rejected" when that file's errors kept the theme shown), the
+   * colors.toml mtime (ms) it saw, the last rejected file's errors, and the applied theme's
+   * warnings.
    */
   get status() {
-    const builtin =
-      Services.prefs.getStringPref(SOURCE_PREF, "omarchy") === "builtin" ||
-      configTheme.source === "file";
     const parts = signature.split("|");
     const seen = parts.length > 1;
     return {
-      source: builtin ? "builtin" : "omarchy",
+      source: followsOmarchy() ? "omarchy" : "builtin",
+      omarchy: omarchyInstalled,
+      polling: timer !== null,
       builtin: configTheme.name ?? DEFAULT_THEME_NAME,
+      appearance: appearance(),
       path: themeDir(),
       state: signature === "" ? "pending" : seen ? (lastError ? "rejected" : "loaded") : signature,
       mtime: seen ? Number(parts[1]) : null,
@@ -333,6 +530,69 @@ export const ThemeHost = {
     signature = "";
     await poll();
     return { changed: css !== before };
+  },
+
+  /**
+   * Looks for Omarchy again, under `dir` (tests: a temporary HOME; startup does this once).
+   * @param {string} dir
+   * @returns {Promise<boolean>} found
+   */
+  detectOmarchy(dir) {
+    return detect(dir);
+  },
+
+  /** Whether Omarchy is installed, once looked for (OmarchyHook waits for it). */
+  get omarchyDetected() {
+    return detection ?? detect(systemHome());
+  },
+
+  /**
+   * Whether the theme follows Omarchy (the start page leaves out the `:theme` tip then), once
+   * Omarchy has been looked for.
+   * @returns {Promise<boolean>}
+   */
+  async followsOmarchy() {
+    await this.omarchyDetected;
+    return followsOmarchy();
+  },
+
+  /**
+   * `:theme [dark|light|system]` (theme-appearance B3-B5): the built-in palette's appearance,
+   * kept in a pref unless config.toml sets it; without a word the other of what `win` shows.
+   * @param {Window} win
+   * @param {string} [text]
+   * @returns {{ text: string, error?: boolean }}  the notice
+   */
+  setAppearance(win, text) {
+    const word = (text ?? "").trim().toLowerCase();
+    if (word && !APPEARANCE_WORDS.includes(word)) {
+      return { text: `theme: ${JSON.stringify(word)} is not dark, light or system`, error: true };
+    }
+    if (configTheme.appearance !== undefined) {
+      const set = JSON.stringify(configTheme.appearance);
+      return { text: `theme: config.toml sets [theme] appearance = ${set}; change it there` };
+    }
+    const shown = win
+      .getComputedStyle(win.document.documentElement)
+      .getPropertyValue("--vimma-color-scheme")
+      .trim();
+    const next = word || (shown === "light" ? "dark" : "light");
+    // Before the pref: its observer starts a fresh check, which forgets what is shown.
+    const omarchyShown = followsOmarchy() && loaded;
+    if (next === "system") Services.prefs.clearUserPref(APPEARANCE_PREF);
+    else Services.prefs.setStringPref(APPEARANCE_PREF, next);
+    let said = `theme: ${next}`;
+    if (next === "system") {
+      const light = win.matchMedia("(prefers-color-scheme: light)").matches;
+      said += ` (${light ? "light" : "dark"} now)`;
+    }
+    const mode = configTheme.colors.mode;
+    if (mode === "dark" || mode === "light") {
+      said += `; config.toml's [theme.colors] mode = "${mode}" keeps it ${mode}`;
+    } else if (omarchyShown) {
+      said += "; your Omarchy theme is shown, this is for the built-in one";
+    }
+    return { text: said };
   },
 
   /** The token stylesheet in force (tests, about:vimma later). */

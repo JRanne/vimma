@@ -1,0 +1,2352 @@
+{
+  "version": 1,
+  "generated": "Generated from packages/vimma-core/src/actions.mjs and defaults.mjs by npm run gen-docs; do not edit.",
+  "prefix": "ctrl+b",
+  "legend": "prefix = ctrl+b",
+  "modes": ["normal", "insert", "visual", "command", "hint", "help", "panel", "resize"],
+  "groups": [
+    {
+      "name": "Help",
+      "actions": [
+        {
+          "name": "show_keybinds",
+          "description": "Show all bindings (filter with /)",
+          "keys": [
+            {
+              "keys": "ctrl+b ?",
+              "chords": ["ctrl+b", "?"]
+            }
+          ]
+        },
+        {
+          "name": "help_close",
+          "description": "Close the bindings overlay",
+          "keys": [
+            {
+              "keys": "esc",
+              "chords": ["esc"],
+              "mode": "help"
+            },
+            {
+              "keys": "q",
+              "chords": ["q"],
+              "mode": "help"
+            }
+          ]
+        },
+        {
+          "name": "help_filter",
+          "description": "Filter the bindings overlay",
+          "keys": [
+            {
+              "keys": "/",
+              "chords": ["/"],
+              "mode": "help"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tabs",
+      "actions": [
+        {
+          "name": "new_tab",
+          "description": "New tab",
+          "keys": [
+            {
+              "keys": "ctrl+b c",
+              "chords": ["ctrl+b", "c"]
+            },
+            {
+              "keys": "ctrl+t",
+              "chords": ["ctrl+t"]
+            },
+            {
+              "keys": "t",
+              "chords": ["t"]
+            }
+          ]
+        },
+        {
+          "name": "next_tab",
+          "description": "Next tab (with a count: go to tab N)",
+          "keys": [
+            {
+              "keys": "ctrl+b n",
+              "chords": ["ctrl+b", "n"]
+            },
+            {
+              "keys": "ctrl+tab",
+              "chords": ["ctrl+tab"]
+            },
+            {
+              "keys": "ctrl+pagedown",
+              "chords": ["ctrl+pagedown"]
+            },
+            {
+              "keys": "gt",
+              "chords": ["gt"]
+            }
+          ]
+        },
+        {
+          "name": "previous_tab",
+          "description": "Previous tab",
+          "keys": [
+            {
+              "keys": "ctrl+b p",
+              "chords": ["ctrl+b", "p"]
+            },
+            {
+              "keys": "ctrl+shift+tab",
+              "chords": ["ctrl+shift+tab"]
+            },
+            {
+              "keys": "ctrl+pageup",
+              "chords": ["ctrl+pageup"]
+            },
+            {
+              "keys": "gT",
+              "chords": ["gT"]
+            }
+          ]
+        },
+        {
+          "name": "select_tab_1",
+          "description": "Jump to tab 1 in this workspace",
+          "keys": [
+            {
+              "keys": "ctrl+b 1",
+              "chords": ["ctrl+b", "1"]
+            },
+            {
+              "keys": "alt+1",
+              "chords": ["alt+1"]
+            }
+          ]
+        },
+        {
+          "name": "select_tab_2",
+          "description": "Jump to tab 2 in this workspace",
+          "keys": [
+            {
+              "keys": "ctrl+b 2",
+              "chords": ["ctrl+b", "2"]
+            },
+            {
+              "keys": "alt+2",
+              "chords": ["alt+2"]
+            }
+          ]
+        },
+        {
+          "name": "select_tab_3",
+          "description": "Jump to tab 3 in this workspace",
+          "keys": [
+            {
+              "keys": "ctrl+b 3",
+              "chords": ["ctrl+b", "3"]
+            },
+            {
+              "keys": "alt+3",
+              "chords": ["alt+3"]
+            }
+          ]
+        },
+        {
+          "name": "select_tab_4",
+          "description": "Jump to tab 4 in this workspace",
+          "keys": [
+            {
+              "keys": "ctrl+b 4",
+              "chords": ["ctrl+b", "4"]
+            },
+            {
+              "keys": "alt+4",
+              "chords": ["alt+4"]
+            }
+          ]
+        },
+        {
+          "name": "select_tab_5",
+          "description": "Jump to tab 5 in this workspace",
+          "keys": [
+            {
+              "keys": "ctrl+b 5",
+              "chords": ["ctrl+b", "5"]
+            },
+            {
+              "keys": "alt+5",
+              "chords": ["alt+5"]
+            }
+          ]
+        },
+        {
+          "name": "select_tab_6",
+          "description": "Jump to tab 6 in this workspace",
+          "keys": [
+            {
+              "keys": "ctrl+b 6",
+              "chords": ["ctrl+b", "6"]
+            },
+            {
+              "keys": "alt+6",
+              "chords": ["alt+6"]
+            }
+          ]
+        },
+        {
+          "name": "select_tab_7",
+          "description": "Jump to tab 7 in this workspace",
+          "keys": [
+            {
+              "keys": "ctrl+b 7",
+              "chords": ["ctrl+b", "7"]
+            },
+            {
+              "keys": "alt+7",
+              "chords": ["alt+7"]
+            }
+          ]
+        },
+        {
+          "name": "select_tab_8",
+          "description": "Jump to tab 8 in this workspace",
+          "keys": [
+            {
+              "keys": "ctrl+b 8",
+              "chords": ["ctrl+b", "8"]
+            },
+            {
+              "keys": "alt+8",
+              "chords": ["alt+8"]
+            }
+          ]
+        },
+        {
+          "name": "select_tab_9",
+          "description": "Jump to tab 9 in this workspace",
+          "keys": [
+            {
+              "keys": "ctrl+b 9",
+              "chords": ["ctrl+b", "9"]
+            }
+          ]
+        },
+        {
+          "name": "rename_tab",
+          "description": "Rename tab",
+          "keys": [
+            {
+              "keys": "ctrl+b shift+t",
+              "chords": ["ctrl+b", "shift+t"]
+            }
+          ]
+        },
+        {
+          "name": "close_tab",
+          "description": "Close tab",
+          "keys": [
+            {
+              "keys": "ctrl+b shift+x",
+              "chords": ["ctrl+b", "shift+x"]
+            },
+            {
+              "keys": "ctrl+f4",
+              "chords": ["ctrl+f4"]
+            },
+            {
+              "keys": "x",
+              "chords": ["x"]
+            }
+          ]
+        },
+        {
+          "name": "select_last_tab",
+          "description": "Jump to the last tab in this workspace",
+          "keys": [
+            {
+              "keys": "alt+9",
+              "chords": ["alt+9"]
+            }
+          ]
+        },
+        {
+          "name": "move_tab_left",
+          "description": "Move the tab left",
+          "keys": [
+            {
+              "keys": "ctrl+shift+pageup",
+              "chords": ["ctrl+shift+pageup"]
+            }
+          ]
+        },
+        {
+          "name": "move_tab_right",
+          "description": "Move the tab right",
+          "keys": [
+            {
+              "keys": "ctrl+shift+pagedown",
+              "chords": ["ctrl+shift+pagedown"]
+            }
+          ]
+        },
+        {
+          "name": "restore_tab",
+          "description": "Reopen the last closed tab",
+          "keys": [
+            {
+              "keys": "ctrl+shift+t",
+              "chords": ["ctrl+shift+t"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Panes",
+      "actions": [
+        {
+          "name": "split_vertical",
+          "description": "Split right",
+          "keys": [
+            {
+              "keys": "ctrl+b v",
+              "chords": ["ctrl+b", "v"]
+            }
+          ]
+        },
+        {
+          "name": "split_horizontal",
+          "description": "Split down",
+          "keys": [
+            {
+              "keys": "ctrl+b -",
+              "chords": ["ctrl+b", "-"]
+            }
+          ]
+        },
+        {
+          "name": "focus_pane_left",
+          "description": "Focus pane to the left",
+          "keys": [
+            {
+              "keys": "ctrl+b h",
+              "chords": ["ctrl+b", "h"]
+            },
+            {
+              "keys": "ctrl+w h",
+              "chords": ["ctrl+w", "h"]
+            }
+          ]
+        },
+        {
+          "name": "focus_pane_down",
+          "description": "Focus pane below",
+          "keys": [
+            {
+              "keys": "ctrl+b j",
+              "chords": ["ctrl+b", "j"]
+            },
+            {
+              "keys": "ctrl+w j",
+              "chords": ["ctrl+w", "j"]
+            }
+          ]
+        },
+        {
+          "name": "focus_pane_up",
+          "description": "Focus pane above",
+          "keys": [
+            {
+              "keys": "ctrl+b k",
+              "chords": ["ctrl+b", "k"]
+            },
+            {
+              "keys": "ctrl+w k",
+              "chords": ["ctrl+w", "k"]
+            }
+          ]
+        },
+        {
+          "name": "focus_pane_right",
+          "description": "Focus pane to the right",
+          "keys": [
+            {
+              "keys": "ctrl+b l",
+              "chords": ["ctrl+b", "l"]
+            },
+            {
+              "keys": "ctrl+w l",
+              "chords": ["ctrl+w", "l"]
+            }
+          ]
+        },
+        {
+          "name": "swap_pane_left",
+          "description": "Swap with pane to the left",
+          "keys": [
+            {
+              "keys": "ctrl+b shift+h",
+              "chords": ["ctrl+b", "shift+h"]
+            },
+            {
+              "keys": "ctrl+w H",
+              "chords": ["ctrl+w", "H"]
+            }
+          ]
+        },
+        {
+          "name": "swap_pane_down",
+          "description": "Swap with pane below",
+          "keys": [
+            {
+              "keys": "ctrl+b shift+j",
+              "chords": ["ctrl+b", "shift+j"]
+            },
+            {
+              "keys": "ctrl+w J",
+              "chords": ["ctrl+w", "J"]
+            }
+          ]
+        },
+        {
+          "name": "swap_pane_up",
+          "description": "Swap with pane above",
+          "keys": [
+            {
+              "keys": "ctrl+b shift+k",
+              "chords": ["ctrl+b", "shift+k"]
+            },
+            {
+              "keys": "ctrl+w K",
+              "chords": ["ctrl+w", "K"]
+            }
+          ]
+        },
+        {
+          "name": "swap_pane_right",
+          "description": "Swap with pane to the right",
+          "keys": [
+            {
+              "keys": "ctrl+b shift+l",
+              "chords": ["ctrl+b", "shift+l"]
+            },
+            {
+              "keys": "ctrl+w L",
+              "chords": ["ctrl+w", "L"]
+            }
+          ]
+        },
+        {
+          "name": "zoom",
+          "description": "Zoom pane",
+          "keys": [
+            {
+              "keys": "ctrl+b z",
+              "chords": ["ctrl+b", "z"]
+            },
+            {
+              "keys": "ctrl+w o",
+              "chords": ["ctrl+w", "o"]
+            }
+          ]
+        },
+        {
+          "name": "close_pane",
+          "description": "Close pane; the last pane closes the tab",
+          "keys": [
+            {
+              "keys": "ctrl+b x",
+              "chords": ["ctrl+b", "x"]
+            }
+          ]
+        },
+        {
+          "name": "resize_mode",
+          "description": "Resize mode",
+          "keys": [
+            {
+              "keys": "ctrl+b r",
+              "chords": ["ctrl+b", "r"]
+            }
+          ]
+        },
+        {
+          "name": "resize_exit",
+          "description": "Leave resize mode",
+          "keys": [
+            {
+              "keys": "esc",
+              "chords": ["esc"],
+              "mode": "resize"
+            },
+            {
+              "keys": "enter",
+              "chords": ["enter"],
+              "mode": "resize"
+            },
+            {
+              "keys": "q",
+              "chords": ["q"],
+              "mode": "resize"
+            }
+          ]
+        },
+        {
+          "name": "resize_narrower",
+          "description": "Make pane narrower",
+          "keys": [
+            {
+              "keys": "ctrl+w <",
+              "chords": ["ctrl+w", "<"]
+            },
+            {
+              "keys": "h",
+              "chords": ["h"],
+              "mode": "resize"
+            },
+            {
+              "keys": "left",
+              "chords": ["left"],
+              "mode": "resize"
+            },
+            {
+              "keys": "<",
+              "chords": ["<"],
+              "mode": "resize"
+            }
+          ]
+        },
+        {
+          "name": "resize_wider",
+          "description": "Make pane wider",
+          "keys": [
+            {
+              "keys": "ctrl+w >",
+              "chords": ["ctrl+w", ">"]
+            },
+            {
+              "keys": "l",
+              "chords": ["l"],
+              "mode": "resize"
+            },
+            {
+              "keys": "right",
+              "chords": ["right"],
+              "mode": "resize"
+            },
+            {
+              "keys": ">",
+              "chords": [">"],
+              "mode": "resize"
+            }
+          ]
+        },
+        {
+          "name": "resize_taller",
+          "description": "Make pane taller",
+          "keys": [
+            {
+              "keys": "ctrl+w +",
+              "chords": ["ctrl+w", "+"]
+            },
+            {
+              "keys": "j",
+              "chords": ["j"],
+              "mode": "resize"
+            },
+            {
+              "keys": "down",
+              "chords": ["down"],
+              "mode": "resize"
+            },
+            {
+              "keys": "+",
+              "chords": ["+"],
+              "mode": "resize"
+            }
+          ]
+        },
+        {
+          "name": "resize_shorter",
+          "description": "Make pane shorter",
+          "keys": [
+            {
+              "keys": "ctrl+w -",
+              "chords": ["ctrl+w", "-"]
+            },
+            {
+              "keys": "k",
+              "chords": ["k"],
+              "mode": "resize"
+            },
+            {
+              "keys": "up",
+              "chords": ["up"],
+              "mode": "resize"
+            },
+            {
+              "keys": "-",
+              "chords": ["-"],
+              "mode": "resize"
+            }
+          ]
+        },
+        {
+          "name": "new_pane",
+          "description": "New pane, along the longer side",
+          "keys": [
+            {
+              "keys": "ctrl+b enter",
+              "chords": ["ctrl+b", "enter"]
+            }
+          ]
+        },
+        {
+          "name": "next_layout",
+          "description": "Next layout",
+          "keys": [
+            {
+              "keys": "ctrl+b space",
+              "chords": ["ctrl+b", "space"]
+            }
+          ]
+        },
+        {
+          "name": "select_layout",
+          "description": "Apply a layout preset by name (:layout name)",
+          "keys": []
+        },
+        {
+          "name": "layout_even_horizontal",
+          "description": "Layout: all side by side",
+          "keys": []
+        },
+        {
+          "name": "layout_even_vertical",
+          "description": "Layout: all stacked",
+          "keys": []
+        },
+        {
+          "name": "layout_main_vertical",
+          "description": "Layout: main pane left, rest stacked",
+          "keys": []
+        },
+        {
+          "name": "layout_main_horizontal",
+          "description": "Layout: main pane on top, rest below",
+          "keys": []
+        },
+        {
+          "name": "layout_tiled",
+          "description": "Layout: a grid",
+          "keys": []
+        },
+        {
+          "name": "layout_dwindle",
+          "description": "Layout: a spiral (dwindle)",
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "Workspaces",
+      "actions": [
+        {
+          "name": "next_workspace",
+          "description": "Next workspace",
+          "keys": [
+            {
+              "keys": "ctrl+b )",
+              "chords": ["ctrl+b", ")"]
+            },
+            {
+              "keys": "]w",
+              "chords": ["]w"]
+            }
+          ]
+        },
+        {
+          "name": "previous_workspace",
+          "description": "Previous workspace",
+          "keys": [
+            {
+              "keys": "ctrl+b (",
+              "chords": ["ctrl+b", "("]
+            },
+            {
+              "keys": "[w",
+              "chords": ["[w"]
+            }
+          ]
+        },
+        {
+          "name": "last_workspace",
+          "description": "Previous workspace you were in; again toggles back (Vim's ctrl+^)",
+          "keys": [
+            {
+              "keys": "ctrl+b ^",
+              "chords": ["ctrl+b", "^"]
+            },
+            {
+              "keys": "ctrl+b ctrl+6",
+              "chords": ["ctrl+b", "ctrl+6"]
+            },
+            {
+              "keys": "ctrl+^",
+              "chords": ["ctrl+^"]
+            },
+            {
+              "keys": "ctrl+6",
+              "chords": ["ctrl+6"]
+            }
+          ]
+        },
+        {
+          "name": "switch_workspace",
+          "description": "Switch to a workspace by name or number",
+          "keys": []
+        },
+        {
+          "name": "workspace_picker",
+          "description": "Workspace picker",
+          "keys": [
+            {
+              "keys": "ctrl+b w",
+              "chords": ["ctrl+b", "w"]
+            }
+          ]
+        },
+        {
+          "name": "new_workspace",
+          "description": "New workspace",
+          "keys": [
+            {
+              "keys": "ctrl+b shift+n",
+              "chords": ["ctrl+b", "shift+n"]
+            }
+          ]
+        },
+        {
+          "name": "rename_workspace",
+          "description": "Rename workspace",
+          "keys": [
+            {
+              "keys": "ctrl+b shift+w",
+              "chords": ["ctrl+b", "shift+w"]
+            }
+          ]
+        },
+        {
+          "name": "close_workspace",
+          "description": "Close workspace",
+          "keys": [
+            {
+              "keys": "ctrl+b shift+d",
+              "chords": ["ctrl+b", "shift+d"]
+            }
+          ]
+        },
+        {
+          "name": "move_to_workspace",
+          "description": "Move the tab to another workspace (reopens it there)",
+          "keys": []
+        },
+        {
+          "name": "route_rules",
+          "description": "Routing rules: list them; :route add [workspace], :route move",
+          "keys": []
+        },
+        {
+          "name": "private_workspace",
+          "description": "Private workspace (a private window); again goes back",
+          "keys": [
+            {
+              "keys": "ctrl+b shift+p",
+              "chords": ["ctrl+b", "shift+p"]
+            },
+            {
+              "keys": "ctrl+shift+p",
+              "chords": ["ctrl+shift+p"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Navigation",
+      "actions": [
+        {
+          "name": "goto_picker",
+          "description": "Goto picker: every tab in every workspace",
+          "keys": [
+            {
+              "keys": "ctrl+b g",
+              "chords": ["ctrl+b", "g"]
+            },
+            {
+              "keys": "b",
+              "chords": ["b"]
+            }
+          ]
+        },
+        {
+          "name": "toggle_sidebar",
+          "description": "Open / close the side panel",
+          "keys": [
+            {
+              "keys": "ctrl+b b",
+              "chords": ["ctrl+b", "b"]
+            }
+          ]
+        },
+        {
+          "name": "scroll_down",
+          "description": "Scroll down",
+          "keys": [
+            {
+              "keys": "j",
+              "chords": ["j"]
+            },
+            {
+              "keys": "ctrl+e",
+              "chords": ["ctrl+e"]
+            }
+          ]
+        },
+        {
+          "name": "scroll_up",
+          "description": "Scroll up",
+          "keys": [
+            {
+              "keys": "k",
+              "chords": ["k"]
+            },
+            {
+              "keys": "ctrl+y",
+              "chords": ["ctrl+y"]
+            }
+          ]
+        },
+        {
+          "name": "scroll_left",
+          "description": "Scroll left",
+          "keys": [
+            {
+              "keys": "h",
+              "chords": ["h"]
+            }
+          ]
+        },
+        {
+          "name": "scroll_right",
+          "description": "Scroll right",
+          "keys": [
+            {
+              "keys": "l",
+              "chords": ["l"]
+            }
+          ]
+        },
+        {
+          "name": "scroll_half_down",
+          "description": "Scroll half a page down",
+          "keys": [
+            {
+              "keys": "d",
+              "chords": ["d"]
+            },
+            {
+              "keys": "ctrl+d",
+              "chords": ["ctrl+d"]
+            }
+          ]
+        },
+        {
+          "name": "scroll_half_up",
+          "description": "Scroll half a page up",
+          "keys": [
+            {
+              "keys": "u",
+              "chords": ["u"]
+            },
+            {
+              "keys": "ctrl+u",
+              "chords": ["ctrl+u"]
+            }
+          ]
+        },
+        {
+          "name": "scroll_top",
+          "description": "Scroll to top",
+          "keys": [
+            {
+              "keys": "gg",
+              "chords": ["gg"]
+            }
+          ]
+        },
+        {
+          "name": "scroll_bottom",
+          "description": "Scroll to bottom",
+          "keys": [
+            {
+              "keys": "G",
+              "chords": ["G"]
+            }
+          ]
+        },
+        {
+          "name": "history_back",
+          "description": "Go back",
+          "keys": [
+            {
+              "keys": "alt+left",
+              "chords": ["alt+left"]
+            },
+            {
+              "keys": "H",
+              "chords": ["H"]
+            },
+            {
+              "keys": "ctrl+o",
+              "chords": ["ctrl+o"]
+            },
+            {
+              "keys": "ctrl+[",
+              "chords": ["ctrl+["]
+            }
+          ]
+        },
+        {
+          "name": "history_forward",
+          "description": "Go forward",
+          "keys": [
+            {
+              "keys": "alt+right",
+              "chords": ["alt+right"]
+            },
+            {
+              "keys": "L",
+              "chords": ["L"]
+            },
+            {
+              "keys": "ctrl+i",
+              "chords": ["ctrl+i"]
+            },
+            {
+              "keys": "ctrl+]",
+              "chords": ["ctrl+]"]
+            }
+          ]
+        },
+        {
+          "name": "reload",
+          "description": "Reload page",
+          "keys": [
+            {
+              "keys": "f5",
+              "chords": ["f5"]
+            },
+            {
+              "keys": "ctrl+r",
+              "chords": ["ctrl+r"]
+            },
+            {
+              "keys": "r",
+              "chords": ["r"]
+            }
+          ]
+        },
+        {
+          "name": "open_url",
+          "description": "Open a URL or search in this tab",
+          "keys": []
+        },
+        {
+          "name": "url_up",
+          "description": "Go up a level in the URL path",
+          "keys": [
+            {
+              "keys": "gu",
+              "chords": ["gu"]
+            }
+          ]
+        },
+        {
+          "name": "url_root",
+          "description": "Go to the site's root",
+          "keys": [
+            {
+              "keys": "gU",
+              "chords": ["gU"]
+            }
+          ]
+        },
+        {
+          "name": "focus_urlbar",
+          "description": "Focus the address bar, its text selected",
+          "keys": [
+            {
+              "keys": "ctrl+l",
+              "chords": ["ctrl+l"]
+            },
+            {
+              "keys": "alt+d",
+              "chords": ["alt+d"]
+            },
+            {
+              "keys": "I",
+              "chords": ["I"]
+            },
+            {
+              "keys": "I",
+              "chords": ["I"],
+              "mode": "visual"
+            },
+            {
+              "keys": "I",
+              "chords": ["I"],
+              "mode": "panel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Page",
+      "actions": [
+        {
+          "name": "yank_url",
+          "description": "Copy the page's URL",
+          "keys": [
+            {
+              "keys": "yy",
+              "chords": ["yy"]
+            }
+          ]
+        },
+        {
+          "name": "open_clipboard",
+          "description": "Open the clipboard's URL or search in this tab",
+          "keys": [
+            {
+              "keys": "p",
+              "chords": ["p"]
+            }
+          ]
+        },
+        {
+          "name": "open_clipboard_tab",
+          "description": "Open the clipboard's URL or search in a new tab",
+          "keys": [
+            {
+              "keys": "P",
+              "chords": ["P"]
+            }
+          ]
+        },
+        {
+          "name": "focus_input",
+          "description": "Focus the first text field (with a count: the Nth)",
+          "keys": [
+            {
+              "keys": "gi",
+              "chords": ["gi"]
+            }
+          ]
+        },
+        {
+          "name": "view_source",
+          "description": "View the page's source in a new tab",
+          "keys": [
+            {
+              "keys": "gf",
+              "chords": ["gf"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Browser",
+      "actions": [
+        {
+          "name": "new_window",
+          "description": "New window",
+          "keys": [
+            {
+              "keys": "ctrl+n",
+              "chords": ["ctrl+n"]
+            }
+          ]
+        },
+        {
+          "name": "close_window",
+          "description": "Close the window",
+          "keys": [
+            {
+              "keys": "ctrl+shift+w",
+              "chords": ["ctrl+shift+w"]
+            }
+          ]
+        },
+        {
+          "name": "restore_window",
+          "description": "Reopen the last closed window",
+          "keys": [
+            {
+              "keys": "ctrl+shift+n",
+              "chords": ["ctrl+shift+n"]
+            }
+          ]
+        },
+        {
+          "name": "quit",
+          "description": "Quit (asks first)",
+          "keys": [
+            {
+              "keys": "ctrl+q",
+              "chords": ["ctrl+q"]
+            }
+          ]
+        },
+        {
+          "name": "reload_hard",
+          "description": "Reload, bypassing the cache",
+          "keys": [
+            {
+              "keys": "ctrl+f5",
+              "chords": ["ctrl+f5"]
+            },
+            {
+              "keys": "ctrl+shift+r",
+              "chords": ["ctrl+shift+r"]
+            }
+          ]
+        },
+        {
+          "name": "stop_loading",
+          "description": "Stop loading the page",
+          "keys": [
+            {
+              "keys": "esc",
+              "chords": ["esc"]
+            }
+          ]
+        },
+        {
+          "name": "go_home",
+          "description": "Go to the home page",
+          "keys": [
+            {
+              "keys": "alt+home",
+              "chords": ["alt+home"]
+            }
+          ]
+        },
+        {
+          "name": "page_zoom_in",
+          "description": "Zoom the page in",
+          "keys": [
+            {
+              "keys": "ctrl+plus",
+              "chords": ["ctrl+plus"]
+            },
+            {
+              "keys": "ctrl+=",
+              "chords": ["ctrl+="]
+            }
+          ]
+        },
+        {
+          "name": "page_zoom_out",
+          "description": "Zoom the page out",
+          "keys": [
+            {
+              "keys": "ctrl+minus",
+              "chords": ["ctrl+minus"]
+            },
+            {
+              "keys": "ctrl+_",
+              "chords": ["ctrl+_"]
+            }
+          ]
+        },
+        {
+          "name": "page_zoom_reset",
+          "description": "Reset the page's zoom",
+          "keys": [
+            {
+              "keys": "ctrl+0",
+              "chords": ["ctrl+0"]
+            }
+          ]
+        },
+        {
+          "name": "toggle_fullscreen",
+          "description": "Full screen, or leave it",
+          "keys": [
+            {
+              "keys": "f11",
+              "chords": ["f11"]
+            }
+          ]
+        },
+        {
+          "name": "save_page",
+          "description": "Save the page",
+          "keys": [
+            {
+              "keys": "ctrl+s",
+              "chords": ["ctrl+s"]
+            }
+          ]
+        },
+        {
+          "name": "print_page",
+          "description": "Print the page",
+          "keys": [
+            {
+              "keys": "ctrl+p",
+              "chords": ["ctrl+p"]
+            }
+          ]
+        },
+        {
+          "name": "downloads",
+          "description": "Downloads (the Library)",
+          "keys": [
+            {
+              "keys": "ctrl+shift+y",
+              "chords": ["ctrl+shift+y"]
+            }
+          ]
+        },
+        {
+          "name": "addons_manager",
+          "description": "Add-ons manager (about:addons)",
+          "keys": [
+            {
+              "keys": "ctrl+shift+a",
+              "chords": ["ctrl+shift+a"]
+            }
+          ]
+        },
+        {
+          "name": "history_library",
+          "description": "History (the Library)",
+          "keys": [
+            {
+              "keys": "ctrl+shift+h",
+              "chords": ["ctrl+shift+h"]
+            }
+          ]
+        },
+        {
+          "name": "bookmarks_library",
+          "description": "Bookmarks (the Library)",
+          "keys": [
+            {
+              "keys": "ctrl+shift+o",
+              "chords": ["ctrl+shift+o"]
+            }
+          ]
+        },
+        {
+          "name": "mute_tab",
+          "description": "Mute or unmute the tab",
+          "keys": [
+            {
+              "keys": "ctrl+m",
+              "chords": ["ctrl+m"]
+            }
+          ]
+        },
+        {
+          "name": "picture_in_picture",
+          "description": "Picture-in-Picture",
+          "keys": [
+            {
+              "keys": "ctrl+}",
+              "chords": ["ctrl+}"]
+            }
+          ]
+        },
+        {
+          "name": "reader_view",
+          "description": "Reader View",
+          "keys": [
+            {
+              "keys": "ctrl+alt+r",
+              "chords": ["ctrl+alt+r"]
+            }
+          ]
+        },
+        {
+          "name": "screenshot",
+          "description": "Take a screenshot",
+          "keys": [
+            {
+              "keys": "ctrl+shift+s",
+              "chords": ["ctrl+shift+s"]
+            }
+          ]
+        },
+        {
+          "name": "clear_history",
+          "description": "Clear recent history",
+          "keys": [
+            {
+              "keys": "ctrl+shift+delete",
+              "chords": ["ctrl+shift+delete"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Developer tools",
+      "actions": [
+        {
+          "name": "devtools",
+          "description": "Open / close the developer tools",
+          "keys": [
+            {
+              "keys": "ctrl+shift+i",
+              "chords": ["ctrl+shift+i"]
+            },
+            {
+              "keys": "f12",
+              "chords": ["f12"]
+            }
+          ]
+        },
+        {
+          "name": "browser_toolbox",
+          "description": "Browser Toolbox",
+          "keys": [
+            {
+              "keys": "ctrl+alt+shift+i",
+              "chords": ["ctrl+alt+shift+i"]
+            }
+          ]
+        },
+        {
+          "name": "browser_console",
+          "description": "Browser Console",
+          "keys": [
+            {
+              "keys": "ctrl+shift+j",
+              "chords": ["ctrl+shift+j"]
+            }
+          ]
+        },
+        {
+          "name": "responsive_design",
+          "description": "Responsive Design Mode",
+          "keys": [
+            {
+              "keys": "ctrl+shift+m",
+              "chords": ["ctrl+shift+m"]
+            }
+          ]
+        },
+        {
+          "name": "devtools_inspector",
+          "description": "Developer tools: Inspector",
+          "keys": [
+            {
+              "keys": "ctrl+shift+c",
+              "chords": ["ctrl+shift+c"]
+            }
+          ]
+        },
+        {
+          "name": "devtools_console",
+          "description": "Developer tools: Web Console",
+          "keys": [
+            {
+              "keys": "ctrl+shift+k",
+              "chords": ["ctrl+shift+k"]
+            }
+          ]
+        },
+        {
+          "name": "devtools_debugger",
+          "description": "Developer tools: Debugger",
+          "keys": [
+            {
+              "keys": "ctrl+shift+z",
+              "chords": ["ctrl+shift+z"]
+            }
+          ]
+        },
+        {
+          "name": "devtools_network",
+          "description": "Developer tools: Network",
+          "keys": [
+            {
+              "keys": "ctrl+shift+e",
+              "chords": ["ctrl+shift+e"]
+            }
+          ]
+        },
+        {
+          "name": "devtools_style_editor",
+          "description": "Developer tools: Style Editor",
+          "keys": [
+            {
+              "keys": "shift+f7",
+              "chords": ["shift+f7"]
+            }
+          ]
+        },
+        {
+          "name": "devtools_performance",
+          "description": "Developer tools: Performance",
+          "keys": [
+            {
+              "keys": "shift+f5",
+              "chords": ["shift+f5"]
+            }
+          ]
+        },
+        {
+          "name": "devtools_storage",
+          "description": "Developer tools: Storage",
+          "keys": [
+            {
+              "keys": "shift+f9",
+              "chords": ["shift+f9"]
+            }
+          ]
+        },
+        {
+          "name": "devtools_accessibility",
+          "description": "Developer tools: Accessibility",
+          "keys": [
+            {
+              "keys": "shift+f12",
+              "chords": ["shift+f12"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Hints",
+      "actions": [
+        {
+          "name": "follow_link",
+          "description": "Follow link",
+          "keys": [
+            {
+              "keys": "f",
+              "chords": ["f"]
+            }
+          ]
+        },
+        {
+          "name": "follow_link_new_tab",
+          "description": "Follow link in new tab",
+          "keys": [
+            {
+              "keys": "F",
+              "chords": ["F"]
+            }
+          ]
+        },
+        {
+          "name": "hint_cancel",
+          "description": "Leave hint mode",
+          "keys": [
+            {
+              "keys": "esc",
+              "chords": ["esc"],
+              "mode": "hint"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Find",
+      "actions": [
+        {
+          "name": "find_forward",
+          "description": "Search in page",
+          "keys": [
+            {
+              "keys": "/",
+              "chords": ["/"]
+            }
+          ]
+        },
+        {
+          "name": "find_backward",
+          "description": "Search backwards in page",
+          "keys": [
+            {
+              "keys": "?",
+              "chords": ["?"]
+            }
+          ]
+        },
+        {
+          "name": "find_next",
+          "description": "Next match",
+          "keys": [
+            {
+              "keys": "ctrl+g",
+              "chords": ["ctrl+g"]
+            },
+            {
+              "keys": "f3",
+              "chords": ["f3"]
+            },
+            {
+              "keys": "n",
+              "chords": ["n"]
+            }
+          ]
+        },
+        {
+          "name": "find_previous",
+          "description": "Previous match",
+          "keys": [
+            {
+              "keys": "ctrl+shift+g",
+              "chords": ["ctrl+shift+g"]
+            },
+            {
+              "keys": "shift+f3",
+              "chords": ["shift+f3"]
+            },
+            {
+              "keys": "N",
+              "chords": ["N"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Modes",
+      "actions": [
+        {
+          "name": "normal_mode",
+          "description": "Back to normal mode",
+          "keys": [
+            {
+              "keys": "esc",
+              "chords": ["esc"],
+              "mode": "insert"
+            },
+            {
+              "keys": "esc",
+              "chords": ["esc"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "insert_mode",
+          "description": "Insert mode: focus the first input",
+          "keys": [
+            {
+              "keys": "i",
+              "chords": ["i"]
+            }
+          ]
+        },
+        {
+          "name": "copy_mode",
+          "description": "Copy mode (caret browsing + selection)",
+          "keys": [
+            {
+              "keys": "ctrl+b [",
+              "chords": ["ctrl+b", "["]
+            },
+            {
+              "keys": "v",
+              "chords": ["v"]
+            }
+          ]
+        },
+        {
+          "name": "command_line",
+          "description": "Command line",
+          "keys": [
+            {
+              "keys": ":",
+              "chords": [":"]
+            }
+          ]
+        },
+        {
+          "name": "command_cancel",
+          "description": "Close the command line",
+          "keys": [
+            {
+              "keys": "esc",
+              "chords": ["esc"],
+              "mode": "command"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Copy mode",
+      "actions": [
+        {
+          "name": "caret_left",
+          "description": "Move caret left",
+          "keys": [
+            {
+              "keys": "h",
+              "chords": ["h"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_down",
+          "description": "Move caret down",
+          "keys": [
+            {
+              "keys": "j",
+              "chords": ["j"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_up",
+          "description": "Move caret up",
+          "keys": [
+            {
+              "keys": "k",
+              "chords": ["k"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_right",
+          "description": "Move caret right",
+          "keys": [
+            {
+              "keys": "l",
+              "chords": ["l"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_word_forward",
+          "description": "Move caret a word forward",
+          "keys": [
+            {
+              "keys": "w",
+              "chords": ["w"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_word_backward",
+          "description": "Move caret a word back",
+          "keys": [
+            {
+              "keys": "b",
+              "chords": ["b"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_line_start",
+          "description": "Move caret to the start of the line",
+          "keys": [
+            {
+              "keys": "0",
+              "chords": ["0"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_line_end",
+          "description": "Move caret to the end of the line",
+          "keys": [
+            {
+              "keys": "$",
+              "chords": ["$"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_top",
+          "description": "Move caret to the top of the page",
+          "keys": [
+            {
+              "keys": "gg",
+              "chords": ["gg"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_bottom",
+          "description": "Move caret to the bottom of the page",
+          "keys": [
+            {
+              "keys": "G",
+              "chords": ["G"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_word_end",
+          "description": "Move caret to the end of the word",
+          "keys": [
+            {
+              "keys": "e",
+              "chords": ["e"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_prev_word_end",
+          "description": "Move caret to the previous word's end",
+          "keys": [
+            {
+              "keys": "ge",
+              "chords": ["ge"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_bigword_next",
+          "description": "Move caret to the next WORD (by spaces)",
+          "keys": [
+            {
+              "keys": "W",
+              "chords": ["W"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_bigword_back",
+          "description": "Move caret to the WORD's start",
+          "keys": [
+            {
+              "keys": "B",
+              "chords": ["B"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_bigword_end",
+          "description": "Move caret to the end of the WORD",
+          "keys": [
+            {
+              "keys": "E",
+              "chords": ["E"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_first_char",
+          "description": "Move caret to the line's first non-blank",
+          "keys": [
+            {
+              "keys": "^",
+              "chords": ["^"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_para_back",
+          "description": "Move caret to the paragraph's start",
+          "keys": [
+            {
+              "keys": "{",
+              "chords": ["{"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_para_next",
+          "description": "Move caret to the paragraph's end",
+          "keys": [
+            {
+              "keys": "}",
+              "chords": ["}"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_find_forward",
+          "description": "Find a character forward on the line",
+          "keys": [
+            {
+              "keys": "f",
+              "chords": ["f"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_find_backward",
+          "description": "Find a character backward on the line",
+          "keys": [
+            {
+              "keys": "F",
+              "chords": ["F"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_till_forward",
+          "description": "Till a character forward on the line",
+          "keys": [
+            {
+              "keys": "t",
+              "chords": ["t"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_till_backward",
+          "description": "Till a character backward on the line",
+          "keys": [
+            {
+              "keys": "T",
+              "chords": ["T"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_find_repeat",
+          "description": "Repeat the last f, F, t or T",
+          "keys": [
+            {
+              "keys": ";",
+              "chords": [";"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "caret_find_reverse",
+          "description": "Repeat the last find, reversed",
+          "keys": [
+            {
+              "keys": ",",
+              "chords": [","],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "toggle_selection",
+          "description": "Start or drop a selection at the caret",
+          "keys": [
+            {
+              "keys": "v",
+              "chords": ["v"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "line_selection",
+          "description": "Start or drop a line-wise selection",
+          "keys": [
+            {
+              "keys": "V",
+              "chords": ["V"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "swap_selection_ends",
+          "description": "Swap the selection's ends",
+          "keys": [
+            {
+              "keys": "o",
+              "chords": ["o"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "select_inner_word",
+          "description": "Select the word at the caret",
+          "keys": [
+            {
+              "keys": "iw",
+              "chords": ["iw"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "select_a_word",
+          "description": "Select the word at the caret and its spaces",
+          "keys": [
+            {
+              "keys": "aw",
+              "chords": ["aw"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "yank_selection",
+          "description": "Copy selection and leave copy mode",
+          "keys": [
+            {
+              "keys": "y",
+              "chords": ["y"],
+              "mode": "visual"
+            }
+          ]
+        },
+        {
+          "name": "yank_lines",
+          "description": "Copy the selection's whole lines and leave",
+          "keys": [
+            {
+              "keys": "Y",
+              "chords": ["Y"],
+              "mode": "visual"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Side panel",
+      "actions": [
+        {
+          "name": "panel_select_1",
+          "description": "Select row 1",
+          "keys": [
+            {
+              "keys": "1",
+              "chords": ["1"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "panel_select_2",
+          "description": "Select row 2",
+          "keys": [
+            {
+              "keys": "2",
+              "chords": ["2"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "panel_select_3",
+          "description": "Select row 3",
+          "keys": [
+            {
+              "keys": "3",
+              "chords": ["3"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "panel_select_4",
+          "description": "Select row 4",
+          "keys": [
+            {
+              "keys": "4",
+              "chords": ["4"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "panel_select_5",
+          "description": "Select row 5",
+          "keys": [
+            {
+              "keys": "5",
+              "chords": ["5"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "panel_select_6",
+          "description": "Select row 6",
+          "keys": [
+            {
+              "keys": "6",
+              "chords": ["6"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "panel_select_7",
+          "description": "Select row 7",
+          "keys": [
+            {
+              "keys": "7",
+              "chords": ["7"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "panel_select_8",
+          "description": "Select row 8",
+          "keys": [
+            {
+              "keys": "8",
+              "chords": ["8"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "panel_select_9",
+          "description": "Select row 9",
+          "keys": [
+            {
+              "keys": "9",
+              "chords": ["9"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "panel_down",
+          "description": "Next row",
+          "keys": [
+            {
+              "keys": "j",
+              "chords": ["j"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "panel_up",
+          "description": "Previous row",
+          "keys": [
+            {
+              "keys": "k",
+              "chords": ["k"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "panel_open",
+          "description": "Apply the marks (the marked tabs become the panes), then go to the selected row",
+          "keys": [
+            {
+              "keys": "enter",
+              "chords": ["enter"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "panel_close",
+          "description": "End the range, clear or restore the marks, or close the side panel",
+          "keys": [
+            {
+              "keys": "esc",
+              "chords": ["esc"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "panel_close_tab",
+          "description": "Close the selected tab; the panel stays open",
+          "keys": [
+            {
+              "keys": "x",
+              "chords": ["x"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "panel_mark",
+          "description": "Mark or unmark the selected tab and move down",
+          "keys": [
+            {
+              "keys": "space",
+              "chords": ["space"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "panel_visual",
+          "description": "Start a range of rows to mark, or mark it",
+          "keys": [
+            {
+              "keys": "V",
+              "chords": ["V"],
+              "mode": "panel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Bookmarks",
+      "actions": [
+        {
+          "name": "toggle_bookmarks",
+          "description": "Open / close the bookmarks panel",
+          "keys": [
+            {
+              "keys": "ctrl+b shift+b",
+              "chords": ["ctrl+b", "shift+b"]
+            }
+          ]
+        },
+        {
+          "name": "add_bookmark",
+          "description": "Bookmark this page (folders/title files it in folders)",
+          "keys": [
+            {
+              "keys": "ctrl+b a",
+              "chords": ["ctrl+b", "a"]
+            }
+          ]
+        },
+        {
+          "name": "bookmarks_collapse",
+          "description": "Bookmarks: close the folder, or go to its parent",
+          "keys": [
+            {
+              "keys": "h",
+              "chords": ["h"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "bookmarks_expand",
+          "description": "Bookmarks: open the folder or the bookmark",
+          "keys": [
+            {
+              "keys": "l",
+              "chords": ["l"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "bookmarks_open_tab",
+          "description": "Bookmarks: open in a new background tab",
+          "keys": [
+            {
+              "keys": "t",
+              "chords": ["t"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "bookmarks_vsplit",
+          "description": "Bookmarks: open in a split right",
+          "keys": [
+            {
+              "keys": "s",
+              "chords": ["s"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "bookmarks_hsplit",
+          "description": "Bookmarks: open in a split below",
+          "keys": [
+            {
+              "keys": "S",
+              "chords": ["S"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "bookmarks_add",
+          "description": "Bookmarks: add this page here (a/b/ makes folders)",
+          "keys": [
+            {
+              "keys": "a",
+              "chords": ["a"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "bookmarks_folder",
+          "description": "Bookmarks: add a folder here",
+          "keys": [
+            {
+              "keys": "A",
+              "chords": ["A"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "bookmarks_rename",
+          "description": "Bookmarks: rename",
+          "keys": [
+            {
+              "keys": "r",
+              "chords": ["r"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "bookmarks_move",
+          "description": "Bookmarks: move to a folder",
+          "keys": [
+            {
+              "keys": "m",
+              "chords": ["m"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "bookmarks_delete",
+          "description": "Bookmarks: delete (asks y/N)",
+          "keys": [
+            {
+              "keys": "d",
+              "chords": ["d"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "bookmarks_yank",
+          "description": "Bookmarks: copy the URL",
+          "keys": [
+            {
+              "keys": "y",
+              "chords": ["y"],
+              "mode": "panel"
+            }
+          ]
+        },
+        {
+          "name": "bookmarks_filter",
+          "description": "Bookmarks: filter",
+          "keys": [
+            {
+              "keys": "/",
+              "chords": ["/"],
+              "mode": "panel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Config",
+      "actions": [
+        {
+          "name": "reload_config",
+          "description": "Reload config",
+          "keys": []
+        },
+        {
+          "name": "edit_config",
+          "description": "Open config.toml in a tab",
+          "keys": []
+        },
+        {
+          "name": "theme_appearance",
+          "description": "Built-in theme: dark, light or the system's (:theme)",
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "Agents",
+      "actions": [
+        {
+          "name": "mcp_command",
+          "description": "Agents (MCP): :mcp on, off or forget",
+          "keys": []
+        },
+        {
+          "name": "agent_prompt",
+          "description": "Answer the waiting agent request (none: revoke grants)",
+          "keys": [
+            {
+              "keys": "ctrl+b shift+a",
+              "chords": ["ctrl+b", "shift+a"]
+            }
+          ]
+        },
+        {
+          "name": "control_command",
+          "description": "Full control for a while: :control on <minutes>, off",
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "Add-ons",
+      "actions": [
+        {
+          "name": "addon_picker",
+          "description": "Add-on picker: popup, options, on/off, remove, update",
+          "keys": [
+            {
+              "keys": "ctrl+b e",
+              "chords": ["ctrl+b", "e"]
+            }
+          ]
+        },
+        {
+          "name": "addon_popup",
+          "description": "Open an add-on's popup by name (:addon name)",
+          "keys": []
+        }
+      ]
+    }
+  ]
+}
