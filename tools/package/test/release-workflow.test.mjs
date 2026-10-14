@@ -97,3 +97,44 @@ describe("release-please-config.json", () => {
     expect(manifest["."]).toBe(surfer.brands.vimma.release.displayVersion);
   });
 });
+
+// `vimma --version` prints `Vimma <vimma> · Firefox <firefox>` (spec firefox-versions): every smoke
+// check takes the expected line from tools/release/version-line.mjs, never its own copy of it.
+describe("--version smoke checks", () => {
+  /** @param {string} name */
+  const workflow = (name) =>
+    readFileSync(new URL(`../../../.github/workflows/${name}`, import.meta.url), "utf8");
+  /**
+   * The `run:` block of the step called `name`.
+   * @param {string} file
+   * @param {string} name
+   */
+  const step = (file, name) => {
+    const start = file.indexOf(`- name: ${name}\n`);
+    expect(start, name).toBeGreaterThan(-1);
+    const rest = file.slice(start + 1);
+    const end = rest.search(/\n {6}- (?:name|uses):/);
+    return end === -1 ? rest : rest.slice(0, end);
+  };
+
+  it("nightly and release smoke checks compare --version with versionLine", () => {
+    const nightly = workflow("nightly.yml");
+    const release = workflow("release.yml");
+    const checks = [
+      step(nightly, "Smoke check"),
+      step(release, "Smoke check"),
+      step(release, "Smoke test the .deb and the AppImage"),
+    ];
+    for (const check of checks) {
+      expect(check).toContain("node tools/release/version-line.mjs");
+      expect(check).toMatch(/--version/);
+    }
+    // the .deb and the AppImage are each compared with the line
+    expect(checks[2]?.match(/= "\$line" \]/g)).toHaveLength(2);
+    for (const file of [nightly, release]) expect(file).not.toContain("Vimma Vimma");
+  });
+
+  it("the release smoke check also ties the line to the tag", () => {
+    expect(step(workflow("release.yml"), "Smoke check")).toContain('"Vimma ${TAG#v} · Firefox "');
+  });
+});

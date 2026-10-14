@@ -219,7 +219,7 @@ Run `npm run import` again until it completes.
 ```sh
 npx surfer build                                       # ≈ 39 min cold on 16 threads
 engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma --version
-# → Vimma Vimma 0.x.y           (brands.vimma.release.displayVersion, unchanged by a bump)
+# → Vimma 0.x.y · Firefox X.Y   (displayVersion, unchanged by a bump; the new Firefox version)
 sed -n 's/^Version=//p' engine/obj-x86_64-pc-linux-gnu/dist/bin/application.ini
 # → X.Y                         (the new Firefox version: spec m0-app-version)
 npm run mochitest -- tests/browser/

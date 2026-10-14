@@ -28,7 +28,7 @@ npm start                  # tools/start.mjs: the build with ~/.cache/vimma-dev-
 
 ```sh
 bin=engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma
-$bin --version   # "Vimma Vimma 0.1.0" (vendor, name, surfer.json brands.vimma.release.displayVersion)
+$bin --version   # "Vimma 0.1.0 · Firefox 157.0.1" (node tools/release/version-line.mjs prints the same)
 grep '^Version=' engine/obj-x86_64-pc-linux-gnu/dist/bin/application.ini
                  # "Version=157.0.1": appinfo.version is the Firefox version (spec m0-app-version)
 # navigator.userAgent stays Firefox's: "Mozilla/5.0 (X11; Linux x86_64; rv:157.0) Gecko/20100101
