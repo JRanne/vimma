@@ -100,6 +100,129 @@ describe("parseOmarchyColors", () => {
   });
 });
 
+// Themes made before Omarchy's named palette carry only the base keys: accent, foreground,
+// background, selection_* and ANSI color0-color15. Every other key is derived as Omarchy's own
+// omarchy-theme-color derives it, so Vimma matches the terminal and the bar.
+describe("parseOmarchyColors: a colors.toml with only the base keys", () => {
+  const eventHorizon = fixture("event-horizon.colors.toml");
+  const base = [
+    'accent = "#26bbd9"',
+    'foreground = "#fadad1"',
+    'background = "#1c1e26"',
+    ...["#1c1e26", "#e95678", "#29d398", "#fab795", "#26bbd9", "#ee64ac", "#59e3e3", "#fadad1"].map(
+      (c, i) => `color${i} = "${c}"`,
+    ),
+  ].join("\n");
+
+  test("Event Horizon is accepted, every key derived from the base set", () => {
+    const r = parseOmarchyColors(eventHorizon);
+    expect(r.errors).toEqual([]);
+    expect(r.palette).toEqual({
+      mode: "dark", // no mode, no light.mode: background's channel sum 96 is under 383
+      accent: "#26bbd9",
+      selection: "#216577", // selection_background, toward background until foreground reads
+      muted: "#6c6f93", // color8
+      background: "#1c1e26",
+      dark_background: "#15171d", // background, 25% toward black
+      darker_background: "#0e0f13", // background, 50% toward black
+      lighter_background: "#1c1e26", // background (Omarchy has set color0 to it)
+      foreground: "#fadad1",
+      dark_foreground: "#6c6f93", // color8
+      light_foreground: "#fadad1", // foreground (Omarchy has set color7 to it)
+      bright_foreground: "#fadad1", // color15
+      red: "#e95678", // color1
+      yellow: "#fab795", // color3
+      orange: "#fab795", // yellow
+      green: "#29d398", // color2
+      cyan: "#59e3e3", // color6
+      blue: "#26bbd9", // color4
+      magenta: "#ee64ac", // color5
+      brown: "#6c6f93", // dark_foreground
+      bright_red: "#ec6a88", // color9
+      bright_yellow: "#fbc3a7", // color11
+      bright_green: "#3fdaa4", // color10
+      bright_cyan: "#6be4e6", // color14
+      bright_blue: "#3fc4de", // color12
+      bright_magenta: "#f075b5", // color13
+    });
+  });
+
+  test("Event Horizon resolves with no errors and no contrast warnings", () => {
+    const r = resolveTheme({ theme: themeCfg(), omarchy: eventHorizon });
+    expect(r.errors).toEqual([]);
+    expect(r.warnings).toEqual([]);
+    expect(r.tokens["--vimma-bg"]).toBe("#1c1e26");
+    expect(r.tokens["--vimma-statusbar-bg"]).toBe("#15171d");
+    expect(r.tokens["--vimma-accent"]).toBe("#26bbd9");
+  });
+
+  test("without color8-15 or selection_background: bright colours 20% toward white", () => {
+    const r = parseOmarchyColors(base);
+    expect(r.errors).toEqual([]);
+    const p = /** @type {Record<string, string>} */ (r.palette);
+    expect(p.bright_red).toBe("#ed7893"); // #e95678, 20% toward white
+    expect(p.bright_foreground).toBe("#fadad1"); // foreground
+    expect(p.dark_foreground).toBe("#fadad1"); // foreground (Omarchy's rule; fg-dim reads)
+    expect(p.muted).toBe("#fadad1"); // dark_foreground
+    // selection falls back to color8, then color0: the background itself.
+    expect(p.selection).toBe("#1c1e26");
+  });
+
+  test("color0 and color7 stand in for background and foreground", () => {
+    const text = base.replace(/^(foreground|background) = .*\n/gm, "");
+    const p = parseOmarchyColors(text).palette;
+    expect(p?.background).toBe("#1c1e26");
+    expect(p?.foreground).toBe("#fadad1");
+  });
+
+  test("a named key wins over its ANSI colour", () => {
+    const p = parseOmarchyColors(`${base}\nred = "#ff0000"\nmuted = "#333333"`).palette;
+    expect(p?.red).toBe("#ff0000");
+    expect(p?.muted).toBe("#333333");
+  });
+
+  test("Omarchy's short names and purple are read too", () => {
+    const text = `${base.replace(/^color5 = .*$/m, "")}\npurple = "#aa00aa"\nbg = "#000000"`;
+    const p = parseOmarchyColors(text.replace(/^background = .*$/m, "")).palette;
+    expect(p?.magenta).toBe("#aa00aa");
+    expect(p?.background).toBe("#000000");
+  });
+
+  test("an explicit selection is kept as given, contrast or not", () => {
+    const p = parseOmarchyColors(`${eventHorizon}\nselection = "#26bbd9"`).palette;
+    expect(p?.selection).toBe("#26bbd9");
+  });
+
+  test("without mode or light.mode, a light background makes a light theme", () => {
+    const light = base
+      .replace('background = "#1c1e26"', 'background = "#f5f4ef"')
+      .replace('foreground = "#fadad1"', 'foreground = "#1d2924"');
+    expect(parseOmarchyColors(light).palette?.mode).toBe("light");
+    expect(parseOmarchyColors(light, { lightMode: false }).palette?.mode).toBe("light");
+  });
+
+  test("a missing base colour is rejected, naming the key and its ANSI name", () => {
+    const r = parseOmarchyColors(base.replace(/^color1 = .*$/m, ""));
+    expect(r.palette).toBeNull();
+    expect(r.errors).toEqual([
+      { path: "red", message: 'missing key "red" (or its ANSI name "color1")' },
+    ]);
+  });
+
+  test("an invalid ANSI colour is rejected at its line", () => {
+    const r = parseOmarchyColors(base.replace('color2 = "#29d398"', 'color2 = "green"'));
+    expect(r.palette).toBeNull();
+    expect(r.errors).toEqual([
+      expect.objectContaining({ path: "color2", line: 6, message: expect.stringMatching(/hex/) }),
+    ]);
+  });
+
+  test("a missing accent is rejected: Omarchy derives no accent either", () => {
+    const r = parseOmarchyColors(base.replace(/^accent = .*$/m, ""));
+    expect(r.errors).toEqual([{ path: "accent", message: 'missing key "accent"' }]);
+  });
+});
+
 describe("resolveTheme", () => {
   // theme-appearance A: no Omarchy is not a problem to report, so no warning names it.
   test("the default source without an Omarchy file is the built-in vimma, without a warning", () => {
