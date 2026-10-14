@@ -138,7 +138,8 @@ export function candidateTree(versionDisplay, sourceRepo) {
  * @param {SourceStamp} stamp
  */
 export function indexNamespace({ tree, revision }) {
-  const project = tree.split("/").at(-1);
+  // A constant per accepted tree: nothing read from the tarball but the revision reaches the URL.
+  const project = tree === "releases/mozilla-beta" ? "mozilla-beta" : "mozilla-release";
   return `gecko.v2.${project}.shippable.revision.${revision}.firefox.linux64-opt`;
 }
 
@@ -226,6 +227,10 @@ async function main(root) {
         `${tree}, but a release's MOZ_ARTIFACT_REVISION is found only on mozilla-release ` +
         `(artifacts.py select_candidate_trees). Use an x.y.z display version for artifact builds.`,
     );
+  }
+  // sourceStamp already checked both; repeated here, where the file data meets the request.
+  if (!/^[0-9a-f]{40}$/.test(stamp.revision) || !TREES.includes(stamp.tree)) {
+    throw new Error("engine/sourcestamp.txt: unexpected tree or revision");
   }
   const res0 = await fetch(INDEX_URL + indexNamespace(stamp));
   const { taskId, expires } = indexTask(stamp, res0.status, await res0.json(), new Date());
