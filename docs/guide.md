@@ -877,7 +877,7 @@ and output, connects to Vimma as an agent (never with full control), and offers 
    claude mcp add --transport stdio --scope user vimma -- vimma-ctl mcp
    ```
 
-   Codex CLI: `codex mcp add vimma -- vimma-ctl mcp`. Other tools (opencode, GitHub Copilot)
+   Codex CLI (the line checked with 0.160.0): `codex mcp add vimma -- vimma-ctl mcp`. Other tools (opencode, GitHub Copilot)
    take the same command, `vimma-ctl mcp`, in their MCP server settings. For a profile other than
    your default one: `vimma-ctl --profile DIR mcp`.
 
