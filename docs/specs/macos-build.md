@@ -247,7 +247,7 @@ Paths under `vimma/` are `src/browser/base/content/vimma/`.
 
 1. **Windows is not a target platform.** Vimma's audience is keyboard-first developers on Linux
    and macOS; a Windows build would add a third toolchain, signing scheme and key model for few of
-   them. `plan.md` and `docs/limits.md` say "not planned" instead of "when cheap".
+   them. `docs/limits.md` and the roadmap in `plan.md` §6 say "not planned".
 2. **Linux first, macOS next.** Linux x86_64 stays the platform every feature is built and
    gated on. macOS is the second platform and gets this spec's CI; features may be Linux-only
    (decision 11), never Mac-only.
@@ -405,8 +405,8 @@ Dock bounce and notification.
 
 ## Docs and changelog
 
-In this PR: `plan.md` §6 says macOS comes later and Windows is not planned, and its "More
-platforms" row links this spec; `docs/limits.md` "Platforms and packaging" says the same.
+With this spec: `docs/limits.md` "Platforms and packaging" says macOS comes later, links this spec
+and says Windows is not planned; the roadmap in `plan.md` §6 says the same.
 
 With the sub-PRs:
 
