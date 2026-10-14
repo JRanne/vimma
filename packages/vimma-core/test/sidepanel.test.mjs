@@ -113,6 +113,29 @@ describe("openPanel", () => {
     expect([s.previous, s.next]).toEqual([null, null]);
   });
 
+  test("Given the agent workspace, then the header names the ctrl+b ( / ctrl+b ) targets past it", () => {
+    // docs/specs/vimma-mcp.md decision 9: the cycle skips the agent workspace (w3 here), so the
+    // header must not name it as a neighbour.
+    const skip = new Set(["w3"]);
+    const last = openPanel({ ...model, active: "w2" }, info, { skip });
+    expect([last.previous, last.next]).toEqual(["work", "work"]);
+    const first = openPanel({ ...model, active: "w1" }, info, { skip });
+    expect([first.previous, first.next]).toEqual(["admin", "admin"]);
+    const again = refreshPanel(last, { ...model, active: "w2" }, info, { skip });
+    expect([again.previous, again.next]).toEqual(["work", "work"]);
+  });
+
+  test("Given only the agent workspace besides this one, then there are no neighbours", () => {
+    const two = { ...model, active: "w1", workspaces: [model.workspaces[0], model.workspaces[2]] };
+    const s = openPanel(two, info, { skip: new Set(["w3"]) });
+    expect([s.previous, s.next]).toEqual([null, null]);
+  });
+
+  test("Given the agent workspace is the active one, then its neighbours are the cycle's", () => {
+    const s = openPanel({ ...model, active: "w3" }, info, { skip: new Set(["w3"]) });
+    expect([s.previous, s.next]).toEqual(["admin", "work"]);
+  });
+
   test("Given the private workspace, then its head says so and its neighbours are the host's", () => {
     const priv = {
       active: "◆ private",

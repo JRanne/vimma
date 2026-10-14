@@ -47,6 +47,25 @@ export function cycleFromPrivate(order, dir) {
 }
 
 /**
+ * The side panel's neighbours in the private workspace (decision 6): `[ctrl+b ( target,
+ * ctrl+b ) target]`, the names of the last and the first normal workspace (cycleFromPrivate).
+ * Workspaces in `skip` (the agent workspace, docs/specs/vimma-mcp.md decision 9) are never a
+ * cycle's target, so they are never named.
+ * @param {readonly { id: string, name: string }[]} workspaces  the normal window's, in order
+ * @param {ReadonlySet<string>} [skip]  workspace ids
+ * @returns {readonly [string | null, string | null]}
+ */
+export function privateNeighbours(workspaces, skip = new Set()) {
+  const usable = workspaces.filter((w) => !skip.has(w.id));
+  const order = usable.map((w) => w.id);
+  const name = (/** @type {string | null} */ id) => usable.find((w) => w.id === id)?.name ?? null;
+  return Object.freeze([
+    name(cycleFromPrivate(order, "previous")),
+    name(cycleFromPrivate(order, "next")),
+  ]);
+}
+
+/**
  * `ctrl+^` (and the toggle) from the private workspace: the workspace left, while it still
  * exists; null to show the normal window as it is.
  * @param {string | null | undefined} left  the workspace active when private was entered

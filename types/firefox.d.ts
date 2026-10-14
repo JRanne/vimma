@@ -124,6 +124,7 @@ declare const IOUtils: {
     options?: { createAncestors?: boolean; ignoreExisting?: boolean; permissions?: number },
   ): Promise<void>;
   readUTF8(path: string): Promise<string>;
+  read(path: string, options?: { offset?: number; maxBytes?: number }): Promise<Uint8Array>;
   stat(path: string): Promise<{
     size: number;
     lastModified: number;

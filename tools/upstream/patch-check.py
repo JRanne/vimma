@@ -268,6 +268,15 @@ def source_revision(read):
     return m.group(1).decode("ascii") if m else None
 
 
+def source_tree(read):
+    """The hg.mozilla.org tree on sourcestamp.txt's revision line (`releases/mozilla-release`,
+    `releases/mozilla-beta` for a Beta), or None. The preflight looks the build up in that tree's
+    index and accepts only those two (spec upstream-beta-canary)."""
+    data = read(SOURCESTAMP)
+    m = re.search(rb"^https://hg\.mozilla\.org/(\S+)/rev/[0-9a-f]{40}\s*$", data or b"", re.M)
+    return m.group(1).decode("ascii", "replace") if m else None
+
+
 def firefox_version(read):
     data = read(MILESTONE)
     if data is None:
@@ -393,6 +402,7 @@ def build_report(src, read, source):
         "ran": True,
         "firefox": firefox_version(read),
         "revision": source_revision(read),
+        "tree": source_tree(read),
         "source": source,
         "ok": all(r["imports"] for r in rows),
         "counts": counts,

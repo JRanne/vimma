@@ -205,6 +205,28 @@ export function formatReport(results) {
 }
 
 /**
+ * The results for `--report-json` (spec upstream-beta-canary, decision 4): e2e.yml's Beta mode
+ * puts the failures into suite-results.json. Failed means what exitCode counts as failed.
+ * @param {Result[]} results
+ * @returns {{
+ *   passed: number,
+ *   failed: Array<{ name: string, status: Status, error: string }>,
+ *   pending: Array<{ name: string, reason: string }>,
+ * }}
+ */
+export function reportJson(results) {
+  return {
+    passed: results.filter((r) => r.status === "pass").length,
+    failed: results
+      .filter((r) => r.status === "fail" || r.status === "timeout" || r.status === "skipped")
+      .map((r) => ({ name: r.name, status: r.status, error: r.error ?? r.status })),
+    pending: results
+      .filter((r) => r.status === "pending")
+      .map((r) => ({ name: r.name, reason: r.error ?? "" })),
+  };
+}
+
+/**
  * GitHub Actions workflow commands: an error per failure, a notice per pending scenario.
  * @param {Result[]} results
  */

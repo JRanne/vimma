@@ -5,6 +5,8 @@
 # release-please-config.json, .release-please-manifest.json; setup in docs/runbook.md (Releases).
 # The version's single source of truth is surfer.json brands.vimma.release.displayVersion,
 # bumped through extra-files; the Firefox pin (version.version) is never touched.
+# Two post-steps name the Firefox the release is built on (spec firefox-versions): firefox-notes
+# puts it in the release PR's CHANGELOG.md heading, release-title in the release's title and notes.
 name: release-please
 
 on:
@@ -26,11 +28,128 @@ jobs:
       contents: write # release branch, CHANGELOG.md/surfer.json commits, tags, GitHub Release
       pull-requests: write # open and update the release PR
       issues: write # labels ("autorelease: pending/tagged") use the issues API
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      id: ${{ steps.release.outputs.id }}
     steps:
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           # GITHUB_TOKEN PRs trigger no workflows; an optional fine-grained token (Contents +
           # Pull requests + Issues: read/write, this repo only) makes CI run on the release PR.
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  # Decision 7: the release PR's newest CHANGELOG.md heading gets ` · Firefox <version>` and each
+  # Firefox bump line its advisory links (tools/release/firefox-notes.mjs), as one commit on the
+  # release branch. The PR body stays as release-please wrote it, so release-please finds it
+  # unchanged and does not rebuild the branch until main changes the notes; when it does rebuild
+  # (a force-push that drops this commit), this job applies the edit again in the same run.
+  # Main's code runs; the release branch's files are read through the API as data. The commit is
+  # pushed with RELEASE_PLEASE_TOKEN, since a GITHUB_TOKEN push would leave the release PR's new
+  # head without its required checks; without that token the job only logs a notice.
+  firefox-notes:
+    needs: release-please
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read # check out main, read the release branch's files
+      pull-requests: read # find the open release PR
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Name the Firefox version in the release PR's changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUSH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          BRANCH: release-please--branches--main
+        run: |
+          set -euo pipefail
+          pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --base main --state open \
+            --json number --jq '.[0].number // empty')
+          if [ -z "$pr" ]; then
+            echo "No open release PR."
+            exit 0
+          fi
+          if [ -z "$PUSH_TOKEN" ]; then
+            echo "::notice::RELEASE_PLEASE_TOKEN is not set; #$pr's changelog heading has no Firefox version (docs/runbook.md, Releases)"
+            exit 0
+          fi
+          dir="$RUNNER_TEMP/firefox-notes"
+          mkdir -p "$dir"
+          api="repos/$GITHUB_REPOSITORY/contents"
+          gh api "$api/surfer.json?ref=$BRANCH" --jq .content | base64 -d > "$dir/surfer.json"
+          gh api "$api/CHANGELOG.md?ref=$BRANCH" > "$dir/changelog.json"
+          sha=$(jq -r .sha "$dir/changelog.json")
+          jq -r .content "$dir/changelog.json" | base64 -d > "$dir/CHANGELOG.md"
+          node tools/release/firefox-notes.mjs "$dir/CHANGELOG.md" --surfer "$dir/surfer.json" \
+            > "$dir/new.md"
+          if cmp -s "$dir/CHANGELOG.md" "$dir/new.md"; then
+            echo "#$pr's changelog already names the Firefox version."
+            exit 0
+          fi
+          firefox=$(jq -r .version.version "$dir/surfer.json")
+          # `sha` is the blob this replaces: if release-please rebuilt the branch since, GitHub
+          # refuses the push (409) and the next run applies the edit to the new file.
+          jq -n --arg message "chore(release): firefox $firefox in the changelog heading" \
+            --arg branch "$BRANCH" --arg sha "$sha" --rawfile content "$dir/new.md" \
+            '{message: $message, branch: $branch, sha: $sha, content: ($content | @base64)}' \
+            > "$dir/put.json"
+          GH_TOKEN="$PUSH_TOKEN" gh api --method PUT "$api/CHANGELOG.md" --input "$dir/put.json" \
+            --jq '"Pushed " + .commit.sha'
+          echo "#$pr: CHANGELOG.md heading names Firefox $firefox" >> "$GITHUB_STEP_SUMMARY"
+
+  # Decision 8: the release release-please just created is titled `Vimma <x> · Firefox <y>`
+  # (tools/release/version-line.mjs on the tag's surfer.json) and its notes' heading and bump
+  # lines get the same edit as the changelog. The notes are transformed, never rewritten, so
+  # nothing another job added is lost. Only the name and body change: the release stays a draft.
+  release-title:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # edit the release's title and notes
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ needs.release-please.outputs.tag_name }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Title the release with Vimma's and Firefox's versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ needs.release-please.outputs.id }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          title=$(node tools/release/version-line.mjs)
+          case "$title" in
+            "Vimma ${TAG#v} · Firefox "*) ;;
+            *) echo "::error::$TAG's surfer.json gives \"$title\""; exit 1 ;;
+          esac
+          dir="$RUNNER_TEMP/release-title"
+          mkdir -p "$dir"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > "$dir/release.json"
+          if [ "$(jq -r .tag_name "$dir/release.json")" != "$TAG" ]; then
+            echo "::error::release $RELEASE_ID is not $TAG"
+            exit 1
+          fi
+          jq -j '.body // ""' "$dir/release.json" > "$dir/body.md"
+          node tools/release/firefox-notes.mjs "$dir/body.md" --surfer surfer.json > "$dir/new.md"
+          if [ "$(jq -r .name "$dir/release.json")" = "$title" ] && cmp -s "$dir/body.md" "$dir/new.md"; then
+            echo "$TAG is already titled \"$title\"."
+            exit 0
+          fi
+          jq -n --arg name "$title" --rawfile body "$dir/new.md" '{name: $name, body: $body}' |
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --input - \
+              --jq '"Edited " + .html_url + " (draft: " + (.draft | tostring) + ")"'
+          echo "$TAG: \"$title\"" >> "$GITHUB_STEP_SUMMARY"

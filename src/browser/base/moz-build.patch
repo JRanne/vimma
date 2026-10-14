@@ -1,21 +1,22 @@
 diff --git a/browser/base/moz.build b/browser/base/moz.build
-index bb312509ae9167854792e5bfa7adbb96f5361cae..6e14a7a03d7366002b8868b4979d2823f39698d3 100644
+index 3ca8d96f564ef19872d8d02516bd7bf2fcc0d0aa..72d37df29fa06e503fb4a57dee307889106db1b5 100644
 --- a/browser/base/moz.build
 +++ b/browser/base/moz.build
 @@ -72,6 +72,7 @@ BROWSER_CHROME_MANIFESTS += [
  DIRS += [
-     "content/test/performance/",
-     "content/test/fullscreen/",
+     "content/test/browser-fullscreen/",
+     "content/test/browser-performance/",
 +    "content/vimma",
  ]
  
  PERFTESTS_MANIFESTS += ["content/test/perftest.toml"]
-@@ -80,5 +81,8 @@ DEFINES["MOZ_APP_VERSION"] = CONFIG["MOZ_APP_VERSION"]
- DEFINES["MOZ_APP_VERSION_DISPLAY"] = CONFIG["MOZ_APP_VERSION_DISPLAY"]
- 
- DEFINES["APP_LICENSE_BLOCK"] = "%s/content/overrides/app-license.html" % SRCDIR
-+DEFINES["APP_LICENSE_PRODUCT_NAME"] = "%s/content/vimma/licence/product-name.html" % SRCDIR
-+DEFINES["APP_LICENSE_LIST_BLOCK"] = "%s/content/vimma/licence/list.html" % SRCDIR
-+DEFINES["APP_LICENSE_BODY_BLOCK"] = "%s/content/vimma/licence/body.html" % SRCDIR
+@@ -87,6 +88,9 @@ GENERATED_FILES["license.html"].inputs = [
+     "/toolkit/content/license.html.mako",
+     "!/licenses.json",
+     "content/overrides/app-license.html",
++    "content/vimma/licence/list.html",
++    "content/vimma/licence/body.html",
++    "content/vimma/licence/product-name.html",
+ ]
  
  JAR_MANIFESTS += ["jar.mn"]

@@ -17,25 +17,26 @@
 //   SANDBOXED_AUXILIARY_NAVIGATION, as Firefox's own hidden page reader does
 //   (toolkit/components/pageextractor/PageExtractorParent.sys.mjs); window.open and
 //   target=_blank open nothing. CanonicalBrowsingContext::ReplacedBy copies the flags.
+// - Downloads (decision 31, sub-PR 2c): every agent tab's top browsing context downloads into
+//   the quarantine folder (`downloadFolderOverride`), and AgentDownloads asks and checks each.
 // The agent container is WorkspaceStore.agent's, read at each check.
 
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
+import { AgentDownloads } from "./AgentDownloads.sys.mjs";
 
 const lazy = /** @type {any} */ ({});
 ChromeUtils.defineESModuleGetters(lazy, {
   Integration: "resource://gre/modules/Integration.sys.mjs",
+  nsContentDispatchChooser: "resource://gre/modules/ContentDispatchChooser.sys.mjs",
 });
 
 /** nsSandboxFlags.h: no new browsing contexts (window.open, target=_blank). */
 export const SANDBOXED_AUXILIARY_NAVIGATION = 0x2;
 /**
- * nsSandboxFlags.h: no downloads (review of #177, L3), until sub-PR 2c asks and quarantines
- * them: nsContentSecurityUtils::ClassifyDownload forbids a download whose load has it, before
- * any file is made. 2c removes it from AGENT_SANDBOX.
+ * What every agent tab's browsing context is sandboxed against. Not SANDBOXED_DOWNLOADS: since
+ * sub-PR 2c downloads are allowed, asked and quarantined (decision 31; 2b had it as a stopgap).
  */
-export const SANDBOXED_DOWNLOADS = 0x10000;
-/** What every agent tab's browsing context is sandboxed against. */
-export const AGENT_SANDBOX = SANDBOXED_AUXILIARY_NAVIGATION | SANDBOXED_DOWNLOADS;
+export const AGENT_SANDBOX = SANDBOXED_AUXILIARY_NAVIGATION;
 
 /**
  * Prompts WebRTCParent shows itself, outside nsIContentPermissionPrompt (decision 30): denied
@@ -94,6 +95,7 @@ const permissionOverride = (base) => ({
  * @returns {boolean} whether the flag was missing (and is set now)
  */
 function sandbox(bc) {
+  quarantine(bc);
   try {
     if ((bc.sandboxFlags & AGENT_SANDBOX) !== AGENT_SANDBOX) {
       bc.sandboxFlags |= AGENT_SANDBOX;
@@ -103,6 +105,21 @@ function sandbox(bc) {
     console.error("vimma agent pages: cannot sandbox", e);
   }
   return false;
+}
+
+/**
+ * The tab downloads into the quarantine folder (decision 31 b): nsExternalAppHandler puts its
+ * `.part` file in a top browsing context's `downloadFolderOverride`. Not copied when the context
+ * is replaced, so set at every attach.
+ * @param {any} bc
+ */
+function quarantine(bc) {
+  try {
+    const dir = AgentDownloads.overrideDir();
+    if (bc.downloadFolderOverride !== dir) bc.downloadFolderOverride = dir;
+  } catch (e) {
+    console.error("vimma agent pages: no quarantine folder", e);
+  }
 }
 
 /** @param {any} subject  a BrowsingContext, just attached */
@@ -166,6 +183,9 @@ function onWindowGlobal(wgp) {
   if (!principal?.isContentPrincipal) return;
   if (!isAgentContainer(principal.originAttributes?.userContextId)) return;
   denyFor(principal.URI, principal.originAttributes, bc.browserId);
+  // A page is showing: what the tab downloads from now on is the page's, not the agent-open's.
+  const browser = bc.embedderElement;
+  if (browser && principal.URI?.spec !== "about:blank") AgentDownloads.committed(browser);
 }
 
 /** Every agent tab open now: sandboxed, and its origin denied (the agent workspace changed). */
@@ -190,26 +210,18 @@ function sweep() {
 function observe(subject, topic) {
   if (topic === "browsing-context-attached") onAttached(subject);
   else if (topic === "window-global-created") onWindowGlobal(subject);
-  else if (topic === "vimma-mcp-changed") sweep();
-  else onResponse(subject);
+  else if (topic === "vimma-mcp-changed") {
+    // The folder is checked first, so each tab's download folder is the checked one.
+    AgentDownloads.ensureQuarantine().then(sweep);
+  } else onResponse(subject);
 }
 
 /**
- * Downloads (review of #177, L3): until sub-PR 2c asks, quarantines and checks them, every
- * download from the agent container is blocked before a byte is written, through Firefox's own
- * DownloadIntegration hook (the download fails as "blocked by parental controls").
- * @param {any} base  DownloadIntegration
+ * Firefox's chooser for external protocols (uriloader/exthandler/nsIContentDispatchChooser). The
+ * wrapper constructs upstream's class (toolkit/mozapps/handling/components.conf) directly:
+ * Firefox 158 removed nsIComponentManager.getClassObject, and script cannot create an instance
+ * by CID once the contract points at our factory.
  */
-const downloadOverride = (base) => ({
-  __proto__: base,
-  /** @param {any} download */
-  shouldBlockForParentalControls(download) {
-    if (isAgentContainer(download?.source?.userContextId)) return Promise.resolve(true);
-    return base.shouldBlockForParentalControls(download);
-  },
-});
-
-/** Firefox's chooser for external protocols (uriloader/exthandler/nsIContentDispatchChooser). */
 const CHOOSER_CONTRACT = "@mozilla.org/content-dispatch-chooser;1";
 const CHOOSER_CID = Components.ID("{a69ebe05-6906-408c-b7ed-a626713b04f3}");
 
@@ -221,16 +233,11 @@ const CHOOSER_CID = Components.ID("{a69ebe05-6906-408c-b7ed-a626713b04f3}");
  */
 function wrapChooser() {
   const registrar = Components.manager.QueryInterface(Ci.nsIComponentRegistrar);
-  const original = registrar.contractIDToCID(CHOOSER_CONTRACT);
   const factory = {
     QueryInterface: ChromeUtils.generateQI(["nsIFactory"]),
     /** @param {any} iid */
     createInstance(iid) {
-      const inner =
-        AgentPages._chooserForTests ??
-        /** @type {any} */ (Components).classesByID[original].createInstance(
-          Ci.nsIContentDispatchChooser,
-        );
+      const inner = AgentPages._chooserForTests ?? new lazy.nsContentDispatchChooser();
       const chooser = {
         QueryInterface: ChromeUtils.generateQI(["nsIContentDispatchChooser"]),
         /** @param {any[]} args  handler, uri, principal, browsingContext, … */
@@ -264,7 +271,8 @@ export const AgentPages = {
     if (initialised) return;
     initialised = true;
     lazy.Integration.contentPermission.register(permissionOverride);
-    lazy.Integration.downloads.register(downloadOverride);
+    AgentDownloads.init();
+    AgentDownloads.ensureQuarantine().then(sweep);
     try {
       wrapChooser();
     } catch (e) {
