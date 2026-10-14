@@ -32,7 +32,7 @@ import { DEFAULT_THEME_NAME } from "./theme.mjs";
  *   (docs/specs/private-swap.md)
  * @property {{ enabled?: boolean, workspace?: string, ask_timeout?: number,
  *   grant_minutes?: number, grant_max_minutes?: number, max_read_chars?: number,
- *   notify?: boolean }} [mcp]  local AI agents and the agent workspace (docs/specs/vimma-mcp.md)
+ *   notify?: boolean, download_dir?: string, download_max_mb?: number }} [mcp]  local AI agents and the agent workspace (docs/specs/vimma-mcp.md)
  */
 
 /**
@@ -346,6 +346,8 @@ export const DEFAULT_CONFIG = Object.freeze({
     grant_max_minutes: 480,
     max_read_chars: 200000,
     notify: true,
+    download_dir: "~/Downloads/vimma-agent",
+    download_max_mb: 200,
   },
 });
 
@@ -474,6 +476,10 @@ function mcpLines() {
     `grant_max_minutes = ${m.grant_max_minutes}`,
     `max_read_chars = ${m.max_read_chars}`,
     `notify = ${m.notify}`,
+    "# Downloads from the agent workspace ask first, are saved only here (never your Downloads",
+    "# folder itself), never opened, and refused over download_max_mb (1 to 4096).",
+    `download_dir = ${tomlString(m.download_dir)}`,
+    `download_max_mb = ${m.download_max_mb}`,
   ];
 }
 

@@ -15,6 +15,7 @@ import { formatPath, parsePath, parseToml } from "../../src/toml.mjs";
 import { PALETTE_KEYS } from "../../src/theme.mjs";
 import { INSERT_SITE_MODES } from "../../src/editable.mjs";
 import { PANES_MAX_LIMIT } from "../../src/panes.mjs";
+import { resolveDownloadDir } from "../../src/agent-downloads.mjs";
 import { FUZZ_TIMEOUT, PROTO_NAMES, fuzz, nastyString, within } from "./harness.mjs";
 import { configText } from "./toml-arb.mjs";
 
@@ -260,6 +261,47 @@ describe("config.toml fuzzing", () => {
     FUZZ_TIMEOUT,
   );
 
+  // docs/specs/vimma-mcp.md decision 31 b: an accepted download_dir is never home, / or the
+  // Downloads folder itself, however it is spelt; download_max_mb stays in 1..4096.
+  test(
+    "[mcp] download_dir and download_max_mb are refused or a quarantine folder in bounds",
+    () =>
+      fuzz(
+        "config-mcp-downloads",
+        fc.property(
+          fc.oneof(
+            nastyString,
+            fc
+              .array(fc.constantFrom("~", "/", ".", "..", "Downloads", "downloads", "x", ""), {
+                maxLength: 6,
+              })
+              .map((p) => p.join("/")),
+          ),
+          fc.oneof(fc.integer({ min: -5, max: 5000 }), fc.constantFrom('"9"', "1.5")),
+          (dir, mb) => {
+            const text = [
+              "schema = 2",
+              "[mcp]",
+              `download_dir = ${JSON.stringify(dir)}`,
+              `download_max_mb = ${mb}`,
+              "",
+            ].join("\n");
+            const r = within(2000, () => parseConfig(text));
+            expectWellFormed(r);
+            if (!r.config) return;
+            const m = r.config.mcp;
+            expect(m.downloadMaxMb >= 1 && m.downloadMaxMb <= 4096).toBe(true);
+            const home = "/home/u";
+            const path = resolveDownloadDir(m.downloadDir, home);
+            expect(["/", home, `${home}/Downloads`]).not.toContain(path);
+            expect(path.toLowerCase()).not.toBe(`${home}/downloads`);
+          },
+        ),
+        { weight: 3 },
+      ),
+    FUZZ_TIMEOUT,
+  );
+
   test(
     "migrations never change their input",
     () =>
@@ -342,10 +384,17 @@ describe("config.toml fuzzing", () => {
         // Regression: the [sites] IPv6 pattern backtracked quadratically (minutes at 512 KiB).
         "a long IPv6-like site": `schema = 2\n[sites."[${":".repeat(512 * 1024)}g"]\ninsert = "auto"\n`,
         "a long bracketed site": `schema = 2\n[sites."[${"1:".repeat(256 * 1024)}]"]\ninsert = "auto"\n`,
+        // Regression (#196): an unknown key or value gets a "did you mean" suggestion, and the
+        // edit distance of a megabyte against every known name took seconds under coverage.
         "a long unknown key": `${"k".repeat(1024 * 1024)} = 1`,
+        "a long workspace colour": `[workspaces.w]\ncolor = "${"x".repeat(1024 * 1024)}"`,
+        "a long workspace icon": `[workspaces.w]\nicon = "${"x".repeat(1024 * 1024)}"`,
+        "a long theme source": `[theme]\nsource = "${"x".repeat(1024 * 1024)}"`,
+        "a long unbind mode": `[unbind.${"x".repeat(1024 * 1024)}]`,
+        "a long route key": `schema = 2\n[[routes]]\n${"x".repeat(1024 * 1024)} = "a"`,
       };
       for (const [name, text] of Object.entries(cases)) {
-        const r = within(5000, () => parseConfig(text));
+        const r = within(5000, () => parseConfig(text), name);
         expectWellFormed(r);
         expect(typeof parseToml(text).ok, name).toBe("boolean");
       }

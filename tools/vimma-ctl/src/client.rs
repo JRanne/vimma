@@ -157,11 +157,16 @@ impl Client {
             let code = random_code().map_err(|e| {
                 Error::Protocol(format!("cannot read random bytes for the code: {e}"))
             })?;
-            eprintln!(
-                "vimma-ctl: MCP is on: answer y in Vimma to let this vimma-ctl in (full control); \
-                 Vimma asks with code {code}: answer y only if it shows {code}"
-            );
-            client.send(&protocol::auth_with_code(&discovery.token, &code))?;
+            let auth = protocol::auth_with_code(&discovery.token, &code);
+            auth_then_code(
+                || client.send(&auth),
+                || {
+                    eprintln!(
+                        "vimma-ctl: MCP is on: answer y in Vimma to let this vimma-ctl in (full \
+                         control); Vimma asks with code {code}: answer y only if it shows {code}"
+                    );
+                },
+            )?;
             if let Some(later) = Instant::now().checked_add(ASK_WAIT) {
                 client.deadline = client.deadline.max(later);
             }
@@ -306,6 +311,18 @@ impl Client {
     }
 }
 
+/// Send the auth that carries the full-control code, and only then show the user the code
+/// (review of #177): a process reading the terminal learns it too late to race its own auth with
+/// it in. A failed send shows nothing.
+fn auth_then_code(
+    send: impl FnOnce() -> Result<(), Error>,
+    say: impl FnOnce(),
+) -> Result<(), Error> {
+    send()?;
+    say();
+    Ok(())
+}
+
 /// 32 bytes from the OS CSPRNG as 64 lowercase hex chars.
 fn random_nonce() -> io::Result<String> {
     use std::io::Read;
@@ -341,6 +358,28 @@ mod tests {
             message: "m".into(),
             reason: None,
         }
+    }
+
+    // Review of #177 (follow-up): the code reaches the terminal only after the auth carrying it
+    // was sent, so a process reading the user's terminal has no window to race its own auth
+    // with the same code in; and a failed send prints no code.
+    #[test]
+    fn the_code_is_shown_only_after_its_auth_was_sent() {
+        let events = std::cell::RefCell::new(Vec::new());
+        auth_then_code(
+            || {
+                events.borrow_mut().push("auth");
+                Ok(())
+            },
+            || events.borrow_mut().push("code"),
+        )
+        .unwrap();
+        assert_eq!(*events.borrow(), ["auth", "code"]);
+
+        let shown = std::cell::Cell::new(false);
+        let failed = auth_then_code(|| Err(Error::Protocol("closed".into())), || shown.set(true));
+        assert!(failed.is_err());
+        assert!(!shown.get(), "no code without its auth");
     }
 
     #[test]

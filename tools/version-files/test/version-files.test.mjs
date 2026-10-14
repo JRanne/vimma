@@ -48,6 +48,14 @@ describe("versionFiles", () => {
     expect(lastLine(files["version_display.txt"])).toBe("0.2.0-nightly.20261009");
   });
 
+  it("a beta pin writes 159.0 to version.txt", () => {
+    // Mozilla's own Beta tree has 159.0 there (159.0b1 only in version_display.txt), and
+    // browser_vimma_app_version.js expects appinfo.version to equal platformVersion.
+    const files = versionFiles(surfer("159.0b1", "0.1.0"));
+    expect(lastLine(files["version.txt"])).toBe("159.0");
+    expect(lastLine(files["version_display.txt"])).toBe("0.1.0");
+  });
+
   it("reads the named brand", () => {
     const config = surfer("157.0.1", "0.1.0");
     config.brands = { ...config.brands, other: { release: { displayVersion: "2.0.0" } } };

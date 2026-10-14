@@ -50,10 +50,10 @@ def by_name(report):
     return {Path(p["patch"]).name: p for p in report["patches"]}
 
 
-def make_tarball(dest, top="firefox-158.0", extra=None):
+def make_tarball(dest, top="firefox-158.0", extra=None, tree=TREE):
     """A source tarball of the fixture tree, laid out as archive.mozilla.org's (one top dir)."""
     with tarfile.open(dest, "w:xz") as tar:
-        tar.add(TREE, arcname=top)
+        tar.add(tree, arcname=top)
         for name, data in (extra or {}).items():
             info = tarfile.TarInfo(name)
             info.size = len(data)
@@ -226,6 +226,22 @@ class PatchCheckFromTarball(unittest.TestCase):
         # m7-upstream-autopilot) before it spends minutes on an artifact build.
         r, report = self.check("--tarball", str(self.tarball))
         self.assertEqual(report["revision"], "0" * 40)
+        self.assertEqual(report["tree"], "releases/mozilla-release")
+
+    def test_report_names_the_mozilla_beta_tree(self):
+        # A Beta tarball's sourcestamp.txt names mozilla-beta (159.0b1: spec
+        # upstream-beta-canary, R3); the preflight looks Mozilla's build up in that tree's index.
+        tree = self.dir / "beta-tree"
+        shutil.copytree(TREE, tree)
+        rev = "c0c03f3f899017ae4b7e56c0713f1ada51173c41"
+        (tree / "sourcestamp.txt").write_text(
+            f"20261012000000\nhttps://hg.mozilla.org/releases/mozilla-beta/rev/{rev}\n"
+        )
+        beta = self.dir / "firefox-159.0b1.source.tar.xz"
+        make_tarball(beta, top="firefox-159.0", tree=tree)
+        r, report = self.check("--tarball", str(beta))
+        self.assertEqual(report["tree"], "releases/mozilla-beta")
+        self.assertEqual(report["revision"], rev)
 
     def test_tarball_on_stdin(self):
         r, report = self.check("--tarball", "-", stdin=self.tarball.read_bytes())
