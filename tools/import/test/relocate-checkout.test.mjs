@@ -1,15 +1,8 @@
 import { describe, expect, it } from "vitest";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readlinkSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, readlinkSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { relocate, replacePath } from "../relocate-checkout.mjs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 describe("replacePath", () => {
   it("rewrites the old checkout path and what lies under it", () => {
@@ -30,7 +23,7 @@ describe("replacePath", () => {
 });
 
 function tree() {
-  const base = mkdtempSync(join(tmpdir(), "vimma-relocate-"));
+  const base = tempDir("vimma-relocate-");
   const from = join(base, "VimHerdr");
   const to = join(base, "vimma");
   const engine = join(to, "engine");
