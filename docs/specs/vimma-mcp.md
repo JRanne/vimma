@@ -679,8 +679,12 @@ grant_max_minutes` (default 480, at most 1440) caps both the count and the confi
     question: https only, the place, the known size, the name, type and `isExecutable`) and
     `shouldBlockForReputationCheck` (on the finished `.part`, before it is renamed: the first 512
     bytes, the zip central directory, then ClamAV). A refused download returns
-    `VERDICT_DANGEROUS` with its part deleted (`block()` deletes it) and is taken off the
-    downloads list with a notice saying why. Every agent tab gets the quarantine folder as its
+    `VERDICT_DANGEROUS` with its part and the empty placeholder at its name already deleted
+    (`block()` deletes both), so nothing of it is on disk once the download has stopped, and is
+    taken off the downloads list with a notice saying why. Firefox keeps that placeholder itself:
+    its `shouldKeepBlockedData` is true for Firefox's app ID, which Vimma keeps, and takes no
+    download, so it cannot be false for agent downloads alone (`DownloadCore.sys.mjs`,
+    `_checkReputationAndMove`, Firefox 158.0; issue #204). Every agent tab gets the quarantine folder as its
     `downloadFolderOverride` at each `browsing-context-attached`, and the helper-app dialog is
     wrapped so an agent tab's download never shows "open with" and its final name is in the
     quarantine too; the original channel and the agent's cookies are kept. An agent download is

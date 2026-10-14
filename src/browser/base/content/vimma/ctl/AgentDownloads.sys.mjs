@@ -281,6 +281,13 @@ function neutralise(/** @type {any} */ download) {
 /** @param {string} text */
 const notice = (text) => AgentGate.notify(text);
 
+/** Whether `path` is an empty file, as Firefox's own placeholder test. @param {string} path */
+const isEmpty = (path) =>
+  IOUtils.stat(path).then(
+    (st) => st.size === 0,
+    () => false,
+  );
+
 /**
  * A refused download: its channel stopped, its part and placeholder deleted, and taken off the
  * downloads list (the notice says why, not Firefox's "blocked by parental controls").
@@ -406,14 +413,20 @@ async function admit(download) {
 }
 
 /**
- * Block a finished agent download (its `.part` deleted), for _checkReputationAndMove.
+ * Block a finished agent download, for _checkReputationAndMove: its `.part` and the empty
+ * placeholder Firefox made at its name are deleted before the verdict returns, so nothing of it
+ * is left once the download has stopped. Firefox itself keeps the placeholder (its
+ * shouldKeepBlockedData is true for Firefox's app ID and takes no download to answer per file).
  * @param {any} download @param {Refusal} why
  */
 async function block(download, why) {
   const t = tracked.get(download);
   if (t) t.refused = true;
-  const part = download.target.partFilePath ?? download.target.path;
-  await IOUtils.remove(part, { ignoreAbsent: true }).catch(() => {});
+  const { partFilePath, path } = download.target;
+  await IOUtils.remove(partFilePath ?? path, { ignoreAbsent: true }).catch(() => {});
+  if (partFilePath && inOurFolders(path) && (await isEmpty(path))) {
+    await IOUtils.remove(path, { ignoreAbsent: true }).catch(() => {});
+  }
   notice(downloadRefusedNotice(nameOf(download), why));
   // Off the list once it has failed.
   download.whenSucceeded().catch(() => {});
