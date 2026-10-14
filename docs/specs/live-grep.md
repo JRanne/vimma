@@ -72,21 +72,22 @@ Firefox has no cross-tab text search either: the find bar works on one tab, and 
 
 Keys and commands added:
 
-| Key or command                 | Where       | Does                                                          |
-| ------------------------------ | ----------- | ------------------------------------------------------------- |
-| `ctrl+b f g`, `:grep [text]`   | everywhere  | `live_grep`: opens live grep (`:grep` alone resumes the last) |
-| `]q` / `[q`                    | normal mode | `grep_next` / `grep_previous`: the next / previous result     |
-| typing                         | in the list | edits the query (search mode, the mode it opens in)           |
-| `ctrl+n` / `ctrl+p`, `↓` / `↑` | in the list | move down / up the list (down is toward the best result)      |
-| `Tab` / `shift+tab`            | in the list | the next / previous tab's first result                        |
-| `Enter`                        | in the list | goes to the result                                            |
-| `ctrl+d` / `ctrl+u`            | in the list | scrolls the preview down / up                                 |
-| `ctrl+s`                       | in the list | cycles the scope: workspace → window → tab                    |
-| `ctrl+space`                   | in the list | keeps these results and filters them fuzzily                  |
-| `Esc`                          | in the list | search mode → browse mode (`j`/`k`, `gg`/`G`); again closes   |
+| Key or command                 | Where       | Does                                                        |
+| ------------------------------ | ----------- | ----------------------------------------------------------- |
+| `ctrl+b f g`, `:grep text`     | everywhere  | `live_grep`: opens live grep, empty or with the text        |
+| `:grep`                        | everywhere  | `grep_resume`: opens live grep with the last query, re-run  |
+| `]q` / `[q`                    | normal mode | `grep_next` / `grep_previous`: the next / previous result   |
+| typing                         | in the list | edits the query (search mode, the mode it opens in)         |
+| `ctrl+n` / `ctrl+p`, `↓` / `↑` | in the list | move down / up the list (down is toward the best result)    |
+| `Tab` / `shift+tab`            | in the list | the next / previous tab's first result                      |
+| `Enter`                        | in the list | goes to the result                                          |
+| `ctrl+d` / `ctrl+u`            | in the list | scrolls the preview down / up                               |
+| `ctrl+s`                       | in the list | cycles the scope: workspace → window → tab                  |
+| `ctrl+space`                   | in the list | keeps these results and filters them fuzzily                |
+| `Esc`                          | in the list | search mode → browse mode (`j`/`k`, `gg`/`G`); again closes |
 
-No config key is added. `keys.live_grep`, `keys.grep_next` and `keys.grep_previous` are
-configurable as every action is (firefox-keys).
+No config key is added. `keys.live_grep`, `keys.grep_next`, `keys.grep_previous` and
+`keys.grep_resume` are configurable as every action is (firefox-keys).
 
 ## Research
 
@@ -281,7 +282,9 @@ match.
    live grep alone for now. The alternatives were weaker: `prefix+/` pairs with `/` but starts
    no group; `prefix+shift+f` is slower to press; no default key hides the feature. `prefix+/`
    stays unbound. `:grep` is Vim's command for the same job; with text it opens with that
-   query, alone it reopens the last query and re-runs it (Telescope's `resume`). `grep_next`
+   query (`live_grep`), alone it reopens the last query and re-runs it (`grep_resume`,
+   `grep.resume`, Telescope's `resume`, with no default key). The key opens the picker empty,
+   as Telescope's `<leader>fg` does, so a new search never starts from an old query. `grep_next`
    and `grep_previous` (`grep.next`, `grep.previous`) are `]q` and `[q`, Vim-unimpaired's
    quickfix keys, next to Vimma's `]w`/`[w`.
 3. **Matching: ripgrep's rules.** The query is a JavaScript regular expression with the `u`
@@ -300,7 +303,13 @@ match.
    was not checked against it, and the guide says the syntax is JavaScript's.
 4. **Lines.** A page has no lines, so a line is a run of the text model between block
    boundaries and `<br>` (a paragraph, list item, table cell or heading), and `pre` text keeps
-   its own line breaks. Lines are numbered from 1 in document order, per frame. Matching per
+   its own line breaks. A run with nothing but white space (the space between two blocks in the
+   markup) is not a line: it is never matched, numbered or shown in the preview. Collapsible
+   white space reads as layout shows it: a run is one space, and a line starts without one, so
+   a query with one space finds text that the markup wraps over several source lines; the model
+   keeps each character's offset in its text node, so a jump still selects the page's own text.
+   Lines are
+   numbered from 1 in document order, per frame. Matching per
    line keeps a match from spanning two paragraphs and bounds a regular expression's work to
    one line. A row shows the line cut to 160 characters around the match (up to 60 before it),
    with an ellipsis where cut. Each match of a line is its own result.
@@ -319,13 +328,15 @@ match.
    same either way. A row reads, in one line:
    - the tab's number in its workspace (the number `ctrl+b 1..9` and the status bar use);
    - the tab's title cut to 24 characters, then `:line:`, the line number in its frame;
-   - the line, with each match in `<mark>`; prefixed `↳ host` when the match is in a frame
-     from another site, and `◇ agent` for an agent workspace tab (decision 13).
+   - the line, with its match in `<mark>`, starting at most 16 characters before the match so
+     that the match stays in view in a narrow list; prefixed `↳ host` when the match is in a
+     frame from another site, and `◇ agent` for an agent workspace tab (decision 13).
 
    "Best" is source order: results in the workspace's tab order (in a window scope, workspace by
    workspace, the agent workspace last), matches in document order, the top frame before its
    subframes, as ripgrep's rows come by file. The order is stable as replies arrive: a reply
-   from a later tab never moves an earlier tab's rows, and the selection stays on its result
+   from a later tab never moves an earlier tab's rows. Until the user moves the selection it is
+   the best result, whichever that is once more tabs answer; once moved, it stays on its result
    while rows arrive. Tabs with no match get no row.
 
 6. **The preview** shows the selected match's line with the ten lines before and after it,
@@ -340,8 +351,11 @@ match.
 7. **Jump.** `Enter` closes the picker, selects the tab (`gBrowser.selectedTab`, which switches
    workspace and focuses the tab's pane, m4-split-panes decision 4), then asks the frame to
    select the match range, set the display to `SELECTION_ATTENTION` and scroll it to the
-   vertical centre, as find does. Focus goes to the page (to the frame, for a match in a
-   subframe) and the mode is normal. `v` then enters copy mode with the match selected
+   vertical centre, as find does. When the tab was not selected, the parent first waits for
+   Firefox's `TabSwitchDone` (`browser/components/tabbrowser/AsyncTabSwitcher.sys.mjs:347`, at
+   most a second) and the frame for its next animation frame, so the page is shown at its
+   own size before the match is scrolled to its middle. Focus goes to the page (to the frame,
+   for a match in a subframe) and the mode is normal. `v` then enters copy mode with the match selected
    (`caret.mjs:180-193`); `y` copies it. Entering copy mode directly was rejected because `j`
    and `k` would then move the caret instead of scrolling, which surprises after a jump. If the
    page changed since the search, the frame matches the query again and takes the match with
@@ -411,7 +425,7 @@ match.
       replies for an older generation are dropped.
     - Matching runs in the content processes, one per site, so tabs search in parallel and the
       parent only merges. At most 8 tabs are asked at a time; a frame that has not answered in
-      2,000 ms is left out and the count says `timed out`. Up to 200 tabs are searched.
+      2,000 ms is left out and the prompt says `timed out`. Up to 200 tabs are searched.
     - A frame's model is cut at 1,000,000 characters. A frame lists at most 100 matches and
       counts to 1,000; the list holds at most 2,000 rows. Telescope has no such caps by
       default; a page can be far larger than a source file, and a rendered list of thousands of
@@ -461,14 +475,14 @@ Written first and seen to fail.
 
 - `grep.test.mjs` (new, pure):
   - `parseQuery`: smart case per ripgrep (`foo` ignores case, `Foo` matches it, `a\w` ignores,
-    `\w+Error` matches, `\pL` alone ignores); an invalid expression gives a literal query
-    flagged `literal`; an empty query gives none.
+    `\w+Error` matches, `\p{Lu}x` ignores, `\w+` with no literal matches); an invalid
+    expression gives a literal query flagged `literal`; an empty query gives none.
   - `grepText(text, query, caps)`: lines split at `BLOCK` and `"\n"`; matches with start, end,
-    line and ordinal; the context cut to 160 characters around the match; the per-frame cap of
-    100 listed and 1,000 counted; zero-length matches (`^`, `\b`) do not loop and are not
-    listed.
+    line and ordinal; blank lines neither matched nor numbered; the context cut to 160
+    characters around the match; the per-frame cap of 100 listed and 1,000 counted;
+    zero-length matches (`^`, `\b`) do not loop and are not listed.
   - `previewLines`: the ten lines before and after a match, the matched line's index and the
-    match's range in it, fewer at the start and end of the text.
+    match's range in it, fewer at the start and end of the text, blank lines left out.
   - `parseGrepReply`: a reply from a content process is copied field by field; wrong types,
     overlong lines and too many matches drop the reply or are cut.
   - `grepRows`: rows in tab order whatever order replies arrive in; frames in their order; the
@@ -478,7 +492,8 @@ Written first and seen to fail.
   - picker keys (`grepPickerKey`): `ctrl+n`/`↓`/`j` move toward the best result and
     `ctrl+p`/`↑`/`k` away from it; `gg`/`G`; `Tab`/`shift+tab` go to the next/previous tab's
     first result; `ctrl+s` cycles the scope; `ctrl+space` enters refine and `Esc` leaves it;
-    `ctrl+u` scrolls with a preview and clears without one; `Esc` search → browse → close.
+    `ctrl+u` scrolls with a preview and clears without one; `Esc` search → browse → close;
+    the best result stays selected as rows arrive until the selection moves.
   - bench: `grepText` over 1,000,000 characters under 50 ms.
 - `keymap.test.mjs`: the `prefix+f` node has no action and has the child `g`; `ctrl+b f g`
   dispatches `live_grep` and `ctrl+b f` followed by an unbound key cancels.
@@ -517,10 +532,14 @@ Written first and seen to fail.
   - An agent workspace tab's results appear only in window scope, marked `◇ agent`, last.
   - Accessibility: option names hold the line, the tab's title and its workspace; the live
     region says `N matches in M tabs` or `no matches`.
+  - Page text and a title with markup show as text; no page element reaches the picker or the
+    preview.
+  - Closing the picker tells every searched frame to drop its text model.
 
 ### e2e (`tests/e2e/scenarios/`, Xvfb) and screenshots
 
-- New scenario `live-grep.json`: one workspace with fixture tabs from `tools/e2e/pages.mjs`;
+- New scenario `issue-241-live-grep.json`: one workspace with fixture tabs from
+  `tests/e2e/fixtures/`;
   `ctrl+b f g`, type `needle`; screenshot `live-grep.png` with the preview, then `Enter` and
   screenshot `live-grep-jump.png` with the selected match. Checked first with the real Omarchy
   theme (`vimma.theme.source=omarchy`) and recorded in the default theme as new baselines, with

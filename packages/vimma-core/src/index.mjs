@@ -39,3 +39,4 @@ export * from "./pageurl.mjs";
 export * from "./layouts.mjs";
 export * from "./privatews.mjs";
 export * from "./hyprswap.mjs";
+export * from "./grep.mjs";

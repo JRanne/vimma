@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- Live grep fixture (docs/specs/live-grep.md). Query parameters: `title`; `t`, lines of text
+     separated by `|`, one paragraph each; `pad`, filler paragraphs before and after them; `frame`, the URL
+     of an iframe after them; `shadow`, an open and a closed shadow root with a match each. -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>grep fixture</title>
+  </head>
+  <body>
+    <script>
+      const p = new URLSearchParams(location.search);
+      document.title = p.get("title") || "grep fixture";
+      const pad = () => {
+        for (let i = 0; i < Number(p.get("pad") || 0); i++) {
+          const filler = document.createElement("p");
+          filler.textContent = `filler ${i}`;
+          document.body.append(filler);
+        }
+      };
+      pad();
+      for (const line of (p.get("t") || "").split("|")) {
+        const el = document.createElement("p");
+        el.textContent = line;
+        document.body.append(el);
+      }
+      pad();
+      if (p.has("shadow")) {
+        for (const mode of ["open", "closed"]) {
+          const host = document.createElement("div");
+          const root = host.attachShadow({ mode });
+          const span = document.createElement("span");
+          span.textContent = `needle in ${mode} shadow`;
+          root.append(span);
+          document.body.append(host);
+        }
+      }
+      if (p.get("frame")) {
+        const frame = document.createElement("iframe");
+        frame.src = p.get("frame");
+        document.body.append(frame);
+      }
+    </script>
+  </body>
+</html>

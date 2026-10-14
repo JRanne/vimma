@@ -115,6 +115,9 @@ support-files = [
 
 ["browser_vimma_picker.js"]
 
+["browser_vimma_live_grep.js"]
+support-files = ["file_vimma_grep.html"]
+
 ["browser_vimma_rename.js"]
 
 ["browser_vimma_start_page.js"]

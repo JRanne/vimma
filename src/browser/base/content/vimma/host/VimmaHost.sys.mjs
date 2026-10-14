@@ -34,6 +34,7 @@ import { BookmarksPanel } from "../ui/bookmarks-panel.mjs";
 import { quickAdd, runBookmarkEffect } from "./bookmark-actions.mjs";
 import { bookmarksRoot, loadTree, observeBookmarks, setBookmarksRoot } from "./bookmark-ops.mjs";
 import { gotoItems, pickerWorkspaces, tabById } from "./goto.mjs";
+import { GrepSession } from "./grep.mjs";
 import { getTabLabel, setTabLabel } from "./tab-labels.mjs";
 import {
   BLOCKED_URL_TEXT,
@@ -194,6 +195,7 @@ const PAGE_FIRST_MAX = 16;
  * @property {GotoPicker} picker  the prefix+g overlay (m2-picker-rename)
  * @property {WorkspacePicker} wsPicker  the prefix+w overlay (m3-workspaces 5)
  * @property {AddonPicker} addonPicker  the prefix+e overlay (docs/specs/addon-manager.md)
+ * @property {GrepSession} grep  prefix+f g, `:grep`, `]q`/`[q` (docs/specs/live-grep.md)
  * @property {RenamePrompt} rename  the prefix+shift+t prompt (m2-picker-rename)
  * @property {AgentPrompt} agentPrompt  the agent question line (docs/specs/vimma-mcp.md)
  * @property {() => void} onFocus  focus moved in the window: the agent line may go back to waiting
@@ -549,6 +551,17 @@ export const RUNNERS = Object.freeze({
     s.notice.hide();
     s.picker.open();
   },
+  // docs/specs/live-grep.md: the key opens it empty, `:grep text` with that query.
+  "grep.open": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) => {
+    s.notice.hide();
+    s.grep.open(text);
+  },
+  "grep.resume": (/** @type {WindowState} */ s) => {
+    s.notice.hide();
+    s.grep.resume();
+  },
+  "grep.next": (/** @type {WindowState} */ s) => void s.grep.step(1),
+  "grep.previous": (/** @type {WindowState} */ s) => void s.grep.step(-1),
   "tab.rename": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
     renameTab(s, text),
   // m3-workspaces 5: prefix+w (and `:workspace` without a name).
@@ -936,6 +949,15 @@ export const VimmaHost = {
   _hintRuns: 0,
 
   /**
+   * Test-only: the window's live grep session (docs/specs/live-grep.md).
+   * @param {Window} win
+   * @returns {GrepSession | undefined}
+   */
+  _grep(win) {
+    return states.get(win)?.grep;
+  },
+
+  /**
    * Test-only: treats `id` as not built until the returned function is called, so the "not
    * implemented yet" notice and the overlay's dimmed rows stay testable now that every action
    * is built. Call it before `configure`, which rebuilds the overlay's rows.
@@ -974,6 +996,7 @@ export const VimmaHost = {
         state.picker.close({ tabChanged: true });
         state.wsPicker.close({ tabChanged: true });
         state.addonPicker.close({ tabChanged: true });
+        state.grep.close({ tabChanged: true });
         state.rename.close({ tabChanged: true });
       },
       dispatcher: createDispatcher(keymap),
@@ -1039,6 +1062,10 @@ export const VimmaHost = {
         load: addonPickerItems,
         select: (id) => void sayAddon(state, openAddonById(win, id)),
         addon: (op, id) => addonOp(state, op, id),
+      }),
+      grep: new GrepSession(win, {
+        notice: (text) => state.notice.show(text),
+        emit: () => this._emit(state),
       }),
       rename: new RenamePrompt(win, {
         apply: (tab, text) => {
@@ -1112,6 +1139,7 @@ export const VimmaHost = {
         state.picker.isOpen ||
         state.wsPicker.isOpen ||
         state.addonPicker.isOpen ||
+        state.grep.isOpen ||
         state.cmdline.isOpen ||
         state.rename.isOpen ||
         state.panel.isOpen ||
@@ -1208,6 +1236,7 @@ export const VimmaHost = {
     state.picker.destroy();
     state.wsPicker.destroy();
     state.addonPicker.destroy();
+    state.grep.destroy();
     state.rename.destroy();
     state.panel.destroy();
     state.bookmarks.destroy();
@@ -1404,7 +1433,7 @@ export const VimmaHost = {
    */
   _mode(state) {
     if (state.help.isOpen || state.picker.isOpen || state.wsPicker.isOpen) return "help";
-    if (state.addonPicker.isOpen) return "help";
+    if (state.addonPicker.isOpen || state.grep.isOpen) return "help";
     if (state.cmdline.isOpen) return "command";
     // A prompt over a panel (the bookmarks' add, rename, a y/N) types: keys are its input's.
     if (state.rename.isOpen) return "insert";
@@ -1493,7 +1522,9 @@ export const VimmaHost = {
     }
     // A picker takes every key, bare ones too, before any binding: nothing reaches the page or
     // Firefox underneath (ctrl+w would close a tab), and its j / q are not keymap keys.
-    const picker = [state.picker, state.wsPicker, state.addonPicker].find((p) => p.isOpen);
+    const picker = [state.picker, state.wsPicker, state.addonPicker, state.grep].find(
+      (p) => p.isOpen,
+    );
     if (picker) {
       consume(e);
       picker.key(key);

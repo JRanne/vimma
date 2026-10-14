@@ -104,6 +104,10 @@ export const COMMANDS = Object.freeze([
     aliases: ["priv"],
   }),
   cmd("ls", "none", "goto.picker", "Goto picker: every tab in every workspace"),
+  // docs/specs/live-grep.md decision 2: with text opens with that query; alone resumes.
+  cmd("grep", "optional", "grep.resume", "Live grep (with text: that query; alone: the last)", {
+    textAction: "grep.open",
+  }),
   cmd("sidebar", "none", "sidebar.toggle", "Open / close the side panel"),
   // docs/specs/bookmarks.md: with a path, files the page without the prompt.
   cmd("bookmark", "optional", "bookmark.add", "Bookmark this page (optionally folders/title)"),

@@ -490,7 +490,7 @@ const TYPED = { space: " ", minus: "-", plus: "+" };
  * The character a key types in search mode, or null.
  * @param {string} key formatKey text
  */
-function typed(key) {
+export function typedChar(key) {
   if (key in TYPED) return /** @type {string} */ (TYPED[key]);
   if ([...key].length === 1) return key;
   const shifted = /^shift\+([a-z])$/.exec(key);
@@ -558,6 +558,6 @@ export function pickerKey(state, key) {
     case "ctrl+w":
       return done(setQuery(state, deleteWordBackward(state.query)));
   }
-  const ch = typed(key);
+  const ch = typedChar(key);
   return done(ch === null ? state : setQuery(state, state.query + ch));
 }

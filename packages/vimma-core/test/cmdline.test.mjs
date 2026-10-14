@@ -66,6 +66,10 @@ describe("parseCommandLine: plan §2 commands", () => {
     [":private close", run("private", "workspace.private", { text: "close" })],
     [":private_workspace", run("private_workspace", "workspace.private")],
     [":ls", run("ls", "goto.picker")],
+    // docs/specs/live-grep.md decision 2: with text opens with that query; alone resumes.
+    [":grep", run("grep", "grep.resume")],
+    [":grep retry budget", run("grep", "grep.open", { text: "retry budget" })],
+    [":live_grep", run("live_grep", "grep.open")],
     [":sidebar", run("sidebar", "sidebar.toggle")],
     [":map", run("map", "help.show")],
     [":help", run("help", "help.show")],

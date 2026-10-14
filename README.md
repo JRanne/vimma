@@ -41,6 +41,8 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
 - Link hints: `f` labels every link, button and field on screen; type a label to follow it,
   `F` opens it in a background tab.
 - Find: `/` searches as you type (smartcase, frames and PDFs too), `n`/`N` jump between matches.
+- Live grep: `ctrl+b f g` searches the text of every tab in your workspace and jumps to the
+  match, like Telescope's `live_grep`; `]q`/`[q` step through the results.
 - Copy mode: `v` puts a caret on the page; move it with Vim motions, select and `y` to copy.
 - Insert mode: focusing a text field types as usual; `Esc` leaves it.
 - Command line: `:open`, `:tabnew`, `:q`, `:map`, `:source` and any action by name, with

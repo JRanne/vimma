@@ -172,12 +172,16 @@ shows as `space n` ([guide](guide.md#configtoml)).
 
 ## Find
 
-| Action                   | Config name     | Bindings                        |
-| ------------------------ | --------------- | ------------------------------- |
-| Search in page           | `find_forward`  | `/`                             |
-| Search backwards in page | `find_backward` | `?`                             |
-| Next match               | `find_next`     | `ctrl+g`, `f3`, `n`             |
-| Previous match           | `find_previous` | `ctrl+shift+g`, `shift+f3`, `N` |
+| Action                                             | Config name     | Bindings                        |
+| -------------------------------------------------- | --------------- | ------------------------------- |
+| Search in page                                     | `find_forward`  | `/`                             |
+| Search backwards in page                           | `find_backward` | `?`                             |
+| Next match                                         | `find_next`     | `ctrl+g`, `f3`, `n`             |
+| Previous match                                     | `find_previous` | `ctrl+shift+g`, `shift+f3`, `N` |
+| Live grep: search the text of the workspace's tabs | `live_grep`     | `ctrl+b f g`                    |
+| Next result of the last live grep                  | `grep_next`     | `]q`                            |
+| Previous result of the last live grep              | `grep_previous` | `[q`                            |
+| Live grep again with the last query (:grep)        | `grep_resume`   | —                               |
 
 ## Modes
 

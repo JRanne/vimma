@@ -629,3 +629,39 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   [`the_token_never_leaves_the_handshake`](../tools/vimma-ctl/tests/mcp.rs),
   [`bad_arguments_never_reach_vimma`](../tools/vimma-ctl/tests/mcp.rs),
   [`bad_arguments_are_tool_errors_and_never_reach_vimma`](../tools/vimma-ctl/src/mcp.rs)
+
+## 13. Live grep (`host/grep.mjs`, `actors/VimmaChild.sys.mjs`)
+
+`ctrl+b f g` searches the text of the window's tabs: the parent sends the query to each frame's
+own content process, which matches it against its own document and answers with the matching
+lines. Spec: [live-grep](specs/live-grep.md).
+
+**Reach:** only you, with the key or `:grep`. No control-socket command reaches it, so neither
+`vimma-ctl` nor an agent connection can run it or read its results (S7). Pages see neither the
+query nor another page's text: each frame answers from its own document only.
+
+- G1. Live grep **must** search only the tabs of the window it is opened in: a normal window
+  **never** searches or lists a private tab, and the private window lists only its own tabs.
+  [`private_tabs_never_reach_a_normal_window_and_back`](../tests/browser/browser_vimma_live_grep.js)
+- G2. A frame's reply comes from a content process that may be compromised: the parent **must**
+  copy it field by field, cut to the limits (100 listed and 1,000 counted matches a frame, lines
+  of 162 characters, 21 preview lines of 302 characters), and drop a malformed one.
+  [`a good reply is copied`](../packages/vimma-core/test/grep.test.mjs),
+  [`drops %j`](../packages/vimma-core/test/grep.test.mjs),
+  [`cuts overlong contexts and too many matches`](../packages/vimma-core/test/grep.test.mjs),
+  [`parsePreviewReply checks and cuts the preview`](../packages/vimma-core/test/grep.test.mjs)
+- G3. Rows and the preview **must** show page text and titles as text nodes and `<mark>`
+  elements made in chrome, **never** parsed as HTML (C1).
+  [`page_text_with_markup_stays_text`](../tests/browser/browser_vimma_live_grep.js),
+  [`never parses strings as HTML: page titles, add-on and bookmark names stay text`](../tools/security/test/chrome-source.test.mjs)
+- G4. The agent workspace's tabs **must** be searched only when the scope includes them, and
+  their results **must** be marked as the agent's, so an agent's page is never taken for yours.
+  [`agent_tabs_only_in_window_scope_marked_and_last`](../tests/browser/browser_vimma_live_grep.js)
+- G5. Page text **must not** outlive the picker: when it closes, every searched frame is told to
+  drop its text, the parent keeps no rows, and the grep list holds only the lines it shows, in
+  memory, never on disk or in the session store.
+  [`closing_tells_every_searched_frame_to_drop_its_text`](../tests/browser/browser_vimma_live_grep.js)
+- G6. A query **must** run only in the page's content process, one line at a time, so a costly
+  regular expression is bounded by one line of one page and **never** runs in the parent; a
+  match **never** spans two lines.
+  [`a match never spans two lines`](../packages/vimma-core/test/grep.test.mjs)
