@@ -117,8 +117,8 @@ completion list.
   `--vimma-accent`, `--vimma-selection`, `--vimma-error`, `--vimma-font`) with `Canvas` /
   `CanvasText` fallbacks; the status bar (#34) loads the token sheet once per window.
 - **Notice, fullscreen (review round 1).** The which-key layering (the line dropping to
-  `z-index: 4` while a prefix was pending) went with the strip (maintainer decision 2026-10-09,
-  m2-statusbar-whichkey Settled). While the line is open (`:root[vimma-cmdline-open]`)
+  `z-index: 4` while a prefix was pending) went with the strip (removed on 2026-10-09; see
+  m2-statusbar-whichkey, Settled). While the line is open (`:root[vimma-cmdline-open]`)
   the notice moves above it: a `ResizeObserver` on the panel sets `--vimma-cmdline-height` on
   the root. In DOM fullscreen (`:root[inDOMFullscreen]`) `:` does not open the line and an open
   one is hidden, as the status bar is; entering DOM fullscreen needs focus in the page, which

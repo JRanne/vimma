@@ -340,7 +340,7 @@ Spec: [m0-mozilla-services](specs/m0-mozilla-services.md),
   [`test_keyed_build_fetches_google_lists`](../tests/browser/browser_vimma_safebrowsing.js),
   [`test_keyless_build_is_honestly_off`](../tests/browser/browser_vimma_safebrowsing.js)
 - P7. Site permissions (camera, location, notifications …) **must** be kept per container, so
-  per workspace (`permissions.isolateBy.userContext`; user decision "Per workspace",
+  per workspace (`permissions.isolateBy.userContext`;
   [vimma-mcp](specs/vimma-mcp.md) decision 30): one given in one workspace never applies to the
   same site in another, the agent workspace included.
   [`test_site_permissions_are_per_workspace`](../tests/browser/browser_vimma_mcp_agent_pages.js)
@@ -461,6 +461,12 @@ one workspace, **agent**, through the control socket's `agent` role. Spec:
 while MCP is on (`:mcp on`). Every check runs in the browser, never in the client: an agent with
 a shell can run `vimma-ctl` itself, or speak the protocol directly.
 
+**Planned:** [mcp-drive](specs/mcp-drive.md) adds `vimma_show` and `vimma_keys` (the agent shows
+a page, and runs Vimma's own page keys in an agent tab) and makes full control's questions say
+that it reaches beyond the agent workspace while MCP is on. Its rules M16-M23 (key whitelist,
+background-only, follows as loads, show always asked, limits, delimited link lists, full
+control's wording, the audit) enter this section with their tests in the sub-PR that builds each.
+
 - M1. Every agent command but `agent-hello`, `agent-ping` and `agent-cancel` **must** wait for
   your yes, or run under an unexpired grant of that connection and tool.
   [`test_grants_per_connection_and_tool`](../tests/browser/browser_vimma_mcp_agent.js),
@@ -526,8 +532,8 @@ a shell can run `vimma-ctl` itself, or speak the protocol directly.
   [`test_the_read_checks_last`](../tests/browser/browser_vimma_mcp_agent.js),
   [`test_confinement_edges`](../tests/browser/browser_vimma_mcp_agent.js)
 - M10. Pages in the agent container **must** get no permission prompt and no permission given
-  elsewhere: site permissions are kept per container (`permissions.isolateBy.userContext`, user
-  decision "Per workspace"), every `nsIContentPermissionPrompt` request from the agent
+  elsewhere: site permissions are kept per container (`permissions.isolateBy.userContext`,
+  [vimma-mcp](specs/vimma-mcp.md) decision 30), every `nsIContentPermissionPrompt` request from the agent
   container is cancelled, and camera, microphone and screen are denied per agent tab (a
   browser-scoped DENY, set on each HTTP response and when each document's window global is
   created, so a page a service worker serves is covered). They **must** open no new window or

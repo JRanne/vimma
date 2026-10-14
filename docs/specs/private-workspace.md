@@ -11,15 +11,14 @@ Engine paths are relative to `engine/` (Firefox 157.0.1). Zen paths are inside t
 files of Zen 1.23.1b (`~/Downloads/zen`, BuildID 20261006042626), unpacked to a scratch
 directory.
 
-## The user's words
+## Goal
 
-"we should have private window capability and it should open with keybind, however it should
-not be separate 'window' private should private workspace that functions as private windows of
-the past, if that is possible?"
+Private browsing opened with a key, as a private workspace inside the Vimma window rather than a
+separate private window, with the guarantees of a private window.
 
 ## Short answer
 
-Not as asked, without forking Firefox's front end. Gecko's core could keep private and normal tabs
+Not in full, without forking Firefox's front end. Gecko's core could keep private and normal tabs
 apart inside one window. Firefox's front end could not: about 220 places decide privacy by
 window, and every one of them would leak a private tab's data into the normal profile. The design
 below gives the user the workspace experience with private-window guarantees that are real,
@@ -255,10 +254,10 @@ attribute only counts when the context is created.
 | Private search engine                | No                                                                                                                                                                 |
 | Same window, workspace keys          | Yes                                                                                                                                                                |
 
-Verdict: it keeps the user's "same window" and fails most of the guarantees. Calling it
+Verdict: it keeps the single window and fails most of the guarantees. Calling it
 "private" would mislead, which is a security problem in itself. Rejected as the private
 workspace. A "scratch workspace" whose data is wiped on close could be its own feature under its
-own name, if wanted. The user does not want one now (decided question 5).
+own name, if wanted. It is out of scope for now (decided question 5).
 
 ### A. The private window presented as a workspace: chosen
 
@@ -272,7 +271,7 @@ UX, honestly:
 
 - **Grouped (recommended on Hyprland):** the private workspace is a second tab of the Vimma frame.
   `ctrl+b )` swaps the frame to it. The group bar shows both titles, and the private one has
-  Firefox's private suffix. This is close to the user's wish.
+  Firefox's private suffix. This comes close to a workspace in the same window.
 - **Not grouped (Omarchy's default dwindle):** opening it splits the screen, and both stay visible.
   Switching moves the focus. This is a private window with Vimma keys, and the guide must not
   promise more.
@@ -346,8 +345,8 @@ UX, honestly:
    the tabs of all private windows. `ctrl+n` in a private window and Firefox's "Open Link in New
    Private Window" make more of them. They share one cookie jar anyway.
 5. **Switching.** The private workspace is reached only by its own key (`workspace.private`),
-   `:private` and the picker. It is never a cycle or alternate target (user, 2026-10-11: "own
-   key only"), so cycling never drops you into it by accident.
+   `:private` and the picker. It is never a cycle or alternate target, so cycling never drops you
+   into it by accident.
    - `ctrl+b (` / `ctrl+b )`, `]w` / `[w`, `:wn` / `:wp` in a normal window cycle the normal
      workspaces only, whether or not private is open: today's cycle, unchanged.
    - In private, `ctrl+b )` goes to the first workspace and `ctrl+b (` to the last, in the most
@@ -372,8 +371,8 @@ UX, honestly:
    panel get their data from a small private-window adapter in the host.
 7. **Window placement.** Vimma opens the private window at the current window's size and, where
    the platform allows (X11, floating WMs), its position. On Wayland it does not try, because
-   Hyprland decides. ~~Vimma does not run `hyprctl` or any other WM command.~~ **Superseded
-   (user, 2026-10-12):** on Hyprland the private window swaps into the Vimma window's place, over
+   Hyprland decides. ~~Vimma does not run `hyprctl` or any other WM command.~~ **Superseded:**
+   on Hyprland the private window swaps into the Vimma window's place, over
    Hyprland's socket. See [private-swap](private-swap.md) and ADR-017. Off Hyprland, or with
    `[private] placement = "window"`, this decision stands as written.
 8. **Leak protections in Vimma's own code** (the private window's own guarantees are Firefox's):
@@ -388,7 +387,7 @@ UX, honestly:
      the WM focuses it, so you leave the private workspace.
    - d. `vimma-ctl state` of a private window reports `"private": true` and `"workspace":
 "private"`, with each tab's `url` and `title` as `null`. Pane structure and ids are kept, so
-     scripts can still drive it. No config switch (user, 2026-10-11).
+     scripts can still drive it. No config switch.
    - e. No status-bar notice in a normal window names a page of the private workspace.
 9. **Add-ons, search and protections** are Firefox's, per private window. Add-ons need "Run in
    Private Windows" (`ctrl+b e`, `shift+p`), and Vimma's start page and its own UI need no
@@ -468,11 +467,11 @@ Per-tab private browsing in a normal window (option C); a throwaway container wo
 jar); Vimma running WM commands (since reversed on Hyprland: [private-swap](private-swap.md));
 restoring a private workspace after a restart (that would break the guarantee).
 
-## Decided questions (user, 2026-10-11)
+## Decided questions
 
 1. **Hyprland grouping:** ~~Vimma runs no WM command; the guide documents the `SUPER+G`
-   recipe.~~ This was the coordinator's proposal, not asked of the user. **Reversed (user,
-   2026-10-12): "Swap in place"** on Hyprland, in [private-swap](private-swap.md).
+   recipe.~~ **Reversed: the private window swaps in place** on Hyprland, in
+   [private-swap](private-swap.md).
 2. **Scripts and private pages:** `vimma-ctl state` hides private URLs and titles. No switch.
 3. **`ctrl+shift+p`:** goes to the private workspace (toggles back from it), same as
    `ctrl+b shift+p`. Firefox's "New Private Window" key no longer runs.

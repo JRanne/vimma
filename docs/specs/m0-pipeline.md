@@ -33,9 +33,10 @@ new Firefox releases arrive as PRs.
 
 ## Settled (2026-10-09)
 
-- **No branch protection for now** (maintainer decision). GitHub refuses it on this free private repo
-  (`gh api …/branches/main/protection` → 403 "Upgrade to GitHub Pro"). `docs/runbook.md` says it
-  is deliberately off. PRs merge after review and green checks; no required approvals.
+- **No branch protection while the repository was private**, because GitHub refused it on a free
+  private repository (`gh api …/branches/main/protection` → 403 "Upgrade to GitHub Pro"). Since
+  the repository became public, the ruleset "main" protects it (`docs/runbook.md`, "Merging and
+  branch protection"). No required approvals.
 - **nightly.yml runs on a self-hosted runner** labelled `vimma-build` (22 GB `engine/`, 39 min
   build: too big for hosted runners). The schedule is gated by `vars.NIGHTLY_ENABLED == 'true'`;
   `workflow_dispatch` bypasses the gate so the runner can be tested first. `clean: false` keeps

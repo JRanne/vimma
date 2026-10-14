@@ -17,6 +17,7 @@ in the same PR.
   because W". Do not write who asked for it, who chose it, when, or how the choice was reached.
   No "the user said", "user request", "user decision", "the coordinator", quoted chat messages
   or dates of conversations.
+  <!-- process-wording: these rules quote the phrases they ban -->
 - **No process residue.** Agent instructions, session handovers, to-do lists for the author and
   "first draft" notes do not belong in a spec. Handover notes go in the PR description.
 - **Verify every fact.** A claim about Firefox cites the engine path and line, and the Firefox

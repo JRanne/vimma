@@ -442,7 +442,8 @@ request cannot change the classifier that judges it.
 
 A workflow, a script, `package.json` or any other file in the same pull request runs everything.
 
-Still runs on a docs-only pull request: prettier, commitlint, `npm run security-links`,
+Still runs on a docs-only pull request: prettier, commitlint, `npm run md-wording`,
+`npm run security-links`,
 `npm run test:py` (it reads ADR-003), the gen-docs freshness step, the Vitest files listed in
 `MARKDOWN_TESTS`, Semgrep and CodeQL.
 
