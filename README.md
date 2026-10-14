@@ -48,8 +48,9 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
 
 **tmux-style tabs, panes and workspaces** (prefix `ctrl+b`)
 
-- Tabs: `ctrl+b c` new, `ctrl+b n`/`p` next and previous, `ctrl+b 1..9` jump, `ctrl+b g` a
-  fuzzy picker. Tabs can be renamed. Firefox's tab strip is hidden; the status bar shows where
+- Tabs: `ctrl+b c` new, `ctrl+b n`/`p` next and previous, `ctrl+b 1..9` jump, `ctrl+b g` tab
+  search: every tab of every workspace and window, and recently closed, fuzzy by title, URL or
+  your rename. Tabs can be renamed. Firefox's tab strip is hidden; the status bar shows where
   you are.
 - Split panes: `ctrl+b v` and `ctrl+b -` split, `ctrl+b h/j/k/l` move, `ctrl+b z` zoom, plus
   swap, resize and close. Up to 4 panes, built on Firefox's own split view.

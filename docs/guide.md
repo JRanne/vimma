@@ -428,8 +428,8 @@ keys. A `[panel]` after a key means it works only in that mode.
 | `ctrl+b n` / `ctrl+b p`, `ctrl+tab` / `ctrl+shift+tab`, `ctrl+pagedown` / `ctrl+pageup` | Next / previous tab, wrapping around at the ends. Hidden tabs are skipped. `gt` / `gT` in normal mode; `3gt` goes to tab 3.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `ctrl+b 1..9`, `alt+1..8`, `alt+9`                                                      | Tab 1 to 9, counting visible tabs (pinned tabs first); Firefox's `alt+9` is the last tab. With fewer tabs than N, nothing happens. `ctrl+shift+pageup` / `ctrl+shift+pagedown` move the tab left / right among them.                                                                                                                                                                                                                                                                                                                                                                      |
 | `:`                                                                                     | Normal mode: opens the command line at the bottom of the window ([below](#the-command-line)). In a text field `:` is typed.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `ctrl+b g`, `b`                                                                         | Opens the goto picker over the page (`b` in normal mode): every tab of the window ([below](#goto-picker-and-tab-rename)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `ctrl+b shift+t`                                                                        | Renames the tab ([below](#goto-picker-and-tab-rename)); an empty name restores the page title.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `ctrl+b g`, `b`                                                                         | Opens tab search over the page, ready to type (`b` in normal mode): every tab of every workspace and window, and the recently closed ones ([below](#tab-search-and-tab-rename)).                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `ctrl+b shift+t`                                                                        | Renames the tab ([below](#tab-search-and-tab-rename)); an empty name restores the page title.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `ctrl+b a`                                                                              | Bookmarks the page; type folders before its title: `work/docs/title` ([below](#bookmarks)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `ctrl+b shift+b`                                                                        | Opens or closes the bookmarks panel ([below](#bookmarks)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `ctrl+b e`                                                                              | Opens the add-on picker: popups, options, enable/disable, remove, updates ([below](#add-ons)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -680,8 +680,8 @@ more as you need them (see [Managing workspaces](#managing-workspaces)).
   before, the same pane focused and its page ready for keys. Each workspace keeps its own split:
   splitting in one leaves the others' layouts alone. A workspace with no tabs gets a start-page tab when you switch to it.
 - `ctrl+b 1..9`, `ctrl+b n` / `p`, `gt`, `ctrl+tab` and closing a tab stay within the
-  workspace. The goto picker (`ctrl+b g`) is the exception: it lists every workspace's tabs, and
-  picking one from another workspace switches there.
+  workspace. Tab search (`ctrl+b g`) is the exception: it lists every workspace's tabs, and other
+  windows', and picking one from another workspace switches there.
 - **New tabs** (`ctrl+b c`, `t`, `ctrl+t`, a bookmark, a link from another app) open in the
   current workspace and its container. A link opened from a page keeps that page's container
   and so its workspace: opened in the background into another workspace, it waits there, hidden,
@@ -1393,24 +1393,50 @@ Library, Sync, another window) show in the panel at once. With `root = "all"`, t
 folders cannot be renamed, moved or deleted. The panel remembers which folders you opened until
 Vimma quits.
 
-## Goto picker and tab rename
+## Tab search and tab rename
 
-`ctrl+b g` (or `b` in normal mode, or `:ls`) opens a list of the window's tabs over the page: the tab number (the
-one `ctrl+b 1..9` uses), the title or your rename, and the site. The current tab is selected.
-Like the bindings overlay it takes every key while open, so nothing reaches the page.
+`ctrl+b g` (or `b` in normal mode, or `:ls`) opens tab search over the page, ready to type. It
+finds any tab: every workspace of this window, your other windows, and the tabs and windows
+you closed recently. The current tab is selected. Like the bindings overlay it takes every key
+while open, so nothing reaches the page.
 
-- `j` / `k`, `Down` / `Up`, `ctrl+n` / `ctrl+p` move; `Enter` goes to the selected tab.
-- `/` starts a search: type a few letters of the title, URL or rename. Matches are highlighted,
+- Type a few letters of the title, URL, rename, workspace or marker. Matches are highlighted,
   best first: the start of a title beats a word inside it, which beats letters spread out.
   Letters with diacritics count as their own letters first (`kä` puts "Käyttäjät" on top), and
-  still match without them, lower down (`ka` finds it after "Kalenteri"). `Backspace`,
-  `ctrl+w` and `ctrl+u` delete a letter, a word, everything.
-- `Esc` in a search goes back to moving through the filtered list; `Esc` or `q` then closes the
-  picker and focus returns to the page.
+  still match without them, lower down (`ka` finds it after "Kalenteri"). Every term must
+  match something: `jira 412`, `work mail`. `Backspace`, `ctrl+w` and `ctrl+u` delete a letter,
+  a word, everything.
+- `ctrl+n` / `ctrl+p` and `Down` / `Up` move; `Tab` / `shift+Tab` jump to the next or previous
+  section. Every letter types, `j`, `k` and `q` too.
+- `Enter` goes to the selected tab: its window comes to the front and its workspace becomes
+  current. On a recently closed tab it reopens it, with its history, in its workspace, and
+  goes there; on a closed window it reopens the window.
+- `Esc` closes it and focus returns to the page.
 
-The picker lists every tab of every workspace in the current window, workspace by workspace;
-the number is the tab's place in its workspace. `Enter` on a tab of another workspace switches
-to that workspace.
+`:tabsearch text` (`:ts`, or `:b text` as Vim's buffer command) opens it with the text already
+typed.
+
+With nothing typed, the list is in sections, each under a heading such as `work · 12`: this
+window's workspaces, the current one first; then each other window's, most recently used first
+(`personal · 40 · w2`); then `Recently closed`, newest first, up to 25 tabs and 5 windows (as
+many as Firefox keeps). With a query, the best matches come first from every section. Each row
+shows the tab's number in its workspace (the one `ctrl+b 1..9` uses), its title or rename, then
+in muted text its workspace, its window (`w2`, other windows only) and its markers, and the
+site:
+
+| Marker          | Means                                                                 |
+| --------------- | --------------------------------------------------------------------- |
+| `♪`             | The tab is playing sound (type `playing` to find it).                 |
+| `muted`         | The tab is muted.                                                     |
+| `pinned`        | The tab is pinned.                                                    |
+| `◇` (workspace) | A tab of the [agent workspace](#agent-workspace), listed after yours. |
+| `closed`        | Recently closed (`closed window` for a window).                       |
+
+A private window and the normal ones never see each other's tabs, open or closed: tab search
+in a normal window lists no private tab, and in the private workspace it lists only private
+tabs. Tabs that have not loaded since a restart are listed by their saved title and stay
+unloaded. Tab search only finds tabs; to close, move or reorder them, use the
+[side panel](#side-panel) (`ctrl+b b`).
 
 `ctrl+b shift+t` opens a one-line prompt at the foot of the window with the tab's current name.
 Type a name and press `Enter`; `Esc` cancels. An empty name removes the rename, so the page title
@@ -1429,7 +1455,7 @@ anything by itself. What Vimma adds is keyboard control.
 `ctrl+b e` (or `:addons`) opens the add-on picker over the page: every extension you installed,
 with its version, whether it is enabled, `private ok` when it may run in private windows, and
 `update` when an update is waiting. Firefox's own built-in and hidden add-ons are never listed,
-and themes and dictionaries are not either. Like the goto picker, it takes every key while open.
+and themes and dictionaries are not either. Like tab search, it takes every key while open.
 
 | Key            | What it does                                                                                                                  |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -1504,7 +1530,8 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:map`, `:help`, `:h`                 | Shows every binding (the `ctrl+b ?` overlay).                                                                                               |
 | `:scroll_down`, `:tab.next`…          | Any action by its name in [bindings.md](bindings.md), or by its dotted id. Actions take no argument.                                        |
 | `:tabrename [name]`                   | Renames the tab; without a name, opens the rename prompt.                                                                                   |
-| `:ls`, `:b`                           | Opens the goto picker.                                                                                                                      |
+| `:ls`                                 | Opens [tab search](#tab-search-and-tab-rename).                                                                                             |
+| `:tabsearch [text]`, `:ts`, `:b`      | Opens tab search with the text already typed.                                                                                               |
 | `:vsplit`/`:vs`, `:split`/`:sp`       | Splits the pane right / down, as `ctrl+b v` / `ctrl+b -`.                                                                                   |
 | `:layout [name]`                      | Arranges the panes in the named preset ([Layouts](#layouts)); Tab completes the names. Without one, the next preset.                        |
 | `:wsnext`/`:wn`, `:wsprev`/`:wp`      | Next / previous workspace, as `ctrl+b )` / `ctrl+b (`.                                                                                      |

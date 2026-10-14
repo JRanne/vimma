@@ -138,7 +138,8 @@ group("Workspaces", [
 ]);
 
 group("Navigation", [
-  ["goto_picker", "goto.picker", "Goto picker: every tab in every workspace"],
+  // docs/specs/tab-search.md: the goto picker is tab search.
+  ["goto_picker", "goto.picker", "Tab search: every tab, every window, recently closed"],
   ["toggle_sidebar", "sidebar.toggle", "Open / close the side panel"],
   ["scroll_down", "scroll.down", "Scroll down"],
   ["scroll_up", "scroll.up", "Scroll up"],

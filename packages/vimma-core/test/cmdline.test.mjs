@@ -66,6 +66,13 @@ describe("parseCommandLine: plan §2 commands", () => {
     [":private close", run("private", "workspace.private", { text: "close" })],
     [":private_workspace", run("private_workspace", "workspace.private")],
     [":ls", run("ls", "goto.picker")],
+    // docs/specs/tab-search.md decision 2: tab search, with the text as its query.
+    [":tabsearch", run("tabsearch", "goto.picker")],
+    [":ts", run("tabsearch", "goto.picker")],
+    [":tabsearch jira 412", run("tabsearch", "goto.picker", { text: "jira 412" })],
+    // Vim's :b {name} goes to a buffer by name: here, tab search with the name typed.
+    [":b", run("tabsearch", "goto.picker")],
+    [":b jira", run("tabsearch", "goto.picker", { text: "jira" })],
     [":sidebar", run("sidebar", "sidebar.toggle")],
     [":map", run("map", "help.show")],
     [":help", run("help", "help.show")],
@@ -218,11 +225,11 @@ describe("command table", () => {
 describe("completeCommandLine", () => {
   const values = (text, opts) => completeCommandLine(text, opts).candidates.map((c) => c.value);
 
-  test("tab → tabnew, tabrename first, then actions", () => {
+  test("tab → tabnew, tabrename, tabsearch first, then actions", () => {
     const v = values(":tab");
-    expect(v.slice(0, 2)).toEqual(["tabnew", "tabrename"]);
+    expect(v.slice(0, 3)).toEqual(["tabnew", "tabrename", "tabsearch"]);
     expect(completeCommandLine(":tab").word).toBe("tab");
-    expect(completeCommandLine(":tab").candidates[2].kind).toBe("action");
+    expect(completeCommandLine(":tab").candidates[3].kind).toBe("action");
   });
 
   test("wsp → wsprev", () => {

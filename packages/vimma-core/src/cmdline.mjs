@@ -103,7 +103,11 @@ export const COMMANDS = Object.freeze([
   cmd("private", "optional", "workspace.private", "Private workspace; again goes back (close)", {
     aliases: ["priv"],
   }),
-  cmd("ls", "none", "goto.picker", "Goto picker: every tab in every workspace"),
+  cmd("ls", "none", "goto.picker", "Tab search: every tab, every window, recently closed"),
+  // docs/specs/tab-search.md decision 2: the same picker, the text as its query.
+  cmd("tabsearch", "optional", "goto.picker", "Tab search, with the text as its query", {
+    aliases: ["ts", "b"],
+  }),
   cmd("sidebar", "none", "sidebar.toggle", "Open / close the side panel"),
   // docs/specs/bookmarks.md: with a path, files the page without the prompt.
   cmd("bookmark", "optional", "bookmark.add", "Bookmark this page (optionally folders/title)"),

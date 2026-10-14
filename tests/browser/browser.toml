@@ -115,6 +115,8 @@ support-files = [
 
 ["browser_vimma_picker.js"]
 
+["browser_vimma_tab_search.js"]
+
 ["browser_vimma_rename.js"]
 
 ["browser_vimma_start_page.js"]

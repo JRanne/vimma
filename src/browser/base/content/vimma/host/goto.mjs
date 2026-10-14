@@ -74,12 +74,20 @@ export function tabById(win, tabId) {
 }
 
 /**
- * Every tab the picker lists, with its title, URL and rename.
+ * Every tab the picker lists, with its title, URL, rename and audio and pinned state. Nothing
+ * here loads a lazy tab: its browser answers title and URL from SessionStore (tab-search,
+ * decision 9).
  * @param {Window} win
+ * @param {{ agentId?: string | null, window?: number, name?: string }} [options]  `name`: the
+ *   workspace name of a window without workspaces (the private workspace)
  * @returns {PickerItem[]}
  */
-export function gotoItems(win) {
-  const model = pickerWorkspaces(win);
+export function gotoItems(win, { agentId = null, window, name } = {}) {
+  const base = pickerWorkspaces(win);
+  const model =
+    name === undefined
+      ? base
+      : { ...base, workspaces: base.workspaces.map((w) => (w.name ? w : { ...w, name })) };
   /** @type {Record<string, string>} */
   const labels = {};
   for (const id of model.workspaces.flatMap((w) => w.tabs)) {
@@ -93,8 +101,16 @@ export function gotoItems(win) {
       const tab = tabById(win, id);
       if (!tab) return undefined;
       const browser = tab.linkedBrowser;
-      return { title: browser.contentTitle || tab.label, url: browser.currentURI?.spec ?? "" };
+      const t = /** @type {any} */ (tab);
+      return {
+        title: browser.contentTitle || tab.label,
+        url: browser.currentURI?.spec ?? "",
+        playing: !!t.soundPlaying,
+        muted: !!t.muted,
+        pinned: !!t.pinned,
+      };
     },
     labels,
+    { agentId, ...(window !== undefined ? { window } : {}) },
   );
 }

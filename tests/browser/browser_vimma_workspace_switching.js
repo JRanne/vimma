@@ -318,13 +318,17 @@ add_task(async function the_goto_picker_lists_every_workspace_and_switches() {
   prefix("g");
   const picker = document.getElementById(PICKER_ID);
   await until(() => picker?.open, "the picker opens");
-  const rows = picker.querySelectorAll("[role=option]");
+  // Recently closed tabs are listed too, after them (docs/specs/tab-search.md).
+  const rows = [...picker.querySelectorAll("[role=option]")].filter(
+    (r) => !r.dataset.id.startsWith("closed"),
+  );
   Assert.equal(
     rows.length,
     ww().model.workspaces.flatMap((w) => w.tabs).length,
     "it lists the tabs of every workspace",
   );
-  for (const ch of "/only-in-b") EventUtils.synthesizeKey(ch);
+  // It opens typing (docs/specs/tab-search.md, decision 2).
+  for (const ch of "only-in-b") EventUtils.synthesizeKey(ch);
   EventUtils.synthesizeKey("KEY_Enter");
   await until(() => active() === B.id, "selecting B's tab switches to B");
   Assert.equal(gBrowser.selectedTab, bTab, "on that tab");

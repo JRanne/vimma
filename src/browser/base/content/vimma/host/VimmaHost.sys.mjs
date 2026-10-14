@@ -33,7 +33,8 @@ import { SidePanel } from "../ui/side-panel.mjs";
 import { BookmarksPanel } from "../ui/bookmarks-panel.mjs";
 import { quickAdd, runBookmarkEffect } from "./bookmark-actions.mjs";
 import { bookmarksRoot, loadTree, observeBookmarks, setBookmarksRoot } from "./bookmark-ops.mjs";
-import { gotoItems, pickerWorkspaces, tabById } from "./goto.mjs";
+import { pickerWorkspaces, tabById } from "./goto.mjs";
+import { goToTab, reopenClosed, tabSearchList } from "./tab-search.mjs";
 import { getTabLabel, setTabLabel } from "./tab-labels.mjs";
 import {
   BLOCKED_URL_TEXT,
@@ -545,9 +546,10 @@ export const RUNNERS = Object.freeze({
   "urlbar.focus": focusUrlbar,
   "command.open": (/** @type {WindowState} */ s) => s.cmdline.open(),
   "command.cancel": (/** @type {WindowState} */ s) => s.cmdline.close(),
-  "goto.picker": (/** @type {WindowState} */ s) => {
+  // Tab search (docs/specs/tab-search.md); `:tabsearch text` opens it with the text typed.
+  "goto.picker": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) => {
     s.notice.hide();
-    s.picker.open();
+    s.picker.open({ query: text ?? "" });
   },
   "tab.rename": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
     renameTab(s, text),
@@ -952,6 +954,8 @@ export const VimmaHost = {
   /** @param {Window} win */
   init(win) {
     if (states.has(win)) return;
+    /** @type {Map<string, Window>} the window of each tab tab search listed (tab-search.mjs) */
+    let tabWindows = new Map();
     const keymap = settings.keymap ?? compileKeymap();
     /** @type {WindowState} */
     const state = {
@@ -993,18 +997,17 @@ export const VimmaHost = {
       listeners: new Set(),
       statusBar: null,
       picker: new GotoPicker(win, {
-        items: () => gotoItems(win),
+        items: () => {
+          const { items, windowOf } = tabSearchList(win);
+          tabWindows = windowOf;
+          return items;
+        },
         activeId: () =>
           /** @type {{ gBrowser: { selectedTab: { linkedPanel: string } } }} */ (
             /** @type {unknown} */ (win)
           ).gBrowser.selectedTab.linkedPanel,
-        select: (tabId) => {
-          const tab = tabById(win, tabId);
-          if (!tab) return;
-          /** @type {{ gBrowser: { selectedTab: Element } }} */ (
-            /** @type {unknown} */ (win)
-          ).gBrowser.selectedTab = tab;
-        },
+        select: (tabId) => goToTab(win, tabWindows.get(tabId), tabId),
+        reopen: (id) => reopenClosed(win, id),
       }),
       // The private workspace is the last row (docs/specs/private-workspace.md decision 5).
       wsPicker: new WorkspacePicker(win, {

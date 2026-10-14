@@ -1,6 +1,6 @@
 # Spec: tab-search
 
-Status: accepted · Area: `packages/vimma-core/src/` (`picker.mjs`, `tabsearch.mjs` new,
+Status: implemented · Area: `packages/vimma-core/src/` (`picker.mjs`, `tabsearch.mjs` new,
 `actions.mjs`, `cmdline.mjs`); `src/browser/base/content/vimma/` (`host/goto.mjs`,
 `host/tab-search.mjs` new, `host/VimmaHost.sys.mjs`, `ui/picker.mjs`, `jar.mn`);
 `src/browser/themes/shared/vimma/picker.css` · Upstream patches: none · ADR: none. No new

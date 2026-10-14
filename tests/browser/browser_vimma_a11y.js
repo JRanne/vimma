@@ -268,23 +268,41 @@ async function expectPicker(id, title, listName) {
   return { dialog, list };
 }
 
-add_task(async function goto_picker_is_a_listbox_whose_focus_follows_j_and_k() {
+add_task(async function tab_search_is_a_listbox_whose_focus_follows_ctrl_n_and_ctrl_p() {
   const tabs = [await openPage(`${PAGE}?one`), await openPage(`${PAGE}?two`)];
   prefix("g");
-  const { list } = await expectPicker("vimma-picker", "Go to tab", "Tabs");
-  // It opens on the selected tab, the last one: k moves up, j back down.
-  const last = await expectActiveRow(list, Role.ROLE_OPTION, "goto picker");
-  EventUtils.synthesizeKey("k");
+  const { dialog, list } = await expectPicker("vimma-picker", "Tabs", "Tabs");
+  // It opens on the selected tab, the last one: ctrl+p moves up, ctrl+n back down (letters
+  // type: tab search opens typing, docs/specs/tab-search.md).
+  const last = await expectActiveRow(list, Role.ROLE_OPTION, "tab search");
+  const lastAcc = await accOf(last, "the active option");
+  const main = WindowWorkspaces.get(window).model.workspaces.find(
+    (w) => w.id === WindowWorkspaces.get(window).model.active,
+  );
+  Assert.stringContains(lastAcc.name, `, ${main.name}`, "an option's name says its workspace");
+  for (const heading of dialog.querySelectorAll(".vimma-picker-heading")) {
+    Assert.equal(heading.getAttribute("role"), "presentation", "a section heading is no option");
+  }
+  EventUtils.synthesizeKey("p", { ctrlKey: true });
   await until(
     () => list.getAttribute("aria-activedescendant") !== last.id,
-    "k moves the active row",
+    "ctrl+p moves the active row",
   );
-  await expectActiveRow(list, Role.ROLE_OPTION, "goto picker after k");
-  EventUtils.synthesizeKey("j");
-  await until(() => list.getAttribute("aria-activedescendant") === last.id, "j moves it back");
-  await expectActiveRow(list, Role.ROLE_OPTION, "goto picker after j");
+  await expectActiveRow(list, Role.ROLE_OPTION, "tab search after ctrl+p");
+  EventUtils.synthesizeKey("n", { ctrlKey: true });
+  await until(() => list.getAttribute("aria-activedescendant") === last.id, "ctrl+n moves back");
+  await expectActiveRow(list, Role.ROLE_OPTION, "tab search after ctrl+n");
+
+  // A polite live region says how many tabs match as the query changes.
+  const live = dialog.querySelector(".vimma-picker-count");
+  const liveAcc = await accOf(live, "the match count");
+  Assert.equal(attr(liveAcc, "live"), "polite", "the count is polite");
+  EventUtils.sendString("zzqqxv");
+  await until(() => live.textContent === "no tabs match", "no match is announced");
+  EventUtils.synthesizeKey("u", { ctrlKey: true });
+  await until(() => /^\d+ tabs?$/.test(live.textContent), "a count is announced");
   EventUtils.synthesizeKey("KEY_Escape");
-  await focusBackOn(tabs[1].linkedBrowser, "goto picker");
+  await focusBackOn(tabs[1].linkedBrowser, "tab search");
   for (const tab of tabs) gBrowser.removeTab(tab);
 });
 

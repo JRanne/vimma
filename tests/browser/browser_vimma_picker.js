@@ -2,7 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Spec: docs/specs/m2-picker-rename.md (the goto picker)
+// Spec: docs/specs/m2-picker-rename.md (the goto picker), which is tab search
+// (docs/specs/tab-search.md): it opens typing, and Esc closes it.
 
 "use strict";
 
@@ -10,6 +11,9 @@
 
 const { VimmaHost } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
+);
+const { SessionStore } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/sessionstore/SessionStore.sys.mjs",
 );
 
 const PAGE = "https://example.org/";
@@ -39,7 +43,10 @@ async function select(tab) {
   if (gBrowser.selectedTab !== tab) await BrowserTestUtils.switchTab(gBrowser, tab);
 }
 
-/** One example.org tab per title, each recording its keys; the first focused, normal mode. */
+/**
+ * One example.org tab per title, each recording its keys; the first focused, normal mode. The
+ * tabs earlier tasks closed are forgotten first: tab search lists recently closed tabs too.
+ */
 async function openTitled(list = TITLES) {
   const tabs = [];
   for (const [i, title] of list.entries()) {
@@ -52,6 +59,9 @@ async function openTitled(list = TITLES) {
     await recordPageKeys(browser);
     tabs.push(tab);
   }
+  // By now the previous task's tabs have finished closing.
+  while (SessionStore.getClosedTabCountForWindow(window)) SessionStore.forgetClosedTab(window, 0);
+  while (SessionStore.getClosedWindowCount()) SessionStore.forgetClosedWindow(0);
   await select(tabs[0]);
   await focusContent(tabs[0].linkedBrowser);
   Assert.equal(VimmaHost.status(window).mode, "normal", "sanity: the page is in normal mode");
@@ -94,19 +104,25 @@ add_task(async function prefix_g_lists_every_tab_with_number_label_and_host() {
   closeTabs(tabs);
 });
 
-add_task(async function j_k_and_ctrl_n_p_move_the_selection() {
+add_task(async function arrows_and_ctrl_n_p_move_the_selection_and_j_types() {
   const tabs = await openTitled();
   openPicker();
   const at = () => rows().indexOf(selected());
   const start = at();
-  EventUtils.synthesizeKey("j");
-  Assert.equal(at(), start + 1, "j moves down");
+  EventUtils.synthesizeKey("KEY_ArrowDown");
+  Assert.equal(at(), start + 1, "Down moves down");
   EventUtils.synthesizeKey("n", { ctrlKey: true });
   Assert.equal(at(), start + 2, "ctrl+n moves down");
-  EventUtils.synthesizeKey("k");
-  Assert.equal(at(), start + 1, "k moves up");
+  EventUtils.synthesizeKey("KEY_ArrowUp");
+  Assert.equal(at(), start + 1, "Up moves up");
   EventUtils.synthesizeKey("p", { ctrlKey: true });
   Assert.equal(at(), start, "ctrl+p moves up");
+  EventUtils.synthesizeKey("j");
+  Assert.equal(
+    picker().querySelector(".vimma-picker-query").textContent,
+    "/j",
+    "j types: the picker opens typing (tab-search decision 2)",
+  );
   EventUtils.synthesizeKey("KEY_Escape");
   closeTabs(tabs);
 });
@@ -115,7 +131,7 @@ add_task(async function finnish_letters_rank_exact_first_and_enter_selects() {
   const tabs = await openTitled();
   const pageBrowser = tabs[0].linkedBrowser;
   openPicker();
-  type("/kä");
+  type("kä");
   Assert.equal(picker().querySelector(".vimma-picker-query").textContent, "/kä", "the query shows");
   Assert.equal(titles()[0], "Käyttäjät", "kä ranks Käyttäjät first");
   Assert.equal(
@@ -137,11 +153,9 @@ add_task(async function finnish_letters_rank_exact_first_and_enter_selects() {
   );
   Assert.ok(!list.includes("Asetukset"), "a non-match is filtered out");
 
-  EventUtils.synthesizeKey("KEY_Escape");
-  Assert.ok(isOpen(), "Esc in search goes back to browse, still open");
   Assert.equal(selected(), rows()[0], "on the best match, Kalenteri");
-  EventUtils.synthesizeKey("j");
-  Assert.equal(rowTitle(selected()), "Käyttäjät", "j moves to Käyttäjät");
+  EventUtils.synthesizeKey("n", { ctrlKey: true });
+  Assert.equal(rowTitle(selected()), "Käyttäjät", "ctrl+n moves to Käyttäjät");
   EventUtils.synthesizeKey("KEY_Enter");
   Assert.ok(!isOpen(), "Enter closes the picker");
   Assert.equal(gBrowser.selectedTab, tabs[2], "and selects that tab");
@@ -153,13 +167,12 @@ add_task(async function esc_closes_and_restores_focus_without_page_keys() {
   const tabs = await openTitled();
   const browser = tabs[0].linkedBrowser;
   openPicker();
-  type("jk/xq"); // q types in search; in browse it would close
+  type("jk/xq"); // every letter types, q too
+  Assert.equal(picker().querySelector(".vimma-picker-query").textContent, "/jk/xq", "typed");
   EventUtils.synthesizeKey("w", { ctrlKey: true });
-  EventUtils.synthesizeKey("KEY_Escape");
-  Assert.ok(isOpen(), "the first Esc leaves search");
   Assert.equal(gBrowser.tabs.includes(tabs[0]), true, "ctrl+w closed no tab");
   EventUtils.synthesizeKey("KEY_Escape");
-  Assert.ok(!isOpen(), "the second Esc closes");
+  Assert.ok(!isOpen(), "one Esc closes");
   Assert.equal(gBrowser.selectedTab, tabs[0], "the tab did not change");
   Assert.equal(document.activeElement, browser, "focus is back on the page");
   Assert.equal(VimmaHost.status(window).mode, "normal", "in normal mode again");
@@ -167,11 +180,8 @@ add_task(async function esc_closes_and_restores_focus_without_page_keys() {
   closeTabs(tabs);
 });
 
-add_task(async function q_closes_from_browse_and_ls_and_b_open_it() {
+add_task(async function ls_and_b_open_it() {
   const tabs = await openTitled();
-  openPicker();
-  EventUtils.synthesizeKey("q");
-  Assert.ok(!isOpen(), "q closes in browse mode");
   EventUtils.synthesizeKey(":", { shiftKey: true });
   EventUtils.sendString("ls");
   EventUtils.synthesizeKey("KEY_Enter");
