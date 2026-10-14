@@ -6,7 +6,7 @@
  * The side panel (docs/specs/m3-workspaces.md, sub-spec 6): what it lists and what its keys do,
  * as pure functions over the workspace model. The host renders it (ui/side-panel.mjs).
  */
-import { activeWorkspace } from "./workspaces.mjs";
+import { activeWorkspace, nextWorkspace, previousWorkspace } from "./workspaces.mjs";
 import { displayLabel } from "./tablabels.mjs";
 
 /** @import { Workspaces } from "./workspaces.mjs" */
@@ -55,8 +55,10 @@ import { displayLabel } from "./tablabels.mjs";
  * private workspace, whose ctrl+b ( / ctrl+b ) targets the host knows (private-workspace).
  * `panes` / `paneFocus`: the active workspace's split, its tabs and its focused pane's tab
  * (side-panel-unsplit); none or [] without a split. `paneHidden`: the split is a hidden view.
+ * `skip`: workspace ids the cycle passes over (the agent workspace, docs/specs/vimma-mcp.md
+ * decision 9), so the header never names one as a neighbour.
  * @typedef {{ color?: string, private?: boolean,
- *   neighbours?: readonly [string | null, string | null],
+ *   neighbours?: readonly [string | null, string | null], skip?: ReadonlySet<string>,
  *   panes?: readonly string[], paneFocus?: string | null, paneHidden?: boolean }} PanelOptions
  */
 
@@ -88,16 +90,23 @@ function hostOf(url) {
 export function openPanel(
   model,
   info,
-  { color, selectedId = null, panes = [], paneFocus = null, paneHidden = false, ...where } = {},
+  {
+    color,
+    selectedId = null,
+    panes = [],
+    paneFocus = null,
+    paneHidden = false,
+    skip,
+    ...where
+  } = {},
 ) {
   const w = activeWorkspace(model);
   const at = model.workspaces.indexOf(w);
-  const n = model.workspaces.length;
+  // The ctrl+b ( / ctrl+b ) targets, as the cycle finds them: none when it stays put.
   const neighbour = (/** @type {number} */ step) => {
     if (where.neighbours) return where.neighbours[step < 0 ? 0 : 1];
-    return n > 1
-      ? /** @type {{ name: string }} */ (model.workspaces[(at + step + n) % n]).name
-      : null;
+    const to = (step < 0 ? previousWorkspace : nextWorkspace)(model, skip);
+    return to.active === model.active ? null : activeWorkspace(to).name;
   };
   const rows = w.tabs.map((tabId, i) => {
     const t = info(tabId) ?? {};

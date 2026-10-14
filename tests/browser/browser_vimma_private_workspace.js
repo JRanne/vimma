@@ -312,13 +312,39 @@ add_task(async function the_status_bar_and_side_panel_show_private() {
     panel.querySelector(`.vimma-panel-row[data-tab-id="${tab.linkedPanel}"]`),
     "listing the private window's tabs",
   );
-  Assert.ok(
-    panel.querySelector(".vimma-panel-neighbours").textContent ===
-      `ctrl+b ( ${ww().model.workspaces.at(-1).name} · ctrl+b ) ${ww().model.workspaces[0].name}`,
-    "its neighbours are the last and the first normal workspace",
+  // Every profile has the agent workspace (docs/specs/vimma-mcp.md decision 8), last in the
+  // model; the cycle skips it (decision 9), so the head never names it.
+  const agent = WorkspaceStore.agent;
+  Assert.equal(ww().model.workspaces.at(-1).id, agent.id, "the agent workspace sorts last");
+  const cycled = ww().model.workspaces.filter((w) => w.id !== agent.id);
+  Assert.equal(
+    panel.querySelector(".vimma-panel-neighbours").textContent,
+    `ctrl+b ( ${cycled.at(-1).name} · ctrl+b ) ${cycled[0].name}`,
+    "its neighbours are the last and the first normal workspace, past the agent workspace",
   );
   EventUtils.synthesizeKey("KEY_Escape", {}, priv);
   await until(() => panel.hidden, "Esc closes it");
+});
+
+add_task(async function a_normal_side_panel_names_the_cycles_targets_past_agent() {
+  await SimpleTest.promiseFocus(window);
+  const agent = WorkspaceStore.agent;
+  const cycled = ww().model.workspaces.filter((w) => w.id !== agent.id);
+  Assert.greater(cycled.length, 1, "two normal workspaces and the agent workspace");
+  ww().switchTo({ id: cycled.at(-1).id });
+  await until(() => ww().model.active === cycled.at(-1).id, "on the last normal workspace");
+  await focusContent(gBrowser.selectedBrowser);
+  prefix("b");
+  const panel = document.getElementById(PANEL_ID);
+  await until(() => panel && !panel.hidden, "ctrl+b b opens the side panel");
+  Assert.equal(
+    panel.querySelector(".vimma-panel-neighbours").textContent,
+    `ctrl+b ( ${cycled.at(-2).name} · ctrl+b ) ${cycled[0].name}`,
+    "ctrl+b ) wraps to the first workspace, past the agent workspace",
+  );
+  EventUtils.synthesizeKey("KEY_Escape", {});
+  await until(() => panel.hidden, "Esc closes it");
+  ww().switchTo({ id: main().id });
 });
 
 add_task(async function a_normal_window_never_shows_a_private_title_or_url() {

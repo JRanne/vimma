@@ -1,6 +1,6 @@
 // The fuzz harness's own failure report (harness.mjs). Spec: docs/specs/m7-fuzzing.md.
 import { describe, expect, test } from "vitest";
-import { replayCommand } from "./harness.mjs";
+import { replayCommand, within } from "./harness.mjs";
 
 describe("fuzz harness", () => {
   // Regression (issue #134): the printed replay filtered with `-t "config-no-throw"`, the failure
@@ -20,5 +20,18 @@ describe("fuzz harness", () => {
     const pattern = quoted.replaceAll("'\\''", "'");
     expect(new RegExp(pattern).test(title)).toBe(true);
     expect(new RegExp(pattern).test(title.replace(".", "X"))).toBe(false);
+  });
+
+  // Issue #196: "took 5046 ms, budget 5000 ms" did not say which of sixteen inputs was slow.
+  test("an over-budget case names its input", () => {
+    const slow = () => {
+      const end = performance.now() + 5;
+      while (performance.now() < end);
+      return 1;
+    };
+    expect(() => within(0, slow, "a long unknown key")).toThrow(
+      /^a long unknown key: took \d+ ms, budget 0 ms$/,
+    );
+    expect(within(1000, () => 2, "fast")).toBe(2);
   });
 });
