@@ -27,6 +27,8 @@ packages, signs and publishes all of it without me, once I have enabled it.
   gated off until `RELEASE_ENABLED` is set.
 - `nightly.yml`: its `surfer package` step is replaced by `./mach package` (see Findings).
 - `docs/runbook.md` (Releases): enabling and verifying; `docs/guide.md`: "Installing" (planned).
+- `README.md`: the first release adds the download and latest-release badges to the badge bar
+  ([README badges](#readme-badges)).
 
 Out of scope: macOS and Windows (M7); the update manifest, MAR files and update server (separate
 spec, with the in-app updater); Flatpak (plan §9 open question); AppStream metainfo; a smoke
@@ -223,6 +225,24 @@ idempotent.
 | `sign`      | `gh variable set SIGNING_ENABLED --body true` (keyless: no key)                                                                                |
 | `aur`       | an AUR account, its SSH key as `gh secret set AUR_SSH_KEY`, and the name `vimma-bin` still free on the AUR (check before the first push)       |
 | public repo | the runner exposure rules in the runbook (fork PRs must not reach `vimma-build`)                                                               |
+
+## README badges
+
+The README opens with a centred row of shields.io badges in one muted grey style (`labelColor=333333`,
+`color=666666`): licence (MPL-2.0), GitHub stars, CI status and the Firefox version Vimma is built on.
+These work before any release.
+
+The first release that publishes assets adds two more, in the same style:
+
+- total downloads, `https://img.shields.io/github/downloads/JRanne/vimma/total`, linking to the
+  Releases page;
+- the latest release, `https://img.shields.io/github/v/release/JRanne/vimma?label=release`,
+  linking to `releases/latest`.
+
+Before a release both would read "0" or "no releases", which says nothing useful, so they are not
+shown until then. An AUR version badge (`https://img.shields.io/aur/version/vimma-bin`) follows
+once the `aur` job has pushed `vimma-bin`. The badges are a README edit made when the first release
+is published, not part of `release.yml`: shields.io reads the counts from the GitHub and AUR APIs.
 
 ## Tests (write first)
 
