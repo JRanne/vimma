@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +21,7 @@ import {
   testsLine,
 } from "../autopilot-body.mjs";
 import { ADVISORIES_URL, RELEASES_URL, VERSIONS_URL } from "../releases.mjs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 const fixtures = fileURLToPath(new URL("fixtures/", import.meta.url));
 const read = (/** @type {string} */ name) => readFileSync(join(fixtures, name), "utf8");
@@ -245,7 +246,7 @@ describe("detect", () => {
   });
 
   it("the CLI reads --feeds, prints a summary and appends step outputs (no network)", () => {
-    const dir = mkdtempSync(join(tmpdir(), "detect-"));
+    const dir = tempDir("detect-");
     const surfer = join(dir, "surfer.json");
     writeFileSync(surfer, JSON.stringify({ version: { product: "firefox", version: "156.0" } }));
     const out = join(dir, "out");
@@ -483,7 +484,7 @@ describe("autopilot body", () => {
   });
 
   it("the CLI renders from files", () => {
-    const dir = mkdtempSync(join(tmpdir(), "body-"));
+    const dir = tempDir("body-");
     const det = join(dir, "d.json");
     writeFileSync(det, JSON.stringify(securityRelease));
     const run = (/** @type {string[]} */ args) =>

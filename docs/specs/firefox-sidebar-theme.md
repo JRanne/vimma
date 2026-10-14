@@ -168,7 +168,8 @@ variables, not the elements that paint:
    `--color-accent-primary` (and its hover and active shades) is `--vimma-focus`;
    `--input-text-background-color` and `--background-color-box` are `--vimma-bg`,
    `--input-text-color` `--vimma-fg`, `--input-text-border-color` `--vimma-muted`, `--icon-color`
-   `--vimma-fg`. Gecko still draws its 1px halo around the ring in the accent's contrasting
+   `--vimma-fg` (and, since Firefox 159, `--input-background-color` and `--input-border-color`:
+   see "Firefox 159" below). Gecko still draws its 1px halo around the ring in the accent's contrasting
    colour (`Theme.cpp`, `PaintAutoStyleOutline`): white around Latte's dark blue, a dark tint
    around Ristretto's peach. It is derived from the theme's focus colour, not Firefox's palette.
 2. **The open panel's launcher button** (`<sidebar-main>`, a pressed non-ghost `moz-button`):
@@ -249,6 +250,31 @@ panel to load, and found no pressed launcher button after a theme switch; it now
 `<browser id="sidebar">`, the documents' URLs, `SidebarController.show`) is unchanged in 158;
 the other launcher changes (default tool order `opentabs,bookmarks,aichat,history,syncedtabs` in
 `SidebarManager.sys.mjs`, the Customize button kept last) do not touch the theme.
+
+### Firefox 159: the input tokens are renamed
+
+Firefox 159 (checked on 159.0b1, against 158.0) renamed the design system's text-input tokens and
+dropped the old names: `toolkit/content/widgets/moz-input-text/moz-input-text.css` paints the field
+with `background-color: var(--input-background-color)` and `border: var(--input-border)`, where it
+used `--input-text-background-color` and `--input-text-border` in 158. The design tokens
+(`toolkit/themes/shared/design-system/dist/tokens-shared.css`, `tokens-platform.css`) define
+`--input-background-color` (`Field`, or `--background-color-box` under Nova), `--input-border`
+and `--input-border-color` (now `--border-color-interactive`, a stronger grey than 158's
+`--border-color`), and no `--input-text-background-color`, `--input-text-border*`,
+`--input-text-min-height`, `--input-text-icon-size` or `--input-text-opacity-disabled`.
+`--input-text-color` keeps its name. The search rules moved from `moz-input-text.css` into a new
+`moz-input-search.css` that imports it; the selectors and the focus ring
+(`outline: var(--focus-outline)`, `accent-color` from `--color-accent-primary`) are unchanged.
+
+So on 159 the history and bookmarks search field went back to `Field` (`#2b2a33` dark, white
+light) with a `#949297` or `#817f84` border: the mochitest failed 14 assertions (background and
+border, for history and bookmarks under the dark, switched, light and built-in themes), and
+nothing else in the sidebar changed. `firefox-sidebar-page.css` now sets both generations of the
+two tokens to the same Vimma tokens (`--input-text-background-color` and
+`--input-background-color` to `--vimma-bg`, `--input-text-border-color` and
+`--input-border-color` to `--vimma-muted`), so the same sheet works on 158 and 159; the 158 names
+can go once Vimma no longer builds on 158. The assertions are unchanged: 232 checks pass on both
+158.0 and 159.0b1.
 
 ## Open questions
 

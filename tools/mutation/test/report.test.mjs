@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MAX_BODY, survivorsReport } from "../report.mjs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 const script = fileURLToPath(new URL("../report.mjs", import.meta.url));
 
@@ -103,7 +103,7 @@ describe("survivorsReport", () => {
 
 describe("report.mjs on the command line", () => {
   it("writes the issue body to stdout and the score to GITHUB_OUTPUT", () => {
-    const dir = mkdtempSync(join(tmpdir(), "mutation-report-"));
+    const dir = tempDir("mutation-report-");
     const json = join(dir, "mutation.json");
     const out = join(dir, "output");
     writeFileSync(json, JSON.stringify(report));

@@ -292,7 +292,7 @@ Release checklist (`release.yml`, automated; `docs/release.md` is the human fall
 
 The repo holds the memory. `CLAUDE.md`, specs, ADRs, tests and the changelog are what every fresh session reads, local or headless.
 
-**Plan-first, one spec per session.** Plan mode → plan saved to `docs/specs/<feature>.md` listing tests to write, files to touch, upstream patches needed (ideally none), ADR check → approve → run. Drift past the spec means stop and split.
+**Plan-first, one spec per session.** Plan mode → plan saved to `docs/specs/<feature>.md` listing tests to write, files to touch, upstream patches needed (ideally none), ADR check → approve → run. Every spec follows `docs/specs/README.md`: the template, verified facts, and professional prose with no record of who asked for what. Drift past the spec means stop and split.
 
 **When to clear context (`/clear` or new session):**
 

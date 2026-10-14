@@ -617,15 +617,36 @@ function installedKiB(dir) {
  */
 
 /**
- * Every release file from one `./mach package` tarball; see the file comment.
+ * @typedef {{ version: string, files: string[], appDir: string, debRoot: string, aurDir: string }}
+ *   PackageResult
+ */
+
+/**
+ * Every release file from one `./mach package` tarball; see the file comment. The AppDir and the
+ * deb root are built in `workDir`, which stays; without one they are built in a temp dir that is
+ * removed before this returns or throws, and `appDir`/`debRoot` no longer exist.
  * @param {PackageOptions} options
- * @returns {{ version: string, files: string[], appDir: string, debRoot: string, aurDir: string }}
+ * @returns {PackageResult}
  */
 export function packageRelease(options) {
+  if (options.workDir) return packageIn(options.workDir, options);
+  const work = mkdtempSync(join(tmpdir(), "vimma-package-"));
+  try {
+    return packageIn(work, options);
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+}
+
+/**
+ * @param {string} work scratch dir for the extracted tarball, the AppDir and the deb root
+ * @param {PackageOptions} options
+ * @returns {PackageResult}
+ */
+function packageIn(work, options) {
   const version = releaseVersion(options.config, options.tag);
   checkMaintainer(options.maintainer);
   const names = artifactNames(version);
-  const work = options.workDir ?? mkdtempSync(join(tmpdir(), "vimma-package-"));
   const out = options.outDir;
   mkdirSync(out, { recursive: true });
 
