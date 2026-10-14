@@ -60,7 +60,10 @@ One workflow, six jobs; the heavy ones run once per release (`upstream.yml` has 
    - **No artifacts** (404 or expired in the index): the suites are skipped and the PR says so.
      The full-build path is the build machine: `npx surfer build` and
      `npm run mochitest -- tests/browser/` (docs/rebase.md, step 4), and after merge the nightly.
-     A hosted runner cannot do a full build (22 GB, 39 min on 16 threads; ADR-010).
+     A hosted runner cannot do a full build (22 GB, 39 min on 16 threads; ADR-010). (Since
+     changed: the full-build path is a developer's machine, and the nightly moves to a
+     GitHub-hosted runner with [#224](https://github.com/JRanne/vimma/issues/224); spec build-supply-chain, decision 6, and its
+     research R9-R10 show the build fits one.)
    - `publish` (`contents`/`pull-requests`/`issues: write`): bump `surfer.json`, commit
      `upstream: firefox X.Y.Z`, push the branch, open the PR with `autopilot-body.mjs`'s body:
      a table (tarball, patches clean/offset/fuzz/failed, register, artifacts, suites), the
@@ -112,6 +115,8 @@ One workflow, six jobs; the heavy ones run once per release (`upstream.yml` has 
 
 About 3 releases a month (one major, one or two dot releases): ≈ 180 + 3 × 30 = **≈ 270 a
 month**, 14 % of the budget (was ≈ 130). Once the repo is public, hosted minutes are free.
+(Since changed: the repository is public, so these minutes cost nothing; `docs/runbook.md`,
+"Actions minutes budget".)
 
 ## Tests (written first)
 

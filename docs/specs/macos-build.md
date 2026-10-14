@@ -4,8 +4,8 @@ Status: draft · Area: `configs/macos/mozconfig`, `configs/macos/entitlements/` 
 `configs/branding/vimma/`, `tools/artifact-build/`, `tools/e2e/`, `tools/mochitest.mjs`,
 `tools/start.mjs`, `tools/vimma-ctl/src/discovery.rs`, `.github/workflows/ci.yml`, `e2e.yml`,
 `macos.yml` (new); `docs/guide.md`, `docs/limits.md`, `CONTRIBUTING.md`, `docs/runbook.md` ·
-Upstream patches: none (decision 7) · ADR: ADR-018 (new, "macOS: cross-compiled on Linux, arm64
-first"), with sub-PR 3
+Upstream patches: none (decision 7) · ADR: ADR-018 (planned, "macOS: cross-compiled on Linux, arm64
+first"; written with sub-PR 3)
 
 Engine paths are relative to `engine/` and were checked against Firefox 158.0. Surfer paths
 (`S/`) are relative to `node_modules/@zen-browser/surfer`, version 1.14.9. Zen Browser
@@ -316,7 +316,7 @@ Paths under `vimma/` are `src/browser/base/content/vimma/`.
     Before that, the `.dmg` is a `macos.yml` workflow artifact (90-day retention); once the Linux
     nightly is switched on (`NIGHTLY_ENABLED`), the `.dmg` may join the same nightly. `release.yml`
     gets no macOS job in this spec; when it does (sub-PR 6), the job must run with no manual step,
-    because a Firefox security release ships without a person (firefox-versions, ADR-020).
+    because a Firefox security release ships without a person (firefox-versions; ADR-020, planned with its sub-PR 4).
 13. **macOS never blocks a Linux release.** `macos.yml` is its own workflow, not a step of
     `nightly.yml`, `release.yml` or the Firefox bump, so a macOS-only breakage cannot hold back a
     Linux security release. It runs weekly, on `workflow_dispatch`, and on pull requests that touch

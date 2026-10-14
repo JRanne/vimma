@@ -1,6 +1,6 @@
 # Spec: firefox-versions
 
-Status: accepted · Area: `tools/release/` (new: `version-line.mjs`, `firefox-notes.mjs`,
+Status: accepted (sub-PRs 1 and 2 implemented, #194 and #199; sub-PRs 3 and 4: [#219](https://github.com/JRanne/vimma/issues/219), [#220](https://github.com/JRanne/vimma/issues/220)) · Area: `tools/release/` (new: `version-line.mjs`, `firefox-notes.mjs`,
 `security-release.mjs`), `.github/workflows/release-please.yml`, `nightly.yml`, `release.yml`,
 `tools/upstream/autopilot-body.mjs`, `src/browser/branding/vimma/pref/firefox-branding.js`,
 `docs/runbook.md`, `docs/security.md`, `docs/review-checklist.md`, `CONTRIBUTING.md` · Upstream

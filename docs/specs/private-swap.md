@@ -1,6 +1,7 @@
 # Spec: private-swap
 
-Status: implemented (hand checks on Hyprland pending) · Milestone: after
+Status: implemented (Results records the hand checks run so far; the rest of the Test plan's
+hand-check list is not recorded) · Milestone: after
 [private-workspace](private-workspace.md) (merged, #142) · Area: `packages/vimma-core/src/`
 (`hyprswap.mjs` new, `config.mjs`, `defaults.mjs`); `host/hypr/HyprIpc.sys.mjs` (new),
 `host/private-swap.mjs` (new), `host/private-ops.mjs`, `about/AboutVimma.sys.mjs`,

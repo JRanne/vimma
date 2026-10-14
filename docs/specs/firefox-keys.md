@@ -1,6 +1,6 @@
 # Spec: firefox-keys
 
-Status: in progress (sub-PR 1 built; sub-PRs 2 and 3 next) · Milestone: after M5 (builds on
+Status: accepted (sub-PR 1 implemented; sub-PRs 2 and 3: [#234](https://github.com/JRanne/vimma/issues/234), [#235](https://github.com/JRanne/vimma/issues/235)) · Milestone: after M5 (builds on
 [key-handling-batch](key-handling-batch.md) § 1, [m0-help-overlay](m0-help-overlay.md),
 [m5-config-load](m5-config-load.md) and [m1-cmdline](m1-cmdline.md)) · Area:
 `packages/vimma-core/src/firefox-keys.mjs`, `actions.mjs`, `defaults.mjs`, `keymap.mjs`,

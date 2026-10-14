@@ -1,6 +1,6 @@
 # Spec: upstream-beta-canary
 
-Status: accepted · Area: `.github/workflows/upstream-beta.yml` (new), `.github/workflows/e2e.yml`,
+Status: accepted (sub-PRs 1 to 3 implemented, #192, #197 and #206; sub-PR 4: [#218](https://github.com/JRanne/vimma/issues/218)) · Area: `.github/workflows/upstream-beta.yml` (new), `.github/workflows/e2e.yml`,
 `.github/workflows/upstream.yml` (one step moves into a shared script),
 `tools/upstream/canary.mjs` (new), `tools/upstream/source-check.sh` (new),
 `tools/upstream/patch-check.py`, `tools/upstream/artifact-preflight.mjs`,
@@ -195,7 +195,9 @@ patch check still runs.
   at the first failed step, so after a mochitest failure the e2e scenarios do not run.
 - `nightly.yml`: a full build on a self-hosted runner that does nothing until `NIGHTLY_ENABLED`
   is set; it is not live. A full build does not fit a hosted runner (ADR-010: 22 GB, 39 min on 16
-  threads), so the canary, like PR CI, cannot exercise compiled-in build configuration.
+  threads), so the canary, like PR CI, cannot exercise compiled-in build configuration. (Since
+  changed: spec build-supply-chain, R9-R10, finds a full build fits a standard hosted runner,
+  and [#224](https://github.com/JRanne/vimma/issues/224) moves the nightly there; the canary still runs artifact builds only.)
 - `patch-audit.yml`: the pattern for a scheduled report. The job that holds `issues: write`
   checks out and runs no repository code; it only calls `gh` with files an earlier read-only job
   produced.
