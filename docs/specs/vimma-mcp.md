@@ -10,6 +10,11 @@ Status: accepted · Area: `tools/vimma-ctl` (`src/mcp.rs`, `src/mcp_serve.rs`, `
 `config/ConfigHost.sys.mjs`, `about/AboutVimma.sys.mjs`; `tools/e2e` · Upstream patches: none ·
 ADR: [ADR-019](../adr/019-agents-over-mcp.md)
 
+Issues: [#229](https://github.com/JRanne/vimma/issues/229),
+[#230](https://github.com/JRanne/vimma/issues/230),
+[#231](https://github.com/JRanne/vimma/issues/231),
+[#232](https://github.com/JRanne/vimma/issues/232)
+
 Builds on [m0-control-protocol-and-vimma-ctl](m0-control-protocol-and-vimma-ctl.md),
 [m0-control-server](m0-control-server.md), [m3-workspaces](m3-workspaces.md),
 [workspace-routing](workspace-routing.md) and [private-workspace](private-workspace.md). Engine

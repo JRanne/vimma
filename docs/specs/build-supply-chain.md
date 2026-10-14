@@ -11,6 +11,12 @@ Status: accepted · Area: `package.json`, `package-lock.json`, `.npmrc` (new),
 none · ADR: ADR-021 (new, "Mozilla's release key is the trust anchor for the Firefox source");
 [ADR-001](../adr/001-engine-firefox-surfer.md) gains one paragraph on how Surfer is pinned
 
+Issues: [#221](https://github.com/JRanne/vimma/issues/221),
+[#222](https://github.com/JRanne/vimma/issues/222),
+[#223](https://github.com/JRanne/vimma/issues/223),
+[#224](https://github.com/JRanne/vimma/issues/224),
+[#225](https://github.com/JRanne/vimma/issues/225)
+
 ## Summary
 
 Vimma's binaries are built from three inputs: Mozilla's Firefox source tarball, Vimma's own

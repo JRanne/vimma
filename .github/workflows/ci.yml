@@ -1,8 +1,8 @@
 # Spec m0-pipeline. One job: the required check "lint, typecheck, test, commitlint, licences".
 # Issue #245: on a docs-only pull request (tools/ci/docs-only.mjs) the steps that Markdown cannot
 # affect skip with `if:`, and the job still reports. The steps that read Markdown (prettier,
-# md-wording, security-links, gen-docs, test:py, the Vitest files in MARKDOWN_TESTS) and
-# commitlint always run.
+# md-wording, spec-lint, security-links, gen-docs, test:py, the Vitest files in
+# MARKDOWN_TESTS) and commitlint always run.
 name: CI
 
 on:
@@ -64,6 +64,11 @@ jobs:
       # Markdown is documentation for outside readers: no record of who asked or when (#226).
       - name: No process wording in Markdown (npm run md-wording)
         run: npm run md-wording
+
+      # Spec and ADR statuses, a live spec's issue line, and a reason for every new decision
+      # (docs/specs/README.md).
+      - name: Spec statuses and decision reasons (npm run spec-lint)
+        run: npm run spec-lint
 
       # docs/bindings.md, docs/bindings.json and defaults.toml are generated: a hand edit fails here.
       - name: Generated docs are current (npm run gen-docs)

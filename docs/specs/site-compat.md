@@ -5,6 +5,8 @@ user-visible change) · Area: `tools/sites/` (new), `tools/e2e/launcher.mjs` (on
 `.github/workflows/sites.yml` (new), `package.json` (one script). No upstream patch, no product
 code, no new dependency.
 
+Issue: [#262](https://github.com/JRanne/vimma/issues/262)
+
 Engine paths are relative to `engine/` (Firefox 157.0.1). Timings were measured with
 `gh run list` / `gh run view` on 2026-10-12. GitHub's billing and runner facts were checked
 against docs.github.com the same day (links in Research).
