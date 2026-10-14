@@ -391,7 +391,8 @@ add_task(async function test_dangerous_content_asks_again_and_no_deletes_it() {
   AgentGate.answer(q.id, { kind: "deny" });
   let download = await added;
   Assert.ok(!(await settled(download)), "refused");
-  await until(async () => !(await names(quarantine)).length, "and deleted");
+  // Gone by the time it stopped (#204): its part and the placeholder at its name, no waiting.
+  Assert.deepEqual(await names(quarantine), [], "and deleted");
   await noticed("an executable (ELF), not allowed");
 
   // A zip holding an executable: listed, never extracted; allowed only for that file.
@@ -525,14 +526,15 @@ add_task(async function test_clamav_clean_infected_error_and_missing() {
   await fakeClam("infected");
   r = await run("bad.txt");
   Assert.ok(!r.ok, "infected: refused");
-  Assert.ok(!(await names(quarantine)).includes("bad.txt"), "and deleted");
+  // Gone by the time it stopped (#204): its part and the placeholder at its name, no waiting.
+  Assert.deepEqual(await names(quarantine), ["clean.txt"], "and deleted");
   await noticed('"bad.txt": ClamAV found Vimma-Test-Signature');
 
   // Security review of #182 (finding 7): what ClamAV could not do is asked, and no deletes it.
   await fakeClam("error");
   r = await run("unsure.txt", "deny");
   Assert.ok(!r.ok, "a ClamAV error asks; no deletes it");
-  await until(async () => !(await names(quarantine)).includes("unsure.txt"), "deleted");
+  Assert.deepEqual(await names(quarantine), ["clean.txt"], "deleted");
   r = await run("kept.txt", "once");
   Assert.ok(r.ok, "yes keeps it");
   await noticed('"kept.txt" to ');

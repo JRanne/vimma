@@ -98,9 +98,17 @@ mochitest run on a full build.
 
 Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
 
-- **Specs.** Every feature starts as `docs/specs/<milestone>-<feature>.md`, with acceptance
-  criteria written as Given/When/Then. Boundary changes and new upstream patches need an ADR in
-  `docs/adr/`.
+- **Issues.** Every planned feature has one GitHub issue (label `planned`) with a short reason,
+  a link to its spec and the spec's open questions. The issues are the backlog; the
+  [Vimma roadmap](https://github.com/users/JRanne/projects/2) board tracks them, and
+  [plan.md](plan.md) §6 keeps only the milestones and their order.
+- **Specs.** Every feature starts as `docs/specs/<feature>.md`, written to
+  [docs/specs/README.md](docs/specs/README.md). A spec merges to `main` at once as a draft with
+  its open questions; the maintainer answers them in the feature's issue, each answer is a small
+  edit merged at once, and the spec is accepted when nothing is open (the "Lifecycle" section of
+  that page). Boundary changes and new upstream patches need an ADR in `docs/adr/`.
+- **Pull requests.** A pull request is only for work that is ready to merge. Work that waits on a
+  decision is a question in its issue, not an open pull request.
 - **TDD.** Write the failing test and run it, then implement until it passes. Never loosen a test.
 - **Commits.** Use Conventional Commits with a body: the subject is the changelog line; the body
   explains why.
