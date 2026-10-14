@@ -116,7 +116,10 @@ async function runCommand(line) {
 async function tempStore(doc, options = {}) {
   const path = PathUtils.join(PathUtils.tempDir, `vimma-mcp-${Date.now()}-${Math.random()}.json`);
   if (doc) await IOUtils.writeJSON(path, doc);
-  registerCleanupFunction(() => IOUtils.remove(path, { ignoreAbsent: true }));
+  // and the backup JSONFile writes next to it (backupTo), which was left in /tmp (#207)
+  registerCleanupFunction(async () => {
+    for (const file of [path, `${path}.bak`]) await IOUtils.remove(file, { ignoreAbsent: true });
+  });
   const store = new WorkspaceStoreImpl({ path, saveDelayMs: 0, ...options });
   await store.init();
   for (const w of store.definitions.workspaces) {

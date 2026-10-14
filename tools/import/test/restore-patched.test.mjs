@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { findPatches, patchedFiles, restorePatched } from "../restore-patched.mjs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 const modify = `--- a/browser/base/moz.build
 +++ b/browser/base/moz.build
@@ -50,7 +50,7 @@ describe("patchedFiles", () => {
 
 describe("findPatches", () => {
   it("finds .patch files under src/, sorted, and ignores other files", () => {
-    const src = mkdtempSync(join(tmpdir(), "vimma-restore-"));
+    const src = tempDir("vimma-restore-");
     mkdirSync(join(src, "browser/base"), { recursive: true });
     writeFileSync(join(src, "browser/base/moz-build.patch"), modify);
     writeFileSync(join(src, "browser/a.patch"), modify);
@@ -73,7 +73,7 @@ const git = (dir, ...args) =>
   });
 
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "vimma-restore-"));
+  const root = tempDir("vimma-restore-");
   const engine = join(root, "engine");
   mkdirSync(join(engine, "browser/base"), { recursive: true });
   mkdirSync(join(root, "src/browser/base"), { recursive: true });

@@ -11,6 +11,7 @@ import {
   readFileSync,
   readlinkSync,
   readdirSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -37,6 +38,7 @@ import {
   sha256sums,
   srcinfo,
 } from "../package.mjs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 const BRAND_DIR = fileURLToPath(new URL("../../../configs/branding/vimma/", import.meta.url));
 const MAINTAINER = "Test Maintainer <test@example.invalid>";
@@ -85,10 +87,10 @@ MaxVersion=157.0.1
 /**
  * A fake `./mach package` tarball: one top-level vimma/ dir, as the real one.
  * @param {{ name?: string, omit?: string }} [options]
+ * @param {string} [dir] where to build it (default: a temp dir removed after the test)
  * @returns {string} the tarball's path
  */
-function fakeMachTarball({ name = "Vimma", omit } = {}) {
-  const dir = mkdtempSync(join(tmpdir(), "vimma-fake-dist-"));
+function fakeMachTarball({ name = "Vimma", omit } = {}, dir = tempDir("vimma-fake-dist-")) {
   const app = join(dir, "vimma");
   mkdirSync(join(app, "browser/chrome/icons/default"), { recursive: true });
   /** @type {Record<string, [string, number]>} */
@@ -114,10 +116,10 @@ function fakeMachTarball({ name = "Vimma", omit } = {}) {
 
 /**
  * An appimagetool stand-in: records its arguments and ARCH, writes the output file.
+ * @param {string} [dir] where to put it (default: a temp dir removed after the test)
  * @returns {{ tool: string, log: string }}
  */
-function fakeAppimagetool() {
-  const dir = mkdtempSync(join(tmpdir(), "vimma-fake-tool-"));
+function fakeAppimagetool(dir = tempDir("vimma-fake-tool-")) {
   const tool = join(dir, "appimagetool");
   const log = join(dir, "args.log");
   writeFileSync(
@@ -168,7 +170,7 @@ describe("application.ini", () => {
   });
 
   it("reads Name and RemotingName from an app dir", () => {
-    const dir = mkdtempSync(join(tmpdir(), "vimma-ini-"));
+    const dir = tempDir("vimma-ini-");
     writeFileSync(join(dir, "application.ini"), APP_INI);
     expect(readAppIni(dir)).toEqual({ name: "Vimma", remotingName: "vimma-vimma" });
   });
@@ -218,7 +220,7 @@ describe("desktop entry", () => {
   });
 
   it.skipIf(!has("desktop-file-validate"))("passes desktop-file-validate", () => {
-    const dir = mkdtempSync(join(tmpdir(), "vimma-desktop-"));
+    const dir = tempDir("vimma-desktop-");
     writeFileSync(join(dir, "vimma-vimma.desktop"), text);
     const result = spawnSync("desktop-file-validate", [join(dir, "vimma-vimma.desktop")], {
       encoding: "utf8",
@@ -236,7 +238,7 @@ describe("AppRun", () => {
     expect(script).toMatch(/MOZ_APP_LAUNCHER="\$APPIMAGE"/);
   });
   it("leaves MOZ_APP_LAUNCHER alone when not started by the AppImage runtime", () => {
-    const dir = mkdtempSync(join(tmpdir(), "vimma-apprun-"));
+    const dir = tempDir("vimma-apprun-");
     mkdirSync(join(dir, "usr/lib/vimma"), { recursive: true });
     writeFileSync(join(dir, "AppRun"), script);
     copyFileSync(LAUNCHER, join(dir, "usr/lib/vimma/vimma-open"));
@@ -264,7 +266,7 @@ describe("AppRun", () => {
     expect(spawnSync("sh", ["-n"], { input: script }).status).toBe(0);
   });
   it("sends one link through vimma-open, and flags (desktop actions) straight to vimma", () => {
-    const dir = mkdtempSync(join(tmpdir(), "vimma-apprun-"));
+    const dir = tempDir("vimma-apprun-");
     mkdirSync(join(dir, "usr/lib/vimma"), { recursive: true });
     writeFileSync(join(dir, "AppRun"), script, { mode: 0o755 });
     copyFileSync(LAUNCHER, join(dir, "usr/lib/vimma/vimma-open"));
@@ -368,7 +370,7 @@ describe("PKGBUILD and .SRCINFO", () => {
   });
 
   it.skipIf(!has("makepkg"))("equals makepkg --printsrcinfo", () => {
-    const dir = mkdtempSync(join(tmpdir(), "vimma-pkgbuild-"));
+    const dir = tempDir("vimma-pkgbuild-");
     writeFileSync(join(dir, "PKGBUILD"), build);
     const printed = execFileSync("makepkg", ["--printsrcinfo"], { cwd: dir, encoding: "utf8" });
     expect(info).toBe(printed);
@@ -377,7 +379,7 @@ describe("PKGBUILD and .SRCINFO", () => {
 
 describe("SHA256SUMS", () => {
   it("lists each file by name, sorted, in sha256sum format", () => {
-    const dir = mkdtempSync(join(tmpdir(), "vimma-sums-"));
+    const dir = tempDir("vimma-sums-");
     writeFileSync(join(dir, "b.bin"), "bee");
     writeFileSync(join(dir, "a.bin"), "ay");
     const text = sha256sums([join(dir, "b.bin"), join(dir, "a.bin")]);
@@ -397,12 +399,18 @@ describe("packageRelease on a fake ./mach package tarball", () => {
   const deb = has("dpkg-deb");
 
   beforeAll(() => {
-    tarball = fakeMachTarball();
-    tool = fakeAppimagetool();
-    out = mkdtempSync(join(tmpdir(), "vimma-out-"));
-    const runtime = join(mkdtempSync(join(tmpdir(), "vimma-rt-")), "runtime-x86_64");
+    // tempDir() is per test; these outlive one, so they go when the describe ends.
+    const dirs = ["vimma-tarball-", "vimma-tool-", "vimma-out-", "vimma-rt-", "vimma-work-"].map(
+      (prefix) => mkdtempSync(join(tmpdir(), prefix)),
+    );
+    const [tarDir, toolDir, outDir, rtDir, work] = /** @type {string[]} */ (dirs);
+    tarball = fakeMachTarball({}, tarDir);
+    tool = fakeAppimagetool(toolDir);
+    out = outDir;
+    const runtime = join(rtDir, "runtime-x86_64");
     writeFileSync(runtime, "runtime");
     result = packageRelease({
+      workDir: work,
       tarball,
       outDir: out,
       config: surfer("0.1.0"),
@@ -414,6 +422,9 @@ describe("packageRelease on a fake ./mach package tarball", () => {
       runtime,
       buildDeb: deb,
     });
+    return () => {
+      for (const d of dirs) rmSync(d, { recursive: true, force: true });
+    };
   });
 
   it("copies the mach tarball unchanged under the release name", () => {
@@ -545,8 +556,8 @@ describe("packageRelease on a fake ./mach package tarball", () => {
 
 describe("packageRelease includes an SBOM given next to it", () => {
   it("adds the SBOM to SHA256SUMS", () => {
-    const out = mkdtempSync(join(tmpdir(), "vimma-out-"));
-    const sbom = join(mkdtempSync(join(tmpdir(), "vimma-sbom-")), "vimma-0.1.0.cdx.json");
+    const out = tempDir("vimma-out-");
+    const sbom = join(tempDir("vimma-sbom-"), "vimma-0.1.0.cdx.json");
     writeFileSync(sbom, "{}\n");
     packageRelease({
       tarball: fakeMachTarball(),
@@ -563,12 +574,45 @@ describe("packageRelease includes an SBOM given next to it", () => {
   });
 });
 
+describe("packageRelease cleans up after itself", () => {
+  /** The tool's own scratch dirs in the temp dir. */
+  const scratch = () => readdirSync(tmpdir()).filter((n) => n.startsWith("vimma-package-"));
+  const opts = (/** @type {string} */ tarball) => ({
+    tarball,
+    outDir: tempDir("vimma-out-"),
+    config: surfer("0.1.0"),
+    maintainer: MAINTAINER,
+    repo: REPO,
+    brandDir: BRAND_DIR,
+    buildDeb: false,
+  });
+
+  it("removes its scratch dir when it made one", () => {
+    const before = scratch();
+    packageRelease(opts(fakeMachTarball()));
+    expect(scratch()).toEqual(before);
+  });
+
+  it("removes it when packaging fails too", () => {
+    const before = scratch();
+    expect(() => packageRelease(opts(fakeMachTarball({ name: "Firefox" })))).toThrow();
+    expect(scratch()).toEqual(before);
+  });
+
+  it("keeps a workDir it was given", () => {
+    const work = tempDir("vimma-work-");
+    const result = packageRelease({ ...opts(fakeMachTarball()), workDir: work });
+    expect(result.appDir).toBe(join(work, "AppDir"));
+    expect(existsSync(join(result.appDir, "AppRun"))).toBe(true);
+  });
+});
+
 describe("packageRelease refuses bad input", () => {
   /** @param {string} tarball */
   const run = (tarball) => () =>
     packageRelease({
       tarball,
-      outDir: mkdtempSync(join(tmpdir(), "vimma-out-")),
+      outDir: tempDir("vimma-out-"),
       config: surfer("0.1.0"),
       maintainer: MAINTAINER,
       repo: REPO,

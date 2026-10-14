@@ -38,11 +38,17 @@
     var(--vimma-focus) 70%,
     var(--vimma-fg)
   ) !important;
+  /* The field's surface and border tokens were renamed in Firefox 159 (moz-input-text.css:
+   * --input-text-background-color and --input-text-border-color became --input-background-color
+   * and --input-border-color, the border now --border-color-interactive): both names are set, so
+   * the field follows the theme on 158 and 159. --input-text-color kept its name. */
   --input-text-background-color: var(--vimma-bg) !important;
+  --input-background-color: var(--vimma-bg) !important;
   /* The design system's box surface (white or #171519; the synced tabs' rows and badges). */
   --background-color-box: var(--vimma-bg) !important;
   --input-text-color: var(--vimma-fg) !important;
   --input-text-border-color: var(--vimma-muted) !important;
+  --input-border-color: var(--vimma-muted) !important;
   --icon-color: var(--vimma-fg) !important;
 
   /* Buttons (the panel's close and "..." buttons, the rows' delete buttons): Nova hovers and
