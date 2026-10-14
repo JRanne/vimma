@@ -1,11 +1,10 @@
 # Spec: live-grep
 
-Status: draft · Area: `packages/vimma-core/src/` (`grep.mjs` new, `actions.mjs`, `defaults.mjs`,
-`cmdline.mjs`, `help.mjs`); `src/browser/base/content/vimma/` (`actors/text-model.mjs`,
+Status: accepted · Area: `packages/vimma-core/src/` (`grep.mjs` new, `actions.mjs`, `defaults.mjs`,
+`cmdline.mjs`); `src/browser/base/content/vimma/` (`actors/text-model.mjs`,
 `actors/VimmaChild.sys.mjs`, `actors/VimmaActors.sys.mjs`, `host/grep.mjs` new,
-`host/VimmaHost.sys.mjs`, `ui/picker.mjs`, `ui/grep-preview.mjs` new);
-`src/browser/themes/shared/vimma/picker.css` · Upstream patches: none · ADR: none. No new
-dependency.
+`host/VimmaHost.sys.mjs`, `ui/grep.mjs` new); `src/browser/themes/shared/vimma/grep.css` new ·
+Upstream patches: none · ADR: none. No new dependency.
 
 Builds on [m1-find](m1-find.md) (`/`, smartcase), [m1-copy-mode](m1-copy-mode.md) (the caret
 and `v`), [m2-picker-rename](m2-picker-rename.md) (the picker dialog and its core state
@@ -20,7 +19,7 @@ relative to `engine/` and checked against Firefox 158.0 (`engine/config/mileston
 ## Summary
 
 Live grep searches the text of every loaded tab in the current workspace as you type and lists
-each match with its line of context, grouped by tab, beside a preview of the surrounding text.
+each match with its tab and line of context, beside a preview of the surrounding text.
 `Enter` goes to the tab, scrolls to the match and selects it. It is modelled on Telescope's
 `live_grep` in Neovim: a prompt, a results list, a preview, smart case and regular expressions,
 and a result list to step through afterwards with `]q` and `[q`. A Vimma user with many tabs
@@ -44,8 +43,9 @@ Firefox has no cross-tab text search either: the find bar works on one tab, and 
 ## Behaviour
 
 1. As a Vimma user with twelve tabs in `work`, `ctrl+b f g` and `retry budget` list every line
-   containing those words in those tabs, grouped under each tab's number and title, and update
-   as I type. The current tab's matches are among them.
+   containing those words in those tabs, each row naming its tab by number and title, and the
+   list updates as I type. The current tab's matches are among them. The prompt is at the
+   bottom, the best result next to it, and a preview on the right, as in Telescope.
 2. As a Vimma user, `Enter` on a result selects that tab (switching to the pane that shows it,
    if the workspace is split), scrolls the match to the middle of the view and selects it with
    the find highlight. I am in normal mode, and `v` starts copy mode with the match selected.
@@ -53,13 +53,14 @@ Firefox has no cross-tab text search either: the find bar works on one tab, and 
    matches case, as `/` and ripgrep's `--smart-case` do. `err(or)?s?\b` is a regular
    expression; a query that is not a valid expression, such as `c++(`, is searched literally and
    the prompt says `literal`.
-4. As a Vimma user, the preview beside the list shows the selected match's surrounding text with
-   the match marked; `ctrl+d` / `ctrl+u` scroll it.
+4. As a Vimma user, the preview beside the list shows the selected match's surrounding lines with
+   the matched line highlighted and the match marked; `ctrl+d` / `ctrl+u` scroll it. In a
+   window narrower than 900 pixels the preview is hidden.
 5. As a Vimma user, after I jump to a result, `]q` and `[q` go to the next and previous result of
    that search, across tabs, without reopening the list; `:grep` with no text reopens the list
    with the last query.
 6. As a Vimma user with tabs that have not loaded since a restart, those tabs are listed at the
-   end as `not loaded`, and `Enter` on one opens it. Live grep never loads a tab by itself.
+   far end of the results as `not loaded`, and `Enter` on one opens it. Live grep never loads a tab by itself.
 7. As a Vimma user, `ctrl+s` in the list widens the search from the workspace to every
    workspace of this window, or narrows it to the current tab, and the prompt shows the scope.
 8. As a user of the private workspace, live grep in a normal window never searches or shows a
@@ -76,8 +77,8 @@ Keys and commands added:
 | `ctrl+b f g`, `:grep [text]`   | everywhere  | `live_grep`: opens live grep (`:grep` alone resumes the last) |
 | `]q` / `[q`                    | normal mode | `grep_next` / `grep_previous`: the next / previous result     |
 | typing                         | in the list | edits the query (search mode, the mode it opens in)           |
-| `ctrl+n` / `ctrl+p`, `↓` / `↑` | in the list | next / previous result                                        |
-| `Tab` / `shift+tab`            | in the list | next / previous tab's group                                   |
+| `ctrl+n` / `ctrl+p`, `↓` / `↑` | in the list | move down / up the list (down is toward the best result)      |
+| `Tab` / `shift+tab`            | in the list | the next / previous tab's first result                        |
 | `Enter`                        | in the list | goes to the result                                            |
 | `ctrl+d` / `ctrl+u`            | in the list | scrolls the preview down / up                                 |
 | `ctrl+s`                       | in the list | cycles the scope: workspace → window → tab                    |
@@ -128,13 +129,14 @@ The reference setup is a Neovim 0.12.5 configuration with telescope.nvim at tag 
 - **After the picker** Vim's quickfix list holds the results; `:cnext`/`:cprevious` step
   through them.
 
-What Vimma takes: a picker of its own, opened ready to type; regular expressions with
-ripgrep's smart case; results in source order with the match highlighted; a preview beside
-the list, hidden when the window is narrow; the same moving, preview-scrolling, refine and
-`Esc` keys; and a list of results to step through afterwards. What Vimma changes: rows are
-grouped under a heading per tab instead of repeating a title on every row, because a page title
-is far longer than a path; the prompt is at the top, as in every Vimma picker; and `Tab` jumps
-between tab groups, as in tab search, instead of building a multi-selection (decision 9).
+What Vimma takes: a picker of its own, opened ready to type; Telescope's layout, with the prompt
+at the bottom, the results above it and the best result next to the prompt, and a preview on
+the right, hidden when the window is narrow; regular expressions with ripgrep's smart case;
+results in source order with the match highlighted; the same moving, preview-scrolling, refine
+and `Esc` keys; and a list of results to step through afterwards. What Vimma changes: a row
+names its tab by number and a shortened title instead of a path, because a page title is far
+longer than a path; and `Tab` jumps to the next tab's results instead of building a
+multi-selection (decision 9).
 
 ### Vimma today
 
@@ -148,10 +150,10 @@ between tab groups, as in tab search, instead of building a multi-selection (dec
   are highlighted with `<mark>` built from text (`ui/picker.mjs:224`). The list is a
   `role=listbox` with `role=option` rows (`:214-215`). Core matching is fuzzy over item fields
   and runs in the parent; it is not a text search.
-- **Tab search** ([tab-search](tab-search.md), issue #215, draft) grows the goto picker into one
-  list of every tab, every window and recently closed, matched on title, URL and rename, opened
-  with `prefix+f` and `:tabsearch`. Its decision 13 puts page content out of scope, because
-  Firefox has no index of it and loading lazy tabs to search them breaks its decision 9.
+- **Tab search** ([tab-search](tab-search.md), issue #215) grows the goto picker into one list
+  of every tab, every window and recently closed, matched on title, URL and rename, on the goto
+  picker's key `ctrl+b g`. Its decision 13 puts page content out of scope, because Firefox has
+  no index of it and loading lazy tabs to search them breaks its decision 9.
 - **Find** (`/`, `?`, `n`, `N`; `defaults.mjs:186-189`) drives Firefox's find bar and finder
   (m1-find), with smartcase from `isCaseSensitive` (`packages/vimma-core/src/find.mjs:24`:
   `query !== query.toLowerCase()`). It searches one tab.
@@ -180,8 +182,8 @@ between tab groups, as in tab search, instead of building a multi-selection (dec
   (m4-split-panes decision 1 and 4; guide "Picking a tab during a split").
 - **Keys.** Prefix keys in use (`defaults.mjs`):
   `( ) ? [ ^ a b c ctrl+6 e enter g h j k l minus n p r space v w x z` and
-  `shift+a b d h j k l n p t w x`; the find group `f` (tab search's `f f` and live grep's `f g`,
-  decision 2) and toolbar-toggle's `u` claim two more. `prefix+/` is free, and no spec, open
+  `shift+a b d h j k l n p t w x`; the find group `f` (live grep's `f g`, decision 2) and
+  toolbar-toggle's `u` claim two more. `prefix+/` is free, and no spec, open
   pull request or open issue claims it. In normal mode `]w`/`[w` step workspaces
   (`:202-203`); `]q` and `[q` are free. No `:grep` command exists (`cmdline.mjs:60-150`). tmux
   3.7c's default `prefix` table has no `/` (its `f` is `find-window`, `man tmux`).
@@ -191,9 +193,9 @@ between tab groups, as in tab search, instead of building a multi-selection (dec
   is one today (`packages/vimma-core/test/keymap.test.mjs:139-143`). The dispatcher returns
   pending at such a node (`dispatcher.mjs:138-141`), arms no timeout because the node has no
   action of its own (`ambiguous`, `:174`), and cancels on a key with no child (`:123-136`).
-  Checked on main at 7280cd5 by compiling `prefix+f f` and `prefix+f g` as user keys:
-  `ctrl+b f f` and `ctrl+b f g` ran their actions, `ctrl+b f x` cancelled and `ctrl+b g` still
-  ran `goto_picker`. No default binding has three chords yet, so no test covers one.
+  Checked on main at 7280cd5 by compiling two three-chord user keys under `prefix+f`: both ran
+  their actions, `ctrl+b f x` cancelled and `ctrl+b g` still ran `goto_picker`. No default
+  binding had three chords before live grep, so no test covered one.
 - **Telescope's keys.** telescope.nvim's README (v0.2.1) suggests `<leader>ff` for
   `find_files`, `<leader>fg` for `live_grep`, `<leader>fb` for `buffers` and `<leader>fh` for
   `help_tags`: one `f` group for its finders.
@@ -251,167 +253,189 @@ between tab groups, as in tab search, instead of building a multi-selection (dec
 
 ## Design
 
-Data flow: `ctrl+b f g` opens the grep picker (`ui/picker.mjs`, look `GREP`). Each query change,
-debounced, goes to the host (`host/grep.mjs`), which sends `Vimma:Grep { gen, query, caps }` to
-every frame of every loaded tab in scope. Each frame's `VimmaChild` builds (or reuses) the
-frame's text model, matches the query with the pure `grep.mjs` from core, and returns the
-matches with their line of context. The host merges replies into tab groups in tab order and
-hands them to the picker as they arrive; stale generations are dropped. `Enter` selects the tab
-and sends `Vimma:GrepJump { gen, match }` to the frame, which selects and scrolls to the match.
-
-Decisions 1, 3, 5, 6, 7, 8 and 10 are the recommended answers to the open questions below and
-change if those are answered otherwise.
+Data flow: `ctrl+b f g` opens the grep picker (`ui/grep.mjs`). Each query change, debounced, goes
+to the host (`host/grep.mjs`), which sends `Vimma:Grep { gen, query }` to every frame of every
+loaded tab in scope. Each frame's `VimmaChild` builds (or reuses) the frame's text model,
+matches the query with the pure `grep.mjs` from core, and returns the matches with their line of
+context. The parent checks each reply with core `parseGrepReply`, merges the replies in tab
+order and hands them to the picker as they arrive; stale generations are dropped. Moving the
+selection asks the frame for the lines around the match (`Vimma:GrepPreview`). `Enter` selects
+the tab and sends `Vimma:GrepJump { gen, match }` to the frame, which selects and scrolls to the
+match.
 
 1. **A picker of its own, next to tab search.** Live grep is a second picker on its own key,
    not a mode of tab search. Telescope keeps `find_files` and `live_grep` apart for the same
    reason: one finds a thing by its name and answers at once from memory; the other reads
    content, answers in a stream, has a preview and leaves a result list. Mixing them would make
-   tab search slower and its rows ambiguous. It reuses the picker dialog, its styles and core
-   state machine (selection, modes, query editing), with its own items and keys. (Open
-   question 1.)
+   tab search slower and its rows ambiguous; a mode key (`ctrl+g`) in one dialog was rejected
+   for that reason and because the keys would mean different things per mode. Live grep shares
+   the pickers' stylesheet tokens and the core picker's fuzzy matcher (for refine, decision 3),
+   with its own dialog, state machine and keys.
 2. **Keys: `ctrl+b f` is the find group.** `prefix+f` is a group: a prefix with no action of
    its own that waits for a third key, as `y` waits in normal mode. `live_grep` (`grep.open`) is
-   `prefix+f g` and `:grep [text]`; tab search's `tab_search` is `prefix+f f` (tab-search
-   decision 2). The pair mirrors Telescope's suggested `<leader>fg` and `<leader>ff`, so a
-   Neovim user's habit carries over unchanged, and one group keeps every finder under one key
-   with room for more (`f h`, `f b`) without spending further prefix keys. The keymap already
-   supports it: bindings may have three chords and a node may have no action (Research, "Three-key
-   sequences"). The alternatives were weaker: `prefix+/` pairs with `/` but leaves the two
-   finders on unrelated keys; `prefix+shift+f` is slower to press and reads as a variant of tab
-   search; no default key hides the feature. `prefix+/` stays unbound, kept for a later use.
-   `ctrl+b g` keeps opening tab search's list in browse mode. `:grep` is Vim's command for the
-   same job; with text it opens with that query, alone it reopens the last query and its results
-   (Telescope's `resume`). `grep_next` and `grep_previous` (`grep.next`, `grep.previous`) are
-   `]q` and `[q`, Vim-unimpaired's quickfix keys, next to Vimma's `]w`/`[w`.
+   `prefix+f g` and `:grep [text]`, after Telescope's suggested `<leader>fg`, so a Neovim user's
+   habit carries over, and one group leaves room for more finders (`f h`, `f b`) without
+   spending further prefix keys. The keymap already supports it: bindings may have three chords
+   and a node may have no action (Research, "Three-key sequences"). Tab search keeps the goto
+   picker's `ctrl+b g` and takes no key in the group (tab-search decision 2), so the group holds
+   live grep alone for now. The alternatives were weaker: `prefix+/` pairs with `/` but starts
+   no group; `prefix+shift+f` is slower to press; no default key hides the feature. `prefix+/`
+   stays unbound. `:grep` is Vim's command for the same job; with text it opens with that
+   query, alone it reopens the last query and re-runs it (Telescope's `resume`). `grep_next`
+   and `grep_previous` (`grep.next`, `grep.previous`) are `]q` and `[q`, Vim-unimpaired's
+   quickfix keys, next to Vimma's `]w`/`[w`.
 3. **Matching: ripgrep's rules.** The query is a JavaScript regular expression with the `u`
-   flag, matched per line. Smart case follows ripgrep: case is ignored when the query has at
-   least one literal character and no upper-case literal, so `\w+Error` matches case and
-   `a\w` does not; this differs from `/`'s rule only for queries with escapes. A query that does
-   not compile is matched literally and the prompt shows `literal`, so `c++(` and `what?(`
-   find what they say rather than an error. An empty query lists nothing. `ctrl+space` keeps
-   the current results and switches the prompt to filtering them with the core picker's fuzzy
-   matcher, as Telescope's `to_fuzzy_refine` does; `Esc` there goes back to the grep query.
-   JavaScript's syntax covers what ripgrep users type (classes, `\b`, `\d`, `\w`, alternation,
-   groups, quantifiers); ripgrep's own flags syntax was not checked against it, and the guide
-   says the syntax is JavaScript's. (Open question 2.)
+   flag, matched per line, as Telescope's `live_grep` passes the prompt to ripgrep. Smart case
+   follows ripgrep: case is ignored when the query has at least one literal character and no
+   upper-case literal, so `\w+Error` matches case and `a\w` does not; this differs from `/`'s
+   rule only for queries with escapes. A query that does not compile is matched literally and
+   the prompt shows `literal`, so `c++(` and `what?(` find what they say rather than an error;
+   this fallback is why plain literal matching with a key for expressions was not chosen, as it
+   would differ from the Neovim picker for little gain. Fuzzy matching of words was rejected
+   because it floods the list on large pages and cannot express an exact phrase. An empty query
+   lists nothing. `ctrl+space` keeps the current results and switches the prompt to filtering
+   them with the core picker's fuzzy matcher, as Telescope's `to_fuzzy_refine` does; `Esc`
+   there goes back to the grep query. JavaScript's syntax covers what ripgrep users type
+   (classes, `\b`, `\d`, `\w`, alternation, groups, quantifiers); ripgrep's own flags syntax
+   was not checked against it, and the guide says the syntax is JavaScript's.
 4. **Lines.** A page has no lines, so a line is a run of the text model between block
    boundaries and `<br>` (a paragraph, list item, table cell or heading), and `pre` text keeps
-   its own line breaks. Matching per line keeps a match from spanning two paragraphs and bounds
-   a regular expression's work to one line. A row shows the line cut to 160 characters around
-   the match (up to 60 before it), with an ellipsis where cut.
-5. **Layout.** The dialog has the prompt at the top, as every Vimma picker, then the list and,
-   when the dialog is at least 900 CSS pixels wide, the preview on the right taking 40 % of it
-   (Telescope's proportions and its narrow-window cutoff). The prompt line reads
-   `grep [workspace] ›`, with `literal` or `fuzzy` after the scope when they apply, and the
-   match count right-aligned (`37 in 6 tabs`). The list is:
-   - a heading row per tab: the tab's number in its workspace (the number `ctrl+b 1..9` and the
-     status bar use), title, host and match count, `role=presentation`, so `j`/`k` skip it;
-   - under it a row per match: the line with the match in `<mark>`, prefixed `↳ host` when the
-     match is in a frame from another site.
+   its own line breaks. Lines are numbered from 1 in document order, per frame. Matching per
+   line keeps a match from spanning two paragraphs and bounds a regular expression's work to
+   one line. A row shows the line cut to 160 characters around the match (up to 60 before it),
+   with an ellipsis where cut. Each match of a line is its own result.
+5. **Layout: Telescope's.** The dialog takes 80 % of the window's width and 90 % of its height,
+   Telescope's `horizontal` layout. On the left, a "Results" box above a "Live Grep" prompt box;
+   on the right, when the dialog is at least 900 CSS pixels wide, a "Grep Preview" box taking
+   40 % of the width (Telescope's proportion and, in pixels, its narrow-window cutoff). Each box
+   has its title on its top border, as Telescope draws them. The prompt line reads `> query`,
+   and on its right the flags that apply (`literal`, `fuzzy`, the scope when it is not
+   `workspace`) and the count `n / m`: `n` results listed out of `m` matches found. The results
+   are listed bottom up: the best result sits next to the prompt, marked `>`, and further
+   results stack above it, as Telescope's `descending` sorting does. Live grep follows
+   Telescope rather than Vimma's other pickers, which keep their prompt at the top, because the
+   picker is modelled on it and a Neovim user's eye goes to the bottom for it; one layout for
+   every Vimma picker was the alternative, and the keys, which muscle memory relies on, are the
+   same either way. A row reads, in one line:
+   - the tab's number in its workspace (the number `ctrl+b 1..9` and the status bar use);
+   - the tab's title cut to 24 characters, then `:line:`, the line number in its frame;
+   - the line, with each match in `<mark>`; prefixed `↳ host` when the match is in a frame
+     from another site, and `◇ agent` for an agent workspace tab (decision 13).
 
-   Ordering is stable as replies arrive: groups in the workspace's tab order (in a window
-   scope, workspace by workspace, the agent workspace last), matches in document order, the
-   top frame before its subframes. The selection stays on its row when groups arrive
-   (`setPickerItems`). Tabs with no match get no group. (Open questions 3 and 4.)
+   "Best" is source order: results in the workspace's tab order (in a window scope, workspace by
+   workspace, the agent workspace last), matches in document order, the top frame before its
+   subframes, as ripgrep's rows come by file. The order is stable as replies arrive: a reply
+   from a later tab never moves an earlier tab's rows, and the selection stays on its result
+   while rows arrive. Tabs with no match get no row.
 
 6. **The preview** shows the selected match's line with the ten lines before and after it,
-   from the frame's text model (`Vimma:GrepPreview`), with the match marked and scrolled to the
-   middle. `ctrl+d`/`ctrl+u` scroll it half a pane, as Telescope's insert-mode keys do; with the
-   preview, clearing the query is `ctrl+w` word by word or `backspace`, and without it (a narrow
-   dialog) `ctrl+u` clears as in other pickers. It is text, not a picture of the page: a
-   background tab is not painted (vimma-mcp, Research), and text is enough to recognise the
-   place. (Open question 4.)
+   from the frame's text model (`Vimma:GrepPreview`), with the matched line highlighted, the
+   match marked, and the line scrolled to the middle. `ctrl+d`/`ctrl+u` scroll it half a pane,
+   as Telescope's insert-mode keys do; with the preview shown, clearing the query is `ctrl+w`
+   word by word or `backspace`, and without it (a narrow dialog) `ctrl+u` clears as in other
+   pickers. It is text, not a picture of the page: a background tab is not painted (vimma-mcp,
+   Research), so a picture would mean switching tabs while browsing results, and text is
+   enough to recognise the place. No preview, with the context line alone, was the simpler
+   alternative; Telescope's preview is what makes a result recognisable before the jump.
 7. **Jump.** `Enter` closes the picker, selects the tab (`gBrowser.selectedTab`, which switches
    workspace and focuses the tab's pane, m4-split-panes decision 4), then asks the frame to
    select the match range, set the display to `SELECTION_ATTENTION` and scroll it to the
-   vertical centre, as find does. Focus goes to the page and the mode is normal. `v` then enters
-   copy mode with the match selected (`caret.mjs:180-193`); `y` copies it. If the page changed
-   since the search (the frame's model is stale), the frame matches the query again and takes
-   the match with the same ordinal, else the nearest one with the same text; if none is left,
-   the tab is selected and the status bar says `match no longer on the page`. In a PDF the jump
-   runs Vimma's find for the matched text, literally and matching case, stepping to its
-   ordinal among identical strings. `n`/`N` keep stepping through the `/` query; they do not
-   take the grep query, as in Vim. (Open question 5.)
+   vertical centre, as find does. Focus goes to the page (to the frame, for a match in a
+   subframe) and the mode is normal. `v` then enters copy mode with the match selected
+   (`caret.mjs:180-193`); `y` copies it. Entering copy mode directly was rejected because `j`
+   and `k` would then move the caret instead of scrolling, which surprises after a jump. If the
+   page changed since the search, the frame matches the query again and takes the match with
+   the same ordinal and text, else the nearest one with the same text; if none is left, the tab
+   is selected and a notice says `match no longer on the page`. `n`/`N` keep stepping through
+   the `/` query; they do not take the grep query, as in Vim, and a regular expression cannot be
+   handed to Firefox's find anyway.
 8. **The result list.** Jumping from the picker keeps that search's results in the window as
-   its grep list (Vim's `:grep` fills the quickfix list the same way). `]q`/`[q` go to the
-   next/previous result, across tabs, wrapping at the ends, and the status bar says
-   `grep 4/37`. A result whose tab has closed is skipped. `:grep` alone reopens the picker with
-   that query, re-run. The list lives in memory for the window and is dropped when the window
-   closes; it is not saved with the session. (Open question 6.)
+   its grep list, as Vim's `:grep` fills the quickfix list. `]q`/`[q` go to the next/previous
+   result, across tabs, wrapping at the ends, and a notice says `grep 4/37`. A result whose tab
+   has closed is skipped. `:grep` alone reopens the picker with that query, re-run. The list
+   lives in memory for the window and is dropped when the window closes; it is not saved with
+   the session. Sending results to the list only on request (`ctrl+q`, as Telescope) was
+   rejected because `]q` and `[q` cost nothing until used; no list at all would mean reopening
+   the picker for every next result.
 9. **Keys in the picker.** Search mode (the mode it opens in) types into the query; browse mode
-   comes with `Esc`, as in Telescope and every Vimma picker. In both modes: `ctrl+n`/`ctrl+p`,
-   `↓`/`↑`, `Enter`, `ctrl+d`/`ctrl+u` (decision 6), `ctrl+s` (scope), `ctrl+space` (refine),
-   `Tab`/`shift+tab` (next/previous tab group, as tab search's sections). Browse mode adds
-   `j`/`k`, `gg`/`G`, `/` or `i` back to typing, and `Esc`/`q` to close. Telescope's
-   `Tab` multi-selection and `ctrl+q` are not taken, because every result goes to the grep list
-   (decision 8). `ctrl+v`/`ctrl+x` (open in a split) are not taken either: the result is an
-   existing tab, and showing it beside another changes the workspace's split, which "Show
-   together" in the side panel already does deliberately. These are picker keys, not keymap
-   bindings, as `j` and `/` in the goto picker are.
+   comes with `Esc`, as in Telescope and every Vimma picker. Moving keys follow the screen, as
+   in Telescope: `ctrl+n`, `↓` (and `j` in browse mode) move down, toward the prompt and the
+   best result; `ctrl+p`, `↑` (and `k`) move up. In both modes: those keys, `Enter`,
+   `ctrl+d`/`ctrl+u` (decision 6), `ctrl+s` (scope), `ctrl+space` (refine), and
+   `Tab`/`shift+tab`, which go to the first result of the next/previous tab, as tab search's
+   sections do. Browse mode adds `gg` (top) and `G` (bottom, the best result), `/` or `i` back
+   to typing, and `Esc`/`q` to close. Telescope's `Tab` multi-selection and `ctrl+q` are not
+   taken, because every result goes to the grep list (decision 8). `ctrl+v`/`ctrl+x` (open in a
+   split) are not taken either: the result is an existing tab, and showing it beside another
+   changes the workspace's split, which "Show together" in the side panel already does
+   deliberately. These are picker keys, not keymap bindings, as `j` and `/` in the goto picker
+   are.
 10. **Scope.** The current workspace by default, because a workspace is a task and the tabs of
     that task are where the text is expected. `ctrl+s` cycles to `window` (every workspace of
     this window, the agent workspace last) and `tab` (the current tab, Telescope's
     `current_buffer_fuzzy_find` with a regular expression), then back. The scope resets to
-    `workspace` each time the picker opens. Other windows are never searched: tab membership
-    is per window (m3-workspaces decision 10), each window has its own grep, and the private
-    workspace is a window of its own (decision 13). (Open question 7.)
+    `workspace` each time the picker opens. Searching every workspace by default was rejected
+    because it mixes tasks, and searching only the workspace because widening should be one
+    key away. Other windows are never searched: tab membership is per window (m3-workspaces
+    decision 10), each window has its own grep, and the private workspace is a window of its own
+    (decision 13).
 11. **Not-loaded tabs are listed, not loaded.** A tab with no `linkedPanel` (lazy or discarded)
-    or with `pending` has no content to search. They form one last group, `not loaded · 5`,
-    with a row per tab (number, title, host); `Enter` on one selects it, which loads it, and the
-    user can grep again. Loading them for the search was rejected: Firefox restores a pending
-    tab only when it is selected (Research), so loading means selecting every tab in turn or
-    replacing its pending session with a fresh load that drops its back history, and either
-    costs memory and network for a query. SessionStore has no saved text to search instead.
+    or with `pending` has no content to search. Each gets one row at the far end of the
+    results, `not loaded` and its title and host; `Enter` on one selects it, which loads it, and
+    the user can grep again. Loading them for the search was rejected: Firefox restores a
+    pending tab only when it is selected (Research), so loading means selecting every tab in
+    turn or replacing its pending session with a fresh load that drops its back history, and
+    either costs memory and network for a query. SessionStore has no saved text to search
+    instead.
 12. **What is searched in a frame.** The rendered text the text model collects: text nodes in
-    document order, skipping `SKIP` elements and elements that fail `checkVisibility()`, now
-    also inside open and closed shadow roots (`openOrClosedShadowRoot`, as `PageExtractor`
-    does), through a new `textOfDocument(win, cap)` beside `textAround`. Not searched: form
-    field values, text drawn on a canvas, images, closed `<details>` and `hidden=until-found`
-    content (not rendered, and Vimma cannot reveal them as find does), and pages Vimma's actor
-    does not match (`view-source:`, `moz-extension:`), which appear in the not-loaded group as
-    `cannot search`. Every frame is asked separately through
+    flat-tree order (open and closed shadow roots through `openOrClosedShadowRoot`, as
+    `PageExtractor` does, and slotted content where its slot is), skipping `SKIP` elements and
+    elements that fail `checkVisibility()`, through a new `textOfDocument(win, cap)` beside
+    `textAround`. Not searched: form field values, text drawn on a canvas, images, closed
+    `<details>` and `hidden=until-found` content (not rendered, and Vimma cannot reveal them as
+    find does), PDFs (pdf.js renders only the pages near the view and finds through its own
+    find bar events, so a jump would need a second path; a later change can add them through
+    `PdfJsParent.getTextContent()`), and pages Vimma's actor does not match (`view-source:`,
+    `moz-extension:`). Every frame is asked separately through
     `getAllBrowsingContextsInSubtree()`, skipping those under a hidden embedder as
     `FinderParent` does, so cross-site frames in other processes are searched by their own
-    child. A PDF tab's text comes from `PdfJsParent.getTextContent()` in the parent and is
-    matched there with the same core function.
+    child.
 13. **Private and agent workspaces.** Live grep searches only the window it is opened in. In a
     normal window it never sees the private workspace, which is its own private window
     (private-workspace); in the private window it searches only private tabs. The agent
     workspace is searched only when the scope includes it (`window`, or `workspace` when the
-    agent workspace is current); its groups are marked `◇ agent` in the agent's colour and sort
-    last, as in tab search decision 6.
+    agent workspace is current); its rows are marked `◇ agent` in the agent's colour and sort
+    last, as in tab search decision 6, so an agent's pages are never taken for the user's own.
 14. **Performance.**
     - A query is sent 80 ms after the last keystroke. Each send carries a generation number;
-      replies for an older generation are dropped, and a frame drops older work in its queue.
+      replies for an older generation are dropped.
     - Matching runs in the content processes, one per site, so tabs search in parallel and the
-      parent only merges. At most 8 tabs are asked at a time; a tab that has not answered in
-      2,000 ms shows `timed out` in its heading. Up to 200 tabs are searched; beyond that the
-      last group says how many were not.
-    - A frame's model is cut at 1,000,000 characters (the heading says `cut`). A tab lists at
-      most 100 matches and counts to 1,000 (`100 of 412`); the list holds at most 2,000 match
-      rows. Telescope has no such caps by default; a page can be far larger than a source file,
-      and a rendered list of thousands of rows does not help a keyboard user, who narrows by
-      typing.
+      parent only merges. At most 8 tabs are asked at a time; a frame that has not answered in
+      2,000 ms is left out and the count says `timed out`. Up to 200 tabs are searched.
+    - A frame's model is cut at 1,000,000 characters. A frame lists at most 100 matches and
+      counts to 1,000; the list holds at most 2,000 rows. Telescope has no such caps by
+      default; a page can be far larger than a source file, and a rendered list of thousands of
+      rows does not help a keyboard user, who narrows by typing.
     - The frame caches its text model while the picker is open and drops it when the picker
       closes (`Vimma:GrepEnd`). A `MutationObserver` on the document marks the model stale; it
       is rebuilt at the next query, not on each mutation. A navigation creates a new document
       and actor, so nothing survives it.
-    - Budgets, measured in tests: building the model for a 1,000,000-character fixture page
-      under 400 ms, matching a query against it under 50 ms, and first results for 30 loaded
-      fixture tabs on screen under 500 ms after the debounce.
+    - Budget, measured in a test: matching a query against 1,000,000 characters under 50 ms.
     - The parent holds only what it shows: a context line per listed match (at most 160
       characters) and the preview's lines. Page text is not written anywhere.
-15. **Accessibility.** As tab search: a `role=listbox` with option rows, heading rows
-    `role=presentation`, each option's accessible name holding the line, the tab's title and its
-    workspace (`"retry budget is 3, Retries – docs, work"`), a polite live region announcing
-    `37 matches in 6 tabs` or `no matches` after results settle, and the preview a
-    `role=region` named "Preview". The `literal` and `fuzzy` flags are words, not colours.
-16. **Theme.** Existing tokens only, as picker.css uses them: headings `--vimma-text-accent`,
-    hosts and counts `--vimma-muted`, `<mark>` as in the goto picker, the agent marker
-    `--vimma-text-cyan`, and in the preview the match with `--vimma-selection`. No new token.
+15. **Accessibility.** The list is a `role=listbox` with `role=option` rows, each option's
+    accessible name holding the line, the tab's title and its workspace
+    (`retry budget is 3, Retries – docs, work`); a polite live region announces
+    `37 matches in 6 tabs` or `no matches` after results settle; the preview is a `role=region` named "Grep Preview". The
+    `literal` and `fuzzy` flags are words, not colours.
+16. **Theme.** Existing tokens only, as picker.css uses them: box borders `--vimma-muted`, box
+    titles `--vimma-text-accent`, tab titles and line numbers `--vimma-fg-dim`,
+    `<mark>` as in the goto picker, the `>` marker and the selected row as the goto picker's
+    selected row, the agent marker `--vimma-text-cyan`, and in the preview the matched line
+    with `--vimma-selection`. No new token.
 17. **Out of scope.** Other windows; closed tabs (SessionStore keeps no text); history and
-    bookmarks content; replacing text; Telescope's split and tab openers (decision 9); an
-    agent or `vimma-ctl` command for grep; search inside form fields.
+    bookmarks content; PDFs (decision 12); replacing text; Telescope's split and tab openers
+    (decision 9); an agent or `vimma-ctl` command for grep; search inside form fields.
 
 ## Security and privacy
 
@@ -440,33 +464,36 @@ Written first and seen to fail.
     `\w+Error` matches, `\pL` alone ignores); an invalid expression gives a literal query
     flagged `literal`; an empty query gives none.
   - `grepText(text, query, caps)`: lines split at `BLOCK` and `"\n"`; matches with start, end,
-    line and ordinal; the context cut to 160 characters around the match; the per-tab cap of
+    line and ordinal; the context cut to 160 characters around the match; the per-frame cap of
     100 listed and 1,000 counted; zero-length matches (`^`, `\b`) do not loop and are not
     listed.
-  - `occurrenceOf(text, match)`: the ordinal of a literal among identical strings (the PDF
-    jump).
-  - grouping and ordering: groups in tab order whatever order replies arrive in; the agent
-    workspace's groups last; the not-loaded group last; the 2,000-row cap.
-  - the grep list: `]q`/`[q` order across tabs, wrapping, skipping closed tabs; the status text
-    `grep 4/37`.
-  - picker keys: `ctrl+s` cycles the scope; `Tab`/`shift+tab` jump groups and skip headings;
-    `ctrl+space` enters refine and `Esc` leaves it; `ctrl+u` scrolls with a preview and clears
-    without one; `Esc` search → browse → close.
+  - `previewLines`: the ten lines before and after a match, the matched line's index and the
+    match's range in it, fewer at the start and end of the text.
+  - `parseGrepReply`: a reply from a content process is copied field by field; wrong types,
+    overlong lines and too many matches drop the reply or are cut.
+  - `grepRows`: rows in tab order whatever order replies arrive in; frames in their order; the
+    agent workspace's rows last; not-loaded rows at the far end; the 2,000-row cap.
+  - the grep list: `stepGrepList` order across tabs, wrapping, skipping closed tabs; the
+    notice text `grep 4/37`.
+  - picker keys (`grepPickerKey`): `ctrl+n`/`↓`/`j` move toward the best result and
+    `ctrl+p`/`↑`/`k` away from it; `gg`/`G`; `Tab`/`shift+tab` go to the next/previous tab's
+    first result; `ctrl+s` cycles the scope; `ctrl+space` enters refine and `Esc` leaves it;
+    `ctrl+u` scrolls with a preview and clears without one; `Esc` search → browse → close.
   - bench: `grepText` over 1,000,000 characters under 50 ms.
-- `keymap.test.mjs`: the `prefix+f` node has no action and has the child `g` (and `f` once tab
-  search's key exists); `ctrl+b f g` dispatches `live_grep` and `ctrl+b f` followed by an
-  unbound key cancels.
+- `keymap.test.mjs`: the `prefix+f` node has no action and has the child `g`; `ctrl+b f g`
+  dispatches `live_grep` and `ctrl+b f` followed by an unbound key cancels.
 - `actions.test.mjs`, `defaults.test.mjs`, `cmdline.test.mjs`, `help.test.mjs`: `live_grep` on
-  `prefix+f g`, `grep_next`/`grep_previous` on `]q`/`[q`, `:grep [text]`; the help rows. Snapshots
-  re-recorded with a changelog line each; `docs/bindings.md`, `bindings.json` and
-  `defaults.toml` regenerated.
+  `prefix+f g`, `grep_next`/`grep_previous` on `]q`/`[q`, `:grep [text]`; the help rows. The
+  help snapshot is re-recorded with a changelog line; `docs/bindings.md`, `bindings.json` and
+  `defaults.toml` are regenerated.
 
 ### Mochitests (`tests/browser/`)
 
 - `browser_vimma_live_grep.js` (new):
   - Three fixture tabs in one workspace and one in another: `ctrl+b f g`, `needle` lists the
-    matches of the three in tab order with headings; the fourth appears after `ctrl+s` (window
-    scope) and the current tab alone after another `ctrl+s`.
+    matches of the three in tab order, the first tab's first match next to the prompt; the
+    fourth appears after `ctrl+s` (window scope) and the current tab alone after another
+    `ctrl+s`.
   - `Enter` on the second tab's match selects that tab, the selection is the match text, the
     display is `SELECTION_ATTENTION`, the match is within the viewport's middle third, and the
     mode is normal; `v` then enters copy mode with that selection.
@@ -475,129 +502,61 @@ Written first and seen to fail.
   - A match inside an open and inside a closed shadow root is listed and jumps there.
   - Smart case and the regular expression: `Needle` and `nee+dle` against fixture text; `c++(`
     shows `literal` and finds the literal text.
-  - A pending tab (restored, never selected) is in the not-loaded group and is still pending
-    after the search; `Enter` on it selects it.
+  - A lazy tab (never selected) is listed as `not loaded` and is still unloaded after the
+    search; `Enter` on it selects it.
   - The page changes after the search (a script removes the first match): the jump takes the
-    remaining match; with none left the status bar says so.
+    remaining match; with none left the notice says so.
   - `]q`/`[q` after a jump go to the next/previous result across tabs and wrap; closing a tab
     skips its results; `:grep` alone reopens with the query.
   - A split workspace: `Enter` on a result in a pane's tab focuses that pane.
-  - A PDF fixture: its match is listed and the jump lands on it through find.
+  - The preview shows the lines around the selected match with the matched line marked, and
+    is hidden in a dialog narrower than 900 pixels.
   - Stale generations: replies to an older query never appear after a newer query's results.
-  - No page text in the parent after close: the host's grep state holds only the grep list.
-- `browser_vimma_private_workspace.js`: grep in a normal window lists no private tab, and grep
-  in the private window lists only private tabs.
-- `browser_vimma_mcp_agent.js`: an agent tab's results only
-  in window scope, marked `◇ agent`, last.
-- `browser_vimma_a11y.js`: option names, headings not options, the live region text.
-- Bench (mochitest, logged): the 1,000,000-character fixture page's model under 400 ms; 30
-  loaded tabs to first results under 500 ms.
+  - A private window: grep there lists only its own tabs, and grep in the normal window lists
+    none of them.
+  - An agent workspace tab's results appear only in window scope, marked `◇ agent`, last.
+  - Accessibility: option names hold the line, the tab's title and its workspace; the live
+    region says `N matches in M tabs` or `no matches`.
 
 ### e2e (`tests/e2e/scenarios/`, Xvfb) and screenshots
 
-- New scenario `live-grep.json`: one workspace with four tabs from `tools/e2e/pages.mjs`
-  fixtures (one with a cross-site frame), one pending tab; `ctrl+b f g`, type `needle`;
-  screenshot `live-grep.png` with the preview, then `Enter` and screenshot `live-grep-jump.png`
-  with the selected match. Checked first with the real Omarchy theme
-  (`vimma.theme.source=omarchy`) and recorded in the default theme as new baselines, with the
-  changelog line "baselines for live grep".
+- New scenario `live-grep.json`: one workspace with fixture tabs from `tools/e2e/pages.mjs`;
+  `ctrl+b f g`, type `needle`; screenshot `live-grep.png` with the preview, then `Enter` and
+  screenshot `live-grep-jump.png` with the selected match. Checked first with the real Omarchy
+  theme (`vimma.theme.source=omarchy`) and recorded in the default theme as new baselines, with
+  the changelog line "baselines for live grep".
+- The `ctrl+b ?` overlay, filtered to `grep`, is checked in a screenshot with the new rows.
 
 ## Docs and changelog
 
 - **`docs/guide.md`**: a new section "Live grep" after "Find": opening it, the query syntax
   (JavaScript regular expressions, ripgrep's smart case, the literal fallback, refine), the
   layout and preview, the keys, scope, the jump and copy mode, the grep list and `]q`/`[q`, what
-  is not searched (not-loaded tabs, form fields, canvases, closed `<details>`), and the private
-  and agent rules. Rows for `ctrl+b f g`, `]q`, `[q` in the keys table, and `:grep` in "The
-  command line".
+  is not searched (not-loaded tabs, form fields, canvases, closed `<details>`, PDFs), and the
+  private and agent rules. Rows for `ctrl+b f g`, `]q`, `[q` in the keys table, and `:grep` in
+  "The command line".
 - **README**: a feature line, "live grep: search the text of every tab in your workspace and jump
   to the match, like Telescope's `live_grep`".
+- **`docs/security.md`**: the grep messages between the parent and content processes, what the
+  parent accepts from a reply, and the private and agent boundaries, each with its test.
 - **`docs/bindings.md`, `bindings.json`, `defaults.toml`**: regenerated with `npm run gen-docs`.
-- **`CHANGELOG.md` [Unreleased]**, added by the maintainer at merge. Suggested lines: "Live grep:
-  `ctrl+b f g` and `:grep` search the text of the tabs in your workspace and jump to a match"
-  (sub-PR 3, when the feature pref goes); "`]q` and `[q` step through the last grep's results"
-  (sub-PR 3); and the baseline line.
+- **`CHANGELOG.md` [Unreleased]**: "Live grep: `ctrl+b f g` and `:grep` search the text of the
+  tabs in your workspace and jump to a match; `]q` and `[q` step through the results", and a
+  line for the help snapshot and the new baselines.
 
 ## Delivery
 
-Sub-PRs 1 and 2 land behind the pref `vimma.feature.grep` (default false), as unfinished
-features must (issue #219); sub-PR 3 removes it.
-
-| #   | Title                                                                | Scope                                                                                                                                                                                                                                                                                                                                                                                  | Size     |
-| --- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| 1   | `feat(grep): search the text of the workspace's tabs and jump`       | Core `grep.mjs` (query, smart case, literal fallback, lines, caps, grouping); `textOfDocument` with shadow roots; `Vimma:Grep`, `Vimma:GrepJump`, `Vimma:GrepEnd`; `host/grep.mjs` (frames, generations, concurrency, timeouts, not-loaded group); the picker look without preview; `:grep` behind the pref; mochitests for search, jump, frames, shadow roots, pending tabs, private. | L (~900) |
-| 2   | `feat(grep): preview, scope and fuzzy refine in live grep`           | `ui/grep-preview.mjs` and `Vimma:GrepPreview`; `ctrl+d`/`ctrl+u`; `ctrl+s` scopes and the agent marker; `ctrl+space` refine; PDFs; a11y names and live region; benches.                                                                                                                                                                                                                | M (~600) |
-| 3   | `feat(keys): ctrl+b f g opens live grep; ]q and [q step its results` | `live_grep`, `grep_next`, `grep_previous`; the grep list and status text; default keys; help rows; gen-docs and snapshots; the e2e scenario and baselines; guide and README; the pref removed.                                                                                                                                                                                         | M (~500) |
-
-Sub-PR 3 adds default keys, so it is a keymap PR and waits its turn in the keymap queue (one
-keymap PR at a time, after firefox-keys). Whichever of it and tab-search sub-PR 3 lands first
-adds the first three-chord default binding and, with it, the keymap test that `prefix+f` is a
-group with no action of its own. Each sub-PR is checked in e2e screenshots with the
-Omarchy theme before review.
+One pull request, `feat(grep): live grep across the workspace's tabs, on ctrl+b f g`, with every
+decision above, its tests, the e2e scenario and the docs. The parts are not useful on their own
+(a search without its key, or a key without its preview), and one pull request needs no feature
+pref to hide a half-built picker. It adds default keys, so it is a keymap pull request and waits
+its turn in the keymap queue (one keymap pull request at a time). It adds the first three-chord
+default binding and, with it, the keymap test that `prefix+f` is a group with no action of its
+own. It is checked in e2e screenshots with the Omarchy theme before review.
 
 ## Open questions
 
-1. **A separate picker, or a mode of tab search?**
-   - a. A separate grep picker on its own key (decision 1). The same split as Telescope's
-     `find_files` and `live_grep`; tab search stays instant and its rows stay tabs.
-   - b. A mode of tab search: one dialog, a key (`ctrl+g`) switches between matching titles and
-     URLs and matching page text. One place to look, at the cost of a slower, mixed list and
-     keys that mean different things per mode.
-
-   Recommendation: a, because the two answer different questions at different speeds, and it
-   matches the Neovim habit of two keys for two pickers.
-
-2. **Query syntax?**
-   - a. A regular expression with ripgrep's smart case, the literal fallback for an invalid
-     expression, and `ctrl+space` fuzzy refine (decision 3). The same as Telescope's
-     `live_grep`.
-   - b. Literal text with smartcase, as `/` (Firefox's find); a key (`ctrl+r`) switches to a
-     regular expression. Safer for text full of `(`, `?` and `+`, but differs from the Neovim
-     picker.
-   - c. Fuzzy matching of words across the line. Forgiving, but floods the list on large pages
-     and cannot express an exact phrase.
-
-   Recommendation: a; the literal fallback removes most of b's advantage.
-
-3. **Prompt at the top or at the bottom?**
-   - a. Top, results below, as every Vimma picker (decision 5).
-   - b. Bottom, results above and best next to the prompt, as Telescope's `horizontal` layout.
-     Matches the Neovim picker exactly, but Vimma's pickers would then disagree with each other.
-
-   Recommendation: a, for one layout across Vimma's pickers; the keys are what muscle memory
-   relies on, and they are the same.
-
-4. **Preview pane?**
-   - a. A text preview on the right, ten lines around the match, hidden below 900 pixels, with
-     `ctrl+d`/`ctrl+u` (decisions 5 and 6).
-   - b. No preview; the context line is enough. Simpler, and `ctrl+u` keeps clearing the query.
-   - c. A picture of the page at the match. Closest to seeing the place, but a background tab
-     is not painted, so it would mean switching tabs while browsing results.
-
-   Recommendation: a.
-
-5. **What does `Enter` leave you in?**
-   - a. Normal mode with the match selected and highlighted; `v` enters copy mode on it
-     (decision 7).
-   - b. Copy mode directly, with the match selected. One key less to copy, but `j`/`k` then
-     move the caret instead of scrolling, which surprises after a jump.
-   - c. As a, and the grep query also becomes the `/` query, so `n`/`N` step through matches in
-     that page. Useful for literal queries; a regular expression cannot be handed to Firefox's
-     find.
-
-   Recommendation: a; `]q`/`[q` already step through the results.
-
-6. **A result list after the picker closes?**
-   - a. Every jump keeps the search's results as the window's grep list; `]q`/`[q` step it and
-     `:grep` alone resumes (decision 8). As Vim's `:grep` fills the quickfix list.
-   - b. Only on request: `ctrl+q` in the picker sends the results to the list, as Telescope.
-   - c. No list; reopen the picker to pick another result.
-
-   Recommendation: a; `]q` and `[q` cost nothing until used, and the list is in memory only.
-
-7. **Scope?**
-   - a. The current workspace by default; `ctrl+s` cycles window and tab (decision 10).
-   - b. The current workspace only.
-   - c. Every workspace of the window by default, `ctrl+s` to narrow.
-
-   Recommendation: a; a workspace is one task, and widening is one key away.
+None. Every question is answered in Design: a picker of its own (decision 1), ripgrep's
+matching (decision 3), Telescope's layout with the prompt at the bottom (decision 5), the
+preview (decision 6), the jump (decision 7), the result list (decision 8) and the scope
+(decision 10).
