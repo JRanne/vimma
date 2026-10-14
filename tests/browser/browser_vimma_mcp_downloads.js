@@ -641,6 +641,14 @@ add_task(async function test_a_grant_never_covers_the_pages_own_downloads() {
         "the page loads",
       ).then(() => agentTabs().find((t) => t.linkedBrowser.currentURI.spec === PAGE)))
   );
+  // currentURI is the page's from the moment its load commits, before its body is parsed: wait
+  // for the document, or the first script below finds no body to append to.
+  await SpecialPowers.spawn(tab.linkedBrowser, [], () =>
+    ContentTaskUtils.waitForCondition(
+      () => content.document.readyState === "complete",
+      "the page has loaded",
+    ),
+  );
   for (const [how, go] of [
     ["location=", (/** @type {string} */ u) => `location.href = ${JSON.stringify(u)}`],
     [
@@ -656,6 +664,12 @@ add_task(async function test_a_grant_never_covers_the_pages_own_downloads() {
         `m.content = "0;url=" + ${JSON.stringify(u)}; document.head.append(m); }`,
     ],
   ]) {
+    // The grant is still in force and its connection still open: without them the page's
+    // download would be asked anyway, and the check below would prove nothing.
+    Assert.ok(
+      AgentGate.grants().some((g) => g.tool === "vimma_download"),
+      `${how}: the agent's vimma_download grant is in force`,
+    );
     added = nextDownload();
     const url = fileUrl({ name: `page-${how.replace(/\W/g, "")}.txt`, type: "text/plain" });
     await SpecialPowers.spawn(tab.linkedBrowser, [go(url)], (code) => {
