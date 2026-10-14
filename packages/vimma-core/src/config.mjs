@@ -22,6 +22,7 @@ import { OVERLAP_CHORDS, canonicalChord, isShortcutChord } from "./firefox-keys.
 import { KeyNotationError, parseKey } from "./keys.mjs";
 import { BOOKMARKS_ROOTS } from "./bookmarks.mjs";
 import { quarantineProblem, resolveDownloadDir } from "./agent-downloads.mjs";
+import { resolveSearch, validateSearch } from "./search.mjs";
 
 /** @import { Keymap } from "./keymap.mjs" */
 /** @import { UserConfig } from "./defaults.mjs" */
@@ -30,6 +31,7 @@ import { quarantineProblem, resolveDownloadDir } from "./agent-downloads.mjs";
 /** @import { InsertSiteMode, InsertSiteRule } from "./editable.mjs" */
 /** @import { Route } from "./routes.mjs" */
 /** @import { BookmarksRoot } from "./bookmarks.mjs" */
+/** @import { ResolvedSearch } from "./search.mjs" */
 
 /**
  * @typedef {object} ConfigError
@@ -67,6 +69,8 @@ import { quarantineProblem, resolveDownloadDir } from "./agent-downloads.mjs";
  * @property {{ root: BookmarksRoot }} bookmarks          `[bookmarks]` (schema 2)
  * @property {{ placement: PrivatePlacement }} private    `[private]` (schema 2), private-swap
  * @property {McpConfig} mcp                             `[mcp]` (schema 2), docs/specs/vimma-mcp.md
+ * @property {ResolvedSearch | null} search              `[search]` (schema 2), null without it;
+ *   docs/specs/search-engines.md
  */
 
 /**
@@ -166,6 +170,7 @@ const TOP_KEYS = [
   "bookmarks",
   "private",
   "mcp",
+  "search",
 ];
 const KEYMAP_SECTIONS = new Set(["keys", "modal", "unbind"]);
 const WORKSPACE_KEYS = ["color", "icon", "home", "autofill"];
@@ -195,6 +200,7 @@ const SCHEMA_2_KEYS = [
   "theme.appearance",
   "private",
   "mcp",
+  "search",
 ];
 /** `[bookmarks]` (docs/specs/bookmarks.md, decision 2). */
 const BOOKMARKS_KEYS = ["root"];
@@ -505,6 +511,9 @@ function validate(raw, declared) {
 
   if (declared >= 2 && isTable(raw.mcp)) validateMcp(raw.mcp, { fail, typeError, unknownKey });
 
+  // docs/specs/search-engines.md, decision 2.
+  if (declared >= 2 && isTable(raw.search)) problems.push(...validateSearch(raw.search));
+
   if (declared >= 2 && isTable(raw.sites)) {
     /** @type {Map<string, string>} */
     const seen = new Map();
@@ -761,6 +770,7 @@ export function mergeWithDefaults(user, workspaceOrder, siteOrder) {
     bookmarks: { root: user.bookmarks?.root ?? "workspace" },
     private: { placement: user.private?.placement ?? "swap" },
     mcp: resolveMcp(user.mcp),
+    search: resolveSearch(user.search),
   };
 }
 

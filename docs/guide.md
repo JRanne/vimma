@@ -1485,8 +1485,11 @@ type reaches the page, and `ctrl+b` sequences still work.
 - **History.** `Up` / `Down` walk the lines you ran before, newest first. With text typed, `Up`
   recalls only lines that start with it, as in Vim. History lasts until Vimma quits; a private
   window keeps its own, forgotten when it closes.
+- `:open @` and `Tab` lists the search aliases (`@gh`, `@google`, …) with the engine each one
+  searches; the chosen one ends in a space, ready for the words.
 - `:open` and `:tabnew` refuse `javascript:` and `data:` URLs (also behind `view-source:`), with a
-  message, as `p` does. The line does not open over a fullscreen page.
+  message, as `p` does; so is a bookmark keyword that leads to one (a bookmarklet). The line does
+  not open over a fullscreen page.
 - **Errors** show under the line, which stays open so you can fix it: `:tabnwe` says
   `not a command: "tabnwe"; did you mean :tabnew?`.
 - A command name can be shortened while it stays unique (`:tabr`, `:wsp`), and leading colons
@@ -1498,7 +1501,7 @@ type reaches the page, and `ctrl+b` sequences still work.
 
 | Command                               | What it does                                                                                                                                |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `:open text`                          | Opens `text` in this tab as the URL bar would: `example.com` becomes a web address, other words a web search.                               |
+| `:open text`                          | As the URL bar would: `example.com` a web address, `@gh words` that alias's engine, a bookmark keyword its bookmark, other words a search.  |
 | `:tabnew`, `:tabnew text`             | Opens a new tab; with text, opens it there (as `:open`).                                                                                    |
 | `:q`, `:quit`                         | Closes the pane, as `ctrl+b x`; with one pane the tab, as `x`: a pinned tab is kept and the next one selected.                              |
 | `:map`, `:help`, `:h`                 | Shows every binding (the `ctrl+b ?` overlay).                                                                                               |
@@ -1641,13 +1644,52 @@ accent = "#ff9e64"
   name, default `"agent"`, never `"private"`; `ask_timeout`, 10 to 300 seconds, default 50;
   `grant_minutes`, default 10, at most `grant_max_minutes`, 1 to 1440, default 480;
   `max_read_chars`, 1,000 to 500,000, default 200,000; `notify`, default `true`;
-  `download_dir` and `download_max_mb`, [above](#downloads-from-the-agent-workspace)).
+  `download_dir` and `download_max_mb`, [above](#downloads-from-the-agent-workspace)); `[search]`
+  (the default engine and `@aliases`, [below](#search-engines)).
 - **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]`, `[[routes]]`, `[firefox]`,
-  `[bookmarks]`, `[private]`, `[mcp]`,
+  `[bookmarks]`, `[private]`, `[mcp]`, `[search]`,
   `hint_chars`, `insert_editing`, `[theme] name` and `appearance`; every key,
   its type and default are in [m5-core-config-and-theme](specs/m5-core-config-and-theme.md#schema-v1)
   and [m3-m4-core-prep](specs/m3-m4-core-prep.md#config-schema-2), and
   `packages/vimma-core/defaults.toml` lists them with their defaults.
+
+### Search engines
+
+`[search]` sets the default search engine and gives engines short `@aliases`, so the file holds
+what Firefox otherwise keeps in Settings > Search:
+
+```toml
+[search]
+default = "DuckDuckGo"                    # an installed engine's name, or "@alias" of a URL below
+
+[search.aliases]
+gh = "https://github.com/search?q=%s"     # a URL with one %s becomes an engine
+w = "Wikipedia (en)"                      # an installed engine gets this alias
+```
+
+- **Using an alias:** type `@gh vimma` in the URL bar, or `:open @gh vimma` (`:tabnew` too), and
+  the words go to that engine. Firefox's own aliases (`@google`, `@ddg`, `@wikipedia`) and your
+  bookmark keywords work in `:open` the same way. To search the default engine for text that
+  starts with `@`, put `? ` before it: `:open ? @gh vimma`.
+- **Aliases:** a key is the alias without its `@` (a leading `@` in the key is dropped): a letter
+  or digit, then up to 31 of `a-z 0-9 . _ -`, case-insensitive. A URL value must be `https://`
+  or `http://` with exactly one `%s`, where the words go; Vimma adds it to Firefox as an engine
+  named after its host (`github.com`), with no search suggestions, so nothing is sent before
+  `Enter`. An `http://` URL sends your searches unencrypted, and `about:vimma` says so. Any other
+  value is an installed engine's name, as Settings > Search lists it; that engine gets the alias,
+  and its own keeps working.
+- **The default:** `default` names an installed engine, or `"@sx"` for an alias with a URL (a
+  SearXNG of your own, say). It applies to the URL bar, `:open`, `:tabnew` and `p`/`P`, in
+  private windows too unless Firefox's separate private default is on. The file wins: at every
+  start and every save Vimma sets it again, so a default chosen in Settings lasts until then.
+  Delete the `default` line to choose it in Settings instead.
+- **Removing lines** puts back what was there: without `default`, the engine you had before
+  becomes the default again (unless you have chosen another one in Settings since); an engine
+  Vimma made from a URL is removed, and an installed engine gets its old alias back.
+- **Mistakes:** a name that is not installed, or an alias another engine already has, shows in
+  the status bar and `about:vimma` like any config error, with its line and a suggestion
+  (`config.toml:3: search.default: no search engine named "DuckDuckGoo" (did you mean
+"DuckDuckGo"?)`). The rest of the file still applies; only that entry is skipped.
 
 ## Scripting with vimma-ctl
 

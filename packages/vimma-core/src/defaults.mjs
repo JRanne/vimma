@@ -33,6 +33,8 @@ import { DEFAULT_THEME_NAME } from "./theme.mjs";
  * @property {{ enabled?: boolean, workspace?: string, ask_timeout?: number,
  *   grant_minutes?: number, grant_max_minutes?: number, max_read_chars?: number,
  *   notify?: boolean, download_dir?: string, download_max_mb?: number }} [mcp]  local AI agents and the agent workspace (docs/specs/vimma-mcp.md)
+ * @property {{ default?: string, aliases?: Record<string, string> }} [search]  the default
+ *   search engine and `@alias` keywords (docs/specs/search-engines.md)
  */
 
 /**
@@ -455,6 +457,17 @@ export function formatDefaultsToml() {
     "# [[routes]]",
     '# domain = "github.com"',
     '# workspace = "work"',
+    "",
+    "# Search engines. default: an installed engine's name (as in Settings > Search), or",
+    '# "@alias" of a URL below. Each alias is typed as @alias before the words, in the URL bar',
+    "# and in :open and :tabnew. A URL with one %s becomes an engine; a name gives that engine",
+    "# the alias. Set here, the default wins at every start; delete the line to choose it in",
+    "# Settings. None by default.",
+    "# [search]",
+    '# default = "DuckDuckGo"',
+    "# [search.aliases]",
+    '# gh = "https://github.com/search?q=%s"',
+    '# w = "Wikipedia (en)"',
     "",
   );
   return lines.join("\n");
