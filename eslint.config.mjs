@@ -113,6 +113,12 @@ export default [
     languageOptions: { globals: { Components: "readonly" } },
   },
   {
+    // Agent downloads (docs/specs/vimma-mcp.md decision 31): the registrar wraps the helper-app
+    // dialog, and a download's browsing context says which tab and container it came from.
+    files: ["src/**/vimma/ctl/AgentDownloads.sys.mjs"],
+    languageOptions: { globals: { BrowsingContext: "readonly", Components: "readonly" } },
+  },
+  {
     // The -vimma-from command-line handler: the component registrar (workspace-routing).
     files: ["src/**/vimma/workspaces/WorkspaceRouter.sys.mjs"],
     languageOptions: { globals: { Components: "readonly" } },

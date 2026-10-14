@@ -11,6 +11,7 @@
  *   npm run e2e -- --xvfb --keep                 # own Xvfb even with a display; keep profiles
  *   npm run e2e -- --update-baselines            # rewrite baselines: needs a changelog line
  *   npm run e2e -- --run-pending                 # also run scenarios marked pending
+ *   npm run e2e -- --report-json out.json        # also write the results as JSON (Beta canary)
  *
  * A scenario's `restart` step quits with ctrl+q ("quit") or SIGKILLs the browser once its
  * session is saved ("kill", a crash), and relaunches on the same profile; its
@@ -19,7 +20,14 @@
  * Exit 0 when nothing failed (pending scenarios are reported, not passed), 1 on failures,
  * 2 on usage errors.
  */
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,7 +44,7 @@ import {
   waitForSessionSaved,
 } from "./launcher.mjs";
 import { fixtureUrl, startPageServer } from "./pages.mjs";
-import { exitCode, formatReport, githubAnnotations, runScenarios } from "./runner.mjs";
+import { exitCode, formatReport, githubAnnotations, reportJson, runScenarios } from "./runner.mjs";
 import { loadScenarios } from "./scenario.mjs";
 import { capture, checkBaseline } from "./screenshot.mjs";
 
@@ -57,6 +65,7 @@ const OPTIONS = /** @type {const} */ ({
   scenarios: { type: "string", default: join(REPO, "tests/e2e/scenarios") },
   baselines: { type: "string", default: join(REPO, "tests/e2e/baselines") },
   out: { type: "string", default: join(REPO, "e2e-output") },
+  "report-json": { type: "string" },
   help: { type: "boolean", short: "h", default: false },
 });
 
@@ -80,6 +89,7 @@ async function main() {
   if (values["update-baselines"] && process.env.CI) {
     return usage("--update-baselines is refused in CI: baselines change only in a reviewed commit");
   }
+  if (values["report-json"] === "") return usage("--report-json needs a file path");
   const budgetMs = Number(values.budget) * 1000;
   const discoveryTimeoutMs = Number(values["discovery-timeout"]) * 1000;
   if (!(budgetMs > 0) || !(discoveryTimeoutMs > 0))
@@ -269,6 +279,9 @@ async function main() {
     });
     const report = formatReport(results);
     console.log(`\n${report}`);
+    if (values["report-json"]) {
+      writeFileSync(values["report-json"], `${JSON.stringify(reportJson(results), null, 2)}\n`);
+    }
     if (process.env.GITHUB_ACTIONS) {
       for (const line of githubAnnotations(results)) console.log(line);
       if (process.env.GITHUB_STEP_SUMMARY) {

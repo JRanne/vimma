@@ -325,6 +325,10 @@ grant_minutes = 10
 grant_max_minutes = 480
 max_read_chars = 200000
 notify = true
+# Downloads from the agent workspace ask first, are saved only here (never your Downloads
+# folder itself), never opened, and refused over download_max_mb (1 to 4096).
+download_dir = "~/Downloads/vimma-agent"
+download_max_mb = 200
 
 # Per-site insert mode: auto (detect text fields), never (keys stay vimma's), always.
 # A host also covers its subdomains. None by default.

@@ -16,6 +16,7 @@ import {
   cycleFromPrivate,
   movePrivateQuestion,
   privateItem,
+  privateNeighbours,
   privateReturn,
   privateToggle,
 } from "../core/privatews.mjs";
@@ -412,9 +413,10 @@ async function moveIntoPrivate(win, tab) {
 export function privatePanel(model) {
   const [w] = model.workspaces;
   const workspace = { .../** @type {any} */ (w), id: PRIVATE_WORKSPACE_ID, name: PRIVATE_NAME };
-  const win = normalWindow();
-  const names = (win && WindowWorkspaces.get(win)?.model?.workspaces.map((x) => x.name)) ?? [];
-  const neighbours = /** @type {const} */ ([names.at(-1) ?? null, names[0] ?? null]);
+  const normal = normalWindow();
+  const ww = normal ? WindowWorkspaces.get(normal) : undefined;
+  // Past the agent workspace, as cycleOutOfPrivate goes (docs/specs/vimma-mcp.md, decision 9).
+  const neighbours = privateNeighbours(ww?.model?.workspaces ?? [], ww?.cycleSkip);
   return {
     model: { ...model, workspaces: [workspace], active: PRIVATE_WORKSPACE_ID },
     options: { private: true, neighbours },

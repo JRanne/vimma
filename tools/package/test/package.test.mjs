@@ -48,6 +48,16 @@ const has = (cmd) => spawnSync("sh", ["-c", `command -v ${cmd}`]).status === 0;
 const mode = (path) => statSync(path).mode & 0o777;
 /** @param {string | Buffer} data */
 const sha256 = (data) => createHash("sha256").update(data).digest("hex");
+/**
+ * Asserts two files are byte-identical by digest. toEqual on Buffers deep-compares byte by byte:
+ * on the ~560 KB of icons below that took seconds under a loaded coverage run (#200).
+ * @param {string} actual
+ * @param {string} expected
+ */
+const expectSameBytes = (actual, expected) =>
+  expect(sha256(readFileSync(actual)), `${actual} = ${expected}`).toBe(
+    sha256(readFileSync(expected)),
+  );
 
 /**
  * @param {string | undefined} display
@@ -419,18 +429,16 @@ describe("packageRelease on a fake ./mach package tarball", () => {
     expect(readFileSync(join(app, "vimma-vimma.desktop"), "utf8")).toMatch(
       /^StartupWMClass=vimma-vimma$/m,
     );
-    expect(readFileSync(join(app, "vimma.png"))).toEqual(
-      readFileSync(join(BRAND_DIR, "logo256.png")),
-    );
+    expectSameBytes(join(app, "vimma.png"), join(BRAND_DIR, "logo256.png"));
     expect(mode(join(app, "usr/lib/vimma/vimma"))).toBe(0o755);
     expect(mode(join(app, "usr/lib/vimma/vimma-open"))).toBe(0o755);
-    expect(readFileSync(join(app, "usr/lib/vimma/vimma-open"))).toEqual(readFileSync(LAUNCHER));
+    expectSameBytes(join(app, "usr/lib/vimma/vimma-open"), LAUNCHER);
     expect(mode(join(app, "usr/lib/vimma/libxul.so"))).toBe(0o755);
     expect(mode(join(app, "usr/lib/vimma/omni.ja"))).toBe(0o644);
     expect(existsSync(join(app, "usr/share/applications/vimma-vimma.desktop"))).toBe(true);
     for (const size of ICON_SIZES) {
       const icon = join(app, `usr/share/icons/hicolor/${size}x${size}/apps/vimma.png`);
-      expect(readFileSync(icon)).toEqual(readFileSync(join(BRAND_DIR, `logo${size}.png`)));
+      expectSameBytes(icon, join(BRAND_DIR, `logo${size}.png`));
       expect(mode(icon)).toBe(0o644);
     }
     expect(existsSync(join(app, "usr/share/icons/hicolor/scalable/apps/vimma.svg"))).toBe(true);

@@ -112,7 +112,10 @@ jobs:
       - name: Smoke check
         run: |
           version=$("$MOZ_OBJDIR/dist/bin/vimma" --version 2>&1)
-          expected="Vimma Vimma ${TAG#v}"
+          # "Vimma <vimma> · Firefox <firefox>" from surfer.json (spec firefox-versions), and the
+          # tag must be its Vimma version.
+          expected=$(node tools/release/version-line.mjs)
+          case "$expected" in "Vimma ${TAG#v} · Firefox "*) ;; *) echo "::error::surfer.json gives '$expected', tag is $TAG"; exit 1 ;; esac
           [ "$version" = "$expected" ] || { echo "::error::--version is '$version', want '$expected'"; exit 1; }
           # appinfo.version is the Firefox version (spec m0-app-version); --version shows Vimma's.
           appver=$(sed -n 's/^Version=//p' "$MOZ_OBJDIR/dist/bin/application.ini")
@@ -206,8 +209,9 @@ jobs:
       - name: Smoke test the .deb and the AppImage
         run: |
           v=${TAG#v}
+          line=$(node tools/release/version-line.mjs)
           sudo apt-get install -y -q "./dist/vimma_${v}_amd64.deb"
-          [ "$(vimma --version)" = "Vimma Vimma $v" ] || { echo "::error::.deb: $(vimma --version)"; exit 1; }
+          [ "$(vimma --version)" = "$line" ] || { echo "::error::.deb: $(vimma --version)"; exit 1; }
           test -f /usr/share/applications/vimma-vimma.desktop
           test -x /usr/bin/vimma-open
           p=$(mktemp -d)
@@ -217,7 +221,7 @@ jobs:
           timeout 60 vimma --headless --no-remote --profile "$p" --screenshot "$RUNNER_TEMP/shot.png" "data:text/html,<h1>ok</h1>"
           test -s "$RUNNER_TEMP/shot.png"
           out=$(APPIMAGE_EXTRACT_AND_RUN=1 "./dist/vimma-$v-x86_64.AppImage" --version)
-          [ "$out" = "Vimma Vimma $v" ] || { echo "::error::AppImage: $out"; exit 1; }
+          [ "$out" = "$line" ] || { echo "::error::AppImage: $out"; exit 1; }
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
