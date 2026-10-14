@@ -29,6 +29,40 @@ in the same PR.
   no filler, no emoji. Consistent with the terms in `docs/guide.md`.
 - **One feature per spec.** If the scope grows past what one PR series can deliver, split it.
 
+## Lifecycle
+
+A spec moves through three statuses, set on its `Status:` line.
+
+1. **Draft.** The spec merges to `main` as soon as it meets this page, with `Status: draft` and
+   its open questions listed in its Open questions section. It does not wait in an open pull
+   request for answers. The same change opens the feature's GitHub issue.
+2. **Accepted.** Each answer is a small edit, merged at once: the answer moves into Design as a
+   decision with its reason, and the question is removed. When no question is open, the status
+   becomes `accepted` and the feature can be built.
+3. **Implemented.** The status becomes `implemented` with the last sub-PR of its Delivery
+   section.
+
+### The feature's issue
+
+Every planned feature has one GitHub issue. It is the backlog entry, and the roadmap in
+[plan.md](../../plan.md) §6 links to it instead of describing the feature itself.
+
+- **Title:** the feature's name.
+- **Body:** a short reason for the feature, a link to the spec on `main`, and the spec's open
+  questions as a numbered checklist, each with its options and a recommendation, worded as in
+  the spec.
+- **Labels:** `planned`, and `spec:draft` or `spec:accepted` to match the spec; `ready` once it
+  can be built; others such as `security` where they apply. A milestone is optional.
+- **Board:** the [Vimma roadmap](https://github.com/users/JRanne/projects/2) project tracks each
+  issue as Draft, Decided, Building or Done.
+
+The maintainer answers the questions in a comment on the issue. The answers then go into the
+spec as above, and the issue's labels follow the spec's status. The implementing pull requests
+reference the issue, and the last one closes it.
+
+A pull request exists only for work that is ready to merge. Anything waiting on a decision is a
+question in an issue, not an open pull request.
+
 ## Template
 
 Copy this skeleton. Sections that do not apply stay, with one line saying why (for example "No
@@ -87,10 +121,12 @@ Each question states the options, their trade-offs and a recommendation. When it
 the answer moves into Design as a decision with its reason, and the question is removed.
 ```
 
-## Before the spec PR is opened
+## Before the spec is merged
 
 - [ ] Every section of the template is present.
 - [ ] No sentence depends on knowing the discussion that produced the spec.
 - [ ] Every claim about Firefox or another tool cites a source and a version.
 - [ ] Every behaviour has a test.
+- [ ] Every open question has its options and a recommendation, and the feature's issue lists
+      them.
 - [ ] `npx prettier --check` passes.
