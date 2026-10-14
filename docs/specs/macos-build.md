@@ -170,8 +170,8 @@ From GitHub's "GitHub-hosted runners" reference
 - "Larger runners are only available for organizations and enterprises using the GitHub Team or
   GitHub Enterprise Cloud plans" and "are not free for public repositories". Vimma's repository
   belongs to a user account, so larger runners would need a move to an organisation.
-- The standard Linux runner has far more free disk than documented: the pending build-supply-chain
-  spec (PR #195, R9) measured 85 GB free on `ubuntu-24.04` before the Firefox source is
+- The standard Linux runner has far more free disk than documented: [build-supply-chain](build-supply-chain.md)
+  (R9) measured 85 GB free on `ubuntu-24.04` before the Firefox source is
   downloaded. A Firefox build needs about 30 GB (R10 there). The free disk on hosted Macs beyond
   the documented 14 GB is **not measured**.
 - GitHub announced that Intel macOS images end when the macOS 15 image retires in fall 2027
@@ -259,33 +259,33 @@ Paths under `vimma/` are `src/browser/base/content/vimma/`.
 
 4. **No self-hosted build machine.** None is registered, none is planned, and on a public
    repository a self-hosted runner reachable from pull requests is a machine anyone can run code
-   on (build-supply-chain, PR #195, pending, R7 and decision 7). The macOS build must not name a
+   on (build-supply-chain R7 and decision 7). The macOS build must not name a
    self-hosted runner. Rejected: the earlier plan to build on a `vimma-build` runner beside the
-   Linux nightly, because that runner does not exist and #195 removes it from both workflows.
+   Linux nightly, because that runner does not exist and build-supply-chain removes it from both workflows.
 5. **Cross-compile on a GitHub-hosted Linux runner; never build on a hosted Mac.** This is what
    Mozilla and Zen do. `configs/macos/mozconfig` gains `--target=aarch64-apple-darwin`; the SDK,
    clang (lld) and the DMG tools come through `--enable-bootstrap` and `bootstrap_toolchain`, and
    sub-PR 3 adds an explicit `mach artifact toolchain` fetch of cctools, libdmg and hfsplus only if
    bootstrap proves insufficient. The file stays usable on a Mac host for a contributor who builds
-   natively. The runner type follows #195 decision 6 (open question 8 confirms it for macOS):
+   natively. The runner type follows build-supply-chain decision 6 (open question 8 confirms it for macOS):
    - The standard `ubuntu-24.04` runner first: free, 16 GB RAM, and about 85 GB free disk
      measured against the 30 GB a build needs. A disk guard fails the job before the download when
-     less than 40 GB is free (#195 decision 9). Freeing disk (`jlumbroso/free-disk-space`, as Zen
+     less than 40 GB is free (build-supply-chain decision 9). Freeing disk (`jlumbroso/free-disk-space`, as Zen
      does) is the fallback if the image shrinks; it is not needed today.
-   - A cold cross build on 4 CPUs is estimated at 1.5 to 3 hours (from #195's estimate of at least
+   - A cold cross build on 4 CPUs is estimated at 1.5 to 3 hours (from build-supply-chain's estimate of at least
      116 minutes for a Linux build on 4 CPUs, and Zen's 28-53 minutes on 8 vCPU); not measured.
-     Sub-PR 3 measures it. If it exceeds #195's 4-hour threshold, the macOS build follows the
+     Sub-PR 3 measures it. If it exceeds build-supply-chain's 4-hour threshold, the macOS build follows the
      Linux release to a larger hosted Linux runner, which needs an organisation on the GitHub Team
      plan (paid, about $0.042 per minute for 16 cores).
    - Rejected: building on a hosted Mac. The documented 14 GB SSD is under half of what a build
      needs, on the free runner and on the paid `xlarge` alike, and the free arm64 Mac has 3 cores
      and 7 GB RAM.
    - Rejected: a third-party runner service (Zen's Blacksmith). It adds a party that runs the
-     build, outside #195's trust boundary (#195 decision 6).
-6. **The macOS build follows #195's supply-chain rules.** It verifies the Firefox source against
+     build, outside build-supply-chain's trust boundary (build-supply-chain decision 6).
+6. **The macOS build follows the build-supply-chain rules.** It verifies the Firefox source against
    Mozilla's signed `SHA512SUMS` and extracts it afresh, restores nothing from the Actions cache
-   and uses no shared compiler cache, so every build is cold (#195 decisions 1-5 and 8). Until #195
-   is merged, sub-PR 3 waits for its source-verification step rather than adding a second one.
+   and uses no shared compiler cache, so every build is cold (build-supply-chain decisions 1-5 and 8). Sub-PR 3 reuses that spec's
+   source-verification step once it is implemented, rather than adding a second one.
 
 ### Testing on Macs without building on them
 
@@ -325,7 +325,7 @@ Paths under `vimma/` are `src/browser/base/content/vimma/`.
 14. **Test builds are keyless.** `macos.yml` builds without the Safe Browsing key, so Safe
     Browsing is off by default in those builds (`configs/common/mozconfig:46-59`). The key stays in
     as few jobs as possible; a macOS build that joins the nightly or the release uses the key as
-    #195 prescribes for those.
+    build-supply-chain prescribes for those.
 15. **Artifact names carry both versions.** `mach package` names the file
     `vimma-<firefox>.en-US.mac.dmg`; the workflow uploads it as
     `vimma-<vimma>-firefox-<firefox>-macos-aarch64`, matching the version line of
@@ -350,7 +350,7 @@ Mac-native integrations such as Handoff, the Services menu or a global hotkey.
 ## Security and privacy
 
 - **Build trust.** The macOS build runs on a GitHub-hosted runner under the same rules as the
-  Linux builds in #195: verified Firefox source, no restored caches, toolchains from Mozilla's
+  Linux builds in build-supply-chain: verified Firefox source, no restored caches, toolchains from Mozilla's
   Taskcluster through `mach` as trusted inputs. No self-hosted runner exists for pull request
   code to reach.
 - **Secrets.** The unsigned sub-PRs need none: no Safe Browsing key (decision 14), no Apple
@@ -440,11 +440,11 @@ full build.
    private-repository billing and no longer applies); the config path per open question 4; the
    swap-gate and keys tests on macOS.
 3. **`build(macos): an arm64 cross build`.** ADR-018. `configs/macos/mozconfig` for the cross
-   build; `macos.yml` on `ubuntu-24.04` (decision 5) with #195's source verification and disk
+   build; `macos.yml` on `ubuntu-24.04` (decision 5) with build-supply-chain's source verification and disk
    guard; `npm run import`, `surfer build`, `./mach package`, ad hoc `rcodesign` with the
    developer entitlements, upload as an artifact. Measures the cold build time and sets
-   `timeout-minutes`. Branding `.icns` and DMG background. After #195's source-verification
-   sub-PR.
+   `timeout-minutes`. Branding `.icns` and DMG background. After the build-supply-chain
+   source-verification sub-PR.
 4. **`test(macos): smoke the dmg on a mac`.** A `macos-15` job after the build: mount, verify,
    launch with `MOZ_HEADLESS=1`, `vimma --version`, the two smoke scenarios through `vimma-ctl`.
    The e2e launcher learns `MOZ_HEADLESS` instead of Xvfb on macOS, the `.app` binary path and
@@ -510,6 +510,6 @@ Time and cost per run:
    (a) the standard `ubuntu-24.04` runner: free, 85 GB measured free disk, 1.5-3 hours estimated,
    within the 6-hour limit. (b) a larger hosted Linux runner: about 40 minutes, but paid and only
    for organisations on the Team plan. (c) a hosted Mac, natively: documented 14 GB disk, too
-   small for a 30 GB build even on the paid `xlarge`. **Recommendation: (a)**, as #195 decides for
+   small for a 30 GB build even on the paid `xlarge`. **Recommendation: (a)**, as build-supply-chain decides for
    Linux, moving to (b) together with the Linux release only if sub-PR 3 measures more than 4
    hours.
