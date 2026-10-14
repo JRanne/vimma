@@ -34,10 +34,12 @@ import { LAYOUTS } from "./layouts.mjs";
  * @typedef {{ value: string, kind: "command" | "action" | "argument", description: string,
  *   label?: string }} Candidate
  */
+/** @typedef {{ name: string, description: string }} AliasCompletion */
 /**
- * What arguments complete to: names by `ARGUMENT_KINDS` key, and `search` for `:open @`.
- * @typedef {Readonly<Record<string, readonly string[]>>
- *   & { search?: readonly { name: string, description: string }[] }} CompletionArgs
+ * What arguments complete to: names by `ARGUMENT_KINDS` key, and `search`, the `@aliases`
+ * `:open` completes, as AliasCompletion.
+ * @typedef {Readonly<Record<string, readonly string[] | readonly AliasCompletion[]>>}
+ *   CompletionArgs
  */
 /**
  * @typedef {object} History
@@ -373,7 +375,7 @@ function argumentCandidates(command, kind, text, names) {
  * typed, each with its engine, the words to follow after the space.
  * @param {string} command
  * @param {string} text
- * @param {readonly { name: string, description: string }[]} aliases  from searchCompletions
+ * @param {readonly AliasCompletion[]} aliases  from searchCompletions
  * @returns {Candidate[]}
  */
 function aliasCandidates(command, text, aliases) {
@@ -413,7 +415,14 @@ export function completeCommandLine(line, { limit = 20, args = {} } = {}) {
     if (!spec || !names) return { word, candidates: [] };
     const text = rest.slice(/** @type {string} */ (m[1]).length + 1);
     if (spec.names === "search") {
-      return { word, candidates: aliasCandidates(word, text, args.search ?? []).slice(0, limit) };
+      return {
+        word,
+        candidates: aliasCandidates(
+          word,
+          text,
+          /** @type {readonly AliasCompletion[]} */ (args.search ?? []),
+        ).slice(0, limit),
+      };
     }
     return {
       word,
