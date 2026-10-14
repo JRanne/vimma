@@ -4,11 +4,11 @@ Status: implemented · Area: `packages/vimma-core/src/help.mjs`, `tools/gen-docs
 `docs/bindings.json` (new, generated), `.github/workflows/site-dispatch.yml` (new). No upstream
 patch. The website half lives in JRanne/vimma-site.
 
-## The user's words
+## Goal
 
-2026-10-12: "is there way to mirror all the available keybinds to vimma.dev? now we have limited
-amount of them, when someone is pressing ? without actually using Vimma. this should probably
-read them from default config.toml". The design below was approved ("do it").
+vimma.dev's `?` overlay shows only some of Vimma's keys to a visitor who is not running Vimma. It
+should mirror every available binding, read from the same source as the default `config.toml`, so it
+cannot fall behind the browser.
 
 ## User stories
 

@@ -124,9 +124,9 @@ did not compile (`no variant named ReloadTheme`). Green: control mochitest 258/2
 (`poll()` for `await poll()`) failed three assertions (`{"changed":false}` vs `true`, the bar
 still `rgb(16, 24, 32)`); reverted.
 
-## Instant reload by default (2026-10-10)
+## Instant reload by default
 
-The user wants instant reload on by default. The control socket stays off by default (a loopback
+Instant reload is on by default, so a theme switch reaches Vimma with no setup. The control socket stays off by default (a loopback
 TCP port any local user can reach); the hook uses Firefox's command-line remoting instead, which
 is always on.
 

@@ -496,7 +496,7 @@ tested by `browser_vimma_pane_workspaces.js` (3 tasks).
   whole `tests/browser/` suite green (2504). Mutation check: not calling `#focusPane` after a
   switch fails "A's focused page has focus".
 
-**Handover (the rest of sub-spec 6, since done):**
+**Remaining work of sub-spec 6 (since done):**
 
 - **Adopting foreign splits:** listen for `SplitViewCreated`, `SplitViewRemoved` and
   `SplitViewTabChange` on `gBrowser.tabContainer` outside `reconcile`; a new wrapper becomes a
@@ -558,8 +558,8 @@ step, protocol field or product code was needed.
 - **Covered, all keyboard through `send-keys`, asserted on `state.panes` and titles:**
   `prefix+v` and `prefix+-` build an L shape `x[a, y[b, c]]`; `prefix+h/j/k/l` move by
   geometry, and `l` from `a` returns to `c`, not `b` (MRU); each pane keeps its own mode (`b`
-  has a focused input: insert there, normal in `a` and `c`; sub-spec 6's per-pane mode
-  handover, now pinned end to end); `prefix+z` twice; `prefix+shift+h` swaps `c` with `a`
+  has a focused input: insert there, normal in `a` and `c`; sub-spec 6's open per-pane mode
+  item, now pinned end to end); `prefix+z` twice; `prefix+shift+h` swaps `c` with `a`
   (`x[c, y[b, a]]`); `prefix+r`, `l l`, `Esc` gives 767/511; the screenshot; Enter in `b`'s
   input requests DOM fullscreen (`b 1280x800 fs`) and Enter again leaves it with every width and
   the tree unchanged; `prefix+x` closes `b`'s pane and keeps its tab; a second workspace with a

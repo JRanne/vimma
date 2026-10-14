@@ -7,8 +7,8 @@ routing rules" as out of scope) · Area: `packages/vimma-core/src/routes.mjs` (n
 (new), `about/`, `config/ConfigHost.sys.mjs`; `tools/package/vimma-open.sh` (new) and the
 packages; two existing patch hunks changed, no new hunk.
 
-User request: "make sure that there is capability to do workspace profile routing based on which
-application opened the page, or by domain name (similar feature to zen)". Engine paths are
+Goal: route a page to a workspace by the application that opened it or by its domain name, as
+Zen's space routing does. Engine paths are
 relative to `engine/` (Firefox 157.0.1). Zen paths are inside Zen's `browser/omni.ja` (the build
 installed here, `modules/zen/spacerouting/ZenSpaceRoutingManager.sys.mjs` and
 `modules/zen/ui/ZenSpaceRoutingNavigation.sys.mjs`).
@@ -148,7 +148,7 @@ caller reaches the running Vimma.
      bar, `:open`, `:tabnew`, bookmarks, history, and `p`/`P` once they exist), any `where`. An
      explicit container ("Open in New Container Tab", an extension) is the user's choice and
      stays.
-   - **Never an open a page triggers** (review of PR #88; this replaces the first draft's "(b)",
+   - **Never an open a page triggers** (review of PR #88; this replaces an earlier option "(b)",
      which routed a page's links opened in a new tab or window in the page's own container). The
      threat: `ClickHandlerChild` accepts synthetic ctrl- and middle-clicks from the page's own
      script once the page has a user gesture, and `ClickHandlerParent` opens them in a
@@ -318,8 +318,8 @@ WindowWorkspaces: TabOpen/TabSelect (switch or notice), location changes (hint)
 
 ## Review round 1 (PR #88)
 
-- **Decision 3b dropped** (the maintainer's decision): a page's opens are never routed; the
-  cookie threat is in decision 3. The router routes `openLinkIn` only for the system principal
+- **Decision 3b dropped**: a page's opens are never routed, because of the cookie threat
+  described in decision 3. The router routes `openLinkIn` only for the system principal
   with no container given; the referrer stripping that (b) needed went with it. The hint now also
   fires when a tab is selected, so a link a page opened in the background is hinted when looked
   at. Tests: a scripted ctrl-click and middle-click through ClickHandler, `openLinkIn` with a

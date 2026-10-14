@@ -5,9 +5,9 @@
 
 ## Context
 
-The user wants local AI tools (Claude Code, Codex, opencode, Copilot) to use Vimma, with two
-conditions: "it should always confirm from user when agents wants to use it's mcp", and "All the
-agents usage should be go through agent workspace". These tools speak MCP, the Model Context
+Local AI tools (Claude Code, Codex, opencode, Copilot) should be able to use Vimma, under two
+conditions: every use is confirmed by the user in Vimma, and every use goes through the agent
+workspace, never the user's other workspaces. These tools speak MCP, the Model Context
 Protocol, to servers they start themselves, usually over stdio.
 
 Vimma already has a control socket (ADR-007) and a client for it, `vimma-ctl` (ADR-011). Its
@@ -32,7 +32,7 @@ process of the user's.
 3. **Confinement and confirmation are enforced in the browser**, never trusted to the client.
    Agent commands see only tabs of the agent workspace in its container, checked when each
    command runs. Every one but hello and ping waits for the user's answer in Vimma, or runs
-   under a grant the user gave that connection for that tool, for minutes the user chose. A
+   under a grant the user gave that connection for that tool, for as many minutes as the user picked. A
    timeout, a full queue and a muted connection deny. The yes stands for the tab and URL asked
    about. Page text comes back between untrusted-content delimiters the page cannot close.
 

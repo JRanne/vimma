@@ -9,7 +9,7 @@ Read plan.md once per milestone; read docs/specs/<current>.md every session.
 
 - npm test # Vitest for packages/vimma-core (fast, run constantly)
 - npm run typecheck # tsc --checkJs over src/**/vimma/** and packages/**
-- npm run lint # eslint + prettier check
+- npm run lint # eslint + prettier check + process wording in Markdown (tools/md-wording)
 - npm run gen-docs # regenerate docs/bindings.md, docs/bindings.json, defaults.toml from actions.mjs
 - npm run import # sync-core + surfer import: symlink src/ and tests/ into engine/; rerun after editing packages/vimma-core
 - npx surfer build --ui # rebuild our UI only; plain ./mach build after a moz.build change.
@@ -76,3 +76,4 @@ Read plan.md once per milestone; read docs/specs/<current>.md every session.
   only its report. Reviews run in another fresh agent.
 - Clear after merge, before review, after 3 failed attempts, when switching area.
 - Before clearing mid-task: commit or stash, and write a handover paragraph into the PR description.
+  <!-- process-wording: these lines instruct the agents that do the work -->

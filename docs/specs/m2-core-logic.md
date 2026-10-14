@@ -366,8 +366,8 @@ UI, timers and the state file. For the host:
 
 ## Settled (2026-10-09)
 
-- **Which-key dropped (maintainer decision, 2026-10-09: "which-key is not needed").** Only `prefix+?`
-  shows the bindings; `whichkey.mjs` and its tests are removed. `isRunnable` stays in
+- **Which-key dropped (2026-10-09).** The help overlay already lists every binding, so only
+  `prefix+?` shows the bindings; `whichkey.mjs` and its tests are removed. `isRunnable` stays in
   `actions.mjs` for the help overlay. The which-key notes in this spec are history.
 
 - **Which-key order is alphanumeric, not binding order**, grouped by `ACTIONS` group so the strip

@@ -6,12 +6,10 @@ change · Area: `packages/vimma-core/src/search.mjs` (new), `config.mjs`, `defau
 `host/tab-ops.mjs`, `host/VimmaHost.sys.mjs`, `about/AboutVimma.sys.mjs`, `jar.mn`. No upstream
 patch.
 
-## The user's words
+## Goal
 
-"should we have capability to set default search engine and then writing @google for example,
-that allows using different engine? similarly to Zen."
-
-The coordinator proposed, and the user approved ("do so"): a `[search]` section in
+Set the default search engine, and use another engine for one search by typing an alias such as
+`@google`, as Zen allows. Vimma does this with a `[search]` section in
 `config.toml` with `default = "DuckDuckGo"` and `[search.aliases]` mapping short aliases to
 installed engine names or to custom URL templates with `%s`
 (`gh = "https://github.com/search?q=%s"`); `@alias query` works in Firefox's URL bar and in
@@ -89,7 +87,7 @@ running it, not recalled.
   welcome flow (`ZenWelcome.mjs`, `ZenSearchEngineStore.setDefaultEngine` →
   `SearchService.setDefault(engine, CHANGE_REASON.USER)`), hides the one-off buttons
   (`zen.urlbar.hide-one-offs`), and has no config file for engines: aliases and custom engines
-  are about:preferences#search. What the user saw in Zen is therefore Firefox's feature; Vimma
+  are about:preferences#search. What Zen offers is therefore Firefox's feature; Vimma
   has it already in the URL bar, and this spec adds the config file and `:open`.
 - **Vimma today:**
   - `:open` / `:tabnew` (`page.open` / `tab.new` with text) go through `openOrSay` →
@@ -295,9 +293,9 @@ Per-workspace defaults (decision 13); a separate private default key; a table fo
 Firefox's existing engines into `config.toml`; hiding or removing app-provided engines from the
 file (the policy's `Remove`).
 
-## Answered by the user (2026-10-11)
+## Decided questions
 
-1. **The file wins at every start** (decision 7): "config always wins".
-2. **Private browsing's default** is not a separate `[search] private` key. The user wants a
-   private workspace in place of private windows (spec in progress, private-workspace); its
-   search default is decided there. Until then decision 12 stands.
+1. **The file wins at every start** (decision 7), because `config.toml` is the source of truth.
+2. **Private browsing's default** is not a separate `[search] private` key. Vimma replaces
+   private windows with a private workspace (spec in progress, private-workspace); its search
+   default is decided there. Until then decision 12 stands.

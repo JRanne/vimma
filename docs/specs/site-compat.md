@@ -9,13 +9,13 @@ Engine paths are relative to `engine/` (Firefox 157.0.1). Timings were measured 
 `gh run list` / `gh run view` on 2026-10-12. GitHub's billing and runner facts were checked
 against docs.github.com the same day (links in Research).
 
-## The user's words
+## Goal
 
-2026-10-12: "could we run automated test on sites that most developers use? to see how well
-Vimma works on them?" Then: "start with sites without login, however i wonder how heavy workflow
-that would be on github side? or if i should have my own dedicated runner doing it?"
+Run automated tests on the sites most developers use, to see how well Vimma works on them, starting
+with sites that need no login. The suite must be cheap enough to run on GitHub's hosted runners, or
+else justify a dedicated runner.
 
-## Short answer to the cost question
+## Cost in short
 
 Free, and light. The repo is public, and GitHub's billing docs say "GitHub Actions usage is free
 for self-hosted runners and for public repositories that use standard GitHub-hosted runners".
@@ -152,10 +152,9 @@ needs no dependency.
   `consent.youtube.com` ("Before you continue"), and common consent-manager containers
   (OneTrust, Sourcepoint, Quantcast, Didomi, Funding Choices).
 - **IP reputation.** GitHub-hosted runners are Azure datacenter IPs. Reddit, Google search and
-  Cloudflare-fronted sites (Stack Overflow) challenge datacenter ranges far more often than a
-  home connection. Expect some of those to show as blocked on some nights. That is why bot
-  checks are their own status, and why `npm run sites` from the user's own network is the
-  second half of the plan.
+  Cloudflare-fronted sites (Stack Overflow) challenge datacenter ranges far more often than a home
+  connection. Expect some of those to show as blocked on some nights. That is why bot checks are
+  their own status, and why `npm run sites` from a home network is the second half of the plan.
 - **Consent.** The runner is in the US, so Google and YouTube usually show no consent wall
   there. From Finland they do. A "Reject all" click is safe (it only refuses), so the suite
   tries it. It never clicks "Accept".
@@ -190,14 +189,14 @@ needs no dependency.
   failed check: roughly 40-60 PNGs of 100-400 kB, so about 10-20 MB a night. Kept 14 days.
 - Network: each site is loaded once, plus the one link a hint follows. No crawling. That is a
   few MB per site, one visit a day from one IP. Well under anything a site would notice.
-- **Self-hosted alternative.** Free too, but on a public repo it is only acceptable if: the
-  workflow that uses it is triggered **only** by `schedule` and `workflow_dispatch` (never
-  `pull_request`, `pull_request_target`, `issue_comment` or `push` from forks), the runner is
-  registered to this repo with a dedicated label, it runs in a dedicated VM or container that is
-  reset after each job (ephemeral runner), it holds no secret beyond its registration, and it is
-  **not the user's daily machine**. `nightly.yml` already uses that pattern for the full build
-  (`if:` on the event and ref). The gain would be a residential IP, which matters only if
-  bot checks swamp the hosted results.
+- **Self-hosted alternative.** Free too, but on a public repo it is only acceptable if: the workflow
+  that uses it is triggered **only** by `schedule` and `workflow_dispatch` (never `pull_request`,
+  `pull_request_target`, `issue_comment` or `push` from forks), the runner is registered to this
+  repo with a dedicated label, it runs in a dedicated VM or container that is reset after each job
+  (ephemeral runner), it holds no secret beyond its registration, and it is **not a developer's
+  daily machine**. `nightly.yml` already uses that pattern for the full build (`if:` on the event
+  and ref). The gain would be a residential IP, which matters only if bot checks swamp the hosted
+  results.
 
 ## Decisions
 
@@ -345,10 +344,10 @@ selected pages, and fail the PR when a check that passed on the recording fails.
    or is the artifact and job summary enough?
 4. **Shortcut conflicts.** Report only (as now), or also suggest a per-site pass-through list
    for the config (a feature of its own)?
-5. **The site list.** Add the user's daily sites beyond the 19 in the request (Hacker News
-   comments page, a GitLab project, crates.io)?
+5. **The site list.** Add more sites developers use daily beyond the first 19 (Hacker News comments
+   page, a GitLab project, crates.io)?
 
-## Implementation log (2026-10-12, sub-PR 1)
+## Implementation log (sub-PR 1)
 
 What changed from the plan above, and why:
 

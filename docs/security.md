@@ -349,7 +349,7 @@ Spec: [m0-mozilla-services](specs/m0-mozilla-services.md),
   [`test_keyed_build_fetches_google_lists`](../tests/browser/browser_vimma_safebrowsing.js),
   [`test_keyless_build_is_honestly_off`](../tests/browser/browser_vimma_safebrowsing.js)
 - P7. Site permissions (camera, location, notifications …) **must** be kept per container, so
-  per workspace (`permissions.isolateBy.userContext`; user decision "Per workspace",
+  per workspace (`permissions.isolateBy.userContext`;
   [vimma-mcp](specs/vimma-mcp.md) decision 30): one given in one workspace never applies to the
   same site in another, the agent workspace included.
   [`test_site_permissions_are_per_workspace`](../tests/browser/browser_vimma_mcp_agent_pages.js)
@@ -541,8 +541,8 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   [`test_the_read_checks_last`](../tests/browser/browser_vimma_mcp_agent.js),
   [`test_confinement_edges`](../tests/browser/browser_vimma_mcp_agent.js)
 - M10. Pages in the agent container **must** get no permission prompt and no permission given
-  elsewhere: site permissions are kept per container (`permissions.isolateBy.userContext`, user
-  decision "Per workspace"), every `nsIContentPermissionPrompt` request from the agent
+  elsewhere: site permissions are kept per container (`permissions.isolateBy.userContext`,
+  [vimma-mcp](specs/vimma-mcp.md) decision 30), every `nsIContentPermissionPrompt` request from the agent
   container is cancelled, and camera, microphone and screen are denied per agent tab (a
   browser-scoped DENY, set on each HTTP response and when each document's window global is
   created, so a page a service worker serves is covered). They **must** open no new window or
