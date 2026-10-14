@@ -28,7 +28,7 @@ npm start                  # tools/start.mjs: the build with ~/.cache/vimma-dev-
 
 ```sh
 bin=engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma
-$bin --version   # "Vimma Vimma 0.1.0" (vendor, name, surfer.json brands.vimma.release.displayVersion)
+$bin --version   # "Vimma 0.1.0 · Firefox 157.0.1" (node tools/release/version-line.mjs prints the same)
 grep '^Version=' engine/obj-x86_64-pc-linux-gnu/dist/bin/application.ini
                  # "Version=157.0.1": appinfo.version is the Firefox version (spec m0-app-version)
 # navigator.userAgent stays Firefox's: "Mozilla/5.0 (X11; Linux x86_64; rv:157.0) Gecko/20100101
@@ -485,6 +485,11 @@ The seeded fuzz properties add a few seconds to each CI run, and compiling propt
 `patch-audit.yml` (the quarterly patch audit, docs/rebase.md "Patch-size audit") runs two
 one-minute jobs four times a year: no npm or toolchain install, only the runner's `python3`.
 
+`upstream-beta.yml` (the Beta canary) checks for a new Firefox Beta build every 6 hours, under a
+minute each time (about 2 hours a month). Each Beta build is tested once, about 16 minutes (the
+patch check 2, `e2e.yml` 12, render and report 1): five builds per two-week cycle, about 11
+tested builds and 3 hours a month. One run uses one hosted runner at a time.
+
 ### Mutation testing (`mutation.yml`)
 
 Plan §5: Stryker mutates `packages/vimma-core/src` (not `vendor/`) every Sunday and runs the core's
@@ -624,7 +629,11 @@ Why it does not flake (plan §5: no retries; flaky means quarantine):
   max−min; 9V74: 6 jobs, 1 %); single cases within a few per cent. With the old method the same
   class moved from −18 % to +11 % against its baseline on unchanged code. So 10 % on the suite
   and 25 % per case are a wide margin over the noise, and a 20 % slower dispatcher fails the gate
-  (`tools/bench/test/bench.test.mjs`).
+  (`tools/bench/test/bench.test.mjs`). That test measures the baseline, an unchanged copy and the
+  slowed code as variants of one `measure()` call, sample by sample in rotating order, so all
+  three see the same JIT state and the same load from the parallel test pool, and gates the
+  median of three such runs, as the bench does over its 15 processes (issue #202: measured one
+  after the other, unchanged code read from −16 % to +17 % on the suite under coverage).
 - **The budget has headroom.** The slowest case is about 17 µs on CI, the key cases under 1 µs.
 
 If the step does fail without a slowing change, that is a flake: quarantine per plan §5 (open an
@@ -792,10 +801,12 @@ In short: every 4 h `detect` (read-only, < 1 min, no secrets) reads product-deta
 index. For a newer Firefox it opens a tracking issue labelled `upstream` (+ `security` with the
 advisory and severity, mentioning you), streams and SHA-512-verifies the source tarball, dry-runs
 our patches, runs `e2e.yml` on the new version (import, artifact build, `tests/browser/`,
-`tests/e2e/`), pushes `upstream/firefox-X.Y.Z` and opens `upstream: firefox X.Y.Z`. Each release
-is handled once (its branch exists); `gh workflow run upstream.yml -f rebuild=true` redoes it. If
-`main` is more than 3 days behind a security dot release (7 for a major, 14 otherwise), the
-`drift` job opens a `security` issue and the run fails until the bump is merged.
+`tests/e2e/`), pushes `upstream/firefox-X.Y.Z` and opens the PR
+`upstream: firefox X.Y.Z (MFSA YYYY-N)`, with the advisories that name the release, if any (a
+later run updates the title when one appears). Each release is handled once (its branch
+exists); `gh workflow run upstream.yml -f rebuild=true` redoes it. If `main` is more than 3
+days behind a security dot release (7 for a major, 14 otherwise), the `drift` job opens a
+`security` issue and the run fails until the bump is merged.
 
 Permissions: the workflow grants nothing by default; `detect` reads contents and issues, `track`
 and `drift` write issues, `patch-check` and `test` read contents only, and only `publish` can
@@ -822,6 +833,38 @@ m0-mozilla-services, m0-safebrowsing-key). `tools/upstream/upstream-prefs.mjs` c
 `e2e.yml` and prints the line to paste. Before a release, run
 `tools/safebrowsing-smoke/safebrowsing-smoke.sh` on a keyed full build. Patch-size review
 (plan §4, Sunday): `python3 tools/upstream/patch-audit.py`.
+
+### Firefox Beta canary (`upstream-beta.yml`)
+
+What it does and what its issue means: [docs/rebase.md](rebase.md), "Before the release: the Beta
+canary". Spec [upstream-beta-canary](specs/upstream-beta-canary.md); ADR-002 as amended.
+
+Schedule: `41 */6 * * *`. `detect` reads product-details' `LATEST_FIREFOX_DEVEL_VERSION` and
+does nothing unless it is a Beta (`N.0bM`) of an unreleased Firefox, or when `main` tested that
+Beta build in the last 7 days (an artifact `upstream-beta-<version>` of a run on `main`). Then
+`source-check` (`tools/upstream/source-check.sh`, as `upstream.yml`), `test` (`e2e.yml` in Beta
+mode with `fail-on-findings: false`), `render` (`tools/upstream/canary.mjs render`, uploads
+`upstream-beta-<version>` for 30 days: `issue.json`, `state.json`, the patch check and the suite
+results) and, on `main` only, `report`, which opens, updates or closes `Firefox N beta: canary
+findings` (label `upstream-beta`) and closes the issues of released versions.
+
+Permissions: nothing by default; `detect` reads contents and Actions artifacts; `source-check`,
+`test` and `render` read contents; only `report` writes, and only issues, with no checkout. No
+secrets. A red run means the canary is broken, not that it found something: findings go to the
+issue.
+
+By hand:
+
+```sh
+gh workflow run upstream-beta.yml                   # the current Beta, if not tested in 7 days
+gh workflow run upstream-beta.yml -f version=159.0b2  # always tests that Beta
+gh workflow run upstream-beta.yml --ref <branch> -f version=159.0b2  # a branch: no issue written
+gh run download <run-id> -n upstream-beta-159.0b2   # issue.json, state.json, the reports
+```
+
+A manual run on a branch skips `report`, and its artifact does not count as `main`'s tested
+build, so it never delays the scheduled run. To check a run: its summary shows the rendered issue
+and the comment; the artifact holds the same in `issue.json`.
 
 ### Claude Code in GitHub (`claude.yml`)
 
@@ -914,8 +957,28 @@ while the release gate is closed (below). Nothing is built or uploaded by releas
   `release-workflow.test.mjs`. Publish any drafts still waiting, oldest first. Then turn on
   packaging (below, "Release packages", step 7).
 - **The changelog line is the commit subject; the body explains why** (CLAUDE.md). release-please
-  writes subjects only. Firefox bumps are `upstream: firefox X.Y.Z` (upstream.yml), so a
-  security dot release alone still produces a release PR (ADR-015: merged within 3 days).
+  writes subjects only. Firefox bumps are `upstream: firefox X.Y.Z (MFSA YYYY-N)` (upstream.yml),
+  so a security dot release alone still produces a release PR (ADR-015: merged within 3 days).
+- **The Firefox version in titles and headings** (spec firefox-versions). release-please can only
+  title a release `vX.Y.Z` and head its entry `## [X.Y.Z](compare) (date)`, so two jobs after it
+  edit both with `tools/release/firefox-notes.mjs` (idempotent: a second pass changes nothing):
+  - `firefox-notes`, on every run while the release PR is open: reads `CHANGELOG.md` and
+    `surfer.json` from `release-please--branches--main` through the API, and when the newest
+    heading lacks it, pushes one `chore(release)` commit that makes it
+    `## [X.Y.Z](compare) · Firefox <version> (date)` and turns each bump line into
+    `Firefox <version> ([MFSA YYYY-N](advisory))`. The push uses `RELEASE_PLEASE_TOKEN` (a
+    `GITHUB_TOKEN` push would leave the release PR without required checks); without the token the
+    job logs a notice and does nothing. release-please rebuilds the branch (dropping the commit)
+    only when the notes change, and the job then adds it back in the same run. The PR body keeps
+    release-please's heading.
+  - `release-title`, when a release was created: checks out its tag, titles it with
+    `node tools/release/version-line.mjs` (`Vimma X.Y.Z · Firefox <version>`, which must start
+    with the tag's version) and applies the same edit to its notes, through `GITHUB_TOKEN`
+    (`contents: write`). It changes only the name and the notes; a draft stays a draft.
+
+  Check either by hand: `node tools/release/firefox-notes.mjs CHANGELOG.md --surfer surfer.json`
+  prints the edited file, and `node tools/release/version-line.mjs` the title.
+
 - **First release (one-time).** No `v0.1.0` tag exists, and the manifest's `0.1.0` (what every
   build so far shows) counts as released, so the first release is **0.1.1**: the release PR
   `chore(main): release 0.1.1` on branch `release-please--branches--main` lists every
@@ -924,7 +987,8 @@ while the release gate is closed (below). Nothing is built or uploaded by releas
   the generated `0.1.1` list with the `[Unreleased]` sections and delete that heading. The
   generated list also has a false "BREAKING CHANGES" item (cd70146's body has a line starting
   `BREAKING CHANGE:`). release-please rewrites the branch on every push to `main`, so make the
-  edit last. From then on every entry is generated.
+  edit last, on top of the `firefox-notes` commit (pull the branch first; keep the
+  `· Firefox <version>` in the `0.1.1` heading). From then on every entry is generated.
 - **Names.** `include-component-in-tag` is off, so tags are `vX.Y.Z`, the branch is
   `release-please--branches--main` and the PR title `chore(main): release X.Y.Z`.
 
@@ -940,8 +1004,11 @@ One-time setup:
    (on `release: published`) runs by itself only with `RELEASE_PLEASE_TOKEN` set; without it,
    start it by hand (see "Release packages").
 
-The job's token has `contents`, `pull-requests` and `issues: write` (labels go through the issues
-API). It runs no repository code.
+The release-please job's token has `contents`, `pull-requests` and `issues: write` (labels go
+through the issues API); it runs no repository code. `firefox-notes` reads with `contents` and
+`pull-requests: read` and writes only through `RELEASE_PLEASE_TOKEN`; `release-title` has
+`contents: write` and nothing else. Both run only `main`'s `tools/release/` (the tag is a commit
+on `main`), never code from the release branch, and keep no token in their checkout.
 
 ### Release packages (`release.yml`, spec m6-packaging)
 

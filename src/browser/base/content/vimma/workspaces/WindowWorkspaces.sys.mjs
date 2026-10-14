@@ -386,6 +386,11 @@ export class WindowWorkspacesImpl {
     return new Set(agent ? [agent.id] : []);
   }
 
+  /** The same set, for what names the cycle's targets (the side panel's header). */
+  get cycleSkip() {
+    return this.#skip();
+  }
+
   /** ctrl+b ); wraps, past the agent workspace. */
   next() {
     if (!this.#model) return "no workspaces in this window";

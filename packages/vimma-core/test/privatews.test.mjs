@@ -7,6 +7,7 @@ import {
   movePrivateQuestion,
   parsePrivateCommand,
   privateItem,
+  privateNeighbours,
   privateReturn,
   privateToggle,
 } from "../src/privatews.mjs";
@@ -32,6 +33,25 @@ const model = Object.freeze({
 describe("the private workspace's id", () => {
   test("is never a valid workspace id, so no workspace can collide with it", () => {
     expect(isWorkspaceId(PRIVATE_WORKSPACE_ID)).toBe(false);
+  });
+});
+
+describe("privateNeighbours (decision 6)", () => {
+  const ws = [
+    { id: "w1", name: "main" },
+    { id: "w2", name: "work" },
+    { id: "w3", name: "agent" },
+  ];
+  test("the side panel names the last and the first normal workspace", () => {
+    expect(privateNeighbours(ws)).toEqual(["agent", "main"]);
+  });
+  test("past the agent workspace, which the cycle skips (vimma-mcp decision 9)", () => {
+    expect(privateNeighbours(ws, new Set(["w3"]))).toEqual(["work", "main"]);
+    expect(privateNeighbours([ws[0], ws[2]], new Set(["w3"]))).toEqual(["main", "main"]);
+  });
+  test("with no normal workspace there is none", () => {
+    expect(privateNeighbours([])).toEqual([null, null]);
+    expect(privateNeighbours([ws[2]], new Set(["w3"]))).toEqual([null, null]);
   });
 });
 
