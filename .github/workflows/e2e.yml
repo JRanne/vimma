@@ -23,8 +23,8 @@ on:
     # workflows; marking them ready (or a manual run) starts this as the owner.
     types: [opened, synchronize, reopened, ready_for_review]
     # No paths filter: "mochitest (artifact build)" is a required check on main, so it must
-    # report on every PR, docs-only ones too. Hosted minutes are free for a public repo
-    # (docs/runbook.md, "Actions minutes budget").
+    # report on every PR. A docs-only PR skips it with `if:` instead (job changes, issue #245),
+    # which GitHub reports as success.
   workflow_dispatch:
     inputs:
       firefox-version:
@@ -58,8 +58,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Issue #245: is this a docs-only pull request? (tools/ci/docs-only.mjs, as the base branch has
+  # it, so the pull request cannot change the answer.) Any other event leaves the output empty
+  # and everything runs; so does a failed classifier (!cancelled() below, not success()).
+  changes:
+    name: changes (docs-only?)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      docs-only: ${{ steps.classify.outputs.docs-only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 0 # base...head needs the merge base
+          persist-credentials: false
+
+      - name: Docs-only pull request? (tools/ci/docs-only.mjs, from the base)
+        id: classify
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git show "$BASE:tools/ci/docs-only.mjs" > "$RUNNER_TEMP/docs-only.mjs"; then
+            node "$RUNNER_TEMP/docs-only.mjs" --event pull_request --base "$BASE" --head "$HEAD"
+          else
+            echo "No classifier on the base: running everything"
+          fi
+
   mochitest:
     name: mochitest (artifact build)
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs-only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:

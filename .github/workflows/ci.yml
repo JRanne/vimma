@@ -1,5 +1,7 @@
-# Spec m0-pipeline. One job on purpose: Actions minutes on the free private plan are billed per
-# job, rounded up to the minute.
+# Spec m0-pipeline. One job: the required check "lint, typecheck, test, commitlint, licences".
+# Issue #245: on a docs-only pull request (tools/ci/docs-only.mjs) the steps that Markdown cannot
+# affect skip with `if:`, and the job still reports. The steps that read Markdown (prettier,
+# security-links, gen-docs, test:py, the Vitest files in MARKDOWN_TESTS) and commitlint always run.
 name: CI
 
 on:
@@ -26,7 +28,22 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0 # commitlint reads the whole PR range
+          fetch-depth: 0 # commitlint and the classifier read the whole PR range
+
+      # The classifier as the base branch has it, so the pull request cannot change the answer;
+      # without one on the base (before #245 merged) the output stays empty and everything runs.
+      - name: Docs-only pull request? (tools/ci/docs-only.mjs, from the base)
+        id: classify
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git show "$BASE:tools/ci/docs-only.mjs" > "$RUNNER_TEMP/docs-only.mjs"; then
+            node "$RUNNER_TEMP/docs-only.mjs" --event pull_request --base "$BASE" --head "$HEAD"
+          else
+            echo "No classifier on the base: running everything"
+          fi
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -36,20 +53,42 @@ jobs:
       - name: npm ci
         run: npm ci
 
-      - name: Lint (eslint + prettier)
-        run: npm run lint
+      - name: eslint
+        if: steps.classify.outputs.docs-only != 'true'
+        run: npx eslint .
+
+      - name: prettier --check (Markdown too)
+        run: npx prettier --check .
+
+      # docs/bindings.md, docs/bindings.json and defaults.toml are generated: a hand edit fails here.
+      - name: Generated docs are current (npm run gen-docs)
+        run: |
+          npm run gen-docs
+          if ! git diff --exit-code -- docs/bindings.md docs/bindings.json \
+            packages/vimma-core/defaults.toml; then
+            echo "::error::Generated docs differ from npm run gen-docs: edit actions.mjs or defaults.mjs and run it, never the output"
+            exit 1
+          fi
 
       - name: Typecheck
+        if: steps.classify.outputs.docs-only != 'true'
         run: npm run typecheck
 
       - name: Vitest with coverage gate (vitest.config.mjs)
+        if: steps.classify.outputs.docs-only != 'true'
         run: npm run coverage
 
       # Plan §5 performance gate (issue #17): fails on a case over 50 µs, or the suite more than
       # 10 % slower (one case 25 %) than the baseline recorded for this runner's CPU model. A step,
       # not a job (~30 s; no extra per-job minute). Why it does not flake: docs/runbook.md,
       # "Bench baseline".
+      # Docs-only: instead of the whole suite, the Vitest files that read the repo's Markdown.
+      - name: Vitest, the files that read Markdown (docs-only pull request)
+        if: steps.classify.outputs.docs-only == 'true'
+        run: npx vitest run $(node tools/ci/docs-only.mjs --markdown-tests)
+
       - name: Key-to-action bench against the baseline
+        if: steps.classify.outputs.docs-only != 'true'
         run: npm run bench -- --check
 
       - name: Python tests (tools/upstream)
@@ -60,30 +99,37 @@ jobs:
         run: npm run security-links
 
       - name: Licences of package-lock.json
+        if: steps.classify.outputs.docs-only != 'true'
         run: npm run license-check
 
       # vimma-ctl (ADR-011). Steps in this job, not a job of their own: see the note at the top.
       # The runner image ships rustup; it installs the toolchain pinned in rust-toolchain.toml.
       - name: Rust toolchain (tools/vimma-ctl/rust-toolchain.toml)
+        if: steps.classify.outputs.docs-only != 'true'
         working-directory: tools/vimma-ctl
         run: rustup toolchain install && cargo --version && cargo clippy --version
 
       - name: cargo fmt
+        if: steps.classify.outputs.docs-only != 'true'
         working-directory: tools/vimma-ctl
         run: cargo fmt --check
 
       - name: cargo clippy
+        if: steps.classify.outputs.docs-only != 'true'
         working-directory: tools/vimma-ctl
         run: cargo clippy --locked --all-targets -- -D warnings
 
       - name: cargo test
+        if: steps.classify.outputs.docs-only != 'true'
         working-directory: tools/vimma-ctl
         run: cargo test --locked
 
       - name: Licences of the Rust crates
+        if: steps.classify.outputs.docs-only != 'true'
         run: npm run license-check:crates
 
       - name: MPL headers in src/
+        if: steps.classify.outputs.docs-only != 'true'
         run: npx surfer license-check
 
       - name: commitlint (PR range)

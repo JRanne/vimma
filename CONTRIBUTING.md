@@ -129,8 +129,11 @@ A ruleset protects `main`:
 - **Pull requests only.** Nobody pushes to `main` directly. PRs are squash-merged, so history
   stays linear and each PR is one commit whose subject is the PR's changelog line.
 - **Required checks.** A PR merges only when these pass: "lint, typecheck, test, commitlint,
-  licences" (`ci.yml`), "mochitest (artifact build)" (`e2e.yml`, which runs on every PR), the
-  Semgrep check (`semgrep.yml`), "CodeQL (javascript-typescript)" and "CodeQL (rust)".
+  licences" (`ci.yml`), "mochitest (artifact build)" (`e2e.yml`), the Semgrep check
+  (`semgrep.yml`), "CodeQL (javascript-typescript)" and "CodeQL (rust)". A PR that changes only
+  prose Markdown skips the build, the tests and CodeQL, and those checks still pass; prettier,
+  commitlint, the Markdown checks and Semgrep run on every PR
+  ([runbook](docs/runbook.md#docs-only-pull-requests-issue-245)).
 - **Code scanning gate.** A PR that adds a code-scanning alert of severity high or above
   cannot merge. Fix the alert; a false positive is dismissed on GitHub with a reason, never
   silenced in the code.
