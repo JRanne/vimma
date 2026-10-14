@@ -99,7 +99,7 @@ from (`ctrl+b ?` keys, `:` commands, `f` hints), and, unless the colours are you
 theme's, `:theme light/dark` to [switch the colours](#colours-and-themes). The URL bar is empty and focused, so you can type an
 address straight away; click the page to use `:` and the other keys there. At the bottom, a small
 line shows which Vimma you run and the Firefox release it is built on (`Vimma 0.1.0 · Firefox
-157.0.1`). It is a local page (`chrome://browser/content/vimma/start/start.html`); nothing loads
+158.0`). It is a local page (`chrome://browser/content/vimma/start/start.html`); nothing loads
 from the network.
 
 To change it back:
@@ -1701,10 +1701,10 @@ Google Safe Browsing (see below). Firefox's app updater is not built into Vimma,
 updates are off, so neither asks Mozilla's update server. The one remaining request there is for
 the OpenH264 and Widevine plugins, which video calls and DRM video need.
 
-Sites see Firefox 157's user agent, with no Vimma token, and add-ons see Firefox's version
+Sites see Firefox 158's user agent, with no Vimma token, and add-ons see Firefox's version
 (`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. The About dialog shows Vimma's own
 version (`0.1.0`); `vimma --version` and the start page show it with the Firefox release it is
-built on, `Vimma 0.1.0 · Firefox 157.0.1`.
+built on, `Vimma 0.1.0 · Firefox 158.0`.
 
 ### Safe Browsing
 
@@ -1782,8 +1782,8 @@ screen reader on top of Firefox's own accessibility support. On Linux that is Or
 
 **Vimma says the profile was used by a newer version and refuses to start.** Profiles remember
 the version that last used them. Builds from before the app-version change report `0.1.0`
-instead of `157.0.1`, so they treat any newer profile as a downgrade. Give each build its own
-`--profile`, or start with `--allow-downgrade` if you accept the risk.
+instead of the Firefox version (`158.0`), so they treat any newer profile as a downgrade. Give
+each build its own `--profile`, or start with `--allow-downgrade` if you accept the risk.
 
 **Does Safe Browsing protect me?** Yes, in builds made with a Google API key, which are on by
 default (see [Safe Browsing](#safe-browsing)). A build without a key fetches no phishing or

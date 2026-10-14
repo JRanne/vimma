@@ -320,7 +320,7 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
 - Profiles from the old `unofficial`-brand builds are not picked up
   ([m0-branding](specs/m0-branding.md), Settled).
 - `vimma --full-version` keeps Firefox's `<vendor> <name> <version>` format, `Vimma Vimma 0.1.0`
-  and the build IDs; only `--version` prints `Vimma 0.1.0 · Firefox 157.0.1`
+  and the build IDs; only `--version` prints `Vimma 0.1.0 · Firefox 158.0`
   ([firefox-versions](specs/firefox-versions.md), decision 1).
 
 ## Files and profiles

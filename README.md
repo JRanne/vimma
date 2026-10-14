@@ -29,7 +29,7 @@ work the same way. Pages get Vim's modes. Tabs and splits answer to tmux's `ctrl
 Each workspace is a container of its own, so the session you are signed in to at work stays out
 of your personal one. The whole window can follow your desktop theme and change with it.
 
-Underneath is Firefox (currently 157), a foundation you can trust: sites and add-ons work as they
+Underneath is Firefox (currently 158), a foundation you can trust: sites and add-ons work as they
 do in Firefox, and Vimma starts with quieter defaults for your privacy.
 
 ## Features
@@ -103,7 +103,7 @@ The [user guide](docs/guide.md) covers every key and option,
 
 **Pre-alpha.** Everything above works today, and Vimma is being used as a daily browser ahead of
 its first release. There are no packages or binaries yet: you build it from source, on Linux
-x86_64 only. Version `0.1.0`, on Firefox 157.0.1.
+x86_64 only. Version `0.1.0`, on Firefox 158.0.
 
 ### How it is built
 
