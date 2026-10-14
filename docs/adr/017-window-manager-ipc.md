@@ -1,6 +1,6 @@
 # ADR-017: Vimma talks to the window manager (Hyprland only, over its socket)
 
-- Status: Proposed
+- Status: Accepted (built by spec [private-swap](../specs/private-swap.md))
 - Date: 2026-10-12
 
 ## Context

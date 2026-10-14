@@ -43,8 +43,8 @@ export const AGENT_SANDBOX = SANDBOXED_AUXILIARY_NAVIGATION;
  * per agent tab. A browser-scoped DENY (Services.perms.addFromPrincipalForBrowser) is what
  * SitePermissions.getForPrincipal(principal, id, browser) reads as a temporary BLOCK, and
  * WebRTCParent then denies without a prompt. Browser-scoped, not the origin's permission: Vimma
- * isolates permissions by container (permissions.isolateBy.userContext, user decision "Per
- * workspace"), but that pref can be turned off in about:config, and an origin-wide DENY would
+ * isolates permissions by container (permissions.isolateBy.userContext, docs/specs/vimma-mcp.md: site
+ * permissions per workspace), but that pref can be turned off in about:config, and an origin-wide DENY would
  * then reach the same site in `work`.
  */
 export const AGENT_DENIED_PERMISSIONS = Object.freeze([

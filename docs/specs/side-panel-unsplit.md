@@ -1,6 +1,6 @@
 # Spec: side-panel-unsplit
 
-Status: done (revised after testing: hidden views, option B) · Milestone: after M4 (builds on
+Status: implemented (revised after testing: hidden views, option B) · Milestone: after M4 (builds on
 [m4-side-panel-multiselect](m4-side-panel-multiselect.md), [m4-split-panes](m4-split-panes.md) and
 [tiling-layouts](tiling-layouts.md)) · Area: `packages/vimma-core/src/sidepanel.mjs`,
 `layouts.mjs`, `panes.mjs`, `snapshot.mjs`, `statusbar.mjs`, `actions.mjs`; `ui/side-panel.mjs`,

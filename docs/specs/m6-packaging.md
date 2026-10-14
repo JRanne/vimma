@@ -1,10 +1,16 @@
 # Spec: m6-packaging
 
-Status: implemented (tooling); gated off until the owner sets up the runner, secrets and variables · Milestone: M6 · Area:
+Status: implemented (tooling); gated off until the build job runs on a hosted runner ([#224](https://github.com/JRanne/vimma/issues/224)) and the secrets and variables are set · Milestone: M6 · Area:
 `tools/package/`, `.github/workflows/release.yml`
 Prerequisite: release-please (`release-please.yml`) and the self-hosted `vimma-build` runner
 (`nightly.yml`), both merged. The updater spec (m0-updater, PR #15) compiles the app updater
 out; packages here rely on that (they are updated by apt, pacman or a new AppImage).
+
+Since changed: this spec assumed the `build` job runs on a self-hosted `vimma-build` runner
+and that the repository is private. The repository is public, no self-hosted runner is used or
+planned, and the `build` job moves to a GitHub-hosted runner with [#224](https://github.com/JRanne/vimma/issues/224) (spec
+[build-supply-chain](build-supply-chain.md), decisions 6 and 7). Until then the release stays
+off; the runner rows below describe the workflow as written, not the target.
 
 ## User story
 

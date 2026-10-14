@@ -39,10 +39,12 @@ red run. Reusing `e2e.yml` keeps one definition of "the suites pass".
 - **Auto-merge green security bumps**: removes the last human check on a Firefox-sized change
   before Vimma has been daily-driven; revisit with M6.
 - **Full builds in CI**: do not fit a hosted runner; the nightly runner does them after merge.
+  (Since changed: no self-hosted runner is used; the nightly moves to a hosted runner with
+  [#224](https://github.com/JRanne/vimma/issues/224).)
 - **A drift check in `ci.yml`**: would turn every unrelated PR red and need the network in CI.
 
 ## Consequences
 
-About 270 Actions minutes a month while the repo is private (spec). The owner enables "Allow
+About 270 Actions minutes a month while the repo was private (spec); free since it is public. The owner enables "Allow
 GitHub Actions to create and approve pull requests" (runbook). Bumps use the `upstream` commit
 type so release-please lists them and cuts a release PR.

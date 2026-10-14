@@ -43,6 +43,25 @@ A spec moves through three statuses, set on its `Status:` line.
 3. **Implemented.** The status becomes `implemented` with the last sub-PR of its Delivery
    section.
 
+The `Status:` line starts with one of these three words. A short note may follow it, in
+parentheses or after a comma: which sub-PRs are built, or the issue that tracks a part that is
+not. Each implementing pull request updates that note, and the last one sets `implemented`.
+
+### Implemented specs are frozen
+
+An implemented spec, and every milestone spec (`m0-*` to `m7-*`), is a record of the design as
+it was built and of the reasons at that time. It is not rewritten when the code changes later,
+because a reader comparing it with the history of the code needs the design that the code was
+written against.
+
+- A later change gets a spec of its own, or goes into the spec of the feature that is still
+  being built and changes it.
+- Where an implemented spec no longer matches the code, it gets a short note at that place:
+  `(Since changed: <what changed>; <where it is described now>.)`. When the whole spec is
+  affected, the note is a paragraph starting "Since changed:" under the status line.
+- A part that was specified but never built is named on the status line with its issue, for
+  example `implemented, except the leftovers in #<issue>`.
+
 ### The feature's issue
 
 Every planned feature has one GitHub issue. It is the backlog entry, and the roadmap in

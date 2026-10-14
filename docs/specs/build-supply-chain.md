@@ -34,7 +34,7 @@ on, what they produce is packaged, signed with cosign and given an SBOM by GitHu
 those jobs sign whatever the build job produced: a signature proves that `release.yml` at the
 release tag published the file, not that the file was built from Mozilla's source and Vimma's
 code alone. Once security releases ship with no person in the loop
-([firefox-versions](firefox-versions.md), ADR-020), nothing but the build pipeline stands between
+([firefox-versions](firefox-versions.md); ADR-020, planned with its sub-PR 4), nothing but the build pipeline stands between
 a tampered input and every user. Today:
 
 1. **The release and nightly builds do not verify the Firefox source.** `release.yml` (lines
@@ -707,10 +707,11 @@ No mochitest or e2e scenario: nothing in the browser changes.
 
 - `docs/security.md`: §13 with B1 to B7 and their test links; G4 amended; §11 gains "Build
   infrastructure".
-- `docs/runbook.md`: "Nightly build runner" becomes "Full builds (`nightly.yml`, `release.yml`)":
-  they run on GitHub-hosted runners, the measured time and disk from sub-PR 4, the disk guard,
-  `sha_pinning_required`, and the `build` environment with the steps to move the secret into it;
-  the self-hosted runner setup and the "Runner rule" paragraph in "Releases" go; a new
+- `docs/runbook.md`, "Full builds (`nightly.yml`, `release.yml`)" (already says they run on
+  GitHub-hosted runners, with the self-hosted label as a known gap): the measured time and disk
+  from sub-PR 4, the disk guard, `sha_pinning_required`, the steps to switch both builds on, and
+  the `build` environment with the steps to move the secret into it; the known-gap paragraph
+  goes; a new
   "Mozilla's release key" section (how to update the pinned key from Mozilla's announcement and
   `KEY` file, what the issue from decision 21 asks for); the `engine/.vimma-firefox-version`
   paragraph goes.

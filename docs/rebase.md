@@ -14,18 +14,20 @@ Background: [ADR-002](adr/002-upstream-release-channel.md),
 
 ## At a glance
 
-| #   | Step                                      | Where                                | Time                    |
-| --- | ----------------------------------------- | ------------------------------------ | ----------------------- |
-| 1   | Autopilot: issue, patch check, suites, PR | `upstream.yml`, hosted runners       | ≤ 6 h after the release |
-| 2   | Download the new source                   | build machine (self-hosted or yours) | 12.5 min                |
-| 3   | Import; fix any patch that fails          | build machine                        | 1 min, plus fixes       |
-| 4   | Full build + full mochitest suite         | build machine (or the nightly)       | 39 min cold + suite     |
-| 5   | Artifact build + suite (preflight first)  | autopilot, `e2e.yml` on the PR       | 5 min                   |
-| 6   | Version files, branding prefs, cfr, SB    | autopilot (prefs), build machine     | 5 min                   |
-| 7   | Split-view contract (M4 canary)           | both builds                          | part of the suite       |
-| 8   | Mark ready, CI, merge                     | GitHub                               | CI ≈ 8 min              |
+| #   | Step                                      | Where                                         | Time                    |
+| --- | ----------------------------------------- | --------------------------------------------- | ----------------------- |
+| 1   | Autopilot: issue, patch check, suites, PR | `upstream.yml`, hosted runners                | ≤ 6 h after the release |
+| 2   | Download the new source                   | your machine                                  | 12.5 min                |
+| 3   | Import; fix any patch that fails          | your machine                                  | 1 min, plus fixes       |
+| 4   | Full build + full mochitest suite         | your machine (the hosted nightly, after #224) | 39 min cold + suite     |
+| 5   | Artifact build + suite (preflight first)  | autopilot, `e2e.yml` on the PR                | 5 min                   |
+| 6   | Version files, branding prefs, cfr, SB    | autopilot (checks prefs), your machine        | 5 min                   |
+| 7   | Split-view contract (M4 canary)           | both builds                                   | part of the suite       |
+| 8   | Mark ready, CI, merge                     | GitHub                                        | CI ≈ 8 min              |
 
-**When the autopilot's PR is green (the common case) you do only step 8.** Steps 2–7 are for a
+**When the autopilot's PR is green (the common case) you do only step 8**, until auto-merge of
+a green bump is built ([#259](https://github.com/JRanne/vimma/issues/259)), which removes that
+step too. Steps 2–7 are for a
 draft: a patch that does not apply, a failing suite, or a release without Mozilla artifacts.
 Decision points are marked **Decide**.
 
@@ -94,7 +96,7 @@ prepared change there. The autopilot's tracking issue then already has the work 
    `surfer download` (SHA-512 checked again), `npm run import`, the branding prefs test, the
    upstream-prefs check (cfr provider and Safe Browsing lists, step 6), the artifact build,
    `tests/browser/` and `tests/e2e/`. Without artifacts the suites are skipped and the PR says
-   so: run steps 2–4 on the build machine (the full-build path).
+   so: run steps 2–4 on your machine (the full-build path).
 5. **`publish`** (the only job that can push). Pushes `upstream/firefox-X.Y.Z` with one commit,
    `upstream: firefox X.Y.Z`, and opens the PR of that title, labelled like the issue, which
    closes the issue on merge. Older open bump PRs and tracking issues are closed as superseded.
@@ -131,7 +133,7 @@ Each `fuzz` or `failed` hunk is listed under the table, collapsed, as the hunk f
 - **Draft, "the suites did not pass"** → read the run's `mochitest (artifact build)` job.
   `upstream-prefs` failing prints the pref line to paste (step 6); anything else is a real
   regression: hold the bump, fix it on the branch.
-- **"No Mozilla artifacts for this revision"** → steps 2–4 on the build machine; e2e.yml on the PR
+- **"No Mozilla artifacts for this revision"** → steps 2–4 on your machine; e2e.yml on the PR
   will stay red until Mozilla indexes the build (it never has not, so far; check `surfer.json`).
 - **"Patch check: did not run"** → no verdict at all, not "patches fail": the tarball was not
   readable (not published yet, or a network error) or a patch is malformed. Rerun with
@@ -156,7 +158,7 @@ the bump is the fix; close the drift issue then.
 
 ## 2. Download the new source
 
-On the build machine (the self-hosted runner's host or your own), in the repo:
+On your machine, in the repo:
 
 ```sh
 gh pr checkout <PR number>                  # branch upstream/firefox-X.Y
