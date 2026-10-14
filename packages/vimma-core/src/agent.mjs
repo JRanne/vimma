@@ -157,7 +157,8 @@ export const MUTE_MS = 60_000;
 
 /**
  * @typedef {string | number} ConnId
- * @typedef {{ id: number, conn: ConnId, tool: string }} AgentRequest
+ * @typedef {{ id: number, conn: ConnId, tool: string, always?: boolean }} AgentRequest  `always`:
+ *   asks even under a grant of its tool, and its answer never makes one (decision 31 d)
  * @typedef {{ conn: ConnId, tool: string, until: number }} AgentGrant
  * @typedef {{ id: number, allow: true } | { id: number, allow: false,
  *   reason: "user" | "timeout" | "muted" }} Resolution
@@ -212,21 +213,25 @@ export class AgentQueue {
   /**
    * A request arrives: it runs under a grant, waits for an answer, or is denied at once.
    * @param {ConnId} conn @param {string} tool @param {number} now
+   * @param {{ always?: boolean }} [options]  `always`: ask even under a grant (a dangerous
+   *   download, decision 31 d)
    * @returns {Admission}
    */
-  ask(conn, tool, now) {
+  ask(conn, tool, now, { always = false } = {}) {
     const c = this.conns.get(conn);
     if (!c) return { kind: "deny", reason: "busy" };
     if (c.mutedUntil > now) return { kind: "deny", reason: "muted" };
     const until = c.grants.get(tool);
-    if (until !== undefined && until > now) return { kind: "run", grant: { conn, tool, until } };
-    if (until !== undefined) c.grants.delete(tool);
+    if (!always && until !== undefined && until > now) {
+      return { kind: "run", grant: { conn, tool, until } };
+    }
+    if (until !== undefined && until <= now) c.grants.delete(tool);
     const mine = this.queue.filter((r) => r.conn === conn).length;
     if (mine >= QUEUE_LIMITS.perConnection || this.queue.length >= QUEUE_LIMITS.total) {
       return { kind: "deny", reason: "busy" };
     }
     const id = this.nextId++;
-    this.queue.push({ id, conn, tool });
+    this.queue.push(always ? { id, conn, tool, always } : { id, conn, tool });
     return { kind: "wait", id };
   }
 
@@ -242,7 +247,7 @@ export class AgentQueue {
       this.conns.get(request.conn)
     );
     this.#drop(id);
-    if (answer.kind === "once") {
+    if (answer.kind === "once" || (answer.kind === "grant" && request.always)) {
       c.denials = 0;
       return { resolved: [{ id, allow: true }] };
     }
@@ -251,7 +256,9 @@ export class AgentQueue {
       const until = now + Math.max(1, answer.minutes) * 60_000;
       c.grants.set(request.tool, until);
       // The same connection's queued calls of that tool now run under the grant.
-      const covered = this.queue.filter((r) => r.conn === request.conn && r.tool === request.tool);
+      const covered = this.queue.filter(
+        (r) => r.conn === request.conn && r.tool === request.tool && !r.always,
+      );
       for (const r of covered) this.#drop(r.id);
       return {
         resolved: [

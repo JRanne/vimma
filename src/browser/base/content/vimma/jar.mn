@@ -9,6 +9,7 @@ browser.jar:
         content/browser/vimma/ctl/AgentGate.sys.mjs       (ctl/AgentGate.sys.mjs)
         content/browser/vimma/ctl/agent-commands.mjs      (ctl/agent-commands.mjs)
         content/browser/vimma/ctl/AgentPages.sys.mjs      (ctl/AgentPages.sys.mjs)
+        content/browser/vimma/ctl/AgentDownloads.sys.mjs  (ctl/AgentDownloads.sys.mjs)
         content/browser/vimma/config/ConfigHost.sys.mjs   (config/ConfigHost.sys.mjs)
         content/browser/vimma/host/tab-ops.mjs            (host/tab-ops.mjs)
         content/browser/vimma/host/firefox-keys.mjs       (host/firefox-keys.mjs)

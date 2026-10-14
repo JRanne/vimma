@@ -15,6 +15,7 @@ import { formatPath, parsePath, parseToml } from "../../src/toml.mjs";
 import { PALETTE_KEYS } from "../../src/theme.mjs";
 import { INSERT_SITE_MODES } from "../../src/editable.mjs";
 import { PANES_MAX_LIMIT } from "../../src/panes.mjs";
+import { resolveDownloadDir } from "../../src/agent-downloads.mjs";
 import { FUZZ_TIMEOUT, PROTO_NAMES, fuzz, nastyString, within } from "./harness.mjs";
 import { configText } from "./toml-arb.mjs";
 
@@ -256,6 +257,47 @@ describe("config.toml fuzzing", () => {
           },
         ),
         { weight: 5 },
+      ),
+    FUZZ_TIMEOUT,
+  );
+
+  // docs/specs/vimma-mcp.md decision 31 b: an accepted download_dir is never home, / or the
+  // Downloads folder itself, however it is spelt; download_max_mb stays in 1..4096.
+  test(
+    "[mcp] download_dir and download_max_mb are refused or a quarantine folder in bounds",
+    () =>
+      fuzz(
+        "config-mcp-downloads",
+        fc.property(
+          fc.oneof(
+            nastyString,
+            fc
+              .array(fc.constantFrom("~", "/", ".", "..", "Downloads", "downloads", "x", ""), {
+                maxLength: 6,
+              })
+              .map((p) => p.join("/")),
+          ),
+          fc.oneof(fc.integer({ min: -5, max: 5000 }), fc.constantFrom('"9"', "1.5")),
+          (dir, mb) => {
+            const text = [
+              "schema = 2",
+              "[mcp]",
+              `download_dir = ${JSON.stringify(dir)}`,
+              `download_max_mb = ${mb}`,
+              "",
+            ].join("\n");
+            const r = within(2000, () => parseConfig(text));
+            expectWellFormed(r);
+            if (!r.config) return;
+            const m = r.config.mcp;
+            expect(m.downloadMaxMb >= 1 && m.downloadMaxMb <= 4096).toBe(true);
+            const home = "/home/u";
+            const path = resolveDownloadDir(m.downloadDir, home);
+            expect(["/", home, `${home}/Downloads`]).not.toContain(path);
+            expect(path.toLowerCase()).not.toBe(`${home}/downloads`);
+          },
+        ),
+        { weight: 3 },
       ),
     FUZZ_TIMEOUT,
   );
