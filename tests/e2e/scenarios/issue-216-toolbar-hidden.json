@@ -1,7 +1,7 @@
 {
   "name": "issue-216-toolbar-hidden",
   "issue": 216,
-  "description": "docs/specs/toolbar-toggle.md: ctrl+b u hides Firefox's toolbar, and the page (fixture edge.html, its blue band at its top edge) reaches the top of the window with the status bar below (toolbar-hidden.png); I shows the minimal bar over the page, only the URL field with the typed address, the page not resized (its title, edge <innerHeight>, unchanged) (toolbar-minimal.png); Enter loads the address and the bar hides again. Firefox's suggestions are off, so the minimal-bar shot holds only the field and its one heuristic row.",
+  "description": "docs/specs/toolbar-toggle.md: ctrl+b u hides Firefox's toolbar, and the page (fixture edge.html, its blue band at its top edge; the shot waits out the notice) reaches the top of the window with the status bar below (toolbar-hidden.png); I shows the minimal bar over the page, only the URL field with the typed address, the page not resized (its title, edge <innerHeight>, unchanged) (toolbar-minimal.png); Enter loads the address and the bar hides again. Firefox's suggestions are off, so the minimal-bar shot holds only the field and its one heuristic row.",
   "timeoutSeconds": 60,
   "prefs": {
     "browser.urlbar.suggest.searches": false,
@@ -39,7 +39,7 @@
       "keys": "ctrl+b u"
     },
     {
-      "sleep": 1
+      "sleep": 2.5
     },
     {
       "wait-for-state": {
