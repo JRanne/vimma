@@ -458,8 +458,9 @@ fn mcp_off_says_to_run_mcp_on_without_connecting() {
         content_texts(&r)[0].starts_with("MCP is off in Vimma: run :mcp on"),
         "{r}"
     );
-    assert!(
-        vimma.seen().hellos.is_empty(),
+    assert_eq!(
+        vimma.seen().hellos,
+        Vec::<Value>::new(),
         "no connection, so no full role either"
     );
     mcp.finish();
@@ -607,7 +608,11 @@ fn bad_arguments_never_reach_vimma() {
     assert!(is_error(&r));
     let r = mcp.call(3, "vimma_open", r#"{"url":"javascript:alert(1)"}"#);
     assert!(is_error(&r));
-    assert!(vimma.seen().hellos.is_empty());
+    assert_eq!(
+        vimma.seen().hellos,
+        Vec::<Value>::new(),
+        "no connection was made"
+    );
     mcp.finish();
 }
 
