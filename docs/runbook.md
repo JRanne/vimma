@@ -428,7 +428,7 @@ Actions minutes and logs show every push. Check `git log origin/main` if anythin
 
 A pull request whose every changed file is prose Markdown skips the work Markdown cannot affect.
 `tools/ci/docs-only.mjs` decides from `git diff --name-only --no-renames base...head` (never the
-title or body); ci.yml, e2e.yml and codeql.yml run it as the base branch has it, so a pull
+title or body); ci.yml and e2e.yml run it as the base branch has it, so a pull
 request cannot change the classifier that judges it.
 
 **Docs-only** means all of these hold:
@@ -444,12 +444,18 @@ A workflow, a script, `package.json` or any other file in the same pull request 
 
 Still runs on a docs-only pull request: prettier, commitlint, `npm run security-links`,
 `npm run test:py` (it reads ADR-003), the gen-docs freshness step, the Vitest files listed in
-`MARKDOWN_TESTS`, and Semgrep.
+`MARKDOWN_TESTS`, Semgrep and CodeQL.
 
 Skipped: eslint, typecheck, the full Vitest suite with coverage, the bench, the licence checks,
-cargo, the MPL header check, `mochitest (artifact build)` with the e2e scenarios (the job
-`changes` gates the job), and the CodeQL analysis (the matrix job runs and its steps skip, so
-both required CodeQL checks report).
+cargo, the MPL header check, and `mochitest (artifact build)` with the e2e scenarios (the job
+`changes` gates the job).
+
+CodeQL is not skipped, although Markdown cannot change its findings: the ruleset's code
+scanning rule blocks a merge until CodeQL has uploaded results for the pull request, whatever
+its required checks report. With the analysis skipped, a docs-only pull request had every
+required check green and still showed `mergeStateStatus` `BLOCKED`, and the only check missing
+next to a code pull request was the `CodeQL` results check. The analysis takes about 2.5
+minutes (Rust), so it sets how long a docs-only pull request waits.
 
 A skipped job or step reports success, so the required checks pass. If the classifier fails,
 the gated jobs run (`!cancelled()`, not `success()`). Adding a Vitest file that reads a

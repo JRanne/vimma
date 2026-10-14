@@ -2,9 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Issue #245: a pull request that changes only Markdown skips vitest, the mochitests and e2e,
-// and CodeQL. tools/ci/docs-only.mjs decides; ci.yml, e2e.yml and codeql.yml gate their heavy
-// steps and jobs on its answer, and keep every check that reads Markdown running.
+// Issue #245: a pull request that changes only Markdown skips vitest, the mochitests and e2e.
+// tools/ci/docs-only.mjs decides; ci.yml and e2e.yml gate their heavy steps and jobs on its
+// answer, and keep every check that reads Markdown running. CodeQL and Semgrep always run.
 
 import { describe, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -247,18 +247,11 @@ describe("workflow wiring", () => {
     expect(jobIf(mochitest)).toBe(`\${{ !cancelled() && ${RUNS} }}`);
   });
 
-  it("codeql.yml: both languages report, and analyse unless the change is docs-only", () => {
-    const text = workflow("codeql.yml");
-    expectChangesJob(text);
-    const analyze = job(text, "analyze");
-    expect(analyze).toMatch(/^ {4}name: CodeQL \(\$\{\{ matrix\.language \}\}\)$/m);
-    expect(analyze).toMatch(/^ {4}needs: changes$/m);
-    // A matrix job skipped by its own if: reports under its unexpanded name, which no required
-    // check matches; so the job runs and its steps skip.
-    expect(jobIf(analyze)).toBe("${{ !cancelled() && github.event.repository.private == false }}");
-    const all = steps(analyze);
-    expect(all.length).toBeGreaterThan(0);
-    for (const s of all) expect(s.cond).toBe(RUNS);
+  // Not gated: the ruleset's code scanning rule waits for CodeQL results on every pull request,
+  // so a docs-only one without an analysis stays blocked (draft PR #249, mergeStateStatus
+  // BLOCKED with every required check green).
+  it.each(["codeql.yml", "semgrep.yml"])("%s is not gated", (name) => {
+    expect(workflow(name)).not.toContain("outputs.docs-only");
   });
 
   it("ci.yml: Markdown checks run on every change, the rest unless docs-only", () => {
@@ -300,9 +293,5 @@ describe("workflow wiring", () => {
       /npx surfer license-check/,
     ])
       expect(step(re).cond).toBe(SKIP);
-  });
-
-  it("semgrep.yml is not gated", () => {
-    expect(workflow("semgrep.yml")).not.toContain("docs-only");
   });
 });
