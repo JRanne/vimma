@@ -26,7 +26,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - `ctrl+b e` or `:addons` opens a keyboard add-on manager: `Enter` opens an add-on's popup with focus inside it, `o` its options, `x` turns it on or off, `d` removes it after y/N, `u` checks for updates and `shift+p` allows it in private windows; `:addon <name>` opens one popup directly. System and hidden add-ons are never listed.
 - In text fields `ctrl+w` deletes the previous word, `ctrl+u` deletes to the start of the line and `ctrl+h` deletes a character, as in Vim, and `ctrl+z` undoes them (`[modal] insert_editing = false` turns this off).
 - `x` in the side panel closes the selected tab and keeps the panel open; pinned tabs are left alone.
-- The browser builds as Vimma: `vimma --version` prints `Vimma Vimma 0.1.0`, and the window title, brand strings, app name and vendor say Vimma. The app icon is the window-and-V mark from the Vimma logo, on a dark window that reads on light and dark desktops; the start page shows the full logo, transparent, with a dark tile under light themes.
+- The browser builds as Vimma: `vimma --version` prints `Vimma 0.1.0 · Firefox 158.0`, and the window title, brand strings, app name and vendor say Vimma. The app icon is the window-and-V mark from the Vimma logo, on a dark window that reads on light and dark desktops; the start page shows the full logo, transparent, with a dark tile under light themes.
 - `ctrl+b ?` opens a bindings overlay over any page, including `about:preferences` and the PDF viewer. `/` filters it, `Esc` or `q` closes it and focus returns to where it was. A bare `ctrl+b` waits for the next key without a timeout.
 - Firefox's tab strip is hidden by default. Set `vimma.ui.tabstrip.hidden` to `false` in `about:config` to show it again, without a restart. Firefox's tab keys and the window controls keep working.
 - Key capture across the whole window, including `about:` pages, the URL bar and the PDF viewer. Set `vimma.debug.keys` to log each key to the console.
@@ -58,6 +58,9 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Changed
 
+- Firefox 158.0 ([MFSA 2026-106](https://www.mozilla.org/en-US/security/advisories/mfsa2026-106/)).
+- The e2e baseline `m0-happy-path-help` was re-recorded on Firefox 158.0, which antialiases the bindings overlay's text slightly differently (1.26 % of pixels, every row in place) and draws its scrollbar thumb 3 px shorter; nothing else in the screenshot changed.
+- `vimma --version` prints Vimma's version and the Firefox release it is built on (`Vimma 0.1.0 · Firefox 158.0`) instead of `Vimma Vimma 0.1.0`.
 - Firefox's own shortcuts that overlap Vimma or Vim are off: `ctrl+w` (close tab), `ctrl+u` (page source), `ctrl+h` (history), `ctrl+d` (bookmark dialog), `ctrl+o` (open file), `ctrl+i` (page info), `ctrl+k` (web search) and `ctrl+b` (bookmarks sidebar). `[firefox] disable = "all" | [...]` and `enable = [...]` in `config.toml` change the set; `about:vimma` lists what is off. The help-text and `defaults.toml` snapshots changed with the new keys and options.
 - Characters typed with AltGr (Linux, Windows) or Option (macOS), such as `{`, `}` and `$` on Finnish layouts, match their bindings.
 - `ctrl+b ?`, `:map` and `about:vimma` list the keys you press (`ctrl+b b`, `ctrl+b shift+x`, `ctrl+w h`) instead of config notation (`prefix+b`), following a remapped prefix or leader; the legend names the leader only when a binding uses it. The help-text snapshot changed to match.
@@ -73,6 +76,10 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Fixed
 
+- Opening external-protocol links and download prompts no longer fails on Firefox 158.
+- Split panes keep pages exactly at their pane edges on Firefox 158.
+- The side panel no longer names the agent workspace as the `ctrl+b (` / `ctrl+b )` target, in a normal or a private window.
+- A megabyte-long unknown key or value in `config.toml` no longer stalls the "did you mean" suggestion (#196).
 - Keys typed right after switching to a workspace whose start page is still being restored are no longer lost: focus waits on the window until the page has loaded (#140).
 - Private workspace on Hyprland: Vimma listens to Hyprland's events again even when a switch happens just as Hyprland closes the event socket (#163).
 - On Hyprland the private workspace now really takes the Vimma window's place (a new private window used to be shown beside it); a swap that cannot name the window says so once in the console and in `about:vimma` (#160).
@@ -84,8 +91,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - The address bar's focus ring, the focused pane's outline in a split and other focus rings in the browser's own UI take the theme's accent instead of Firefox's blue, a shade darker or lighter where the accent would miss 3:1 contrast.
 - `npm run import` no longer fails after a patch changes: it restores the Firefox files our patches touch before re-applying them. `tools/relocate-checkout.mjs` repairs a checkout that was moved.
 - Switching workspaces with `ctrl+b (`, `ctrl+b )` or `:workspace` no longer shows "no workspaces in this window" after a successful switch.
-- Sites see Firefox's user agent (`… Gecko/20100101 Firefox/157.0`), not `Vimma/0.1.0`.
-- Everything that asks for the Firefox version (webcompat interventions, add-on updates, Remote Settings and Nimbus targeting, backups) gets Firefox's (157.0.1). `--version` and the About dialog still show Vimma's 0.1.0.
+- Sites see Firefox's user agent (`… Gecko/20100101 Firefox/158.0`), not `Vimma/0.1.0`.
+- Everything that asks for the Firefox version (webcompat interventions, add-on updates, Remote Settings and Nimbus targeting, backups) gets Firefox's (158.0). `--version` shows Vimma's 0.1.0 with the Firefox version, and the About dialog shows Vimma's 0.1.0.
 - Startup no longer throws in BrowserGlue, so `about:home` and `about:newtab` load again.
 - The build stops with "run 'npm run import'" when the version files are missing, instead of silently building as 0.1.0 everywhere.
 - The `ctrl+b ?` overlay takes the theme's colours instead of staying white under a dark theme.

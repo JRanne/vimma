@@ -27,6 +27,7 @@ import { AgentDownloads } from "./AgentDownloads.sys.mjs";
 const lazy = /** @type {any} */ ({});
 ChromeUtils.defineESModuleGetters(lazy, {
   Integration: "resource://gre/modules/Integration.sys.mjs",
+  nsContentDispatchChooser: "resource://gre/modules/ContentDispatchChooser.sys.mjs",
 });
 
 /** nsSandboxFlags.h: no new browsing contexts (window.open, target=_blank). */
@@ -215,7 +216,12 @@ function observe(subject, topic) {
   } else onResponse(subject);
 }
 
-/** Firefox's chooser for external protocols (uriloader/exthandler/nsIContentDispatchChooser). */
+/**
+ * Firefox's chooser for external protocols (uriloader/exthandler/nsIContentDispatchChooser). The
+ * wrapper constructs upstream's class (toolkit/mozapps/handling/components.conf) directly:
+ * Firefox 158 removed nsIComponentManager.getClassObject, and script cannot create an instance
+ * by CID once the contract points at our factory.
+ */
 const CHOOSER_CONTRACT = "@mozilla.org/content-dispatch-chooser;1";
 const CHOOSER_CID = Components.ID("{a69ebe05-6906-408c-b7ed-a626713b04f3}");
 
@@ -227,16 +233,11 @@ const CHOOSER_CID = Components.ID("{a69ebe05-6906-408c-b7ed-a626713b04f3}");
  */
 function wrapChooser() {
   const registrar = Components.manager.QueryInterface(Ci.nsIComponentRegistrar);
-  const original = registrar.contractIDToCID(CHOOSER_CONTRACT);
   const factory = {
     QueryInterface: ChromeUtils.generateQI(["nsIFactory"]),
     /** @param {any} iid */
     createInstance(iid) {
-      const inner =
-        AgentPages._chooserForTests ??
-        Components.manager
-          .getClassObject(original, Ci.nsIFactory)
-          .createInstance(Ci.nsIContentDispatchChooser);
+      const inner = AgentPages._chooserForTests ?? new lazy.nsContentDispatchChooser();
       const chooser = {
         QueryInterface: ChromeUtils.generateQI(["nsIContentDispatchChooser"]),
         /** @param {any[]} args  handler, uri, principal, browsingContext, … */

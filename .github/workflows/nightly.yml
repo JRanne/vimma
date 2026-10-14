@@ -82,7 +82,8 @@ jobs:
         run: |
           set -o pipefail
           version=$(engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma --version 2>&1 | tee -a "$LOG")
-          expected="Vimma Vimma $(node -p "require('./surfer.json').brands.vimma.release.displayVersion")"
+          # "Vimma <vimma> · Firefox <firefox>" from surfer.json (spec firefox-versions).
+          expected=$(node tools/release/version-line.mjs)
           # A nightly that lost the Vimma brand (e.g. built `unofficial`) must not be published.
           [ "$version" = "$expected" ] || { echo "::error::--version is '$version', want '$expected'"; exit 1; }
           # appinfo.version is the Firefox version (spec m0-app-version); --version shows Vimma's.
