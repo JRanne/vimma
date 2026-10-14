@@ -318,7 +318,9 @@ other lines are from each tool's documentation; sub-PR 4 runs them against real 
    actor could be confined, but needs its own threat review (form posts, purchases, logged-in
    actions), so it is a later spec. A screenshot of a hidden tab needs measuring (background tabs
    are not painted), so it is later too. `:pipe <cmd>` (send the current page to a local tool) is
-   a different direction, started by the user, and out of scope.
+   a different direction, started by the user, and out of scope. Showing a page to the user and
+   running Vimma's own page keys in an agent tab, confined to the agent workspace, are specified
+   in [mcp-drive](mcp-drive.md).
 
 ### B. The agent workspace
 
@@ -1010,8 +1012,8 @@ One sub-PR at a time, after firefox-keys sub-PR 2 (both change the keymap; this 
 | 3   | `feat(vimma-ctl): vimma-ctl mcp, an MCP server over stdio`         | Decisions 35-41: `src/mcp.rs` and `src/mcp_serve.rs` (dual-era server, tool table and fixture, protocol-2 client, keep-alive, error texts), `agent-cancel`; Rust unit, integration and property tests; the e2e harness's `mcp` steps and the `m0-mcp-stdio` scenario. | merged (#243) |
 | 4   | `docs(guide): set up Claude Code, Codex, opencode and Copilot`     | The guide's "Agents (MCP)" in full: the threat model in plain words, each tool's setup run against a real install with the version tested, timeouts, grants, sharing a tab, revoking, why `vimma.control.enabled` stays off; README feature line; limits.md.          | to do         |
 
-Out of scope: Agent `send-keys`, clicks, form filling and screenshots (a later spec, decision 6);
-`:pipe <cmd>` sending page context to a local tool; MCP over HTTP or a listener inside the browser;
+Out of scope: Agent `send-keys`, clicks, form filling and screenshots (later specs, decision 6;
+showing pages and page keys are [mcp-drive](mcp-drive.md)); `:pipe <cmd>` sending page context to a local tool; MCP over HTTP or a listener inside the browser;
 MCP resources, prompts, sampling and elicitation; several agent workspaces (one per agent); macOS
 (`/proc` parent name and notifications differ; the macOS spec takes it up); Windows.
 
