@@ -641,6 +641,14 @@ add_task(async function test_a_grant_never_covers_the_pages_own_downloads() {
         "the page loads",
       ).then(() => agentTabs().find((t) => t.linkedBrowser.currentURI.spec === PAGE)))
   );
+  // currentURI is the page's from the moment its load commits, before its body is parsed: wait
+  // for the document, or the first script below finds no body to append to.
+  await SpecialPowers.spawn(tab.linkedBrowser, [], () =>
+    ContentTaskUtils.waitForCondition(
+      () => content.document.readyState === "complete",
+      "the page has loaded",
+    ),
+  );
   for (const [how, go] of [
     ["location=", (/** @type {string} */ u) => `location.href = ${JSON.stringify(u)}`],
     [
