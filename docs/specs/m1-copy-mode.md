@@ -19,8 +19,9 @@ back in normal mode. `Esc` drops the selection and leaves. The page sees none of
 Plan §2 binds copy mode to `prefix+[` and `v`; `[modal.visual]` had `h j k l w b y` and `Esc`.
 This spec adds `0` / `$` (line start / end), `gg` / `G` (top / bottom of the page) and `v`
 (`selection.toggle`) to `[modal.visual]`, with their actions in the "Copy mode" group. Plan §2
-lists no other yank key: `yy` (yank the URL) is not bound, so in normal mode `y` reaches the
-page as any unbound key.
+lists no other yank key: `yy` (yank the URL) was not bound, so in normal mode `y` reached the
+page as any unbound key. (m1-actor-insert-scroll's normal-mode extras later bound `yy`, making
+`y` a normal-mode prefix.)
 
 ## Scope
 
@@ -161,6 +162,6 @@ iw aw`) are pure functions in core `motions.mjs` over a flat string; `actors/tex
 
 ## Out of scope
 
-Yank shortcuts not in plan §2 (`yy` URL, `yf` link), registers, search inside copy mode (`/`
-there is unbound), copy mode in pages without our actor, Vim's other text objects (`is`, `ip`,
-`i(`…).
+Yank shortcuts not in plan §2 (`yy` URL, since added by m1-actor-insert-scroll; `yf` link),
+registers, search inside copy mode (`/` there is unbound), copy mode in pages without our actor,
+Vim's other text objects (`is`, `ip`, `i(`…).

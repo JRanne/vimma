@@ -45,7 +45,8 @@ private windows) without the mouse or about:addons.
    the panel (a XUL panel's own Esc) and focus returns to the page. Keys in the popup are the
    popup's: it is a `<browser>` without Vimma's actor, so the host treats it as insert mode
    (only global chords such as `ctrl+b` stay Vimma's). No browser action at all: the notice
-   says `<name>: no popup or button`. A disabled add-on: `<name> is disabled (x enables it)`.
+   says `<name>: no popup or button`. A disabled add-on:
+   `<name> is disabled (x in ctrl+b e enables it)`.
 6. **Options (`o`)**: an add-on with an options page (`optionsURL`, from `options_ui`) opens it
    in a tab with `switchToTabHavingURI` (a tab already showing it is selected), as about:addons'
    `openOptionsInTab`. Deviation: an inline (`open_in_tab: false`) options page opens in a tab
@@ -60,12 +61,14 @@ private windows) without the mouse or about:addons.
    its name or version changed, nothing is removed and the notice says so. Without
    `PERM_CAN_UNINSTALL` it refuses before asking. Removal is `addon.uninstall()`.
 9. **Updates (`u`)**: `addon.findUpdates(listener, AddonManager.UPDATE_WHEN_USER_REQUESTED)`;
-   the notice says `checking <name> for updates…`, then `<name>: no update`, `<name>: update
-<version> available` or `<name>: update check failed`. Deviation: Vimma only checks, it never
-   installs the found update itself, because an update that asks for new permissions must go
-   through Firefox's own prompt (about:addons attaches it with `attachUpdateHandler`); Firefox's
-   background updates and about:addons install it. The row shows `update` meanwhile. Without
-   `PERM_CAN_UPGRADE` (a temporary add-on, one without an update URL) the notice says so.
+   the notice says `checking for updates…`, then `<name>: no update`,
+   `<name>: update <version> available (install: about:addons)` or
+   `<name>: update check failed`. Deviation: Vimma only checks, it never installs the found
+   update itself, because an update that asks for new permissions must go through Firefox's own
+   prompt (about:addons attaches it with `attachUpdateHandler`); Firefox's background updates
+   and about:addons install it. The row shows `update` meanwhile. Without
+   `PERM_CAN_UPGRADE` (a temporary add-on, one without an update URL) the notice says
+   `<name>: updates are not checked`.
 10. **Private windows (`shift+p`)**: add or remove `internal:privateBrowsingAllowed` with
     `ExtensionPermissions.add/remove` and reload the add-on if active, exactly as about:addons'
     "Run in Private Windows" radio (`components/addon-card.mjs`). Only with

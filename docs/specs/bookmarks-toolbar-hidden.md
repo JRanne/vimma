@@ -142,9 +142,9 @@ changes.
   is `"workspace"` (bookmarks decision 11): a folder per workspace at the top of the Bookmarks
   Toolbar folder (`toolbar_____`). The toolbar folder is the store; the toolbar widget is one view
   of it. The bookmarks spec lists "the bookmarks toolbar's visibility" as out of scope
-  (`bookmarks.md:148`); this spec is that item.
+  (`bookmarks.md:149`); this spec is that item.
 - **`ctrl+shift+b`.** The firefox-keys inventory gives `viewBookmarksToolbarKb` fate c (no Vimma
-  binding, "`ctrl+b u` hides the whole toolbar"; `docs/specs/firefox-keys.md:229`,
+  binding, "`ctrl+b u` hides the whole toolbar"; `docs/specs/firefox-keys.md:225`,
   `packages/vimma-core/src/firefox-keys.mjs:309`), and `docs/bindings.md:352` lists it as
   unbound. Firefox-keys sub-PR 1 (#171) is built; the default `[firefox] disable` is still
   `OVERLAP_CHORDS` (`firefox-keys.mjs:21–32`), which does not list `ctrl+shift+b`, so on main the
@@ -154,7 +154,7 @@ changes.
   by `tools/branding/test/branding-prefs.test.mjs` (Vitest). They are defaults, never locked, so
   the user's own value wins.
 - **Config.** `config.toml` has no `[ui]` table on main (`TOP_KEYS`,
-  `packages/vimma-core/src/config.mjs:155–170`). [toolbar-toggle](toolbar-toggle.md) (ready,
+  `packages/vimma-core/src/config.mjs:155–169`). [toolbar-toggle](toolbar-toggle.md) (ready,
   not built) introduces `[ui] toolbar = "shown" | "hidden"` (decision 3, schema 2), held in
   `vimma.ui.toolbar.hidden`, written by `ConfigHost` at startup and on a reload only when that
   value changed; a toggle lasts until the next restart or edit of that line (decision 4). Its
@@ -370,7 +370,7 @@ Written first and seen to fail (red, then green, per CLAUDE.md).
 2. **`feat(keys): ctrl+shift+b shows or hides the bookmarks toolbar`** (small; only if open
    question 1 is answered yes): a keymap PR after firefox-keys sub-PR 2. It binds `ctrl+shift+b`
    to `toggle_bookmarks_toolbar`, page first as in Firefox; the firefox-keys inventory row
-   (`firefox-keys.mjs:309`, `firefox-keys.md:229`) moves from fate c to fate a, and
+   (`firefox-keys.mjs:309`, `firefox-keys.md:225`) moves from fate c to fate a, and
    `docs/bindings.md` "Firefox's shortcuts" says `toggle_bookmarks_toolbar`, page first.
 
 Decision 8 adds no code here; it is mochitest 10 in whichever of this spec and toolbar-toggle is

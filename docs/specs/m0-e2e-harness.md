@@ -130,7 +130,9 @@ One JSON file per scenario in `tests/e2e/scenarios/`, file name = `name`:
   beside the restored session; m3-workspaces sub-spec 7), or `"kill"`: once SessionStore's
   recovery file has been unchanged for 3 s, SIGKILL to the browser pid the harness started (any
   of its process group left after 5 s too), then the same start; the stale discovery file is
-  skipped by its `pid` (`m3-crash-restore`, 2026-10-10).
+  skipped by its `pid` (`m3-crash-restore`). Later specs added the `hold`, `sleep`, `agent`,
+  `agent-result`, `ctl`, `ctl-result`, `mcp` and `mcp-result` steps (`STEP_KINDS` in
+  `scenario.mjs`).
 - **Prefs**: an optional `"prefs": { "name": value }` overrides the profile's `user.js`;
   `null` leaves the pref out so the build's default applies (`m3-restart-restore` drops
   `browser.startup.page = 0` to run on Vimma's 3, resume the session).
@@ -182,23 +184,22 @@ emitted as `::notice::` and written to the step summary), 1 otherwise, 2 for usa
 
 ### LFS: not now
 
-Decided 2026-10-09: baselines are committed as plain git blobs, marked `binary` in
-`.gitattributes`. The repo is 6 MB; a 1280×800 browser screenshot PNG is ~50–150 kB, and the
-plan's rate (one happy path per milestone plus regressions) adds well under 5 MB a year. Git LFS
-on the free private plan has a 1 GiB storage and 1 GiB/month bandwidth quota, and every CI
-checkout with `lfs: true` spends bandwidth on all baselines, which would cost more than it
-saves at this size. Revisit when `tests/e2e/baselines/` passes 25 MB or a single baseline
-passes 1 MB (then `git lfs migrate import --include="tests/e2e/baselines/*.png"`).
+Baselines are committed as plain git blobs, marked `binary` in `.gitattributes`. The repo is 6 MB; a
+1280×800 browser screenshot PNG is ~50–150 kB, and the plan's rate (one happy path per milestone
+plus regressions) adds well under 5 MB a year. Git LFS on the free private plan has a 1 GiB storage
+and 1 GiB/month bandwidth quota, and every CI checkout with `lfs: true` spends bandwidth on all
+baselines, which would cost more than it saves at this size. Revisit when `tests/e2e/baselines/`
+passes 25 MB or a single baseline passes 1 MB (then `git lfs migrate import
+--include="tests/e2e/baselines/*.png"`).
 
 ## CI integration (`e2e.yml`)
 
-- The mochitest job (paths now include `tools/e2e/**`, `tests/e2e/**`, `tools/vimma-ctl/**`)
-  first builds `vimma-ctl` (`rustup toolchain install`, `cargo build --locked`) and runs
-  `npx vitest run tools/e2e/` with `E2E_REQUIRE_CTL=1` and `E2E_REQUIRE_XVFB=1`, so the
-  driver tests and the real Xvfb capture test cannot skip there. This runs before the Firefox
-  download, so a harness bug fails in about a minute. The same tests run in `ci.yml` through
-  `npm run coverage`; there the binary and Xvfb may be missing and those tests are skipped
-  with the reason in their name.
+- The mochitest job (which has no paths filter; a docs-only PR skips it) first builds `vimma-ctl`
+  (`rustup toolchain install`, `cargo build --locked`) and runs `npx vitest run tools/e2e/` with
+  `E2E_REQUIRE_CTL=1` and `E2E_REQUIRE_XVFB=1`, so the driver tests and the real Xvfb capture test
+  cannot skip there. This runs before the Firefox download, so a harness bug fails in about a
+  minute. The same tests run in `ci.yml` through `npm run coverage`; there the binary and Xvfb may
+  be missing and those tests are skipped with the reason in their name.
 - After the mochitests: `npm run e2e -- --artifact` on the artifact build. While every scenario
   is pending it launches nothing and prints a `::notice::` naming the pending scenarios and the
   reason; it is not a pass. When the server spec lands, it removes `pending` and this step runs
@@ -343,13 +344,13 @@ Supersedes the sections above where they differ.
   `Failed to load chrome://browser/content/vimma/…`. Chosen over a separate script: it reuses
   the launch, the socket and the CI step, and costs one ~3 s scenario.
 
-## Known issue: the stale help-overlay baseline (2026-10-10)
+## Re-recording the help-overlay baseline
 
-`tests/e2e/baselines/m0-happy-path-help.png` still shows an old legend line; CI passes it within
-the 0.5 % tolerance. It has not been re-recorded, because the baseline must come from
-CI's own image (fonts differ locally: a local run differs by 18.6 % here), and `e2e.yml`
-uploads `e2e-output/` only when a step fails, while a comparison within tolerance writes no
-actual image at all. To re-record: in a branch, make CI produce the image (for example a
-one-off run with the baseline deleted, which fails as "missing" and writes
-`m0-happy-path-help.actual.png`), take it with `gh run download <run-id> -n e2e-output`, check
-it by eye and commit it with a changelog line in the body.
+`tests/e2e/baselines/m0-happy-path-help.png` once showed an old legend line that CI passed within
+the 0.5 % tolerance; it has since been re-recorded with later overlay changes. A re-recording is not
+trivial, because the baseline must come from CI's own image (fonts differ locally: a local run
+differs by 18.6 % here), and `e2e.yml` uploads `e2e-output/` only when a step fails, while a
+comparison within tolerance writes no actual image at all. To re-record: in a branch, make CI
+produce the image (for example a one-off run with the baseline deleted, which fails as "missing" and
+writes `m0-happy-path-help.actual.png`), take it with `gh run download <run-id> -n e2e-output`,
+check it by eye and commit it with a changelog line in the body.

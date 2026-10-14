@@ -43,9 +43,9 @@ Decisions:
 4. **With Omarchy**: unchanged. The poll, the hook, the "missing theme" rule all stay.
 5. Also the same when `vimma.theme.source = builtin` or `[theme] source = "file"`: no timer runs
    while nothing would be read (today the timer ticked and returned).
-6. **macOS** (spec PR #156, `docs/spec-macos-build`, sub-PR 2 "the theme poll stops on macOS while
-   Omarchy is absent"): this covers it, on every platform. Its decision 8 asked `about:vimma` to say
-   "Omarchy theme: not found"; this spec overrides that: no Omarchy wording off Omarchy, because a
+6. **macOS** ([macos-build](macos-build.md)): the theme poll stops on macOS while Omarchy is
+   absent, because this spec stops it on every platform. `about:vimma` does not say "Omarchy
+   theme: not found" there (macos-build decision 11): no Omarchy wording off Omarchy, because a
    missing Omarchy is not a problem to report on a system that never had it.
 
 ## B. Built-in appearance: dark, light or the system's

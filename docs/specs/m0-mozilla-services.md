@@ -203,9 +203,9 @@ ships.
   (`browser/components/preferences/config/privacy.mjs` has no visibility gate for it); the only
   pref route is turning `browser.safebrowsing.{phishing,malware}.enabled` off, which would make
   the UI truthful but must then be undone when the key lands, so it is left on. Follow-up spec
-  `m0-safebrowsing-key`: the key (`--with-google-safebrowsing-api-keyfile`, a CI secret), which
-  the user is obtaining.
-- **Version-gated Remote Settings filters** see `0.1.0` (m0-user-agent Open issues); CRLite and
-  the blocklist are not version-gated, so they are unaffected.
+  `m0-safebrowsing-key`: the key (`--with-google-safebrowsing-api-keyfile`, a CI secret).
+- **Version-gated Remote Settings filters** saw `0.1.0` (m0-user-agent Open issues); since
+  m0-app-version they see the Firefox version. CRLite and the blocklist are not version-gated, so
+  they were unaffected.
 - **M6:** opt-in crash reporting (re-enable the reporter with `--with-crashreporter-url` pointing
   at our server, `browser.tabs.crashReporting.sendReport` stays false), and the update manifest.

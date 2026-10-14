@@ -13,7 +13,8 @@ running browser, and with it off nothing listens and no token file exists.
 
 ## Scope
 
-- `ctl/VimmaControl.sys.mjs`: protocol v1 server. One per app: every window's `vimma.js` calls
+- `ctl/VimmaControl.sys.mjs`: protocol v1 server (protocol 2 and its roles since
+  [vimma-mcp](vimma-mcp.md)). One per app: every window's `vimma.js` calls
   `VimmaControl.init(window)`, which acts once. The pref `vimma.control.enabled` (default `false`,
   branding prefs file) starts and stops it live; starts and stops run one after another.
 - `nsIServerSocket.init(-1, /* loopbackOnly */ true, 16)`: 127.0.0.1, an OS-chosen port.
@@ -43,11 +44,11 @@ running browser, and with it off nothing listens and no token file exists.
   would test something users never do. Cost: keys go where focus is; for page-bound keys that is
   the page only while the window has focus, as with a real keyboard. `?` is sent without shift
   (vimma-core's canonical chord), which the host treats the same.
-- **`state.pending`** is `VimmaHost.status(win).pending.join(" ")`, what the status bar shows: `"prefix"`
-  after `ctrl+b`, `null` when empty. `mode` is the host's `_mode`: `help` with the overlay
-  open, else the focused page's mode (`normal` on a page with Vimma's actor, `insert` in a text
-  field, a page without the actor, or chrome; m1-actor-insert-scroll). Each tab also
-  has `index` (strip order among visible tabs) and `pinned`; clients ignore fields they do not
+- **`state.pending`** is `VimmaHost.status(win).pending.join(" ")`, what the status bar shows:
+  `"prefix"` after `ctrl+b`, `null` when empty. `mode` is the host's `_mode`: `help` with the
+  overlay open, else the focused page's mode (`normal` on a page with Vimma's actor, `insert` in a
+  text field, a page without the actor, or chrome; m1-actor-insert-scroll). Each tab also has
+  `index` (strip order among visible tabs) and `pinned`; clients ignore fields they do not
   know. `workspace` is the active workspace's name and `panes` the window's pane tree, `null`
   with one pane (shape in the protocol spec; m3-workspaces sub-spec 7).
 - **`open`**: the URL is re-parsed with `Services.io.newURI` and its scheme checked again
@@ -100,7 +101,7 @@ running browser, and with it off nothing listens and no token file exists.
   0600, port matches, pid is the parent, no `.tmp` left, handshake works, 127.0.0.2 refused. Off:
   file gone, old port refused. On again: a new token.
 - Handshake: wrong token → exact `unauthorized` response, then close; an HTTP request →
-  `bad-request`, close; protocol 2 → `unsupported-protocol`, close; right token → valid
+  `bad-request`, close; protocol 3 → `unsupported-protocol`, close; right token → valid
   `welcome` (app, version). After it: not-JSON → `bad-request`, unknown command, reserved →
   `not-implemented`, unknown args → `invalid-args`, connection still usable.
 - `send-keys ctrl+b` → `state.pending` `"prefix"`; `?` → overlay opens, host saw real keydowns,
@@ -112,10 +113,10 @@ running browser, and with it off nothing listens and no token file exists.
 - `open https://example.com/` → new selected tab, result id, content principal; `where: current`
   reuses it; `about:blank` → a new selected tab at `about:blank`; `javascript:`, `data:`,
   `chrome:` → `invalid-args`, nothing opened.
-- Limits: 8 authenticated connections, the 9th hello gets `busy` (id null, no doubled "busy:")
-  and a close, a freed slot works; 20 connections that never say hello leave 2 waiting (the
-  evicted told `busy`) and a client with the token still gets in; an oversized line → `bad-request` and a close; idle (500 ms pref) →
-  closed without a message; no hello (300 ms pref) → `bad-request` and a close.
+- Limits: 8 authenticated connections, the 9th hello gets `busy` (id null, no doubled "busy:") and a
+  close, a freed slot works; 20 connections that never say hello leave 2 waiting (the evicted told
+  `busy`) and a client with the token still gets in; an oversized line → `bad-request` and a close;
+  idle (500 ms pref) → closed without a message; no hello (300 ms pref) → `bad-request` and a close.
 - `vimma-ctl --profile <test profile> state --json` exits 0 with the live state; 5 more runs
   succeed during a flood of 30 idle connections; against a squatting socket (a stale discovery
   file with a token it does not know) it exits 4 and the squatter receives no command.

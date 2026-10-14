@@ -68,8 +68,9 @@ window after `VimmaHost` and `PaneViews`:
 - With a 10-minute poll, `:source` loads the file.
 - `schema = 2`, `[panes] max = 2`: the third split is refused (`at most 2 panes`), no tab opened;
   without the file the maximum is 4 again.
-- With an Omarchy fixture followed, `[theme] source = "file"` switches the status bar to Tokyo
-  Night, `[theme.colors] dark_background` overrides it, and removing the file brings Omarchy back.
+- With an Omarchy fixture followed, `[theme] source = "file"` switches the status bar to the
+  built-in Vimma palette (Tokyo Night with `name = "tokyo-night"`),
+  `[theme.colors] dark_background` overrides it, and removing the file brings Omarchy back.
 
 Red: the run before `ConfigHost.sys.mjs` existed crashed on `Missing chrome or resource URLs:
 chrome://browser/content/vimma/config/ConfigHost.sys.mjs`. Green: 35 passed, 0 failed. Mutation:
@@ -129,8 +130,8 @@ poll's read fails "config.toml is the file in force again"; reverted.
 Issue #66 (`browser_vimma_theme.js` flaked in CI): a real race in `theme-host.mjs`. A check
 reading the old Omarchy path when the path pref changed went on to record and apply that
 theme and set `loaded`; the recheck then found the new path missing and, `loaded` being true,
-kept the old theme for good (the CI failure: `no_omarchy_dir_means_tokyo_night` timed out,
-then the poll timer was left running). Fixed with a generation counter: a check started
-before `recheck()` drops what it read. New test
+kept the old theme for good (the CI failure: `no_omarchy_dir_means_tokyo_night`, now
+`no_omarchy_dir_means_the_builtin_vimma`, timed out, then the poll timer was left running).
+Fixed with a generation counter: a check started before `recheck()` drops what it read. New test
 `a_path_change_during_a_check_is_not_undone_by_it` reproduces it deterministically (red with
 the same three failures as CI, green after).

@@ -32,7 +32,8 @@ moment, and the `ctrl+b ?` overlay shows at a glance which bindings run today.
   no legend.
 - **One source of truth:** `RUNNABLE = keys(RUNNERS) ∪ keys(CONTENT_RUNNERS)` (m1-actor-insert-
   scroll's page actions), exported by the host. The overlay dims what is not in it, `_run` shows
-  the notice for what is not in it, and the which-key strip takes it when wired.
+  the notice for what is not in it, and the which-key strip was to take it (the strip was later
+  removed; m2-statusbar-whichkey).
   `_runnable(state, id)` (pass or consume) derives from it, adding "the focused browser has our
   actor" for content actions. Scroll keys, `i` and `Esc` are therefore never dimmed.
 - **`_run` order:** content runner (on the focused page, if it has our actor; a content action
@@ -44,14 +45,15 @@ moment, and the `ctrl+b ?` overlay shows at a glance which bindings run today.
 
 - `packages/vimma-core/test/tabs.test.mjs`: wrapping, single tab, goto, goto past the end, counts
   (`Ngt`, `NgT`), degenerate input; `describeAction` / `notImplementedText`.
-- `tests/browser/browser_vimma_tab_keys.js`: each key on `gBrowser` (count, `selectedTab`),
-  wrapping both ways, hidden tabs skipped, `ctrl+b 9` past the end a silent no-op, from the URL bar
-  (nothing typed into it) and from `about:preferences`; every page sees none of the chord keys;
-  the notice for `ctrl+b v` (text, `role`, no focus taken, hides by itself after > 1 s) and for
-  `3H`; none for a passed-through `f` or `Esc`, none in DOM fullscreen; `ctrl+b p`/`c` from the
-  PDF viewer; pinned tabs first in the order and not closed by `ctrl+b shift+x`/`x`; normal-mode
-  `t`, `x`, `gt`, `gT`; the last tab closing the window, or not with
-  `browser.tabs.closeWindowWithLastTab` false.
+- `tests/browser/browser_vimma_tab_keys.js`: each key on `gBrowser` (count, `selectedTab`), wrapping
+  both ways, hidden tabs skipped, `ctrl+b 9` past the end a silent no-op, from the URL bar (nothing
+  typed into it) and from `about:preferences`; every page sees none of the chord keys; the notice
+  for `ctrl+b v` (text, `role`, no focus taken, hides by itself after > 1 s) and for `3H` (every
+  action is built since M1's navigation keys, so the tests now withhold `history.back` and bind it
+  to `ctrl+b o` in place of `ctrl+b v`: `head.js` `bindUnbuiltPrefixKey`); none for a passed-through
+  `f` or `Esc`, none in DOM fullscreen; `ctrl+b p`/`c` from the PDF viewer; pinned tabs first in the
+  order and not closed by `ctrl+b shift+x`/`x`; normal-mode `t`, `x`, `gt`, `gT`; the last tab
+  closing the window, or not with `browser.tabs.closeWindowWithLastTab` false.
 - `browser_vimma_help_overlay.js`: rows marked from the host's set (implemented and not-yet),
   computed opacity (scroll, `i` and `Esc` rows not dimmed), the legend; a given `runnable` set
   decides the marks. The old "unrunnable key
@@ -78,7 +80,8 @@ action set).
   layer). A count makes the next key part of a sequence: `3H` (history.back, not built) is
   consumed and shows the notice; a count before an unbound key (`3z`) is cancelled by core with
   no action to name, so it stays silent. After #32, single keys that pass are `f`, `/`, `r`,
-  `ctrl+i`, `ctrl+u` and the like; `Esc` in normal mode is unbound and reaches the page.
+  `ctrl+i`, `ctrl+u` and the like; `Esc` in normal mode is unbound and reaches the page (its later
+  `page.stop` binding, firefox-keys, runs only after the page had it).
 - **Selection order: visible tabs, wrapping.** `prefix+n`/`p` and `prefix+1..9` count
   `gBrowser.visibleTabs` (hidden tabs skipped). Herdr's docs do not say; its source does
   (`src/client/shell/actions.rs`): `NextTab`/`PreviousTab` use `rem_euclid` over the focused
@@ -111,8 +114,7 @@ action set).
   `showPopover()` does not move focus (asserted). One element per window, removed on
   `VimmaHost.uninit`; the stylesheet is loaded once per window, as the overlay's.
 - **The overlay marks rows through core's `bindingTable(keymap, { runnable })`** (M2 core, #22):
-  `isRunnable` is the same rule the which-key strip will use, so the strip can take the host's
-  `RUNNABLE` too when it is wired.
+  `isRunnable` is the same rule the which-key strip was to use (the strip was later removed).
 - **M3 seam.** `host/tab-ops.mjs` `selectableTabs(win)` is the only place that decides which tabs
   the keys count. M3 returns the active workspace's tabs in its model order (m3-m4-core-models
   `selectTab`/`openTab`/`closeTab`) and routes `tab.new`/`tab.close` through the model; the

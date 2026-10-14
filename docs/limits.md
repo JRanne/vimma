@@ -294,7 +294,7 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
 - Safe Browsing's `goog-harmful-proto` list is requested but did not arrive in the smoke run
   with our key (phishing, malware and unwanted did); treat it as unavailable. See
   [m0-safebrowsing-key](specs/m0-safebrowsing-key.md).
-- No update mechanism of our own and no update manifest until M6
+- No update mechanism of our own and no update manifest until M6a
   ([m0-app-version](specs/m0-app-version.md), Out of scope).
 - No crash reporting: builds have no crash reporter, so crashes leave only a local core dump.
   Opt-in reporting to our own server is M6 ([m0-mozilla-services](specs/m0-mozilla-services.md)).
@@ -345,7 +345,6 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
   ([plan.md](../plan.md) §6, [macos-build](specs/macos-build.md)); Windows is not planned.
 - No binaries, packages or releases: build from source. Tarball, AppImage, `.deb` and AUR are M6
   ([plan.md](../plan.md) §6).
-- The smol-toml BSD-3-Clause notice is not in `about:license` yet (M6, issue #16).
 - `vimma-ctl` checks the discovery file's permissions on Unix only; on Windows `check_mode`
   does nothing (ACLs, not mode bits)
   ([m0-control-protocol-and-vimma-ctl](specs/m0-control-protocol-and-vimma-ctl.md)).
@@ -361,8 +360,6 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
   ([ADR-010](adr/010-pr-artifact-builds.md), [runbook](runbook.md)).
 - Artifact builds depend on Mozilla's Taskcluster index for the pinned release, which expires
   after a year ([ADR-010](adr/010-pr-artifact-builds.md)).
-- `e2e.yml` is path-filtered, so it cannot be a required check without handling skipped runs
-  ([m0-build-strategy](specs/m0-build-strategy.md)).
 - PRs opened by `GITHUB_TOKEN` (upstream bumps, Claude, release-please) do not trigger CI by
   themselves ([runbook](runbook.md)).
 - Firefox bumps are manual after the bot's PR. Plan §4's Claude conflict resolution (≤3 pushes),
@@ -372,8 +369,6 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
 - `surfer import` stops at the first patch that fails, and `git apply` has no fuzz: a hunk whose
   context drifted fails like one whose code is gone. `tools/upstream/patch-check.py` reports
   every patch and hunk, and tells the two apart ([m0-rebase-playbook](specs/m0-rebase-playbook.md)).
-- No branch protection on `main` (free private plan); write-token jobs could push to it
-  ([m0-pipeline](specs/m0-pipeline.md), [runbook](runbook.md)).
 - A change to build config needs a full rebuild of 15–30 min on 16 threads: 927 s
   ([m0-app-version](specs/m0-app-version.md)), 977 s ([m0-branding](specs/m0-branding.md)),
   1763 s ([m0-mozilla-services](specs/m0-mozilla-services.md)) and 1805 s (`m0-updater`, PR #15),

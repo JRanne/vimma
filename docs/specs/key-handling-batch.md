@@ -40,10 +40,11 @@ panel.
 `ctrl+shift+y` on GNOME), so they match nothing there and about:vimma says so. `ctrl+j` stays.
 
 **How.** Our own code, no patch: `host/firefox-keys.mjs` sets `disabled="true"` on the matching
-`<key>` elements of `#mainKeyset` at window init and after every config change, and marks them
-`vimma-disabled` so it only ever re-enables its own. `dom/events/GlobalKeyListener.cpp` reads
-`disabled` at key time (`CanHandle` → `KeyElementIsDisabled`), so the change is live; a disabled
-key is no longer reserved either, so the page gets the chord. The letters come from Fluent
+`<key>` elements of `#mainKeyset` (since firefox-keys sub-PR 1, of every keyset of the window)
+at window init and after every config change, and marks them `vimma-disabled` so it only ever
+re-enables its own. `dom/events/GlobalKeyListener.cpp` reads `disabled` at key time
+(`CanHandle` → `KeyElementIsDisabled`), so the change is live; a disabled key is no longer
+reserved either, so the page gets the chord. The letters come from Fluent
 (`data-l10n-id`), maybe after our init, and other locales may use other letters: a
 MutationObserver on the keyset re-applies when a `key`, `keycode`, `modifiers` or `disabled`
 attribute changes (Firefox flips `disabled` itself on some keys). Matching is by chord, from
@@ -52,7 +53,9 @@ browser.xhtml's `<head>`, before `#mainKeyset` is parsed, so the first pass runs
 `DOMContentLoaded`.
 
 **Kept** (not overlapping): `ctrl+t`, `ctrl+n`, `ctrl+shift+t`, `ctrl+l`, `ctrl+f`, `ctrl+tab`,
-`alt+1..9`, `ctrl+q`, and every other `#mainKeyset` key.
+`alt+1..9`, `ctrl+q`, and every other `#mainKeyset` key. Since [firefox-keys](firefox-keys.md)
+sub-PR 1, Vimma binds most of these itself, and a chord Vimma binds is always off as a Firefox
+shortcut.
 
 **Config** (schema 2):
 
@@ -141,9 +144,10 @@ modifiers. Alt alone with `AltGraph` false (Linux, Windows) is always a genuine 
 - Counts: panel mode has none (`COUNT_MODES` is normal, visual, resize, and `1`..`9` select a row),
   so `3x` selects row 3 (which goes to its tab and closes the panel), and the `x` is then normal
   mode's `tab.close`, which closes that tab. Noted in limits.md.
-- `ctrl+shift+t` reopens the last closed tab: `[modal.panel] "<C-S-t>" = "tab.restore"`
-  (`restore_tab`), Firefox's `History:RestoreLastClosedTabOrWindowOrSession` command, since panel
-  mode consumes every other key.
+- `ctrl+shift+t` reopens the last closed tab (`restore_tab`, Firefox's
+  `History:RestoreLastClosedTabOrWindowOrSession` command). This batch bound it as
+  `[modal.panel] "<C-S-t>" = "tab.restore"`, since panel mode consumes every other key;
+  [firefox-keys](firefox-keys.md) sub-PR 1 replaced that with a global `[keys]` binding.
 - The bookmarks panel shares the mode: `x` does nothing there (`d` deletes).
 
 ## Tests

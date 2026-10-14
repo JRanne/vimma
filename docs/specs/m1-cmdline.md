@@ -41,11 +41,14 @@ line open and tells me what I probably meant. Nothing I type into it reaches the
 - `:open example.com` loads `http(s)://example.com/` through fixup; `:tabnew example.com` does so
   in a new tab.
 - `:vsplit` shows m2-tab-keys' "Split right: not implemented yet"; `:workspace work` (pending)
-  shows "… not available yet"; `:map` and `:help` open the bindings overlay.
+  shows "… not available yet"; `:map` and `:help` open the bindings overlay. (Every command
+  runs since M4 and m3-workspaces: the test now runs `:sidebar`, and `:workspace work` reports
+  `no workspace "work"`.)
 - `:` in a text field (insert) is typed into it; the line does not open.
 - The page sees none of the keys typed into the line (head.js race-free helpers).
 
-`packages/vimma-core/test/cmdline.test.mjs`: `PENDING_ACTIONS` is `["workspace.switch"]`;
+`packages/vimma-core/test/cmdline.test.mjs`: `PENDING_ACTIONS` is `["workspace.switch"]` (empty
+since m3-workspaces);
 `:open x` parses to `page.open`; `:help`, `:h` → `help.show`.
 
 ## Out of scope
@@ -109,7 +112,7 @@ completion list.
   line prefilled with `open `.
 - **`:q` → `pane.close`** closes the tab with m2-tab-keys' `closeTab` (pinned: selects the first
   unpinned tab; the last tab closes the window unless `closeWindowWithLastTab` is false). M4
-  replaces the runner with "close the pane; the last pane closes the tab". `prefix+x` gets the
+  replaced the runner with "close the pane; the last pane closes the tab". `prefix+x` gets the
   same runner, so it is no longer dimmed.
 - **Insert mode:** `:` is not bound in `insert`, so it is typed. In chrome text fields (URL bar)
   the mode is `insert` too.
