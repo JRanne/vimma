@@ -192,7 +192,7 @@ jobs:
         run: |
           out="$RUNNER_TEMP/upstream-beta"
           node tools/upstream/canary.mjs render --version "$VERSION" --repo "$GITHUB_REPOSITORY" \
-            --sha "$SHA" --run-url "$RUN_URL" --owner "$OWNER" \
+            --ref "$GITHUB_REF_NAME" --sha "$SHA" --run-url "$RUN_URL" --owner "$OWNER" \
             --patch-check "$RUNNER_TEMP/source/patch-check.json" --source-result "$SOURCE_RESULT" \
             --artifacts "$ARTIFACTS" --artifacts-note "$ARTIFACTS_NOTE" --test-result "$TEST_RESULT" \
             --suite-results "$RUNNER_TEMP/suites/suite-results.json" \

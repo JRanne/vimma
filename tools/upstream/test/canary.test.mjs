@@ -443,6 +443,17 @@ describe("canary CLI", () => {
     expect(r.stdout).toContain("open: Firefox 159 beta: canary findings");
   });
 
+  it("names the branch a manual run tested, and refuses a ref that is not a plain name", () => {
+    const { issue } = renderWith({
+      ref: "ci/upstream-beta-canary",
+      patchCheck,
+      sourceResult: "fail",
+    });
+    expect(issue.body).toContain("tested `ci/upstream-beta-canary` against Firefox 159.0b1");
+    expect(issue.body).toContain("| `ci/upstream-beta-canary` tested |");
+    expect(() => renderWith({ ref: "a`b" })).toThrow(/bad ref/);
+  });
+
   it("render refuses a version that is not a beta", () => {
     expect(() => renderWith({ version: "159.0" })).toThrow(/not a Firefox Beta version/);
   });

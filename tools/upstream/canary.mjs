@@ -358,7 +358,8 @@ function fit(head, sections, tail, cutNote) {
 }
 
 /**
- * @typedef {{ version: string, repo: string, sha: string, runUrl: string, owner: string,
+ * `ref` is the branch tested, `main` but for a manual run on a branch (whose report job is skipped).
+ * @typedef {{ version: string, repo: string, ref?: string, sha: string, runUrl: string, owner: string,
  *   patchCheck: PatchCheck | null, sourceResult: string, artifacts: string, artifactsNote: string,
  *   testResult: string, suiteResults: SuiteResults | null, previous: State | null }} RenderInput
  */
@@ -368,12 +369,13 @@ function fit(head, sections, tail, cutNote) {
  * @param {RenderInput} input
  */
 export function render(input) {
-  const { version, repo, sha, runUrl, owner, previous } = input;
+  const { version, repo, sha, runUrl, owner, previous, ref = "main" } = input;
   const { major } = parseBeta(version);
   // Only a GitHub login, a repository and a commit go into the Markdown outside a fence.
   if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(owner)) throw new Error(`bad owner: ${owner}`);
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error(`bad repo: ${repo}`);
   if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error(`bad sha: ${sha}`);
+  if (!/^[\w./-]{1,100}$/.test(ref)) throw new Error(`bad ref: ${ref}`);
   if (!/^https:\/\/github\.com\/[\w./-]+$/.test(runUrl)) throw new Error(`bad run url: ${runUrl}`);
   const { items, sections, suites, patches } = findings(input);
   const short = sha.slice(0, 12);
@@ -386,14 +388,14 @@ export function render(input) {
       : "";
 
   const head = [
-    `The Beta canary (\`upstream-beta.yml\`) tested \`main\` against Firefox ${version} and found ` +
+    `The Beta canary (\`upstream-beta.yml\`) tested \`${ref}\` against Firefox ${version} and found ` +
       "the problems below. Fix them on `main` so that the fix works on the release `main` ships " +
       'and on this Beta (docs/rebase.md, "Before the release: the Beta canary").',
     "",
     "| | |",
     "| --- | --- |",
     `| Beta build | Firefox ${version}${source} |`,
-    `| \`main\` tested | ${commit} |`,
+    `| \`${ref}\` tested | ${commit} |`,
     `| Run | [run](${runUrl}), artifact \`${artifactName(version)}\` |`,
     `| Patches | ${patches} |`,
     `| Suites | ${suites} |`,
@@ -428,7 +430,7 @@ export function render(input) {
         lists.push([`**Fixed** (${fixed.length})`, fenced(fixed.map((i) => i.label).join("\n"))]);
       }
       comment = fit(
-        `Firefox ${version} at \`main\` ${commit} ([run](${runUrl})) compared with the previous ` +
+        `Firefox ${version} at \`${ref}\` ${commit} ([run](${runUrl})) compared with the previous ` +
           `run (${prevVersion} at \`${prevSha}\`):\n`,
         lists,
         "",
@@ -437,8 +439,8 @@ export function render(input) {
     }
   }
   const closeComment =
-    `Every patch, check and test passes on Firefox ${version} at \`main\` ${commit} ` +
-    `([run](${runUrl})). Closing; the canary reopens a new issue if a later Beta build fails.\n`;
+    `Every patch, check and test passes on Firefox ${version} at \`${ref}\` ${commit} ` +
+    `([run](${runUrl})). Closing; the canary opens a new issue if a later Beta build fails.\n`;
   const issue = {
     version,
     major,
@@ -490,6 +492,7 @@ async function main(argv) {
       "github-output": { type: "string" },
       sha: { type: "string", default: "" },
       "run-url": { type: "string", default: "" },
+      ref: { type: "string", default: "main" },
       owner: { type: "string", default: "" },
       "patch-check": { type: "string", default: "" },
       "source-result": { type: "string", default: "" },
@@ -543,6 +546,7 @@ async function main(argv) {
     const { issue, state } = render({
       version: values.version,
       repo: values.repo,
+      ref: values.ref,
       sha: values.sha,
       runUrl: values["run-url"],
       owner: values.owner,
