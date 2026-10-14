@@ -1,0 +1,14 @@
+{
+  "description": "A client name with a control character is refused",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 1,
+    "command": "agent-hello",
+    "args": {
+      "client": {
+        "name": "claude\u001b[2Jcode"
+      }
+    }
+  }
+}

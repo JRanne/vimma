@@ -463,6 +463,48 @@ describe("[theme] name", () => {
   });
 });
 
+// docs/specs/theme-appearance.md, B: the built-in palette dark, light or as the system is.
+describe("[theme] appearance", () => {
+  test("left out, it stays out: :theme's pref decides", () => {
+    expect(ok(v2()).theme.appearance).toBeUndefined();
+    expect(DEFAULT_CONFIG.theme?.appearance).toBeUndefined();
+  });
+
+  test.each([["system"], ["dark"], ["light"]])('appearance = "%s" is accepted', (v) => {
+    expect(ok(v2("[theme]", `appearance = "${v}"`)).theme.appearance).toBe(v);
+  });
+
+  test("an unknown value suggests the nearest; a non-string is a type error", () => {
+    expect(errors(v2("[theme]", 'appearance = "ligt"'))).toEqual([
+      {
+        line: 3,
+        path: "theme.appearance",
+        message: 'must be "system", "dark" or "light"',
+        suggestion: "light",
+      },
+    ]);
+    expect(errors(v2("[theme]", "appearance = 1"))).toEqual([
+      { line: 3, path: "theme.appearance", message: "expected a string, got an integer" },
+    ]);
+  });
+
+  test("is new in schema 2", () => {
+    expect(errors(toml("schema = 1", "[theme]", 'appearance = "dark"'))).toEqual([
+      {
+        line: 3,
+        path: "theme.appearance",
+        message: "is new in schema 2: put schema = 2 at the top of the file",
+      },
+    ]);
+  });
+
+  test("defaults.toml documents it as a comment, so the file does not pin it", () => {
+    expect(formatDefaultsToml()).toMatch(/^# appearance = "system"$/m);
+    expect(formatDefaultsToml()).not.toMatch(/^appearance =/m);
+    expect(ok(formatDefaultsToml()).theme.appearance).toBeUndefined();
+  });
+});
+
 // docs/specs/private-swap.md, decision 1 (user decision, 2026-10-12).
 describe("[private] placement", () => {
   test('defaults to "swap"', () => {
@@ -510,6 +552,182 @@ describe("[private] placement", () => {
         path: "private",
         message: "is new in schema 2: put schema = 2 at the top of the file",
       },
+    ]);
+  });
+});
+
+// docs/specs/vimma-mcp.md, decision 26: [mcp], a schema-2 table; config wins over :mcp on|off.
+describe("[mcp]", () => {
+  test("defaults: workspace agent, 50 s, 10 of at most 480 min, 200,000 characters, notify", () => {
+    expect(ok(v2()).mcp).toEqual({
+      workspace: "agent",
+      askTimeout: 50,
+      grantMinutes: 10,
+      grantMaxMinutes: 480,
+      maxReadChars: 200000,
+      notify: true,
+      downloadDir: "~/Downloads/vimma-agent",
+      downloadMaxMb: 200,
+    });
+    expect(ok(toml()).mcp.workspace).toBe("agent");
+    expect(DEFAULT_CONFIG.mcp).toEqual({
+      workspace: "agent",
+      ask_timeout: 50,
+      grant_minutes: 10,
+      grant_max_minutes: 480,
+      max_read_chars: 200000,
+      notify: true,
+      download_dir: "~/Downloads/vimma-agent",
+      download_max_mb: 200,
+    });
+    const text = formatDefaultsToml();
+    expect(text).toMatch(/^\[mcp\]\n# enabled = false\nworkspace = "agent"\nask_timeout = 50$/m);
+    expect(text).toMatch(
+      /^grant_minutes = 10\ngrant_max_minutes = 480\nmax_read_chars = 200000\nnotify = true$/m,
+    );
+    expect(text).toMatch(/^download_dir = "~\/Downloads\/vimma-agent"\ndownload_max_mb = 200$/m);
+  });
+
+  test("every key as written; enabled only when the file sets it", () => {
+    const mcp = ok(
+      v2(
+        "[mcp]",
+        "enabled = true",
+        'workspace = "bots"',
+        "ask_timeout = 10",
+        "grant_minutes = 1440",
+        "grant_max_minutes = 1440",
+        "max_read_chars = 1000",
+        "notify = false",
+        'download_dir = "/srv/agent-files"',
+        "download_max_mb = 4096",
+      ),
+    ).mcp;
+    expect(mcp).toEqual({
+      enabled: true,
+      workspace: "bots",
+      askTimeout: 10,
+      grantMinutes: 1440,
+      grantMaxMinutes: 1440,
+      maxReadChars: 1000,
+      notify: false,
+      downloadDir: "/srv/agent-files",
+      downloadMaxMb: 4096,
+    });
+    expect(ok(v2("[mcp]", "enabled = false")).mcp.enabled).toBe(false);
+    expect("enabled" in ok(v2("[mcp]", "notify = true")).mcp).toBe(false);
+  });
+
+  test("each bound is an error that says the range", () => {
+    const at = (/** @type {string} */ line) => errors(v2("[mcp]", line))[0];
+    expect(at("ask_timeout = 5")).toEqual({
+      line: 3,
+      path: "mcp.ask_timeout",
+      message: "must be an integer between 10 and 300 (seconds)",
+    });
+    expect(at("ask_timeout = 301")?.message).toBe(
+      "must be an integer between 10 and 300 (seconds)",
+    );
+    expect(at("grant_max_minutes = 0")?.message).toBe(
+      "must be an integer between 1 and 1440 (minutes)",
+    );
+    expect(at("grant_max_minutes = 1441")?.path).toBe("mcp.grant_max_minutes");
+    expect(at("grant_minutes = 0")?.message).toBe(
+      "must be an integer between 1 and grant_max_minutes (480)",
+    );
+    expect(at("max_read_chars = 999")?.message).toBe("must be an integer between 1000 and 500000");
+    expect(at("max_read_chars = 500001")?.path).toBe("mcp.max_read_chars");
+    expect(at('ask_timeout = "50"')?.message).toBe("expected an integer, got a string");
+    expect(at("notify = 1")?.message).toBe("expected a boolean, got an integer");
+    expect(at('enabled = "yes"')?.message).toBe("expected a boolean, got a string");
+  });
+
+  test("grant_minutes above grant_max_minutes is an error", () => {
+    expect(errors(v2("[mcp]", "grant_minutes = 60", "grant_max_minutes = 30"))).toEqual([
+      {
+        line: 3,
+        path: "mcp.grant_minutes",
+        message: "must be an integer between 1 and grant_max_minutes (30)",
+      },
+    ]);
+    expect(errors(v2("[mcp]", "grant_minutes = 500"))[0]?.message).toBe(
+      "must be an integer between 1 and grant_max_minutes (480)",
+    );
+  });
+
+  // Decision 31 b, f (sub-PR 2c): the quarantine folder and the size cap.
+  test("download_dir is ~ or absolute, never home, / or the Downloads folder itself", () => {
+    const at = (/** @type {string} */ line) => errors(v2("[mcp]", line))[0];
+    expect(ok(v2("[mcp]", 'download_dir = "~/agent-files"')).mcp.downloadDir).toBe("~/agent-files");
+    expect(at('download_dir = "agent-files"')).toEqual({
+      line: 3,
+      path: "mcp.download_dir",
+      message: "must start with ~/ or /",
+    });
+    for (const dir of ["~", "~/", "/", "/./", "~/Downloads", "~/./Downloads/", "$HOME/Downloads"]) {
+      expect(at(`download_dir = "${dir}"`)?.message, dir).toMatch(
+        /^must not (be your home folder|be \/|be the Downloads folder itself|start with \$)/,
+      );
+    }
+    expect(at('download_dir = "~/a/../b"')?.message).toBe("must not contain ..");
+    expect(at('download_dir = "~/a\\u0007b"')?.message).toBe("must not contain control characters");
+    expect(at("download_dir = 3")?.message).toBe("expected a string, got an integer");
+  });
+
+  // Security review of #182 (finding 3): no hidden folder of home, nothing anyone can write.
+  test("download_dir is never in a hidden folder of home or in /tmp, /var/tmp, /dev/shm", () => {
+    const at = (/** @type {string} */ line) => errors(v2("[mcp]", line))[0]?.message;
+    expect(at('download_dir = "~/.local/bin"')).toBe("must not be in a hidden folder (.local)");
+    expect(at('download_dir = "~/a/.cache"')).toBe("must not be in a hidden folder (.cache)");
+    for (const dir of ["/tmp/q", "/var/tmp", "/dev/shm/x", "/tmp"]) {
+      expect(at(`download_dir = "${dir}"`), dir).toBe("must not be in /tmp, /var/tmp or /dev/shm");
+    }
+    expect(ok(v2("[mcp]", 'download_dir = "~/agent.files"')).mcp.downloadDir).toBe("~/agent.files");
+  });
+
+  test("download_max_mb is 1 to 4096", () => {
+    const at = (/** @type {string} */ line) => errors(v2("[mcp]", line))[0];
+    expect(ok(v2("[mcp]", "download_max_mb = 1")).mcp.downloadMaxMb).toBe(1);
+    expect(at("download_max_mb = 0")).toEqual({
+      line: 3,
+      path: "mcp.download_max_mb",
+      message: "must be an integer between 1 and 4096 (MB)",
+    });
+    expect(at("download_max_mb = 4097")?.path).toBe("mcp.download_max_mb");
+    expect(at('download_max_mb = "200"')?.message).toBe("expected an integer, got a string");
+  });
+
+  test('workspace follows the workspace-name rules and is never "private"', () => {
+    const at = (/** @type {string} */ line) => errors(v2("[mcp]", line))[0];
+    expect(at('workspace = "private"')).toEqual({
+      line: 3,
+      path: "mcp.workspace",
+      message: 'must not be "private", the private workspace\'s name',
+    });
+    expect(at('workspace = ""')?.message).toBe("must be 1 to 32 characters");
+    expect(at(`workspace = "${"x".repeat(33)}"`)?.message).toBe("must be 1 to 32 characters");
+    expect(at('workspace = "a\\u0007b"')?.message).toBe("must not contain control characters");
+    expect(at("workspace = 3")?.message).toBe("expected a string, got an integer");
+  });
+
+  test("a misspelt key suggests the right one; [mcp] without schema = 2 asks for it", () => {
+    expect(errors(v2("[mcp]", "ask_timout = 50"))).toEqual([
+      {
+        line: 3,
+        path: "mcp.ask_timout",
+        message: 'unknown key "ask_timout"',
+        suggestion: "ask_timeout",
+      },
+    ]);
+    expect(errors(toml("[mcp]", "enabled = true"))).toEqual([
+      {
+        line: 1,
+        path: "mcp",
+        message: "is new in schema 2: put schema = 2 at the top of the file",
+      },
+    ]);
+    expect(errors(v2("mcp = true"))).toEqual([
+      { line: 2, path: "mcp", message: "expected a table, got a boolean" },
     ]);
   });
 });

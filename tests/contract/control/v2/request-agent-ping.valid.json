@@ -1,0 +1,10 @@
+{
+  "description": "Keep the connection open",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 6,
+    "command": "agent-ping",
+    "args": {}
+  }
+}

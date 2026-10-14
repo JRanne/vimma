@@ -1,6 +1,7 @@
 import { describe, test, expect } from "vitest";
 import {
   PINNED_MARK_TEXT,
+  gutterOf,
   inRange,
   markSummary,
   markedRows,
@@ -110,6 +111,29 @@ describe("openPanel", () => {
     const one = { ...model, active: "w1", workspaces: [model.workspaces[0]] };
     const s = openPanel(one, info);
     expect([s.previous, s.next]).toEqual([null, null]);
+  });
+
+  test("Given the agent workspace, then the header names the ctrl+b ( / ctrl+b ) targets past it", () => {
+    // docs/specs/vimma-mcp.md decision 9: the cycle skips the agent workspace (w3 here), so the
+    // header must not name it as a neighbour.
+    const skip = new Set(["w3"]);
+    const last = openPanel({ ...model, active: "w2" }, info, { skip });
+    expect([last.previous, last.next]).toEqual(["work", "work"]);
+    const first = openPanel({ ...model, active: "w1" }, info, { skip });
+    expect([first.previous, first.next]).toEqual(["admin", "admin"]);
+    const again = refreshPanel(last, { ...model, active: "w2" }, info, { skip });
+    expect([again.previous, again.next]).toEqual(["work", "work"]);
+  });
+
+  test("Given only the agent workspace besides this one, then there are no neighbours", () => {
+    const two = { ...model, active: "w1", workspaces: [model.workspaces[0], model.workspaces[2]] };
+    const s = openPanel(two, info, { skip: new Set(["w3"]) });
+    expect([s.previous, s.next]).toEqual([null, null]);
+  });
+
+  test("Given the agent workspace is the active one, then its neighbours are the cycle's", () => {
+    const s = openPanel({ ...model, active: "w3" }, info, { skip: new Set(["w3"]) });
+    expect([s.previous, s.next]).toEqual(["admin", "work"]);
   });
 
   test("Given the private workspace, then its head says so and its neighbours are the host's", () => {
@@ -497,5 +521,217 @@ describe("marks", () => {
     expect(d.dispatch("panel", parseKey("space"))).toEqual({ kind: "pending" });
     expect(d.ambiguous()).toBe(true);
     expect(d.flush()).toEqual({ kind: "action", action: { id: "panel.mark" } });
+  });
+});
+
+// docs/specs/side-panel-unsplit.md: the split's panes start marked; Enter applies a change.
+describe("a split in the panel", () => {
+  const five = {
+    ...model,
+    workspaces: model.workspaces.map((w) =>
+      w.id === "w2" ? { ...w, tabs: ["t2", "t3", "t4", "t5", "t6"], activeTab: "t3" } : w,
+    ),
+  };
+  /** @type {Record<string, PanelTabInfo>} */
+  const more = { ...tabs, t5: { title: "Docs" }, t6: { title: "Chat" } };
+  const info5 = (/** @type {string} */ id) => more[id];
+  /** t2, t3, t4 are the panes, t3's has focus; the highlight starts on t3 (the active tab). */
+  const split = { panes: ["t4", "t2", "t3"], paneFocus: "t3" };
+  const open = () => openPanel(five, info5, split);
+  const SPACE = { id: "panel.mark" };
+  const V = { id: "panel.visual" };
+  const J = { id: "panel.down" };
+  const K = { id: "panel.up" };
+  const ENTER = { id: "panel.open" };
+  const ESC = { id: "panel.close" };
+
+  test("the panes start marked, in row order, and the header names the split", () => {
+    const s = open();
+    expect(s.panes).toEqual(["t2", "t3", "t4"]);
+    expect(s.marked).toEqual(["t2", "t3", "t4"]);
+    expect(s.anchor).toBeNull();
+    expect(markSummary(s)).toBe("split: 3 panes");
+  });
+
+  test("without a split nothing is marked, as before", () => {
+    for (const s of [openPanel(five, info5), openPanel(five, info5, { panes: [] })]) {
+      expect(s.panes).toEqual([]);
+      expect(s.marked).toEqual([]);
+      expect(markSummary(s)).toBe("");
+    }
+  });
+
+  test("a pane tab not listed in the workspace is not marked", () => {
+    const s = openPanel(five, info5, { panes: ["t2", "t3", "gone"], paneFocus: "t2" });
+    expect(s.panes).toEqual(["t2", "t3"]);
+    expect(s.marked).toEqual(["t2", "t3"]);
+  });
+
+  test("space unmarks a pane and marks another tab; the header says what Enter will do", () => {
+    let { state } = press(open(), [SPACE]);
+    expect(state.marked).toEqual(["t2", "t4"]);
+    expect(markSummary(state)).toBe("split: 3 → 2");
+    ({ state } = press(state, [J, SPACE]));
+    expect(state.marked).toEqual(["t2", "t4", "t5"]);
+    expect(markSummary(state)).toBe("split: 3 → 3");
+    ({ state } = press(state, [K, K, K, K, SPACE, J, SPACE]));
+    expect(state.marked).toEqual(["t5"]);
+    expect(markSummary(state)).toBe("split: 3 → 1 (unsplit)");
+    ({ state } = press(state, [SPACE]));
+    expect(state.marked).toEqual([]);
+    expect(markSummary(state)).toBe("split: 3 → 0 (unsplit)");
+  });
+
+  test("marking back to the panes reads as unchanged", () => {
+    const { state } = press(open(), [SPACE, K, SPACE]);
+    expect(state.marked).toEqual(["t2", "t3", "t4"]);
+    expect(markSummary(state)).toBe("split: 3 panes");
+  });
+
+  test("an open range is counted before the split", () => {
+    const { state } = press(open(), [J, V, J]);
+    expect(markSummary(state)).toBe("range: 2 · split: 3 panes");
+  });
+
+  test("the gutter: ● marked, ○ a pane that will leave, │ in a range, else blank", () => {
+    let { state } = press(open(), [SPACE]);
+    expect([0, 1, 2, 3, 4].map((i) => gutterOf(state, i))).toEqual(["●", "○", "●", "", ""]);
+    ({ state } = press(state, [J, V, J]));
+    expect([0, 1, 2, 3, 4].map((i) => gutterOf(state, i))).toEqual(["●", "○", "●", "│", "│"]);
+  });
+
+  test("Enter with the marks unchanged goes to the highlighted tab (decision 12)", () => {
+    expect(press(open(), [ENTER]).effect).toEqual({ type: "select", id: "t3" });
+    expect(press(open(), [J, J, ENTER]).effect).toEqual({ type: "select", id: "t5" });
+    expect(press(open(), [SPACE, K, SPACE, ENTER]).effect).toEqual({
+      type: "select",
+      id: "t4",
+    });
+  });
+
+  test("Enter after unmarking a pane shows the rest; the focused pane keeps focus", () => {
+    const { effect } = press(open(), [J, SPACE, ENTER]);
+    expect(effect).toEqual({ type: "together", ids: ["t2", "t3"], focus: "t3" });
+  });
+
+  test("the focused pane unmarked: focus on the highlighted row if marked, else the first", () => {
+    const on = press(open(), [SPACE, J, SPACE, K, ENTER]).effect;
+    expect(on).toEqual({ type: "together", ids: ["t2", "t4", "t5"], focus: "t5" });
+    const off = press(open(), [SPACE, J, J, ENTER]).effect;
+    expect(off).toEqual({ type: "together", ids: ["t2", "t4"], focus: "t2" });
+  });
+
+  test("Enter after marking another tab adds it", () => {
+    const { effect } = press(open(), [J, J, SPACE, ENTER]);
+    expect(effect).toEqual({ type: "together", ids: ["t2", "t3", "t4", "t5"], focus: "t3" });
+  });
+
+  test("Enter after removing one and adding another applies both at once", () => {
+    const { effect } = press(open(), [K, SPACE, J, J, SPACE, ENTER]);
+    expect(effect).toEqual({ type: "together", ids: ["t3", "t4", "t5"], focus: "t3" });
+  });
+
+  test("Enter with one mark left ends the split and shows that tab alone", () => {
+    const { effect } = press(open(), [K, SPACE, J, SPACE, ENTER]);
+    expect(effect).toEqual({ type: "alone", id: "t3" });
+  });
+
+  // Revision (decision 25): Enter applies the marks, then goes to the highlighted row.
+  test("the user's flow: space on pane C, Enter on C: C alone, the rest a hidden view", () => {
+    const { effect } = press(open(), [J, SPACE, K, ENTER]);
+    expect(effect).toEqual({ type: "together", ids: ["t2", "t3"], focus: "t3", alone: "t4" });
+  });
+
+  test("one mark left with the highlight on a removed pane: that pane shows alone", () => {
+    const { effect } = press(open(), [K, SPACE, J, SPACE, K, ENTER]);
+    expect(effect).toEqual({ type: "alone", id: "t4" });
+  });
+
+  test("the highlighted row has focus when it is marked, before the kept focused pane", () => {
+    const { effect } = press(open(), [J, J, SPACE, K, ENTER]);
+    expect(effect).toEqual({ type: "together", ids: ["t2", "t3", "t4", "t5"], focus: "t5" });
+  });
+
+  test("a hidden view's panes are marked, and the header says it is hidden", () => {
+    const s = openPanel(five, info5, { ...split, paneHidden: true });
+    expect(s.marked).toEqual(["t2", "t3", "t4"]);
+    expect(s.hidden).toBe(true);
+    expect(markSummary(s)).toBe("split: 3 panes (hidden)");
+    expect(markSummary(press(s, [SPACE]).state)).toBe("split: 3 → 2");
+    expect(open().hidden).toBe(false);
+  });
+
+  test("Enter with no mark left ends the split and shows the highlighted tab alone", () => {
+    const { effect } = press(open(), [K, SPACE, SPACE, SPACE, J, ENTER]);
+    expect(effect).toEqual({ type: "alone", id: "t6" });
+  });
+
+  test("Enter in a range marks it first, then compares with the split", () => {
+    expect(press(open(), [K, V, J, ENTER]).effect).toEqual({ type: "select", id: "t3" });
+    expect(press(open(), [J, J, V, ENTER]).effect).toEqual({
+      type: "together",
+      ids: ["t2", "t3", "t4", "t5"],
+      focus: "t5",
+    });
+  });
+
+  test("a digit still goes to its row, whatever is marked", () => {
+    expect(press(open(), [SPACE, { id: "panel.select", arg: 5 }]).effect).toEqual({
+      type: "select",
+      id: "t6",
+    });
+  });
+
+  test("Esc with the marks unchanged closes at once", () => {
+    expect(press(open(), [ESC]).effect).toEqual({ type: "close" });
+  });
+
+  test("Esc with changed marks puts the panes' marks back, then closes", () => {
+    let r = press(open(), [SPACE, SPACE, ESC]);
+    expect(r.state.marked).toEqual(["t2", "t3", "t4"]);
+    expect(r.effect).toBeNull();
+    r = press(r.state, [ESC]);
+    expect(r.effect).toEqual({ type: "close" });
+  });
+
+  test("Esc ends a range first, even on an unchanged split", () => {
+    const r = press(open(), [V, J, ESC]);
+    expect(r.state.anchor).toBeNull();
+    expect(r.state.marked).toEqual(["t2", "t3", "t4"]);
+    expect(r.effect).toBeNull();
+  });
+
+  test("a refresh follows the split while the marks are unchanged", () => {
+    const next = refreshPanel(open(), five, info5, { panes: ["t2", "t3"], paneFocus: "t2" });
+    expect(next.panes).toEqual(["t2", "t3"]);
+    expect(next.marked).toEqual(["t2", "t3"]);
+    expect(next.paneFocus).toBe("t2");
+  });
+
+  test("a refresh keeps the user's changes, dropping tabs no longer listed", () => {
+    const s = press(open(), [SPACE, J, SPACE]).state;
+    expect(s.marked).toEqual(["t2", "t4", "t5"]);
+    const fewer = {
+      ...five,
+      workspaces: five.workspaces.map((w) =>
+        w.id === "w2" ? { ...w, tabs: ["t2", "t3", "t5", "t6"] } : w,
+      ),
+    };
+    const next = refreshPanel(s, fewer, info5, { panes: ["t2", "t3"], paneFocus: "t3" });
+    expect(next.panes).toEqual(["t2", "t3"]);
+    expect(next.marked).toEqual(["t2", "t5"]);
+  });
+
+  test("another workspace starts from its own split", () => {
+    const s = press(open(), [SPACE]).state;
+    const two = {
+      ...five,
+      active: "w1",
+      workspaces: five.workspaces.map((w) => (w.id === "w1" ? { ...w, tabs: ["t1", "t7"] } : w)),
+    };
+    const next = refreshPanel(s, two, info5, { panes: ["t1", "t7"], paneFocus: "t7" });
+    expect(next.marked).toEqual(["t1", "t7"]);
+    expect(next.paneFocus).toBe("t7");
+    expect(refreshPanel(s, two, info5).marked).toEqual([]);
   });
 });

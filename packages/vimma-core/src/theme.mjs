@@ -182,9 +182,13 @@ export const BUILTIN_THEMES = Object.freeze({
 /** `[theme] name` by default. */
 export const DEFAULT_THEME_NAME = "vimma";
 
-/** How the warnings name each built-in. */
-/** @type {Readonly<Record<string, string>>} */
-const BUILTIN_TITLES = Object.freeze({ vimma: "vimma", "tokyo-night": "Tokyo Night" });
+/**
+ * `[theme] appearance` (docs/specs/theme-appearance.md): the built-in palette's variant. "system"
+ * follows prefers-color-scheme, live; "dark" and "light" fix it. Omarchy themes decide their own.
+ * @typedef {"system" | "dark" | "light"} Appearance
+ */
+/** @type {readonly Appearance[]} */
+export const APPEARANCES = Object.freeze(/** @type {Appearance[]} */ (["system", "dark", "light"]));
 
 /**
  * Tokens a built-in takes from another palette key than THEME_TOKENS says: vimma's link hints
@@ -547,6 +551,8 @@ function mix(a, b, t) {
  * @typedef {object} ThemeConfig
  * @property {"omarchy" | "file"} source
  * @property {string} [name]   the built-in palette (BUILTIN_THEMES); DEFAULT_THEME_NAME without
+ * @property {string} [appearance]  the built-in palette's variant (APPEARANCES); "system"
+ *   without one. `colors.mode` wins over it.
  * @property {string} font
  * @property {Record<string, string>} colors   [theme.colors], validated
  */
@@ -583,15 +589,22 @@ export function resolveTheme({ theme, omarchy = null, omarchyLightMode = false, 
     name = DEFAULT_THEME_NAME;
   }
   const builtin = /** @type {BuiltinTheme} */ (BUILTIN_THEMES[name]);
-  const pinned = theme.colors.mode === "dark" || theme.colors.mode === "light";
-  const variant = pinned ? theme.colors.mode : scheme;
+  let appearance = theme.appearance ?? "system";
+  if (!APPEARANCES.includes(/** @type {Appearance} */ (appearance))) {
+    const message = `must be "system", "dark" or "light", got ${describe(appearance)}`;
+    errors.push({ path: "theme.appearance", message });
+    appearance = "system";
+  }
+  const modePinned = theme.colors.mode === "dark" || theme.colors.mode === "light";
+  // [theme.colors] mode is an override on top of any palette: it wins over appearance.
+  const pinned = modePinned || appearance !== "system";
+  const variant = modePinned ? theme.colors.mode : appearance === "system" ? scheme : appearance;
   /** @type {Palette} */
   let base = { ...(variant === "light" && builtin.light ? builtin.light : builtin.dark) };
   let fromBuiltin = true;
   if (theme.source === "omarchy") {
-    if (omarchy === null) {
-      warnings.push(`Omarchy theme not found; using the built-in ${BUILTIN_TITLES[name]}`);
-    } else {
+    // No Omarchy file: the built-in palette, and nothing to report (theme-appearance A).
+    if (omarchy !== null) {
       const r = parseOmarchyColors(omarchy, { lightMode: omarchyLightMode });
       if (r.palette) {
         base = r.palette;

@@ -15,12 +15,13 @@ import { KeymapError, compileKeymap } from "./keymap.mjs";
 import { MODES, isMode } from "./modes.mjs";
 import { PANES_MAX_DEFAULT, PANES_MAX_LIMIT } from "./panes.mjs";
 import { MAIN_SIZE_DEFAULT } from "./layouts.mjs";
-import { BUILTIN_THEMES, PALETTE_KEYS, isHexColor, normalizeHex } from "./theme.mjs";
+import { APPEARANCES, BUILTIN_THEMES, PALETTE_KEYS, isHexColor, normalizeHex } from "./theme.mjs";
 import { resolveRoutes, validateRoutes } from "./routes.mjs";
 import { formatPath, locateKeys, parsePath, parseToml } from "./toml.mjs";
 import { OVERLAP_CHORDS, canonicalChord, isShortcutChord } from "./firefox-keys.mjs";
 import { KeyNotationError, parseKey } from "./keys.mjs";
 import { BOOKMARKS_ROOTS } from "./bookmarks.mjs";
+import { quarantineProblem, resolveDownloadDir } from "./agent-downloads.mjs";
 
 /** @import { Keymap } from "./keymap.mjs" */
 /** @import { UserConfig } from "./defaults.mjs" */
@@ -65,6 +66,15 @@ import { BOOKMARKS_ROOTS } from "./bookmarks.mjs";
  * @property {boolean} insertEditing                     `[modal] insert_editing` (schema 2)
  * @property {{ root: BookmarksRoot }} bookmarks          `[bookmarks]` (schema 2)
  * @property {{ placement: PrivatePlacement }} private    `[private]` (schema 2), private-swap
+ * @property {McpConfig} mcp                             `[mcp]` (schema 2), docs/specs/vimma-mcp.md
+ */
+
+/**
+ * `[mcp]` (vimma-mcp decision 26). `enabled` is there only when the file sets it: then it wins
+ * over `:mcp on|off` (the pref), as `[theme] appearance` wins over `:theme`.
+ * @typedef {{ enabled?: boolean, workspace: string, askTimeout: number, grantMinutes: number,
+ *   grantMaxMinutes: number, maxReadChars: number, notify: boolean, downloadDir: string,
+ *   downloadMaxMb: number }} McpConfig  `downloadDir` as written (`~` not expanded yet)
  */
 
 /** @typedef {"swap" | "window"} PrivatePlacement */
@@ -155,10 +165,11 @@ const TOP_KEYS = [
   "firefox",
   "bookmarks",
   "private",
+  "mcp",
 ];
 const KEYMAP_SECTIONS = new Set(["keys", "modal", "unbind"]);
 const WORKSPACE_KEYS = ["color", "icon", "home", "autofill"];
-const THEME_KEYS = ["source", "name", "font", "colors"];
+const THEME_KEYS = ["source", "name", "appearance", "font", "colors"];
 const THEME_NAMES = Object.keys(BUILTIN_THEMES);
 const THEME_SOURCES = ["omarchy", "file"];
 const PANES_KEYS = ["max", "layout", "main_size"];
@@ -181,7 +192,9 @@ const SCHEMA_2_KEYS = [
   "modal.insert_editing",
   "bookmarks",
   "theme.name",
+  "theme.appearance",
   "private",
+  "mcp",
 ];
 /** `[bookmarks]` (docs/specs/bookmarks.md, decision 2). */
 const BOOKMARKS_KEYS = ["root"];
@@ -190,6 +203,27 @@ export const PRIVATE_PLACEMENTS = Object.freeze(
   /** @type {PrivatePlacement[]} */ (["swap", "window"]),
 );
 const PRIVATE_KEYS = ["placement"];
+/** `[mcp]` (docs/specs/vimma-mcp.md, decision 26) and its bounds. */
+const MCP_KEYS = [
+  "enabled",
+  "workspace",
+  "ask_timeout",
+  "grant_minutes",
+  "grant_max_minutes",
+  "max_read_chars",
+  "notify",
+  "download_dir",
+  "download_max_mb",
+];
+export const MCP_BOUNDS = Object.freeze({
+  askTimeout: Object.freeze({ min: 10, max: 300 }),
+  grantMaxMinutes: Object.freeze({ min: 1, max: 1440 }),
+  maxReadChars: Object.freeze({ min: 1000, max: 500000 }),
+  downloadMaxMb: Object.freeze({ min: 1, max: 4096 }),
+});
+
+/** The private workspace's name (privatews.mjs): never the agent workspace's. */
+const PRIVATE_WORKSPACE_NAME = "private";
 const NEEDS_SCHEMA_2 = "is new in schema 2: put schema = 2 at the top of the file";
 const LABEL = "[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?";
 const DOMAIN = new RegExp(`^(?=.{1,253}$)${LABEL}(?:\\.${LABEL})*\\.?$`, "i");
@@ -469,6 +503,8 @@ function validate(raw, declared) {
     }
   }
 
+  if (declared >= 2 && isTable(raw.mcp)) validateMcp(raw.mcp, { fail, typeError, unknownKey });
+
   if (declared >= 2 && isTable(raw.sites)) {
     /** @type {Map<string, string>} */
     const seen = new Map();
@@ -511,6 +547,13 @@ function validate(raw, declared) {
           const names = THEME_NAMES.map((n) => `"${n}"`).join(" or ");
           fail(path, `must be ${names}`, closest(v, THEME_NAMES));
         }
+      } else if (key === "appearance") {
+        // docs/specs/theme-appearance.md B1: left out, `:theme` (a pref) decides.
+        if (gated(path)) continue;
+        if (typeof v !== "string") typeError(path, v, "a string");
+        else if (!APPEARANCES.includes(/** @type {any} */ (v))) {
+          fail(path, `must be "system", "dark" or "light"`, closest(v, [...APPEARANCES]));
+        }
       } else if (key === "font") {
         if (typeof v !== "string") typeError(path, v, "a string");
         else if (v.length < 1 || v.length > MAX_FONT)
@@ -536,6 +579,101 @@ function validate(raw, declared) {
     }
   }
   return problems;
+}
+
+/**
+ * `[mcp]` (vimma-mcp decision 26): every value bounded, `grant_minutes` at most the
+ * `grant_max_minutes` in force, `workspace` a workspace name that is not the private one's.
+ * @param {Record<string, unknown>} mcp
+ * @param {{ fail: (path: Path, message: string, suggestion?: string) => void,
+ *   typeError: (path: Path, v: unknown, expected: string) => void,
+ *   unknownKey: (path: Path, key: string, known: readonly string[]) => void }} report
+ */
+function validateMcp(mcp, { fail, typeError, unknownKey }) {
+  /** @param {Path} path @param {unknown} v @param {number} min @param {number} max */
+  const integer = (path, v, min, max, unit = "") => {
+    if (typeof v !== "bigint") typeError(path, v, "an integer");
+    else if (v < BigInt(min) || v > BigInt(max)) {
+      fail(path, `must be an integer between ${min} and ${max}${unit}`);
+    } else return true;
+    return false;
+  };
+  const max = mcp.grant_max_minutes;
+  const { grantMaxMinutes: g } = MCP_BOUNDS;
+  const maxValid = typeof max === "bigint" && max >= BigInt(g.min) && max <= BigInt(g.max);
+  const grantMax = maxValid ? Number(max) : DEFAULT_CONFIG.mcp?.grant_max_minutes;
+  for (const [key, v] of Object.entries(mcp)) {
+    const path = ["mcp", key];
+    if (key === "enabled" || key === "notify") {
+      if (typeof v !== "boolean") typeError(path, v, "a boolean");
+    } else if (key === "workspace") {
+      if (typeof v !== "string") typeError(path, v, "a string");
+      else if ([...v].length < 1 || [...v].length > MAX_WORKSPACE_NAME) {
+        fail(path, `must be 1 to ${MAX_WORKSPACE_NAME} characters`);
+      } else if (hasControl(v)) fail(path, "must not contain control characters");
+      else if (v === PRIVATE_WORKSPACE_NAME) {
+        fail(path, `must not be "${PRIVATE_WORKSPACE_NAME}", the private workspace's name`);
+      }
+    } else if (key === "ask_timeout") {
+      integer(path, v, MCP_BOUNDS.askTimeout.min, MCP_BOUNDS.askTimeout.max, " (seconds)");
+    } else if (key === "grant_max_minutes") {
+      integer(path, v, g.min, g.max, " (minutes)");
+    } else if (key === "grant_minutes") {
+      if (typeof v !== "bigint") typeError(path, v, "an integer");
+      else if (v < 1n || (grantMax !== undefined && v > BigInt(grantMax))) {
+        fail(path, `must be an integer between 1 and grant_max_minutes (${grantMax})`);
+      }
+    } else if (key === "max_read_chars") {
+      integer(path, v, MCP_BOUNDS.maxReadChars.min, MCP_BOUNDS.maxReadChars.max);
+    } else if (key === "download_max_mb") {
+      const { min, max: top } = MCP_BOUNDS.downloadMaxMb;
+      integer(path, v, min, top, " (MB)");
+    } else if (key === "download_dir") {
+      const problem = downloadDirProblem(v);
+      if (problem === "type") typeError(path, v, "a string");
+      else if (problem) fail(path, problem);
+    } else unknownKey(path, key, MCP_KEYS);
+  }
+}
+
+/**
+ * Why `[mcp] download_dir` is not a quarantine folder (decision 31 b), or null: `~/…` or an
+ * absolute path, never home, `/` or the Downloads folder itself. The browser checks the folder
+ * Firefox downloads to as well, when it uses it.
+ * @param {unknown} v
+ * @returns {string | null} `"type"` for a value that is not a string
+ */
+function downloadDirProblem(v) {
+  if (typeof v !== "string") return "type";
+  if (hasControl(v)) return "must not contain control characters";
+  if (v.startsWith("$")) return "must not start with $: write ~/ for your home folder";
+  if (!(v === "~" || v.startsWith("~/") || v.startsWith("/"))) return "must start with ~/ or /";
+  if (v.split("/").includes("..")) return "must not contain ..";
+  // `~` stands for a home folder no real path can be: the checks see `~/…` as under home.
+  const HOME = "/~";
+  return quarantineProblem(resolveDownloadDir(v, HOME), HOME);
+}
+
+/**
+ * `[mcp]` with the defaults filled in (camelCase, as ResolvedConfig keeps it).
+ * @param {UserConfig["mcp"]} mcp  valid
+ * @returns {McpConfig}
+ */
+function resolveMcp(mcp) {
+  const d = /** @type {Required<Omit<NonNullable<UserConfig["mcp"]>, "enabled">>} */ (
+    DEFAULT_CONFIG.mcp
+  );
+  return {
+    ...(mcp?.enabled === undefined ? {} : { enabled: mcp.enabled }),
+    workspace: mcp?.workspace ?? d.workspace,
+    askTimeout: mcp?.ask_timeout ?? d.ask_timeout,
+    grantMinutes: mcp?.grant_minutes ?? d.grant_minutes,
+    grantMaxMinutes: mcp?.grant_max_minutes ?? d.grant_max_minutes,
+    maxReadChars: mcp?.max_read_chars ?? d.max_read_chars,
+    notify: mcp?.notify ?? d.notify,
+    downloadDir: mcp?.download_dir ?? d.download_dir,
+    downloadMaxMb: mcp?.download_max_mb ?? d.download_max_mb,
+  };
 }
 
 /**
@@ -602,6 +740,8 @@ export function mergeWithDefaults(user, workspaceOrder, siteOrder) {
     theme: {
       source: theme.source ?? defTheme.source,
       name: theme.name ?? defTheme.name,
+      // Only when the file sets it: config.toml then wins over `:theme` (theme-appearance B4).
+      ...(theme.appearance === undefined ? {} : { appearance: theme.appearance }),
       font: theme.font ?? defTheme.font,
       colors,
     },
@@ -620,6 +760,7 @@ export function mergeWithDefaults(user, workspaceOrder, siteOrder) {
     insertEditing: /** @type {boolean | undefined} */ (user.modal?.insert_editing) ?? true,
     bookmarks: { root: user.bookmarks?.root ?? "workspace" },
     private: { placement: user.private?.placement ?? "swap" },
+    mcp: resolveMcp(user.mcp),
   };
 }
 

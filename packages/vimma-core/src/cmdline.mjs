@@ -113,6 +113,8 @@ export const COMMANDS = Object.freeze([
   // m5-config-load: with a path, that file replaces the config in force (all or nothing).
   cmd("source", "optional", "config.reload", "Reload config (or load the given file)"),
   cmd("config", "none", "config.edit", "Open config.toml in a tab (created if missing)"),
+  // docs/specs/theme-appearance.md: without a word, the other of dark and light.
+  cmd("theme", "optional", "theme.appearance", "Built-in theme: dark, light or system (Tab)"),
   // about:vimma (m5-about-vimma): a fixed URL for tab.new, so no new action or host runner.
   cmd("about", "none", "tab.new", "Open about:vimma (diagnostics)", {
     aliases: ["vimma"],
@@ -124,6 +126,20 @@ export const COMMANDS = Object.freeze([
   // docs/specs/addon-manager.md. Without a name, :addon asks on the command line.
   cmd("addons", "none", "addons.picker", "Add-on picker"),
   cmd("addon", "optional", "addons.popup", "Open an add-on's popup (Tab completes names)"),
+  // docs/specs/vimma-mcp.md: local AI agents and the agent workspace (on, off, revoke, forget).
+  cmd(
+    "mcp",
+    "optional",
+    "mcp.command",
+    "Agents (MCP): on, off, revoke, forget; without: the status",
+  ),
+  // docs/specs/vimma-mcp.md decision 29 D: full control (vimma.control.enabled) for a while.
+  cmd(
+    "control",
+    "optional",
+    "control.command",
+    "Full control: on <minutes>, off; without: the status",
+  ),
 ]);
 
 /**
@@ -307,6 +323,8 @@ const ARGUMENT_KINDS = Object.freeze({
   addon: { names: "addon", kind: "add-on" },
   layout: { names: "layout", kind: "layout", fixed: LAYOUTS },
   private: { names: "private", kind: "private workspace", fixed: ["close"] },
+  // The two a first-time user wants first, then back to following the system.
+  theme: { names: "theme", kind: "appearance", fixed: ["dark", "light", "system"] },
   workspace: { names: "workspace", kind: "workspace" },
   wsdelete: { names: "workspace", kind: "workspace" },
   wsmove: { names: "workspace", kind: "workspace" },

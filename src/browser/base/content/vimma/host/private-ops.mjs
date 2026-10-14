@@ -16,11 +16,13 @@ import {
   cycleFromPrivate,
   movePrivateQuestion,
   privateItem,
+  privateNeighbours,
   privateReturn,
   privateToggle,
 } from "../core/privatews.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
-import { PrivateSwap } from "./private-swap.mjs";
+import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
+import { PrivateSwap, startedUp } from "./private-swap.mjs";
 import { workspacePickerItems } from "./workspace-ops.mjs";
 
 /** @import { WorkspaceItem } from "../core/picker.mjs" */
@@ -231,7 +233,11 @@ export function togglePrivate(win) {
 export function cycleOutOfPrivate(dir) {
   const win = normalWindow();
   if (!win) return NO_NORMAL;
-  const order = WindowWorkspaces.get(win)?.model?.workspaces.map((w) => w.id) ?? [];
+  // The agent workspace is never a cycle's target (docs/specs/vimma-mcp.md, decision 9).
+  const agent = WorkspaceStore.agent?.id;
+  const order = (WindowWorkspaces.get(win)?.model?.workspaces ?? [])
+    .map((w) => w.id)
+    .filter((id) => id !== agent);
   return showNormal(win, cycleFromPrivate(order, dir));
 }
 
@@ -375,7 +381,7 @@ async function moveIntoPrivate(win, tab) {
       : page;
   const [existing] = privateWindows();
   const priv = /** @type {any} */ (existing ?? openPrivate(win));
-  if (!existing) await priv.delayedStartupPromise;
+  if (!existing) await startedUp(priv);
   if (priv.closed) return "the private workspace closed meanwhile";
   const fresh = priv.gBrowser.addTab(url, { triggeringPrincipal: principal, skipAnimation: true });
   priv.gBrowser.selectedTab = fresh;
@@ -407,9 +413,10 @@ async function moveIntoPrivate(win, tab) {
 export function privatePanel(model) {
   const [w] = model.workspaces;
   const workspace = { .../** @type {any} */ (w), id: PRIVATE_WORKSPACE_ID, name: PRIVATE_NAME };
-  const win = normalWindow();
-  const names = (win && WindowWorkspaces.get(win)?.model?.workspaces.map((x) => x.name)) ?? [];
-  const neighbours = /** @type {const} */ ([names.at(-1) ?? null, names[0] ?? null]);
+  const normal = normalWindow();
+  const ww = normal ? WindowWorkspaces.get(normal) : undefined;
+  // Past the agent workspace, as cycleOutOfPrivate goes (docs/specs/vimma-mcp.md, decision 9).
+  const neighbours = privateNeighbours(ww?.model?.workspaces ?? [], ww?.cycleSkip);
   return {
     model: { ...model, workspaces: [workspace], active: PRIVATE_WORKSPACE_ID },
     options: { private: true, neighbours },

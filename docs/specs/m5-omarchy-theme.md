@@ -188,6 +188,13 @@ Red: Vitest 1 (no `busctl call`), `start.test.mjs` 1, the mochitest crashed (no 
 Vitest 6/6 and 22/22, the mochitest 30/30. Mutation: without `preventDefault` the mochitest failed
 (`and nothing else handles the line`, `still no window - 2 == 1`); reverted.
 
+## Only where Omarchy is (2026-10-13)
+
+[theme-appearance](theme-appearance.md) A: Omarchy is looked for once per process
+(`~/.local/share/omarchy` or `~/.local/state/omarchy`, or a user-set `vimma.theme.omarchyPath`).
+Without it there is no poll timer, no `stat` and no hook check; the timer also stops while the
+source is forced built in. `~` in the path resolves against the HOME the detection used.
+
 ## Limits
 
 - Without the hook (no Omarchy, opted out or deleted), up to 2 s latency per theme change

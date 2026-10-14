@@ -107,6 +107,18 @@ export default [
     languageOptions: { globals: { Cu: "readonly" } },
   },
   {
+    // Agent pages launch no app: the component registrar wraps the external-protocol chooser
+    // (docs/specs/vimma-mcp.md, review of #177 L3).
+    files: ["src/**/vimma/ctl/AgentPages.sys.mjs"],
+    languageOptions: { globals: { Components: "readonly" } },
+  },
+  {
+    // Agent downloads (docs/specs/vimma-mcp.md decision 31): the registrar wraps the helper-app
+    // dialog, and a download's browsing context says which tab and container it came from.
+    files: ["src/**/vimma/ctl/AgentDownloads.sys.mjs"],
+    languageOptions: { globals: { BrowsingContext: "readonly", Components: "readonly" } },
+  },
+  {
     // The -vimma-from command-line handler: the component registrar (workspace-routing).
     files: ["src/**/vimma/workspaces/WorkspaceRouter.sys.mjs"],
     languageOptions: { globals: { Components: "readonly" } },
@@ -114,6 +126,21 @@ export default [
   {
     files: ["src/**/vimma/**/*.js"],
     languageOptions: { sourceType: "script" },
+  },
+  {
+    // The site suite's probes: functions sent over the DevTools protocol and run in a page
+    // (content*) or in the browser window (chrome*), never in Node (docs/specs/site-compat.md).
+    files: ["tools/sites/probes.mjs"],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ChromeUtils: "readonly",
+        Services: "readonly",
+        Cc: "readonly",
+        Ci: "readonly",
+        gBrowser: "readonly",
+      },
+    },
   },
   {
     // The promo video's fixture pages' script: a web page (a module), in Firefox.

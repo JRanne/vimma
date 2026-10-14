@@ -185,7 +185,8 @@ are sent.
   `{ "axis": "x" | "y", "ratios": [0.5, 0.5], "children": [<node>, …] }` (`x` left to right,
   `y` top to bottom, one ratio per child) or a leaf `{ "tab": "<tab id>", "index": 1 }`: the
   tab's id as in `tabs` and its place there (`-1` if it is not visible). Read-only, like the
-  rest of `state`.
+  rest of `state`. Since side-panel-unsplit (decision 28) it also has `"hidden": true | false`:
+  true while the split is kept as a hidden view and another tab shows alone.
 
 **`open`.** `url` is an absolute URL whose scheme is `http`, `https`, `file` or `about`; anything
 else (notably `javascript:` and `data:`) is `invalid-args`. At most 65536 characters. `where`
@@ -203,6 +204,63 @@ the poll reads anyway, and changes only the theme's token stylesheet.
 
 Adding a command within v1: a v1 client never sends it unasked, and an older server answers it
 `unknown-command` (exit 1), which is the right message. No existing message changes shape.
+
+## Protocol, version 2 (roles; 2026-10-13)
+
+Spec: [vimma-mcp](vimma-mcp.md) (decisions 2-4), ADR-019. Fixtures:
+`tests/contract/control/v2/` (v1's are unchanged). The server speaks 1 and 2.
+
+- **Hello.** `{ "type": "hello", "protocol": 2, "nonce": "…", "role": "agent" | "full" }`. The
+  role is required in protocol 2 and not allowed in protocol 1, whose hello is the `full` role.
+  The challenge and the welcome carry the hello's protocol; a protocol 2 welcome also repeats the
+  `role`. Any other protocol is `unsupported-protocol` ("this server speaks protocols 1 and 2").
+- **Roles and switches.** `full` runs protocol 1's commands and is served while
+  `vimma.control.enabled` is on. `agent` runs only the agent commands below and is served while
+  MCP is on (`vimma.mcp.enabled`, `[mcp] enabled`). Either switch starts the server; it stops
+  when both are off. A hello for a role that is off is answered `role-off` (its message names
+  the switch) and closed, and turning a switch off closes that role's connections. Each role gets
+  `unknown-command` for the other's commands.
+- **Discovery file.** `protocol` is 2, and `roles` lists the roles served, in the order
+  `["agent", "full"]`: `{ "protocol": 2, "port": …, "token": "…", "pid": …, "roles": ["agent"] }`.
+  A v1 client reads past `roles` and speaks protocol 1, which works while `full` is served.
+  `vimma-ctl` speaks protocol 2 as `full` when the file says 2, and says the control socket is
+  off when `roles` lacks `full`, without connecting.
+- **Full control while MCP is on** ([vimma-mcp](vimma-mcp.md) decision 29). After a `full`
+  connection's auth and before its welcome, Vimma asks the user; a refusal is the error `denied`
+  (with its `reason`) in place of the welcome. The auth may carry `"code"`: 4 characters of 2-9
+  and A-Z without I and O, which `vimma-ctl` prints on stderr and the question shows, so the
+  user answers for the client they ran. `vimma-ctl` sends it, and waits up to 310 s for the
+  welcome, only when the discovery file lists `agent`.
+- **New error codes.** `role-off` (above) and `denied`: an agent request the user did not allow.
+  A `denied` error carries `reason`: `user`, `timeout`, `busy`, `muted`, `changed` or
+  `cancelled`; no other error has a `reason`.
+- **Agent commands** (role `agent` only; `agent-hello` must come first, and only once):
+
+  | Command       | `args`                                                     | `result`                                                                         |
+  | ------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------- |
+  | `agent-hello` | `{ "client": { "name", "version"? }, "via"? }`             | `{ "workspace": "agent", "exists": true }`                                       |
+  | `agent-tabs`  | `{}`                                                       | `{ "tabs": [{ "id", "url", "title", "loading" }] }`                              |
+  | `agent-read`  | `{ "tab", "format"?: "markdown" \| "text", "max_chars"? }` | `{ "url", "title", "text", "truncated", "selection", "language", "background" }` |
+  | `agent-open`  | `{ "url", "tab"? }`                                        | `{ "tab": "<id>" }`                                                              |
+  | `agent-close` | `{ "tab" }`                                                | `{ "closed": true }`                                                             |
+  | `agent-ping`  | `{}`                                                       | `{}`                                                                             |
+
+  `name` and `version` are 1 to 64 printable characters and `via` 1 to 32 (no control
+  characters, no bidirectional marks or overrides). `tab` is a tab id as `state` gives it
+  (digits). `url` is http or https only, at most 65536 characters. `max_chars` is 1 to 500000,
+  and the server caps it at `[mcp] max_read_chars`. `text` is the page text between
+  `<untrusted-web-content>` and `</untrusted-web-content>` lines; a delimiter inside the page
+  text is broken with a zero-width space. `selection` and `language` may be `null`.
+  `background` says the tab was not in front while it was read.
+
+- **Asking.** Every agent command but `agent-hello` and `agent-ping` waits for the user's answer
+  in Vimma, or runs under a grant of that connection and tool. An agent connection's requests do
+  not wait for each other: each is answered by `id` when its answer comes, so responses may come
+  out of order. A connection with requests waiting is not closed by the 60 s idle limit. Limits: at most 4
+  agent connections (of the server's 8), at most 4 requests of one agent connection waiting or
+  running at once, and at most 10 `agent-open`s of one connection a minute; beyond each, `busy`.
+  Strings in agent replies are well-formed Unicode (a lone surrogate becomes U+FFFD), and the
+  read's `selection` is inside the untrusted-content delimiters too.
 
 ## Security
 

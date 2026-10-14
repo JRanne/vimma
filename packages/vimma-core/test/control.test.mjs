@@ -171,9 +171,9 @@ describe("validateMessage: envelopes", () => {
   });
 
   test.each(ERROR_CODES)("error code %s is accepted", (code) => {
-    expect(errorsOf({ type: "response", id: 1, ok: false, error: { code, message: "m" } })).toEqual(
-      [],
-    );
+    // A protocol 2 denial also says why (control-v2.test.mjs).
+    const error = { code, message: "m", ...(code === "denied" ? { reason: "user" } : {}) };
+    expect(errorsOf({ type: "response", id: 1, ok: false, error })).toEqual([]);
   });
 
   test("error must be an object without extra fields", () => {

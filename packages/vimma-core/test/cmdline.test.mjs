@@ -75,6 +75,15 @@ describe("parseCommandLine: plan §2 commands", () => {
     [':so "my config.toml"', run("source", "config.reload", { text: "my config.toml" })],
     [":config", run("config", "config.edit")],
     [":edit_config", run("edit_config", "config.edit")],
+    // docs/specs/theme-appearance.md B3: bare :theme switches dark <-> light in the host.
+    [":theme", run("theme", "theme.appearance")],
+    [":theme light", run("theme", "theme.appearance", { text: "light" })],
+    [":theme_appearance", run("theme_appearance", "theme.appearance")],
+    // docs/specs/vimma-mcp.md decision 29 D: full control for a while.
+    [":control", run("control", "control.command")],
+    [":control on 15", run("control", "control.command", { text: "on 15" })],
+    [":control off", run("control", "control.command", { text: "off" })],
+    [":agent_prompt", run("agent_prompt", "mcp.answer")],
     [":about", run("about", "tab.new", { text: "about:vimma" })],
     [":vimma", run("about", "tab.new", { text: "about:vimma" })],
     [":bug", run("bug", "tab.new", { text: "about:vimma#bug" })],
@@ -258,6 +267,13 @@ describe("completeCommandLine", () => {
     }
     const vs = completeCommandLine(":vs").candidates.find((c) => c.value === "vs");
     expect(vs.description).toContain("vsplit");
+  });
+
+  test(":theme completes dark, light and system", () => {
+    expect(values(":theme ")).toEqual(["theme dark", "theme light", "theme system"]);
+    expect(values(":theme li")).toEqual(["theme light"]);
+    const c = completeCommandLine(":theme sy").candidates[0];
+    expect(c).toMatchObject({ label: "system", kind: "argument", description: "appearance" });
   });
 
   test("no match gives no candidates", () => {

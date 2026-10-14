@@ -10,6 +10,12 @@
   );
   MozillaServices.init();
 
+  // Video keeps the screen awake on Wayland (wake-lock): set before any page plays.
+  const { WakeLock } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/services/WakeLock.sys.mjs",
+  );
+  WakeLock.init();
+
   // The start page as the new-tab page, before this window opens its first tab (start-page).
   const { StartPage } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/start/StartPage.sys.mjs",
@@ -80,6 +86,18 @@
     "chrome://browser/content/vimma/ctl/VimmaControl.sys.mjs",
   );
   VimmaControl.init(window);
+
+  // docs/specs/vimma-mcp.md decision 29 D: `:control on <minutes>` ends, also across a restart.
+  const { ControlHost } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/host/control-ops.mjs",
+  );
+  ControlHost.init();
+
+  // Decision 30: the agent workspace's pages ask for no permission and open no pop-up.
+  const { AgentPages } = ChromeUtils.importESModule(
+    "chrome://browser/content/vimma/ctl/AgentPages.sys.mjs",
+  );
+  AgentPages.init();
 
   // The private workspace in place of this window on Hyprland (spec private-swap): learns the
   // window's address while `[private] placement = "swap"` applies. Nothing without Hyprland.

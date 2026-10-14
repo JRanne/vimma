@@ -1,0 +1,12 @@
+{
+  "description": "A tab id is a browserId: digits",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 5,
+    "command": "agent-close",
+    "args": {
+      "tab": "../12"
+    }
+  }
+}

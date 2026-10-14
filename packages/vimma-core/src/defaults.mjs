@@ -30,6 +30,9 @@ import { DEFAULT_THEME_NAME } from "./theme.mjs";
  *   (docs/specs/bookmarks.md)
  * @property {{ placement?: "swap" | "window" }} [private]  where the private workspace is shown
  *   (docs/specs/private-swap.md)
+ * @property {{ enabled?: boolean, workspace?: string, ask_timeout?: number,
+ *   grant_minutes?: number, grant_max_minutes?: number, max_read_chars?: number,
+ *   notify?: boolean, download_dir?: string, download_max_mb?: number }} [mcp]  local AI agents and the agent workspace (docs/specs/vimma-mcp.md)
  */
 
 /**
@@ -44,22 +47,35 @@ import { DEFAULT_THEME_NAME } from "./theme.mjs";
  * @typedef {object} ThemeInput
  * @property {"omarchy" | "file"} [source]
  * @property {string} [name]   a built-in palette: "vimma" or "tokyo-night" (schema 2)
+ * @property {"system" | "dark" | "light"} [appearance]  the built-in palette's variant (schema 2)
  * @property {string} [font]
  * @property {Record<string, string>} [colors]
  */
 
-/** Herdr's default keymap (https://herdr.dev/docs/keyboard/), plus vimma's own global chords. */
+/**
+ * Herdr's default keymap (https://herdr.dev/docs/keyboard/), plus vimma's own global chords and
+ * Firefox's own keys as Vimma bindings (docs/specs/firefox-keys.md: the inventory's a and b rows
+ * in FIREFOX_SHORTCUTS, which a test keeps in step with this table).
+ */
 const keys = {
   prefix: "ctrl+b",
   show_keybinds: ["prefix+?"],
-  new_tab: ["prefix+c"],
-  next_tab: ["prefix+n"],
-  previous_tab: ["prefix+p"],
+  new_tab: ["prefix+c", "ctrl+t"],
+  next_tab: ["prefix+n", "ctrl+tab", "ctrl+pagedown"],
+  previous_tab: ["prefix+p", "ctrl+shift+tab", "ctrl+pageup"],
   ...Object.fromEntries(
-    Array.from({ length: 9 }, (_, i) => [`select_tab_${i + 1}`, [`prefix+${i + 1}`]]),
+    Array.from({ length: 9 }, (_, i) => [
+      `select_tab_${i + 1}`,
+      // Firefox's alt+1..8 (Linux); its alt+9 is the last tab.
+      i < 8 ? [`prefix+${i + 1}`, `alt+${i + 1}`] : [`prefix+${i + 1}`],
+    ]),
   ),
   rename_tab: ["prefix+shift+t"],
-  close_tab: ["prefix+shift+x"],
+  close_tab: ["prefix+shift+x", "ctrl+f4"],
+  select_last_tab: ["alt+9"],
+  move_tab_left: ["ctrl+shift+pageup"],
+  move_tab_right: ["ctrl+shift+pagedown"],
+  restore_tab: ["ctrl+shift+t"],
   split_vertical: ["prefix+v"],
   split_horizontal: ["prefix+minus"],
   focus_pane_left: ["prefix+h"],
@@ -89,8 +105,48 @@ const keys = {
   private_workspace: ["prefix+shift+p", "ctrl+shift+p"],
   goto_picker: ["prefix+g"],
   toggle_sidebar: ["prefix+b"],
+  history_back: ["alt+left"],
+  history_forward: ["alt+right"],
+  reload: ["f5", "ctrl+r"],
+  focus_urlbar: ["ctrl+l", "alt+d"],
+  find_next: ["ctrl+g", "f3"],
+  find_previous: ["ctrl+shift+g", "shift+f3"],
+  new_window: ["ctrl+n"],
+  close_window: ["ctrl+shift+w"],
+  restore_window: ["ctrl+shift+n"],
+  quit: ["ctrl+q"],
+  reload_hard: ["ctrl+f5", "ctrl+shift+r"],
+  go_home: ["alt+home"],
+  page_zoom_in: ["ctrl+plus", "ctrl+="],
+  page_zoom_out: ["ctrl+minus", "ctrl+_"],
+  page_zoom_reset: ["ctrl+0"],
+  toggle_fullscreen: ["f11"],
+  save_page: ["ctrl+s"],
+  print_page: ["ctrl+p"],
+  downloads: ["ctrl+shift+y"],
+  addons_manager: ["ctrl+shift+a"],
+  history_library: ["ctrl+shift+h"],
+  bookmarks_library: ["ctrl+shift+o"],
+  mute_tab: ["ctrl+m"],
+  picture_in_picture: ["ctrl+}"],
+  reader_view: ["ctrl+alt+r"],
+  screenshot: ["ctrl+shift+s"],
+  clear_history: ["ctrl+shift+delete"],
+  devtools: ["ctrl+shift+i", "f12"],
+  browser_toolbox: ["ctrl+alt+shift+i"],
+  browser_console: ["ctrl+shift+j"],
+  responsive_design: ["ctrl+shift+m"],
+  devtools_inspector: ["ctrl+shift+c"],
+  devtools_console: ["ctrl+shift+k"],
+  devtools_debugger: ["ctrl+shift+z"],
+  devtools_network: ["ctrl+shift+e"],
+  devtools_style_editor: ["shift+f7"],
+  devtools_performance: ["shift+f5"],
+  devtools_storage: ["shift+f9"],
+  devtools_accessibility: ["shift+f12"],
   toggle_bookmarks: ["prefix+shift+b"],
   add_bookmark: ["prefix+a"],
+  agent_prompt: ["prefix+shift+a"],
   copy_mode: ["prefix+["],
   addon_picker: ["prefix+e"],
 };
@@ -118,6 +174,12 @@ const modal = {
     L: "history.forward",
     "<C-o>": "history.back",
     "<C-i>": "history.forward",
+    // Firefox's Unix back / forward; in a text field they do nothing (firefox-keys Q2).
+    "<C-[>": "history.back",
+    "<C-]>": "history.forward",
+    // Firefox's stop, after the page had Esc (firefox-keys decision 7): Esc still leaves insert
+    // mode, closes dialogs and cancels a pending key first.
+    "<Esc>": "page.stop",
     r: "page.reload",
     f: "hint.follow",
     F: "hint.follow_new_tab",
@@ -213,8 +275,6 @@ const modal = {
     // Marks for Enter to show together (m4-side-panel-multiselect), ranger's keys.
     "<Space>": "panel.mark",
     V: "panel.visual",
-    // The panel takes every key: Firefox's ctrl+shift+t, as an action of its own.
-    "<C-S-t>": "tab.restore",
     // Closes the panel, then focuses the address bar (as I does in normal mode).
     I: "urlbar.focus",
     // The bookmarks panel (docs/specs/bookmarks.md), neo-tree's keys; nothing in the tabs panel.
@@ -278,6 +338,17 @@ export const DEFAULT_CONFIG = Object.freeze({
   firefox: { disable: OVERLAP_CHORDS, enable: [] },
   bookmarks: { root: /** @type {const} */ ("workspace") },
   private: { placement: /** @type {const} */ ("swap") },
+  // docs/specs/vimma-mcp.md, decision 26. No `enabled`: left out, `:mcp on|off` decides.
+  mcp: {
+    workspace: "agent",
+    ask_timeout: 50,
+    grant_minutes: 10,
+    grant_max_minutes: 480,
+    max_read_chars: 200000,
+    notify: true,
+    download_dir: "~/Downloads/vimma-agent",
+    download_max_mb: 200,
+  },
 });
 
 /** @param {string} s */
@@ -325,8 +396,9 @@ export function formatDefaultsToml() {
     "[unbind]",
     "normal = []",
     "",
-    "# Firefox's own shortcuts that are off, so they never fire on Vimma's keys. disable = \"all\"",
-    "# turns off every Firefox shortcut with ctrl, alt or meta but ctrl+q; enable keeps chords on.",
+    "# Firefox's own shortcuts that are off. One on a key Vimma binds is always off (ctrl+b ? lists",
+    '# them); disable = "all" turns off every other one with ctrl, alt or meta but ctrl+q, and',
+    "# enable keeps chords on.",
     "[firefox]",
     `disable = [${OVERLAP_CHORDS.map(tomlString).join(", ")}]`,
     "enable = []",
@@ -336,12 +408,15 @@ export function formatDefaultsToml() {
     "[workspaces]",
     '# work = { color = "blue", icon = "briefcase", home = "https://intranet.example" }',
     "",
-    '# "omarchy" follows the current Omarchy theme, and uses the built-in palette `name` without',
-    '# one; "file" always uses `name`: "vimma" (vimma.dev\'s colours, light or dark as the browser',
-    '# is) or "tokyo-night" (dark).',
+    '# The built-in palette `name`: "vimma" (vimma.dev\'s colours, dark or light) or "tokyo-night"',
+    '# (dark). "omarchy" follows your Omarchy theme where Omarchy is installed and uses `name`',
+    '# elsewhere; "file" always uses `name`.',
     "[theme]",
     `source = ${tomlString(theme.source)}`,
     `name = ${tomlString(theme.name)}`,
+    '# The built-in palette "dark", "light", or "system" (as the system or Firefox is, live).',
+    "# Left out, :theme dark|light|system sets it and remembers it; set here, it always wins.",
+    '# appearance = "system"',
     `font = ${tomlString(theme.font)}`,
     "",
     "# Overrides on top of the palette, with the keys of Omarchy's colors.toml.",
@@ -368,6 +443,8 @@ export function formatDefaultsToml() {
     "[private]",
     `placement = ${tomlString(DEFAULT_CONFIG.private?.placement ?? "swap")}`,
     "",
+    ...mcpLines(),
+    "",
     "# Per-site insert mode: auto (detect text fields), never (keys stay vimma's), always.",
     "# A host also covers its subdomains. None by default.",
     '# [sites."docs.google.com"]',
@@ -381,6 +458,29 @@ export function formatDefaultsToml() {
     "",
   );
   return lines.join("\n");
+}
+
+/** `[mcp]` in defaults.toml (docs/specs/vimma-mcp.md, decision 26). */
+function mcpLines() {
+  const m = /** @type {Required<NonNullable<UserConfig["mcp"]>>} */ (DEFAULT_CONFIG.mcp);
+  return [
+    "# Local AI agents (Claude Code, Codex, opencode, Copilot) reach only the agent workspace, and",
+    "# every request asks you first. Left out, :mcp on|off sets enabled and remembers it; set",
+    "# here, it always wins. ask_timeout: seconds a request waits for you (10 to 300); a bare `a`",
+    "# grants grant_minutes, a count before it up to grant_max_minutes (at most 1440).",
+    "[mcp]",
+    "# enabled = false",
+    `workspace = ${tomlString(m.workspace)}`,
+    `ask_timeout = ${m.ask_timeout}`,
+    `grant_minutes = ${m.grant_minutes}`,
+    `grant_max_minutes = ${m.grant_max_minutes}`,
+    `max_read_chars = ${m.max_read_chars}`,
+    `notify = ${m.notify}`,
+    "# Downloads from the agent workspace ask first, are saved only here (never your Downloads",
+    "# folder itself), never opened, and refused over download_max_mb (1 to 4096).",
+    `download_dir = ${tomlString(m.download_dir)}`,
+    `download_max_mb = ${m.download_max_mb}`,
+  ];
 }
 
 /** The lines of defaults.toml's header, which the template replaces. */

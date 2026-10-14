@@ -1,0 +1,10 @@
+{
+  "description": "List the agent workspace's tabs",
+  "kind": "request",
+  "message": {
+    "type": "request",
+    "id": 2,
+    "command": "agent-tabs",
+    "args": {}
+  }
+}

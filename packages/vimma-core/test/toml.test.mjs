@@ -142,6 +142,15 @@ describe("config paths", () => {
     expect(parsePath(text)).toEqual(segs);
   });
 
+  // Not formatPath's output, but parsePath must still end: an unclosed `[` used to loop until
+  // the array overflowed (issue #134).
+  test.each([
+    ["keys.c[mmand", ["keys", "c", "[mmand"]],
+    ['keys."abc', ["keys", '"abc']],
+  ])("parsePath(%j) ends on text formatPath does not write", (text, segs) => {
+    expect(parsePath(text)).toEqual(segs);
+  });
+
   test.each([
     [["keys", "new_tab", 1], "keys.new_tab[1]"],
     [["modal", "normal", "j"], "modal.normal.j"],

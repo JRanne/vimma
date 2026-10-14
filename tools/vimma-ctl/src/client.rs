@@ -7,7 +7,7 @@
 
 use crate::json::{self, Value};
 use crate::protocol::{
-    self, Command, CommandResult, Discovery, ErrorBody, MAX_LINE, PROTOCOL, Response,
+    self, Command, CommandResult, Discovery, ErrorBody, MAX_LINE, Response, Role,
 };
 use std::fmt;
 use std::io::{self, BufRead, BufReader, Write};
@@ -29,10 +29,17 @@ pub enum Error {
     Busy(ErrorBody),
     /// The server's welcome did not prove it knows the token: not Vimma (exit 4).
     Impostor(String),
+    /// The user said no to full control while MCP is on, or did not answer (exit 4;
+    /// docs/specs/vimma-mcp.md decision 29 C).
+    Denied(ErrorBody),
 }
 
 /// Longest allowed timeout; [`Client::connect`] clamps to it so the deadline cannot overflow.
 pub const MAX_TIMEOUT: Duration = Duration::from_secs(3600);
+
+/// How long the welcome may take while MCP is on: Vimma asks the user first, for at most
+/// `[mcp] ask_timeout` (300 s at most), and answers by then (docs/specs/vimma-mcp.md, 29 C).
+pub const ASK_WAIT: Duration = Duration::from_secs(310);
 
 impl Error {
     #[must_use]
@@ -40,7 +47,7 @@ impl Error {
         match self {
             Error::Server(_) => 1,
             Error::NotRunning(_) | Error::Busy(_) => 3,
-            Error::Auth(_) | Error::Impostor(_) => 4,
+            Error::Auth(_) | Error::Impostor(_) | Error::Denied(_) => 4,
             Error::Protocol(_) => 5,
         }
     }
@@ -52,6 +59,10 @@ impl fmt::Display for Error {
             Error::Server(e) => write!(f, "{}: {}", e.code, e.message),
             Error::NotRunning(message) | Error::Impostor(message) => f.write_str(message),
             Error::Auth(e) => write!(f, "authentication failed: {}: {}", e.code, e.message),
+            Error::Denied(e) => match &e.reason {
+                Some(reason) => write!(f, "full control refused: {} ({reason})", e.message),
+                None => write!(f, "full control refused: {}", e.message),
+            },
             Error::Protocol(message) => write!(f, "protocol error: {message}"),
             Error::Busy(e) => write!(
                 f,
@@ -81,6 +92,17 @@ impl Client {
     /// [`Error::NotRunning`] when nothing listens, [`Error::Auth`] when the token or protocol is
     /// refused, [`Error::Protocol`] on a malformed or late reply.
     pub fn connect(discovery: &Discovery, timeout: Duration) -> Result<Self, Error> {
+        // vimma-ctl's commands are the `full` role. A protocol 2 Vimma says which roles it
+        // serves: with only MCP on, the control socket's full side is off (vimma-mcp decision 3).
+        if !discovery.roles.contains(&Role::Full) {
+            return Err(Error::NotRunning(
+                "Vimma's control socket is off (only MCP is on); set the pref \
+                 vimma.control.enabled to true"
+                    .to_string(),
+            ));
+        }
+        // Speak the newest protocol both sides know: 2 (role full) when the file says 2.
+        let protocol = discovery.protocol.min(protocol::PROTOCOL);
         let timeout = timeout.min(MAX_TIMEOUT);
         let deadline = Instant::now()
             .checked_add(timeout)
@@ -103,12 +125,17 @@ impl Client {
             Error::Protocol(format!("cannot read random bytes for the handshake: {e}"))
         })?;
         // 1. hello: a fresh nonce and no token.
-        client.send(&protocol::hello(&nonce))?;
+        let hello = if protocol >= 2 {
+            protocol::hello_v2(&nonce, Role::Full)
+        } else {
+            protocol::hello(&nonce)
+        };
+        client.send(&hello)?;
         let reply = client.handshake_reply("challenge")?;
         let challenge = protocol::decode_challenge(&reply).map_err(protocol_error)?;
-        if challenge.protocol != PROTOCOL {
+        if challenge.protocol != protocol {
             return Err(Error::Protocol(format!(
-                "server speaks protocol {}, this vimma-ctl speaks {PROTOCOL}",
+                "server speaks protocol {}, this vimma-ctl speaks {protocol}",
                 challenge.protocol
             )));
         }
@@ -122,14 +149,42 @@ impl Client {
                 discovery.port
             )));
         }
-        // 3. auth: now the token; 4. welcome.
-        client.send(&protocol::auth(&discovery.token))?;
+        // 3. auth: now the token; 4. welcome. While MCP is on (the `agent` role is served), Vimma
+        // asks the user before it welcomes a full connection: wait for that answer, then give
+        // the command its own timeout.
+        let asks = protocol >= 2 && discovery.roles.contains(&Role::Agent);
+        if asks {
+            let code = random_code().map_err(|e| {
+                Error::Protocol(format!("cannot read random bytes for the code: {e}"))
+            })?;
+            let auth = protocol::auth_with_code(&discovery.token, &code);
+            auth_then_code(
+                || client.send(&auth),
+                || {
+                    eprintln!(
+                        "vimma-ctl: MCP is on: answer y in Vimma to let this vimma-ctl in (full \
+                         control); Vimma asks with code {code}: answer y only if it shows {code}"
+                    );
+                },
+            )?;
+            if let Some(later) = Instant::now().checked_add(ASK_WAIT) {
+                client.deadline = client.deadline.max(later);
+            }
+        } else {
+            client.send(&protocol::auth(&discovery.token))?;
+        }
         let reply = client.handshake_reply("welcome")?;
+        if asks {
+            if let Some(deadline) = Instant::now().checked_add(timeout) {
+                client.deadline = deadline;
+            }
+        }
         let welcome = protocol::decode_welcome(&reply).map_err(protocol_error)?;
-        if welcome.protocol != PROTOCOL {
+        if welcome.protocol != protocol || welcome.role != Role::Full {
             return Err(Error::Protocol(format!(
-                "server speaks protocol {}, this vimma-ctl speaks {PROTOCOL}",
-                welcome.protocol
+                "server speaks protocol {} as {}, this vimma-ctl speaks {protocol} as full",
+                welcome.protocol,
+                welcome.role.name()
             )));
         }
         Ok(client)
@@ -141,6 +196,11 @@ impl Client {
         if reply.get("type") == Some(&Value::String("response".into())) {
             return match protocol::decode_response(&reply).map_err(protocol_error)? {
                 Response::Err { error, .. } if error.code == "busy" => Err(Error::Busy(error)),
+                // The role asked for is off in Vimma: like a socket that is off (exit 3).
+                Response::Err { error, .. } if error.code == "role-off" => Err(Error::NotRunning(
+                    format!("{}: {}", error.code, error.message),
+                )),
+                Response::Err { error, .. } if error.code == "denied" => Err(Error::Denied(error)),
                 Response::Err { error, .. } => Err(Error::Auth(error)),
                 Response::Ok { .. } => Err(Error::Protocol(format!(
                     "expected {expected}, got a result"
@@ -251,12 +311,37 @@ impl Client {
     }
 }
 
+/// Send the auth that carries the full-control code, and only then show the user the code
+/// (review of #177): a process reading the terminal learns it too late to race its own auth with
+/// it in. A failed send shows nothing.
+fn auth_then_code(
+    send: impl FnOnce() -> Result<(), Error>,
+    say: impl FnOnce(),
+) -> Result<(), Error> {
+    send()?;
+    say();
+    Ok(())
+}
+
 /// 32 bytes from the OS CSPRNG as 64 lowercase hex chars.
 fn random_nonce() -> io::Result<String> {
     use std::io::Read;
     let mut bytes = [0u8; 32];
     std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
     Ok(crate::hmac::hex(&bytes))
+}
+
+/// Four characters of 2-9 and A-Z without I and O: 20 bits, enough to tell this vimma-ctl's
+/// question from one another client raced in, and easy to compare by eye.
+fn random_code() -> io::Result<String> {
+    use std::io::Read;
+    const ALPHABET: &[u8; 32] = b"23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+    let mut bytes = [0u8; 4];
+    std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
+    Ok(bytes
+        .iter()
+        .map(|b| char::from(ALPHABET[usize::from(b % 32)]))
+        .collect())
 }
 
 fn protocol_error(e: protocol::DecodeError) -> Error {
@@ -271,7 +356,30 @@ mod tests {
         ErrorBody {
             code: code.into(),
             message: "m".into(),
+            reason: None,
         }
+    }
+
+    // Review of #177 (follow-up): the code reaches the terminal only after the auth carrying it
+    // was sent, so a process reading the user's terminal has no window to race its own auth
+    // with the same code in; and a failed send prints no code.
+    #[test]
+    fn the_code_is_shown_only_after_its_auth_was_sent() {
+        let events = std::cell::RefCell::new(Vec::new());
+        auth_then_code(
+            || {
+                events.borrow_mut().push("auth");
+                Ok(())
+            },
+            || events.borrow_mut().push("code"),
+        )
+        .unwrap();
+        assert_eq!(*events.borrow(), ["auth", "code"]);
+
+        let shown = std::cell::Cell::new(false);
+        let failed = auth_then_code(|| Err(Error::Protocol("closed".into())), || shown.set(true));
+        assert!(failed.is_err());
+        assert!(!shown.get(), "no code without its auth");
     }
 
     #[test]
@@ -282,6 +390,7 @@ mod tests {
         assert_eq!(Error::Protocol("x".into()).exit_code(), 5);
         assert_eq!(Error::Busy(body("busy")).exit_code(), 3);
         assert_eq!(Error::Impostor("x".into()).exit_code(), 4);
+        assert_eq!(Error::Denied(body("denied")).exit_code(), 4);
     }
 
     #[test]
@@ -303,6 +412,7 @@ mod tests {
             port,
             token: "0".repeat(64),
             pid: 1,
+            roles: vec![Role::Full],
         };
         let result = Client::connect(&discovery, Duration::MAX);
         assert!(matches!(result, Err(Error::NotRunning(_))), "{result:?}");

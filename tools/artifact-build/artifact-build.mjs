@@ -9,9 +9,12 @@
  *   node tools/artifact-build/artifact-build.mjs
  * then `npm run mochitest -- --artifact tests/browser/`.
  *
- * It writes engine/mozconfig.artifact from engine/mozconfig, runs `mach build` with
- * MOZ_ARTIFACT_REVISION taken from engine/sourcestamp.txt (the tarball has no VCS history, so
- * mach cannot guess it), then adapts two things Mozilla's binaries compile in:
+ * It writes engine/mozconfig.artifact from engine/mozconfig and runs `mach build` on Mozilla's
+ * build of the revision in engine/sourcestamp.txt (the tarball has no VCS history, so mach cannot
+ * guess it): a release tarball passes MOZ_ARTIFACT_REVISION; a Beta tarball (the Beta canary,
+ * spec upstream-beta-canary) passes MOZ_ARTIFACT_TASK, the task this tool found in the
+ * mozilla-beta index, because mach's revision search never reaches that tree for Vimma's 0.x
+ * display version. Then it adapts two things Mozilla's binaries compile in:
  * - the launcher is `firefox`; dist/bin/<binaryName> becomes a symlink to it, as mach expects;
  * - the launcher's built-in app data is Mozilla's (Name=Firefox, Vendor=Mozilla). Tests run with
  *   XUL_APP_FILE=dist/bin/browser/application.ini, our application.ini plus `UAName=` from
@@ -67,15 +70,30 @@ export function artifactMozconfig(mozconfig) {
   ].join("\n");
 }
 
+/** The trees whose builds an artifact build can take: the release, and the Beta (canary only). */
+export const TREES = ["releases/mozilla-release", "releases/mozilla-beta"];
+
 /**
- * @param {string} sourcestamp engine/sourcestamp.txt of a release source tarball:
- *   the build id, then `https://hg.mozilla.org/<tree>/rev/<40-hex revision>`
- * @returns {string} the revision, for MOZ_ARTIFACT_REVISION
+ * @typedef {{ tree: string, revision: string }} SourceStamp
  */
-export function sourceRevision(sourcestamp) {
-  const match = /\/rev\/([0-9a-f]{40})\s*$/m.exec(sourcestamp);
-  if (!match?.[1]) throw new Error("engine/sourcestamp.txt has no 40-hex revision line");
-  return match[1];
+
+/**
+ * @param {string} sourcestamp engine/sourcestamp.txt of a Firefox source tarball:
+ *   the build id, then `https://hg.mozilla.org/<tree>/rev/<40-hex revision>`
+ * @returns {SourceStamp} the tree (one of TREES) and the revision
+ */
+export function sourceStamp(sourcestamp) {
+  const match = /^https:\/\/hg\.mozilla\.org\/(\S+)\/rev\/([0-9a-f]{40})\s*$/m.exec(sourcestamp);
+  if (!match?.[1] || !match[2]) {
+    throw new Error("engine/sourcestamp.txt has no hg.mozilla.org 40-hex revision line");
+  }
+  const tree = match[1];
+  if (!TREES.includes(tree)) {
+    throw new Error(
+      `engine/sourcestamp.txt names ${tree}; artifact builds take only ${TREES.join(" or ")}`,
+    );
+  }
+  return { tree, revision: match[2] };
 }
 
 /**
@@ -100,8 +118,9 @@ export function appIniForArtifact(ini, name) {
 /**
  * The tree mach searches for artifacts, as `select_candidate_trees` in
  * python/mozbuild/mozbuild/artifacts.py decides it: from MOZ_APP_VERSION_DISPLAY (our
- * version_display.txt, not Firefox's version) and MOZ_SOURCE_REPO. Only mozilla-release has
- * the build our release tarball came from; mach has no switch to force the tree.
+ * version_display.txt, not Firefox's version) and MOZ_SOURCE_REPO. It must be mozilla-release
+ * so that a release's MOZ_ARTIFACT_REVISION is found; mach has no switch to force the tree, which
+ * is why a Beta goes through MOZ_ARTIFACT_TASK instead (machArtifactEnv).
  * @param {string} versionDisplay
  * @param {string} sourceRepo
  * @returns {string}
@@ -116,30 +135,47 @@ export function candidateTree(versionDisplay, sourceRepo) {
 /**
  * The Taskcluster index namespace artifacts.py looks up (`TaskCache.artifacts`: the tree's last
  * path part, `.shippable` for `-opt` jobs, trust domain gecko, product firefox).
- * @param {string} revision
+ * @param {SourceStamp} stamp
  */
-export function indexNamespace(revision) {
-  return `gecko.v2.mozilla-release.shippable.revision.${revision}.firefox.linux64-opt`;
+export function indexNamespace({ tree, revision }) {
+  // A constant per accepted tree: nothing read from the tarball but the revision reaches the URL.
+  const project = tree === "releases/mozilla-beta" ? "mozilla-beta" : "mozilla-release";
+  return `gecko.v2.${project}.shippable.revision.${revision}.firefox.linux64-opt`;
+}
+
+/**
+ * How mach finds Mozilla's build. A release: MOZ_ARTIFACT_REVISION, which mach looks up on
+ * mozilla-release itself. A Beta: MOZ_ARTIFACT_TASK, the task found in the mozilla-beta index,
+ * because install_from (python/mozbuild/mozbuild/artifacts.py) reads it only when
+ * MOZ_ARTIFACT_REVISION is unset and searches mozilla-beta only for a `bN` display version.
+ * @param {SourceStamp} stamp
+ * @param {string} taskId the indexed task (indexTask)
+ * @returns {Record<string, string>} the variables to set; the other one must be unset
+ */
+export function machArtifactEnv(stamp, taskId) {
+  if (stamp.tree === "releases/mozilla-beta") return { MOZ_ARTIFACT_TASK: taskId };
+  return { MOZ_ARTIFACT_REVISION: stamp.revision };
 }
 
 const INDEX_URL = "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/";
 const REMEDY =
-  "Check that surfer.json pins a Firefox release (not a beta or ESR) and that `npm run import` " +
-  "ran on its tarball; release builds are indexed for a year (ADR-010). A full build " +
-  "(`npx surfer build`) does not need this.";
+  "Check that surfer.json pins a Firefox release (or, in the Beta canary, a Beta) and that " +
+  "`npm run import` ran on its tarball; release and Beta builds are indexed for a year " +
+  "(ADR-010). A full build (`npx surfer build`) does not need this.";
 
 /**
- * @param {string} revision
+ * @param {SourceStamp} stamp
  * @param {number} status HTTP status of the findTask call
  * @param {unknown} body its JSON body
  * @param {Date} now
  * @returns {{ taskId: string, expires: string }}
  */
-export function indexTask(revision, status, body, now) {
+export function indexTask(stamp, status, body, now) {
+  const { revision } = stamp;
   if (status === 404) {
     throw new Error(
-      `Mozilla's linux64 release build of ${revision} is not in the Taskcluster index ` +
-        `(${indexNamespace(revision)}). ${REMEDY}`,
+      `Mozilla's linux64 build of ${revision} is not in the Taskcluster index ` +
+        `(${indexNamespace(stamp)}). ${REMEDY}`,
     );
   }
   if (status !== 200) throw new Error(`Taskcluster index: HTTP ${status} for ${revision}`);
@@ -148,9 +184,7 @@ export function indexTask(revision, status, body, now) {
     throw new Error(`Taskcluster index: unexpected response for ${revision}`);
   }
   if (Date.parse(task.expires) <= now.getTime()) {
-    throw new Error(
-      `Mozilla's linux64 release build of ${revision} expired ${task.expires}. ${REMEDY}`,
-    );
+    throw new Error(`Mozilla's linux64 build of ${revision} expired ${task.expires}. ${REMEDY}`);
   }
   return { taskId: task.taskId, expires: task.expires };
 }
@@ -183,28 +217,35 @@ async function main(root) {
   }
   const mozconfig = join(engine, "mozconfig.artifact");
   writeFileSync(mozconfig, artifactMozconfig(read("mozconfig")));
-  const revision = sourceRevision(read("sourcestamp.txt"));
+  const stamp = sourceStamp(read("sourcestamp.txt"));
   const display = read("browser/config/vimma/version_display.txt").trimEnd().split("\n").at(-1);
   const repo = /^export MOZ_SOURCE_REPO=(\S*)/m.exec(read("mozconfig"))?.[1] ?? "";
   const tree = candidateTree(display ?? "", repo);
   if (tree !== "mozilla-release") {
     throw new Error(
       `display version ${display} / MOZ_SOURCE_REPO ${repo} make mach look for artifacts on ` +
-        `${tree}, but the release tarball's build is on mozilla-release (artifacts.py ` +
-        `select_candidate_trees). Use an x.y.z display version for artifact builds.`,
+        `${tree}, but a release's MOZ_ARTIFACT_REVISION is found only on mozilla-release ` +
+        `(artifacts.py select_candidate_trees). Use an x.y.z display version for artifact builds.`,
     );
   }
-  const res0 = await fetch(INDEX_URL + indexNamespace(revision));
-  const { expires } = indexTask(revision, res0.status, await res0.json(), new Date());
+  // sourceStamp already checked both; repeated here, where the file data meets the request.
+  const { tree: stampTree, revision } = stamp;
+  if (!TREES.includes(stampTree)) throw new Error(`unexpected tree ${stampTree}`);
+  if (!/^[0-9a-f]{40}$/.test(revision)) throw new Error("the source revision is not 40 hex");
+  const res0 = await fetch(INDEX_URL + indexNamespace({ tree: stampTree, revision }));
+  const { taskId, expires } = indexTask(stamp, res0.status, await res0.json(), new Date());
+  const artifactEnv = machArtifactEnv(stamp, taskId);
   console.log(
-    `artifact-build: Mozilla binaries of ${revision} (indexed until ${expires}), ` +
-      `objdir engine/${ARTIFACT_OBJDIR}`,
+    `artifact-build: Mozilla binaries of ${stamp.tree} ${stamp.revision} (task ${taskId}, ` +
+      `indexed until ${expires}), ${Object.keys(artifactEnv)[0]}, objdir engine/${ARTIFACT_OBJDIR}`,
   );
 
+  const env = { ...process.env, MOZCONFIG: mozconfig, ...artifactEnv };
+  if (!("MOZ_ARTIFACT_REVISION" in artifactEnv)) delete env.MOZ_ARTIFACT_REVISION;
   const res = spawnSync("./mach", ["--no-interactive", "build"], {
     cwd: engine,
     stdio: "inherit",
-    env: { ...process.env, MOZCONFIG: mozconfig, MOZ_ARTIFACT_REVISION: revision },
+    env,
   });
   if (res.status !== 0) process.exit(res.status ?? 1);
 

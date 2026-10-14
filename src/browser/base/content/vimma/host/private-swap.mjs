@@ -63,15 +63,20 @@ let failed = false;
  *   | { state: "none", reason: string, retry: boolean }}
  */
 let wm = { state: "unknown" };
-/** The one console line a session gets (decision 3). */
-let logged = false;
+/** Each kind of console line once a session (decisions 3 and 7). @type {Set<string>} */
+const logged = new Set();
+/** Why the last switch was shown as a window although Hyprland was found, for about:vimma. */
+/** @type {string | null} */
+let skipped = null;
 /** Tests: a fake Hyprland, so the headless and Wayland checks do not apply. */
 let forced = false;
 
 /** @type {WeakMap<Window, string>} */
 const addresses = new WeakMap();
 /** @type {WeakMap<Window, Promise<string | null>>} */
-const resolving = new WeakMap();
+let resolving = new WeakMap();
+/** Bumped by a reset: a naming begun before it ends without an address. */
+let naming = 0;
 /** @type {Map<string, WeakRef<Window>>} */
 const byAddress = new Map();
 /** Pending nonce titles and who waits for them. @type {Map<string, (a: string | null) => void>} */
@@ -83,6 +88,8 @@ const records = new Map();
 const windows = new Set();
 /** @type {{ close: () => void } | null} */
 let events = null;
+/** The listener was wanted after it opened: if it turns out dropped, listen again at once. */
+let relisten = false;
 /** @type {Pair} */
 let pair = null;
 /** Swaps run one after another. */
@@ -90,11 +97,41 @@ let chain = Promise.resolve(true);
 /** A swap is running: activations meanwhile are the swap's own. */
 let running = 0;
 
-/** @param {string} text */
-function logOnce(text) {
-  if (logged) return;
-  logged = true;
+/** @param {string} text @param {string} [kind]  lines of one kind share their once */
+function logOnce(text, kind = text) {
+  if (logged.has(kind)) return;
+  logged.add(kind);
   console.warn(`vimma: ${text}`);
+}
+
+/** What a switch says when Hyprland never named a Vimma window (decision 7). */
+const NOT_NAMED = "private: Hyprland did not name the Vimma window; showing it as a window";
+
+/**
+ * Resolves once `win`'s browser document has finished its delayed startup: true, or false when
+ * it closed first. The window OpenBrowserWindow returns still shows the initial about:blank,
+ * without browser-init.js's delayedStartupPromise, and a title set on that document never
+ * reaches the window manager.
+ * @param {Window} win
+ * @returns {Promise<boolean>}
+ */
+export function startedUp(win) {
+  const w = /** @type {any} */ (win);
+  if (w.closed) return Promise.resolve(false);
+  if (w.gBrowserInit?.delayedStartupFinished) return Promise.resolve(true);
+  const READY = "browser-delayed-startup-finished";
+  const CLOSED = "domwindowclosed";
+  return new Promise((resolve) => {
+    /** @param {unknown} subject @param {string} topic */
+    const observer = (subject, topic) => {
+      if (subject !== win) return;
+      Services.obs.removeObserver(observer, READY);
+      Services.obs.removeObserver(observer, CLOSED);
+      resolve(topic === READY);
+    };
+    Services.obs.addObserver(observer, READY);
+    Services.obs.addObserver(observer, CLOSED);
+  });
 }
 
 /** Why Hyprland is not even tried, or null. */
@@ -119,7 +156,7 @@ function detect() {
   const none = (reason, retry) => {
     wm = { state: "none", reason, retry };
     if (reason !== "not on Hyprland" && reason !== "not on Wayland" && reason !== "headless") {
-      logOnce(`private workspace shown as a window: ${reason}`);
+      logOnce(`private workspace shown as a window: ${reason}`, "detect");
     }
     return false;
   };
@@ -150,15 +187,38 @@ function wanted() {
   return configured && placement === "swap" && !failed && !(wm.state === "none" && !wm.retry);
 }
 
+/**
+ * Holds the event socket while swap placement applies. Hyprland's drop reaches us as a later
+ * main-thread event, so a caller can find a listener that is already dead (#163): it is then
+ * marked, and its close handler listens again once. One extra connection per call at most, so
+ * a socket that keeps hanging up is not retried in a loop.
+ */
 function ensureEvents() {
-  if (events || wm.state !== "ok" || placement !== "swap") return;
+  if (wm.state !== "ok" || placement !== "swap") return;
+  if (events) {
+    relisten = true;
+    return;
+  }
+  relisten = false;
   try {
-    events = HyprIpc.listen(onLine, () => {
+    /** @type {{ close: () => void }} */
+    const mine = HyprIpc.listen(onLine, () => {
+      // Our own close (placement "window", tests) has already let go of it.
+      if (events !== mine) return;
       events = null;
+      if (relisten) ensureEvents();
     });
+    events = mine;
   } catch {
     events = null;
   }
+}
+
+/** Stops listening; its close handler then does nothing. */
+function stopEvents() {
+  const old = events;
+  events = null;
+  old?.close();
 }
 
 /** @param {string} line  never logged: it can hold any window's title (decision 8) */
@@ -208,7 +268,8 @@ function addressOf(win) {
   const running_ = resolving.get(win);
   if (running_) return running_;
   const promise = (async () => {
-    if (win.closed || !(await detect())) return null;
+    const at = naming;
+    if (!(await startedUp(win)) || !(await detect()) || at !== naming) return null;
     ensureEvents();
     const nonce = nonceTitle(crypto.getRandomValues(new Uint8Array(16)));
     /** @type {Promise<string | null>} */
@@ -226,7 +287,8 @@ function addressOf(win) {
     });
     keep.observe(doc.documentElement, { subtree: true, childList: true, characterData: true });
     let address = await heard;
-    if (!address) {
+    if (at !== naming) address = null;
+    else if (!address) {
       try {
         address = findNonce(
           await HyprIpc.request(QUERY_CLIENTS),
@@ -245,8 +307,9 @@ function addressOf(win) {
     }
     return address;
   })();
-  resolving.set(win, promise);
-  promise.finally(() => resolving.delete(win));
+  const pending = resolving;
+  pending.set(win, promise);
+  promise.finally(() => pending.delete(win));
   return promise;
 }
 
@@ -451,9 +514,9 @@ export const PrivateSwap = {
     placement = next;
     configured = true;
     failed = false;
+    skipped = null;
     if (next === "window") {
-      events?.close();
-      events = null;
+      stopEvents();
       return;
     }
     ensureEvents();
@@ -471,11 +534,20 @@ export const PrivateSwap = {
   enter(from, priv, fresh) {
     if (!wanted()) return false;
     (async () => {
-      if (fresh) await /** @type {any} */ (priv).delayedStartupPromise;
       const [normal, p] = await Promise.all([addressOf(from), addressOf(priv)]);
+      if (!normal || !p) {
+        // Hyprland is there but did not name a window: never silent (decision 7).
+        if (wm.state === "ok" && !from.closed && !priv.closed) {
+          skipped = "window not named";
+          logOnce(NOT_NAMED);
+        }
+        if (!priv.closed) priv.focus();
+        return;
+      }
+      skipped = null;
       // A private window shown somewhere else (a second one from ctrl+n): focus it, as today.
-      if (!normal || !p || (!fresh && p !== pair?.private)) {
-        if (!fresh && !priv.closed) priv.focus();
+      if (!fresh && p !== pair?.private) {
+        if (!priv.closed) priv.focus();
         return;
       }
       if (!(await step({ type: "enter", normal, private: p })) && !priv.closed) priv.focus();
@@ -513,8 +585,10 @@ export const PrivateSwap = {
   get status() {
     const how = placement === "window" ? "window (config)" : failed ? "window (swap failed)" : "";
     switch (wm.state) {
-      case "ok":
-        return `Hyprland ${wm.version} (${wm.dialect}), private placement: ${how || "swap"}`;
+      case "ok": {
+        const last = !how && skipped ? ` (last switch: ${skipped})` : "";
+        return `Hyprland ${wm.version} (${wm.dialect}), private placement: ${how || "swap"}${last}`;
+      }
       case "none":
         return `none (${wm.reason}), private placement: window`;
       default:
@@ -533,20 +607,25 @@ export const PrivateSwap = {
    * @param {{ request: string, events: string } | null | undefined} sockets
    */
   _resetForTests(sockets, { configured: read = true } = {}) {
-    events?.close();
-    events = null;
+    stopEvents();
     HyprIpc._setSocketsForTests(sockets);
     forced = sockets !== undefined;
     wm = { state: "unknown" };
     pair = null;
     failed = false;
-    logged = false;
+    logged.clear();
+    skipped = null;
     placement = "swap";
     configured = read;
     settleUntil = 0;
     ownMoves.clear();
     epoch++;
+    // A naming in flight ends now (null), drops its nonce title and is not reused: left
+    // waiting, it would hold the title and stand in for every later naming of that window.
+    naming++;
+    for (const resolve of nonces.values()) resolve(null);
     nonces.clear();
+    resolving = new WeakMap();
     byAddress.clear();
     records.clear();
     for (const win of windows) addresses.delete(win);

@@ -1,0 +1,20 @@
+{
+  "description": "Only the agent workspace's tabs",
+  "kind": "response",
+  "command": "agent-tabs",
+  "message": {
+    "type": "response",
+    "id": 2,
+    "ok": true,
+    "result": {
+      "tabs": [
+        {
+          "id": "12",
+          "url": "https://docs.rs/serde",
+          "title": "serde - Rust",
+          "loading": false
+        }
+      ]
+    }
+  }
+}

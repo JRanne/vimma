@@ -1,0 +1,11 @@
+{
+  "description": "Protocol 2's discovery file lists the roles the server serves",
+  "kind": "discovery",
+  "message": {
+    "protocol": 2,
+    "port": 43817,
+    "token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "pid": 12345,
+    "roles": ["agent"]
+  }
+}

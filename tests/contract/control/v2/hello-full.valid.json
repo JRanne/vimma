@@ -1,0 +1,10 @@
+{
+  "description": "A full-role hello: what protocol 1 means",
+  "kind": "hello",
+  "message": {
+    "type": "hello",
+    "protocol": 2,
+    "nonce": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+    "role": "full"
+  }
+}
