@@ -318,7 +318,9 @@ other lines are from each tool's documentation; sub-PR 4 runs them against real 
    actor could be confined, but needs its own threat review (form posts, purchases, logged-in
    actions), so it is a later spec. A screenshot of a hidden tab needs measuring (background tabs
    are not painted), so it is later too. `:pipe <cmd>` (send the current page to a local tool) is
-   a different direction, started by the user, and out of scope.
+   a different direction, started by the user, and out of scope. Showing a page to the user and
+   running Vimma's own page keys in an agent tab, confined to the agent workspace, are specified
+   in [mcp-drive](mcp-drive.md).
 
 ### B. The agent workspace
 
@@ -1001,16 +1003,17 @@ m7-a11y.
 One sub-PR at a time, after firefox-keys sub-PR 2 (both change the keymap; this adds
 `prefix+shift+a`). Issue #229 tracks sub-PR 3.
 
-| #   | PR                                                                 | Contents                                                                                                                                                                                                                                                              | State          |
-| --- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| 1   | `feat(workspaces): every profile gets an agent workspace`          | `[mcp]` (all keys, validated); `vimma.mcp.enabled`; `:mcp on`, `:mcp off`, `:mcp forget`; the agent workspace in new and existing profiles; out of the cycle, last in the picker; rename refused, close keeps its container, the move question; about:vimma section.  | merged (#175)  |
-| 2a  | `feat(ctl): agent role with a confirmation for every request`      | Protocol 2 (role, `role-off`, `denied`, agent commands, v2 fixtures); server roles and switches; `AgentGate.sys.mjs`; `agent.mjs` in core; `:mcp revoke`; `PageExtractor` reads; ADR-019; security.md §1 and §12.                                                     | merged (#176)  |
-| 2b  | `feat(mcp): the agent question line and status, full control asks` | Decisions 13-15 and 23-25 (the question line, `◇ agent`, `ctrl+b shift+a`, attention and notifications, grant notices), 29 (full control asks while MCP is on; `:control on <minutes>`), 30 (the agent workspace's pages).                                            | merged (#177)  |
-| 2c  | `feat(mcp): agent downloads, asked and quarantined`                | Decision 31.                                                                                                                                                                                                                                                          | merged (#182)  |
-| 3   | `feat(vimma-ctl): vimma-ctl mcp, an MCP server over stdio`         | Decisions 35-41: `src/mcp.rs` and `src/mcp_serve.rs` (dual-era server, tool table and fixture, protocol-2 client, keep-alive, error texts), `agent-cancel`; Rust unit, integration and property tests; the e2e harness's `mcp` steps and the `m0-mcp-stdio` scenario. | this PR (#229) |
-| 4   | `docs(guide): set up Claude Code, Codex, opencode and Copilot`     | The guide's "Agents (MCP)" in full: the threat model in plain words, each tool's setup run against a real install with the version tested, timeouts, grants, sharing a tab, revoking, why `vimma.control.enabled` stays off; README feature line; limits.md.          | to do          |
+| #   | PR                                                                 | Contents                                                                                                                                                                                                                                                              | State         |
+| --- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| 1   | `feat(workspaces): every profile gets an agent workspace`          | `[mcp]` (all keys, validated); `vimma.mcp.enabled`; `:mcp on`, `:mcp off`, `:mcp forget`; the agent workspace in new and existing profiles; out of the cycle, last in the picker; rename refused, close keeps its container, the move question; about:vimma section.  | merged (#175) |
+| 2a  | `feat(ctl): agent role with a confirmation for every request`      | Protocol 2 (role, `role-off`, `denied`, agent commands, v2 fixtures); server roles and switches; `AgentGate.sys.mjs`; `agent.mjs` in core; `:mcp revoke`; `PageExtractor` reads; ADR-019; security.md §1 and §12.                                                     | merged (#176) |
+| 2b  | `feat(mcp): the agent question line and status, full control asks` | Decisions 13-15 and 23-25 (the question line, `◇ agent`, `ctrl+b shift+a`, attention and notifications, grant notices), 29 (full control asks while MCP is on; `:control on <minutes>`), 30 (the agent workspace's pages).                                            | merged (#177) |
+| 2c  | `feat(mcp): agent downloads, asked and quarantined`                | Decision 31.                                                                                                                                                                                                                                                          | merged (#182) |
+| 3   | `feat(vimma-ctl): vimma-ctl mcp, an MCP server over stdio`         | Decisions 35-41: `src/mcp.rs` and `src/mcp_serve.rs` (dual-era server, tool table and fixture, protocol-2 client, keep-alive, error texts), `agent-cancel`; Rust unit, integration and property tests; the e2e harness's `mcp` steps and the `m0-mcp-stdio` scenario. | merged (#243) |
+| 4   | `docs(guide): set up Claude Code, Codex, opencode and Copilot`     | The guide's "Agents (MCP)" in full: the threat model in plain words, each tool's setup run against a real install with the version tested, timeouts, grants, sharing a tab, revoking, why `vimma.control.enabled` stays off; README feature line; limits.md.          | to do         |
 
-Out of scope: Agent `send-keys`, clicks, form filling and screenshots (a later spec, decision 6); `:pipe
+Out of scope: Agent `send-keys`, clicks, form filling and screenshots (later specs, decision 6;
+showing pages and page keys are [mcp-drive](mcp-drive.md)); `:pipe
 <cmd>` sending page context to a local tool; MCP over HTTP or a listener inside the browser; MCP
 resources, prompts, sampling and elicitation; several agent workspaces (one per agent); macOS
 (`/proc` parent name and notifications differ; the macOS spec takes it up); Windows.
