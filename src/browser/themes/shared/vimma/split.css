@@ -52,6 +52,24 @@
     -moz-subtree-hidden-only-visually: 1;
   }
 
+  /* A page fills its pane's rect. Under Nova, Firefox 158's content-area.css gives every panel's
+   * .browserContainer a 1px border, which shrinks each page by 2px inside core's rect, and trims
+   * the focused panel's outline to 1px. Drawn as on Firefox 157 instead: no border; the other
+   * panes keep an inset 1px separator outline, which leaves the content box alone; the focused
+   * pane gets the whole --focus-outline (2px, the theme's focus colour, focus.css). */
+  & > .split-view-panel > .browserContainer {
+    border: none !important;
+  }
+
+  & > .split-view-panel:not(.deck-selected) > .browserContainer {
+    outline: var(--border-width) solid var(--chrome-content-separator-color) !important;
+    outline-offset: calc(-1 * var(--border-width)) !important;
+  }
+
+  & > .split-view-panel.deck-selected > .browserContainer {
+    outline: var(--focus-outline) !important;
+  }
+
   & > .split-view-splitter,
   & split-view-footer {
     display: none !important;

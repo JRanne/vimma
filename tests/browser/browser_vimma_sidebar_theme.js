@@ -159,10 +159,13 @@ function ringColour(el) {
   return style.outlineStyle === "auto" ? style.accentColor : style.outlineColor;
 }
 
-/** The launcher's button for the open panel, or undefined. */
+/**
+ * The launcher's button for the open panel, or undefined. Since Firefox 158 the launcher is a
+ * tab list: the open panel's button is aria-selected (sidebar-main.mjs), not aria-pressed.
+ */
 function pressedLauncherButton() {
   return [...document.querySelector("sidebar-main").shadowRoot.querySelectorAll("moz-button")].find(
-    (b) => b.shadowRoot?.querySelector('button[aria-pressed="true"]'),
+    (b) => b.shadowRoot?.querySelector('button[aria-selected="true"]'),
   );
 }
 
@@ -238,7 +241,7 @@ function assertSidebarFollowsTheTheme(label, doc) {
     `${label}: the window's focus ring (launcher, splitter) is --vimma-focus`,
   );
 
-  // The open panel's launcher button (aria-pressed, which moz-button moves to its inner
+  // The open panel's launcher button (aria-selected, which moz-button moves to its inner
   // <button>): Firefox paints it in the system accent (AccentColor at 30%, a dark blue); Vimma's
   // selected row is --vimma-selection.
   const pressed = pressedLauncherButton();

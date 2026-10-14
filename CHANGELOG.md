@@ -58,6 +58,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Changed
 
+- Firefox 158.0 ([MFSA 2026-106](https://www.mozilla.org/en-US/security/advisories/mfsa2026-106/)).
+- The e2e baseline `m0-happy-path-help` was re-recorded on Firefox 158.0, which antialiases the bindings overlay's text slightly differently (1.26 % of pixels, every row in place) and draws its scrollbar thumb 3 px shorter; nothing else in the screenshot changed.
 - Firefox's own shortcuts that overlap Vimma or Vim are off: `ctrl+w` (close tab), `ctrl+u` (page source), `ctrl+h` (history), `ctrl+d` (bookmark dialog), `ctrl+o` (open file), `ctrl+i` (page info), `ctrl+k` (web search) and `ctrl+b` (bookmarks sidebar). `[firefox] disable = "all" | [...]` and `enable = [...]` in `config.toml` change the set; `about:vimma` lists what is off. The help-text and `defaults.toml` snapshots changed with the new keys and options.
 - Characters typed with AltGr (Linux, Windows) or Option (macOS), such as `{`, `}` and `$` on Finnish layouts, match their bindings.
 - `ctrl+b ?`, `:map` and `about:vimma` list the keys you press (`ctrl+b b`, `ctrl+b shift+x`, `ctrl+w h`) instead of config notation (`prefix+b`), following a remapped prefix or leader; the legend names the leader only when a binding uses it. The help-text snapshot changed to match.
@@ -73,6 +75,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Fixed
 
+- Opening external-protocol links and download prompts no longer fails on Firefox 158.
+- Split panes keep pages exactly at their pane edges on Firefox 158.
 - Keys typed right after switching to a workspace whose start page is still being restored are no longer lost: focus waits on the window until the page has loaded (#140).
 - Private workspace on Hyprland: Vimma listens to Hyprland's events again even when a switch happens just as Hyprland closes the event socket (#163).
 - On Hyprland the private workspace now really takes the Vimma window's place (a new private window used to be shown beside it); a swap that cannot name the window says so once in the console and in `about:vimma` (#160).

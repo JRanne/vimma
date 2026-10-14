@@ -142,6 +142,11 @@ layout(state, rect) ──rects──▶      1 membership → wrapper          
     resize is out of scope (limits);
   - the focused pane is Firefox's `.deck-selected`, which already draws `--focus-outline`; M5
     maps that colour to the theme;
+  - the panels' `.browserContainer` has no border, the other panes an inset 1px separator
+    outline and the focused one the whole `--focus-outline`, all `!important`: Firefox 158
+    (`content-area.css`, Nova) borders every panel's container by 1px, which shrinks each page
+    2px inside its rect, and trims the focused panel's outline to 1px. That is Firefox 157's
+    drawing, kept (risk "Firefox's two-column CSS leaks through ours");
   - `[vimma-zoomed]` panels (every pane but `zoom`) get `-moz-subtree-hidden-only-visually: 1`,
     as upstream's fullscreen rule does for the other panels, not `display: none`, so their
     frames and scroll positions stay. The zoomed panel gets the full rectangle (core's
@@ -574,6 +579,20 @@ step, protocol field or product code was needed.
 - **Not covered here:** click focus (the harness only sends keys; `browser_vimma_pane_focus.js`
   covers it); key-to-paint timing for `prefix+l` (and m3's 200-tab `prefix+)` measurement) need a
   paint timestamp the control socket does not report; it belongs with the perf gate.
+
+### Firefox 158: the panel border
+
+Firefox 158 changed only the split view's CSS (`browser/themes/shared/tabbrowser/content-area.css`,
+under `browser.nova.enabled`, on by default): every split panel's `.browserContainer` gets a
+`--border-width` (1px) border in `--chrome-content-separator-color`, the focused one in
+`--focus-outline-color` with its outline cut to `--focus-outline-width` minus that border (1px),
+where 157 drew an inset 1px outline on the other panels only and the full 2px outline on the
+focused one; the splitter's wider margin went from 3px to 2px. The panes' rects were unchanged,
+but each page sat 1px inside its rect on every side, so the contract, layout and preset
+mochitests failed their ±1 px checks (Δ 2–3 px), and the focused pane's outline was 1px. The
+split-view JS (`tabsplitview.mjs`, `splitview/`, `tabbox` panel handling) is unchanged in 158:
+order, limits and behaviour are as on 157. `split.css` now sets 157's drawing under
+`[vimma-panes]` (Geometry above).
 
 What is left of M4: nothing. The key-to-paint measurement needs the perf gate (issue #17) and
 moves there.
