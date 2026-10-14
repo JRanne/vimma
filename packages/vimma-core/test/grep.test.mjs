@@ -6,7 +6,7 @@ import {
   grepPickerKey,
   grepRows,
   grepText,
-  holdReply,
+  holdReplies,
   openGrepPicker,
   parseGrepReply,
   parsePreviewReply,
@@ -351,20 +351,34 @@ function rowsOf(tabIds) {
   return grepRows(tabs, frames).rows;
 }
 
-describe("holdReply: the parent keeps at most the rows it can list", () => {
-  test("matches are kept until 2,000 are held; later replies keep only their count", () => {
-    const big = reply(100);
-    let held = 0;
-    for (let i = 0; i < 20; i++) {
-      const kept = holdReply(big, held);
-      expect(kept.reply.matches).toHaveLength(100);
-      held = kept.held;
-    }
-    expect(held).toBe(GREP_CAPS.rows);
-    const past = holdReply(big, held);
-    expect(past.reply.matches).toEqual([]);
-    expect(past.reply.count).toBe(100);
-    expect(past.held).toBe(GREP_CAPS.rows);
+describe("holdReplies: the parent keeps at most the rows it can list, best first", () => {
+  /**
+   * @param {number} rank
+   * @param {number} n
+   */
+  const entry = (rank, n) => ({ rank, reply: reply(n) });
+  const kept = (/** @type {{ reply: { matches: unknown[] } }[]} */ entries) =>
+    entries.reduce((n, e) => n + e.reply.matches.length, 0);
+
+  test("matches are kept until 2,000 are held; past that only counts", () => {
+    const entries = Array.from({ length: 21 }, (_, i) => entry(i, 100));
+    const held = holdReplies(entries);
+    expect(kept(held)).toBe(GREP_CAPS.rows);
+    expect(held.at(-1)?.reply.matches).toEqual([]);
+    expect(held.at(-1)?.reply.count).toBe(100);
+  });
+
+  test("a better-ranked reply that arrives last still keeps its matches", () => {
+    const late = [...Array.from({ length: 20 }, () => entry(9, 100)), entry(1, 100)];
+    const held = holdReplies(late);
+    expect(kept(held)).toBe(GREP_CAPS.rows);
+    expect(held.at(-1)?.reply.matches).toHaveLength(100);
+    expect(held.filter((e) => e.rank === 9 && e.reply.matches.length === 0)).toHaveLength(1);
+  });
+
+  test("under the cap nothing changes", () => {
+    const entries = [entry(2, 10), entry(1, 10)];
+    expect(holdReplies(entries)).toEqual(entries);
   });
 });
 
@@ -393,6 +407,11 @@ describe("the grep list", () => {
 
   test("the notice text", () => {
     expect(grepListText({ query: "x", rows, index: 2 })).toBe("grep 3/4");
+  });
+
+  test("[q after the current row's tab closed goes to the last row", () => {
+    const pruned = pruneGrepList({ query: "x", rows, index: 1 }, (id) => id !== "a");
+    expect(stepGrepList(/** @type {any} */ (pruned), -1, () => true)?.index).toBe(1);
   });
 
   test("pruneGrepList drops a closed tab's rows and keeps its place", () => {

@@ -502,16 +502,33 @@ export function grepRows(tabs, frames, caps = GREP_CAPS) {
 }
 
 /**
- * A reply as the parent keeps it (decision 14): its matches while fewer than `rows` are held,
- * else its count alone, since the list shows at most `rows` rows.
- * @param {GrepReply} reply
- * @param {number} held  matches kept so far for this search
+ * The replies as the parent keeps them (decision 14): the matches of the best-ranked replies,
+ * at most `rows` in all, and only the counts of the rest, since the list shows at most `rows`
+ * rows best first. A reply is ranked by its tab's place in the list, then its frame's; among
+ * equal ranks the earlier reply is better. The array keeps its order.
+ * @template {{ rank: number, reply: GrepReply }} T
+ * @param {readonly T[]} entries
  * @param {{ rows: number }} [caps]
- * @returns {{ reply: GrepReply, held: number }}
+ * @returns {T[]}
  */
-export function holdReply(reply, held, caps = GREP_CAPS) {
-  if (held >= caps.rows) return { reply: { ...reply, matches: [] }, held };
-  return { reply, held: held + reply.matches.length };
+export function holdReplies(entries, caps = GREP_CAPS) {
+  const total = entries.reduce((n, e) => n + e.reply.matches.length, 0);
+  if (total <= caps.rows) return [...entries];
+  const order = entries
+    .map((e, i) => ({ e, i }))
+    .filter(({ e }) => e.reply.matches.length)
+    .sort((a, b) => a.e.rank - b.e.rank || a.i - b.i);
+  let room = caps.rows;
+  /** @type {Set<number>} */
+  const keep = new Set();
+  for (const { e, i } of order) {
+    if (e.reply.matches.length > room) break;
+    keep.add(i);
+    room -= e.reply.matches.length;
+  }
+  return entries.map((e, i) =>
+    keep.has(i) || !e.reply.matches.length ? e : { ...e, reply: { ...e.reply, matches: [] } },
+  );
 }
 
 /**
@@ -540,8 +557,10 @@ export function grepCountText(listed, count, tabs) {
  */
 export function stepGrepList(list, dir, alive) {
   const n = list.rows.length;
+  // Index -1 is "before row 0" (pruneGrepList): `]q` goes to row 0, `[q` to the last row.
+  const from = list.index < 0 && dir < 0 ? 0 : list.index;
   for (let k = 1; k <= n; k++) {
-    const index = (((list.index + dir * k) % n) + n) % n;
+    const index = (((from + dir * k) % n) + n) % n;
     const row = /** @type {GrepRow} */ (list.rows[index]);
     if (alive(row.tabId)) return { ...list, index };
   }

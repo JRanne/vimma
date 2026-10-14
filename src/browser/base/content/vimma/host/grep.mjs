@@ -15,7 +15,7 @@ import {
   grepListText,
   grepPickerKey,
   grepRows,
-  holdReply,
+  holdReplies,
   openGrepPicker,
   parseGrepReply,
   parsePreviewReply,
@@ -294,7 +294,33 @@ export class GrepSession {
       tooLong,
     };
     /** Matches kept for this search: past the row cap, replies keep their counts only. */
-    let held = 0;
+    /**
+     * The replies holding matches, ranked by the list's order: past the row cap the worst
+     * ones keep only their counts (core holdReplies), so the parent never holds more than the
+     * list can show, and always the best of it.
+     * @type {{ rank: number, reply: GrepFrame["reply"], slot: GrepFrame }[]}
+     */
+    let held = [];
+    let heldCount = 0;
+    const ranked = [...tabs.filter((t) => !t.agent), ...tabs.filter((t) => t.agent)];
+    const tabRank = new Map(ranked.map((t, i) => [t.tabId, i]));
+    /** @param {number} rank @param {GrepFrame} slot */
+    const hold = (rank, slot) => {
+      if (!slot.reply.matches.length) return;
+      const worst = held.reduce((m, e) => Math.max(m, e.rank), -1);
+      if (heldCount >= GREP_CAPS.rows && rank > worst) {
+        slot.reply = { ...slot.reply, matches: [] };
+        return;
+      }
+      held.push({ rank, reply: slot.reply, slot });
+      heldCount += slot.reply.matches.length;
+      if (heldCount <= GREP_CAPS.rows) return;
+      held = holdReplies(held).filter((e) => {
+        e.slot.reply = e.reply;
+        return e.reply.matches.length > 0;
+      });
+      heldCount = held.reduce((n, e) => n + e.reply.matches.length, 0);
+    };
     let pending = false;
     const update = () => {
       if (!live() || !this.state) return;
@@ -349,16 +375,15 @@ export class GrepSession {
             if (!parsedReply) return;
             if (parsedReply.timedOut) this.info = { ...this.info, timedOut: true };
             if (parsedReply.cut) this.info = { ...this.info, cut: true };
-            const kept = holdReply(parsedReply, held);
-            held = kept.held;
-            const reply = kept.reply;
             const principal = wg?.documentPrincipal;
             const host =
               i > 0 && principal && principal.siteOrigin !== topSite
                 ? hostOf(wg.documentURI?.spec ?? "")
                 : null;
-            list[i] = { key, host, reply };
-            if (reply.count) schedule();
+            const slot = { key, host, reply: parsedReply };
+            list[i] = slot;
+            hold((tabRank.get(tab.tabId) ?? 0) * (GREP_CAPS.frames + 1) + i, slot);
+            if (parsedReply.count) schedule();
           }),
         );
       }

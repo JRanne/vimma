@@ -427,16 +427,25 @@ match.
 14. **Performance and bounds.**
     - A query is sent 80 ms after the last keystroke. Each send carries a generation number;
       replies for an older generation are dropped, and a frame drops a query older than one it
-      has already seen.
+      has already seen. Generations count per window, so a frame forgets the last one it saw
+      when the picker closes (`Vimma:GrepEnd`), and a tab moved to another window is searched
+      again from there.
     - Matching runs in the content processes, one per site, so tabs search in parallel and the
       parent only merges. At most 8 tabs are asked at a time; a frame that has not answered in
       2,000 ms is left out and the prompt says `timed out`. Up to 200 tabs and 100 frames a tab
       are searched; past that the prompt says `cut`, as it does for a page whose text was cut.
     - In a frame, the text model is built on the page's thread (it reads the DOM), and the
-      regular expression runs in a `ChromeWorker` of that content process
-      (`actors/grep-worker.mjs`), which holds the frame's text. A query that runs for 1 second,
-      or that a newer query replaces, is stopped by terminating the worker; the frame answers
-      `timed out` and starts a new worker for the next query. JavaScript's regular expressions
+      regular expression runs in a `ChromeWorker` (`actors/grep-worker.mjs`). Each content
+      process has one worker, shared by its frames that are being searched
+      (`actors/grep-matcher.mjs`): it holds each frame's text by key and runs one query at a
+      time. One worker a process was chosen over one a frame because a page with 100 frames
+      would otherwise start 100 threads, each with its own copy of the core modules; a small
+      pool was not needed, because a query takes milliseconds and the budget bounds the slow
+      one. A frame whose text is blank is answered without the worker. A query that runs for
+      1 second is stopped by terminating the worker, and its frame answers `timed out`; a
+      frame's newer query replaces its queued or running one. The next query starts a new
+      worker, which gets the frames' texts again; the worker ends when the picker closes and
+      no frame holds text in it. JavaScript's regular expressions
       backtrack, and SpiderMonkey sets no time limit on chrome script
       (`dom.max_chrome_script_run_time` is 0 in `modules/libpref/init/StaticPrefList.yaml`), so
       without the worker a pattern such as `(a+)+b` on a long line of `a`s would freeze every
@@ -445,7 +454,9 @@ match.
     - A query over 1,000 characters is not sent; the prompt says `too long`.
     - A frame's model is cut at 1,000,000 characters. A frame lists at most 100 matches and
       counts to 1,000; the list holds at most 2,000 rows, and once the parent holds 2,000
-      matches for a search it keeps only the counts of later replies. Telescope has no such
+      matches for a search it keeps the matches of the replies that rank first in the list
+      (tab order, then frame order) and only the counts of the rest, whatever order the
+      replies arrive in. Telescope has no such
       caps by default; a page can be far larger than a source file, and a rendered list of
       thousands of rows does not help a keyboard user, who narrows by typing.
     - The frame caches its text model while the picker is open and drops it, its observer and
@@ -516,7 +527,9 @@ Written first and seen to fail.
     overlong lines and too many matches drop the reply or are cut.
   - `grepRows`: rows in tab order whatever order replies arrive in; frames in their order; the
     agent workspace's rows last; not-loaded rows at the far end; the 2,000-row cap.
-  - `holdReply`: matches kept until 2,000 are held, later replies keep only their count;
+  - `holdReplies`: at most 2,000 matches kept, those of the best-ranked replies even when
+    they arrive last; the rest keep only their counts; `stepGrepList`: `[q` from a closed
+    row goes to the last row;
     `parseGrepReply` keeps `timedOut` and `cut` as booleans; `parsePreviewReply` clips the
     match to its line; `pruneGrepList` drops a closed tab's rows and keeps the place.
   - the grep list: `stepGrepList` order across tabs, wrapping, skipping closed tabs; the
@@ -573,7 +586,12 @@ Written first and seen to fail.
     notice says the match is gone.
   - A query over 1,000 characters says `too long` and asks no frame.
   - A catastrophic pattern (`(a+)+b`) against a line of 40 `a`s: the prompt says `timed out`
-    within the budget, the page still answers, and the next query finds its match.
+    within the budget, the page still answers, and the next query finds its match; sent to
+    the frame alone, it is answered `timedOut` within 1.5 seconds.
+  - A frame drops a query with an older generation than one it has seen, and forgets the
+    generation at `Vimma:GrepEnd`.
+  - A page with three frames and a blank one: one worker in the process, holding four texts,
+    and none after the picker closes.
   - Closing a tab removes its lines from the grep list.
 
 ### e2e (`tests/e2e/scenarios/`, Xvfb) and screenshots

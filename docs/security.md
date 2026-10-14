@@ -630,11 +630,11 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   [`bad_arguments_never_reach_vimma`](../tools/vimma-ctl/tests/mcp.rs),
   [`bad_arguments_are_tool_errors_and_never_reach_vimma`](../tools/vimma-ctl/src/mcp.rs)
 
-## 13. Live grep (`host/grep.mjs`, `actors/VimmaChild.sys.mjs`, `actors/grep-worker.mjs`)
+## 13. Live grep (`host/grep.mjs`, `actors/VimmaChild.sys.mjs`, `actors/grep-matcher.mjs`)
 
 `ctrl+b f g` searches the text of the window's tabs: the parent sends the query to each frame's
 own content process, which builds a text model of its own document on the page's thread,
-matches the query in a worker thread of that process, and answers with the matching lines.
+matches the query in that process's worker thread, and answers with the matching lines.
 Spec: [live-grep](specs/live-grep.md).
 
 **Reach:** only you, with the key or `:grep`. No control-socket command reaches it, so neither
@@ -681,18 +681,24 @@ Rules:
   [`the_grep_list_steps_with_bracket_q_and_grep_resumes`](../tests/browser/browser_vimma_live_grep.js),
   [`pruneGrepList drops a closed tab's rows and keeps its place`](../packages/vimma-core/test/grep.test.mjs)
 - G6. A regular expression **must** run on page text only in a worker thread of the page's
-  content process, line by line, and **must** be stopped when it has run for 1 second or when a
-  newer query reaches that frame; a frame drops a query older than one it has seen. A
-  backtracking pattern therefore costs at most a second of one worker thread a frame, and the
-  page itself stays responsive. A query over 1,000 characters is not sent.
+  content process (one a process, shared by its frames), line by line, and a query **must** be
+  stopped when it has run for 1 second, the frame answering `timed out`; a frame's newer query
+  replaces its older one, and a frame drops a query older than one it has seen in this picker
+  session. A backtracking pattern therefore costs at most a second of one worker thread a
+  query, and the page itself stays responsive. A query over 1,000 characters is not sent.
+  [`a_frame_answers_timed_out_within_its_budget`](../tests/browser/browser_vimma_live_grep.js),
   [`a_catastrophic_pattern_never_freezes_the_page`](../tests/browser/browser_vimma_live_grep.js),
+  [`a_frame_drops_an_older_query`](../tests/browser/browser_vimma_live_grep.js),
+  [`grep_end_resets_the_frames_generation`](../tests/browser/browser_vimma_live_grep.js),
+  [`one_worker_a_process_and_none_for_a_blank_frame`](../tests/browser/browser_vimma_live_grep.js),
   [`an_over_long_query_says_so_and_is_not_sent`](../tests/browser/browser_vimma_live_grep.js),
   [`a match never spans two lines`](../packages/vimma-core/test/grep.test.mjs)
 - G7. A page **must not** be able to make the parent hold an unbounded search: at most 100
-  frames are searched in a tab, and once 2,000 matches are held, later replies keep only their
-  counts.
+  frames are searched in a tab, and at most 2,000 matches are held, those of the replies first
+  in the list; the rest keep only their counts.
   [`frames_past_the_cap_are_not_searched`](../tests/browser/browser_vimma_live_grep.js),
-  [`matches are kept until 2,000 are held; later replies keep only their count`](../packages/vimma-core/test/grep.test.mjs)
+  [`matches are kept until 2,000 are held; past that only counts`](../packages/vimma-core/test/grep.test.mjs),
+  [`a better-ranked reply that arrives last still keeps its matches`](../packages/vimma-core/test/grep.test.mjs)
 - G8. A jump, from the picker or `]q` / `[q`, **must** go only to the document that was searched:
   a frame that has navigated since gets nothing, and the notice says the match is gone.
   [`a_jump_never_reaches_a_document_the_frame_navigated_to`](../tests/browser/browser_vimma_live_grep.js)

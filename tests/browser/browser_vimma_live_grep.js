@@ -764,6 +764,85 @@ add_task(async function an_over_long_query_says_so_and_is_not_sent() {
   EventUtils.synthesizeKey("KEY_Escape");
 });
 
+/** The Vimma actor of `tab`'s top frame, after it dropped any earlier search. */
+async function freshActor(tab) {
+  const actor = tab.linkedBrowser.browsingContext.currentWindowGlobal.getActor("Vimma");
+  await actor.sendQuery("Vimma:GrepEnd", {});
+  return actor;
+}
+
+/** A reply, or "no answer" after `ms`. */
+function within(promise, ms) {
+  return Promise.race([promise, new Promise((r) => setTimeout(() => r("no answer"), ms))]);
+}
+
+add_task(async function a_frame_answers_timed_out_within_its_budget() {
+  await reset();
+  const tab = await openFixture({ title: "Budget", t: "needle here", long: 40 });
+  const actor = await freshActor(tab);
+  const t0 = performance.now();
+  const reply = await within(actor.sendQuery("Vimma:Grep", { query: "(a+)+b", gen: 1 }), 5000);
+  const ms = performance.now() - t0;
+  Assert.equal(reply?.timedOut, true, "the frame itself says it timed out");
+  Assert.less(ms, 1500, "within its 1-second budget, with no other query sent");
+  await actor.sendQuery("Vimma:GrepEnd", {});
+});
+
+add_task(async function a_frame_drops_an_older_query() {
+  await reset();
+  const tab = await openFixture({ title: "Older", t: "needle here" });
+  const actor = await freshActor(tab);
+  const newer = await actor.sendQuery("Vimma:Grep", { query: "needle", gen: 10 });
+  Assert.equal(newer?.count, 1, "generation 10 is answered");
+  const older = await actor.sendQuery("Vimma:Grep", { query: "needle", gen: 5 });
+  Assert.equal(older, null, "generation 5, older than one it has seen, is dropped");
+  await actor.sendQuery("Vimma:GrepEnd", {});
+});
+
+add_task(async function grep_end_resets_the_frames_generation() {
+  await reset();
+  const tab = await openFixture({ title: "Reset", t: "needle here" });
+  const actor = await freshActor(tab);
+  Assert.equal((await actor.sendQuery("Vimma:Grep", { query: "needle", gen: 10 }))?.count, 1);
+  await actor.sendQuery("Vimma:GrepEnd", {});
+  const next = await actor.sendQuery("Vimma:Grep", { query: "needle", gen: 1 });
+  Assert.equal(next?.count, 1, "after GrepEnd a new session's first generation is answered");
+  await actor.sendQuery("Vimma:GrepEnd", {});
+});
+
+add_task(async function one_worker_a_process_and_none_for_a_blank_frame() {
+  await reset();
+  const tab = await openFixture({ title: "Workers", t: "top", frames: 3, blank: 1 });
+  await until(
+    () =>
+      tab.linkedBrowser.browsingContext.children.length === 4 &&
+      tab.linkedBrowser.browsingContext.children.every((c) => c.currentWindowGlobal),
+    "4 frames",
+  );
+  await openGrep();
+  type("needle frame");
+  await resultsSettle(3);
+  const seen = await SpecialPowers.spawn(tab.linkedBrowser, [], () => {
+    const { GrepMatcher } = ChromeUtils.importESModule(
+      "chrome://browser/content/vimma/actors/grep-matcher.mjs",
+    );
+    return { workers: GrepMatcher.workers, texts: GrepMatcher.frames.length };
+  });
+  Assert.equal(seen.workers, 1, "the page's frames share one worker in their process");
+  Assert.equal(seen.texts, 4, "it holds the text of the page and its 3 frames, not the blank one");
+  EventUtils.synthesizeKey("KEY_Escape");
+  EventUtils.synthesizeKey("KEY_Escape");
+  await until(() => !isOpen(), "closed");
+  const after = await SpecialPowers.spawn(tab.linkedBrowser, [], async () => {
+    const { GrepMatcher } = ChromeUtils.importESModule(
+      "chrome://browser/content/vimma/actors/grep-matcher.mjs",
+    );
+    await ContentTaskUtils.waitForCondition(() => GrepMatcher.workers === 0, "worker ended");
+    return GrepMatcher.frames.length;
+  });
+  Assert.equal(after, 0, "closing the picker ends the worker and its texts");
+});
+
 // Last: before the fix, this pattern froze the page's process for good.
 add_task(async function a_catastrophic_pattern_never_freezes_the_page() {
   await reset();
