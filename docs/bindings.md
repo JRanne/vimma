@@ -1,4 +1,4 @@
-# Default bindings
+# Default bindings (hand edit)
 
 Generated from `packages/vimma-core/src/actions.mjs` and `defaults.mjs` by `npm run gen-docs`; do not edit.
 
