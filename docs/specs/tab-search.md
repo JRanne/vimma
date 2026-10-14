@@ -1,6 +1,6 @@
 # Spec: tab-search
 
-Status: draft · Area: `packages/vimma-core/src/` (`picker.mjs`,
+Status: accepted · Area: `packages/vimma-core/src/` (`picker.mjs`,
 `tabsearch.mjs` new, `actions.mjs`, `defaults.mjs`, `cmdline.mjs`, `help.mjs`);
 `src/browser/base/content/vimma/` (`host/goto.mjs`, `host/tab-search.mjs` new,
 `host/VimmaHost.sys.mjs`, `ui/picker.mjs`); `src/browser/themes/shared/vimma/picker.css` ·
@@ -278,15 +278,14 @@ pure core (`tabsearch.mjs`, new) orders them into sections, applies the private 
 and the accessible names; `picker.mjs` matches, ranks and handles keys and returns effects; the
 host applies the effects (select, close, forget, reopen, move) and refreshes the list.
 
-Decisions 1, 3 (closed tabs and windows), 3 (other windows) and 6 are the recommended answers
-to the open questions below and change if those are answered otherwise.
-
 1. **Extend the goto picker; no second picker.** `goto.picker` becomes tab search: the same
    dialog, the same core state machine, the same keys plus the new ones in decision 7. Two lists
    that both find tabs would split muscle memory, tests and docs; Chromium and Brave have one.
    Its heading becomes "Tabs", its action name stays `goto_picker` (a config name users may have
    bound), and its help text becomes "Tab search: every tab, every window, recently closed".
-   (Open question 1.)
+   A separate tab-search picker beside the goto picker was rejected: it would keep the goto
+   picker's look and baseline unchanged, at the cost of two lists with overlapping jobs and
+   duplicated keys, tests and docs.
 2. **Two ways in.** `ctrl+b g`, `b` and `:ls` open it as today, in browse mode (`j`/`k` first).
    A new action `tab_search` (`goto.search`) opens the same picker **in search mode**, typing at
    once, as Chromium's `ctrl+shift+a` does. Its default key is `prefix+f f`, and
@@ -312,11 +311,18 @@ to the open questions below and change if those are answered otherwise.
    2. Every other normal window, most recently used first (`BrowserWindowTracker.orderedWindows`),
       each window's workspaces in its own order. Rows carry the window as `w2`, `w3`: Vimma's
       window number is the position in `orderedWindows` when the picker opens, so window 1 is
-      always this one. (Open question 4.)
+      always this one. Listing this window only, as before, was rejected because a tab in
+      another window would stay unfindable from the keyboard; a config switch that limits the
+      list to this window was left out until there is a need for it, since Chromium lists every
+      window without one.
    3. "Recently closed": closed tabs of every normal window, newest first, then closed windows
       as one row each (`3 tabs · closed window`). The caps are 25 tabs and 5 windows, matching
       Firefox's own `browser.sessionstore.max_tabs_undo` (25 per window) and `max_windows_undo`
-      (5). (Open question 2.)
+      (5). The section matches Chromium's and Firefox View's "Recently closed" and uses the
+      SessionStore calls Firefox View already relies on. Closed tabs without closed windows were
+      rejected because a closed window would then have no keyboard path besides
+      `restore_window`, which reopens only the last one; leaving both out would keep
+      `ctrl+shift+t` as the only way back and leave behaviour 2 unsolved.
 
    A section starts with a heading row (`role=presentation`, not an option), so `j`/`k` skip it:
    `work · 12`, `personal · 40 · w2`, `Recently closed · 9`. With a query, matches are ranked
@@ -341,7 +347,9 @@ to the open questions below and change if those are answered otherwise.
    rejected for that reason. `x` on an agent tab closes it like any tab. `m` moving a tab
    **into** the agent workspace asks `moveTabQuestion`'s agent variant (vimma-mcp decision 11),
    never silently. A closed agent tab is marked `◇` too, and reopens in the agent container
-   because SessionStore's saved `userContextId` puts it there. (Open question 3.)
+   because SessionStore's saved `userContextId` puts it there. Listing them only while `[mcp]`
+   is on was rejected too: an agent's tabs outlive the setting, and the user must still be able
+   to find and close them.
 7. **Keys in the picker.** In browse mode (search mode types them as text): `j`/`k`,
    `ctrl+n`/`ctrl+p`, `Down`/`Up`, `left`/`right` (sections), `Enter`, `/` and `Esc`/`q` as today,
    and:
@@ -512,40 +520,4 @@ Each sub-PR is checked in e2e screenshots before review.
 
 ## Open questions
 
-1. **Extend the goto picker or add a new picker?**
-   - a. Extend `goto_picker` into tab search (decision 1). One list for finding any tab;
-     `ctrl+b g`, `b` and `:ls` keep working and gain the new sections and keys. The goto picker's
-     look and test baseline change.
-   - b. A separate tab-search picker next to the goto picker. The goto picker stays exactly as it
-     is, at the cost of two lists with overlapping jobs, duplicated keys, tests and docs.
-
-   Recommendation: a, because Chromium and Brave have one list and two would split muscle memory.
-
-2. **Include recently closed tabs and closed windows?**
-   - a. Both, as a last section capped at 25 tabs and 5 windows (decision 3). `Enter` reopens and
-     goes there, `u` reopens and stays, `x` forgets.
-   - b. Closed tabs only. A smaller list, but a closed window then has no keyboard path besides
-     `restore_window`, which reopens only the last one.
-   - c. Neither; `ctrl+shift+t` stays the only way back. The simplest, and the mistakes case in
-     behaviour 2 stays unsolved.
-
-   Recommendation: a, because it matches Chromium's and Firefox View's "Recently closed" and uses
-   SessionStore APIs Firefox View already relies on.
-
-3. **List the agent workspace's tabs?**
-   - a. Listed, marked `◇ agent`, after the user's workspaces (decision 6).
-   - b. Hidden from tab search, reachable only through the workspace picker and `:mcp`. A shorter
-     list, but the user cannot find or close an agent's tab from the one place that finds tabs.
-   - c. Listed only while `[mcp]` is on.
-
-   Recommendation: a, because seeing and closing what an agent opened is part of staying in
-   control of it, and the marker and ordering keep the tabs apart.
-
-4. **List other windows' tabs?**
-   - a. Yes, after this window's, marked `w2`, `w3`; `Enter` brings that window forward
-     (decisions 3 and 8).
-   - b. This window only, as today. Simpler, but a tab in another window stays unfindable from
-     the keyboard.
-   - c. Every window by default, with a config switch to limit to this window.
-
-   Recommendation: a, as Chromium lists every window; a switch (c) can follow if anyone needs it.
+None. Every question is answered in Design.
