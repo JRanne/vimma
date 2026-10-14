@@ -1,6 +1,6 @@
 # Spec: toolbar-toggle
 
-Status: accepted · Area: `packages/vimma-core/src/actions.mjs`, `defaults.mjs`,
+Status: implemented · Area: `packages/vimma-core/src/actions.mjs`, `defaults.mjs`,
 `config.mjs`, `cmdline.mjs`, `statusbar.mjs`; `ui/toolbar.mjs` (new), `ui/statusbar.mjs`,
 `host/VimmaHost.sys.mjs`, `host/addon-ops.mjs`, `config/ConfigHost.sys.mjs`,
 `browser/themes/shared/vimma/toolbar.css` (new) · Upstream patches: none · ADR: none
@@ -194,6 +194,26 @@ toolbar is shown; the rest of Firefox's panels (a separate Firefox panels audit 
   with `visibility: hidden` keep their box, so the measurement does not change. Collapsed or
   `display: none` items would let a resize pull overflowed buttons back, and those would then
   overflow the bar when it is shown in full again.
+- **The toolbox's stacking and clip:** `#navigator-toolbox` has `overflow: clip` and
+  `z-index: var(--browser-area-z-index-toolbox)` (0), below the tabbox's
+  `--browser-area-z-index-tabbox` (2) (`browser-shared.css` 113–120). A bar drawn outside the
+  toolbox's own box is therefore clipped, and the page is above it for painting and for the
+  mouse. Firefox's level for a toolbox floating over the content is
+  `--browser-area-z-index-toolbox-while-animating` (4).
+- **A collapsed nav bar measures no width:** with `visibility: collapse` on `#nav-bar`, its
+  `getBoundingClientRect().width` is 1 px and its customization target's 0 (measured in a
+  mochitest on 158.0), so a window `resize` while hidden makes `OverflowableToolbar` move items
+  (the flexible spaces among them) into the overflow menu.
+- **The site identity button:** with `browser.urlbar.trustPanel.featureGate` on (158's default),
+  a web page's identity button is `#trust-icon-container` and its panel `#trustpanel-popup`
+  (`browser-trustPanel.js`); `#identity-icon-box` shows only for internal and add-on pages.
+- **`Esc` in the URL bar** (`UrlbarChildController.mjs` 435–465): with the results closed and
+  the address not edited (`pageproxystate` valid, or an empty field on a blank page), Firefox
+  focuses the selected browser, as `browser.urlbar.focusContentDocumentOnEsc` (default true)
+  asks.
+- **`F6`** moves focus between the page and the chrome through the focus manager
+  (`EventStateManager.cpp` 4036), which skips an element that cannot take focus and fires no
+  `beforefocus`.
 - **Popup windows** (`window.open` with `chromehidden`) keep `#nav-bar` with a read-only URL bar,
   for anti-spoofing (`browser-init.js:342–349`). Extension popup windows and chromeless windows
   hide `#nav-bar` with `display: none` (`browser-shared.css:505–506`), and their prompts
@@ -286,17 +306,25 @@ Numbered decisions, each with its reason and the alternatives rejected.
      - taskbar tabs (`[taskbartab]`);
      - F11 fullscreen (`[inFullscreen]`) and DOM fullscreen (`[inDOMFullscreen]`). Firefox's own
        toolbox handling owns those, with its own reveal on hover, `F6` and URL bar focus.
-6. **Hidden means collapsed.**
-   - `ui/toolbar.mjs` sets the root attribute `vimma-toolbar-hidden` from the pref, and
-     `toolbar.css` gives the two toolbars `visibility: collapse`, the same mechanism as the tab
-     strip.
-   - A collapsed bar:
+6. **Hidden means hidden, out of the flow.**
+   - `ui/toolbar.mjs` sets the root attribute `vimma-toolbar-hidden` from the pref. While it is
+     set, `toolbar.css` takes `#nav-bar` and `#PersonalToolbar` out of the flow (absolutely
+     positioned at their own place, the bookmarks toolbar anchored below the nav bar) and gives
+     them `visibility: hidden`.
+   - A hidden bar:
      - takes no space and is not painted;
      - is out of the tab order and the accessibility tree;
-     - honestly fails `checkVisibility`, so nothing anchors to an invisible icon.
+     - honestly fails `checkVisibility`, so nothing anchors to an invisible icon;
+     - keeps its full width, so the overflow measurement sees the bar as it is when shown.
+   - Not `visibility: collapse`, the tab strip's mechanism: a collapsed nav bar measures no width
+     (Research → A collapsed nav bar), and a resize while hidden would move buttons into the
+     overflow menu.
    - Not Zen's opacity and clip: Zen's bar stays "visible" to Firefox while invisible to the user.
      A prompt could then point at a hidden icon, and a screen reader could still browse into the
      bar.
+   - The toolbox becomes the bar's containing block, unclipped and at Firefox's level for a
+     toolbox over the content (Research → The toolbox's stacking and clip), so the revealed bar
+     is painted above the page and takes the mouse.
    - The cost: focus and anchoring need the bar shown first. Decisions 7 and 8 do that before
      either happens, synchronously.
 7. **Reveal, as an overlay, in two sizes.**
@@ -335,6 +363,13 @@ Numbered decisions, each with its reason and the alternatives rejected.
        picker path (decision 10) reveals before opening in any case.
      - **e. Hover → full:** see decision 9.
      - **f. Add-on picker → full:** see decision 10.
+     - **g. `F6` → minimal:** a `keydown` of `F6` or `shift+F6` while the URL bar is not focused
+       reveals the minimal bar before the focus manager looks for the URL bar (Research →
+       `F6`), as F11's `_keyToggleCallback` does. It holds until focus next moves, or 1 s.
+     - **h. A click on the bar → its size:** when a mouse button goes down on the revealed bar and
+       takes focus from the URL bar (a click on the site's identity or a permission icon), the
+       bar stays at its size while the pointer is over it, so the click lands on the icon and
+       its panel then holds the bar (reason d).
    - A switch from minimal to full while the field is focused (hover while typing, say) keeps
      focus, the typed text and the open suggestions: the field does not move (decision 7a).
    - On every change to the set or the size, the host calls
@@ -355,7 +390,7 @@ Numbered decisions, each with its reason and the alternatives rejected.
   - anything the user customised in;
   - the private-browsing indicator, the titlebar buttons and spacers.
 - **How:** a CSS rule on `:root[vimma-toolbar-minimal]` gives those items `visibility: hidden`.
-  `#nav-bar` itself is shown (no longer collapsed) with its theme background, and
+  `#nav-bar` itself is shown (no longer hidden) with its theme background, and
   `#urlbar-container` keeps `visibility: visible`.
   - `visibility: hidden`, not collapse or `display: none`: the hidden items keep their boxes, so
     the URL field sits exactly where it sits in the full toolbar and at the same width.
@@ -398,18 +433,18 @@ Numbered decisions, each with its reason and the alternatives rejected.
      the browser is focused parent-side). The URL bar's blur then ends reason (a), at the moment
      the load starts.
    - **No "hide on load commit" rule:** a focused URL bar is never hidden. Hiding it would leave
-     focus inside a collapsed element.
+     focus inside a hidden element.
    - **`Esc`:**
-     - Firefox's own `Esc` runs first: it closes the results, then reverts typed text.
-     - Then, while the bar is revealed only by reason (a), an `Esc` that Firefox had nothing left
-       to do with (results closed, value not edited, `pageproxystate` valid) focuses the selected
-       browser.
+     - Firefox's own `Esc` runs: it closes the results, then reverts typed text.
+     - An `Esc` with nothing left to do (results closed, value not edited, `pageproxystate`
+       valid) focuses the selected browser: Firefox does this itself (Research → `Esc` in the URL
+       bar), so Vimma adds no `Esc` handling.
      - Reason (a) then ends, and the bar hides.
      - With the toolbar shown, `Esc` behaves exactly as in Firefox; this spec changes nothing
        there.
    - **Never under an open panel:** an open doorhanger or panel anchored in the bar keeps it
      shown at the size it asked for (decision 7c/d). When a full-size reason ends while a
-     minimal one still holds, the bar becomes minimal, not hidden. The bar is never collapsed under an open arrow panel, so
+     minimal one still holds, the bar becomes minimal, not hidden. The bar is never hidden under an open arrow panel, so
      `CheckForAnchorChange` never closes or dismisses a prompt because of us.
 9. **Hover reveals the full toolbar; not keyboard-only.**
    - Pointer at the window's top 2 px, or over the revealed bar, adds a full-size hover reason. It is added
@@ -454,11 +489,18 @@ Numbered decisions, each with its reason and the alternatives rejected.
       - `neutral` is `about:`, `file:`, the start page and similar;
       - `secure` shows nothing, as Firefox's lock is quiet.
 
+      The host reads the level from the identity box's classes (`#identity-box`, which
+      `browser-siteIdentity.js` keeps current whether or not the bar is shown), so the status bar
+      warns exactly where Firefox's address bar would.
+
       Text, not only colour, so it reads without colour vision (m7-a11y).
 
-    - **`private`:** a new segment in a private window, as the toolbar's indicator did.
-    - **URL priority:** the `url` segment's priority rises from 8 to 5, so the address outlasts
-      the title in a narrow window. `http://` is no longer dropped by `displayUrl` for an `http:`
+    - **`private`:** a new segment in a private window, as the toolbar's indicator did, unless
+      the workspace segment already says `◆ private` (the private workspace,
+      [private-workspace](private-workspace.md)): one word, not two.
+    - **URL priority:** the `url` segment's priority rises from 8 to 4.9, just above the title's
+      5, so the address outlasts the title in a narrow window (on equal priorities the fitter
+      drops the later segment first, and the URL comes after the title). `http://` is no longer dropped by `displayUrl` for an `http:`
       page: the scheme is part of the warning.
     - **Toolbar shown:** the bar is exactly as today, with the same inputs and no new segments.
       This keeps every existing screenshot baseline unchanged.
@@ -477,7 +519,7 @@ Numbered decisions, each with its reason and the alternatives rejected.
     - **Customize mode** shows the toolbar (decision 5).
 14. **Hiding with focus inside the bar.** `ctrl+b u` (or `:toolbar hide`) while focus is in the
     URL bar or a toolbar button first focuses the selected browser, then hides. Focus never
-    stays in a collapsed element.
+    stays in a hidden element.
 15. **Split panes:** the URL bar is the selected tab's, which is the focused pane's, as today.
     - The overlay, minimal or full, spans the window's width, as the bar does.
     - The focused pane's accent outline says which pane it belongs to.
@@ -491,7 +533,7 @@ Numbered decisions, each with its reason and the alternatives rejected.
 18. **Accessibility** (m7-a11y):
     - The toggle's notice ("toolbar hidden" / "toolbar shown") is announced through the polite
       live region.
-    - A collapsed bar is out of the accessibility tree.
+    - A hidden bar is out of the accessibility tree.
     - A reveal for focus is not announced, minimal or full. The focused URL bar is announced by the screen reader
       as usual.
     - Focus is never lost:
@@ -562,7 +604,7 @@ Write first; paste red, then green (CLAUDE.md).
     - `defaults.test.mjs.snap` gains the key and `[ui]`;
     - `defaults.toml` is regenerated.
 - **Mochitest `tests/browser/browser_vimma_toolbar.js`:**
-  1. `ctrl+b u` collapses `#nav-bar` and `#PersonalToolbar` in two windows. The notice says
+  1. `ctrl+b u` hides `#nav-bar` and `#PersonalToolbar` in two windows. The notice says
      "toolbar hidden", and `#notifications-toolbar` is still shown. Then `ctrl+b u` restores the
      bar.
   2. The minimal bar on focus:
@@ -578,20 +620,21 @@ Write first; paste red, then green (CLAUDE.md).
      - `#urlbar-container`'s rectangle is the same as with the full toolbar shown (no jump);
      - the selected browser's height and `innerHeight` are unchanged (overlay, no resize event in
        the page).
-  3. `Enter` on a typed address: the page loads, focus is in the page, and the bar is collapsed
+  3. `Enter` on a typed address: the page loads, focus is in the page, and the bar is hidden
      again.
   4. `Esc`:
      - after typing, the first `Esc` reverts, as in Firefox, and the bar stays;
-     - the next `Esc` focuses the page and the bar collapses.
+     - the next `Esc` focuses the page and the bar hides.
   5. Permission prompt while hidden:
      - a test page requests geolocation;
      - the bar is minimal (`vimma-toolbar-minimal`), not full;
      - the prompt's `anchorNode` is `#geo-notification-icon` (not null, not the tab), and that
        node and `#identity-icon` pass `checkVisibility`;
      - the bar stays revealed while the prompt is open;
-     - after "Block", the bar collapses;
+     - after "Block", the bar hides;
      - the prompt is never dismissed by the reveal or the hide.
-  6. Identity panel while hidden: it opens anchored to `#identity-icon-box` in the minimal bar,
+  6. Identity panel while hidden: it opens anchored to the site identity button
+     (`#trust-icon-container`, or `#identity-icon-box` where the trust panel is off) in the minimal bar,
      and keeps that bar shown until it closes.
   7. Add-on popup while hidden:
      - a test extension with a browserAction popup, pinned to the toolbar, then in the extensions
@@ -599,8 +642,9 @@ Write first; paste red, then green (CLAUDE.md).
      - `ctrl+b e` → `Enter` shows the full toolbar (no `vimma-toolbar-minimal`) and opens the
        popup anchored to its button, then to `#unified-extensions-button`;
      - the full bar stays shown while it is open;
-     - `Esc` closes it and the bar collapses;
-     - also via the add-on's own `_execute_action` shortcut (decision 7d).
+     - `Esc` closes it and the bar hides;
+     - also via the add-on's own shortcut, `_execute_action` (`_execute_browser_action` in a
+       Manifest V2 add-on) (decision 7d).
   8. Hiding with focus in the URL bar moves focus to the page first (decision 14).
   9. Safety net (decision 13): stub the reveal to fail. Focusing the URL bar writes the pref back
      to shown, the notice says so, and the URL bar is focused.
@@ -612,7 +656,7 @@ Write first; paste red, then green (CLAUDE.md).
       - with the bar shown, neither appears.
   12. Config: `[ui] toolbar = "hidden"` hides it after the poll. A toggle then lasts until that
       line changes.
-  13. a11y: with the bar hidden, the collapsed `#urlbar` has no accessible. The notice reaches the
+  13. a11y: with the bar hidden, the hidden `#urlbar` has no accessible. The notice reaches the
       polite region.
   14. Hover:
       - a synthesized mouse at `y = 0` shows the full toolbar after the delay: the back button

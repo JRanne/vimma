@@ -105,6 +105,8 @@ export const COMMANDS = Object.freeze([
   }),
   cmd("ls", "none", "goto.picker", "Goto picker: every tab in every workspace"),
   cmd("sidebar", "none", "sidebar.toggle", "Open / close the side panel"),
+  // docs/specs/toolbar-toggle.md decision 2: show / hide set a known state (vimma-ctl).
+  cmd("toolbar", "optional", "toolbar.toggle", "Show / hide the toolbar (show | hide)"),
   // docs/specs/bookmarks.md: with a path, files the page without the prompt.
   cmd("bookmark", "optional", "bookmark.add", "Bookmark this page (optionally folders/title)"),
   cmd("bookmarks", "none", "bookmarks.toggle", "Open / close the bookmarks panel"),
@@ -147,6 +149,23 @@ export const COMMANDS = Object.freeze([
  * (with `npm run gen-docs`) and empties this list.
  */
 export const PENDING_ACTIONS = Object.freeze(/** @type {string[]} */ ([]));
+
+/** `:toolbar`'s words, in completion order. */
+const TOOLBAR_WORDS = Object.freeze(/** @type {const} */ (["show", "hide"]));
+
+/**
+ * `:toolbar [show|hide]` (docs/specs/toolbar-toggle.md decision 2): toggle without a word.
+ * @param {string | undefined} text
+ * @returns {{ kind: "toggle" | "show" | "hide" } | { kind: "refuse", text: string }}
+ */
+export function parseToolbarCommand(text) {
+  const word = (text ?? "").trim().toLowerCase();
+  if (!word) return { kind: "toggle" };
+  if (word === "show" || word === "hide") return { kind: word };
+  const near = closest(word, [...TOOLBAR_WORDS]);
+  const refusal = ':toolbar takes "show", "hide" or nothing';
+  return { kind: "refuse", text: near ? `${refusal}: did you mean "${near}"?` : refusal };
+}
 
 /** @type {Map<string, CommandDef>} */
 const byWord = new Map();
@@ -325,6 +344,7 @@ const ARGUMENT_KINDS = Object.freeze({
   private: { names: "private", kind: "private workspace", fixed: ["close"] },
   // The two a first-time user wants first, then back to following the system.
   theme: { names: "theme", kind: "appearance", fixed: ["dark", "light", "system"] },
+  toolbar: { names: "toolbar", kind: "toolbar", fixed: TOOLBAR_WORDS },
   workspace: { names: "workspace", kind: "workspace" },
   wsdelete: { names: "workspace", kind: "workspace" },
   wsmove: { names: "workspace", kind: "workspace" },

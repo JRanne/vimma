@@ -8,7 +8,13 @@
 // window and the host, renders at most once per frame, and never reads layout on the render
 // path: the bar's width comes from a ResizeObserver.
 
-import { fitStatus, statusAnnouncement, statusSegments } from "../core/statusbar.mjs";
+import {
+  fitStatus,
+  securityLevel,
+  statusAnnouncement,
+  statusSegments,
+} from "../core/statusbar.mjs";
+import { HIDDEN_ATTR as TOOLBAR_HIDDEN_ATTR } from "./toolbar.mjs";
 
 /** @import { Mode } from "../core/modes.mjs" */
 /** @import { FindStatus } from "../core/find.mjs" */
@@ -87,11 +93,17 @@ export class StatusBar {
     this.announced = { mode: null, notFound: null };
     /** @type {ResizeObserver | null} */
     this.resize = null;
+    /** @type {MutationObserver | null} the identity box's classes (toolbar-toggle 12) */
+    this.identity = null;
     /** @type {(() => void) | null} */
     this.unsubscribe = null;
     this.update = () => this.schedule();
     this.start = () => this.build();
-    this.progress = { onLocationChange: () => this.schedule() };
+    // The identity box (not secure, toolbar-toggle 12) follows the security state.
+    this.progress = {
+      onLocationChange: () => this.schedule(),
+      onSecurityChange: () => this.schedule(),
+    };
   }
 
   init() {
@@ -112,6 +124,8 @@ export class StatusBar {
     this.unsubscribe = null;
     this.resize?.disconnect();
     this.resize = null;
+    this.identity?.disconnect();
+    this.identity = null;
     if (this.bar) {
       for (const type of TAB_EVENTS) win.removeEventListener(type, this.update, true);
       win.removeEventListener("focus", this.update, true);
@@ -197,6 +211,15 @@ export class StatusBar {
     // Focus moving into or out of a field changes the mode once the host detects it.
     win.addEventListener("focus", this.update, true);
     win.gBrowser.addProgressListener(this.progress);
+    // Firefox updates the site's identity on its own schedule, after the security change.
+    const identityBox = doc.getElementById("identity-box");
+    if (identityBox) {
+      this.identity = new /** @type {any} */ (win).MutationObserver(() => this.schedule());
+      /** @type {MutationObserver} */ (this.identity).observe(identityBox, {
+        attributes: true,
+        attributeFilter: ["class", "pageproxystate"],
+      });
+    }
     this.unsubscribe = this.host.subscribe(this.update);
     this.schedule();
   }
@@ -229,6 +252,18 @@ export class StatusBar {
       alerts: status.alerts ?? [],
       agent: status.agent ?? null,
     };
+    // docs/specs/toolbar-toggle.md decision 12: the hidden toolbar's cues; shown, none.
+    const root = this.win.document.documentElement;
+    if (root.hasAttribute(TOOLBAR_HIDDEN_ATTR)) {
+      input.toolbarHidden = true;
+      const identity = this.win.document.getElementById("identity-box");
+      input.security = identity
+        ? securityLevel(identity.classList, {
+            pageProxyValid: identity.getAttribute("pageproxystate") === "valid",
+          })
+        : "neutral";
+      input.privateWindow = root.hasAttribute("privatebrowsingmode");
+    }
     return input;
   }
 

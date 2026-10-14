@@ -249,6 +249,14 @@ text that pages, add-ons and bookmarks choose.
   arguments, the path after `--` and no shell, on an agent download in the quarantine folder
   (M13; [vimma-mcp](specs/vimma-mcp.md) decision 31 g; the security review of #182). [`never builds code from text: no eval, Function or sandbox evaluation`](../tools/security/test/chrome-source.test.mjs),
   [`never starts a process, but clamscan on an agent download`](../tools/security/test/chrome-source.test.mjs)
+- C3. With Firefox's toolbar hidden ([toolbar-toggle](specs/toolbar-toggle.md)), a permission
+  prompt **must** hang from its own icon in the address bar, next to the site's identity and
+  address, as with the toolbar shown, and **never** open unanchored; pop-up windows **must** keep
+  their read-only address bar; and the status bar **must** say `not secure` where the address bar
+  would. Nothing anchors to a hidden icon: the bar is revealed before it does.
+  [`a_permission_prompt_shows_the_minimal_bar`](../tests/browser/browser_vimma_toolbar.js),
+  [`exclusions`](../tests/browser/browser_vimma_toolbar.js),
+  [`the_status_bar_says_not_secure_and_private`](../tests/browser/browser_vimma_toolbar.js)
 
 ## 7. Omarchy hook and the `vimma-open` launcher
 

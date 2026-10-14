@@ -5,6 +5,7 @@ import {
   displayUrl,
   fitStatus,
   renderStatusBar,
+  securityLevel,
   statusSegments,
   statusWidth,
   textWidth,
@@ -312,5 +313,119 @@ describe("truncation", () => {
         },
       ),
     );
+  });
+});
+
+// docs/specs/toolbar-toggle.md, decision 12: while the toolbar is hidden the bar carries the
+// cues the hidden toolbar did.
+describe("status bar with the toolbar hidden", () => {
+  const hidden = { ...base, toolbarHidden: true };
+  const http = { ...hidden, tab: { ...base.tab, title: "Plain", url: "http://example.org/a" } };
+
+  test("not secure for an insecure page, in the error colour, as important as config errors", () => {
+    const segs = statusSegments({ ...http, security: "insecure" });
+    const sec = segs.find((s) => s.id === "security");
+    expect(sec).toMatchObject({
+      text: "not secure",
+      fg: "--vimma-text-error",
+      side: "right",
+      priority: 2,
+    });
+  });
+
+  test.each([["secure"], ["neutral"], [undefined]])("nothing for a %s page", (security) => {
+    const segs = statusSegments({ ...hidden, ...(security ? { security } : {}) });
+    expect(segs.some((s) => s.id === "security")).toBe(false);
+  });
+
+  test("private in a private window, unless the workspace already says private", () => {
+    const segs = statusSegments({ ...hidden, workspace: null, privateWindow: true });
+    expect(texts(segs).private).toBe("private");
+    const ws = statusSegments({
+      ...hidden,
+      workspace: { name: "private", index: 0, private: true },
+      privateWindow: true,
+    });
+    expect(ws.filter((s) => s.text.includes("private"))).toHaveLength(1);
+    expect(
+      statusSegments({ ...hidden, privateWindow: false }).some((s) => s.id === "private"),
+    ).toBe(false);
+  });
+
+  test("the URL outlasts the title in a narrow bar", () => {
+    const input = {
+      ...hidden,
+      tab: { index: 1, count: 1, title: "A long page title here", url: "https://example.org/x" },
+    };
+    const full = statusSegments(input);
+    const url = full.find((s) => s.id === "url");
+    const title = full.find((s) => s.id === "title");
+    expect(url && title && url.priority < title.priority).toBe(true);
+    const narrow = renderStatusBar(input, statusWidth(full) - textWidth("A long page title here"));
+    expect(texts(narrow).url).toBe("example.org/x");
+    expect(texts(narrow).title).toBeUndefined();
+  });
+
+  test("http:// stays for an http: page; https:// is still dropped", () => {
+    expect(texts(statusSegments(http)).url).toBe("http://example.org/a");
+    expect(texts(statusSegments(hidden)).url).toBe("github.com");
+  });
+
+  test("with the toolbar shown the segments are exactly today's, whatever the new inputs say", () => {
+    const security = fc.constantFrom("secure", "insecure", "neutral", undefined);
+    const url = fc.constantFrom("http://a.org/", "https://b.org/x", "about:vimma", null);
+    fc.assert(
+      fc.property(
+        security,
+        fc.boolean(),
+        url,
+        fc.boolean(),
+        fc.constantFrom(false, undefined),
+        (sec, priv, u, wsPrivate, shown) => {
+          const today = {
+            ...base,
+            workspace: wsPrivate ? { name: "private", index: 0, private: true } : base.workspace,
+            tab: { ...base.tab, url: u },
+          };
+          const extra = {
+            ...today,
+            ...(shown === undefined ? {} : { toolbarHidden: shown }),
+            ...(sec ? { security: sec } : {}),
+            privateWindow: priv,
+          };
+          expect(statusSegments(extra)).toEqual(statusSegments(today));
+        },
+      ),
+      { seed: 20261014, numRuns: 300 },
+    );
+  });
+});
+
+describe("securityLevel: the identity box's classes as secure, insecure or neutral", () => {
+  test.each([
+    [["verifiedDomain"], "secure"],
+    [["verifiedDomain", "mixedActiveBlocked"], "secure"],
+    [["verifiedDomain", "certUserOverridden"], "insecure"],
+    [["notSecure"], "insecure"],
+    [["notSecure", "notSecureText"], "insecure"],
+    [["certErrorPage", "notSecureText"], "insecure"],
+    [["unknownIdentity", "mixedActiveContent"], "insecure"],
+    [["unknownIdentity", "mixedDisplayContent"], "insecure"],
+    [["unknownIdentity", "weakCipher"], "insecure"],
+    [["unknownIdentity"], "neutral"],
+    [["localResource"], "neutral"],
+    [["chromeUI"], "neutral"],
+    [["extensionPage"], "neutral"],
+    [["httpsOnlyErrorPage"], "insecure"],
+    [["unknownIdentity", "mixedDisplayContentLoadedActiveBlocked"], "insecure"],
+    [[], "neutral"],
+  ])("%j is %s", (classes, level) => {
+    expect(securityLevel(classes)).toBe(level);
+  });
+
+  test("neutral while the address bar shows no page identity (a blank page, an edited address)", () => {
+    expect(securityLevel(["notSecure"], { pageProxyValid: false })).toBe("neutral");
+    expect(securityLevel(["verifiedDomain"], { pageProxyValid: false })).toBe("neutral");
+    expect(securityLevel(["notSecure"], { pageProxyValid: true })).toBe("insecure");
   });
 });

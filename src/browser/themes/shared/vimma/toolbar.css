@@ -1,0 +1,110 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* Firefox's navigation toolbar, hidden while the pref vimma.ui.toolbar.hidden is on (spec
+ * docs/specs/toolbar-toggle.md; ui/toolbar.mjs sets the root attributes). Hidden: no space, not
+ * painted, out of the tab order and the accessibility tree, and failing checkVisibility, so
+ * nothing anchors to an invisible icon.
+ * While a reason holds (ui/toolbar.mjs) the bar is revealed over the top of the page, which
+ * keeps its size: minimal (the URL field and what is inside it) or full. Customize mode, popup
+ * windows (their read-only URL bar is anti-spoofing), taskbar tabs and both fullscreens are left
+ * to Firefox. */
+
+:root[vimma-toolbar-hidden]:not(
+    [customizing],
+    [popup-window],
+    [taskbartab],
+    [inFullscreen],
+    [inDOMFullscreen]
+  ) {
+  /* The containing block of the revealed bar, which then sits where it sits when shown, above
+   * the page: Firefox's own level for a toolbox floating over the content (F11 on macOS). */
+  #navigator-toolbox {
+    position: relative;
+    z-index: var(--browser-area-z-index-toolbox-while-animating);
+    /* Firefox clips the toolbox; it holds nothing in the flow now, and the bar overflows it. */
+    overflow: visible;
+    /* Nor a line between the page and an empty toolbox: the page reaches the window's top. */
+    border-bottom: none;
+  }
+
+  /* Out of the flow, at its own place (no `top`: its static position), hidden or revealed: the
+   * page below keeps its height and is never resized or moved by a reveal, and the bar keeps
+   * its full width, so Firefox's overflow measurement (OverflowableToolbar, on a window resize)
+   * sees the bar as it is when shown. A collapsed bar would measure a width of nothing. */
+  #nav-bar {
+    position: absolute;
+    inset-inline: 0;
+    anchor-name: --vimma-nav-bar;
+  }
+
+  #PersonalToolbar {
+    position: absolute;
+    inset-inline: 0;
+    top: anchor(--vimma-nav-bar bottom);
+  }
+
+  /* Hidden: not painted, out of the tab order and the accessibility tree, and failing
+   * checkVisibility, so nothing anchors to an invisible icon (decision 6). */
+  &:not([vimma-toolbar-revealed]) {
+    /* Every descendant too: some (the remote-control icon) set `visibility: visible` of their
+     * own, which would show through an inherited `hidden`. */
+    :is(#nav-bar, #PersonalToolbar),
+    :is(#nav-bar, #PersonalToolbar) * {
+      visibility: hidden !important;
+    }
+  }
+
+  &[vimma-toolbar-revealed] #nav-bar {
+    border-bottom: 1px solid var(--chrome-content-separator-color);
+  }
+
+  /* Minimal: only the URL field. Hidden, not collapsed, so every other item keeps its box and
+   * the field sits exactly where, and as wide as, it sits in the full toolbar. */
+  &[vimma-toolbar-minimal] {
+    #PersonalToolbar {
+      visibility: collapse;
+    }
+
+    :is(
+      #nav-bar > :not(#nav-bar-customization-target),
+      #nav-bar-customization-target > :not(#urlbar-container)
+    ),
+    :is(
+        #nav-bar > :not(#nav-bar-customization-target),
+        #nav-bar-customization-target > :not(#urlbar-container)
+      )
+      * {
+      visibility: hidden !important;
+    }
+  }
+}
+
+/* The top edge that reveals the full toolbar on hover, as F11's #fullscr-toggler. */
+#vimma-toolbar-edge {
+  display: none;
+}
+
+:root[vimma-toolbar-hidden]:not(
+    [vimma-toolbar-revealed],
+    [customizing],
+    [popup-window],
+    [taskbartab],
+    [inFullscreen],
+    [inDOMFullscreen]
+  )
+  #vimma-toolbar-edge {
+  display: block;
+  position: fixed;
+  top: 0;
+  inset-inline: 0;
+  height: 2px;
+  z-index: 2147483647;
+}
+
+/* The account panel's "Get Vimma for Android or iOS": Firefox's mobile promo under Vimma's
+ * name, for an app that does not exist (toolbar-toggle decision 20). Shown or hidden. */
+#PanelUI-fxa-menu-get-firefox-mobile {
+  display: none;
+}

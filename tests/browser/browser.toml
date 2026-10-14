@@ -59,6 +59,9 @@ skip-if = ["artifact"]
 
 ["browser_vimma_tabstrip.js"]
 
+["browser_vimma_toolbar.js"]
+support-files = ["file_vimma_plain.html"]
+
 ["browser_vimma_tab_keys.js"]
 support-files = ["file_vimma_test.pdf"]
 

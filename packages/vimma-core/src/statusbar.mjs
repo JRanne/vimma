@@ -50,7 +50,45 @@ export { textWidth };
  * @property {{ waiting: number, minutes: number | null, ran: boolean } | null} [agent]  local AI
  *   agents (docs/specs/vimma-mcp.md decision 24): questions waiting, the shortest grant's
  *   minutes left, a request that just ran
+ * @property {boolean} [toolbarHidden]  Firefox's toolbar is hidden (docs/specs/toolbar-toggle.md):
+ *   the bar then carries its security and private-browsing cues; shown, those are left out
+ * @property {SecurityLevel} [security]  the selected page's connection (securityLevel)
+ * @property {boolean} [privateWindow]  a private browsing window
  */
+
+/** @typedef {"secure" | "insecure" | "neutral"} SecurityLevel */
+
+/**
+ * Classes Firefox's identity box (`#identity-box`, browser-siteIdentity.js
+ * `_refreshIdentityIcons`) carries when it shows a warning: the "not secure" icon or text, a
+ * certificate error page or exception, or a broken connection (mixed content, a weak cipher).
+ */
+const INSECURE_CLASSES = new Set([
+  "notSecure",
+  "certErrorPage",
+  "certUserOverridden",
+  "httpsOnlyErrorPage",
+  "mixedActiveContent",
+  "mixedDisplayContent",
+  "mixedDisplayContentLoadedActiveBlocked",
+  "weakCipher",
+]);
+
+/**
+ * The selected page's connection from its identity box's classes: "secure" for a verified
+ * connection (Firefox's quiet lock), "insecure" for anything the box warns about, "neutral" for
+ * the rest (about: pages, files, add-on pages, the start page). Firefox hides the box while
+ * its `pageproxystate` is not valid (a blank page, an address being edited): neutral then too.
+ * @param {Iterable<string>} classes
+ * @param {{ pageProxyValid?: boolean }} [options]
+ * @returns {SecurityLevel}
+ */
+export function securityLevel(classes, { pageProxyValid = true } = {}) {
+  if (!pageProxyValid) return "neutral";
+  const list = [...classes];
+  if (list.some((c) => INSECURE_CLASSES.has(c))) return "insecure";
+  return list.includes("verifiedDomain") ? "secure" : "neutral";
+}
 
 /** `[workspaces.<name>] color` (Firefox container colours) → its readable text token. */
 export const WORKSPACE_COLOR_TOKENS = Object.freeze({
@@ -117,11 +155,13 @@ export function truncate(text, width, how) {
 }
 
 /**
- * The URL as the bar shows it: no `http(s)://`, no lone trailing `/`.
+ * The URL as the bar shows it: no `http(s)://`, no lone trailing `/`. `keepHttp` keeps
+ * `http://`, which is part of the warning while the toolbar is hidden (toolbar-toggle 12).
  * @param {string} url
+ * @param {{ keepHttp?: boolean }} [options]
  */
-export function displayUrl(url) {
-  const m = /^https?:\/\/(.*)$/i.exec(url);
+export function displayUrl(url, { keepHttp = false } = {}) {
+  const m = (keepHttp ? /^https:\/\/(.*)$/i : /^https?:\/\/(.*)$/i).exec(url);
   if (!m) return url;
   const rest = /** @type {string} */ (m[1]);
   const slash = rest.indexOf("/");
@@ -155,6 +195,9 @@ export function statusSegments(input) {
     alerts = [],
     find = null,
     agent = null,
+    toolbarHidden = false,
+    security = "neutral",
+    privateWindow = false,
   } = input;
   /** @type {Segment[]} */
   const left = [];
@@ -304,14 +347,40 @@ export function statusSegments(input) {
       }),
     );
   }
+  if (toolbarHidden && security === "insecure") {
+    // Text, not only colour (m7-a11y); as important as a config error (toolbar-toggle 12).
+    right.push(
+      seg({
+        id: "security",
+        text: "not secure",
+        fg: "--vimma-text-error",
+        side: "right",
+        priority: 2,
+      }),
+    );
+  }
+  if (toolbarHidden && privateWindow && !workspace?.private) {
+    // The toolbar's private-browsing indicator; the private workspace's segment says it already.
+    right.push(
+      seg({
+        id: "private",
+        text: PRIVATE_NAME,
+        fg: PRIVATE_COLOR_TOKEN,
+        side: "right",
+        priority: 3,
+      }),
+    );
+  }
   if (tab?.url && !urlShownAsTitle) {
     right.push(
       seg({
         id: "url",
-        text: displayUrl(tab.url),
+        text: displayUrl(tab.url, { keepHttp: toolbarHidden }),
         fg: "--vimma-fg-dim",
         side: "right",
-        priority: 8,
+        // Toolbar hidden: the bar is the only place the address shows, so it outlasts the
+        // title (5; on a tie the later segment gives way first, so just below it).
+        priority: toolbarHidden ? 4.9 : 8,
         min: 12,
         cut: "middle",
       }),

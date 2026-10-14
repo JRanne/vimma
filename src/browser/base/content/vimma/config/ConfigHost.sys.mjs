@@ -25,6 +25,7 @@ import { McpHost } from "../host/mcp-ops.mjs";
 import { PrivateSwap } from "../host/private-swap.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
+import { Toolbar } from "../ui/toolbar.mjs";
 import { WorkspaceRouter } from "../workspaces/WorkspaceRouter.sys.mjs";
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
 
@@ -83,6 +84,13 @@ let again = false;
 let timer = null;
 /** @type {Set<Window>} */
 const windows = new Set();
+/**
+ * `[ui] toolbar` of the last config applied; null before the first. The pref is written only
+ * when it changes, so ctrl+b u lasts until a restart or an edit of that line, as a tmux `set`
+ * lasts until .tmux.conf is sourced (docs/specs/toolbar-toggle.md decision 4).
+ * @type {string | null}
+ */
+let appliedToolbar = null;
 
 /**
  * @param {string} path
@@ -123,6 +131,10 @@ function apply(next) {
   PrivateSwap.configure(config.private.placement);
   WorkspaceRouter.setRoutes(config.routes);
   McpHost.configure(config.mcp);
+  if (config.ui.toolbar !== appliedToolbar) {
+    appliedToolbar = config.ui.toolbar;
+    Toolbar.setHidden(config.ui.toolbar === "hidden");
+  }
   // `[mcp] workspace` names the agent workspace the reconcile ensures (vimma-mcp decision 8).
   WorkspaceStore.setConfig(config.workspaces, { agent: config.mcp.workspace }).catch((e) =>
     console.error("vimma: [workspaces] not applied", e),

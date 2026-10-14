@@ -69,6 +69,8 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
   of its tabs again (`split 3 hidden` in the status bar); a new tab still opens in the focused
   pane.
 - `ctrl+b ?` lists every binding, searchable.
+- `ctrl+b u` hides the toolbar; it comes back when you need the address bar
+  ([guide](docs/guide.md#hiding-the-toolbar)).
 
 **Yours to configure**
 

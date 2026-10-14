@@ -71,6 +71,9 @@ Workspaces
 Navigation
   goto_picker             ctrl+b g, b                                       Goto picker: every tab in every workspace
   toggle_sidebar          ctrl+b b                                          Open / close the side panel
+  toggle_toolbar          ctrl+b u                                          Show / hide the toolbar (URL bar and add-on buttons)
+  show_toolbar            (unbound)                                         Show the toolbar
+  hide_toolbar            (unbound)                                         Hide the toolbar (the address bar shows when focused)
   scroll_down             j, ctrl+e                                         Scroll down
   scroll_up               k, ctrl+y                                         Scroll up
   scroll_left             h                                                 Scroll left

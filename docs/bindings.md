@@ -88,25 +88,28 @@ shows as `space n` ([guide](guide.md#configtoml)).
 
 ## Navigation
 
-| Action                                    | Config name        | Bindings                                          |
-| ----------------------------------------- | ------------------ | ------------------------------------------------- |
-| Goto picker: every tab in every workspace | `goto_picker`      | `ctrl+b g`, `b`                                   |
-| Open / close the side panel               | `toggle_sidebar`   | `ctrl+b b`                                        |
-| Scroll down                               | `scroll_down`      | `j`, `ctrl+e`                                     |
-| Scroll up                                 | `scroll_up`        | `k`, `ctrl+y`                                     |
-| Scroll left                               | `scroll_left`      | `h`                                               |
-| Scroll right                              | `scroll_right`     | `l`                                               |
-| Scroll half a page down                   | `scroll_half_down` | `d`, `ctrl+d`                                     |
-| Scroll half a page up                     | `scroll_half_up`   | `u`, `ctrl+u`                                     |
-| Scroll to top                             | `scroll_top`       | `gg`                                              |
-| Scroll to bottom                          | `scroll_bottom`    | `G`                                               |
-| Go back                                   | `history_back`     | `alt+left`, `H`, `ctrl+o`, `ctrl+[`               |
-| Go forward                                | `history_forward`  | `alt+right`, `L`, `ctrl+i`, `ctrl+]`              |
-| Reload page                               | `reload`           | `f5`, `ctrl+r`, `r`                               |
-| Open a URL or search in this tab          | `open_url`         | —                                                 |
-| Go up a level in the URL path             | `url_up`           | `gu`                                              |
-| Go to the site's root                     | `url_root`         | `gU`                                              |
-| Focus the address bar, its text selected  | `focus_urlbar`     | `ctrl+l`, `alt+d`, `I`, `I [visual]`, `I [panel]` |
+| Action                                                | Config name        | Bindings                                          |
+| ----------------------------------------------------- | ------------------ | ------------------------------------------------- |
+| Goto picker: every tab in every workspace             | `goto_picker`      | `ctrl+b g`, `b`                                   |
+| Open / close the side panel                           | `toggle_sidebar`   | `ctrl+b b`                                        |
+| Show / hide the toolbar (URL bar and add-on buttons)  | `toggle_toolbar`   | `ctrl+b u`                                        |
+| Show the toolbar                                      | `show_toolbar`     | —                                                 |
+| Hide the toolbar (the address bar shows when focused) | `hide_toolbar`     | —                                                 |
+| Scroll down                                           | `scroll_down`      | `j`, `ctrl+e`                                     |
+| Scroll up                                             | `scroll_up`        | `k`, `ctrl+y`                                     |
+| Scroll left                                           | `scroll_left`      | `h`                                               |
+| Scroll right                                          | `scroll_right`     | `l`                                               |
+| Scroll half a page down                               | `scroll_half_down` | `d`, `ctrl+d`                                     |
+| Scroll half a page up                                 | `scroll_half_up`   | `u`, `ctrl+u`                                     |
+| Scroll to top                                         | `scroll_top`       | `gg`                                              |
+| Scroll to bottom                                      | `scroll_bottom`    | `G`                                               |
+| Go back                                               | `history_back`     | `alt+left`, `H`, `ctrl+o`, `ctrl+[`               |
+| Go forward                                            | `history_forward`  | `alt+right`, `L`, `ctrl+i`, `ctrl+]`              |
+| Reload page                                           | `reload`           | `f5`, `ctrl+r`, `r`                               |
+| Open a URL or search in this tab                      | `open_url`         | —                                                 |
+| Go up a level in the URL path                         | `url_up`           | `gu`                                              |
+| Go to the site's root                                 | `url_root`         | `gU`                                              |
+| Focus the address bar, its text selected              | `focus_urlbar`     | `ctrl+l`, `alt+d`, `I`, `I [visual]`, `I [panel]` |
 
 ## Page
 

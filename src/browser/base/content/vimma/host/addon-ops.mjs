@@ -9,6 +9,7 @@
 // from page content. Each op returns the text for the notice, or null.
 
 import { addonChanged, addonItems, bestAddon, removeAddonQuestion } from "../core/addons.mjs";
+import { Toolbar } from "../ui/toolbar.mjs";
 
 /** @import { AddonItem, AddonRecord } from "../core/addons.mjs" */
 
@@ -143,6 +144,11 @@ export function openAddonPopup(win, item) {
   const policy = /** @type {any} */ (globalThis).WebExtensionPolicy.getByID(item.addonId);
   const action = policy && /** @type {any} */ (win).gUnifiedExtensions?.browserActionFor(policy);
   if (!action) return `${item.display}: no popup or button`;
+  // A hidden toolbar shows in full first, so the popup hangs from its own button or the
+  // extensions menu as with the toolbar shown (docs/specs/toolbar-toggle.md decision 10).
+  if (action.action?.getPopupUrl?.(/** @type {any} */ (win).gBrowser.selectedTab)) {
+    Toolbar.get(win)?.holdForPopup("addon", "full");
+  }
   action.triggerAction(win);
   return null;
 }
