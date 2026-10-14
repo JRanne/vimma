@@ -6,11 +6,10 @@ the side panel of [m3-workspaces](m3-workspaces.md) sub-spec 6) · Area:
 `ui/side-panel.mjs`, `split/PaneView.mjs`, `host/VimmaHost.sys.mjs`, `side-panel.css`. No
 upstream patch.
 
-## The user's words
+## Goal
 
-"A feature that allows selecting tabs from the side panel, and then when pressing a key the
-panels should be shown in the same view. Select two tabs and show them in split view, select
-three and show them split or dwindle etc."
+Select tabs in the side panel, then press one key to show them together in the same view: two
+selected tabs become a split, three or more are arranged as a split or dwindle layout, and so on.
 
 ## User stories
 

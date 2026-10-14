@@ -386,8 +386,8 @@ solve "point at something on screen in two keys" for links; text blocks have no 
 
 ## Security and privacy
 
-- The child replies only rects, a kind from a closed list, a length and, for `y`, the text the
-  Vimma user asked to copy. `parseHintReply` gains `kind: "block"` with a `blockKind` from that
+- The child replies only rects, a kind from a closed list, a length and, for `y`, the text being
+  copied. `parseHintReply` gains `kind: "block"` with a `blockKind` from that
   list; `Vimma:Block` replies get a strict check in core (`parseBlockReply`) like
   `parseHintReply`. The child acts only for the current `gen` and only in the frame that was
   asked; anything else is refused.

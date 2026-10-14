@@ -312,7 +312,7 @@ The repo holds the memory. `CLAUDE.md`, specs, ADRs, tests and the changelog are
 - After three failed attempts at one bug: write what was learned into the issue or `docs/notes/`, clear, restart with the note plus the failing test. Doubly so for `tabbrowser` focus bugs.
 - When switching area: `vimma-core` ↔ host/actors ↔ UI/CSS ↔ CI/Surfer. Different files, different rules.
 - When context passes roughly half: `/compact` with a focus phrase ("keep test names and the actor message schema"); clear if the summary would lose the thread.
-- Never mid-task without a commit/stash and a handover paragraph in the spec.
+- Never mid-task without a commit/stash and a note in the PR description on where the work stands.
 
 **Unattended runs (`claude.yml`):**
 
