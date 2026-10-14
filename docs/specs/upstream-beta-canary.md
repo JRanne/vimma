@@ -10,6 +10,8 @@ Status: accepted (sub-PRs 1 to 3 implemented, #192, #197 and #206; sub-PR 4: [#2
 [ADR-002](../adr/002-upstream-release-channel.md) and
 [ADR-010](../adr/010-pr-artifact-builds.md) (one paragraph each); no new ADR
 
+Issue: [#218](https://github.com/JRanne/vimma/issues/218)
+
 ## Summary
 
 A scheduled workflow, `upstream-beta.yml`, tests Vimma's `main` against the current Firefox

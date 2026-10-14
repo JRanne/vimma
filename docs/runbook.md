@@ -382,20 +382,21 @@ Limits:
 
 ## CI and automation (spec m0-pipeline)
 
-| Workflow                   | Trigger                          | Runner                    | Needs from you                             |
-| -------------------------- | -------------------------------- | ------------------------- | ------------------------------------------ |
-| `ci.yml`                   | push to `main`, PRs, manual      | `ubuntu-latest`           | nothing                                    |
-| `e2e.yml`                  | PRs, manual, upstream.yml        | `ubuntu-24.04`            | nothing (ADR-010)                          |
-| `nightly.yml`              | 03:00 UTC, manual                | hosted (after #224)       | off until #224; then `NIGHTLY_ENABLED`     |
-| `upstream.yml`             | every 4 h (`:17`), manual        | `ubuntu-latest` + e2e.yml | allow Actions to open PRs; optional token  |
-| `claude.yml`               | `@claude`, `spec`+`claude:go`    | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
-| `release-please.yml`       | push to `main`, manual           | `ubuntu-latest`           | Actions may open PRs; optional token       |
-| `release.yml`              | release published, manual        | hosted (after #224)       | see "Release packages" (gated off)         |
-| `mutation.yml`             | Sundays 04:23 UTC, manual        | `ubuntu-latest`           | nothing (creates its `mutation` label)     |
-| `semgrep.yml`              | push to `main`, PRs, Mon, manual | `ubuntu-latest`           | nothing                                    |
-| `codeql.yml`               | push to `main`, PRs, Mon, manual | `ubuntu-latest`           | nothing; skipped while the repo is private |
-| `dependabot-automerge.yml` | Dependabot's PRs                 | `ubuntu-latest`           | nothing (Dependabot, below)                |
-| `site-dispatch.yml`        | `docs/bindings.json` on `main`   | `ubuntu-latest`           | a token secret (vimma.dev, below)          |
+| Workflow                   | Trigger                            | Runner                    | Needs from you                             |
+| -------------------------- | ---------------------------------- | ------------------------- | ------------------------------------------ |
+| `ci.yml`                   | push to `main`, PRs, manual        | `ubuntu-latest`           | nothing                                    |
+| `e2e.yml`                  | PRs, manual, upstream.yml          | `ubuntu-24.04`            | nothing (ADR-010)                          |
+| `nightly.yml`              | 03:00 UTC, manual                  | hosted (after #224)       | off until #224; then `NIGHTLY_ENABLED`     |
+| `upstream.yml`             | every 4 h (`:17`), manual          | `ubuntu-latest` + e2e.yml | allow Actions to open PRs; optional token  |
+| `claude.yml`               | `@claude`, `spec`+`claude:go`      | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
+| `release-please.yml`       | push to `main`, manual             | `ubuntu-latest`           | Actions may open PRs; optional token       |
+| `release.yml`              | release published, manual          | hosted (after #224)       | see "Release packages" (gated off)         |
+| `mutation.yml`             | Sundays 04:23 UTC, manual          | `ubuntu-latest`           | nothing (creates its `mutation` label)     |
+| `semgrep.yml`              | push to `main`, PRs, Mon, manual   | `ubuntu-latest`           | nothing                                    |
+| `codeql.yml`               | push to `main`, PRs, Mon, manual   | `ubuntu-latest`           | nothing; skipped while the repo is private |
+| `dependabot-automerge.yml` | Dependabot's PRs                   | `ubuntu-latest`           | nothing (Dependabot, below)                |
+| `site-dispatch.yml`        | `docs/bindings.json` on `main`     | `ubuntu-latest`           | a token secret (vimma.dev, below)          |
+| `spec-status.yml`          | daily, issue closed, specs, manual | `ubuntu-latest`           | nothing (creates its `spec-status` label)  |
 
 Locally, before pushing: `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:py`,
 `npm run license-check`, `npx surfer license-check`, `npx commitlint --from main`.

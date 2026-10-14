@@ -9,6 +9,9 @@ patches: `src/toolkit/xre/nsAppRunner-cpp.patch` (new; ADR-003 register line: "1
 (firefox-versions)") · ADR: ADR-020 (new, "A security release needs no person"), ADR-015 and
 ADR-003 (register line)
 
+Issues: [#219](https://github.com/JRanne/vimma/issues/219),
+[#220](https://github.com/JRanne/vimma/issues/220)
+
 ## Summary
 
 Vimma keeps one SemVer version of its own and shows the Firefox version it is built on beside it,

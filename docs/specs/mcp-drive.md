@@ -8,6 +8,8 @@ Status: draft · Area: `packages/vimma-core/src/` (`agent-keys.mjs` new, `agent.
 patches: none · ADR: [ADR-019](../adr/019-agents-over-mcp.md) (unchanged; this spec stays inside
 it). No new dependency.
 
+Issue: [#252](https://github.com/JRanne/vimma/issues/252)
+
 Builds on [vimma-mcp](vimma-mcp.md): its agent workspace, protocol 2's `agent` role, the question
 line, grants and limits. Decision numbers of that spec are written "vimma-mcp N"; this spec's own
 are "D1", "D2", and so on. Engine paths are relative to `engine/` (Firefox 158.0,

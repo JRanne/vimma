@@ -8,6 +8,9 @@ Status: accepted (sub-PR 1 implemented; sub-PRs 2 and 3: [#234](https://github.c
 `host/VimmaHost.sys.mjs`, `ui/help-overlay.mjs`, `about/AboutVimma.sys.mjs`,
 `branding/vimma/pref/firefox-branding.js`. No upstream patch.
 
+Issues: [#234](https://github.com/JRanne/vimma/issues/234),
+[#235](https://github.com/JRanne/vimma/issues/235)
+
 Checked against main on 2026-10-13 (after the private workspace #142, the private swap
 #151/#160, unsplit #150, bindings.json #154, find #167 and the restore focus fix #168). File:line
 references below are to that main.
