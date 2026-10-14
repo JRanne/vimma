@@ -1,10 +1,10 @@
 # Spec: tab-search
 
-Status: accepted · Area: `packages/vimma-core/src/` (`picker.mjs`,
-`tabsearch.mjs` new, `actions.mjs`, `defaults.mjs`, `cmdline.mjs`, `help.mjs`);
-`src/browser/base/content/vimma/` (`host/goto.mjs`, `host/tab-search.mjs` new,
-`host/VimmaHost.sys.mjs`, `ui/picker.mjs`); `src/browser/themes/shared/vimma/picker.css` ·
-Upstream patches: none · ADR: none. No new dependency.
+Status: accepted · Area: `packages/vimma-core/src/` (`picker.mjs`, `tabsearch.mjs` new,
+`actions.mjs`, `cmdline.mjs`); `src/browser/base/content/vimma/` (`host/goto.mjs`,
+`host/tab-search.mjs` new, `host/VimmaHost.sys.mjs`, `ui/picker.mjs`, `jar.mn`);
+`src/browser/themes/shared/vimma/picker.css` · Upstream patches: none · ADR: none. No new
+dependency.
 
 Builds on [m2-picker-rename](m2-picker-rename.md) (the goto picker),
 [m3-workspaces](m3-workspaces.md) (sub-spec 5, the workspace picker and its `m`),
@@ -19,11 +19,10 @@ main at 7fc0226 and are under `src/browser/base/content/vimma/` unless they star
 
 The goto picker (`ctrl+b g`, `b`, `:ls`) becomes tab search, modelled on Chromium's and Brave's
 Tab Search: one keyboard list that finds any open tab in any workspace of any normal window, and
-any recently closed tab or window. Each row shows its workspace, window and audio state; `x`
-closes a tab from the list, `u` reopens a closed one and `m` moves a tab to the current
-workspace. A new action, `tab_search` (`ctrl+b f f`, `:tabsearch [text]`), opens the same list
-ready to type. Private tabs never appear outside the private workspace, agent tabs are marked
-`◇`, and lazy tabs stay unloaded.
+any recently closed tab or window. It opens ready to type. Each row shows its workspace, window
+and audio state; `Enter` goes to the tab, or reopens a closed one. Private tabs never appear
+outside the private workspace, agent tabs are marked `◇`, and lazy tabs stay unloaded. Tab
+search only finds tabs; closing and moving them stays in the side panel.
 
 ## Problem
 
@@ -38,44 +37,44 @@ keyboard today:
   repeatedly, which reopens every tab closed after it too. There is no list of closed tabs.
 - A tab playing audio cannot be found from the picker; only the side panel marks it, and only
   for the current workspace.
-- Tidying up means leaving the picker for every tab: there is no close or move from the list.
+- The picker opens in a browse mode, so finding a tab by name takes `/` before the first letter.
 - The agent workspace's tabs appear in the picker with no marker, indistinguishable from the
   user's own.
 
 ## Behaviour
 
-1. As a Vimma user with 150 tabs across `work`, `personal` and two windows, `ctrl+b f f` and a few
+1. As a Vimma user with 150 tabs across `work`, `personal` and two windows, `ctrl+b g` and a few
    letters (`jira 412`) find the tab, and `Enter` takes me there: the right window comes to the
    front and the right workspace becomes active. No tab that was not loaded loads.
-2. As a Vimma user who closed a tab by mistake three tabs ago, `ctrl+b f f`, then `Tab` (to
-   "Recently closed") or part of its title, then `Enter` (or `u`) reopen it in its own
-   workspace, with its history. `ctrl+shift+t` still reopens only the last one.
-3. As a Vimma user tidying up, `ctrl+b g`, `j`/`k` and `x` close tabs one after another without
-   leaving the list. A pinned tab is refused with a notice and stays.
+2. As a Vimma user who closed a tab by mistake three tabs ago, `ctrl+b g`, then `Tab` (to
+   "Recently closed") or part of its title, then `Enter` reopen it in its own workspace, with
+   its history, and go there. `ctrl+shift+t` still reopens only the last one.
+3. As a Vimma user who closed a window, its row under "Recently closed" (`3 tabs`, `closed
+window`) reopens it with `Enter`.
 4. As a Vimma user who hears audio somewhere, the playing tab's row shows `♪` (and `muted` when
    muted), and typing `playing` or `muted` finds those rows.
-5. As a Vimma user in `work`, `m` on a `personal` tab's row moves that tab here, after the same
-   y/N question the workspace picker's `m` asks (the move reopens the page in this workspace's
-   container).
+5. As a Vimma user, every letter I type goes into the search, `j`, `k` and `q` included;
+   `ctrl+n` / `ctrl+p` and the arrow keys move, and one `Esc` closes the list.
 6. As a user of the private workspace, a normal window's tab search never lists a private tab's
-   title or URL, open or closed, and the private window's tab search lists only its own tabs.
+   title or URL, open or closed, and the private window's tab search lists only private tabs.
 7. As a Vimma user running an agent, the agent workspace's tabs are listed marked `◇ agent`,
    after my own workspaces, so an agent's tab is never mistaken for mine.
 8. As a screen-reader user, the list is a listbox whose options name the tab, its workspace and
    its window or "recently closed", and the number of matches is announced as I type.
 
-Keys and commands added (decision 2, decision 7):
+Keys and commands (decisions 2 and 7):
 
-| Key or command                           | Where         | Does                                              |
-| ---------------------------------------- | ------------- | ------------------------------------------------- |
-| `ctrl+b f f`, `:tabsearch [text]`, `:ts` | everywhere    | `tab_search`: opens tab search in search mode     |
-| `ctrl+b g`, `b`, `:ls`, `:b`             | unchanged     | `goto_picker`: opens tab search in browse mode    |
-| `Tab` / `shift+tab`                      | in the picker | next / previous section                           |
-| `x`                                      | in the picker | closes the open tab, or forgets the closed one    |
-| `u`                                      | in the picker | reopens the closed tab and keeps the list open    |
-| `m`                                      | in the picker | moves the open tab to the current workspace (y/N) |
+| Key or command                   | Where         | Does                                            |
+| -------------------------------- | ------------- | ----------------------------------------------- |
+| `ctrl+b g`, `b`, `:ls`           | unchanged     | `goto_picker`: opens tab search, ready to type  |
+| `:tabsearch [text]`, `:ts`, `:b` | command line  | opens tab search with the text already typed    |
+| letters, `Backspace`, `ctrl+w/u` | in the picker | type and edit the query                         |
+| `ctrl+n` / `ctrl+p`, `Down`/`Up` | in the picker | move                                            |
+| `Tab` / `shift+tab`              | in the picker | next / previous section                         |
+| `Enter`                          | in the picker | goes to the tab; reopens a closed tab or window |
+| `Esc`                            | in the picker | closes it                                       |
 
-No config key is added. `keys.tab_search` and `keys.goto_picker` are configurable as every
+No default key and no config key is added. `keys.goto_picker` stays configurable as every
 action is (firefox-keys).
 
 ## Research
@@ -170,21 +169,8 @@ recency order (decision 3) and the AI grouping.
 - **Keys.** `ctrl+shift+a` is `addons_manager`, page first (`defaults.mjs:127`;
   `docs/bindings.md:139`, `:309`; firefox-keys sub-PR 1, #171). Prefix keys in use
   (`defaults.mjs`): `( ) ? [ ^ a b c ctrl+6 e enter g h j k l minus n p r space v w x z` and
-  `shift+a b d h j k l n p t w x`. toolbar-toggle reserves `prefix+u`. `prefix+f` is unbound; it
-  becomes the find group that tab search and live grep share (decision 2), so `prefix+f` has no
-  action of its own and `prefix+f f` and `prefix+f g` are three-chord bindings.
-- **Three-key sequences.** `compileKeymap` builds one trie per mode and walks every chord of a
-  binding, however many (`packages/vimma-core/src/keymap.mjs:263-277`). A node may have
-  children and no action: normal mode's `y` is one today
-  (`packages/vimma-core/test/keymap.test.mjs:139-143`). The dispatcher returns pending at such a
-  node (`dispatcher.mjs:138-141`), arms no timeout because the node has no action
-  (`ambiguous`, `:174`) and cancels on a key with no child (`:123-136`). Checked on main at
-  7280cd5 by compiling `prefix+f f` and `prefix+f g` as user keys: both ran their actions,
-  `ctrl+b f x` cancelled and `ctrl+b g` still ran `goto_picker`. No default binding has three
-  chords yet.
-- **Telescope's keys.** telescope.nvim's README (v0.2.1) suggests `<leader>ff` for
-  `find_files`, `<leader>fg` for `live_grep`, `<leader>fb` for `buffers` and `<leader>fh` for
-  `help_tags`.
+  `shift+a b d h j k l n p t w x`. toolbar-toggle reserves `prefix+u`; live grep plans
+  `prefix+f g` (live-grep). Tab search adds no key (decision 2).
 - **Themes.** `picker.css` uses the theme tokens `--vimma-bg-dark`, `--vimma-fg`,
   `--vimma-fg-bright`, `--vimma-fg-dim`, `--vimma-muted`, `--vimma-selection`,
   `--vimma-text-accent` and `--vimma-focus`, with system-colour fallbacks. The agent's colour is
@@ -272,49 +258,45 @@ does.
 
 ## Design
 
-Data flow: the host (`host/tab-search.mjs`, new) collects items from the current window
-(`gotoItems`, extended), the other normal windows and SessionStore's closed tabs and windows. The
-pure core (`tabsearch.mjs`, new) orders them into sections, applies the private filter, the caps
-and the accessible names; `picker.mjs` matches, ranks and handles keys and returns effects; the
-host applies the effects (select, close, forget, reopen, move) and refreshes the list.
+Data flow: the host (`host/tab-search.mjs`, new) collects items from every browser window on
+the same side of the private line, this one first (`gotoItems`, extended, for each), and
+SessionStore's closed tabs and windows. The pure core (`tabsearch.mjs`, new) orders them into
+sections, applies the private filter, the caps and the accessible names; `picker.mjs` matches,
+ranks and handles keys and returns effects; the host applies them (go to a tab, reopen a closed
+one).
 
 1. **Extend the goto picker; no second picker.** `goto.picker` becomes tab search: the same
-   dialog, the same core state machine, the same keys plus the new ones in decision 7. Two lists
-   that both find tabs would split muscle memory, tests and docs; Chromium and Brave have one.
-   Its heading becomes "Tabs", its action name stays `goto_picker` (a config name users may have
-   bound), and its help text becomes "Tab search: every tab, every window, recently closed".
-   A separate tab-search picker beside the goto picker was rejected: it would keep the goto
-   picker's look and baseline unchanged, at the cost of two lists with overlapping jobs and
-   duplicated keys, tests and docs.
-2. **Two ways in.** `ctrl+b g`, `b` and `:ls` open it as today, in browse mode (`j`/`k` first).
-   A new action `tab_search` (`goto.search`) opens the same picker **in search mode**, typing at
-   once, as Chromium's `ctrl+shift+a` does. Its default key is `prefix+f f`, and
-   `:tabsearch [text]` (alias `:ts`) opens it with the text as the query. `prefix+f` is a find
-   group shared with live grep, a prefix with no action of its own: `f f` is tab search and
-   `f g` is live grep (live-grep decision 2). The pair mirrors Telescope's suggested
-   `<leader>ff` and `<leader>fg`, so a Neovim user's habit carries over, and the group leaves
-   `f h` and `f b` for later finders without spending more prefix keys. The keymap supports
-   three-chord bindings and actionless prefix nodes already (Research, "Three-key sequences").
-   A plain `prefix+f` would have been one key shorter, but it would leave live grep on an
-   unrelated key.
-   `ctrl+shift+a` stays `addons_manager` (firefox-keys, fate a), because Firefox users expect it
-   there; a Vimma user who wants Chromium's chord writes
-   `keys.tab_search = ["prefix+f f", "ctrl+shift+a"]`, which, because a bound key is no longer
-   Firefox's, turns Firefox's add-ons key off for them.
+   dialog, the same core state machine. Two lists that both find tabs would split muscle memory,
+   tests and docs; Chromium and Brave have one. Its heading becomes "Tabs", its action name
+   stays `goto_picker` (a config name users may have bound), and its help text becomes "Tab
+   search: every tab, every window, recently closed". A separate tab-search picker beside the
+   goto picker was rejected: it would keep the goto picker's look and baseline unchanged, at the
+   cost of two lists with overlapping jobs and duplicated keys, tests and docs.
+2. **One key, ready to type.** Tab search is `ctrl+b g` (and `b` in normal mode, `:ls`), and
+   it opens with the cursor in the search, as Chromium's Tab Search does: the first thing a user
+   does in it is type. There is no browse mode, so every letter types (`j`, `k`, `q`, `/` and
+   `x` too), `ctrl+n` / `ctrl+p` and the arrows move, and one `Esc` closes it. `:tabsearch
+[text]` (aliases `:ts`, and `:b`, after Vim's `:b {name}`) opens it with the text already
+   typed. One key to remember was chosen over a second action on a find group (`ctrl+b f f`
+   for tab search beside live grep's `ctrl+b f g`): the goto picker already finds tabs, so a
+   second key for the same list would only add a binding to learn. `b` stays because it is
+   bound today and does not conflict. `ctrl+shift+a`, Chromium's key, stays `addons_manager`
+   (firefox-keys, fate a), because Firefox users expect it there; a user who wants it writes
+   `keys.goto_picker = ["prefix+g", "ctrl+shift+a"]`. The workspace and add-on pickers keep
+   their browse mode.
 3. **What it lists, in order** (blank query):
    1. The current window's workspaces: the current workspace first, then the window's workspace
-      order, the agent workspace last (decision 6). Today the current workspace sits wherever it
-      falls in the order. Putting it first keeps the selected row, which the picker opens on,
-      at the top, and the nearest tabs nearest. Chromium's recency order with the visible tab
+      order, the agent workspace last (decision 6). Before, the current workspace sat wherever
+      it fell in the order. Putting it first keeps the selected row, which the picker opens on,
+      near the top, and the nearest tabs nearest. Chromium's recency order with the visible tab
       at the bottom was rejected: Vimma's tabs are organised by workspace, and a list that
-      reorders on every switch defeats `left`/`right` and `Tab` section jumps.
+      reorders on every switch defeats `Tab` section jumps.
    2. Every other normal window, most recently used first (`BrowserWindowTracker.orderedWindows`),
-      each window's workspaces in its own order. Rows carry the window as `w2`, `w3`: Vimma's
-      window number is the position in `orderedWindows` when the picker opens, so window 1 is
-      always this one. Listing this window only, as before, was rejected because a tab in
-      another window would stay unfindable from the keyboard; a config switch that limits the
-      list to this window was left out until there is a need for it, since Chromium lists every
-      window without one.
+      each window's workspaces in its own order. Rows carry the window as `w2`, `w3`: the
+      window's position when the picker opens, so window 1 is always this one. Listing this
+      window only, as before, was rejected because a tab in another window would stay
+      unfindable from the keyboard; a config switch that limits the list to this window was
+      left out until there is a need for it, since Chromium lists every window without one.
    3. "Recently closed": closed tabs of every normal window, newest first, then closed windows
       as one row each (`3 tabs · closed window`). The caps are 25 tabs and 5 windows, matching
       Firefox's own `browser.sessionstore.max_tabs_undo` (25 per window) and `max_windows_undo`
@@ -324,16 +306,17 @@ host applies the effects (select, close, forget, reopen, move) and refreshes the
       `restore_window`, which reopens only the last one; leaving both out would keep
       `ctrl+shift+t` as the only way back and leave behaviour 2 unsolved.
 
-   A section starts with a heading row (`role=presentation`, not an option), so `j`/`k` skip it:
-   `work · 12`, `personal · 40 · w2`, `Recently closed · 9`. With a query, matches are ranked
+   A section starts with a heading row (`role=presentation`, not an option), so moving skips
+   it: `work · 12`, `personal · 40 · w2`, `Recently closed · 9`. With a query, matches are ranked
    across sections by score, and each row still shows its workspace, window and `closed` tag.
 
 4. **A row** reads: index (the tab's number in its workspace, blank for a closed tab), the
-   display label with highlights, then muted cells: workspace name, window (`w2`, other windows
-   only), markers, host. Markers are `♪` (playing), `muted`, `pinned`, `◇` (agent) and `closed`.
-   The marker words are searchable as a fifth field, `markers`, weight 50, so `playing` finds
-   the audible tabs, as Firefox's all-tabs panel lists them apart. Highlights also cover the
-   host cell (today only `display` is rendered, `ui/picker.mjs:221-227`).
+   display label with highlights, then a muted cell: workspace name, window (`w2`, other windows
+   only), markers; then the host. Markers are `♪` (playing), `muted`, `pinned`, `◇` before the
+   agent workspace's name, and `closed` (`closed window`). The marker words (`playing`, `muted`,
+   `pinned`, `agent`, `closed`) are searchable as a fifth field, `markers`, weight 50, so
+   `playing` finds the audible tabs, as Firefox's all-tabs panel lists them apart. Highlights
+   also cover the host cell where a URL match falls inside the host.
 5. **Private stays private.** A normal window's tab search never lists a private tab, open or
    closed (private-workspace decision 5b). The private window's tab search lists only the
    private workspace's tabs and its own closed tabs, never another window's. Firefox draws the
@@ -343,68 +326,58 @@ host applies the effects (select, close, forget, reopen, move) and refreshes the
 6. **Agent workspace: listed, marked, last.** Its tabs show `◇ agent` and come after the user's
    workspaces in each window; a tie in score never ranks an agent row above a user row (a tie
    breaker, not a score penalty). With `[mcp]` off and the agent workspace empty, nothing shows.
-   Listing them is what lets the user see and close what an agent opened; hiding them was
-   rejected for that reason. `x` on an agent tab closes it like any tab. `m` moving a tab
-   **into** the agent workspace asks `moveTabQuestion`'s agent variant (vimma-mcp decision 11),
-   never silently. A closed agent tab is marked `◇` too, and reopens in the agent container
-   because SessionStore's saved `userContextId` puts it there. Listing them only while `[mcp]`
-   is on was rejected too: an agent's tabs outlive the setting, and the user must still be able
-   to find and close them.
-7. **Keys in the picker.** In browse mode (search mode types them as text): `j`/`k`,
-   `ctrl+n`/`ctrl+p`, `Down`/`Up`, `left`/`right` (sections), `Enter`, `/` and `Esc`/`q` as today,
-   and:
-   - `Tab` / `shift+tab` jump to the next / previous section in every mode and with a query
-     too; in search mode they move without leaving it, so "Recently closed" is one key away.
-   - `x` closes the selected open tab and keeps the list open with the selection on the next
-     row, as the side panel's `x` does; a pinned tab is refused with `PINNED_TEXT`. Closing the
-     last tab of a window asks y/N first, because the window would close under the list. On a
-     closed row `x` forgets it (`SessionStore.forgetClosedTabById`), as Firefox View's dismiss
-     does.
-   - `u` on a closed row reopens it and keeps the list open; `Enter` reopens it and goes there.
-   - `m` on an open tab moves that tab to the current workspace after `moveTabQuestion` (y/N,
-     the reopen-in-container warning). It is refused for a private tab and across private and
-     normal, as `:wsmove` is.
-   - `d` is not used: in Vim `d` deletes, and a second close key next to `x` invites mistakes.
-
-   These are the picker's own keys, not keymap bindings (as `j`, `/` and `q` are today,
-   m2-picker-rename "Keys"). They are listed in the picker's hint line and in `ctrl+b ?` under
-   the picker's group. The add-on picker's keys keep working on add-on rows only.
-
-8. **`Enter` on another window's tab** focuses that window (`win.focus()`), switches its
-   workspace if needed (WindowWorkspaces' `TabSelect` path, as today) and selects the tab, then
-   closes the picker in this window. On another workspace in this window it behaves as today.
+   Listing them is what lets the user see what an agent opened and go there; hiding them was
+   rejected for that reason. A closed agent tab is marked `◇` too, and reopens in the agent
+   container because SessionStore's saved `userContextId` puts it there. Listing them only
+   while `[mcp]` is on was rejected too: an agent's tabs outlive the setting, and the user must
+   still be able to find them.
+7. **Tab search finds; the side panel manages.** The list has no key that changes a tab: no
+   close, forget, reopen-and-stay or move. Closing, moving and reordering tabs belong to the
+   side panel (`ctrl+b b`: `x`, `m`, marks), which shows one workspace's tabs as a list to work
+   on; tab search is a list to leave. Management keys in a type-first list would need a mode
+   switch before every letter that is also a key, which is the browse mode decision 2 removes,
+   and two places that close tabs would split the habits the side panel builds. `Enter` on a
+   closed row reopens it, because going to a closed tab means reopening it. `Tab` /
+   `shift+tab` jump to the next / previous section with or without a query, because neither
+   types a character. These are the picker's own keys, not keymap bindings (as before,
+   m2-picker-rename "Keys"); the hint line lists them.
+8. **`Enter` on another window's tab** focuses that window (`win.focus()`), selects the tab
+   (WindowWorkspaces' `TabSelect` path switches its workspace if needed, as before) and closes
+   the picker in this window. On another workspace in this window it behaves as before. A row
+   whose tab closed while the list was open does nothing.
 9. **Lazy tabs stay lazy.** Title and URL come from `linkedBrowser.contentTitle || tab.label` and
-   `linkedBrowser.currentURI`, as today (`goto.mjs:93-97`); for a pending tab, SessionStore's lazy
-   browser answers both without loading (Research). Closed tabs come from
-   `SessionStore.getClosedTabData`, `getClosedTabDataFromClosedWindows` and
-   `getClosedWindowData` (title, and the URL of the saved state's current history entry); nothing
-   is fetched. Favicons are not shown: Vimma's picker is text, and loading icons for hundreds of
-   rows is the cost Chromium pays with a virtual list.
-10. **Performance.** The list is built once on open and again on `TabOpen`, `TabClose` and
-    `TabAttrModified` events while open (debounced to one animation frame), not per key. Matching
-    runs per key over at most a few hundred items. Today's `scoreField` builds grapheme units
-    for every field per term; with 500 tabs and 4 fields that is about 2,000 segmentations per
-    key, so units are cached per item when the list is built. Budget: 500 open and 25 closed
-    items, query `abc def`, under 8 ms per key in Vitest on CI (a bench test, as the existing
-    key-to-action bench). The rendered list is capped at 200 rows with a
-    `… N more, type to narrow` row. Chromium answers the same problem with a virtualised list
-    (`selectable_lazy_list.ts`); Vimma uses a cap, because a keyboard user narrows by typing.
+   `linkedBrowser.currentURI`, as before (`host/goto.mjs`); for a pending tab, SessionStore's
+   lazy browser answers both without loading (Research). Closed tabs come from
+   `SessionStore.getClosedTabData({ private })` (title, and the URL of the saved state's current
+   history entry) and closed windows from `getClosedWindowData`; `undoCloseById` reopens
+   either. Nothing is fetched. Favicons are not shown: Vimma's picker is text, and loading icons
+   for hundreds of rows is the cost Chromium pays with a virtual list.
+10. **Performance.** The list is built once when the picker opens; matching runs per key over at
+    most a few hundred items. Each text's grapheme units are cached, so a key segments only the
+    query, not every title and URL again, and a field whose letters cannot occur in order is
+    skipped before any tier is tried. Budget: 500 open and 25 closed items, a 22-key sequence,
+    each key under 8 ms in Vitest (a test in `picker.test.mjs`). At most 200 rows are rendered,
+    a window that follows the selection with `… N more` rows above and below, so `ctrl+n` and
+    `Tab` still reach every row. Chromium answers the same problem with a virtualised list
+    (`selectable_lazy_list.ts`); a fixed window is simpler and enough for a list one narrows by
+    typing.
 11. **Accessibility.** The same listbox and option semantics and `aria-activedescendant` as
-    today. Heading rows are `role=presentation`, and the section's name is in each option's
-    accessible name instead (`"Jira 412, work, window 2"`, `"Docs, recently closed"`), because a
-    listbox cannot hold headings. A polite live region announces `12 tabs` or `no tabs match`
-    after a query change (as Chromium's `getA11ySearchResultText_`). Every marker is a word, or
-    a glyph with an accessible word (`♪` is announced "playing").
-12. **Theme.** Existing tokens only: headings `--vimma-text-accent`; marker and window cells
-    `--vimma-muted`; the `closed` tag `--vimma-muted` in italics; `◇` in the agent's colour,
-    `--vimma-text-cyan` (vimma-mcp decision 24). No new token, so Omarchy and the built-in
-    themes work unchanged.
+    before. Heading rows are `role=presentation`, and the section's name is in each option's
+    accessible name instead (`"Jira 412, work, window 2"`, `"Docs, work, recently closed"`),
+    because a listbox cannot hold headings. A polite live region announces `12 tabs` or
+    `no tabs match` after a query change, not on every move (as Chromium's
+    `getA11ySearchResultText_`). Every marker is a word, or a glyph with an accessible word (`♪`
+    is announced "playing").
+12. **Theme.** Existing tokens only: headings `--vimma-text-accent`; the muted cell
+    `--vimma-fg-dim`, as the host cell (`--vimma-muted` is a border colour whose contrast as text
+    is not checked, `tools/test/chrome-css.test.mjs`); the `closed` tag in italics; `◇` in the agent's colour, `--vimma-text-cyan`
+    (vimma-mcp decision 24). No new token, so Omarchy and the built-in themes work unchanged.
 13. **Out of scope.** Tabs in other Firefox profiles; synced tabs from other devices (Firefox
     View has them; Vimma keeps Sync as Firefox has it, m0-mozilla-services); searching page
     content (Firefox has no index of it, and loading lazy tabs to search them breaks decision 9;
-    a later spec could search loaded tabs only through the find actor); tab groups (Vimma has
-    workspaces); AI grouping and Brave's Tab Focus Mode; favicons in the list; a toolbar button
-    (Vimma has no tab strip).
+    live grep covers loaded pages); tab groups (Vimma has workspaces); AI grouping and Brave's
+    Tab Focus Mode; favicons in the list; a toolbar button (Vimma has no tab strip); managing
+    tabs from the list (decision 7).
 
 ## Security and privacy
 
@@ -413,10 +386,9 @@ new is exposed to `vimma-ctl` or to an agent connection; an agent cannot open, r
 picker. The data it shows (titles and URLs of open and closed tabs) is already visible in
 Firefox View and the URL bar's `%` mode. The two boundaries that matter are enforced and tested:
 a normal window never lists a private tab, open or closed (decision 5), and agent tabs are
-always marked so the user can tell them apart (decision 6). Moving a tab into the agent
-workspace, which hands its page to the agent's container, keeps the y/N question with the agent
-wording (vimma-mcp decision 11). Closed-tab data is read from SessionStore in the parent process
-and never leaves it.
+always marked so the user can tell them apart (decision 6). The list changes no tab besides
+selecting one or reopening a closed one, so it cannot move a page into the agent workspace.
+Closed-tab data is read from SessionStore in the parent process and never leaves it.
 
 ## Tests
 
@@ -424,99 +396,80 @@ Written first and seen to fail.
 
 ### Vitest (`packages/vimma-core/test/`)
 
-- `picker.test.mjs`:
-  - `pickerItems` gains an agent id, window and closed items: the agent workspace's rows carry
-    `agent: true` and sort after user workspaces; the current workspace's rows come first;
-    other windows' items carry `window: 2..n`; closed items carry `closed: true` and no
-    `tabIndex`.
-  - `matchItem` on a closed item matches title and URL; highlights for `url` are kept; ties
-    order agent rows last (decision 6); `playing` and `muted` match the `markers` field.
-  - `pickerKey`: `tab` / `shift+tab` jump sections with and without a query and in search mode;
-    `x` on an open row gives `{ type: "closeTab", id }`, on a closed row `{ type: "forget", id }`;
-    `u` on a closed row gives `{ type: "reopen", id, stay: true }`, `Enter` on it
-    `{ type: "reopen", id }`; `m` on an open tab row gives `{ type: "moveHere", id }`; `x`, `u`
-    and `m` type in search mode; the add-on keys still work on add-on rows only.
-  - `openPicker(items, { mode: "search", query })` starts in search mode with the query applied.
-  - Bench: 500 + 25 items, 20 keystrokes, each under the budget (decision 10), and item units are
-    built once (a spy on the segmenter count).
-- `tabsearch.test.mjs` (new, pure): sections and headings from a list of windows (current first,
-  then by recency); the private filter (a private window's items never in a normal list, and the
-  reverse); the closed caps; the 200-row cap and its "more" row; the accessible names.
-- `keymap.test.mjs`: the `prefix+f` node has no action and has the child `f` (and `g` once live
-  grep's key exists); `ctrl+b f f` dispatches `tab_search`, `ctrl+b g` still dispatches
-  `goto_picker`, and `ctrl+b f` followed by an unbound key cancels.
-- `actions.test.mjs`, `defaults.test.mjs`, `cmdline.test.mjs`, `help.test.mjs`: `tab_search` on
-  `prefix+f f`; `:tabsearch [text]` and `:ts`; the overlay row. The snapshots
-  (`defaults.test.mjs.snap`, `help.test.mjs.snap`) are re-recorded with a changelog line each, and
-  `docs/bindings.md`, `bindings.json` and `defaults.toml` are regenerated.
+- `picker.test.mjs` ("tab search"):
+  - `pickerItems` with an agent id and a window: the current workspace first, the agent
+    workspace last, other windows in their own order with `window: n`; rows carry `playing`,
+    `muted`, `pinned`, `agent` and their marker words.
+  - `filterItems`: `playing`, `muted` and `closed` match the `markers` field; a closed item
+    matches title and URL with URL highlights; a tie never ranks an agent row first.
+  - `pickerKey`: `Enter` on a closed row gives `{ type: "reopen", id }`, on a tab `select`; `x`,
+    `u`, `m` and `d` do nothing; `tab` / `shift+tab` jump sections with and without a query and
+    stay in search; type-first: every letter types, `Esc` closes, `ctrl+n` / `ctrl+p` and the
+    arrows move; `openPicker(items, { typeFirst, query })` starts typing with the query applied.
+  - The budget of decision 10: 500 + 25 items, 22 keys after warm-up passes, each key's fastest
+    of five passes under 8 ms, and no text segmented again (`unitsBuilt`).
+  - The workspace picker's `m` still moves, and the goto picker's `m` does nothing.
+- `tabsearch.test.mjs` (new, pure): the order (this window, other windows, closed tabs newest
+  first, closed windows); the private filter in both directions; the caps (25 and 5); a closed
+  agent tab's marker; section keys and headings; accessible names; the live count text; the
+  200-row window.
+- `cmdline.test.mjs`: `:tabsearch [text]`, `:ts` and `:b [text]` run `goto.picker` with the
+  text; `:tab` completes `tabnew`, `tabrename`, `tabsearch`.
+- `help.test.mjs`: the `goto_picker` row keeps `ctrl+b g, b` with the new description, and there
+  is no `tab_search` row. The help snapshot is re-recorded and `docs/bindings.md` and
+  `bindings.json` are regenerated.
 
 ### Mochitests (`tests/browser/`)
 
-- `browser_vimma_picker.js` (extended):
-  - Two windows with two workspaces each: `ctrl+b g` lists all four groups with headings, this
-    window's current workspace first; `Enter` on a window-2 tab focuses window 2, switches its
-    workspace and selects the tab, and window 1's picker is closed.
-  - `ctrl+b f f` opens in search mode (`/` shown) and typing `jira` filters; `:tabsearch jira` does
-    the same.
-  - `x` closes the selected tab and the list stays open on the next row; a pinned tab is refused
-    with the notice; closing a window's last tab asks.
-  - Recently closed: close three tabs; `Tab` jumps to the section; `u` reopens the second in its
-    workspace's container with its history (SessionStore state, `userContextId`) and the list
-    stays; `Enter` on a closed row reopens and selects it; `x` forgets it (`getClosedTabCount`
-    drops by one); `undoCloseById` is the reopen path.
-  - A lazy tab (restored, never selected) is listed with title and URL and is still pending
-    (`tab.hasAttribute("pending")`) after the picker opens and closes.
-  - A tab playing audio shows `♪`; a muted tab shows `muted`.
-  - The agent workspace with a tab: its row shows `◇ agent` and sorts last; `m` into the agent
-    workspace asks the agent question; a closed agent tab reopens in the agent container.
-  - `m` on another workspace's tab asks `moveTabQuestion`, and `y` moves it here.
+- `browser_vimma_tab_search.js` (new): headings with the current workspace first (headings are
+  not options, the dialog is named "Tabs"); it opens typing (`/` shown, `j` and `x` type, one
+  `Esc` closes, `:tabsearch jira` opens with the query and `Enter` goes there); another
+  window's tab is listed as `w2` and `Enter` focuses that window and selects it; three closed
+  tabs, `Tab` reaches the newest, `Enter` reopens the second in its workspace's container with
+  its two history entries and switches to its workspace; a closed window is one row and `Enter`
+  reopens it; a lazy tab is listed with title and host and stays lazy; `♪` and `muted` are shown
+  and `playing` finds the tab; an agent tab is marked `◇ agent` and listed last, and a closed
+  agent tab reopens in the agent container.
+- `browser_vimma_picker.js`: arrows and `ctrl+n` / `ctrl+p` move and `j` types; the Finnish
+  ranking test types without `/`; one `Esc` closes; `:ls` and `b` open it.
 - `browser_vimma_private_workspace.js`: a normal window's tab search lists no private tab, open or
-  closed; the private window's lists only its own (both directions, decision 5).
-- `browser_vimma_a11y.js`: option names include workspace, window or "recently closed"; heading
-  rows are not options; the live region text after a query.
-- `browser_vimma_focus_rings.js` and `browser_vimma_theme.js`: unchanged and green.
-- `browser_vimma_help_overlay.js`: the `tab_search` row with `ctrl+b f f`.
+  closed; the private window's lists its own closed tab and no normal tab, open or closed.
+- `browser_vimma_a11y.js`: the dialog and listbox are named "Tabs", an option's name includes its
+  workspace, headings are not options, and the polite live region says `no tabs match` and a
+  count.
+- `browser_vimma_workspace_switching.js`, `browser_vimma_pane_focus.js` and
+  `browser_vimma_side_panel_unsplit.js` type their queries without `/`.
 
-### e2e (`tests/e2e/scenarios/`, Xvfb) and screenshots
+### e2e and screenshots
 
-- New scenario `tab-search.json`: two windows, three workspaces, one agent tab, two closed tabs
-  and one audio tab (a `tools/e2e/pages.mjs` fixture with a silent looping `<audio>`); `ctrl+b f f`,
-  type `doc`; screenshot `tab-search.png` as a new baseline, with the changelog line "a baseline
-  for tab search". It is checked first with the real Omarchy theme
-  (`vimma.theme.source=omarchy`) and recorded in Tokyo Night for the baseline.
-- Bench: 300 tabs across 3 workspaces (plan §9's hidden-tab risk row says to measure with 200);
-  open-to-render and per-key time logged; no tab gains a loaded browser.
+Checked in Xvfb with the Omarchy theme (`vimma.theme.source=omarchy`) through a throwaway
+scenario: two workspaces, a closed tab and a second window, blank and with a query, and the
+`ctrl+b ?` overlay filtered to the row. No committed baseline: the rows show the fixture
+server's host, whose port changes on every run, so a screenshot of the list differs between
+runs by more than the harness's 0.5 % tolerance.
 
 ## Docs and changelog
 
-- **`docs/guide.md`**: the section "Goto picker and tab rename" becomes "Tab search and tab
-  rename": what is listed, the sections, the keys (`x`, `u`, `m`, `Tab`), other windows,
-  recently closed, and the private and agent rules. Also the keys-table row for `ctrl+b g`, `b`;
-  "The command line" (`:tabsearch`, `:ts`); and the workspaces paragraph that says the goto
-  picker "lists every workspace's tabs" gains "and other windows'".
+- **`docs/guide.md`**: "Goto picker and tab rename" becomes "Tab search and tab rename": what is
+  listed and in what sections, the keys, the markers, other windows, recently closed, the
+  private and agent rules, and the pointer to the side panel for managing tabs. Also the keys
+  table row for `ctrl+b g`, `b`; the command table (`:ls`, `:tabsearch`, `:ts`, `:b`); and the
+  workspaces paragraph, which now says tab search lists other windows' tabs too.
 - **README**: the feature list's picker line becomes "tab search: every tab of every workspace
   and window, and recently closed, fuzzy by title, URL or your rename".
-- **`docs/bindings.md`, `bindings.json`, `defaults.toml`**: regenerated with `npm run gen-docs`
-  (sub-PR 3).
-- **`CHANGELOG.md` [Unreleased]**, added by the maintainer at merge. Suggested lines: "Tab search:
-  the goto picker shows each tab's workspace, closes tabs with `x` and moves them with `m`"
-  (sub-PR 1); "Tab search lists your other windows' tabs and reopens recently closed ones"
-  (sub-PR 2); "`ctrl+b f f` and `:tabsearch` open tab search ready to type" (sub-PR 3); and the
-  baseline line.
+- **`docs/bindings.md`, `bindings.json`**: regenerated with `npm run gen-docs` (the description).
+- **`CHANGELOG.md` [Unreleased]**, added by the maintainer at merge. Suggested line: "Tab search:
+  `ctrl+b g` opens ready to type and finds tabs in every workspace and window and recently
+  closed tabs and windows; rows show workspace, window, audio and agent markers".
 
 ## Delivery
 
-| #   | Title                                                                               | Scope                                                                                                                                                                                                                                                                                                                                | Size                      |
-| --- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------- |
-| 1   | `feat(picker): tab search lists the workspace, window and audio on each row`        | Core: agent id, current-workspace-first order, cached units and bench, URL highlights, section heading rows, `tab`/`shift+tab`, accessible names, live region; UI rows and headings; `x` close and `m` move-here; mochitests; guide "Goto picker" section rewritten as "Tab search". No new default key (picker-internal keys only). | M (~600 lines with tests) |
-| 2   | `feat(picker): tab search finds tabs in your other windows and reopens closed ones` | `host/tab-search.mjs`: other windows, closed tabs and windows from SessionStore, `undoCloseById`, `undoClosedTabFromClosedWindow`, `forgetClosedTabById`, the private filter; `u`; `Enter` across windows; mochitests including private in both directions; e2e scenario and baseline.                                               | M (~700)                  |
-| 3   | `feat(keys): ctrl+b f f opens tab search ready to type`                             | `tab_search` action, `prefix+f f`, `:tabsearch`/`:ts`, help row, gen-docs, snapshots, README feature line.                                                                                                                                                                                                                           | S (~250)                  |
+| #   | Title                                                                           | Scope                                                                                                                                                                                                                  |
+| --- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `feat(picker): tab search finds every tab, in every window and recently closed` | Core (`picker.mjs` type-first, sections, markers, cache; `tabsearch.mjs`), host (`tab-search.mjs`, `goto.mjs`), UI and CSS, `:tabsearch`/`:ts`/`:b`, help description and gen-docs, guide and README, the tests above. |
 
-Sub-PR 3 is the only one that adds a default key, so it is a keymap PR and lands after firefox-keys
-sub-PR 2, one keymap PR at a time. Whichever of it and live-grep sub-PR 3 lands first adds the first
-three-chord default binding and the keymap test for the `prefix+f` group. Sub-PRs 1 and 2 add
-picker-internal keys only, which are not keymap bindings, so they do not wait for the keymap queue.
-Each sub-PR is checked in e2e screenshots before review.
+One pull request, because the list, its type-first keys and the cross-window and closed data are
+one change to one picker.
 
 ## Open questions
 
