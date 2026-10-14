@@ -35,11 +35,13 @@ const HEADER = [
  */
 
 /**
+ * The two versions in surfer.json, checked: the Firefox version and the brand's display version.
+ * tools/release/version-line.mjs uses the same check.
  * @param {SurferConfig} config parsed surfer.json
  * @param {string} [brand]
- * @returns {{ "version.txt": string, "version_display.txt": string }}
+ * @returns {{ firefox: string, display: string }}
  */
-export function versionFiles(config, brand = "vimma") {
+export function surferVersions(config, brand = "vimma") {
   const firefox = config.version?.version;
   if (typeof firefox !== "string" || !FIREFOX.test(firefox)) {
     throw new Error(`surfer.json version.version is not a Firefox version: ${String(firefox)}`);
@@ -52,6 +54,16 @@ export function versionFiles(config, brand = "vimma") {
       `surfer.json brands.${brand}.release.displayVersion is not SemVer: ${String(display)}`,
     );
   }
+  return { firefox, display };
+}
+
+/**
+ * @param {SurferConfig} config parsed surfer.json
+ * @param {string} [brand]
+ * @returns {{ "version.txt": string, "version_display.txt": string }}
+ */
+export function versionFiles(config, brand = "vimma") {
+  const { firefox, display } = surferVersions(config, brand);
   return {
     "version.txt": `${HEADER}${firefox}\n`,
     "version_display.txt": `${HEADER}${display}\n`,
