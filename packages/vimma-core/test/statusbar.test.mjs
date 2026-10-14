@@ -626,3 +626,93 @@ describe("sharing: devices in use while the toolbar is hidden", () => {
     ).toBe(false);
   });
 });
+
+// Final check of #268: the URL takes room only from less important segments. The mode, then
+// `not secure`, `private` and the devices in use come before it; the URL is cut further
+// (its end-cut domain as the last resort) rather than pushing any of them off the bar.
+describe("the security cues outrank the kept URL", () => {
+  const cueTexts = ["not secure", "using camera, mic", "private"];
+  const cuesWidth = cueTexts.reduce((n, t) => n + textWidth(t) + 1, 0);
+
+  test("the reviewer's 63-character domain at 50 and 80 columns", () => {
+    const base = `${"x".repeat(63)}.example`;
+    const host = `login.paypal.com.${base}`;
+    for (const width of [50, 80]) {
+      const out = texts(
+        renderStatusBar(
+          {
+            mode: "normal",
+            toolbarHidden: true,
+            security: "insecure",
+            sharing: ["camera"],
+            tab: {
+              index: 1,
+              count: 1,
+              title: "PayPal",
+              url: `${host}/signin`,
+              origin: { host, base },
+            },
+          },
+          width,
+        ),
+      );
+      expect(out.security).toBe("not secure");
+      expect(out.sharing).toBe("using camera");
+      expect(out.mode?.length).toBeGreaterThan(0);
+      expect(out.url?.length).toBeGreaterThan(0);
+    }
+  });
+
+  test("property: from 40 to 160 columns the cues stay, the URL shows, the URL never cuts the mode", () => {
+    const label = fc.stringMatching(/^[a-z0-9]{1,63}$/);
+    fc.assert(
+      fc.property(
+        fc.array(label, { maxLength: 3 }),
+        label,
+        fc.string({ maxLength: 40 }),
+        fc.integer({ min: 40, max: 160 }),
+        (subs, name, path, width) => {
+          const base = `${name}.example`;
+          const host = [...subs, base].join(".");
+          const out = texts(
+            renderStatusBar(
+              {
+                mode: "normal",
+                toolbarHidden: true,
+                security: "insecure",
+                sharing: ["camera", "mic"],
+                privateWindow: true,
+                workspace: { name: "work", index: 1 },
+                tab: {
+                  index: 1,
+                  count: 3,
+                  title: "Sign in",
+                  url: `${host}/${path}`,
+                  origin: { host, base },
+                },
+              },
+              width,
+            ),
+          );
+          expect(out.security).toBe("not secure");
+          expect(out.sharing).toBe("using camera, mic");
+          expect(out.private).toBe("private");
+          expect(out.url?.length).toBeGreaterThan(0);
+          if (out.url && !out.url.includes(base)) expect(out.url.endsWith("…")).toBe(true);
+          // The mode is never dropped, and gives up its full word only once the less important
+          // segments are gone; it keeps its one-column short form.
+          expect(out.mode?.length).toBeGreaterThan(0);
+          if (out.mode !== "NORMAL") {
+            expect(out.workspace).toBeUndefined();
+            expect(out.tab).toBeUndefined();
+          }
+          // Room for all of it: nothing is cut.
+          if (width >= textWidth("NORMAL") + 1 + cuesWidth + textWidth(`${host}/${path}`)) {
+            expect(out.mode).toBe("NORMAL");
+          }
+        },
+      ),
+      { seed: 20261015, numRuns: 1000 },
+    );
+  });
+});

@@ -500,7 +500,8 @@ export function statusSegments(input) {
         text: PRIVATE_NAME,
         fg: PRIVATE_COLOR_TOKEN,
         side: "right",
-        priority: 3,
+        // A security cue: outranks the URL, as `not secure` and the devices in use do.
+        priority: 2,
       }),
     );
   }
@@ -562,10 +563,22 @@ export function fitStatus(segments, width) {
   const current = () => /** @type {Segment[]} */ (out.filter(Boolean));
   /** @type {number[]} segments with `keep` */
   const kept = [];
+  let yielded = false;
   for (const i of visit) {
     const excess = statusWidth(current()) - width;
     if (excess <= 0) break;
     const s = /** @type {Segment} */ (segments[i]);
+    // A kept segment takes room only from less important ones: before anything that outranks
+    // it gives way (the mode, the error, security and in-use cues), it is cut further.
+    if (kept.length && s.priority < KEEP_YIELDS_BELOW && !yielded) {
+      yielded = true;
+      // The mode's full word gives way first, to its one-column short form; then the kept
+      // segment, down to nothing; only then the cues themselves.
+      let left = excess - shortenModes(out, left0(excess));
+      if (left > 0 && yieldKept(out, segments, kept, left)) break;
+      left = statusWidth(current()) - width;
+      if (left <= 0) break;
+    }
     const w = textWidth(s.text);
     if (s.priority === 0) {
       // never dropped: cut as far as needed, but to one column at least
@@ -592,14 +605,79 @@ export function fitStatus(segments, width) {
       out[i] = null;
     }
   }
-  // A kept segment takes back what the others freed, or as the last resort gives up more.
+  // A kept segment takes back what the others freed (with its separator, if it had to go),
+  // then the mode its full word.
   for (const i of kept) {
     const s = /** @type {Segment} */ (segments[i]);
-    const now = textWidth(/** @type {Segment} */ (out[i]).text);
+    const now = out[i] ? textWidth(/** @type {Segment} */ (out[i]).text) : -1;
     const room = now + width - statusWidth(current());
     out[i] = room < 1 ? null : room >= textWidth(s.text) ? s : { ...s, text: cutUrl(s, room) };
   }
+  if (yielded) {
+    segments.forEach((s, i) => {
+      const now = out[i];
+      if (s.priority !== 0 || !now) return;
+      const room = textWidth(now.text) + width - statusWidth(current());
+      out[i] =
+        room >= textWidth(s.text) ? s : { ...s, text: truncate(s.text, Math.max(1, room), "end") };
+    });
+  }
   return current();
+}
+
+/** @param {number} n */
+const left0 = (n) => Math.max(0, n);
+
+/**
+ * Cuts the modes (priority 0) toward one column to free `excess` columns; returns how many.
+ * @param {(Segment | null)[]} out
+ * @param {number} excess
+ */
+function shortenModes(out, excess) {
+  let freed = 0;
+  out.forEach((s, i) => {
+    if (!s || s.priority !== 0 || freed >= excess) return;
+    const w = textWidth(s.text);
+    const room = Math.max(1, w - (excess - freed));
+    if (room < w) {
+      out[i] = { ...s, text: truncate(s.text, room, "end") };
+      freed += w - textWidth(/** @type {Segment} */ (out[i]).text);
+    }
+  });
+  return freed;
+}
+
+/**
+ * Segments whose priority is below this (more important) outrank a kept segment: the mode's
+ * one-column short form (0), and the error, security, in-use and private cues (2). The mode's
+ * full word does not: it gives way first. docs/security.md C3 orders them so.
+ */
+const KEEP_YIELDS_BELOW = 2.5;
+
+/**
+ * Cuts the kept segments further, down to nothing as the last resort, to free `excess` columns.
+ * @param {(Segment | null)[]} out
+ * @param {readonly Segment[]} segments
+ * @param {number[]} kept
+ * @param {number} excess
+ * @returns {boolean} whether that was enough
+ */
+function yieldKept(out, segments, kept, excess) {
+  let left = excess;
+  for (const i of kept) {
+    const now = out[i];
+    if (!now || left <= 0) continue;
+    const w = textWidth(now.text);
+    const room = w - left;
+    if (room >= 1) {
+      out[i] = { ...now, text: cutUrl(/** @type {Segment} */ (segments[i]), room) };
+      left -= w - textWidth(/** @type {Segment} */ (out[i]).text);
+    } else {
+      out[i] = null;
+      left -= w + 1;
+    }
+  }
+  return left <= 0;
 }
 
 /** @param {Segment} s @param {number} width */

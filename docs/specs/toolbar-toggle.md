@@ -522,8 +522,12 @@ Numbered decisions, each with its reason and the alternatives rejected.
       - **Never dropped.** The `url` segment's priority rises from 8 to 4.9, just above the
         title's 5, so the title gives way first (on equal priorities the fitter drops the later
         segment first, and the URL comes after the title). The segment is also kept: it is cut to
-        `…<domain>…` while the tab position, workspace and others give way, takes back the room
-        they free, and only in a bar narrower than its domain is the domain's end cut.
+        `…<domain>…` while the tab position, workspace and others give way, and takes back the
+        room they free. It takes room only from less important segments: the mode's one-column
+        short form and the error, `not secure`, `private` and in-use cues (priority 2; `private`
+        rises from 3 for this) outrank it, so against them it is cut further, its domain's end as
+        the last resort, and the mode's full word gives way before it. An attacker chooses the
+        domain's length (up to 63 characters a label), so a long one must not push the cues off.
       - **An about:blank a page controls is named.** Firefox's address bar shows an initial page
         (about:blank, the start page) as empty only when `BrowserUIUtils.checkEmptyPageOrigin`
         passes; otherwise it shows `about:blank`. The status bar does the same, and adds the
