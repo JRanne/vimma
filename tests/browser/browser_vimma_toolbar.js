@@ -666,6 +666,69 @@ add_task(async function an_about_blank_a_page_wrote_says_so() {
   await show();
 });
 
+// Re-review A: a blob: page keeps its origin, whatever its path says.
+add_task(async function a_blob_page_shows_its_origin() {
+  const tab = await openPage(
+    PLAIN.replace("https://example.com", "https://sub1.test1.example.com"),
+  );
+  await hide();
+  const opened = BrowserTestUtils.waitForNewTab(gBrowser, (url) => url.startsWith("blob:"), true);
+  await SpecialPowers.spawn(tab.linkedBrowser, [], () => {
+    const script = content.document.createElement("script");
+    script.textContent = `
+      const page = "<title>Sign in</title><form><input type=password></form>";
+      const url = URL.createObjectURL(new Blob([page], { type: "text/html" }));
+      window.open(url);`;
+    content.document.body.append(script);
+  });
+  const blob = await opened;
+  gBrowser.selectedTab = blob;
+  await until(() => gBrowser.currentURI.spec.startsWith("blob:"), "the blob: page is selected");
+  const bar = $("vimma-statusbar");
+  try {
+    for (const width of ["40ch", "50ch", "80ch", "120ch"]) {
+      bar.style.width = width;
+      await until(() => segText("url")?.length > 0, `${width}: an address shows`);
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const url = segText("url");
+      Assert.ok(
+        /(^|[/.…])example\.com(…|\/|$)/.test(url),
+        `${width}: the origin's domain ends the host (${url})`,
+      );
+    }
+  } finally {
+    bar.style.removeProperty("width");
+  }
+  gBrowser.removeTab(blob);
+  gBrowser.removeTab(tab);
+  await show();
+});
+
+// Re-review B: the label names who wrote the blank page, even after that page navigates away.
+add_task(async function an_about_blank_names_its_writer_after_the_opener_leaves() {
+  const tab = await openPage();
+  await hide();
+  const opened = BrowserTestUtils.waitForNewTab(gBrowser, "about:blank");
+  await SpecialPowers.spawn(tab.linkedBrowser, [], () => {
+    const script = content.document.createElement("script");
+    script.textContent = `
+      const w = window.open();
+      w.document.title = "Your bank";
+      location.href = "https://example.org/";`;
+    content.document.body.append(script);
+  });
+  const blank = await opened;
+  await BrowserTestUtils.browserLoaded(tab.linkedBrowser, false, "https://example.org/");
+  gBrowser.selectedTab = blank;
+  await until(
+    () => segText("url") === "about:blank from example.com",
+    `it names the writer, not where the opener went (${segText("url")})`,
+  );
+  gBrowser.removeTab(blank);
+  gBrowser.removeTab(tab);
+  await show();
+});
+
 add_task(async function the_status_bar_shows_camera_and_mic_in_use() {
   await SpecialPowers.pushPrefEnv({
     set: [

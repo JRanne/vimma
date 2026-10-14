@@ -30,6 +30,8 @@ export { textWidth };
  * @property {number} min           shortest width it may be shrunk to
  * @property {"end" | "middle" | "url" | "none"} cut  "url": truncateUrl with `origin`
  * @property {UrlOrigin | null} [origin]  for `cut: "url"`
+ * @property {boolean} [keep]  never dropped: cut to its `min` while others give way, and past it
+ *   only as the last resort
  */
 
 /**
@@ -106,10 +108,15 @@ export function sharingCues(state) {
   if (!state) return [];
   /** @type {string[]} */
   const out = [];
-  /** @param {string} name @param {unknown} value */
+  /**
+   * Camera and microphone are nsIMediaManagerService states (1 capturing, 2 disabled: paused);
+   * screen a string ending in "Paused" when paused (webrtcUI getCombinedStateForBrowser).
+   * @param {string} name @param {unknown} value
+   */
   const add = (name, value) => {
     if (!value) return;
-    out.push(typeof value === "string" && value.includes("Paused") ? `${name} paused` : name);
+    const paused = value === 2 || (typeof value === "string" && value.endsWith("Paused"));
+    out.push(paused ? `${name} paused` : name);
   };
   add("camera", state.webRTC?.camera);
   add("mic", state.webRTC?.microphone);
@@ -207,8 +214,9 @@ function findHost(text, host) {
 /**
  * The URL cut to `width` columns without ever cutting its registrable domain (security review
  * of #268, finding 1): the path and query go first, then the scheme with the leftmost labels of
- * the host, whole labels at a time, as Firefox's address bar keeps the base domain in view. Null
- * when even `…<base domain>…` does not fit. Without an origin (about:, file:) the end is cut.
+ * the host, whole labels at a time, as Firefox's address bar keeps the base domain in view. Only
+ * when even `…<base domain>…` does not fit is the domain's end cut. Without an origin (about:,
+ * file:, a URL with no host) the end is cut, never the middle.
  * @param {string} text
  * @param {number} width
  * @param {UrlOrigin | null | undefined} origin
@@ -226,10 +234,14 @@ export function truncateUrl(text, width, origin) {
   if (room >= 2) return head + truncate(rest, room, "end");
   if (room === 1) return head + ELLIPSIS;
   const tail = rest ? ELLIPSIS : "";
+  let last = "";
   for (const candidate of hostTails(host, origin.base, pre !== "")) {
     if (textWidth(candidate + tail) <= width) return candidate + tail;
+    last = candidate;
   }
-  return null;
+  // Narrower than the registrable domain itself: its end is cut as the last resort, rather
+  // than the address going missing (re-review D).
+  return width > 0 ? truncate(last + tail, width, "end") : null;
 }
 
 /**
@@ -492,7 +504,7 @@ export function statusSegments(input) {
       }),
     );
   }
-  if (tab?.url && !urlShownAsTitle && toolbarHidden && tab.origin) {
+  if (tab?.url && !urlShownAsTitle && toolbarHidden) {
     // The origin indicator while the toolbar is hidden: never cut inside the registrable domain.
     const text = displayUrl(tab.url, { keepHttp: true });
     right.push(
@@ -502,9 +514,11 @@ export function statusSegments(input) {
         fg: "--vimma-fg-dim",
         side: "right",
         priority: 4.9,
-        min: urlMinWidth(text, tab.origin),
+        min: tab.origin ? urlMinWidth(text, tab.origin) : Math.min(12, textWidth(text)),
         cut: "url",
-        origin: tab.origin,
+        origin: tab.origin ?? null,
+        // Never dropped: what else gives way first, then the address is cut further.
+        keep: true,
       }),
     );
   } else if (tab?.url && !urlShownAsTitle) {
@@ -546,6 +560,8 @@ export function fitStatus(segments, width) {
           /** @type {Segment} */ (segments[a]).priority || b - a,
     );
   const current = () => /** @type {Segment[]} */ (out.filter(Boolean));
+  /** @type {number[]} segments with `keep` */
+  const kept = [];
   for (const i of visit) {
     const excess = statusWidth(current()) - width;
     if (excess <= 0) break;
@@ -560,6 +576,13 @@ export function fitStatus(segments, width) {
           : { ...s, text: truncate(s.text, room, s.cut === "middle" ? "middle" : "end") };
       continue;
     }
+    if (s.keep) {
+      // Down to its `min` now; whatever comes next gives way before it is cut further.
+      const room = Math.max(Math.min(s.min, w), w - excess);
+      kept.push(i);
+      out[i] = room >= w ? s : { ...s, text: cutUrl(s, room) };
+      continue;
+    }
     if (s.cut === "url" && w - Math.min(s.min, w) >= excess) {
       const text = truncateUrl(s.text, w - excess, s.origin);
       out[i] = text === null ? null : { ...s, text };
@@ -569,7 +592,22 @@ export function fitStatus(segments, width) {
       out[i] = null;
     }
   }
+  // A kept segment takes back what the others freed, or as the last resort gives up more.
+  for (const i of kept) {
+    const s = /** @type {Segment} */ (segments[i]);
+    const now = textWidth(/** @type {Segment} */ (out[i]).text);
+    const room = now + width - statusWidth(current());
+    out[i] = room < 1 ? null : room >= textWidth(s.text) ? s : { ...s, text: cutUrl(s, room) };
+  }
   return current();
+}
+
+/** @param {Segment} s @param {number} width */
+function cutUrl(s, width) {
+  return (
+    (s.cut === "url" ? truncateUrl(s.text, width, s.origin) : truncate(s.text, width, "end")) ??
+    ELLIPSIS
+  );
 }
 
 /**

@@ -375,11 +375,11 @@ function barUrl(win, browser) {
       empty = uri.spec !== "about:blank";
     }
     if (empty) return { url: null, origin: null };
-    // The page's own principal, which it inherits from its opener; the opener's while the
-    // parent has not heard of the former yet.
+    // The page's own principal, inherited from whoever wrote it: never the opener's current
+    // one, which may have navigated elsewhere since (re-review B). Unknown: the address alone.
     const principal = [
+      browser.browsingContext?.currentWindowGlobal?.documentPrincipal,
       browser.contentPrincipal,
-      browser.browsingContext?.opener?.currentWindowGlobal?.documentPrincipal,
     ].find((p) => p?.isContentPrincipal);
     if (principal) {
       try {
@@ -392,7 +392,32 @@ function barUrl(win, browser) {
     }
     return { url: uri.spec, origin: null };
   }
-  return { url: displaySpec(browser), origin: originOf(uri) };
+  return { url: displaySpec(browser), origin: originOf(uri) ?? innerOrigin(browser, uri) };
+}
+
+/**
+ * The origin of a URL without a host of its own: a nested one's inner URL (view-source:), else
+ * the page's principal (blob:, which carries its creator's origin), so the bar can still keep
+ * that origin's domain whole (re-review A).
+ * @param {any} browser
+ * @param {any} uri
+ * @returns {UrlOrigin | null}
+ */
+function innerOrigin(browser, uri) {
+  try {
+    const inner = uri.QueryInterface(Ci.nsINestedURI).innermostURI;
+    const origin = originOf(inner);
+    if (origin) return origin;
+  } catch {
+    // Not a nested URL.
+  }
+  const principal = browser.browsingContext?.currentWindowGlobal?.documentPrincipal;
+  if (!principal?.isContentPrincipal) return null;
+  try {
+    return originOf(Services.io.newURI(principal.originNoSuffix));
+  } catch {
+    return null;
+  }
 }
 
 /**

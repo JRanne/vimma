@@ -262,19 +262,29 @@ text that pages, add-ons and bookmarks choose.
   is the only origin indicator: the page reaches the window's top, so there is no line of death.
   - The status bar **must** always show the selected page's real address with its registrable
     domain whole: truncation **never** cuts inside it (the path, then the leftmost labels go
-    first), a page title **never** takes the address's place, and an about:blank a page opened or
-    controls **must** read `about:blank from <its origin>`, never nothing.
+    first), also for a `blob:` or `view-source:` address (the origin it carries), and **never**
+    in the middle of an address without a host. A page title **never** takes the address's
+    place, the address is **never** dropped while anything but the mode and the error, security
+    and in-use segments could give way, and only a bar narrower than `…<domain>…` cuts the
+    domain's end. An about:blank a page opened or controls **must** read
+    `about:blank from <the origin that wrote it>`, never nothing.
     [`the URL keeps its registrable domain while the toolbar is hidden`](../packages/vimma-core/test/statusbar.test.mjs),
     [`the_status_bar_keeps_the_registrable_domain`](../tests/browser/browser_vimma_toolbar.js),
-    [`an_about_blank_a_page_wrote_says_so`](../tests/browser/browser_vimma_toolbar.js)
+    [`an_about_blank_a_page_wrote_says_so`](../tests/browser/browser_vimma_toolbar.js),
+    [`a_blob_page_shows_its_origin`](../tests/browser/browser_vimma_toolbar.js),
+    [`an_about_blank_names_its_writer_after_the_opener_leaves`](../tests/browser/browser_vimma_toolbar.js)
   - It **must** say `not secure` wherever Firefox's address bar would warn (plain http, a
     certificate error page or exception, mixed content), read from the browser's security state,
     never from the hidden address bar, and `private` in a private window.
     [`securityFromState`](../packages/vimma-core/test/statusbar.test.mjs),
     [`not_secure_comes_from_the_browser_state`](../tests/browser/browser_vimma_toolbar.js),
     [`the_status_bar_says_not_secure_and_private`](../tests/browser/browser_vimma_toolbar.js)
-  - It **must** say which devices the page uses (camera, microphone, screen, location, XR,
-    serial), the cues the hidden address bar and tab strip carried.
+  - It **must** say which devices the selected page uses (camera, microphone, screen, location,
+    XR, serial; `paused` where Firefox says so), the cues the hidden address bar and tab strip
+    carried. It does not cover background tabs or the other pane of a split (only the selected
+    tab is read, and the tab strip is hidden), nor Firefox's camera and microphone grace period
+    after a stream ends; on Linux the desktop's global WebRTC indicator still shows background
+    capture.
     [`sharing: devices in use while the toolbar is hidden`](../packages/vimma-core/test/statusbar.test.mjs),
     [`the_status_bar_shows_camera_and_mic_in_use`](../tests/browser/browser_vimma_toolbar.js)
   - A permission prompt **must** hang from its own icon in the address bar, next to the site's

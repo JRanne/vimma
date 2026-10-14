@@ -512,18 +512,29 @@ Numbered decisions, each with its reason and the alternatives rejected.
         time, as Firefox's address bar keeps the base domain in view
         (`_ensureFormattedHostVisible`). Middle truncation could show
         `accounts.google.com.secure-login…mail.google.com` and hide the real site.
+      - **Addresses without a host.** A `blob:` page carries its creator's origin and a
+        `view-source:` one its inner URL's; the host takes the origin from those (the inner URI,
+        else the page's document principal), since such a URL has no host of its own
+        (`nsSimpleURI` throws on `host`). An address with no host at all is cut at its end,
+        never in the middle, while the toolbar is hidden.
       - **A title never stands in for the URL.** A page that titles itself with an address does
         not suppress the `url` segment.
-      - **Priority:** the `url` segment's priority rises from 8 to 4.9, just above the title's
-        5, so the title gives way first (on equal priorities the fitter drops the later segment
-        first, and the URL comes after the title).
+      - **Never dropped.** The `url` segment's priority rises from 8 to 4.9, just above the
+        title's 5, so the title gives way first (on equal priorities the fitter drops the later
+        segment first, and the URL comes after the title). The segment is also kept: it is cut to
+        `…<domain>…` while the tab position, workspace and others give way, takes back the room
+        they free, and only in a bar narrower than its domain is the domain's end cut.
       - **An about:blank a page controls is named.** Firefox's address bar shows an initial page
         (about:blank, the start page) as empty only when `BrowserUIUtils.checkEmptyPageOrigin`
         passes; otherwise it shows `about:blank`. The status bar does the same, and adds the
-        origin of the page that opened it: `about:blank from evil.example`. (A page written with
+        origin of the page that wrote it, from the tab's own document principal (never the
+        opener's current one, which may have navigated since): `about:blank from evil.example`. (A page written with
         `document.write` takes its opener's address, which the bar shows as it is.)
     - **What the page uses:** a `using camera, mic` segment (camera, mic, screen, location, XR,
-      serial; `paused` where Firefox says so), priority 2, in `--vimma-text-error`. Firefox
+      serial; `paused` where Firefox says so: camera and microphone are
+      `nsIMediaManagerService` states, 1 capturing and 2 paused), priority 2, in
+      `--vimma-text-error`. Only the selected tab is read: background tabs, the other pane of a
+      split and Firefox's grace period after a stream ends are not shown (docs/security.md C3). Firefox
       marks these on the address bar's sharing icons and on the tab; Vimma hides both the tab
       strip and, here, the address bar. Read from the tab's sharing state
       (`browser._sharingState`), as `gPermissionPanel.updateSharingIndicator` reads it. `http://` is no longer dropped by `displayUrl` for an `http:`

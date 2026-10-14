@@ -437,7 +437,9 @@ describe("the URL keeps its registrable domain while the toolbar is hidden", () 
     expect(truncateUrl(t, 16, o)).toBe("a.b.example.com…");
     expect(truncateUrl(t, 15, o)).toBe("…b.example.com…");
     expect(truncateUrl(t, 13, o)).toBe("…example.com…");
-    expect(truncateUrl(t, 12, o)).toBeNull();
+    // Narrower than the base domain: cut at the end as the last resort, never dropped.
+    expect(truncateUrl(t, 12, o)).toBe("…example.co…");
+    expect(truncateUrl(t, 2, o)).toBe("……");
   });
 
   test("a scheme is kept while it fits, then goes with the leftmost labels", () => {
@@ -454,12 +456,40 @@ describe("the URL keeps its registrable domain while the toolbar is hidden", () 
     expect(truncateUrl("pääsy.kirjaudu.esimerkki.fi/a/b/c", 18, idn)).toBe("…esimerkki.fi…");
     const ip = { host: "192.168.100.200", base: "192.168.100.200" };
     expect(truncateUrl("http://192.168.100.200:8080/admin", 17, ip)).toBe("…192.168.100.200…");
-    expect(truncateUrl("http://192.168.100.200:8080/admin", 16, ip)).toBeNull();
+    expect(truncateUrl("http://192.168.100.200:8080/admin", 16, ip)).toBe("…192.168.100.20…");
     const v6 = { host: "2001:db8::1", base: "2001:db8::1" };
     expect(truncateUrl("http://[2001:db8::1]/index.html", 22, v6)).toBe("http://[2001:db8::1]/…");
     expect(truncateUrl("http://[2001:db8::1]/index.html", 15, v6)).toBe("…[2001:db8::1]…");
     const jp = { host: "login.city.kawasaki.jp", base: "city.kawasaki.jp" };
     expect(truncateUrl("login.city.kawasaki.jp/x/y", 18, jp)).toBe("…city.kawasaki.jp…");
+  });
+
+  // Re-review A: nested and simple URLs (blob:, view-source:) keep the origin they carry, and
+  // a URL with no host is cut at its end, never in the middle, while the toolbar is hidden.
+  const BLOB_HOST = "accounts.google.com.secure-login-verification-session-0123456789.evil.example";
+  test.each([[50], [80], [120]])("blob:, view-source: and no host at %i columns", (width) => {
+    const at = (url, origin) =>
+      texts(
+        renderStatusBar(
+          {
+            mode: "normal",
+            toolbarHidden: true,
+            tab: { index: 1, count: 1, title: "Sign in", url, origin },
+          },
+          width,
+        ),
+      ).url;
+    const origin = { host: BLOB_HOST, base: "evil.example" };
+    const blob = at(
+      `blob:https://${BLOB_HOST}/accounts.google.com/signin/0f8b2a3c-5d6e-4f70-8a9b-0c1d2e3f4a5b`,
+      origin,
+    );
+    expect(blob).toMatch(/evil\.example(…|\/|$)/);
+    const source = at(`view-source:https://${BLOB_HOST}/accounts.google.com/signin`, origin);
+    expect(source).toMatch(/evil\.example(…|\/|$)/);
+    const noHost = at(`data:text/html,${"accounts.google.com ".repeat(10)}`, null);
+    expect(noHost?.startsWith("data:text/html,")).toBe(true);
+    expect(noHost).not.toMatch(/…./);
   });
 
   test("without an origin (about:, file:) the end is cut", () => {
@@ -485,11 +515,17 @@ describe("the URL keeps its registrable domain while the toolbar is hidden", () 
             tab: { index: 1, count: 1, title, url, origin: { host, base } },
           };
           const out = texts(renderStatusBar(input, width));
-          if (out.url !== undefined) {
+          if (out.url !== undefined && !out.url.includes(base)) {
+            // The last resort: a bar narrower than `…<base>…` next to the mode cuts its end.
+            expect(width).toBeLessThan(textWidth(base) + 10);
+            expect(out.url.endsWith("…")).toBe(true);
+          } else if (out.url !== undefined) {
             expect(out.url).toContain(base);
             const at = out.url.lastIndexOf(base);
             expect(["", "…", "/"]).toContain(out.url.slice(at + base.length, at + base.length + 1));
           } else {
+            // Only a bar too narrow for anything but the mode drops the address.
+            expect(width).toBeLessThan(12);
             expect(out.title).toBeUndefined();
           }
         },
@@ -554,9 +590,16 @@ describe("sharing: devices in use while the toolbar is hidden", () => {
   test("sharingCues reads Firefox's per-tab sharing state", () => {
     expect(sharingCues(null)).toEqual([]);
     expect(sharingCues({})).toEqual([]);
-    expect(sharingCues({ webRTC: { camera: true, microphone: true } })).toEqual(["camera", "mic"]);
+    // Firefox's shapes (webrtcUI getCombinedStateForBrowser): camera and microphone are
+    // nsIMediaManagerService states, 1 capturing, 2 disabled (paused), 0 none; screen a string.
+    expect(sharingCues({ webRTC: { camera: 1, microphone: 1, sharing: "camera" } })).toEqual([
+      "camera",
+      "mic",
+    ]);
+    expect(sharingCues({ webRTC: { camera: 2, microphone: 1 } })).toEqual(["camera paused", "mic"]);
+    expect(sharingCues({ webRTC: { camera: 0, microphone: 2 } })).toEqual(["mic paused"]);
     expect(sharingCues({ webRTC: { screen: "Screen" } })).toEqual(["screen"]);
-    expect(sharingCues({ webRTC: { camera: "CameraPaused" } })).toEqual(["camera paused"]);
+    expect(sharingCues({ webRTC: { screen: "WindowPaused" } })).toEqual(["screen paused"]);
     expect(sharingCues({ geo: true, xr: true, serial: true })).toEqual([
       "location",
       "XR",
