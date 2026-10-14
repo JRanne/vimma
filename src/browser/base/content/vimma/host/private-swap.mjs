@@ -74,7 +74,9 @@ let forced = false;
 /** @type {WeakMap<Window, string>} */
 const addresses = new WeakMap();
 /** @type {WeakMap<Window, Promise<string | null>>} */
-const resolving = new WeakMap();
+let resolving = new WeakMap();
+/** Bumped by a reset: a naming begun before it ends without an address. */
+let naming = 0;
 /** @type {Map<string, WeakRef<Window>>} */
 const byAddress = new Map();
 /** Pending nonce titles and who waits for them. @type {Map<string, (a: string | null) => void>} */
@@ -266,7 +268,8 @@ function addressOf(win) {
   const running_ = resolving.get(win);
   if (running_) return running_;
   const promise = (async () => {
-    if (!(await startedUp(win)) || !(await detect())) return null;
+    const at = naming;
+    if (!(await startedUp(win)) || !(await detect()) || at !== naming) return null;
     ensureEvents();
     const nonce = nonceTitle(crypto.getRandomValues(new Uint8Array(16)));
     /** @type {Promise<string | null>} */
@@ -284,7 +287,8 @@ function addressOf(win) {
     });
     keep.observe(doc.documentElement, { subtree: true, childList: true, characterData: true });
     let address = await heard;
-    if (!address) {
+    if (at !== naming) address = null;
+    else if (!address) {
       try {
         address = findNonce(
           await HyprIpc.request(QUERY_CLIENTS),
@@ -303,8 +307,9 @@ function addressOf(win) {
     }
     return address;
   })();
-  resolving.set(win, promise);
-  promise.finally(() => resolving.delete(win));
+  const pending = resolving;
+  pending.set(win, promise);
+  promise.finally(() => pending.delete(win));
   return promise;
 }
 
@@ -615,7 +620,12 @@ export const PrivateSwap = {
     settleUntil = 0;
     ownMoves.clear();
     epoch++;
+    // A naming in flight ends now (null), drops its nonce title and is not reused: left
+    // waiting, it would hold the title and stand in for every later naming of that window.
+    naming++;
+    for (const resolve of nonces.values()) resolve(null);
     nonces.clear();
+    resolving = new WeakMap();
     byAddress.clear();
     records.clear();
     for (const win of windows) addresses.delete(win);

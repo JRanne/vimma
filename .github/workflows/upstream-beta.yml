@@ -1,0 +1,288 @@
+# The Firefox Beta canary (spec upstream-beta-canary; ADR-002 as amended). It tests Vimma's main
+# against each Firefox Beta build, so that breakage a Firefox release brings is found while it is
+# still a Beta, about two weeks before the release and its security deadline (docs/security.md G2).
+#
+#   detect        every 6 h, < 1 min. The current Beta (product-details); tested on main in the
+#                 last 7 days (an artifact upstream-beta-<version>)? The previous result.
+#   source-check  stream + SHA-512-verify the Beta source tarball, dry-run our patches, patch
+#                 audit, artifact preflight (tools/upstream/source-check.sh, as upstream.yml).
+#   test          e2e.yml (workflow_call) in Beta mode: import, artifact build, every check and
+#                 suite, suite-results.json. Only when every patch applies and Mozilla's build of
+#                 the Beta is indexed.
+#   render        tools/upstream/canary.mjs render: issue.json (body, comment, action) and
+#                 state.json, uploaded as upstream-beta-<version> (also the "tested" record).
+#   report        main only. Opens, updates or closes "Firefox N beta: canary findings"
+#                 (label upstream-beta) from issue.json; closes the issues of released versions.
+#
+# It never pushes, commits, opens a pull request or changes the Firefox pin (B8); only the report
+# job may write, and only issues. Findings go to the issue and the run stays green; a red run means the
+# canary itself is broken (B9). No secrets: GITHUB_TOKEN only. Never pull_request_target.
+# Run by hand: gh workflow run upstream-beta.yml -f version=159.0b2 (on a branch, nothing is
+# written: the report job runs only on main).
+name: upstream-beta
+
+on:
+  schedule:
+    - cron: "41 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Firefox Beta to test (e.g. 159.0b2); empty tests the current Beta if due
+        type: string
+        required: false
+        default: ""
+
+permissions: {}
+
+concurrency:
+  # One run per ref at a time; a manual run on a branch never waits for main's.
+  group: upstream-beta-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    if: github.repository == 'JRanne/vimma'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read # tools/upstream
+      actions: read # the upstream-beta-<version> artifacts of earlier runs
+    outputs:
+      version: ${{ steps.detect.outputs.version }}
+      major: ${{ steps.detect.outputs.major }}
+      run: ${{ steps.detect.outputs.run }}
+      reason: ${{ steps.detect.outputs.reason }}
+      released-majors: ${{ steps.detect.outputs.released-majors }}
+      previous-artifact: ${{ steps.detect.outputs.previous-artifact }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/upstream
+
+      # The runner's own Node: no setup-node, no npm ci (Node built-ins only). The version is
+      # checked (^\d+\.0b\d+$) before it reaches any URL, argument or artifact name.
+      - name: The current Beta, and whether main tested it in the last 7 days
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          node tools/upstream/canary.mjs detect --version "$VERSION" \
+            --github-output "$GITHUB_OUTPUT" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # B6: the previous result of main for the same Firefox version, handed to render through
+      # this run's artifacts (render holds no actions: read).
+      - name: Download the previous result
+        if: steps.detect.outputs.run == 'true' && steps.detect.outputs.previous-artifact != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ steps.detect.outputs.previous-artifact }}
+          run-id: ${{ steps.detect.outputs.previous-run }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/previous
+
+      - name: Hand the previous result to render
+        if: steps.detect.outputs.run == 'true' && steps.detect.outputs.previous-artifact != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: canary-previous
+          path: ${{ runner.temp }}/previous/state.json
+          if-no-files-found: warn
+          retention-days: 1
+
+  source-check:
+    needs: detect
+    if: github.repository == 'JRanne/vimma' && needs.detect.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    # Streams the ~820 MB source tarball through patch-check (~1–2 min).
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.check.outputs.result }}
+      artifacts: ${{ steps.check.outputs.artifacts }}
+      artifacts-note: ${{ steps.check.outputs.artifacts-note }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Shared with upstream.yml. Exits 1 on a SHA-512 mismatch: the job fails, nothing is
+      # tested or reported from that tarball (B3, docs/security.md G10).
+      - name: Check the Beta's source (SHA-512, patches, audit, artifact preflight)
+        id: check
+        env:
+          VERSION: ${{ needs.detect.outputs.version }}
+        run: tools/upstream/source-check.sh "$VERSION"
+
+      - name: Upload the source check
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: canary-source-check
+          path: |
+            patch-check.*
+            patch-audit.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+  test:
+    needs: [detect, source-check]
+    if: >-
+      github.repository == 'JRanne/vimma' && needs.source-check.outputs.result == 'ok' &&
+      needs.source-check.outputs.artifacts == 'yes'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e.yml
+    with:
+      firefox-version: ${{ needs.detect.outputs.version }}
+      # B9: findings go to the issue; the job fails only when the canary cannot test.
+      fail-on-findings: false
+
+  render:
+    needs: [detect, source-check, test]
+    # After failed or skipped suites too; never after a cancelled run or a failed source check.
+    if: >-
+      !cancelled() && github.repository == 'JRanne/vimma' && needs.detect.outputs.run == 'true' &&
+      needs.source-check.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/upstream
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: canary-source-check
+          path: ${{ runner.temp }}/source
+
+      # Missing when the suites did not run or ended early: render reports that.
+      - name: Download suite-results (e2e.yml)
+        if: needs.test.result != 'skipped'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: suite-results
+          path: ${{ runner.temp }}/suites
+
+      - name: Download the previous result
+        if: needs.detect.outputs.previous-artifact != ''
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: canary-previous
+          path: ${{ runner.temp }}/previous
+
+      - name: Render the issue (tools/upstream/canary.mjs render)
+        env:
+          VERSION: ${{ needs.detect.outputs.version }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OWNER: ${{ github.repository_owner }}
+          SOURCE_RESULT: ${{ needs.source-check.outputs.result }}
+          ARTIFACTS: ${{ needs.source-check.outputs.artifacts }}
+          ARTIFACTS_NOTE: ${{ needs.source-check.outputs.artifacts-note }}
+          TEST_RESULT: ${{ needs.test.result }}
+        run: |
+          out="$RUNNER_TEMP/upstream-beta"
+          node tools/upstream/canary.mjs render --version "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --ref "$GITHUB_REF_NAME" --sha "$SHA" --run-url "$RUN_URL" --owner "$OWNER" \
+            --patch-check "$RUNNER_TEMP/source/patch-check.json" --source-result "$SOURCE_RESULT" \
+            --artifacts "$ARTIFACTS" --artifacts-note "$ARTIFACTS_NOTE" --test-result "$TEST_RESULT" \
+            --suite-results "$RUNNER_TEMP/suites/suite-results.json" \
+            --previous "$RUNNER_TEMP/previous/state.json" --out-dir "$out"
+          cp "$RUNNER_TEMP"/source/* "$out"/
+          cp "$RUNNER_TEMP"/suites/* "$out"/ 2>/dev/null || true
+          jq -r '"### \(.title): \(.action)\n\n\(.body)\n\n#### Comment\n\n\(.comment)"' \
+            "$out/issue.json" >> "$GITHUB_STEP_SUMMARY"
+
+      # The run's report, and B2's record that main tested this Beta build.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: upstream-beta-${{ needs.detect.outputs.version }}
+          path: ${{ runner.temp }}/upstream-beta/
+          retention-days: 30
+
+  report:
+    needs: [detect, render]
+    # main only: a manual run on a branch writes no issue. Also when render did not run, to close
+    # the issues of released versions (B7). No checkout, no repository code: gh and jq on the
+    # issue.json render wrote.
+    if: >-
+      !cancelled() && github.repository == 'JRanne/vimma' && github.ref == 'refs/heads/main' &&
+      needs.detect.result == 'success' && needs.render.result != 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write # open, edit, comment on and close the canary's issues; its label
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASED: ${{ needs.detect.outputs.released-majors }}
+    steps:
+      - if: needs.render.result == 'success'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: upstream-beta-${{ needs.detect.outputs.version }}
+          path: ${{ runner.temp }}/canary
+
+      # B7: from Firefox N's release on, the release autopilot (upstream.yml) owns it.
+      - name: Close the issues of released Firefox versions
+        id: released
+        run: |
+          [[ $RELEASED =~ ^[0-9]+$ ]] || { echo "::error::released-majors: '$RELEASED'"; exit 1; }
+          gh label create upstream-beta --force --color 5319E7 \
+            --description "Firefox Beta canary findings (upstream-beta.yml)"
+          gh issue list --state open --label upstream-beta --limit 100 --json number,title |
+            jq -r --argjson released "$RELEASED" '.[]
+              | (.title | capture("^Firefox (?<n>[0-9]+) beta: canary findings$")?) as $m
+              | select($m != null and ($m.n | tonumber) <= $released)
+              | "\(.number) \($m.n)"' |
+            while read -r number major; do
+              tracking=$(gh issue list --state all --label upstream --limit 20 \
+                --search "\"Firefox $major.0 released\" in:title" --json number,title |
+                jq -r --arg t "Firefox $major.0 released" '[.[] | select(.title == $t)][0].number // empty')
+              msg="Firefox $major is released: the release autopilot (upstream.yml) takes it from here"
+              if [ -n "$tracking" ]; then msg="$msg, in #$tracking."; else msg="$msg."; fi
+              gh issue close "$number" --comment "$msg"
+            done
+
+      # B5–B7: one issue per Firefox version, found by its exact title among the open ones.
+      - name: Open, update or close this version's issue
+        id: apply
+        run: |
+          f="$RUNNER_TEMP/canary/issue.json"
+          if [ ! -f "$f" ]; then
+            echo "No issue.json (nothing was tested this run)."
+            exit 0
+          fi
+          title=$(jq -r '.title' "$f")
+          major=$(jq -r '.major' "$f")
+          if [ "$major" -le "$RELEASED" ]; then
+            echo "Firefox $major is released: no issue for it (B7)."
+            exit 0
+          fi
+          number=$(gh issue list --state open --label upstream-beta --limit 100 --json number,title |
+            jq -r --arg t "$title" '[.[] | select(.title == $t)][0].number // empty')
+          if [ "$(jq -r '.findings' "$f")" = true ]; then
+            if [ -n "$number" ]; then
+              jq -j '.body' "$f" > "$RUNNER_TEMP/body.md"
+              gh issue edit "$number" --body-file "$RUNNER_TEMP/body.md"
+              jq -j '.comment' "$f" > "$RUNNER_TEMP/comment.md"
+              if [ -s "$RUNNER_TEMP/comment.md" ]; then
+                gh issue comment "$number" --body-file "$RUNNER_TEMP/comment.md"
+              fi
+            else
+              # The only place the owner is mentioned: a new issue (decision 12).
+              jq -j '.openBody' "$f" > "$RUNNER_TEMP/open.md"
+              gh issue create --title "$title" --label upstream-beta --body-file "$RUNNER_TEMP/open.md"
+            fi
+          elif [ -n "$number" ]; then
+            gh issue close "$number" --comment "$(jq -j '.closeComment' "$f")"
+          fi

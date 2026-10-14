@@ -335,3 +335,100 @@ describe(":control's end time", () => {
     expect(controlEnd(raw, now)).toEqual({ kind: "off" });
   });
 });
+
+// docs/specs/vimma-mcp.md, decision 31 (sub-PR 2c): a download asks with its name, size, type
+// and host, never the URL; a dangerous one is allowed only with `!`, for that one file.
+describe("a download's question (decision 31 a, d)", () => {
+  const none = { count: "" };
+  const download = {
+    tool: "vimma_download",
+    label,
+    what: {
+      name: "report.pdf",
+      size: 2_100_000,
+      type: "application/pdf",
+      ext: "pdf",
+      host: "example.com",
+    },
+  };
+  const page = { ...download, label: { client: "a page in the agent workspace" } };
+
+  test("name, size, type and extension, and the host in bold; no URL", () => {
+    const line = questionLine(download, { grantMinutes: 10 });
+    expect(text(line)).toBe(
+      '◇ claude-code wants vimma_download: "report.pdf" 2.1 MB application/pdf (.pdf) ' +
+        "from example.com",
+    );
+    expect(line.parts.filter((p) => p.strong).map((p) => p.text)).toEqual(["example.com"]);
+    expect(line.hint).toBe("y once · 10a for 10 min · n deny · x mute");
+  });
+
+  test("an unknown size and type say so", () => {
+    const what = { name: "blob", size: -1, type: "", ext: "", host: "example.com" };
+    expect(text(questionLine({ ...download, what }, { grantMinutes: 10 }))).toBe(
+      '◇ claude-code wants vimma_download: "blob" unknown size unknown type from example.com',
+    );
+  });
+
+  test("a dangerous file says why, and only ! allows it", () => {
+    const what = { ...download.what, name: "setup.sh", danger: "a script" };
+    const line = questionLine({ ...download, what }, { grantMinutes: 10 });
+    expect(text(line)).toBe(
+      '◇ claude-code wants vimma_download: "setup.sh" 2.1 MB application/pdf (.pdf) ' +
+        "from example.com — ⚠ a script",
+    );
+    expect(line.hint).toBe("! allow this one file · n deny");
+  });
+
+  // Security review of #182 (finding 7): when ClamAV could not scan it, keeping it is asked.
+  test("ClamAV could not scan it: y keeps it, anything else deletes it", () => {
+    const what = { ...download.what, unscanned: "ClamAV failed" };
+    const line = questionLine({ ...download, what }, { grantMinutes: 10 });
+    expect(text(line)).toMatch(/ — ⚠ not scanned: ClamAV failed; keep it\?$/);
+    expect(line.hint).toBe("y keep it unscanned · n delete");
+    const u = { noGrant: true };
+    expect(promptKey(none, "y", u)).toEqual({ kind: "answer", answer: { kind: "once" } });
+    expect(promptKey(none, "a", u)).toEqual({ kind: "ignore" });
+  });
+
+  test("a download no agent asked for (a page's own) cannot be granted", () => {
+    const line = questionLine(page, { grantMinutes: 10 });
+    expect(text(line)).toMatch(/^◇ a page in the agent workspace wants vimma_download: /);
+    expect(line.hint).toBe("y once · n deny");
+  });
+
+  test("the name is isolated text, cut at 60 columns", () => {
+    const what = { ...download.what, name: `\u202e${"x".repeat(100)}.pdf` };
+    const line = questionLine({ ...download, what }, { grantMinutes: 10 });
+    const name = line.parts.find((p) => p.isolate === "auto");
+    expect(name?.text).not.toMatch(/\u202e/);
+    expect(textWidth(name?.text ?? "")).toBeLessThanOrEqual(60);
+  });
+
+  test("! allows a dangerous one; y, a and counts do nothing there", () => {
+    const d = { dangerous: true };
+    expect(promptKey(none, "!", d)).toEqual({ kind: "answer", answer: { kind: "once" } });
+    for (const key of ["y", "Y", "a", "5"])
+      expect(promptKey(none, key, d)).toEqual({ kind: "ignore" });
+    expect(promptKey(none, "n", d)).toEqual({ kind: "answer", answer: { kind: "deny" } });
+    expect(promptKey(none, "x", d)).toEqual({ kind: "answer", answer: { kind: "mute" } });
+    expect(promptKey(none, "!")).toEqual({ kind: "ignore" });
+  });
+
+  test("a page's download: y or n, no grant, and x is a plain no", () => {
+    const p = { noGrant: true };
+    expect(promptKey(none, "y", p)).toEqual({ kind: "answer", answer: { kind: "once" } });
+    expect(promptKey(none, "a", p)).toEqual({ kind: "ignore" });
+    expect(promptKey(none, "3", p)).toEqual({ kind: "ignore" });
+    expect(promptKey(none, "x", p)).toEqual({ kind: "answer", answer: { kind: "deny" } });
+  });
+
+  test("under a grant, the notice; the notification names no file or host", () => {
+    expect(ranNotice(download, 9 * MIN, 0)).toBe(
+      'claude-code downloads "report.pdf" (grant, 9m left)',
+    );
+    expect(agentAlertText(download)).toBe(
+      "claude-code asks to use Vimma's agent workspace (download a file)",
+    );
+  });
+});

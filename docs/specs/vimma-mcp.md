@@ -1,8 +1,8 @@
 # Spec: vimma-mcp
 
 Status: sub-PR 1 merged (the agent workspace, `[mcp]`, `:mcp on|off|forget`); sub-PR 2 split:
-2a merged (#176, protocol 2, the agent role and its gate); 2b in review (the question line,
-full control asks, the agent workspace's pages); 2c (downloads), 3 and 4 to do · Milestone: queued after firefox-keys sub-PR 2 (plan §6) · Area: `tools/vimma-ctl` (`src/mcp.rs` new, `src/protocol.rs`,
+2a merged (#176, protocol 2, the agent role and its gate); 2b merged (#177, the question line,
+full control asks, the agent workspace's pages); 2c in review (downloads); 3 and 4 to do · Milestone: queued after firefox-keys sub-PR 2 (plan §6) · Area: `tools/vimma-ctl` (`src/mcp.rs` new, `src/protocol.rs`,
 `src/client.rs`, `src/cli.rs`); `packages/vimma-core/src/` (`control.mjs`, `agent.mjs` new,
 `config.mjs`, `defaults.mjs`, `actions.mjs`, `cmdline.mjs`, `statusbar.mjs`,
 `workspacedefs.mjs`); `ctl/VimmaControl.sys.mjs`, `ctl/AgentGate.sys.mjs` (new),
@@ -1067,6 +1067,92 @@ approval settings are theirs), the protocol spec (protocol 2 section), ADR-019,
   `test_agent_pages_launch_no_app_and_download_nothing`'s download half into 2c's tests.
 - **Docs.** security.md §12 M11-M13 (downloads asked, quarantined, never launched; dangerous types;
   no Google download reputation in Vimma, Mozilla's build only); the guide's Agents section.
+
+## Sub-PR 2c: what was built, and the choices it made
+
+Decision 31 as the handover above describes, with these findings from the engine and choices
+where the spec was silent (3 and 4 can revisit):
+
+- **Where the bytes go.** A helper-app download writes its `.part` before any JS hook runs
+  (`nsExternalAppHandler::SetUpTempFile`), so `shouldBlockForParentalControls` alone would let the
+  bytes reach the normal folder. The top browsing context's `downloadFolderOverride`
+  (`BrowsingContext.webidl`, used by WebDriver BiDi) is read first
+  (`GetInitialDownloadDirectory`): every agent tab gets the quarantine folder there (set at each
+  `browsing-context-attached`, since `ReplacedBy` does not copy it), and the helper-app dialog
+  (`@mozilla.org/helperapplauncherdialog;1`) is wrapped, as BiDi's `HelperAppDialogHandler`
+  does, so an agent tab's download never shows "open with" and its final name is in the
+  quarantine too. No re-download is needed: the original channel (and the agent's cookies) are
+  kept. `SANDBOXED_DOWNLOADS` is gone from `AGENT_SANDBOX`.
+- **The two checks.** `shouldBlockForParentalControls` is the question (https only, the place,
+  the known size, the name, type and Firefox's `isExecutable`); while it waits the part is
+  measured every 250 ms and the question withdrawn past the cap. `shouldBlockForReputationCheck`
+  runs on the finished `.part` before `_checkReputationAndMove` renames it: the first 512 bytes,
+  the zip central directory, then ClamAV. A refused one returns `VERDICT_DANGEROUS` with its part
+  deleted and `shouldKeepBlockedData` false for it, and is taken off the downloads list (the
+  notice says why, not Firefox's "blocked by parental controls").
+- **Whose download it is.** `vimma_download` is a gate tool (the grant key), not a new protocol
+  command or MCP tool: an agent downloads by `vimma_open`ing a file's URL, and the download is
+  that connection's when the tab was opened or loaded by it (`agent-open`) and it is still
+  connected. Otherwise (a page's own download, the user's clicks in the agent workspace, an agent
+  gone) it asks as `a page in the agent workspace`: `y` or `n` only, no grant, `x` a plain no.
+  Sub-PR 3 can add an explicit `vimma_download` MCP tool on this if wanted.
+- **A danger found only in the bytes** (an ELF named `data.bin`, a zip holding `bin/tool.exe`)
+  asks a second question with `!` before the file gets its name, unless the first answer was
+  already a `!`; a no deletes it.
+- **The user's own saves are the user's.** Save Page, Save Link As and Save Image As in an agent
+  tab go through `internalSave`, which creates its download with no container
+  (`nsITransfer.init`), so it is not an agent download: no question, saved where the user picks,
+  as in any workspace. The agent role cannot press chrome commands (no `send-keys`; full control
+  is its own question), so a save from the menu or `ctrl+s` is always the user's. Asking would
+  add a question the user just answered by choosing a file.
+- **https only** means only `https:` sources: `http:`, and also `blob:` and `data:` (made by a
+  page's script, with no host to show), are refused. Firefox already blocks an http download
+  from an https page as insecure; its "Allow download" then reaches Vimma's check, which refuses.
+- **Sizes** are SI: `download_max_mb = 200` is 200,000,000 bytes, as the question's `2.1 MB`.
+- **Never opened, also later:** `launchDownload` refuses any agent download (or a file in the
+  quarantine folder) with a notice, so the downloads list's "Open" does nothing for them.
+- **C2's one exception.** Chrome code never started a process (security.md C2); ClamAV needs
+  one, in `ctl/AgentDownloads.sys.mjs` only (tightened after the review, below).
+- **Found on the way:** 2b's external-protocol chooser wrapper made Firefox's own chooser with
+  `Components.classesByID`, which system modules do not have, so every external-protocol link
+  in every workspace threw. Fixed with `Components.manager.getClassObject`, with a test.
+- **vimma-ctl** (review of #177, follow-up): the full-control code is printed only after the auth
+  carrying it was sent (`auth_then_code`, a Rust unit test).
+
+**After the security review of #182** (no critical or high; all fixed in 2c):
+
+- 1 (medium): a zip's entries count by what they become: the central directory's version made
+  by (Unix) and external attributes give each entry's mode, and an exec bit, a symbolic link or a
+  path with a `..` segment, a leading `/` or a drive letter makes the zip dangerous.
+- 2 (medium): a grant covered whatever the agent's tab later downloaded. Now `agent-open`
+  records the URL it loads; a download is that connection's only when it is that load (its URL
+  before redirects, within 60 s, once), and the record is dropped as soon as the tab shows a page
+  (`window-global-created`). Anything else asks as the page's.
+- 3 (medium): `download_dir` must not be a hidden folder of home or under `/tmp`, `/var/tmp` or
+  `/dev/shm` (config and at runtime, core `quarantineProblem`). At runtime the folder is made and
+  chmod 0700. A chmod that fails (not the user's folder) or a mode read back as anything else
+  makes it unusable. Agent downloads are then refused with a notice, and agent tabs download into
+  the profile's `vimma-agent-refused` instead (fail closed).
+- 4 (low): an agent download is also one by its tab's container and by being written to the
+  quarantine (or refusal) folder.
+- 5 (low): a `!` allows one kind of danger; another kind found in the bytes asks again.
+- 6 (low): `shouldKeepBlockedData` is left alone. `block()` deletes the `.part` itself.
+- 7 (low): clamscan's stderr is drained, it runs with `--alert-encrypted=yes
+--alert-exceeds-max=yes` and `--` before the path. An encrypted or over-the-limits verdict is
+  "not fully scanned". On that, an error, or five minutes without an answer (the process is
+  killed and not waited for), keeping the file is asked: y/N, no grant, a no deletes it.
+- 8 (low): tests for Firefox's "always ask" dialog, "always open similar files"
+  (useSystemDefault), a frame's download and a `blob:` download. Vitest's only intermittent test
+  here was the key-to-action bench gate (`tools/bench/test/bench.test.mjs`, the known noisy one,
+  issue #125). It failed once in four full runs and passed 5 of 5 alone. It measures wall-clock
+  time while other test files run in parallel, so it is not caused by this change.
+- C2 ("accept with changes"): no `pathSearch`. Only `/usr/bin/clamscan` or
+  `/usr/local/bin/clamscan` runs, and only when it is a regular, executable, non-symlink file the
+  user cannot write, in a folder the user cannot write, owned by another user. Ownership is
+  checked by a no-op chmod that must fail. The source check requires exactly one
+  `Subprocess.call(` with `command: clam` and `arguments: clamArguments(path)`, the fixed list,
+  and no aliasing, bracket access or PATH search. The tests reach a fake clamscan only through
+  `AgentDownloads._clamForTests`, which chrome code alone can set.
 
 ## Out of scope
 

@@ -236,6 +236,20 @@ validator (no `selection`, `muted`, `dark_background`, ... keys), so it shows th
 
 Not covered: nothing known in the sidebar.
 
+### Firefox 158: the launcher is a tab list
+
+Firefox 158 made the launcher's buttons tabs (`browser/components/sidebar/sidebar-main.mjs`:
+`buttonrole="tab"`, `role="presentation"` on the `moz-button`): the open panel's button now
+carries `aria-selected="true"` on its inner `<button>` instead of `aria-pressed="true"`.
+`moz-button.css` (158) styles `[aria-selected="true"]` with the same `--button-*-selected` tokens
+as `[aria-pressed="true"]`, so `firefox-sidebar.css` needed no change of rule, only its comment.
+The mochitest found the open panel's button by `aria-pressed` and so timed out waiting for every
+panel to load, and found no pressed launcher button after a theme switch; it now looks for
+`aria-selected`, with the same assertions. The panel structure (`#sidebar-box`,
+`<browser id="sidebar">`, the documents' URLs, `SidebarController.show`) is unchanged in 158;
+the other launcher changes (default tool order `opentabs,bookmarks,aichat,history,syncedtabs` in
+`SidebarManager.sys.mjs`, the Customize button kept last) do not touch the theme.
+
 ## Open questions
 
 - Should the launcher strip (the sidebar buttons column) show at all in Vimma, or be hidden as

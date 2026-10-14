@@ -11,6 +11,7 @@
  */
 
 import { AGENT_GLYPH } from "./agent.mjs";
+import { DOWNLOAD_TOOL, formatBytes } from "./agent-downloads.mjs";
 import { displayUrl, truncate } from "./statusbar.mjs";
 
 /** No key for this long before the question may open by itself (decision 14). */
@@ -25,6 +26,11 @@ export const TITLE_COLUMNS = 60;
 export const RAN_MS = 2000;
 /** The longest `:control on <minutes>` (decision 29 D). */
 export const CONTROL_MAX_MINUTES = 1440;
+/**
+ * What a download no agent connection asked for calls itself (decision 31): a page's own, or one
+ * the agent that opened its tab is gone from. It cannot be granted, and `x` is a plain no.
+ */
+export const PAGE_CLIENT = "a page in the agent workspace";
 /** Digits a grant's count may have: 1440 is the most a grant can be. */
 const MAX_COUNT_DIGITS = 4;
 
@@ -105,6 +111,26 @@ function urlParts(url, host) {
 }
 
 /**
+ * A download as the question shows it (decision 31 a): its name, size, type and extension, and
+ * the host it comes from in bold; never the URL.
+ * @param {Record<string, any>} w
+ * @returns {Part[]}
+ */
+function downloadParts(w) {
+  const type = clean(w.type) || "unknown type";
+  const ext = clean(w.ext);
+  return [
+    { text: '"' },
+    { text: cutTitle(w.name), isolate: "auto" },
+    { text: `" ${formatBytes(Number(w.size ?? -1))} ${type}${ext ? ` (.${ext})` : ""} from ` },
+    { text: clean(w.host), strong: true, isolate: "ltr" },
+  ];
+}
+
+/** A download no agent connection asked for (PAGE_CLIENT). @param {Asked} q */
+export const isPage = (q) => q.tool === DOWNLOAD_TOOL && q.label?.client === PAGE_CLIENT;
+
+/**
  * The question line: its text in parts (the host of an open in bold), the hint shown once the
  * line is armed, and the accessible name (the whole question).
  * @param {Asked} q
@@ -145,6 +171,18 @@ export function questionLine(q, { grantMinutes }) {
       if (w.tab !== undefined) {
         parts.push({ text: ' in "' }, { text: cutTitle(w.title), isolate: "auto" }, { text: '"' });
       }
+    } else if (q.tool === DOWNLOAD_TOOL) {
+      parts = [...head, ...downloadParts(w)];
+      if (w.unscanned) {
+        // Security review of #182 (finding 7): ClamAV could not scan it; keep it unscanned?
+        parts.push({ text: ` — ⚠ not scanned: ${clean(w.unscanned)}; keep it?` });
+        hint = "y keep it unscanned · n delete";
+      } else if (w.danger) {
+        parts.push({ text: ` — ⚠ ${clean(w.danger)}` });
+        hint = "! allow this one file · n deny";
+      } else if (isPage(q)) {
+        hint = "y once · n deny";
+      }
     } else if (q.tool === "vimma_tabs") {
       parts = [...head, { text: `the list of agent tabs (${Number(w.count) || 0})` }];
     } else {
@@ -158,20 +196,28 @@ export function questionLine(q, { grantMinutes }) {
  * What a key does to the question (decision 13): `y` once; `n`, Esc and Enter deny; `x` denies
  * and mutes; digits make a count and `a` grants that many minutes (a bare `a`: the default);
  * Backspace takes a digit back. Any other key neither allows nor denies. Full control's
- * question (`full`) has no count or grant, and its `x` is a plain no.
+ * question (`full`) and a page's download (`noGrant`) have no count or grant, and their `x` is a
+ * plain no. A dangerous download (`dangerous`, decision 31 d) is allowed only by `!`, for that
+ * one file: `y`, `a` and counts do nothing there.
  * @param {{ count: string }} state  the digits typed so far
  * @param {string} key  core formatKey of the keydown
- * @param {{ full?: boolean }} [options]
+ * @param {{ full?: boolean, noGrant?: boolean, dangerous?: boolean }} [options]
  * @returns {{ kind: "answer", answer: PromptAnswer } | { kind: "count", count: string }
  *   | { kind: "ignore" }}
  */
-export function promptKey({ count }, key, { full = false } = {}) {
+export function promptKey(
+  { count },
+  key,
+  { full = false, noGrant = false, dangerous = false } = {},
+) {
   /** @param {PromptAnswer} answer */
   const say = (answer) => ({ kind: /** @type {const} */ ("answer"), answer });
-  if (key === "y" || key === "Y" || key === "shift+y") return say({ kind: "once" });
+  const plain = full || noGrant;
   if (key === "n" || key === "N" || key === "esc" || key === "enter") return say({ kind: "deny" });
-  if (key === "x") return say(full ? { kind: "deny" } : { kind: "mute" });
-  if (full) return { kind: "ignore" };
+  if (key === "x") return say(plain ? { kind: "deny" } : { kind: "mute" });
+  if (dangerous) return key === "!" ? say({ kind: "once" }) : { kind: "ignore" };
+  if (key === "y" || key === "Y" || key === "shift+y") return say({ kind: "once" });
+  if (plain) return { kind: "ignore" };
   if (key === "a") return say({ kind: "grant", minutes: count ? Number(count) : null });
   if (/^[0-9]$/.test(key)) {
     if ((key === "0" && !count) || count.length >= MAX_COUNT_DIGITS) return { kind: "ignore" };
@@ -206,7 +252,9 @@ export function ranNotice(q, until, now) {
           ? `closed "${cutTitle(w.title)}"`
           : q.tool === "vimma_tabs"
             ? "listed the agent tabs"
-            : `used ${q.tool}`;
+            : q.tool === DOWNLOAD_TOOL
+              ? `downloads "${cutTitle(w.name)}"`
+              : `used ${q.tool}`;
   return `${clientName(q.label)} ${did} (grant, ${left}m left)`;
 }
 
@@ -228,6 +276,7 @@ const ASKS = Object.freeze({
   vimma_read_page: "read a page",
   vimma_open: "open a page",
   vimma_close_tab: "close a tab",
+  [DOWNLOAD_TOOL]: "download a file",
 });
 
 /**
