@@ -236,7 +236,7 @@ appVersion="1.23.2b" buildID=…>` with one complete MAR from the GitHub Release
   `checkInstallTime.days`.
 - `release.yml`'s `build` job (line 44) and `nightly.yml` (line 26) name
   `[self-hosted, linux, x64, vimma-build]`, but no self-hosted runner is registered and none is
-  planned. Pending spec build-supply-chain (PR #195, not merged) moves both full builds to
+  planned. The [build-supply-chain](build-supply-chain.md) spec moves both full builds to
   GitHub-hosted runners (`ubuntu-24.04`, or a larger hosted runner for the release), puts the
   Safe Browsing key in a `build` environment, and adds a test that no workflow job names a
   self-hosted runner. `release.yml`'s `sign` (cosign keyless, the only `id-token: write`) and
@@ -485,7 +485,7 @@ the built updater from an installed tarball; if it does, that hunk joins the sam
 
 Option B, a key file or a hardware token (for example a YubiKey via PKCS#11) on the
 `vimma-build` runner, assumed a self-hosted build machine. None is registered, none is planned,
-and pending spec build-supply-chain (PR #195) moves full builds to GitHub-hosted runners and
+and the build-supply-chain spec moves full builds to GitHub-hosted runners and
 rejects a self-hosted machine; a hosted runner is a fresh virtual machine that cannot hold a
 token. B would need a machine to exist only to sign, online whenever a release or nightly runs,
 with its own security design. It is kept here as a rejected option; if a self-hosted machine is
@@ -582,7 +582,7 @@ with "reached vimma.dev at <time>, <hours> after the advisory".
 4. **The update jobs do not depend on a self-hosted machine.** The `build` job only gains steps
    (`VIMMA_UPDATES=1`, `./mach repackage mar`, the uploads) and runs wherever `release.yml` and
    `nightly.yml` run their full build: today a self-hosted label with no runner behind it, and on
-   GitHub-hosted runners once pending spec build-supply-chain (PR #195) lands. The build job holds
+   GitHub-hosted runners once the build-supply-chain spec is implemented. The build job holds
    no update secret in either case; signing and the site push run in separate `ubuntu-24.04` jobs
    with their own environments. The MAR is produced in the build job because `./mach repackage
 mar` needs the host `mar` tool from the same objdir. Nothing here can ship before the full
@@ -758,8 +758,8 @@ independently mergeable and tested:
 3. **Host** (`vimma/updates/VimmaUpdates.sys.mjs`, the verifier host, AppImage replacement,
    status bar and prompt wiring, about:vimma, control `state` field): the mochitests.
 4. **Packaging and pipeline** (`package.mjs`, `tools/update/`, `release.yml`, `nightly.yml`,
-   `update-publish.yml`, `upstream.yml`): workflow tests and a dry run. Lands after pending spec
-   build-supply-chain (PR #195), whose full builds this extends (decision 4).
+   `update-publish.yml`, `upstream.yml`): workflow tests and a dry run. Lands after the
+   build-supply-chain implementation, whose full builds this extends (decision 4).
 5. **e2e and the security rehearsal**: the scenarios above; the M6a gate.
 
 ## Open questions
