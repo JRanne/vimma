@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tempDir } from "../../test/temp-dir.mjs";
 import { BODY_LIMIT, currentBeta, decide, render, title } from "../canary.mjs";
 
 // Spec upstream-beta-canary, B1–B7: what the Beta canary tests and what it writes to its issue.
@@ -401,7 +401,7 @@ describe("canary render (B5–B7)", () => {
 
 describe("canary CLI", () => {
   it("render writes issue.json and state.json from the job's files", () => {
-    const dir = mkdtempSync(join(tmpdir(), "canary-"));
+    const dir = tempDir("canary-");
     writeFileSync(join(dir, "patch-check.json"), JSON.stringify(patchCheck));
     const r = spawnSync(
       process.execPath,

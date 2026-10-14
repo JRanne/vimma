@@ -276,7 +276,7 @@ describe("e2e.yml Beta mode", () => {
     expect(block).toContain("FAIL_ON_FINDINGS: ${{ inputs.fail-on-findings }}");
     /** @param {number} exit suite-results.mjs's status @param {string} flag */
     const run = (exit, flag) => {
-      const tmp = mkdtempSync(join(tmpdir(), "e2e-findings-"));
+      const tmp = tempDir("e2e-findings-");
       writeFileSync(join(tmp, "node"), `#!/bin/sh\nexit ${exit}\n`, { mode: 0o755 });
       return spawnSync("bash", ["-e", "-c", script(block)], {
         encoding: "utf8",
