@@ -11,6 +11,10 @@
 # Spec m7-upstream-autopilot: upstream.yml calls this workflow (workflow_call) with a newer
 # Firefox version; the job then bumps surfer.json in its own checkout first and runs the same
 # suites on that release. Nothing is pushed from here: the token stays read-only.
+# Spec upstream-beta-canary, decision 4: a Firefox Beta version (^\d+\.0b\d+$, from the canary or
+# a manual run) turns on Beta mode. The checks and suites then run with continue-on-error, so each
+# one runs and is reported, and suite-results.json records every failure; the job still fails at
+# the end. Any other version, PR CI and the release autopilot included, fails on the first failure.
 name: e2e
 
 on:
@@ -22,6 +26,12 @@ on:
     # report on every PR, docs-only ones too. Hosted minutes are free for a public repo
     # (docs/runbook.md, "Actions minutes budget").
   workflow_dispatch:
+    inputs:
+      firefox-version:
+        description: Firefox version to test instead of surfer.json's (a Beta turns on Beta mode)
+        type: string
+        required: false
+        default: ""
   workflow_call:
     inputs:
       firefox-version:
@@ -49,11 +59,27 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Bump surfer.json to the release under test (upstream autopilot only)
+      - name: Beta mode (a Firefox Beta version, spec upstream-beta-canary)
+        id: mode
+        env:
+          VERSION: ${{ inputs.firefox-version }}
+        run: |
+          if [[ "$VERSION" =~ ^[0-9]+\.0b[0-9]+$ ]]; then beta=true; else beta=false; fi
+          echo "beta=$beta" >> "$GITHUB_OUTPUT"
+
+      # --allow-beta only in Beta mode: no release path can pin a Beta by accident.
+      - name: Bump surfer.json to the version under test (upstream autopilot, Beta canary)
+        id: bump
         if: inputs.firefox-version != ''
         env:
           VERSION: ${{ inputs.firefox-version }}
-        run: python3 tools/upstream/bump-surfer-json.py "$VERSION"
+          BETA: ${{ steps.mode.outputs.beta }}
+        run: |
+          if [ "$BETA" = true ]; then
+            python3 tools/upstream/bump-surfer-json.py --allow-beta "$VERSION"
+          else
+            python3 tools/upstream/bump-surfer-json.py "$VERSION"
+          fi
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -110,15 +136,20 @@ jobs:
           df -h . | tail -1
 
       - name: Import our patches and sources
+        id: import
         run: npm run import
 
       # Needs engine/ (upstream's unofficial brand), so it runs here; the CI job skips it.
       - name: Branding prefs keep upstream's (tools/branding/test)
+        id: branding
+        continue-on-error: ${{ steps.mode.outputs.beta == 'true' }}
         run: npx vitest run tools/branding/
 
       # The cfr provider and Safe Browsing lists we copy from upstream (docs/rebase.md, step 6):
       # a stale copy shadows upstream's. Fails with the line to paste.
       - name: Upstream pref copies are current (tools/upstream/upstream-prefs.mjs)
+        id: upstream-prefs
+        continue-on-error: ${{ steps.mode.outputs.beta == 'true' }}
         run: node tools/upstream/upstream-prefs.mjs
 
       - name: Disk guard (artifact build and tests need ~1.2 GB)
@@ -130,13 +161,18 @@ jobs:
           fi
 
       - name: Artifact build (tools/artifact-build)
+        id: artifact-build
         run: node tools/artifact-build/artifact-build.mjs
 
       # browser_vimma_control.js runs the vimma-ctl built above (target/debug) against the live
       # server; without it the task skips, and VIMMA_REQUIRE_CTL=1 makes that skip a failure.
+      # The log is teed for suite-results.json; pipefail keeps the mochitests' exit status.
       - name: Mochitests (npm run mochitest -- --artifact tests/browser/)
+        id: mochitest
+        continue-on-error: ${{ steps.mode.outputs.beta == 'true' }}
         run: |
-          npm run mochitest -- --artifact --setenv=VIMMA_REQUIRE_CTL=1 tests/browser/
+          set -o pipefail
+          npm run mochitest -- --artifact --setenv=VIMMA_REQUIRE_CTL=1 tests/browser/ 2>&1 | tee "$RUNNER_TEMP/mochitest.log"
           df -h . | tail -1
           du -sh engine engine/obj-artifact ~/.mozbuild 2>/dev/null || true
 
@@ -144,15 +180,42 @@ jobs:
       # screenshots compared at 0.5 %; pending ones are a ::notice::, never a pass. CI is set, so
       # --update-baselines is refused: a baseline changes only in a reviewed commit.
       - name: e2e scenarios (npm run e2e -- --artifact)
-        run: npm run e2e -- --artifact
+        id: e2e
+        continue-on-error: ${{ steps.mode.outputs.beta == 'true' }}
+        run: |
+          npm run e2e -- --artifact --report-json "$RUNNER_TEMP/e2e-report.json"
 
       # The actual and diff screenshots of a failed comparison (tools/e2e/screenshot.mjs), for
       # judging a regression or taking a new baseline from the runner's fonts (runbook).
       - name: Upload e2e-output/ (screenshots of failed comparisons)
-        if: failure()
+        if: failure() || (steps.mode.outputs.beta == 'true' && steps.e2e.outcome == 'failure')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-output
           path: e2e-output/
           if-no-files-found: ignore
           retention-days: 7
+
+      # Beta mode only, after every step (a failed build step skips the suites; that is recorded
+      # too). Exits 1 when any step did not succeed, so the run fails once everything reported.
+      - name: suite-results.json (Beta mode, tools/upstream/suite-results.mjs)
+        id: suite-results
+        if: always() && steps.mode.outputs.beta == 'true'
+        env:
+          VERSION: ${{ inputs.firefox-version }}
+          STEPS: ${{ toJSON(steps) }}
+        run: |
+          node tools/upstream/suite-results.mjs --version "$VERSION" \
+            --mochitest-log "$RUNNER_TEMP/mochitest.log" \
+            --e2e-report "$RUNNER_TEMP/e2e-report.json" --out "$RUNNER_TEMP/suite-results.json"
+
+      - name: Upload suite-results.json (Beta mode)
+        if: always() && steps.mode.outputs.beta == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: suite-results
+          path: |
+            ${{ runner.temp }}/suite-results.json
+            ${{ runner.temp }}/e2e-report.json
+          if-no-files-found: warn
+          retention-days: 30
