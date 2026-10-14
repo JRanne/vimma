@@ -19,7 +19,7 @@ maintainer). Plan §4, step 5. Each item is ticked, or answered "n/a" with a rea
 - [ ] No snapshot or screenshot baseline changed without a changelog line explaining why.
 - [ ] Touches `*.patch`, `configs/`, `moz.configure` or branding → a full-build mochitest run is
       reported (ADR-010).
-- [ ] User-visible change → update `docs/guide.md` (and the README feature list or status if it changes what works).
+- [ ] User-visible change → update `docs/guide.md` (and its "Features at a glance" or the README status if it changes what works).
 - [ ] User-visible change → a line in `CHANGELOG.md` `[Unreleased]` (the maintainer adds it at merge time, so
       parallel PRs do not conflict).
 - [ ] Every commit is a Conventional Commit with a body. The subject is the changelog line; the body

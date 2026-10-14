@@ -1,7 +1,7 @@
 # Developing Vimma
 
-How to build, run and test Vimma, and how changes get in. For what Vimma is and does, see the
-[README](README.md); for using it, the [user guide](docs/guide.md).
+How to build, run and test Vimma, and how changes get in. For why Vimma exists, see the
+[README](README.md); for what it does and how to use it, the [user guide](docs/guide.md).
 
 ## Requirements
 
@@ -23,7 +23,13 @@ npm run import          # apply Vimma's files and patches, select the vimma bran
 npx surfer build        # full build
 ```
 
-Run it:
+Google Safe Browsing (phishing and malware protection) needs an API key, which is not in this
+repository. A build without one works but shows the protection as off. To turn it on, get a free
+key from Google and save it as `~/.config/vimma/keys/safebrowsing` before building
+([runbook](docs/runbook.md#google-safe-browsing-key-spec-m0-safebrowsing-key)). Release packages
+are built with a key.
+
+Run it, then press `ctrl+b ?` to see every binding:
 
 ```sh
 npm start               # full build if present, else the artifact build; ~/.cache/vimma-dev-profile
@@ -123,8 +129,9 @@ Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
   explains why.
   `npx commitlint --from origin/main` checks this, and CI rejects `feat`, `fix` and `revert`
   commits without a body.
-- **Docs.** A user-visible change updates [docs/guide.md](docs/guide.md), and the README's
-  status if it changes what works. See [docs/review-checklist.md](docs/review-checklist.md).
+- **Docs.** A user-visible change updates [docs/guide.md](docs/guide.md) (its "Features at a
+  glance" too when it changes what works), and the README's status line if it changes that. See
+  [docs/review-checklist.md](docs/review-checklist.md).
 - **Agents.** [CLAUDE.md](CLAUDE.md) sets the rules for AI coding agents. They apply to human
   contributors too.
 

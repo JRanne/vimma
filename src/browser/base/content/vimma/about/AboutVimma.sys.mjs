@@ -22,6 +22,7 @@ import { VimmaHost } from "../host/VimmaHost.sys.mjs";
 import { McpHost } from "../host/mcp-ops.mjs";
 import { ControlHost } from "../host/control-ops.mjs";
 import { PrivateSwap } from "../host/private-swap.mjs";
+import { SearchHost } from "../search/SearchHost.sys.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
@@ -51,6 +52,10 @@ const CONTRACT = "@mozilla.org/network/protocol/about;1?what=vimma";
  * @property {{ path: string, file: "pending" | "missing" | "read", schema: number | null,
  *   errors: string[] }} config
  * @property {{ name: string, group: string, bindings: string[], overridden: boolean }[]} bindings
+ * @property {{ default: string | null, fromConfig: boolean, template: string | null,
+ *   aliases: { alias: string, engine: string, unencrypted: boolean }[], errors: string[] }} search
+ *   `[search]`; `template`: the alias whose template made the default engine
+ *   (docs/specs/search-engines.md, decision 14)
  * @property {{ source: string, omarchy: boolean | null, polling: boolean, builtin: string,
  *   appearance: { value: string, from: "config" | "pref" | "default" }, path: string,
  *   state: string, mtime: number | null, lastError: string | null, warnings: string[],
@@ -261,6 +266,10 @@ export const AboutVimma = {
         schema: ConfigHost.config?.schema ?? null,
         errors: ConfigHost.errors.map((e) => formatConfigError(e, ConfigHost.errorsPath)),
       },
+      search: {
+        ...SearchHost.status,
+        errors: SearchHost.errors.map((e) => formatConfigError(e, ConfigHost.errorsPath)),
+      },
       bindings: bindingTable(keymap).map((r) => ({
         name: r.name,
         group: r.group,
@@ -313,6 +322,15 @@ export const AboutVimma = {
           .map((b) => `${b.name}=${b.bindings.join("|") || "(unbound)"}`)
           .join(", ") || "none"
       }`,
+      // Engine names only: a template's host can name the user's employer, and an engine Vimma
+      // made from one is named after it.
+      `Search: default ${
+        data.search.template === null
+          ? (data.search.default ?? "-")
+          : `a config.toml template (@${data.search.template})`
+      }` +
+        `${data.search.fromConfig ? " (config.toml)" : ""}, ${data.search.aliases.length} aliases`,
+      ...data.search.errors.map((e) => `  error: ${e}`),
       `Theme: ${data.theme.source}, ${data.theme.state}, ${data.theme.path}` +
         (data.theme.name ? `, ${data.theme.name}` : ""),
       ...(data.theme.lastError ? [`  error: ${data.theme.lastError}`] : []),
