@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tempDir } from "./temp-dir.mjs";
 
 // Spec m7-upstream-autopilot, docs/security.md §10: the upstream autopilot's workflow shape.
 // Text checks, like safebrowsing-workflows.test.mjs: no YAML dependency.
@@ -152,7 +152,7 @@ function script(block) {
 describe("e2e.yml Beta mode", () => {
   /** @param {string} version @returns {string} the mode step's `beta` output */
   const mode = (version) => {
-    const dir = mkdtempSync(join(tmpdir(), "e2e-mode-"));
+    const dir = tempDir("e2e-mode-");
     const out = join(dir, "out");
     writeFileSync(out, "");
     const r = spawnSync("bash", ["-e", "-c", script(step(e2e, "mode"))], {
@@ -216,7 +216,7 @@ describe("e2e.yml Beta mode", () => {
   // log file as well. A fake npm records the command each step runs.
   /** @param {string} id @param {string} beta @returns {{ status: number | null, argv: string }} */
   const runStep = (id, beta) => {
-    const dir = mkdtempSync(join(tmpdir(), "e2e-step-"));
+    const dir = tempDir("e2e-step-");
     const record = join(dir, "argv");
     writeFileSync(join(dir, "npm"), `#!/bin/sh\nprintf '%s\\n' "$@" > "${record}"\nexit 3\n`, {
       mode: 0o755,

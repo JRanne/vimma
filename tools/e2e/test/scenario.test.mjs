@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { decodePng } from "../png.mjs";
 import { loadScenarios, matchState, runSteps, validateScenario } from "../scenario.mjs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 const SCENARIOS = fileURLToPath(new URL("../../../tests/e2e/scenarios/", import.meta.url));
 
@@ -109,14 +109,13 @@ describe("loadScenarios", () => {
   });
 
   it("filters by substring and fails loudly on an invalid file", () => {
-    const dir = mkdtempSync(join(tmpdir(), "vimma-e2e-scn-"));
+    const dir = tempDir("vimma-e2e-scn-");
     writeFileSync(join(dir, "m0-a.json"), JSON.stringify(scenario({ name: "m0-a" })));
     writeFileSync(join(dir, "m1-b.json"), JSON.stringify(scenario({ name: "m1-b" })));
     expect(loadScenarios(dir, { filter: "m1" }).map((s) => s.name)).toEqual(["m1-b"]);
     expect(() => loadScenarios(dir, { filter: "zzz" })).toThrow(/no scenario matches "zzz"/);
     writeFileSync(join(dir, "m2-c.json"), "{");
     expect(() => loadScenarios(dir)).toThrow(/m2-c\.json/);
-    rmSync(dir, { recursive: true, force: true });
   });
 });
 
