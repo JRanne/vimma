@@ -36,7 +36,24 @@ fn challenge(hello: &str) -> String {
     challenge_with_key(hello, TOKEN)
 }
 
-fn temp_profile() -> PathBuf {
+/// A temp dir that is removed when dropped, also when the test panics: one left behind per test
+/// and run filled a tmpfs's inodes (#207). std only, like the crate (ADR-011).
+struct TempDir(PathBuf);
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+impl std::ops::Deref for TempDir {
+    type Target = Path;
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+fn temp_profile() -> TempDir {
     static N: AtomicUsize = AtomicUsize::new(0);
     let dir = std::env::temp_dir().join(format!(
         "vimma-ctl-it-{}-{}",
@@ -45,7 +62,27 @@ fn temp_profile() -> PathBuf {
     ));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
-    dir
+    TempDir(dir)
+}
+
+#[test]
+fn temp_profiles_are_removed_after_the_test_passed_or_panicked() {
+    let passed = {
+        let dir = temp_profile();
+        fs::write(dir.join("f"), "x").unwrap();
+        dir.to_path_buf()
+    };
+    assert!(!passed.exists());
+    let seen = std::sync::Mutex::new(PathBuf::new());
+    let result = std::panic::catch_unwind(|| {
+        let dir = temp_profile();
+        *seen.lock().unwrap() = dir.to_path_buf();
+        panic!("a failing test");
+    });
+    assert!(result.is_err());
+    let panicked = seen.into_inner().unwrap();
+    assert!(panicked.starts_with(std::env::temp_dir()));
+    assert!(!panicked.exists());
 }
 
 fn write_discovery(profile: &Path, port: u16, mode: u32) {
@@ -74,7 +111,7 @@ fn write_discovery_v2(profile: &Path, port: u16, roles: &str) {
 
 /// One accepted connection: the lines it read, in order.
 struct Server {
-    profile: PathBuf,
+    profile: TempDir,
     handle: JoinHandle<Vec<String>>,
 }
 
@@ -410,8 +447,8 @@ fn finds_the_default_profile_through_profiles_ini() {
     .unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_vimma-ctl"))
         .args(["send-keys", "j"])
-        .env("XDG_CONFIG_HOME", &config)
-        .env("HOME", &config)
+        .env("XDG_CONFIG_HOME", config.as_os_str())
+        .env("HOME", config.as_os_str())
         .env_remove("VIMMA_PROFILE")
         .output()
         .unwrap();

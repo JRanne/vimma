@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -9,6 +8,7 @@ import {
   writePatchManifest,
   writeVersionFiles,
 } from "../version-files.mjs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 /**
  * configure (`milestone()`) reads only the last line, as with config/milestone.txt.
@@ -78,7 +78,7 @@ describe("versionFiles", () => {
 
 describe("writeVersionFiles", () => {
   it("writes both files into the directory, creating it", () => {
-    const dir = join(mkdtempSync(join(tmpdir(), "vimma-version-")), "browser/config/vimma");
+    const dir = join(tempDir("vimma-version-"), "browser/config/vimma");
     expect(writeVersionFiles(surfer("157.0.1", "0.1.0"), dir)).toEqual({
       firefox: "157.0.1",
       display: "0.1.0",
@@ -91,7 +91,7 @@ describe("writeVersionFiles", () => {
 describe("patchManifest", () => {
   /** A tree with two patches (one nested) and a file that is not one. */
   function tree() {
-    const root = mkdtempSync(join(tmpdir(), "vimma-patches-"));
+    const root = tempDir("vimma-patches-");
     /** @param {number} n */
     const hunk = (n) => `@@ -${n},1 +${n},2 @@\n line\n+added\n`;
     mkdirSync(join(root, "src/browser/base"), { recursive: true });

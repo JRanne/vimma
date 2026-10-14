@@ -26,6 +26,8 @@ function noticeText() {
 /** A temporary XDG_CONFIG_HOME, in force (with the XDG location) until `restore`. */
 async function tempXdg() {
   const xdg = await IOUtils.createUniqueDirectory(PathUtils.tempDir, "vimma-first-run");
+  // Also when an assertion fails before restore() (#207).
+  registerCleanupFunction(() => IOUtils.remove(xdg, { recursive: true, ignoreAbsent: true }));
   const before = Services.env.exists("XDG_CONFIG_HOME")
     ? Services.env.get("XDG_CONFIG_HOME")
     : null;
