@@ -266,6 +266,31 @@ describe("e2e.yml Beta mode", () => {
     );
   });
 
+  // B9: the canary records findings in its issue and its run stays green; a manual Beta run of
+  // e2e.yml, and any caller that does not say otherwise, still fails once everything reported.
+  it("fails on findings unless the caller passes fail-on-findings: false", () => {
+    expect(e2e).toMatch(
+      /workflow_call:\n\s+inputs:\n(?:.*\n)*?\s+fail-on-findings:\n\s+description: .*\n\s+type: boolean\n\s+required: false\n\s+default: true\n/,
+    );
+    const block = step(e2e, "suite-results");
+    expect(block).toContain("FAIL_ON_FINDINGS: ${{ inputs.fail-on-findings }}");
+    /** @param {number} exit suite-results.mjs's status @param {string} flag */
+    const run = (exit, flag) => {
+      const tmp = mkdtempSync(join(tmpdir(), "e2e-findings-"));
+      writeFileSync(join(tmp, "node"), `#!/bin/sh\nexit ${exit}\n`, { mode: 0o755 });
+      return spawnSync("bash", ["-e", "-c", script(block)], {
+        encoding: "utf8",
+        env: { PATH: `${tmp}:${process.env.PATH}`, FAIL_ON_FINDINGS: flag, RUNNER_TEMP: tmp },
+      }).status;
+    };
+    // "" is a pull_request or workflow_dispatch run, where the input does not exist
+    for (const flag of ["", "true"]) expect(run(1, flag), flag).toBe(1);
+    expect(run(1, "false")).toBe(0);
+    expect(run(0, "false")).toBe(0);
+    // a usage error (2) is a broken step, never a finding
+    for (const flag of ["", "true", "false"]) expect(run(2, flag), flag).toBe(2);
+  });
+
   it("a release run uploads failed screenshots as before; a beta run when the e2e step failed", () => {
     expect(e2e).toContain(
       "if: failure() || (steps.mode.outputs.beta == 'true' && steps.e2e.outcome == 'failure')",

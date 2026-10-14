@@ -485,6 +485,11 @@ The seeded fuzz properties add a few seconds to each CI run, and compiling propt
 `patch-audit.yml` (the quarterly patch audit, docs/rebase.md "Patch-size audit") runs two
 one-minute jobs four times a year: no npm or toolchain install, only the runner's `python3`.
 
+`upstream-beta.yml` (the Beta canary) checks for a new Firefox Beta build every 6 hours, under a
+minute each time (about 2 hours a month). Each Beta build is tested once, about 16 minutes (the
+patch check 2, `e2e.yml` 12, render and report 1): five builds per two-week cycle, about 11
+tested builds and 3 hours a month. One run uses one hosted runner at a time.
+
 ### Mutation testing (`mutation.yml`)
 
 Plan §5: Stryker mutates `packages/vimma-core/src` (not `vendor/`) every Sunday and runs the core's
@@ -822,6 +827,38 @@ m0-mozilla-services, m0-safebrowsing-key). `tools/upstream/upstream-prefs.mjs` c
 `e2e.yml` and prints the line to paste. Before a release, run
 `tools/safebrowsing-smoke/safebrowsing-smoke.sh` on a keyed full build. Patch-size review
 (plan §4, Sunday): `python3 tools/upstream/patch-audit.py`.
+
+### Firefox Beta canary (`upstream-beta.yml`)
+
+What it does and what its issue means: [docs/rebase.md](rebase.md), "Before the release: the Beta
+canary". Spec [upstream-beta-canary](specs/upstream-beta-canary.md); ADR-002 as amended.
+
+Schedule: `41 */6 * * *`. `detect` reads product-details' `LATEST_FIREFOX_DEVEL_VERSION` and
+does nothing unless it is a Beta (`N.0bM`) of an unreleased Firefox, or when `main` tested that
+Beta build in the last 7 days (an artifact `upstream-beta-<version>` of a run on `main`). Then
+`source-check` (`tools/upstream/source-check.sh`, as `upstream.yml`), `test` (`e2e.yml` in Beta
+mode with `fail-on-findings: false`), `render` (`tools/upstream/canary.mjs render`, uploads
+`upstream-beta-<version>` for 30 days: `issue.json`, `state.json`, the patch check and the suite
+results) and, on `main` only, `report`, which opens, updates or closes `Firefox N beta: canary
+findings` (label `upstream-beta`) and closes the issues of released versions.
+
+Permissions: nothing by default; `detect` reads contents and Actions artifacts; `source-check`,
+`test` and `render` read contents; only `report` writes, and only issues, with no checkout. No
+secrets. A red run means the canary is broken, not that it found something: findings go to the
+issue.
+
+By hand:
+
+```sh
+gh workflow run upstream-beta.yml                   # the current Beta, if not tested in 7 days
+gh workflow run upstream-beta.yml -f version=159.0b2  # always tests that Beta
+gh workflow run upstream-beta.yml --ref <branch> -f version=159.0b2  # a branch: no issue written
+gh run download <run-id> -n upstream-beta-159.0b2   # issue.json, state.json, the reports
+```
+
+A manual run on a branch skips `report`, and its artifact does not count as `main`'s tested
+build, so it never delays the scheduled run. To check a run: its summary shows the rendered issue
+and the comment; the artifact holds the same in `issue.json`.
 
 ### Claude Code in GitHub (`claude.yml`)
 

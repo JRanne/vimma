@@ -224,7 +224,11 @@ detect ──► source-check ──► test (e2e.yml) ──► render ──�
 1. **detect** (`contents: read`, `actions: read`). `node tools/upstream/canary.mjs detect` reads
    `firefox_versions.json` and decides B1, then asks the Actions API whether an artifact named
    `upstream-beta-<version>` younger than 7 days exists (B2). Outputs: `version`, `major`,
-   `run` (true or false), `reason`, and `released-majors` for B7.
+   `run` (true or false), `reason`, `released-majors` for B7 (the highest released major: issues
+   for it and lower are closed), and `previous-artifact` and `previous-run`, the newest result of
+   `main` for the same Firefox version (any Beta build), which detect downloads with its
+   `actions: read` and hands to render as the artifact `canary-previous` for B6. Only artifacts
+   of runs on `main` of this repository count, so a manual run on a branch never delays `main`'s.
 2. **source-check** (`contents: read`). `tools/upstream/source-check.sh <version>` streams the
    tarball through `sha512sum` and `patch-check.py`, verifies the hash against `SHA512SUMS`
    (failing on a mismatch, B3), then runs `patch-audit.py` and `artifact-preflight.mjs`.
@@ -283,6 +287,10 @@ detect ──► source-check ──► test (e2e.yml) ──► render ──�
      e2e harness's failed scenarios), uploads it with the e2e report, and then fails the job if
      any step failed, so the run is red once every suite has reported. It does not run on a
      cancelled run.
+   - A `workflow_call` input `fail-on-findings` (default `true`) lets the canary keep the job
+     green after recording findings (B9): with `false`, the final step exits 0 when
+     `suite-results.mjs` reports findings (exit 1) and still fails on a usage error. A failed
+     import or artifact build fails the job in every mode.
    - The run's concurrency group is the ref and the version, so a manual run of a Beta on a
      branch never cancels the canary's run of it on `main`.
 

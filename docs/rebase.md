@@ -29,6 +29,39 @@ Background: [ADR-002](adr/002-upstream-release-channel.md),
 draft: a patch that does not apply, a failing suite, or a release without Mozilla artifacts.
 Decision points are marked **Decide**.
 
+## Before the release: the Beta canary
+
+Firefox now ships a major release every two weeks, and its first Beta appears about 15 days
+before it. `upstream-beta.yml` (spec [upstream-beta-canary](specs/upstream-beta-canary.md))
+tests `main` against each Beta build within about 6 hours of its publication: it verifies the
+Beta's source tarball against `SHA512SUMS`, dry-runs our patches on it, and runs `e2e.yml` in
+Beta mode (artifact build, every check, `tests/browser/` and `tests/e2e/`, each reported even
+after another fails). It never pushes, never opens a PR and never changes `surfer.json`.
+
+**What the issue means.** Findings go to one issue per Firefox version, `Firefox N beta: canary
+findings`, labelled `upstream-beta`. A new issue mentions the owner. Its body always shows the
+latest run: the Beta build and its revision, the `main` commit tested, the run link, the patches
+that do not apply with their hunks, failed checks, mochitest failures grouped by test file and
+failed e2e scenarios. Each later run that changes the results adds a comment, **New** and
+**Fixed**; a run with the same results only refreshes the body. A run that passes completely
+closes the issue, and once Firefox `N` is released the canary closes it with a link to the
+autopilot's `Firefox N.0 released` issue. The run itself stays green on findings; a red run means
+the canary is broken (product-details or the archive unreadable, a checksum mismatch, a crash).
+
+**Fixing on `main` for both versions.** `main` keeps the release in `surfer.json`. A front-end fix
+for a Beta change must work on the release and on the Beta alike, for example by feature-testing
+the upstream API instead of checking a version (the `getClassObject` fix in #186 constructs
+upstream's classes from their modules, on 157 and 158 alike). Run the suite on the Beta from your
+branch with `gh workflow run e2e.yml --ref <branch> -f firefox-version=159.0b2`, and on the
+release as PR CI does.
+
+**Preparing a patch re-export.** A patch applies to one tree, so a patch the Beta breaks cannot
+be fixed on `main` ahead of time. Prepare the re-export instead: check out the Beta's source
+(`surfer.json` set to the Beta in a scratch checkout, `python3 tools/upstream/bump-surfer-json.py
+--allow-beta 159.0b2`, never committed), redo the hunk the issue shows (section 3), and keep the
+new patch on a branch. On release day the autopilot's PR fails on the same patch; apply the
+prepared change there. The autopilot's tracking issue then already has the work done.
+
 ## 1. The autopilot: from release to PR
 
 `upstream.yml` runs every 4 h (`:17`) and on demand (`gh workflow run upstream.yml`; add
@@ -253,7 +286,9 @@ curl -fsS "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2
 
 **Decide:** HTTP 404 means Mozilla has no indexed release build of that revision. Check that
 `surfer.json` pins a real release (not a candidate, beta or ESR) and that `npm run import` ran on
-its tarball. A full build does not need the index, but PR CI does: without it, e2e.yml stays red.
+its tarball. The one exception is Beta mode (the Beta canary, `e2e.yml` with a `N.0bM` version):
+the job's own checkout pins the Beta, never committed, and the tool looks the build up in the
+`mozilla-beta` index (ADR-010, "Beta tarballs"). A full build does not need the index, but PR CI does: without it, e2e.yml stays red.
 
 ## 6. Version files, branding prefs, cfr provider
 
