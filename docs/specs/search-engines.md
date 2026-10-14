@@ -1,10 +1,12 @@
 # Spec: search-engines
 
-Status: accepted (not started) · Milestone: after M6a or alongside it, independent of it; no keymap
+Status: implemented (#255) · Milestone: after M6a or alongside it, independent of it; no keymap
 change · Area: `packages/vimma-core/src/search.mjs` (new), `config.mjs`, `defaults.mjs`,
 `cmdline.mjs`; `search/SearchHost.sys.mjs` (new), `config/ConfigHost.sys.mjs`,
 `host/tab-ops.mjs`, `host/VimmaHost.sys.mjs`, `about/AboutVimma.sys.mjs`, `jar.mn`. No upstream
 patch.
+
+Issue: [#233](https://github.com/JRanne/vimma/issues/233)
 
 ## Goal
 

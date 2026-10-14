@@ -7,6 +7,8 @@ Status: draft · Area: `configs/macos/mozconfig`, `configs/macos/entitlements/` 
 Upstream patches: none (decision 7) · ADR: ADR-018 (planned, "macOS: cross-compiled on Linux, arm64
 first"; written with sub-PR 3)
 
+Issue: [#238](https://github.com/JRanne/vimma/issues/238)
+
 Engine paths are relative to `engine/` and were checked against Firefox 158.0. Surfer paths
 (`S/`) are relative to `node_modules/@zen-browser/surfer`, version 1.14.9. Zen Browser
 references are `zen-browser/desktop`, branch `dev` at commit b53d568. GitHub and Apple facts come

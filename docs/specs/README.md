@@ -14,7 +14,11 @@ in the same PR.
   nothing about the conversation, issue thread or session that produced the spec. Every term
   is either in `docs/guide.md` or defined where it is first used.
 - **State decisions, with their reasons.** Write "Vimma does X, because Y; Z was rejected
-  because W". Do not write who asked for it, who chose it, when, or how the choice was reached.
+  because W". Each decision is a numbered item that starts with a bold title
+  (`1. **Title.** Text`) in the Design section or a section whose heading says "Decisions", and
+  its text gives the reason with "because", "so that", "so", "since", "in order to" or
+  "Reason:". A decision without a reason is a choice the next reader cannot re-examine, so
+  `npm run spec-lint` fails on one in a draft or accepted spec (below, "Checks"). Do not write who asked for it, who chose it, when, or how the choice was reached.
   No "the user said", "user request", "user decision", "the coordinator", quoted chat messages
   or dates of conversations.
   <!-- process-wording: these rules quote the phrases they ban -->
@@ -47,6 +51,9 @@ The `Status:` line starts with one of these three words. A short note may follow
 parentheses or after a comma: which sub-PRs are built, or the issue that tracks a part that is
 not. Each implementing pull request updates that note, and the last one sets `implemented`.
 
+A draft or accepted spec names its GitHub issue on an `Issue:` line (`Issues:` for several),
+its own paragraph under the status line. A spec delivered in several issues lists each of them.
+
 ### Implemented specs are frozen
 
 An implemented spec, and every milestone spec (`m0-*` to `m7-*`), is a record of the design as
@@ -61,6 +68,29 @@ written against.
   affected, the note is a paragraph starting "Since changed:" under the status line.
 - A part that was specified but never built is named on the status line with its issue, for
   example `implemented, except the leftovers in #<issue>`.
+
+### Keeping statuses current
+
+Two checks keep a status from drifting away from the work.
+
+- **`npm run spec-lint`** (part of `npm run lint`, and a step of CI's required check) fails
+  when a spec's `Status:` line does not start with `draft`, `accepted` or `implemented`; when an
+  ADR's `- Status:` line does not start with `Proposed`, `Accepted`, `Superseded`, `Deprecated`
+  or `Rejected`; when a draft or accepted spec has no `Issue:` line; and when a decision in a
+  draft or accepted spec has no reason (Writing rules). Implemented specs are frozen and are not
+  checked for reasons. The decisions that predate the check are listed by title in
+  `tools/spec-lint/decisions-baseline.json`; giving one a reason, or the spec becoming
+  implemented, makes its entry fail as no longer needed, so the list only shrinks. No new
+  entry is added to it.
+- **`spec-status.yml`** runs `npm run spec-status` (`tools/spec-lint/spec-status.mjs`) every day,
+  whenever an issue is closed or reopened, and when `docs/specs/` changes on `main`. It reports a
+  draft or accepted spec whose issues are all closed, an implemented spec with an open issue, an
+  open issue whose `spec:draft` or `spec:accepted` label differs from the spec, and an `Issue:`
+  number that is not an issue. The report is one issue labelled `spec-status`, updated on each
+  run and closed when nothing is left. Fix it in the spec (status or `Issue:` line) or on the
+  issue. The check cannot run in pull request CI, because a status drifts when an issue closes,
+  which no pull request sees; and it cannot fix the spec itself, because `main` takes changes
+  only through pull requests.
 
 ### The feature's issue
 
@@ -94,6 +124,8 @@ upstream patch.").
 Status: draft | accepted | implemented · Area: <files and modules touched> · Upstream patches:
 <none, or each new patch with its ADR-003 register line> · ADR: <links, or none>
 
+Issue: [#<n>](https://github.com/JRanne/vimma/issues/<n>)
+
 ## Summary
 
 Two to four sentences: what changes for the user, and why it is worth doing.
@@ -115,7 +147,10 @@ browsers or forks, platform facts. Only what the design depends on.
 ## Design
 
 How it works: modules, data flow, state, the Firefox APIs used and why they are the right ones.
-Numbered decisions, each with its reason and the alternatives rejected.
+Numbered decisions, each with its reason and the alternatives rejected:
+
+1. **<Decision as a short title>.** What Vimma does, because <reason>. Rejected: <alternative>,
+   because <reason>.
 
 ## Security and privacy
 
@@ -143,10 +178,11 @@ the answer moves into Design as a decision with its reason, and the question is 
 
 ## Before the spec is merged
 
-- [ ] Every section of the template is present.
+- [ ] Every section of the template is present, and the `Issue:` line names the feature's issue.
+- [ ] Every decision gives its reason.
 - [ ] No sentence depends on knowing the discussion that produced the spec.
 - [ ] Every claim about Firefox or another tool cites a source and a version.
 - [ ] Every behaviour has a test.
 - [ ] Every open question has its options and a recommendation, and the feature's issue lists
       them.
-- [ ] `npx prettier --check` passes.
+- [ ] `npx prettier --check` and `npm run spec-lint` pass.
