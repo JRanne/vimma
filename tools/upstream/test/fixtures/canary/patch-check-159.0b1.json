@@ -1,0 +1,283 @@
+{
+  "version": 1,
+  "ran": true,
+  "firefox": "159.0",
+  "revision": "c0c03f3f899017ae4b7e56c0713f1ada51173c41",
+  "tree": "releases/mozilla-beta",
+  "source": "tarball (stdin)",
+  "ok": false,
+  "counts": {
+    "clean": 3,
+    "offset": 7,
+    "applied": 0,
+    "fuzz": 0,
+    "failed": 1
+  },
+  "patches": [
+    {
+      "patch": "src/browser/base/content/browser-init-js.patch",
+      "files": [
+        "browser/base/content/browser-init.js"
+      ],
+      "status": "offset",
+      "imports": true,
+      "missing": [],
+      "message": "Checking patch browser/base/content/browser-init.js...\nHunk #1 succeeded at 856 (offset 9 lines).",
+      "hunks": [
+        {
+          "file": "browser/base/content/browser-init.js",
+          "index": 1,
+          "of": 1,
+          "header": "@@ -847,7 +847,7 @@ var gBrowserInit = {",
+          "old_start": 847,
+          "status": "offset",
+          "offset": 9,
+          "fuzz": 0
+        }
+      ]
+    },
+    {
+      "patch": "src/browser/base/content/browser-xhtml.patch",
+      "files": [
+        "browser/base/content/browser.xhtml"
+      ],
+      "status": "offset",
+      "imports": true,
+      "missing": [],
+      "message": "Checking patch browser/base/content/browser.xhtml...\nHunk #1 succeeded at 113 (offset 1 line).",
+      "hunks": [
+        {
+          "file": "browser/base/content/browser.xhtml",
+          "index": 1,
+          "of": 1,
+          "header": "@@ -112,6 +112,7 @@",
+          "old_start": 112,
+          "status": "offset",
+          "offset": 1,
+          "fuzz": 0
+        }
+      ]
+    },
+    {
+      "patch": "src/browser/base/moz-build.patch",
+      "files": [
+        "browser/base/moz.build"
+      ],
+      "status": "failed",
+      "imports": false,
+      "missing": [],
+      "message": "Checking patch browser/base/moz.build...\nerror: while searching for:\nDIRS += [\n    \"content/test/performance/\",\n    \"content/test/fullscreen/\",\n]\n\nPERFTESTS_MANIFESTS += [\"content/test/perftest.toml\"]\n\nerror: patch failed: browser/base/moz.build:72\nerror: browser/base/moz.build: patch does not apply",
+      "hunks": [
+        {
+          "file": "browser/base/moz.build",
+          "index": 1,
+          "of": 2,
+          "header": "@@ -72,6 +72,7 @@ BROWSER_CHROME_MANIFESTS += [",
+          "old_start": 72,
+          "status": "failed",
+          "offset": 0,
+          "fuzz": 0,
+          "text": "@@ -72,6 +72,7 @@ BROWSER_CHROME_MANIFESTS += [\n DIRS += [\n     \"content/test/performance/\",\n     \"content/test/fullscreen/\",\n+    \"content/vimma\",\n ]\n \n PERFTESTS_MANIFESTS += [\"content/test/perftest.toml\"]\n"
+        },
+        {
+          "file": "browser/base/moz.build",
+          "index": 2,
+          "of": 2,
+          "header": "@@ -80,5 +81,8 @@ DEFINES[\"MOZ_APP_VERSION\"] = CONFIG[\"MOZ_APP_VERSION\"]",
+          "old_start": 80,
+          "status": "failed",
+          "offset": 0,
+          "fuzz": 0,
+          "text": "@@ -80,5 +81,8 @@ DEFINES[\"MOZ_APP_VERSION\"] = CONFIG[\"MOZ_APP_VERSION\"]\n DEFINES[\"MOZ_APP_VERSION_DISPLAY\"] = CONFIG[\"MOZ_APP_VERSION_DISPLAY\"]\n \n DEFINES[\"APP_LICENSE_BLOCK\"] = \"%s/content/overrides/app-license.html\" % SRCDIR\n+DEFINES[\"APP_LICENSE_PRODUCT_NAME\"] = \"%s/content/vimma/licence/product-name.html\" % SRCDIR\n+DEFINES[\"APP_LICENSE_LIST_BLOCK\"] = \"%s/content/vimma/licence/list.html\" % SRCDIR\n+DEFINES[\"APP_LICENSE_BODY_BLOCK\"] = \"%s/content/vimma/licence/body.html\" % SRCDIR\n \n JAR_MANIFESTS += [\"jar.mn\"]\n"
+        }
+      ]
+    },
+    {
+      "patch": "src/browser/components/tabbrowser/Tabbrowser-sys-mjs.patch",
+      "files": [
+        "browser/components/tabbrowser/Tabbrowser.sys.mjs"
+      ],
+      "status": "offset",
+      "imports": true,
+      "missing": [],
+      "message": "Checking patch browser/components/tabbrowser/Tabbrowser.sys.mjs...\nHunk #1 succeeded at 742 (offset 44 lines).\nHunk #2 succeeded at 3915 (offset 140 lines).",
+      "hunks": [
+        {
+          "file": "browser/components/tabbrowser/Tabbrowser.sys.mjs",
+          "index": 1,
+          "of": 2,
+          "header": "@@ -698,6 +698,10 @@ export class Tabbrowser {",
+          "old_start": 698,
+          "status": "offset",
+          "offset": 44,
+          "fuzz": 0
+        },
+        {
+          "file": "browser/components/tabbrowser/Tabbrowser.sys.mjs",
+          "index": 2,
+          "of": 2,
+          "header": "@@ -3771,6 +3775,14 @@ export class Tabbrowser {",
+          "old_start": 3771,
+          "status": "offset",
+          "offset": 140,
+          "fuzz": 0
+        }
+      ]
+    },
+    {
+      "patch": "src/browser/components/tabbrowser/content/tab-bar-visibility-js.patch",
+      "files": [
+        "browser/components/tabbrowser/content/tab-bar-visibility.js"
+      ],
+      "status": "offset",
+      "imports": true,
+      "missing": [],
+      "message": "Checking patch browser/components/tabbrowser/content/tab-bar-visibility.js...\nHunk #1 succeeded at 33 (offset 1 line).",
+      "hunks": [
+        {
+          "file": "browser/components/tabbrowser/content/tab-bar-visibility.js",
+          "index": 1,
+          "of": 1,
+          "header": "@@ -32,11 +32,13 @@ var TabBarVisibility = {",
+          "old_start": 32,
+          "status": "offset",
+          "offset": 1,
+          "fuzz": 0
+        }
+      ]
+    },
+    {
+      "patch": "src/browser/modules/BrowserDOMWindow-sys-mjs.patch",
+      "files": [
+        "browser/modules/BrowserDOMWindow.sys.mjs"
+      ],
+      "status": "offset",
+      "imports": true,
+      "missing": [],
+      "message": "Checking patch browser/modules/BrowserDOMWindow.sys.mjs...\nHunk #1 succeeded at 258 (offset 2 lines).",
+      "hunks": [
+        {
+          "file": "browser/modules/BrowserDOMWindow.sys.mjs",
+          "index": 1,
+          "of": 1,
+          "header": "@@ -256,7 +256,13 @@ export class BrowserDOMWindow {",
+          "old_start": 256,
+          "status": "offset",
+          "offset": 2,
+          "fuzz": 0
+        }
+      ]
+    },
+    {
+      "patch": "src/browser/modules/URILoadingHelper-sys-mjs.patch",
+      "files": [
+        "browser/modules/URILoadingHelper.sys.mjs"
+      ],
+      "status": "offset",
+      "imports": true,
+      "missing": [],
+      "message": "Checking patch browser/modules/URILoadingHelper.sys.mjs...\nHunk #1 succeeded at 542 (offset 4 lines).",
+      "hunks": [
+        {
+          "file": "browser/modules/URILoadingHelper.sys.mjs",
+          "index": 1,
+          "of": 1,
+          "header": "@@ -538,6 +538,19 @@ export const URILoadingHelper = {",
+          "old_start": 538,
+          "status": "offset",
+          "offset": 4,
+          "fuzz": 0
+        }
+      ]
+    },
+    {
+      "patch": "src/browser/moz-configure.patch",
+      "files": [
+        "browser/moz.configure"
+      ],
+      "status": "clean",
+      "imports": true,
+      "missing": [],
+      "message": "Checking patch browser/moz.configure...",
+      "hunks": [
+        {
+          "file": "browser/moz.configure",
+          "index": 1,
+          "of": 1,
+          "header": "@@ -11,7 +11,8 @@ imply_option(\"MOZ_NORMANDY\", True)",
+          "old_start": 11,
+          "status": "clean",
+          "offset": 0,
+          "fuzz": 0
+        }
+      ]
+    },
+    {
+      "patch": "src/toolkit/components/messaging-system/targeting/Targeting-sys-mjs.patch",
+      "files": [
+        "toolkit/components/messaging-system/targeting/Targeting.sys.mjs"
+      ],
+      "status": "clean",
+      "imports": true,
+      "missing": [],
+      "message": "Checking patch toolkit/components/messaging-system/targeting/Targeting.sys.mjs...",
+      "hunks": [
+        {
+          "file": "toolkit/components/messaging-system/targeting/Targeting.sys.mjs",
+          "index": 1,
+          "of": 1,
+          "header": "@@ -44,7 +44,7 @@ const TargetingEnvironment = {",
+          "old_start": 44,
+          "status": "clean",
+          "offset": 0,
+          "fuzz": 0
+        }
+      ]
+    },
+    {
+      "patch": "src/toolkit/components/utils/ClientEnvironment-sys-mjs.patch",
+      "files": [
+        "toolkit/components/utils/ClientEnvironment.sys.mjs"
+      ],
+      "status": "clean",
+      "imports": true,
+      "missing": [],
+      "message": "Checking patch toolkit/components/utils/ClientEnvironment.sys.mjs...",
+      "hunks": [
+        {
+          "file": "toolkit/components/utils/ClientEnvironment.sys.mjs",
+          "index": 1,
+          "of": 1,
+          "header": "@@ -132,7 +132,7 @@ export class ClientEnvironmentBase {",
+          "old_start": 132,
+          "status": "clean",
+          "offset": 0,
+          "fuzz": 0
+        }
+      ]
+    },
+    {
+      "patch": "src/toolkit/xre/nsAppRunner-cpp.patch",
+      "files": [
+        "toolkit/xre/nsAppRunner.cpp"
+      ],
+      "status": "offset",
+      "imports": true,
+      "missing": [],
+      "message": "Checking patch toolkit/xre/nsAppRunner.cpp...\nHunk #1 succeeded at 2250 (offset -3 lines).",
+      "hunks": [
+        {
+          "file": "toolkit/xre/nsAppRunner.cpp",
+          "index": 1,
+          "of": 1,
+          "header": "@@ -2253,14 +2253,9 @@ static void DumpHelp() {",
+          "old_start": 2253,
+          "status": "offset",
+          "offset": -3,
+          "fuzz": 0
+        }
+      ]
+    }
+  ],
+  "tarball_bytes": 817824656
+}

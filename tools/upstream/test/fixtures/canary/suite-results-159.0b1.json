@@ -1,0 +1,103 @@
+{
+  "version": "159.0b1",
+  "ok": false,
+  "steps": {
+    "import": "success",
+    "branding": "success",
+    "upstream-prefs": "success",
+    "artifact-build": "success",
+    "mochitest": "failure",
+    "e2e": "failure"
+  },
+  "mochitest": {
+    "log": true,
+    "failures": [
+      {
+        "status": "TEST-UNEXPECTED-FAIL",
+        "test": "browser/base/zen-components/tests/browser/browser_vimma_sidebar_theme.js",
+        "message": "the_history_sidebar_follows_a_dark_theme - dark: chrome://browser/content/sidebar/sidebar-history.html the search field is on --vimma-bg - \"rgb(43, 42, 51)\" == \"rgb(26, 27, 38)\""
+      },
+      {
+        "status": "TEST-UNEXPECTED-FAIL",
+        "test": "browser/base/zen-components/tests/browser/browser_vimma_sidebar_theme.js",
+        "message": "the_history_sidebar_follows_a_dark_theme - dark: chrome://browser/content/sidebar/sidebar-history.html the search field's border is --vimma-muted - \"rgb(148, 146, 151)\" == \"rgb(65, 72, 104)\""
+      },
+      {
+        "status": "TEST-UNEXPECTED-FAIL",
+        "test": "browser/base/zen-components/tests/browser/browser_vimma_sidebar_theme.js",
+        "message": "an_open_sidebar_follows_a_theme_switch - switched: chrome://browser/content/sidebar/sidebar-history.html the search field is on --vimma-bg - \"rgb(43, 42, 51)\" == \"rgb(42, 26, 42)\""
+      },
+      {
+        "status": "TEST-UNEXPECTED-FAIL",
+        "test": "browser/base/zen-components/tests/browser/browser_vimma_sidebar_theme.js",
+        "message": "an_open_sidebar_follows_a_theme_switch - switched: chrome://browser/content/sidebar/sidebar-history.html the search field's border is --vimma-muted - \"rgb(148, 146, 151)\" == \"rgb(106, 74, 106)\""
+      },
+      {
+        "status": "TEST-UNEXPECTED-FAIL",
+        "test": "browser/base/zen-components/tests/browser/browser_vimma_sidebar_theme.js",
+        "message": "the_bookmarks_sidebar_follows_the_switched_theme - bookmarks: chrome://browser/content/places/bookmarksSidebar.xhtml the search field is on --vimma-bg - \"rgb(43, 42, 51)\" == \"rgb(42, 26, 42)\""
+      },
+      {
+        "status": "TEST-UNEXPECTED-FAIL",
+        "test": "browser/base/zen-components/tests/browser/browser_vimma_sidebar_theme.js",
+        "message": "the_bookmarks_sidebar_follows_the_switched_theme - bookmarks: chrome://browser/content/places/bookmarksSidebar.xhtml the search field's border is --vimma-muted - \"rgb(148, 146, 151)\" == \"rgb(106, 74, 106)\""
+      },
+      {
+        "status": "TEST-UNEXPECTED-FAIL",
+        "test": "browser/base/zen-components/tests/browser/browser_vimma_sidebar_theme.js",
+        "message": "the_sidebar_follows_a_light_theme - light: chrome://browser/content/sidebar/sidebar-history.html the search field is on --vimma-bg - \"rgb(255, 255, 255)\" == \"rgb(239, 241, 245)\""
+      },
+      {
+        "status": "TEST-UNEXPECTED-FAIL",
+        "test": "browser/base/zen-components/tests/browser/browser_vimma_sidebar_theme.js",
+        "message": "the_sidebar_follows_a_light_theme - light: chrome://browser/content/sidebar/sidebar-history.html the search field's border is --vimma-muted - \"rgb(129, 127, 132)\" == \"rgb(156, 160, 176)\""
+      },
+      {
+        "status": "TEST-UNEXPECTED-FAIL",
+        "test": "browser/base/zen-components/tests/browser/browser_vimma_sidebar_theme.js",
+        "message": "the_bookmarks_sidebar_follows_a_light_theme - light bookmarks: chrome://browser/content/places/bookmarksSidebar.xhtml the search field is on --vimma-bg - \"rgb(255, 255, 255)\" == \"rgb(239, 241, 245)\""
+      },
+      {
+        "status": "TEST-UNEXPECTED-FAIL",
+        "test": "browser/base/zen-components/tests/browser/browser_vimma_sidebar_theme.js",
+        "message": "the_bookmarks_sidebar_follows_a_light_theme - light bookmarks: chrome://browser/content/places/bookmarksSidebar.xhtml the search field's border is --vimma-muted - \"rgb(129, 127, 132)\" == \"rgb(156, 160, 176)\""
+      },
+      {
+        "status": "TEST-UNEXPECTED-FAIL",
+        "test": "browser/base/zen-components/tests/browser/browser_vimma_sidebar_theme.js",
+        "message": "the_builtin_palette_follows_the_desktop_scheme_live - vimma dark: chrome://browser/content/sidebar/sidebar-history.html the search field is on --vimma-bg - \"rgb(43, 42, 51)\" == \"rgb(10, 15, 18)\""
+      },
+      {
+        "status": "TEST-UNEXPECTED-FAIL",
+        "test": "browser/base/zen-components/tests/browser/browser_vimma_sidebar_theme.js",
+        "message": "the_builtin_palette_follows_the_desktop_scheme_live - vimma dark: chrome://browser/content/sidebar/sidebar-history.html the search field's border is --vimma-muted - \"rgb(148, 146, 151)\" == \"rgb(42, 61, 54)\""
+      },
+      {
+        "status": "TEST-UNEXPECTED-FAIL",
+        "test": "browser/base/zen-components/tests/browser/browser_vimma_sidebar_theme.js",
+        "message": "the_builtin_palette_follows_the_desktop_scheme_live - vimma light: chrome://browser/content/sidebar/sidebar-history.html the search field is on --vimma-bg - \"rgb(255, 255, 255)\" == \"rgb(245, 244, 239)\""
+      },
+      {
+        "status": "TEST-UNEXPECTED-FAIL",
+        "test": "browser/base/zen-components/tests/browser/browser_vimma_sidebar_theme.js",
+        "message": "the_builtin_palette_follows_the_desktop_scheme_live - vimma light: chrome://browser/content/sidebar/sidebar-history.html the search field's border is --vimma-muted - \"rgb(129, 127, 132)\" == \"rgb(163, 176, 169)\""
+      },
+      {
+        "status": "TEST-UNEXPECTED-FAIL",
+        "test": "browser/base/zen-components/tests/browser/browser_vimma_sidebar_theme.js",
+        "message": "finished in 1923ms"
+      }
+    ]
+  },
+  "e2e": {
+    "passed": 7,
+    "failed": [
+      {
+        "name": "m3-private-workspace",
+        "status": "fail",
+        "error": "step 4 (screenshot): m3-private-workspace: 0.59 % of pixels differ (max 0.5 %); diff: /home/runner/work/vimma/vimma/e2e-output/m3-private-workspace.diff.png; actual: /home/runner/work/vimma/vimma/e2e-output/m3-private-workspace.actual.png"
+      }
+    ],
+    "pending": []
+  }
+}

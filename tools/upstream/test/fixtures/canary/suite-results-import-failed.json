@@ -1,0 +1,17 @@
+{
+  "version": "159.0b1",
+  "ok": false,
+  "steps": {
+    "import": "failure",
+    "branding": "skipped",
+    "upstream-prefs": "skipped",
+    "artifact-build": "skipped",
+    "mochitest": "skipped",
+    "e2e": "skipped"
+  },
+  "mochitest": {
+    "log": false,
+    "failures": []
+  },
+  "e2e": null
+}

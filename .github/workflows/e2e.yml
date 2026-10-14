@@ -39,6 +39,13 @@ on:
         type: string
         required: false
         default: ""
+      # The Beta canary passes false (spec upstream-beta-canary, B9): its findings go to its issue
+      # and its run stays green. Every other run fails once a Beta-mode step failed.
+      fail-on-findings:
+        description: In Beta mode, fail the job when a check or suite failed (the default)
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: read
@@ -206,17 +213,27 @@ jobs:
           retention-days: 7
 
       # Beta mode only, after every step (a failed build step skips the suites; that is recorded
-      # too). Exits 1 when any step did not succeed, so the run fails once everything reported.
+      # too). suite-results.mjs exits 1 when any step did not succeed, so the run fails once
+      # everything reported, unless the caller passed fail-on-findings: false (the canary, whose
+      # findings go to its issue). A failed import or artifact build still fails the job.
       - name: suite-results.json (Beta mode, tools/upstream/suite-results.mjs)
         id: suite-results
         if: "!cancelled() && steps.mode.outputs.beta == 'true'"
         env:
           VERSION: ${{ inputs.firefox-version }}
           STEPS: ${{ toJSON(steps) }}
+          FAIL_ON_FINDINGS: ${{ inputs.fail-on-findings }}
         run: |
+          status=0
           node tools/upstream/suite-results.mjs --version "$VERSION" \
             --mochitest-log "$RUNNER_TEMP/mochitest.tbpl.log" \
-            --e2e-report "$RUNNER_TEMP/e2e-report.json" --out "$RUNNER_TEMP/suite-results.json"
+            --e2e-report "$RUNNER_TEMP/e2e-report.json" --out "$RUNNER_TEMP/suite-results.json" ||
+            status=$?
+          if [ "$status" -eq 1 ] && [ "$FAIL_ON_FINDINGS" = false ]; then
+            echo "::notice::Findings recorded in suite-results.json; the caller reports them"
+            status=0
+          fi
+          exit "$status"
 
       - name: Upload suite-results.json (Beta mode)
         if: "!cancelled() && steps.mode.outputs.beta == 'true'"
