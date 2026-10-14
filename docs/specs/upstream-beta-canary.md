@@ -177,8 +177,9 @@ does not check the download's hash, which is why `e2e.yml` already checks it aga
 
 Conclusion: an artifact build of a Beta works when the tool reads the tree from
 `sourcestamp.txt`, looks the task up in that tree's index itself and passes `MOZ_ARTIFACT_TASK`.
-This was read from the source and the index, not yet run end to end; sub-PR 1 runs it on the
-current Beta and records the result in ADR-010. If Mozilla's Beta build is missing or expired,
+This was confirmed end to end on 159.0b1 on 2026-10-14 (ADR-010, "Beta tarballs"): mach installed
+task `ILGA8D1vQYmtIo0RJKNABg` through `MOZ_ARTIFACT_TASK` and the mochitests ran on the result.
+If Mozilla's Beta build is missing or expired,
 the preflight reports `artifacts=no`, the suites are skipped and the issue says so (B5); the
 patch check still runs.
 
@@ -449,8 +450,9 @@ and artifact checked by hand.
   the Beta channel without tracking it, because Firefox's two-week cycle (R1) leaves too little
   time between a release and its drift deadline to find breakage there. The rejection of
   "Beta/Nightly" as the tracked channel is unchanged.
-- ADR-010: one paragraph. The artifact build also accepts a Beta tarball (tree from
-  `sourcestamp.txt`, `MOZ_ARTIFACT_TASK`), used only by the canary, with the measured run.
+- ADR-010: one section, added with sub-PR 1. The artifact build also accepts a Beta tarball
+  (tree from `sourcestamp.txt`, `MOZ_ARTIFACT_TASK`), used only by the canary, with the measured
+  run.
 - `plan.md`: the Q-UP row gets "every Beta build" instead of "weekly" and the two-week figure.
 - `docs/guide.md`, README: no change; nothing a Vimma user sees changes.
 - `CHANGELOG.md`: none. The change is CI only (`ci:` and `docs:` commits), types that
@@ -462,13 +464,13 @@ and artifact checked by hand.
    (behaviour unchanged, its test updated); `patch-check.py` reports `tree`; the artifact build
    and preflight read the tree and use `MOZ_ARTIFACT_TASK` for a Beta;
    `bump-surfer-json.py --allow-beta`; `version-files.mjs` for Beta pins; the `surfer.json` pin
-   test. Verified by a local `npm run import` and artifact build on the current Beta with the
-   mochitests run, whose result is recorded in the ADR-010 paragraph.
+   test; the ADR-010 section with the measured run. Verified by a local `npm run import` and
+   artifact build on the current Beta with the mochitests run.
 2. **e2e.yml Beta mode** (`ci(e2e):`). `continue-on-error` in Beta mode, `suite-results.json`, the
    e2e harness's `--report-json`. A `workflow_dispatch` of `e2e.yml` on the current Beta shows the
    report; PR CI is unchanged (a release run still fails on the first failure).
 3. **The canary** (`ci(upstream):`). `upstream-beta.yml`, `canary.mjs`, their tests, the docs and
-   both ADR amendments. Merged with the schedule in place; a manual run on the current Beta is
+   the ADR-002 amendment. Merged with the schedule in place; a manual run on the current Beta is
    checked before the first scheduled one.
 4. **Bump PR link** (`ci(upstream):`). `autopilot-body.mjs` names the open `upstream-beta` issue
    (decision 11). Independent of 3 once 3 has merged.
