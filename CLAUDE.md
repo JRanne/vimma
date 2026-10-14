@@ -20,13 +20,13 @@ Read plan.md once per milestone; read docs/specs/<current>.md every session.
 - npm run lane:setup / lane:teardown # a worktree's own artifact engine, for browser tests outside the main checkout
 - cargo test, cargo clippy -- -D warnings # in tools/vimma-ctl (Rust)
 - npm run security-links # every test link in docs/security.md resolves
-- npm run sites # live site-compat suite: nightly CI only; locally it gets the user's IP bot-blocked
+- npm run sites # live site-compat suite: nightly CI only; run locally, it gets the developer's IP bot-blocked
 
 ## Rules
 
 - Specs and every other Markdown file are professional documentation for outside readers. New and
   edited specs follow docs/specs/README.md. State decisions with their reasons; never record who
-  asked, when, quoted chat or agent notes ("user request", "the user said").
+  asked, when, quoted chat or agent notes.
 - TDD: write the failing test, run it, paste red output; implement; paste green. Never loosen a test.
   This includes mochitests: a test written after the code does not count as red.
 - packages/vimma-core imports nothing from Firefox. Enforced by eslint; do not disable the rule.
