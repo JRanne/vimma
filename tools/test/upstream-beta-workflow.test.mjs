@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tempDir } from "./temp-dir.mjs";
 
 // Spec upstream-beta-canary, B8–B10 and "Security and privacy"; docs/security.md G9, G10. The
 // Beta canary's workflow shape. Text checks, like upstream-workflow.test.mjs: no YAML dependency.
@@ -145,7 +145,7 @@ describe("upstream-beta.yml report job", () => {
    *   stderr: string }}
    */
   const report = ({ issue = null, open = [], tracking = [], released = "158" }) => {
-    const tmp = mkdtempSync(join(tmpdir(), "canary-report-"));
+    const tmp = tempDir("canary-report-");
     const bin = join(tmp, "bin");
     mkdirSync(bin);
     mkdirSync(join(tmp, "canary"));

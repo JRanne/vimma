@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -171,6 +171,7 @@ describe("firefoxNotes", () => {
 describe("firefox-notes.mjs CLI", () => {
   const script = fileURLToPath(new URL("../firefox-notes.mjs", import.meta.url));
   const dir = mkdtempSync(join(tmpdir(), "firefox-notes-"));
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
   const surfer = join(dir, "surfer.json");
   const notes = join(dir, "CHANGELOG.md");
   writeFileSync(notes, changelog);
