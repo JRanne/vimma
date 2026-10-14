@@ -114,8 +114,8 @@ Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
 - **TDD.** Write the failing test and run it, then implement until it passes. Never loosen a test.
 - **Commits.** Use Conventional Commits with a body: the subject is the changelog line; the body
   explains why.
-  `npx commitlint --from origin/main` checks this, and CI rejects `feat` and `fix` commits
-  without a body.
+  `npx commitlint --from origin/main` checks this, and CI rejects `feat`, `fix` and `revert`
+  commits without a body.
 - **Docs.** A user-visible change updates [docs/guide.md](docs/guide.md), and the README's
   status if it changes what works. See [docs/review-checklist.md](docs/review-checklist.md).
 - **Agents.** [CLAUDE.md](CLAUDE.md) sets the rules for AI coding agents. They apply to human

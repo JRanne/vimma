@@ -1,6 +1,7 @@
 # Spec: private-workspace
 
-Status: proposed (research done, design chosen; not implemented) · Milestone: after M3 (builds
+Status: implemented (#142; placement on Hyprland revised by [private-swap](private-swap.md)) ·
+Milestone: after M3 (builds
 on [m3-workspaces](m3-workspaces.md) and the side panel) · Area: `packages/vimma-core/src/`
 (`privatews.mjs` new, `actions.mjs`, `defaults.mjs`, `cmdline.mjs`, `picker.mjs`,
 `sidepanel.mjs`, `statusbar.mjs`); `host/workspace-ops.mjs`, `host/VimmaHost.sys.mjs`,
@@ -34,9 +35,10 @@ Anything short of real private browsing (a throwaway container) is rejected unde
 - As a user, `ctrl+b shift+p` (or `ctrl+shift+p`, or `:private`) takes me to my private
   workspace and opens it if there is none. Pressing it again in the private workspace takes me
   back to the workspace I came from.
-- As a user, `ctrl+b )` / `ctrl+b (` reach the private workspace like any other workspace while
-  it is open. It comes last, after my workspaces. `ctrl+^` toggles between it and the workspace
-  I left. `ctrl+b w` lists it as the last row, with its tab count, or `new` when it is closed.
+- As a user, `ctrl+b )` / `ctrl+b (` in the private workspace take me to my first / last
+  workspace, and cycling in a normal window never enters it. `ctrl+^` in it takes me back to the
+  workspace I left. `ctrl+b w` lists it as the last row, with its tab count, or `new` when it is
+  closed.
 - As a user, in the private workspace the status bar says `◆ private`, and `ctrl+b b` lists its
   tabs. Splits, hints, find, copy mode and the command line work as in any workspace.
 - As a user, nothing I do in the private workspace stays on disk. That covers history, cookies
@@ -433,7 +435,7 @@ UX, honestly:
   - `vimma-ctl state` against the private window has `private: true` and null URLs and titles.
   - Permanent private browsing and the policy case give their messages (pref and policy set in
     the test).
-- **e2e** `private-workspace` under Xvfb (no WM): open, switch out and back by keys, close.
+- **e2e** `m3-private-workspace` under Xvfb (no WM): open, switch out and back by keys, close.
   A status-bar baseline of the private window, which is a new baseline with its changelog line.
 - **Manual on Hyprland/Omarchy** (recorded in Results; Xvfb has no WM): grouped (opens in the
   group, switching swaps the frame), not grouped (tiles beside, switching focuses), fullscreen

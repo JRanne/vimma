@@ -19,8 +19,8 @@ local or CI build picks this brand without anyone remembering a flag.
 - **Placeholder logo**: a plain "V" monogram on a dark rounded square, drawn as SVG paths
   (no font, no Mozilla artwork). Source `configs/branding/vimma/logo.svg` and
   `wordmark.svg`; `tools/branding/render.sh` renders every PNG/ICO with `rsvg-convert` and
-  ImageMagick. Replace when real artwork exists. **Replaced 2026-10-10** by the owner's
-  window+V mark (`docs/assets/vimma-mark.png`, keyed transparent from the square logo);
+  ImageMagick. Replace when real artwork exists. **Since replaced** by the window+V mark
+  (`docs/assets/vimma-mark.png`, keyed transparent from the square logo);
   `render.sh` now renders every icon from it, and `logo.svg`/`about-logo.svg` embed it as a PNG.
 - **Brand config** in `surfer.json`: `brands.vimma` with short/shorter/full name "Vimma",
   background colour and `release.displayVersion` (`0.1.0`, plan §7: `0.x` until M6).
@@ -47,7 +47,7 @@ local or CI build picks this brand without anyone remembering a flag.
   - Given a browser window, when reading `document.title`, then it ends with `Vimma`, not
     `Nightly` or `Firefox`.
   - Given `chrome://branding/content/about-logo.svg`, when fetched, then it is our mark
-    (contains `vimma-mark`; `vimma-placeholder` until the real logo, 2026-10-10).
+    (contains `vimma-mark`; `vimma-placeholder` until the real logo replaced the placeholder).
   - Given an emptied bookmarks tree and `browser.bookmarks.restore_default_bookmarks`, when
     Places init is re-run, then `bookmarks-restore-success` fires, not `bookmarks-restore-failed`.
 - Given the default branch, then every pref the stock brands' `firefox-branding.js` define has a
@@ -59,7 +59,7 @@ local or CI build picks this brand without anyone remembering a flag.
   upstream's `unofficial/pref/firefox-branding.js` sets. Needs `engine/`, so it skips in the CI
   job and runs in the e2e job after `npm run import`.
 - `--version` smoke check (runbook): `engine/obj-*/dist/bin/vimma --version` prints
-  `Vimma Vimma 0.1.0`.
+  `Vimma Vimma 0.1.0` (since spec firefox-versions: `Vimma 0.1.0 · Firefox <version>`).
 
 ## Out of scope
 
@@ -91,7 +91,8 @@ of the default bookmarks (still Mozilla's links; see Settled).
   the one line is patched. `MOZ_APP_ID` stays Firefox's (add-on compatibility).
 - **`--version` is `<vendor> <name> <version>`** (`DumpVersion` in `nsAppRunner.cpp`), so with
   vendor and name both Vimma it prints `Vimma Vimma 0.1.0`. Accepted; Firefox prints
-  `Mozilla Firefox …`.
+  `Mozilla Firefox …`. (Spec firefox-versions later patched `DumpVersion` to print
+  `Vimma <version> · Firefox <version>`.)
 - **Profile location moves.** Vendor and name form the Linux profile path, so profiles made by
   earlier `unofficial` builds are not picked up. Nothing to migrate before the first release.
 - **The bookmarks error was not branding.** The `--screenshot` smoke run logs

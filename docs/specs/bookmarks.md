@@ -1,12 +1,13 @@
 # Spec: bookmarks
 
 Status: implemented · Area: core (`packages/vimma-core/src/bookmarks.mjs`), UI
-(`ui/bookmarks-panel.mjs`, `side-panel.css`), host (`host/bookmark-ops.mjs`, `VimmaHost`)
+(`ui/bookmarks-panel.mjs`, `side-panel.css`), host (`host/bookmark-ops.mjs`,
+`host/bookmark-actions.mjs`, `VimmaHost`)
 
 ## User story
 
 As a Vimma user I open my bookmarks the way I open the side panel, with a keybind variation
-(`ctrl+b shift+b`, `<leader>b`), and work them like neo-tree in my Neovim (`<space>n`): `j`/`k`,
+(`ctrl+b shift+b`), and work them like neo-tree in my Neovim (`<space>n`): `j`/`k`,
 `h`/`l` to fold, `a` to add with `/` for folders. From any page `ctrl+b a` bookmarks it: I type
 `work/docs/My page` and it is filed under `work/docs`, the folders made as needed.
 
@@ -100,24 +101,24 @@ As a Vimma user I open my bookmarks the way I open the side panel, with a keybin
 
 ## Keys
 
-| Key                           | Action                                                       |
-| ----------------------------- | ------------------------------------------------------------ |
-| `ctrl+b shift+b`, `<leader>b` | open / close the bookmarks panel (`:bookmarks`)              |
-| `ctrl+b a`                    | bookmark this page (`:bookmark [path]`)                      |
-| `j` / `k`                     | move                                                         |
-| `h`                           | close the folder, or go to the parent folder and close it    |
-| `l`                           | open the folder (again: to its first item); a bookmark opens |
-| `Enter`                       | open in this tab; on a folder, open / close it               |
-| `t`                           | open in a new background tab, panel stays                    |
-| `s` / `S`                     | open in a split right / below                                |
-| `a`                           | add the current page here, as a path (neo-tree `a`)          |
-| `A`                           | add a folder here                                            |
-| `r`                           | rename                                                       |
-| `m`                           | move to a folder (prompt with completion)                    |
-| `d`                           | delete after `y/N` (a folder says how many items go)         |
-| `y`                           | copy the URL                                                 |
-| `/`                           | filter                                                       |
-| `Esc`, the toggle keys        | close (`Esc` clears a filter first)                          |
+| Key                    | Action                                                       |
+| ---------------------- | ------------------------------------------------------------ |
+| `ctrl+b shift+b`       | open / close the bookmarks panel (`:bookmarks`)              |
+| `ctrl+b a`             | bookmark this page (`:bookmark [path]`)                      |
+| `j` / `k`              | move                                                         |
+| `h`                    | close the folder, or go to the parent folder and close it    |
+| `l`                    | open the folder (again: to its first item); a bookmark opens |
+| `Enter`                | open in this tab; on a folder, open / close it               |
+| `t`                    | open in a new background tab, panel stays                    |
+| `s` / `S`              | open in a split right / below                                |
+| `a`                    | add the current page here, as a path (neo-tree `a`)          |
+| `A`                    | add a folder here                                            |
+| `r`                    | rename                                                       |
+| `m`                    | move to a folder (prompt with completion)                    |
+| `d`                    | delete after `y/N` (a folder says how many items go)         |
+| `y`                    | copy the URL                                                 |
+| `/`                    | filter                                                       |
+| `Esc`, the toggle keys | close (`Esc` clears a filter first)                          |
 
 "Here" is the highlighted folder, or the highlighted bookmark's folder; at the top level, the
 workspace's folder (the toolbar with `root = "toolbar"`, the Menu with `root = "all"`). Digits (`panel.select`) do nothing in the bookmarks panel.

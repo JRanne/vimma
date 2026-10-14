@@ -4,7 +4,7 @@ Status: accepted · Area: `tools/release/` (new: `version-line.mjs`, `firefox-no
 `security-release.mjs`), `.github/workflows/release-please.yml`, `nightly.yml`, `release.yml`,
 `tools/upstream/autopilot-body.mjs`, `src/browser/branding/vimma/pref/firefox-branding.js`,
 `docs/runbook.md`, `docs/security.md`, `docs/review-checklist.md`, `CONTRIBUTING.md` · Upstream
-patches: `src/toolkit/xre/nsAppRunner-cpp.patch` (new; ADR-003 register line: "1 hunk, 12 lines:
+patches: `src/toolkit/xre/nsAppRunner-cpp.patch` (new; ADR-003 register line: "1 hunk, 11 lines:
 `DumpVersion` prints `Vimma <version> · Firefox <version>` instead of `<vendor> <name> <version>`
 (firefox-versions)") · ADR: ADR-020 (new, "A security release needs no person"), ADR-015 and
 ADR-003 (register line)

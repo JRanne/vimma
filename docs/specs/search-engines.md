@@ -1,6 +1,6 @@
 # Spec: search-engines
 
-Status: ready (not started) · Milestone: after M6a or alongside it, independent of it; no keymap
+Status: accepted (not started) · Milestone: after M6a or alongside it, independent of it; no keymap
 change · Area: `packages/vimma-core/src/search.mjs` (new), `config.mjs`, `defaults.mjs`,
 `cmdline.mjs`; `search/SearchHost.sys.mjs` (new), `config/ConfigHost.sys.mjs`,
 `host/tab-ops.mjs`, `host/VimmaHost.sys.mjs`, `about/AboutVimma.sys.mjs`, `jar.mn`. No upstream
@@ -294,6 +294,6 @@ file (the policy's `Remove`).
 ## Decided questions
 
 1. **The file wins at every start** (decision 7), because `config.toml` is the source of truth.
-2. **Private browsing's default** is not a separate `[search] private` key. Vimma replaces
-   private windows with a private workspace (spec in progress, private-workspace); its search
-   default is decided there. Until then decision 12 stands.
+2. **Private browsing's default** is not a separate `[search] private` key. Vimma's private
+   workspace ([private-workspace](private-workspace.md)) lives in a private window, so decision
+   12 covers it.

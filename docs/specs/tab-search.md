@@ -192,8 +192,9 @@ recency order (decision 3) and the AI grouping.
 - **Tests to extend.** `tests/browser/browser_vimma_picker.js`, `browser_vimma_workspace_picker.js`,
   `browser_vimma_private_workspace.js` (pins "no private tab in a normal window's goto picker"),
   `browser_vimma_a11y.js`, `browser_vimma_focus_rings.js`. The e2e baselines in
-  `tests/e2e/baselines/` are `m0-happy-path-help.png`, `m3-private-workspace.png` and
-  `m4-split-panes.png`; none shows the picker.
+  `tests/e2e/baselines/` are `m0-happy-path-help.png`, `m0-mcp-stdio-grant.png`,
+  `m0-mcp-stdio-question.png`, `m3-private-workspace.png` and `m4-split-panes.png`; none shows the
+  picker.
 
 ### Firefox (checked against 158.0)
 

@@ -111,7 +111,8 @@ that the overlay and `docs/bindings.md` reuse.
 - Given defaults, when `ctrl+b` then `esc`, then `cancel`.
 - Given prefix `ctrl+a`, when `ctrl+b` then `c`, then `pass`; `ctrl+a`, `c` → `tab.new`.
 - Given `g` → X and `gg` → Y, when `g` then `flush()`, then X.
-- Given defaults, when `space` `n` in normal, then `sidebar.toggle`.
+- Given `toggle_sidebar = ["prefix+b", "<leader>n"]`, when `space` `n` in normal, then
+  `sidebar.toggle` (the defaults have no leader binding, so there `space` passes).
 - Given `[keys] new_tab = ["ctrl+alt+c"]`, then `prefix+c` no longer opens a tab.
 - Given `[keys] new_tabb`, then `KeymapError` suggesting `new_tab`.
 - Given defaults, then no sequence is bound twice in a mode (property).

@@ -28,11 +28,11 @@ npm start                  # tools/start.mjs: the build with ~/.cache/vimma-dev-
 
 ```sh
 bin=engine/obj-x86_64-pc-linux-gnu/dist/bin/vimma
-$bin --version   # "Vimma 0.1.0 · Firefox 157.0.1" (node tools/release/version-line.mjs prints the same)
+$bin --version   # "Vimma 0.1.0 · Firefox 158.0" (node tools/release/version-line.mjs prints the same)
 grep '^Version=' engine/obj-x86_64-pc-linux-gnu/dist/bin/application.ini
-                 # "Version=157.0.1": appinfo.version is the Firefox version (spec m0-app-version)
-# navigator.userAgent stays Firefox's: "Mozilla/5.0 (X11; Linux x86_64; rv:157.0) Gecko/20100101
-# Firefox/157.0", no Vimma token (spec m0-user-agent; browser_vimma_user_agent.js checks it)
+                 # "Version=158.0": appinfo.version is the Firefox version (spec m0-app-version)
+# navigator.userAgent stays Firefox's: "Mozilla/5.0 (X11; Linux x86_64; rv:158.0) Gecko/20100101
+# Firefox/158.0", no Vimma token (spec m0-user-agent; browser_vimma_user_agent.js checks it)
 p=$(mktemp -d)
 timeout 20 $bin --headless --no-remote --profile "$p" about:blank || true   # first run: profile + bookmarks; timeout exits 124
 $bin --headless --no-remote --profile "$p" --screenshot /tmp/shot.png "data:text/html,<h1>ok</h1>"
@@ -52,7 +52,7 @@ If the files are missing (a fresh clone without `npm run import`, or after `git 
 mozconfig stops the build with "browser/config/vimma/version.txt is missing; run 'npm run import'"
 rather than letting configure fall back to Surfer's 0.1.0.
 
-Profiles are stamped with the Firefox version (157.0.1), so a build from before m0-app-version
+Profiles are stamped with the Firefox version (158.0), so a build from before m0-app-version
 (appinfo.version 0.1.0) sees any profile opened by a newer build as a downgrade and refuses it
 (`MOZ_BLOCK_PROFILE_DOWNGRADE`). When testing old and new builds side by side, give each its own
 `--profile`, or pass `--allow-downgrade`.
@@ -80,7 +80,7 @@ Placeholder artwork: `configs/branding/vimma/*.svg`, rendered by `tools/branding
 old version left in `engine/`, so the forward apply fails ("Exiting due to error") on a file
 that still carries the old hunks. `npm run import` therefore runs
 `tools/import/restore-patched.mjs` first: it reads the `+++ b/<path>` line of each header pair in
-`src/**/*.patch` and runs `git -C engine checkout -- <those files>` (10 files today), so every
+`src/**/*.patch` and runs `git -C engine checkout -- <those files>` (11 files today), so every
 import starts from upstream. It touches only those files: never `git checkout .`, never a
 clean. A file a patch creates (`--- /dev/null`) is skipped, as is a path upstream does not track.
 
@@ -419,7 +419,8 @@ these workflows has a `paths` filter; a job or step skipped by `if:` reports suc
 (next section).
 
 **Residual risk:** any job token with `contents: write` (`spec-pr` in claude.yml, upstream.yml,
-nightly.yml, release-please.yml) could push to `main`, since nothing protects it. Mitigations: those jobs run no
+nightly.yml, release-please.yml) can push branches and tags; the ruleset has no bypass actors, so
+none of them can push to `main` itself. Mitigations: those jobs run no
 Claude-written code with that token (claude.yml's Claude job is read-only), Claude runs only for
 the owner (`claude:go` added by the owner; `@claude` from owner/member/collaborator), and GitHub
 Actions minutes and logs show every push. Check `git log origin/main` if anything looks off.
@@ -495,8 +496,9 @@ fails, the message names the revision from `engine/sourcestamp.txt` and the expi
 `surfer.json` points at a real release. It also refuses a display version ending in `aN`/`bN`
 or containing `esr`, which would make mach search the wrong tree.
 
-Fork PRs (once public) run the same job with a read-only token and no secrets; GitHub asks you
-to approve the first run of a first-time contributor (Settings → Actions → General).
+Fork PRs run the same job with a read-only token and no secrets; GitHub asks you to approve
+every run from an external contributor (Settings → Actions → General; the approval policy is
+`all_external_contributors`).
 
 ### Actions minutes budget
 
@@ -685,8 +687,8 @@ Why it does not flake (plan §5: no retries; flaky means quarantine):
 If the step does fail without a slowing change, that is a flake: quarantine per plan §5 (open an
 issue with the log; do not re-run to green), and look at the numbers before touching thresholds.
 
-**Node is pinned exactly** in `.nvmrc`; ci, e2e, mutation and claude use
-`node-version-file: .nvmrc`. Exceptions, none of which runs the bench: release.yml's package job
+**Node is pinned exactly** in `.nvmrc`; ci, e2e, mutation, fuzz, sites, release-please and claude
+use `node-version-file: .nvmrc`. Exceptions, none of which runs the bench: release.yml's package job
 checks out a release tag (tags from before `.nvmrc` lack it) and stays on major 22; the
 self-hosted nightly and release build jobs use the runner's own Node for Surfer. The baseline is keyed on the exact version because a V8 patch can move these numbers. A
 Node bump is therefore its own PR, by hand (Dependabot has no `.nvmrc` support): its bench
@@ -1180,10 +1182,11 @@ them in our own CI.
 
 **CodeQL** (`javascript-typescript` and `rust`, `build-mode: none`, `security-extended`, config in
 `.github/codeql/codeql-config.yml`) is gated with `if: github.event.repository.private == false`,
-so the run shows it as skipped. This is for two reasons. Code scanning on a private repo needs a
-paid GitHub Code Security licence. The CodeQL CLI licence also allows CI analysis only of an
-open source codebase, and it names a private repo as not one. The job starts by itself once the
-repo is public. Its alerts then appear under Security → Code scanning.
+so on a private repository (a private fork) the run shows it as skipped. This is for two
+reasons. Code scanning on a private repo needs a paid GitHub Code Security licence. The CodeQL
+CLI licence also allows CI analysis only of an open source codebase, and it names a private repo
+as not one. This repository is public, so the job runs; its alerts appear under Security → Code
+scanning.
 
 ### Licences
 

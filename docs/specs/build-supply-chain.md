@@ -619,8 +619,8 @@ repository, and GitHub's hosted runners. Each rule links its tests (Tests, below
 §10's G4 changes to cite B1 ("whose SHA-512 differs from a signed `SHA512SUMS`, B1"). §11, "Out
 of scope and trust boundaries", gains a **Build infrastructure** entry with decision 20's
 boundary (GitHub's hosted runners and Mozilla's toolchains are trusted) and what a cosign
-signature does and does not attest. `docs/rebase.md` and `verify-sha512.py`'s docstring drop
-"HTTPS from archive.mozilla.org is the trust anchor".
+signature does and does not attest. `docs/rebase.md` drops "HTTPS from archive.mozilla.org is
+the trust anchor", and `verify-sha512.py`'s docstring drops "its GPG signature is not checked".
 
 ## Tests
 

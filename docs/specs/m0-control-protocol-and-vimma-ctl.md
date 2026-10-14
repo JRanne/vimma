@@ -193,7 +193,7 @@ are sent.
 ```json
 {
   "mode": "normal",
-  "pending": "ctrl+b",
+  "pending": "prefix",
   "workspace": null,
   "tabs": [{ "id": "12", "url": "https://example.com/", "title": "Example", "selected": true }],
   "panes": null
@@ -201,7 +201,8 @@ are sent.
 ```
 
 - `mode`: one of vimma-core's `MODES`.
-- `pending`: the pending key sequence as the status bar shows it (`formatBinding`), or `null`.
+- `pending`: the pending key sequence as the status bar shows it (the dispatcher's `pending()`
+  labels joined by spaces, `"prefix"` after `ctrl+b`), or `null`.
 - `workspace`: the active workspace's name, `null` until workspaces exist (filled since M3) or in a
   window without them. A private window is the private workspace: `"private"`
   ([private-workspace](private-workspace.md)).
@@ -287,14 +288,14 @@ Spec: [vimma-mcp](vimma-mcp.md) (decisions 2-4), ADR-019. Fixtures:
   `background` says the tab was not in front while it was read. `agent-cancel`'s `id` is an
   integer 1 to 2^53 − 1, the id of one of the same connection's requests.
 
-- **Asking.** Every agent command but `agent-hello`, `agent-ping` and `agent-cancel` waits for
-  the user's answer in Vimma, or runs under a grant of that connection and tool. An agent connection's requests do
-  not wait for each other: each is answered by `id` when its answer comes, so responses may come
-  out of order. A connection with requests waiting is not closed by the 60 s idle limit. Limits: at most 4
-  agent connections (of the server's 8), at most 4 requests of one agent connection waiting or
-  running at once, and at most 10 `agent-open`s of one connection a minute; beyond each, `busy`.
-  Strings in agent replies are well-formed Unicode (a lone surrogate becomes U+FFFD), and the
-  read's `selection` is inside the untrusted-content delimiters too.
+- **Asking.** Every agent command but `agent-hello`, `agent-ping` and `agent-cancel` waits for the
+  user's answer in Vimma, or runs under a grant of that connection and tool. An agent connection's
+  requests do not wait for each other: each is answered by `id` when its answer comes, so responses
+  may come out of order. A connection with requests waiting is not closed by the 60 s idle limit.
+  Limits: at most 4 agent connections (of the server's 8), at most 4 requests of one agent
+  connection waiting or running at once, and at most 10 `agent-open`s of one connection a minute;
+  beyond each, `busy`. Strings in agent replies are well-formed Unicode (a lone surrogate becomes
+  U+FFFD), and the read's `selection` is inside the untrusted-content delimiters too.
 - **Withdrawing a question.** `agent-cancel` takes back the question of one of the connection's
   own requests while it still waits: the question leaves the line, the request is answered
   `denied` with reason `cancelled`, and the result says `cancelled: true`. A request that is no
@@ -363,22 +364,23 @@ and it runs until its stdin closes (exit 0); [vimma-mcp](vimma-mcp.md) describes
 
 ### What the server must do
 
-The server ([m0-control-server](m0-control-server.md), `ctl/VimmaControl.sys.mjs`) starts only
-while a role's switch is on and stops when both are off; listens loopback-only on port -1; writes
-the discovery file 0600 atomically and deletes it at `quit-application`; makes the token with
+The server ([m0-control-server](m0-control-server.md), `ctl/VimmaControl.sys.mjs`) starts only while
+a role's switch is on and stops when both are off; listens loopback-only on port -1; writes the
+discovery file 0600 atomically and deletes it at `quit-application-granted`; makes the token with
 `crypto.getRandomValues` (32 bytes, hex); enforces the limits in Security and privacy; validates
-every line with `validateMessage`, compares tokens with `tokensEqual`, enforces the 1 MiB line
-limit and the 5 s handshake deadline, and answers in the fixtures' formats; runs `send-keys`
-through the same dispatcher path as real keydowns, `state` from the host's dispatcher and
-`gBrowser`, and `open` with the triggering principal the command-line handler uses for URLs,
-only for schemes the validator allows; and answers `not-implemented` for reserved commands.
+every line with `validateMessage`, compares tokens with `tokensEqual`, enforces the 1 MiB line limit
+and the 5 s handshake deadline, and answers in the fixtures' formats; runs `send-keys` through the
+same dispatcher path as real keydowns, `state` from the host's dispatcher and `gBrowser`, and `open`
+with the triggering principal the command-line handler uses for URLs, only for schemes the validator
+allows; and answers `not-implemented` for reserved commands.
 
 ## Security and privacy
 
 - **Off unless enabled.** Pref `vimma.control.enabled` (bool, default `false`) in every build,
   dev and release. With it off there is no listening socket and no discovery file. The e2e
-  harness sets it in its temporary profile's `user.js`; users turn it on in `about:config` (a
-  `[control]` table in `config.toml` can map onto it once the config spec lands).
+  harness sets it in its temporary profile's `user.js`; users turn it on in `about:config`, or
+  for a while with `:control on <minutes>` (vimma-mcp decision 29). `config.toml` has no
+  `[control]` table.
 - **Localhost only**, loopback-only server socket, random port.
 - **Token**: 256 bits, new at every start, compared in constant time, required before any
   command. A wrong token closes the connection.
@@ -427,16 +429,16 @@ only for schemes the validator allows; and answers `not-implemented` for reserve
   `tests/contract/control/v1/` validates as its file name says (`*.valid.json` /
   `*.invalid.json`); every message type has both; table tests for each rule; `tokensEqual`.
 - `tools/vimma-ctl` (`cargo test`):
-  - unit: the JSON parser/printer; decoding every server-direction fixture (`welcome`,
-    `response-*`, `discovery`) accepts the valid and rejects the invalid one; encoding `hello`
-    and each request equals the valid client-direction fixture; `profiles.ini` resolution.
+  - unit: the JSON parser/printer; decoding every server-direction fixture (`challenge`, `welcome`,
+    `response-*`, `discovery`) accepts the valid and rejects the invalid one; encoding `hello` and
+    each request equals the valid client-direction fixture; `profiles.ini` resolution.
   - integration (`tests/cli.rs`, a `std::net::TcpListener` fake server in the test): auth success
     and failure, `send-keys`, `state`, `state --json`, `open`, a server error response, a
     malformed response, a timeout, no server (exit 3, clear message), insecure discovery file.
 
 Fixture format: `{ "description", "kind", "command"?, "message" }` where `kind` is `hello`,
-`welcome`, `request`, `response` or `discovery`, and `command` (responses only) says which
-command's result shape applies.
+`challenge`, `auth`, `welcome`, `request`, `response` or `discovery`, and `command` (responses only)
+says which command's result shape applies.
 
 Protocol 2: `packages/vimma-core/test/control-v2.test.mjs` runs every fixture in
 `tests/contract/control/v2/` (one valid and one invalid per new message, `agent-cancel`
