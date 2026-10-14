@@ -273,12 +273,18 @@ detect ──► source-check ──► test (e2e.yml) ──► render ──�
    - `bump-surfer-json.py --allow-beta` writes it into the job's own checkout (the flag is
      required, so no release path can pin a Beta by accident);
    - the check and suite steps (branding prefs, upstream prefs, mochitests, e2e) run with
-     `continue-on-error`, so each one runs and is reported, and the mochitest and e2e output is
-     teed to files;
-   - a final step writes `suite-results.json` (each step's outcome, the
-     `TEST-UNEXPECTED-* | test | message` lines of mozlog's TBPL formatter,
-     `testing/mozbase/mozlog/mozlog/formatters/tbplformatter.py:105`, and the e2e harness's
-     failed scenarios from its new `--report-json` option) and uploads it.
+     `continue-on-error`, so each one runs and is reported. The mochitests also write mozlog's
+     TBPL log (`--log-tbpl=<file>`), because `mach mochitest` prints mach's own format, which has
+     no `TEST-UNEXPECTED-*` lines (seen on e2e.yml run 38559217112); the e2e harness writes its
+     results with its new `--report-json` option;
+   - a final step (`tools/upstream/suite-results.mjs`) writes `suite-results.json` (each step's
+     outcome, the `TEST-UNEXPECTED-* | test | message` lines of that TBPL log,
+     `testing/mozbase/mozlog/mozlog/formatters/tbplformatter.py:242` in Firefox 157.0.1, and the
+     e2e harness's failed scenarios), uploads it with the e2e report, and then fails the job if
+     any step failed, so the run is red once every suite has reported. It does not run on a
+     cancelled run.
+   - The run's concurrency group is the ref and the version, so a manual run of a Beta on a
+     branch never cancels the canary's run of it on `main`.
 
    For a release version, including PR CI and the autopilot, `e2e.yml` behaves exactly as today:
    the first failure fails the job. Reason: one definition of "the suites" (ADR-015), and a Beta
