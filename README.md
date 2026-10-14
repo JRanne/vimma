@@ -2,6 +2,13 @@
   <img src="docs/assets/vimma-logo-wide.jpg" alt="Vimma: Vim and Tmux inspired" width="640">
 </p>
 
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MPL--2.0-666666?labelColor=333333" alt="MPL-2.0 licence" /></a>
+  <a href="https://github.com/JRanne/vimma/stargazers"><img src="https://img.shields.io/github/stars/JRanne/vimma?labelColor=333333&color=666666&logo=github" alt="GitHub stars" /></a>
+  <a href="https://github.com/JRanne/vimma/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/JRanne/vimma/ci.yml?branch=main&label=ci&labelColor=333333&color=666666" alt="CI status on main" /></a>
+  <a href="surfer.json"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FJRanne%2Fvimma%2Fmain%2Fsurfer.json&query=%24.version.version&label=firefox&labelColor=333333&color=666666&logo=firefoxbrowser" alt="Firefox version Vimma is built on" /></a>
+</p>
+
 # Vimma
 
 **A keyboard-first browser for people who live in Vim and tmux.** You already have the muscle
@@ -108,13 +115,6 @@ The [user guide](docs/guide.md) covers every key and option,
 its first release. There are no packages or binaries yet: you build it from source, on Linux
 x86_64 only. Version `0.1.0`, on Firefox 158.0.
 
-### How it is built
-
-Vimma is built with heavy AI assistance (Claude Code): features start as written specs, are
-built test-first by AI agents, reviewed, and checked by CI and the security model in
-[docs/security.md](docs/security.md). The author reviews the work and tries it in daily use before each release.
-[CLAUDE.md](CLAUDE.md) holds the rules the agents follow.
-
 ## Getting started
 
 The first build takes under an hour and about 35 GB of disk:
@@ -134,6 +134,9 @@ packages are built with a key.
 `npm start` opens Vimma with a profile of its own, so your Firefox profile is never touched.
 Press `ctrl+b ?` to see every binding. [CONTRIBUTING.md](CONTRIBUTING.md) has the rest:
 requirements, faster front-end-only rebuilds, tests, the project layout and how changes are made.
+
+AI coding agents working on this repository follow [CLAUDE.md](CLAUDE.md); contributors read
+[CONTRIBUTING.md](CONTRIBUTING.md) before opening issues or pull requests.
 
 ## Licence
 

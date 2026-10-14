@@ -94,6 +94,13 @@ mochitest run on a full build.
 | `tools/`                          | Build, upstream-bump, licence and commitlint helpers.                                                                                            |
 | `docs/`                           | [User guide](docs/guide.md), [bindings](docs/bindings.md), [limits](docs/limits.md), specs, ADRs, [runbook](docs/runbook.md).                    |
 
+## How Vimma is built
+
+Vimma is built with AI coding agents (Claude Code). Features start as written specs, are built
+test-first by the agents, reviewed, and checked by CI and by the security model in
+[docs/security.md](docs/security.md). [CLAUDE.md](CLAUDE.md) holds the rules the agents follow.
+The author tries each change in daily use before it goes into a release.
+
 ## Workflow
 
 Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
