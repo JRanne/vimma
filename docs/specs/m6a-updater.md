@@ -208,8 +208,10 @@ hashValue size/></update></updates>`. Unknown attributes are kept in the propert
    strips them (Design §9, item 1).
 6. **Getting a security fix out without a manual step needs auto-merge.** Today a Firefox
    security release stops twice for a human: the bump PR and the release PR. The exit test needs
-   both merged automatically when green (Design §7), which m7 left out on purpose; this spec
-   puts it behind a variable that stays off until the release gate lifts.
+   both merged automatically when green, which m7 left out on purpose. This spec auto-merges the
+   bump PR (Design §7) behind `AUTO_SECURITY_BUMP`, which stays off until the release gate lifts;
+   spec [firefox-versions](firefox-versions.md) releases what is on `main` after a merged security
+   bump, behind its own `AUTO_SECURITY_RELEASE`.
 7. **vimma.dev is behind Cloudflare Access.** Clients cannot fetch `/updates/` until Access has a
    bypass rule for that path (or is removed at publication). Until Vimma is published there are no
    users, so this is a setup step, not a blocker.
@@ -470,11 +472,12 @@ asset URL with a build-ID file name (`vimma-nightly-<buildID>-linux-x86_64.compl
 the rolling release replaces its assets: the previous MAR is kept as an asset until the next build
 so a client that just read the old manifest can still download it.
 
-**`upstream.yml` and the security path** (Finding 6): with `AUTO_SECURITY_RELEASE=true`, a bump
+**`upstream.yml` and the security path** (Finding 6): with `AUTO_SECURITY_BUMP=true`, a bump
 PR that the autopilot marks ready (every patch clean, suites green) and classifies as security is
-set to auto-merge (`gh pr merge --auto --squash`, needs `UPSTREAM_PR_TOKEN`); release-please then
-updates its PR, and a new job in `release-please.yml` sets that PR to auto-merge when every
-changelog entry in it is an `upstream:` line. Required checks still gate both merges. From there
+set to auto-merge (`gh pr merge --auto --squash`, needs `UPSTREAM_PR_TOKEN`). Required checks
+still gate the merge. The release PR is not auto-merged here: spec
+[firefox-versions](firefox-versions.md) (decision 17) owns that half, under
+`AUTO_SECURITY_RELEASE`, and releases whatever is on `main` after the bump. From there
 `release.yml` and the jobs above publish. Each step comments on the m7 tracking issue, the last
 with "reached vimma.dev at <time>, <hours> after the advisory".
 
@@ -513,7 +516,7 @@ with "reached vimma.dev at <time>, <hours> after the advisory".
    and the URL is vimma.dev; "no request to aus5" stays a test in both builds.
 6. **Settings' "Updates are managed by your operating system"** is accurate for `.deb` and AUR;
    for the AppImage it is not, and the guide says Vimma updates the file itself. No string patch.
-7. **Auto-merge is off** (`AUTO_SECURITY_RELEASE` unset) until the user has daily-driven Vimma
+7. **Bump auto-merge is off** (`AUTO_SECURITY_BUMP` unset) until the user has daily-driven Vimma
    (release gate); the exit test is proven with it on.
 
 ## Upstream patches (ADR-016, needed before implementation)
@@ -541,7 +544,7 @@ in ADR-003's table.
 3. **Host** (`vimma/updates/VimmaUpdates.sys.mjs`, `UpdateVerifierHost`, AppImage replacement,
    status bar and prompt wiring, about:vimma, control `state` field): the mochitests below.
 4. **Packaging and pipeline** (`package.mjs`, `tools/update/`, `release.yml`, `nightly.yml`,
-   `update-publish.yml`, `release-please.yml`, `upstream.yml`): workflow tests and a dry run.
+   `update-publish.yml`, `upstream.yml`): workflow tests and a dry run.
 5. **e2e and the security rehearsal**: the scenarios below; the M6a gate.
 
 ## Tests (write first)
@@ -603,10 +606,11 @@ in ADR-003's table.
      product version is an older Firefox → `update.status` `failed: 23`.
   6. **Bad signature**: the **shipped** `updater` (our certificates) given the `mycert`-signed MAR
      → `failed: 19`; the Vimma verifier given an XML signed by an unknown key → no download.
-- **Security rehearsal (exit test 2)**: with `AUTO_SECURITY_RELEASE=true` and a real Firefox
-  security dot release, the tracking issue shows advisory → bump PR merged → release → `update.xml`
-  served → a nightly-runner check that an installed previous release (kept on the runner) offers and
-  stages it, with no human action between. Proven twice, as M7's gate was.
+- **Security rehearsal (exit test 2)**: with `AUTO_SECURITY_BUMP=true`, `AUTO_SECURITY_RELEASE=true`
+  (spec firefox-versions) and a real Firefox security dot release, the tracking issue shows
+  advisory → bump PR merged → release → `update.xml` served → a nightly-runner check that an
+  installed previous release (kept on the runner) offers and stages it, with no human action
+  between. Proven twice, as M7's gate was.
 
 ## Docs
 
@@ -618,7 +622,7 @@ in ADR-003's table.
   "config.toml" gains `[updates]` in "What applies live" and "Schema".
 - `docs/runbook.md`, "Releases": key ceremony and where the public DERs and their hashes are;
   the chosen key option's setup (environment, OIDC/IAM or secret); `UPDATES_ENABLED`,
-  `AUTO_SECURITY_RELEASE`; `SITE_DEPLOY_KEY` (a deploy key with write on `vimma-site` only); the
+  `AUTO_SECURITY_BUMP`; `SITE_DEPLOY_KEY` (a deploy key with write on `vimma-site` only); the
   Cloudflare Access bypass for `vimma.dev/updates/*`; rotation and the leaked-key procedure; how to
   pull a bad update: publish a newer serial with an empty `<updates/>` through `workflow_dispatch`
   of `update-publish.yml` (committing the previous `update.xml` again does not work: the replay
@@ -646,7 +650,7 @@ closed (Linux has no update agent).
    a USB stick in a safe; only its public DER enters the repo.**
 3. One key for MARs and the manifest, or two? **One** (domain-separated); a second costs another
    key and rotation for little gain.
-4. Turn on `AUTO_SECURITY_RELEASE` (auto-merge clean security bumps and their release PR)?
+4. Turn on `AUTO_SECURITY_BUMP` (auto-merge clean security bumps)?
    **Yes, but only when the release gate lifts**; until then the pipeline is built and tested with
    it off.
 5. Check interval: **12 h** (Firefox release's own), or keep today's 24 h?
