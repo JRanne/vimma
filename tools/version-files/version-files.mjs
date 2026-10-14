@@ -17,7 +17,7 @@ import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** A Firefox version as configure parses it: x.y or x.y.z, optionally a beta (`bN`). */
-const FIREFOX = /^\d+\.\d+(?:\.\d+)?(?:[ab]\d+)?$/;
+export const FIREFOX = /^\d+\.\d+(?:\.\d+)?(?:[ab]\d+)?$/;
 /** SemVer with an optional pre-release (plan §7: `0.x.y`, nightlies `0.x.y-nightly.<date>`). */
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 

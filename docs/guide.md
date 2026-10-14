@@ -42,8 +42,10 @@ about 35 GB of disk space (`engine/` 27 GB, the sccache compiler cache 6.8 GB, `
 
 ### Installing (planned, not yet released)
 
-**Planned for M6; no release has these files yet.** Each GitHub Release will carry, for Linux
-x86_64 (`X.Y.Z` is the Vimma version):
+**Planned for M6; no release has these files yet.** Each GitHub Release is titled with both
+versions, such as `Vimma 0.5.2 · Firefox 158.0`, and its notes link the Mozilla security
+advisories of the Firefox it moves to. It will carry, for Linux x86_64 (`X.Y.Z` is the Vimma
+version):
 
 | File                              | Install                                                                                  |
 | --------------------------------- | ---------------------------------------------------------------------------------------- |
