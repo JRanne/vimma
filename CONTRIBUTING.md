@@ -63,6 +63,11 @@ npm run mochitest -- tests/browser/browser_vimma_tabstrip.js
 npm run sites -- --filter github                          # live sites, a report (docs/runbook.md)
 ```
 
+A test that needs a temp dir makes it with `tempDir(prefix)` from `tools/test/temp-dir.mjs`,
+which removes it when the test ends, also when it fails. `npm test` runs with a `TMPDIR` of its
+own and fails if a test leaves anything in it. A mochitest removes its temp files in
+`registerCleanupFunction`, and a Rust test drops its temp dir guard.
+
 You can also test the front end without a full build. An artifact build puts our front end on
 top of Mozilla's compiled binaries for the same release, and is what PR CI uses
 ([ADR-010](docs/adr/010-pr-artifact-builds.md)):

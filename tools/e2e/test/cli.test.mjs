@@ -1,10 +1,10 @@
 // The CLI's guard: baselines change only in a reviewed commit, never from a CI run.
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 const CLI = fileURLToPath(new URL("../e2e.mjs", import.meta.url));
 
@@ -24,7 +24,7 @@ describe("npm run e2e", () => {
 // suite-results.json through this file. A browser that exits at once is a real launch failure.
 describe("npm run e2e -- --report-json", () => {
   it("--report-json writes each failed scenario with its error", () => {
-    const dir = mkdtempSync(join(tmpdir(), "e2e-report-"));
+    const dir = tempDir("e2e-report-");
     const scenarios = join(dir, "scenarios");
     mkdirSync(scenarios);
     const step = { "wait-for-state": { mode: "insert" } };

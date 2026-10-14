@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -9,6 +8,7 @@ import {
   checkCargoMetadata,
   normaliseCargoLicense,
 } from "../cargo-license-check.mjs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 const script = fileURLToPath(new URL("../cargo-license-check.mjs", import.meta.url));
 
@@ -72,7 +72,7 @@ describe("checkCargoMetadata", () => {
 
 describe("CLI", () => {
   const run = (/** @type {object} */ meta) => {
-    const dir = mkdtempSync(join(tmpdir(), "cargo-license-"));
+    const dir = tempDir("cargo-license-");
     const file = join(dir, "metadata.json");
     writeFileSync(file, JSON.stringify(meta));
     // No exceptions: the repo's own (cargo-exceptions.json) name real crates, which this

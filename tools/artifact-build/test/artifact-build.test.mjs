@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   ARTIFACT_OBJDIR,
@@ -14,6 +13,7 @@ import {
   sourceStamp,
   uaName,
 } from "../artifact-build.mjs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 const REV = "737ec77d798755890b062aab541a90d6c75afd19";
 /** Firefox 159.0b1's source tarball (docs/specs/upstream-beta-canary.md, R3). */
@@ -271,7 +271,7 @@ describe("indexTask (Taskcluster index findTask response)", () => {
 describe("refreshAppIni", () => {
   /** A minimal engine/ with an artifact objdir after `mach build`. */
   const engine = () => {
-    const dir = mkdtempSync(join(tmpdir(), "vimma-artifact-"));
+    const dir = tempDir("vimma-artifact-");
     mkdirSync(join(dir, ARTIFACT_OBJDIR, "dist", "bin", "browser"), { recursive: true });
     mkdirSync(join(dir, "browser"));
     writeFileSync(
