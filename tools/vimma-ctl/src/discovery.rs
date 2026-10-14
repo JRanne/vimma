@@ -254,7 +254,23 @@ mod tests {
 
     const TOKEN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-    fn temp_dir() -> PathBuf {
+    /// A temp dir that is removed when dropped, also when the test panics (#207).
+    struct TempDir(PathBuf);
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    impl std::ops::Deref for TempDir {
+        type Target = Path;
+        fn deref(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    fn temp_dir() -> TempDir {
         static N: AtomicUsize = AtomicUsize::new(0);
         let dir = std::env::temp_dir().join(format!(
             "vimma-ctl-unit-{}-{}",
@@ -263,7 +279,17 @@ mod tests {
         ));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
-        dir
+        TempDir(dir)
+    }
+
+    #[test]
+    fn temp_dirs_are_removed_when_dropped() {
+        let path = {
+            let dir = temp_dir();
+            fs::write(dir.join("f"), "x").unwrap();
+            dir.to_path_buf()
+        };
+        assert!(!path.exists());
     }
 
     #[cfg(unix)]
@@ -322,7 +348,7 @@ mod tests {
     fn root_prefers_xdg_then_home_then_legacy() {
         let home = temp_dir();
         let env = Env {
-            home: Some(home.clone()),
+            home: Some(home.to_path_buf()),
             xdg_config_home: Some(PathBuf::from("/xdg")),
             profile: None,
         };
@@ -342,7 +368,7 @@ mod tests {
         let root = temp_dir();
         let env = Env {
             home: None,
-            xdg_config_home: Some(root.clone()),
+            xdg_config_home: Some(root.to_path_buf()),
             profile: Some(PathBuf::from("/from-env")),
         };
         assert_eq!(

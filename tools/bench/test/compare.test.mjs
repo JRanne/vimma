@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -17,6 +16,7 @@ import {
   minOfMedians,
   withBaselineEntry,
 } from "../compare.mjs";
+import { tempDir } from "../../test/temp-dir.mjs";
 
 const script = fileURLToPath(new URL("../compare.mjs", import.meta.url));
 const MACHINE = "AMD EPYC 7763 64-Core Processor | x64 | node 22.23.3";
@@ -323,7 +323,7 @@ describe("baselineEntry and withBaselineEntry", () => {
 describe("compare.mjs on the command line", () => {
   /** @param {object} r @param {object} b */
   const run = (r, b) => {
-    const dir = mkdtempSync(join(tmpdir(), "bench-compare-"));
+    const dir = tempDir("bench-compare-");
     writeFileSync(join(dir, "result.json"), JSON.stringify(r));
     writeFileSync(join(dir, "baseline.json"), JSON.stringify(b));
     return spawnSync(process.execPath, [
