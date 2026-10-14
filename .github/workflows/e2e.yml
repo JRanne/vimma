@@ -167,13 +167,17 @@ jobs:
 
       # browser_vimma_control.js runs the vimma-ctl built above (target/debug) against the live
       # server; without it the task skips, and VIMMA_REQUIRE_CTL=1 makes that skip a failure.
-      # The log is teed for suite-results.json; pipefail keeps the mochitests' exit status.
+      # Beta mode also writes mozlog's TBPL log for suite-results.json: mach prints its own format,
+      # without the TEST-UNEXPECTED-* lines.
       - name: Mochitests (npm run mochitest -- --artifact tests/browser/)
         id: mochitest
         continue-on-error: ${{ steps.mode.outputs.beta == 'true' }}
+        env:
+          BETA: ${{ steps.mode.outputs.beta }}
         run: |
-          set -o pipefail
-          npm run mochitest -- --artifact --setenv=VIMMA_REQUIRE_CTL=1 tests/browser/ 2>&1 | tee "$RUNNER_TEMP/mochitest.log"
+          log=()
+          if [ "$BETA" = true ]; then log=("--log-tbpl=$RUNNER_TEMP/mochitest.tbpl.log"); fi
+          npm run mochitest -- --artifact --setenv=VIMMA_REQUIRE_CTL=1 "${log[@]}" tests/browser/
           df -h . | tail -1
           du -sh engine engine/obj-artifact ~/.mozbuild 2>/dev/null || true
 
@@ -183,8 +187,12 @@ jobs:
       - name: e2e scenarios (npm run e2e -- --artifact)
         id: e2e
         continue-on-error: ${{ steps.mode.outputs.beta == 'true' }}
+        env:
+          BETA: ${{ steps.mode.outputs.beta }}
         run: |
-          npm run e2e -- --artifact --report-json "$RUNNER_TEMP/e2e-report.json"
+          report=()
+          if [ "$BETA" = true ]; then report=(--report-json "$RUNNER_TEMP/e2e-report.json"); fi
+          npm run e2e -- --artifact "${report[@]}"
 
       # The actual and diff screenshots of a failed comparison (tools/e2e/screenshot.mjs), for
       # judging a regression or taking a new baseline from the runner's fonts (runbook).
@@ -207,7 +215,7 @@ jobs:
           STEPS: ${{ toJSON(steps) }}
         run: |
           node tools/upstream/suite-results.mjs --version "$VERSION" \
-            --mochitest-log "$RUNNER_TEMP/mochitest.log" \
+            --mochitest-log "$RUNNER_TEMP/mochitest.tbpl.log" \
             --e2e-report "$RUNNER_TEMP/e2e-report.json" --out "$RUNNER_TEMP/suite-results.json"
 
       - name: Upload suite-results.json (Beta mode)

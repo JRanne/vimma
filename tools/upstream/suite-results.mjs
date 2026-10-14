@@ -5,10 +5,11 @@
  * what each step did and what failed, for the Beta canary's issue.
  *
  *   STEPS='${{ toJSON(steps) }}' node tools/upstream/suite-results.mjs --version 159.0b1 \
- *     --mochitest-log mochitest.log --e2e-report e2e-report.json --out suite-results.json
+ *     --mochitest-log mochitest.tbpl.log --e2e-report e2e-report.json --out suite-results.json
  *
- * The mochitest failures are the `TEST-UNEXPECTED-* | test | message` lines of mozlog's TBPL
- * formatter (testing/mozbase/mozlog/mozlog/formatters/tbplformatter.py); the e2e failures come
+ * The mochitest failures are the `TEST-UNEXPECTED-* | test | message` lines of the TBPL log
+ * mozlog writes for --log-tbpl (testing/mozbase/mozlog/mozlog/formatters/tbplformatter.py; mach
+ * prints its own format to the console, without them); the e2e failures come
  * from the harness's --report-json. A missing log or report is recorded, not an error: the step
  * that writes it may not have run. Prints a summary; exits 1 when any step did not succeed, so
  * the run shows the failure after every suite has reported, 2 on usage errors.
@@ -29,14 +30,13 @@ export const STEPS = ["import", "branding", "upstream-prefs", "artifact-build", 
  * }} E2eReport
  */
 
-// eslint-disable-next-line no-control-regex -- the log carries mach's colour escapes
+// eslint-disable-next-line no-control-regex -- a log copied from a terminal carries colour escapes
 const ANSI = /\u001b\[[0-9;]*m/g;
 const UNEXPECTED = /(TEST-UNEXPECTED-[A-Z-]+) \| (.+?) \| (.*)$/;
 
 /**
- * @param {string} log a mochitest run's output
- * @returns {MochitestFailure[]} each unexpected result once, in order (mach repeats them in a
- *   summary at the end)
+ * @param {string} log a mochitest run's TBPL log
+ * @returns {MochitestFailure[]} each unexpected result once, in order
  */
 export function mochitestFailures(log) {
   /** @type {Map<string, MochitestFailure>} */

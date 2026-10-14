@@ -212,11 +212,47 @@ describe("e2e.yml Beta mode", () => {
     }
   });
 
-  it("a teed suite still fails its step: pipefail before every pipe into tee", () => {
-    const run = script(step(e2e, "mochitest"));
-    expect(run).toMatch(/^set -o pipefail\n/);
-    expect(run).toContain('2>&1 | tee "$RUNNER_TEMP/mochitest.log"');
-    expect(script(step(e2e, "e2e"))).toContain('--report-json "$RUNNER_TEMP/e2e-report.json"');
+  // `npm run mochitest` prints mach's own log format, not TBPL: Beta mode asks mozlog for a TBPL
+  // log file as well. A fake npm records the command each step runs.
+  /** @param {string} id @param {string} beta @returns {{ status: number | null, argv: string }} */
+  const runStep = (id, beta) => {
+    const dir = mkdtempSync(join(tmpdir(), "e2e-step-"));
+    const record = join(dir, "argv");
+    writeFileSync(join(dir, "npm"), `#!/bin/sh\nprintf '%s\\n' "$@" > "${record}"\nexit 3\n`, {
+      mode: 0o755,
+    });
+    const r = spawnSync("bash", ["-e", "-c", script(step(e2e, id))], {
+      encoding: "utf8",
+      env: { PATH: `${dir}:${process.env.PATH}`, BETA: beta, RUNNER_TEMP: "/t" },
+    });
+    return { status: r.status, argv: readFileSync(record, "utf8").trim().split("\n").join(" ") };
+  };
+
+  it("a release run's suite commands are exactly as before, and fail their step", () => {
+    expect(runStep("mochitest", "false")).toEqual({
+      status: 3,
+      argv: "run mochitest -- --artifact --setenv=VIMMA_REQUIRE_CTL=1 tests/browser/",
+    });
+    expect(runStep("e2e", "false")).toEqual({ status: 3, argv: "run e2e -- --artifact" });
+  });
+
+  it("a beta run also writes the mochitests' TBPL log and the e2e report, and fails its step", () => {
+    expect(runStep("mochitest", "true")).toEqual({
+      status: 3,
+      argv:
+        "run mochitest -- --artifact --setenv=VIMMA_REQUIRE_CTL=1 " +
+        "--log-tbpl=/t/mochitest.tbpl.log tests/browser/",
+    });
+    expect(runStep("e2e", "true")).toEqual({
+      status: 3,
+      argv: "run e2e -- --artifact --report-json /t/e2e-report.json",
+    });
+    for (const id of ["mochitest", "e2e"]) {
+      expect(step(e2e, id), id).toContain("BETA: ${{ steps.mode.outputs.beta }}");
+    }
+    expect(step(e2e, "suite-results")).toContain(
+      '--mochitest-log "$RUNNER_TEMP/mochitest.tbpl.log"',
+    );
   });
 
   it("writes and uploads suite-results.json only in beta mode, even after a failed step, never on a cancelled run", () => {
