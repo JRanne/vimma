@@ -10,7 +10,7 @@ import { INSERT_EDIT_COMMANDS, isEditable } from "../core/editable.mjs";
 import { inputIndex } from "../core/pageurl.mjs";
 import { collectTargets } from "./hint-collect.mjs";
 import { Caret, isCaretMessage } from "./caret.mjs";
-import { GREP_CAPS, grepText, parseQuery, previewLines } from "../core/grep.mjs";
+import { GREP_CAPS, parseQuery, previewLines } from "../core/grep.mjs";
 import { textOfDocument } from "./text-model.mjs";
 
 /** @import { EditableDescriptor } from "../core/editable.mjs" */
@@ -139,8 +139,15 @@ const DISPLAY_ATTENTION = 4;
 const WHOLE_SELECTION = 2;
 const SCROLL_SYNCHRONOUS = 1 << 1;
 const SCROLL_VERTICAL_CENTER = 1 << 5;
-/** The longest query a frame accepts (a typed query is far shorter). */
-const GREP_QUERY_MAX = 1000;
+/** The longest query a frame accepts (the parent sends none longer). */
+const GREP_QUERY_MAX = GREP_CAPS.query;
+/** Live grep's matching runs in this worker, which is terminated when it runs out of time. */
+const GREP_WORKER = "chrome://browser/content/vimma/actors/grep-worker.mjs";
+/** A query's time budget in one frame (ms); the parent waits 2,000 ms for an answer. */
+const GREP_BUDGET_MS = 1000;
+const { clearTimeout, setTimeout } = ChromeUtils.importESModule(
+  "resource://gre/modules/Timer.sys.mjs",
+);
 
 /** nsISelectionListener reasons (spec m1-copy-mode, mouse selection). */
 const MOUSEUP_REASON = 4;
@@ -168,6 +175,13 @@ export class VimmaChild extends JSWindowActorChild {
    *   observer: MutationObserver | null }}
    */
   #grep = { model: null, stale: true, observer: null };
+  /**
+   * The matching worker, the text model it holds, the query it is running, and the newest
+   * search generation seen (an older query is dropped unrun).
+   * @type {{ worker: any, model: object | null, pending: { id: number,
+   *   done: (reply: any) => void } | null, id: number, gen: number }}
+   */
+  #matcher = { worker: null, model: null, pending: null, id: 0, gen: -1 };
   /** The document's selection while a listener for mouse selections is on it. */
   /** @type {Selection | null} */
   #watched = null;
@@ -558,6 +572,57 @@ export class VimmaChild extends JSWindowActorChild {
   #grepEnd() {
     this.#grep.observer?.disconnect();
     this.#grep = { model: null, stale: true, observer: null };
+    this.#stopMatcher();
+  }
+
+  /** Terminates the worker; a query it was running answers null. */
+  #stopMatcher() {
+    const m = this.#matcher;
+    m.pending?.done(null);
+    m.pending = null;
+    m.worker?.terminate();
+    m.worker = null;
+    m.model = null;
+  }
+
+  /**
+   * Runs the query on the model in the worker. A query still running is stopped first (a newer
+   * one replaces it); one that runs past the budget is stopped and answers `"timeout"`.
+   * @param {NonNullable<ReturnType<typeof textOfDocument>>} model
+   * @param {string} query
+   * @param {boolean} all  every match up to the count cap, for the jump
+   * @returns {Promise<any>}  grepText's result, null when replaced, or "timeout"
+   */
+  #match(model, query, all) {
+    const m = this.#matcher;
+    if (m.pending) this.#stopMatcher();
+    if (!m.worker) {
+      m.worker = new ChromeWorker(GREP_WORKER, { type: "module" });
+      m.worker.onmessage = (/** @type {MessageEvent} */ e) => {
+        if (m.pending && e.data?.id === m.pending.id) m.pending.done(e.data.reply);
+      };
+    }
+    if (m.model !== model) {
+      m.worker.postMessage({ type: "text", text: model.text });
+      m.model = model;
+    }
+    const id = ++m.id;
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        if (m.pending?.id !== id) return;
+        this.#stopMatcher();
+        resolve("timeout");
+      }, GREP_BUDGET_MS);
+      m.pending = {
+        id,
+        done: (reply) => {
+          clearTimeout(timer);
+          if (m.pending?.id === id) m.pending = null;
+          resolve(reply);
+        },
+      };
+      m.worker.postMessage({ type: "query", id, query, all });
+    });
   }
 
   /**
@@ -571,14 +636,20 @@ export class VimmaChild extends JSWindowActorChild {
   /**
    * Live grep's query against this document (docs/specs/live-grep.md): its matches with their
    * line of context. The parent checks the reply (core parseGrepReply).
-   * @param {{ query: string }} data
+   * @param {{ query: string, gen: number }} data
    */
-  #grepSearch(data) {
-    if (!this.#isQuery(data?.query)) return null;
+  async #grepSearch(data) {
+    if (!this.#isQuery(data?.query) || !isIndex(data.gen)) return null;
+    // An older search that was queued behind a newer one is dropped unrun.
+    if (data.gen < this.#matcher.gen) return null;
+    this.#matcher.gen = data.gen;
     const parsed = parseQuery(data.query);
     const model = this.#grepModel();
     if (!parsed || !model) return { count: 0, matches: [] };
-    return grepText(model.text, parsed);
+    const result = await this.#match(model, data.query, false);
+    if (result === "timeout") return { count: 0, matches: [], timedOut: true, cut: model.cut };
+    if (!result) return null;
+    return { ...result, cut: model.cut };
   }
 
   /**
@@ -611,10 +682,13 @@ export class VimmaChild extends JSWindowActorChild {
     if (!model) return false;
     let { start, end } = data;
     if (!fresh || model.text.slice(start, end) !== data.text) {
-      const all = grepText(model.text, parsed, {
-        ...GREP_CAPS,
-        listed: GREP_CAPS.counted,
-      }).matches.filter((m) => model.text.slice(m.start, m.end) === data.text);
+      const result = await this.#match(model, data.query, true);
+      if (!result || result === "timeout") return false;
+      /** @type {{ start: number, end: number, ordinal: number }[]} */
+      const all = result.matches.filter(
+        (/** @type {{ start: number, end: number }} */ m) =>
+          model.text.slice(m.start, m.end) === data.text,
+      );
       const same = all.find((m) => m.ordinal === data.ordinal);
       const near = all.reduce(
         (best, m) =>

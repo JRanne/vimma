@@ -2,7 +2,8 @@
 
 Status: accepted · Area: `packages/vimma-core/src/` (`grep.mjs` new, `actions.mjs`, `defaults.mjs`,
 `cmdline.mjs`); `src/browser/base/content/vimma/` (`actors/text-model.mjs`,
-`actors/VimmaChild.sys.mjs`, `actors/VimmaActors.sys.mjs`, `host/grep.mjs` new,
+`actors/VimmaChild.sys.mjs`, `actors/VimmaActors.sys.mjs`, `actors/grep-worker.mjs` new,
+`host/grep.mjs` new,
 `host/VimmaHost.sys.mjs`, `ui/grep.mjs` new); `src/browser/themes/shared/vimma/grep.css` new ·
 Upstream patches: none · ADR: none. No new dependency.
 
@@ -360,7 +361,10 @@ match.
    and `k` would then move the caret instead of scrolling, which surprises after a jump. If the
    page changed since the search, the frame matches the query again and takes the match with
    the same ordinal and text, else the nearest one with the same text; if none is left, the tab
-   is selected and a notice says `match no longer on the page`. `n`/`N` keep stepping through
+   is selected and a notice says `match no longer on the page`. A frame that has navigated since
+   the search (its `currentWindowGlobal` is not the one searched) gets no jump at all, and the
+   same notice shows: the new document was never searched and must not receive the query or a
+   selection. `n`/`N` keep stepping through
    the `/` query; they do not take the grep query, as in Vim, and a regular expression cannot be
    handed to Firefox's find anyway.
 8. **The result list.** Jumping from the picker keeps that search's results in the window as
@@ -420,28 +424,43 @@ match.
     workspace is searched only when the scope includes it (`window`, or `workspace` when the
     agent workspace is current); its rows are marked `◇ agent` in the agent's colour and sort
     last, as in tab search decision 6, so an agent's pages are never taken for the user's own.
-14. **Performance.**
+14. **Performance and bounds.**
     - A query is sent 80 ms after the last keystroke. Each send carries a generation number;
-      replies for an older generation are dropped.
+      replies for an older generation are dropped, and a frame drops a query older than one it
+      has already seen.
     - Matching runs in the content processes, one per site, so tabs search in parallel and the
       parent only merges. At most 8 tabs are asked at a time; a frame that has not answered in
-      2,000 ms is left out and the prompt says `timed out`. Up to 200 tabs are searched.
+      2,000 ms is left out and the prompt says `timed out`. Up to 200 tabs and 100 frames a tab
+      are searched; past that the prompt says `cut`, as it does for a page whose text was cut.
+    - In a frame, the text model is built on the page's thread (it reads the DOM), and the
+      regular expression runs in a `ChromeWorker` of that content process
+      (`actors/grep-worker.mjs`), which holds the frame's text. A query that runs for 1 second,
+      or that a newer query replaces, is stopped by terminating the worker; the frame answers
+      `timed out` and starts a new worker for the next query. JavaScript's regular expressions
+      backtrack, and SpiderMonkey sets no time limit on chrome script
+      (`dom.max_chrome_script_run_time` is 0 in `modules/libpref/init/StaticPrefList.yaml`), so
+      without the worker a pattern such as `(a+)+b` on a long line of `a`s would freeze every
+      page of that process. A per-line time check was rejected because one `exec` call cannot
+      be interrupted.
+    - A query over 1,000 characters is not sent; the prompt says `too long`.
     - A frame's model is cut at 1,000,000 characters. A frame lists at most 100 matches and
-      counts to 1,000; the list holds at most 2,000 rows. Telescope has no such caps by
-      default; a page can be far larger than a source file, and a rendered list of thousands of
-      rows does not help a keyboard user, who narrows by typing.
-    - The frame caches its text model while the picker is open and drops it when the picker
-      closes (`Vimma:GrepEnd`). A `MutationObserver` on the document marks the model stale; it
-      is rebuilt at the next query, not on each mutation. A navigation creates a new document
-      and actor, so nothing survives it.
+      counts to 1,000; the list holds at most 2,000 rows, and once the parent holds 2,000
+      matches for a search it keeps only the counts of later replies. Telescope has no such
+      caps by default; a page can be far larger than a source file, and a rendered list of
+      thousands of rows does not help a keyboard user, who narrows by typing.
+    - The frame caches its text model while the picker is open and drops it, its observer and
+      its worker when the picker closes (`Vimma:GrepEnd`). Every frame the query was sent to
+      gets `Vimma:GrepEnd`, whether or not it answered in time. A `MutationObserver` on the
+      document marks the model stale; it is rebuilt at the next query, not on each mutation. A
+      navigation creates a new document and actor, so nothing survives it.
     - Budget, measured in a test: matching a query against 1,000,000 characters under 50 ms.
     - The parent holds only what it shows: a context line per listed match (at most 160
       characters) and the preview's lines. Page text is not written anywhere.
 15. **Accessibility.** The list is a `role=listbox` with `role=option` rows, each option's
     accessible name holding the line, the tab's title and its workspace
     (`retry budget is 3, Retries – docs, work`); a polite live region announces
-    `37 matches in 6 tabs` or `no matches` after results settle; the preview is a `role=region` named "Grep Preview". The
-    `literal` and `fuzzy` flags are words, not colours.
+    `37 matches in 6 tabs` or `no matches` after results settle; the preview is a
+    `role=region` named "Grep Preview". The `literal` and `fuzzy` flags are words, not colours.
 16. **Theme.** Existing tokens only, as picker.css uses them: box borders `--vimma-muted`, box
     titles `--vimma-text-accent`, tab titles and line numbers `--vimma-fg-dim`,
     `<mark>` as in the goto picker, the `>` marker and the selected row as the goto picker's
@@ -455,17 +474,27 @@ match.
 
 Live grep is chrome UI reading text the user's own pages already show. It adds no
 control-socket command, so neither `vimma-ctl` nor an agent connection can run it or read its
-results. Container isolation is unchanged: the parent sends a query to each tab's own content
-process, which answers from its own document; no page sees another page's text or the query
-of another tab. Page text is untrusted: rows and the preview are built from text nodes and
-`<mark>` elements created in chrome, never from markup, so a page cannot inject content into the
-picker. The private boundary holds by construction: grep searches only its own window, and the
-private workspace is a separate private window (decision 13); a test pins both directions.
-Agent tabs are marked so their content is never taken for the user's own. Nothing is written to
-disk: the text model lives in the content process while the picker is open, the parent keeps
-only context lines and the grep list in memory, and none of it goes into the session store. A
-regular expression runs per line, which bounds the cost of a pathological pattern to the length
-of one line in one content process.
+results. Container isolation is unchanged: the parent sends the query to each in-scope frame's
+own content process, which answers from its own document; no page receives another page's text.
+Three things are exposed, as Firefox's find bar exposes them: the query reaches every frame in
+scope, third-party iframes and (in window scope) agent tabs included, so a compromised content
+process can read it; a jump selects the match, which the page can read; and building the text
+model runs on the page's thread, so a page can tell from timing that it was searched.
+
+Page text is untrusted: rows and the preview are built from text nodes and `<mark>` elements
+created in chrome, never from markup, so a page cannot inject content into the picker. Every
+reply is checked and capped in the parent (core `parseGrepReply`, `parsePreviewReply`), at most
+100 frames a tab are searched and at most 2,000 matches are kept, so a page with thousands of
+frames cannot make the parent hold an unbounded search. The private boundary holds by
+construction: grep searches only its own window, and the private workspace is a separate private
+window (decision 13); a test pins both directions. Agent tabs are marked so their content is
+never taken for the user's own. A jump goes only to the document that was searched (decision 7).
+Nothing is written to disk: the text model lives in the content process while the picker is
+open and is dropped by every frame the query reached, the parent keeps only context lines and
+the grep list in memory, drops a closed tab's lines, and none of it goes into the session store.
+A regular expression runs in a worker that is stopped after 1 second (decision 14), so a
+pathological pattern costs at most that, in one worker thread, and never freezes a page.
+[security.md §13](../security.md) lists the rules and their tests.
 
 ## Tests
 
@@ -487,6 +516,9 @@ Written first and seen to fail.
     overlong lines and too many matches drop the reply or are cut.
   - `grepRows`: rows in tab order whatever order replies arrive in; frames in their order; the
     agent workspace's rows last; not-loaded rows at the far end; the 2,000-row cap.
+  - `holdReply`: matches kept until 2,000 are held, later replies keep only their count;
+    `parseGrepReply` keeps `timedOut` and `cut` as booleans; `parsePreviewReply` clips the
+    match to its line; `pruneGrepList` drops a closed tab's rows and keeps the place.
   - the grep list: `stepGrepList` order across tabs, wrapping, skipping closed tabs; the
     notice text `grep 4/37`.
   - picker keys (`grepPickerKey`): `ctrl+n`/`↓`/`j` move toward the best result and
@@ -534,7 +566,15 @@ Written first and seen to fail.
     region says `N matches in M tabs` or `no matches`.
   - Page text and a title with markup show as text; no page element reaches the picker or the
     preview.
-  - Closing the picker tells every searched frame to drop its text model.
+  - Closing the picker tells every searched frame to drop its text model, also a frame whose
+    answer was still on its way when the picker closed.
+  - A tab with 150 frames: 100 frames are searched and the prompt says `cut`.
+  - `]q` to a frame that has navigated since the search: nothing is selected there and the
+    notice says the match is gone.
+  - A query over 1,000 characters says `too long` and asks no frame.
+  - A catastrophic pattern (`(a+)+b`) against a line of 40 `a`s: the prompt says `timed out`
+    within the budget, the page still answers, and the next query finds its match.
+  - Closing a tab removes its lines from the grep list.
 
 ### e2e (`tests/e2e/scenarios/`, Xvfb) and screenshots
 

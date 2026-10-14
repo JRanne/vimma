@@ -6,11 +6,13 @@ import {
   grepPickerKey,
   grepRows,
   grepText,
+  holdReply,
   openGrepPicker,
   parseGrepReply,
   parsePreviewReply,
   parseQuery,
   previewLines,
+  pruneGrepList,
   setGrepRows,
   stepGrepList,
 } from "../src/grep.mjs";
@@ -210,6 +212,22 @@ describe("parseGrepReply: a content process's reply, checked", () => {
     expect(r?.count).toBe(GREP_CAPS.counted);
   });
 
+  test("a reply's timedOut and cut flags are kept as booleans", () => {
+    expect(parseGrepReply({ ...good, timedOut: true, cut: true })).toMatchObject({
+      timedOut: true,
+      cut: true,
+    });
+    expect(parseGrepReply({ ...good, timedOut: "yes" })).toBeNull();
+    expect(parseGrepReply(good)).not.toHaveProperty("timedOut");
+  });
+
+  test("parsePreviewReply clips the match to its line", () => {
+    const r = parsePreviewReply({ first: 1, line: 0, at: [2, 900], lines: ["abcd"] });
+    expect(r?.at).toEqual([2, 4]);
+    const past = parsePreviewReply({ first: 1, line: 0, at: [10, 20], lines: ["abcd"] });
+    expect(past?.at).toEqual([4, 4]);
+  });
+
   test("parsePreviewReply checks and cuts the preview", () => {
     const ok = { first: 1, line: 0, at: [0, 1], lines: ["a", "b"] };
     expect(parsePreviewReply(ok)).toEqual(ok);
@@ -333,6 +351,23 @@ function rowsOf(tabIds) {
   return grepRows(tabs, frames).rows;
 }
 
+describe("holdReply: the parent keeps at most the rows it can list", () => {
+  test("matches are kept until 2,000 are held; later replies keep only their count", () => {
+    const big = reply(100);
+    let held = 0;
+    for (let i = 0; i < 20; i++) {
+      const kept = holdReply(big, held);
+      expect(kept.reply.matches).toHaveLength(100);
+      held = kept.held;
+    }
+    expect(held).toBe(GREP_CAPS.rows);
+    const past = holdReply(big, held);
+    expect(past.reply.matches).toEqual([]);
+    expect(past.reply.count).toBe(100);
+    expect(past.held).toBe(GREP_CAPS.rows);
+  });
+});
+
 describe("the grep list", () => {
   const rows = rowsOf(["a", "a", "b", "c"]);
 
@@ -358,6 +393,16 @@ describe("the grep list", () => {
 
   test("the notice text", () => {
     expect(grepListText({ query: "x", rows, index: 2 })).toBe("grep 3/4");
+  });
+
+  test("pruneGrepList drops a closed tab's rows and keeps its place", () => {
+    const at = pruneGrepList({ query: "x", rows, index: 3 }, (id) => id !== "a");
+    expect(at?.rows.map((r) => r.tabId)).toEqual(["b", "c"]);
+    expect(at?.index).toBe(1);
+    const onDead = pruneGrepList({ query: "x", rows, index: 1 }, (id) => id !== "a");
+    expect(onDead?.index).toBe(-1);
+    expect(stepGrepList(/** @type {any} */ (onDead), 1, () => true)?.index).toBe(0);
+    expect(pruneGrepList({ query: "x", rows, index: 0 }, () => false)).toBeNull();
   });
 });
 

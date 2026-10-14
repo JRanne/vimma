@@ -34,6 +34,8 @@ const styled = new WeakSet();
  * @property {boolean} literal  the query is matched literally
  * @property {boolean} timedOut  a frame did not answer in time
  * @property {boolean} busy  frames are still answering
+ * @property {boolean} cut  a tab had more frames, or a page more text, than are searched
+ * @property {boolean} tooLong  the query is longer than a frame takes; nothing was searched
  */
 
 /**
@@ -133,6 +135,8 @@ export class GrepPicker {
     if (state.refine) flags.push("fuzzy");
     if (state.scope !== "workspace") flags.push(state.scope);
     if (info.timedOut) flags.push("timed out");
+    if (info.cut) flags.push("cut");
+    if (info.tooLong) flags.push("too long");
     p.flags.textContent = flags.join(" · ");
     const matches = state.rows.filter((r) => r.kind === "match").length;
     const total = state.refine ? state.all.filter((r) => r.kind === "match").length : info.count;

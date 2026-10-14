@@ -271,6 +271,10 @@ is on screen), as Vim's starts at the cursor.
   `not loaded`; `Enter` opens one, so you can search again), form fields, text drawn on a canvas,
   images, closed `<details>`, PDFs, and pages Vimma cannot read (`view-source:`). A page in a
   frame from another site is searched; its rows say `↳ host`.
+- **Limits.** A search stops in a page after a second (`timed out`, so a pattern that would
+  backtrack for ever never freezes the page), covers at most 100 frames a tab and the first
+  million characters of a page (`cut`), and lists at most 2,000 results; a query over 1,000
+  characters is not run (`too long`).
 - **Private and agent tabs.** Live grep searches only its own window: from a normal window it
   never sees the [private workspace](#private-workspace), and in the private workspace it sees
   only private tabs. The [agent workspace](#agent-workspace)'s tabs are searched only when the

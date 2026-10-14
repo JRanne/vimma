@@ -280,7 +280,12 @@ add_task(async function the_grep_list_steps_with_bracket_q_and_grep_resumes() {
   type("[q");
   await until(() => gBrowser.selectedTab === c, "[q wraps back to the last");
 
+  const closed = b.linkedPanel;
   BrowserTestUtils.removeTab(b);
+  Assert.ok(
+    VimmaHost._grep(window).list.rows.every((r) => r.tabId !== closed),
+    "a closed tab's lines leave the grep list",
+  );
   await focusContent(c.linkedBrowser);
   type("[q");
   await until(() => gBrowser.selectedTab === a, "a closed tab's results are skipped");
@@ -658,4 +663,123 @@ add_task(async function white_space_the_markup_wraps_matches_one_space() {
     return range.startContainer.textContent.slice(range.startOffset, range.endOffset);
   });
   Assert.equal(selected, "wrapped\n      across   lines", "the selection covers the source text");
+});
+
+add_task(async function a_reply_held_past_close_still_gets_grep_end() {
+  await reset();
+  await openFixture({ title: "Slow", t: "needle slow" });
+  await openGrep();
+  const session = VimmaHost._grep(window);
+  const ask = session.ask;
+  /** @type {(() => void)[]} */
+  const held = [];
+  const asked = new Set();
+  const ended = new Set();
+  session.ask = (/** @type {any[]} */ ...args) => {
+    const [bc, , name = "Vimma:Grep"] = args;
+    if (name === "Vimma:GrepEnd") ended.add(bc.id);
+    const reply = ask.apply(session, args);
+    if (name !== "Vimma:Grep") return reply;
+    asked.add(bc.id);
+    // Every frame answers only after the picker has closed.
+    return new Promise((resolve) => held.push(() => resolve(reply)));
+  };
+  type("needle");
+  await until(() => held.length >= 2, "the frames were asked");
+  EventUtils.synthesizeKey("KEY_Escape");
+  EventUtils.synthesizeKey("KEY_Escape");
+  await until(() => !isOpen(), "closed before any answer");
+  for (const release of held) release();
+  await new Promise((r) => setTimeout(r, 300));
+  session.ask = ask;
+  Assert.ok(
+    [...asked].every((id) => ended.has(id)),
+    "a frame that had not answered is told to drop its text too",
+  );
+});
+
+add_task(async function frames_past_the_cap_are_not_searched() {
+  await reset();
+  const tab = await openFixture({ title: "Many frames", t: "top", frames: 150 });
+  await until(
+    () =>
+      tab.linkedBrowser.browsingContext.children.length === 150 &&
+      tab.linkedBrowser.browsingContext.children.every((c) => c.currentWindowGlobal),
+    "150 frames",
+  );
+  await openGrep();
+  type("needle frame");
+  await until(() => rows().length > 0 && !dialog().hasAttribute("busy"), "results");
+  Assert.equal(rows().length, 99, "the page and 99 frames: 100 frames a tab");
+  Assert.ok(flagsText().includes("cut"), "the prompt says the search was cut");
+  EventUtils.synthesizeKey("KEY_Escape");
+  EventUtils.synthesizeKey("KEY_Escape");
+});
+
+add_task(async function a_jump_never_reaches_a_document_the_frame_navigated_to() {
+  await reset();
+  const frameUrl = `${OTHER_SITE}?t=${encodeURIComponent("needle in frame")}`;
+  const tab = await openFixture({ title: "Moving", t: "needle top", frame: frameUrl });
+  await openGrep();
+  type("needle");
+  await resultsSettle(2);
+  EventUtils.synthesizeKey("KEY_Enter");
+  await until(() => !isOpen(), "jumped to the top frame's match");
+  const frame = tab.linkedBrowser.browsingContext.children[0];
+  const before = frame.currentWindowGlobal;
+  const next = `${OTHER_SITE}?t=${encodeURIComponent("needle in frame")}&v=2`;
+  await SpecialPowers.spawn(tab.linkedBrowser, [next], (url) => {
+    content.document.querySelector("iframe").src = url;
+  });
+  await until(
+    () => frame.currentWindowGlobal && frame.currentWindowGlobal !== before,
+    "the frame navigated",
+  );
+  await until(() => !frame.currentWindowGlobal.isInitialDocument, "and loaded");
+  await focusContent(tab.linkedBrowser);
+  type("]q");
+  await until(() => noticeText() === "match no longer on the page", "the jump is refused");
+  const selected = await SpecialPowers.spawn(frame, [], () => content.getSelection().toString());
+  Assert.equal(selected, "", "nothing is selected in the new document");
+});
+
+add_task(async function an_over_long_query_says_so_and_is_not_sent() {
+  await reset();
+  await openFixture({ title: "Long query", t: "needle" });
+  await focusContent(gBrowser.selectedBrowser);
+  const session = VimmaHost._grep(window);
+  const ask = session.ask;
+  let sent = 0;
+  session.ask = (/** @type {any[]} */ ...args) => {
+    if ((args[2] ?? "Vimma:Grep") === "Vimma:Grep") sent++;
+    return ask.apply(session, args);
+  };
+  session.open("x".repeat(1001));
+  await until(() => flagsText().includes("too long"), "the prompt says the query is too long");
+  await new Promise((r) => setTimeout(r, 300));
+  Assert.ok(!flagsText().includes("timed out"), "not a time-out");
+  Assert.equal(sent, 0, "no frame was asked");
+  session.ask = ask;
+  EventUtils.synthesizeKey("KEY_Escape");
+  EventUtils.synthesizeKey("KEY_Escape");
+});
+
+// Last: before the fix, this pattern froze the page's process for good.
+add_task(async function a_catastrophic_pattern_never_freezes_the_page() {
+  await reset();
+  const tab = await openFixture({ title: "Backtrack", t: "needle here", long: 40 });
+  await openGrep();
+  type("(a+)+b");
+  await until(() => flagsText().includes("timed out"), "the search gives up in time");
+  const answered = await Promise.race([
+    SpecialPowers.spawn(tab.linkedBrowser, [], () => content.document.title),
+    new Promise((r) => setTimeout(() => r(null), 3000)),
+  ]);
+  Assert.equal(answered, "Backtrack", "the page's process still answers");
+  clearQuery();
+  type("needle");
+  await resultsSettle(1);
+  Assert.deepEqual(texts(), ["needle here"], "and the next query finds its match");
+  EventUtils.synthesizeKey("KEY_Escape");
+  EventUtils.synthesizeKey("KEY_Escape");
 });

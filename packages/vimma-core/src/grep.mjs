@@ -23,6 +23,9 @@ export const GREP_CAPS = Object.freeze({
   previewLines: 10,
   previewWidth: 300,
   modelChars: 1_000_000,
+  /** frames searched in one tab, and the longest query sent to a frame */
+  frames: 100,
+  query: 1000,
 });
 
 const ELLIPSIS = "…";
@@ -47,7 +50,12 @@ const LINE_END = /[\n\r\u2029]/g;
  * @property {string} context  the line, cut to GREP_CAPS.context around the match
  * @property {[number, number]} at  the match in `context`
  */
-/** @typedef {{ gen?: number, count: number, matches: GrepMatch[] }} GrepReply */
+/**
+ * A frame's answer. `timedOut`: its matching ran out of time and was stopped; `cut`: its text
+ * was longer than the model holds.
+ * @typedef {{ gen?: number, count: number, matches: GrepMatch[], timedOut?: boolean,
+ *   cut?: boolean }} GrepReply
+ */
 /**
  * @typedef {object} GrepPreview  the lines around a match
  * @property {number} first  the line number of `lines[0]`
@@ -342,6 +350,9 @@ export function parseGrepReply(raw) {
   const r = /** @type {Record<string, unknown>} */ (raw);
   if (r.gen !== undefined && !isIndex(r.gen)) return null;
   if (!isIndex(r.count) || !Array.isArray(r.matches)) return null;
+  for (const flag of ["timedOut", "cut"]) {
+    if (r[flag] !== undefined && typeof r[flag] !== "boolean") return null;
+  }
   /** @type {GrepMatch[]} */
   const matches = [];
   const max = GREP_CAPS.context + 2;
@@ -360,6 +371,8 @@ export function parseGrepReply(raw) {
     ...(r.gen !== undefined ? { gen: /** @type {number} */ (r.gen) } : {}),
     count: Math.min(r.count, GREP_CAPS.counted),
     matches,
+    ...(r.timedOut !== undefined ? { timedOut: /** @type {boolean} */ (r.timedOut) } : {}),
+    ...(r.cut !== undefined ? { cut: /** @type {boolean} */ (r.cut) } : {}),
   };
 }
 
@@ -377,7 +390,8 @@ export function parsePreviewReply(raw) {
     .slice(0, 2 * GREP_CAPS.previewLines + 1)
     .map((l) => cutText(/** @type {string} */ (l), GREP_CAPS.previewWidth + 2));
   if (line >= kept.length) return null;
-  return { first, line, at: [at[0], at[1]], lines: kept };
+  const length = /** @type {string} */ (kept[line]).length;
+  return { first, line, at: [Math.min(at[0], length), Math.min(at[1], length)], lines: kept };
 }
 
 /**
@@ -488,6 +502,19 @@ export function grepRows(tabs, frames, caps = GREP_CAPS) {
 }
 
 /**
+ * A reply as the parent keeps it (decision 14): its matches while fewer than `rows` are held,
+ * else its count alone, since the list shows at most `rows` rows.
+ * @param {GrepReply} reply
+ * @param {number} held  matches kept so far for this search
+ * @param {{ rows: number }} [caps]
+ * @returns {{ reply: GrepReply, held: number }}
+ */
+export function holdReply(reply, held, caps = GREP_CAPS) {
+  if (held >= caps.rows) return { reply: { ...reply, matches: [] }, held };
+  return { reply, held: held + reply.matches.length };
+}
+
+/**
  * What the live region says once results settle (decision 15).
  * @param {number} listed  match rows in the list
  * @param {number} count  matches found
@@ -519,6 +546,22 @@ export function stepGrepList(list, dir, alive) {
     if (alive(row.tabId)) return { ...list, index };
   }
   return null;
+}
+
+/**
+ * The grep list without the rows of tabs that have closed; the index stays on its row, or
+ * just before where it was, so the next step goes on from there. Null when no row is left.
+ * @param {GrepList} list
+ * @param {(tabId: string) => boolean} alive
+ * @returns {GrepList | null}
+ */
+export function pruneGrepList(list, alive) {
+  const rows = list.rows.filter((r) => alive(r.tabId));
+  if (!rows.length) return null;
+  const before = list.rows.slice(0, list.index).filter((r) => alive(r.tabId)).length;
+  const current = list.rows[list.index];
+  const index = current && alive(current.tabId) ? before : before - 1;
+  return { ...list, rows, index };
 }
 
 /** @param {GrepList} list */

@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- Live grep fixture (docs/specs/live-grep.md). Query parameters: `title`; `t`, lines of text
-     separated by `|`, one paragraph each; `pad`, filler paragraphs before and after them; `frame`, the URL
-     of an iframe after them; `shadow`, an open and a closed shadow root with a match each. -->
+     separated by `|`, one paragraph each; `pad`, filler paragraphs before and after them; `long`, a line of that many `a`s; `frames`, that many srcdoc iframes with a match each;
+     `frame`, the URL of an iframe after them; `shadow`, an open and a closed shadow root with a match each. -->
 <html>
   <head>
     <meta charset="utf-8" />
@@ -34,6 +34,16 @@
           root.append(span);
           document.body.append(host);
         }
+      }
+      if (p.get("long")) {
+        const el = document.createElement("p");
+        el.textContent = "a".repeat(Number(p.get("long")));
+        document.body.append(el);
+      }
+      for (let i = 0; i < Number(p.get("frames") || 0); i++) {
+        const frame = document.createElement("iframe");
+        frame.srcdoc = `<p>needle frame ${i}</p>`;
+        document.body.append(frame);
       }
       if (p.get("frame")) {
         const frame = document.createElement("iframe");

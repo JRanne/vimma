@@ -15,10 +15,12 @@ import {
   grepListText,
   grepPickerKey,
   grepRows,
+  holdReply,
   openGrepPicker,
   parseGrepReply,
   parsePreviewReply,
   parseQuery,
+  pruneGrepList,
   setGrepRows,
   stepGrepList,
 } from "../core/grep.mjs";
@@ -85,6 +87,16 @@ function switchDone(win) {
   });
 }
 
+/** @type {GrepInfo} */
+const IDLE = Object.freeze({
+  count: 0,
+  literal: false,
+  timedOut: false,
+  busy: false,
+  cut: false,
+  tooLong: false,
+});
+
 export class GrepSession {
   /**
    * @param {Window} win
@@ -97,7 +109,7 @@ export class GrepSession {
     /** @type {GrepPickerState | null} */
     this.state = null;
     /** @type {GrepInfo} */
-    this.info = { count: 0, literal: false, timedOut: false, busy: false };
+    this.info = { ...IDLE };
     /** The generation of the newest search; replies for an older one are dropped. */
     this.gen = 0;
     /** @type {number | undefined} */
@@ -112,6 +124,13 @@ export class GrepSession {
     this.lastQuery = "";
     /** @type {Element | null} focused before open */
     this.opener = null;
+    // A closed tab's lines leave the grep list at once (G5).
+    this.onTabClose = (/** @type {Event} */ e) => {
+      if (!this.list) return;
+      const closed = /** @type {any} */ (e.target);
+      this.list = pruneGrepList(this.list, (id) => tabById(win, id) !== closed);
+    };
+    win.addEventListener("TabClose", this.onTabClose);
   }
 
   get isOpen() {
@@ -143,7 +162,7 @@ export class GrepSession {
     for (const key of this.frames.keys()) if (!kept.has(key)) this.frames.delete(key);
     const query = text ?? "";
     this.state = openGrepPicker(query);
-    this.info = { count: 0, literal: false, timedOut: false, busy: false };
+    this.info = { ...IDLE };
     this.ui.open();
     this.state = { ...this.state, preview: this.ui.previewShown() };
     this.render();
@@ -264,9 +283,18 @@ export class GrepSession {
     if (query) this.lastQuery = query;
     /** @type {Map<string, (GrepFrame | null)[]>} */
     const slots = new Map();
-    const scoped = parsed ? this.scopeTabs(scope) : [];
+    // A query no frame would take is not sent (G6); the prompt says why.
+    const tooLong = query.length > GREP_CAPS.query;
+    const scoped = parsed && !tooLong ? this.scopeTabs(scope) : [];
     const tabs = scoped.map((s) => s.tab);
-    this.info = { count: 0, literal: !!parsed?.literal, timedOut: false, busy: !!parsed };
+    this.info = {
+      ...IDLE,
+      literal: !!parsed?.literal,
+      busy: !!parsed && !tooLong,
+      tooLong,
+    };
+    /** Matches kept for this search: past the row cap, replies keep their counts only. */
+    let held = 0;
     let pending = false;
     const update = () => {
       if (!live() || !this.state) return;
@@ -298,7 +326,8 @@ export class GrepSession {
     const worker = async () => {
       for (let next = queue.shift(); next && live(); next = queue.shift()) {
         const { tab, browser } = next;
-        const bcs = VimmaActors.grepFrames(browser);
+        const { frames: bcs, cut } = VimmaActors.grepFrames(browser, GREP_CAPS.frames);
+        if (cut) this.info = { ...this.info, cut: true };
         const topSite = bcs[0]?.currentWindowGlobal?.documentPrincipal?.siteOrigin;
         /** @type {(GrepFrame | null)[]} */
         const list = bcs.map(() => null);
@@ -307,15 +336,22 @@ export class GrepSession {
           bcs.map(async (bc, i) => {
             const wg = bc.currentWindowGlobal;
             const key = String(bc.id);
-            const raw = await this.ask(bc, { query });
+            // Recorded as it is asked, so the frame is told to drop its text at close even
+            // if it never answers in time (G5).
+            this.frames.set(`${tab.tabId}:${key}`, { bc, wg });
+            const raw = await this.ask(bc, { query, gen });
             if (!live()) return;
             if (raw === null) {
               if (wg && !wg.isClosed) this.info = { ...this.info, timedOut: true };
               return;
             }
-            const reply = parseGrepReply(raw);
-            if (!reply) return;
-            this.frames.set(`${tab.tabId}:${key}`, { bc, wg });
+            const parsedReply = parseGrepReply(raw);
+            if (!parsedReply) return;
+            if (parsedReply.timedOut) this.info = { ...this.info, timedOut: true };
+            if (parsedReply.cut) this.info = { ...this.info, cut: true };
+            const kept = holdReply(parsedReply, held);
+            held = kept.held;
+            const reply = kept.reply;
             const principal = wg?.documentPrincipal;
             const host =
               i > 0 && principal && principal.siteOrigin !== topSite
@@ -376,7 +412,12 @@ export class GrepSession {
     tab.linkedBrowser?.focus();
     const frame = this.frames.get(`${row.tabId}:${row.frameKey}`);
     const bc = frame?.bc;
-    const inTab = bc && !bc.isDiscarded && bc.top === tab.linkedBrowser?.browsingContext;
+    // Only the document that was searched: a frame that navigated since gets nothing.
+    const inTab =
+      bc &&
+      !bc.isDiscarded &&
+      bc.top === tab.linkedBrowser?.browsingContext &&
+      bc.currentWindowGlobal === frame.wg;
     const text = row.context.slice(row.at[0], row.at[1]);
     const data = { query, start: row.start, end: row.end, ordinal: row.ordinal, text };
     const done = inTab ? await this.ask(bc, data, "Vimma:GrepJump") : false;
@@ -441,6 +482,7 @@ export class GrepSession {
   /** VimmaHost.uninit */
   destroy() {
     this.close();
+    this.win.removeEventListener("TabClose", this.onTabClose);
     this.ui.destroy();
     this.frames.clear();
     this.list = null;

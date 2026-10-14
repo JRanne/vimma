@@ -387,20 +387,27 @@ export const VimmaActors = {
    * A browser's frames for live grep (docs/specs/live-grep.md decision 12): its browsing
    * contexts in tree order, skipping those under a hidden embedder, as
    * FinderParent.gatherBrowsingContexts does.
+   * At most `max` frames; `cut` says some were left out.
    * @param {any} browser XULBrowserElement
-   * @returns {any[]} BrowsingContexts
+   * @param {number} max
+   * @returns {{ frames: any[], cut: boolean }} BrowsingContexts
    */
-  grepFrames(browser) {
+  grepFrames(browser, max) {
     /** @type {any[]} */
     const out = [];
+    let cut = false;
     /** @param {any} bc @param {number} depth */
     const gather = (bc, depth) => {
       if (!bc || bc.isUnderHiddenEmbedderElement || depth > MAX_FRAME_DEPTH) return;
+      if (out.length >= max) {
+        cut = true;
+        return;
+      }
       out.push(bc);
       for (const child of bc.children) gather(child, depth + 1);
     };
     gather(browser.browsingContext, 0);
-    return out;
+    return { frames: out, cut };
   },
 
   /**
