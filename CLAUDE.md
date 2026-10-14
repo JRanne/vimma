@@ -24,6 +24,9 @@ Read plan.md once per milestone; read docs/specs/<current>.md every session.
 
 ## Rules
 
+- Specs and every other Markdown file are professional documentation for outside readers. New and
+  edited specs follow docs/specs/README.md. State decisions with their reasons; never record who
+  asked, when, quoted chat or agent notes ("user request", "the user said").
 - TDD: write the failing test, run it, paste red output; implement; paste green. Never loosen a test.
   This includes mochitests: a test written after the code does not count as red.
 - packages/vimma-core imports nothing from Firefox. Enforced by eslint; do not disable the rule.
@@ -70,4 +73,4 @@ Read plan.md once per milestone; read docs/specs/<current>.md every session.
   own git worktree (never the main checkout, which the maintainer's dev build reads), and keeps
   only its report. Reviews run in another fresh agent.
 - Clear after merge, before review, after 3 failed attempts, when switching area.
-- Before clearing mid-task: commit or stash, and write a handover paragraph into the spec.
+- Before clearing mid-task: commit or stash, and write a handover paragraph into the PR description.
