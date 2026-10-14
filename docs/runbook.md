@@ -385,7 +385,7 @@ Limits:
 | Workflow                   | Trigger                          | Runner                    | Needs from you                             |
 | -------------------------- | -------------------------------- | ------------------------- | ------------------------------------------ |
 | `ci.yml`                   | push to `main`, PRs, manual      | `ubuntu-latest`           | nothing                                    |
-| `e2e.yml`                  | PRs touching the browser, manual | `ubuntu-24.04`            | nothing (ADR-010)                          |
+| `e2e.yml`                  | PRs, manual, upstream.yml        | `ubuntu-24.04`            | nothing (ADR-010)                          |
 | `nightly.yml`              | 03:00 UTC, manual                | self-hosted `vimma-build` | register the runner, set `NIGHTLY_ENABLED` |
 | `upstream.yml`             | every 4 h (`:17`), manual        | `ubuntu-latest` + e2e.yml | allow Actions to open PRs; optional token  |
 | `claude.yml`               | `@claude`, `spec`+`claude:go`    | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
@@ -404,17 +404,62 @@ Workflow YAML: `go run github.com/rhysd/actionlint/cmd/actionlint@latest` (reads
 
 ### Merging and branch protection
 
-Branch protection on `main` is **deliberately off**: the repo is private on the free plan, where
-GitHub does not offer protection rules on private repositories (`gh api
-repos/JRanne/vimma/branches/main/protection` → 403 "Upgrade to GitHub Pro"). A PR merges after
-review and green checks, by hand; no approval count is configured. Revisit if the repo goes public
-or moves to a paid plan (then: CI required, signed commits, one approval, via `gh api`).
+`main` is protected by the repository ruleset "main" (`gh api repos/JRanne/vimma/rulesets`):
+changes land through a squash-merged pull request only, with no force-push or deletion, and
+these status checks must pass:
+
+- `lint, typecheck, test, commitlint, licences` (ci.yml)
+- `mochitest (artifact build)` (e2e.yml)
+- `semgrep (javascript, typescript, rust, secrets, github-actions)` (semgrep.yml)
+- `CodeQL (javascript-typescript)` and `CodeQL (rust)` (codeql.yml)
+
+The ruleset also requires CodeQL code scanning results without errors or high-severity alerts.
+A required check whose workflow never starts stays pending and blocks the merge, so none of
+these workflows has a `paths` filter; a job or step skipped by `if:` reports success instead
+(next section).
 
 **Residual risk:** any job token with `contents: write` (`spec-pr` in claude.yml, upstream.yml,
 nightly.yml, release-please.yml) could push to `main`, since nothing protects it. Mitigations: those jobs run no
 Claude-written code with that token (claude.yml's Claude job is read-only), Claude runs only for
 the owner (`claude:go` added by the owner; `@claude` from owner/member/collaborator), and GitHub
 Actions minutes and logs show every push. Check `git log origin/main` if anything looks off.
+
+### Docs-only pull requests (issue #245)
+
+A pull request whose every changed file is prose Markdown skips the work Markdown cannot affect.
+`tools/ci/docs-only.mjs` decides from `git diff --name-only --no-renames base...head` (never the
+title or body); ci.yml, e2e.yml and codeql.yml run it as the base branch has it, so a pull
+request cannot change the classifier that judges it.
+
+**Docs-only** means all of these hold:
+
+- the event is `pull_request` (a push to `main`, a schedule, a manual run and `workflow_call`
+  always run everything);
+- every changed path ends in `.md`;
+- none is generated (`GENERATED_MARKDOWN`: `docs/bindings.md`);
+- none is under `.github/`, `packages/`, `src/`, `tests/` or `tools/`, where Markdown can be a
+  fixture, a vendored file pinned by hash or a template GitHub reads.
+
+A workflow, a script, `package.json` or any other file in the same pull request runs everything.
+
+Still runs on a docs-only pull request: prettier, commitlint, `npm run security-links`,
+`npm run test:py` (it reads ADR-003), the gen-docs freshness step, the Vitest files listed in
+`MARKDOWN_TESTS`, and Semgrep.
+
+Skipped: eslint, typecheck, the full Vitest suite with coverage, the bench, the licence checks,
+cargo, the MPL header check, `mochitest (artifact build)` with the e2e scenarios (the job
+`changes` gates the job), and the CodeQL analysis (the matrix job runs and its steps skip, so
+both required CodeQL checks report).
+
+A skipped job or step reports success, so the required checks pass. If the classifier fails,
+the gated jobs run (`!cancelled()`, not `success()`). Adding a Vitest file that reads a
+Markdown file of the repo through `new URL("../…/x.md", import.meta.url)` means adding it to
+`MARKDOWN_TESTS`; `tools/ci/test/docs-only.test.mjs` fails until then. The same test pins the
+`if:` wiring of each required job.
+
+The gen-docs freshness step runs on every pull request: `npm run gen-docs`, then `git diff
+--exit-code` on `docs/bindings.md`, `docs/bindings.json` and `packages/vimma-core/defaults.toml`.
+A hand edit of a generated file fails there with the command to run.
 
 ### PR mochitests (`e2e.yml`, ADR-010)
 
@@ -428,9 +473,7 @@ node tools/artifact-build/artifact-build.mjs     # ~25 s warm; first run downloa
 npm run mochitest -- --artifact tests/browser/
 ```
 
-It runs only when a PR touches `src/`, `tests/browser/`, `packages/vimma-core/`, `configs/`,
-`surfer.json`, `package*.json`, the tools it uses (including `tools/e2e/`, `tools/vimma-ctl/`),
-`tests/e2e/` or `e2e.yml` (paths filter). Before the Firefox download it builds `vimma-ctl` and
+It runs on every PR except a docs-only one (above). Before the Firefox download it builds `vimma-ctl` and
 runs the e2e harness's tests; after the mochitests, `npm run e2e -- --artifact`. For a PR opened
 with `GITHUB_TOKEN`, mark it ready for review or `gh workflow run e2e.yml --ref <branch>`.
 
@@ -445,9 +488,6 @@ fails, the message names the revision from `engine/sourcestamp.txt` and the expi
 `surfer.json` points at a real release. It also refuses a display version ending in `aN`/`bN`
 or containing `esr`, which would make mach search the wrong tree.
 
-The job is path-filtered: it does not report on docs-only PRs. Do not make it a required status
-check (once branch protection exists) without handling skipped runs, or those PRs hang.
-
 Fork PRs (once public) run the same job with a read-only token and no secrets; GitHub asks you
 to approve the first run of a first-time contributor (Settings → Actions → General).
 
@@ -459,9 +499,8 @@ no monthly cap: minutes are no longer a reason to skip a job. What still matters
 jobs at once on the free plan), so keep jobs lean all the same. Rough use per PR push: CI ≈ 2
 min, e2e ≈ 6 min (5.5 min wall, ADR-010), Semgrep ≈ 1 min, CodeQL a few minutes per language.
 
-e2e.yml has no paths filter any more: "mochitest (artifact build)" is a required check, so it
-runs on every PR, docs-only ones included (a required check that never reports blocks the
-merge). The upstream autopilot runs 6 × 1 min a day, plus ≈ 16 min (issue, patch check, the
+e2e.yml has no paths filter: "mochitest (artifact build)" is a required check, so the workflow
+starts on every PR, and on a docs-only one the job skips by `if:` in seconds (above). The upstream autopilot runs 6 × 1 min a day, plus ≈ 16 min (issue, patch check, the
 e2e suites, PR) when a release is found (spec m7-upstream-autopilot); claude.yml only when
 triggered. `nightly.yml` uses the self-hosted runner, which is not a GitHub-hosted runner and
 never was billed. Usage is still listed in Settings → Billing → Usage.

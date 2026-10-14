@@ -21,9 +21,43 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Issue #245: is this a docs-only pull request? (tools/ci/docs-only.mjs, as the base branch has
+  # it, so the pull request cannot change the answer.) Any other event leaves the output empty
+  # and everything runs; so does a failed classifier (!cancelled() below, not success()).
+  changes:
+    name: changes (docs-only?)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      docs-only: ${{ steps.classify.outputs.docs-only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 0 # base...head needs the merge base
+          persist-credentials: false
+
+      - name: Docs-only pull request? (tools/ci/docs-only.mjs, from the base)
+        id: classify
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git show "$BASE:tools/ci/docs-only.mjs" > "$RUNNER_TEMP/docs-only.mjs"; then
+            node "$RUNNER_TEMP/docs-only.mjs" --event pull_request --base "$BASE" --head "$HEAD"
+          else
+            echo "No classifier on the base: running everything"
+          fi
+
+  # On a docs-only pull request the job runs and its steps skip: a matrix job skipped by its own
+  # if: reports under its unexpanded name, which matches neither required CodeQL check.
   analyze:
     name: CodeQL (${{ matrix.language }})
-    if: github.event.repository.private == false
+    needs: changes
+    if: ${{ !cancelled() && github.event.repository.private == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -37,13 +71,16 @@ jobs:
         language: [javascript-typescript, rust]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.changes.outputs.docs-only != 'true'
 
       - uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        if: needs.changes.outputs.docs-only != 'true'
         with:
           languages: ${{ matrix.language }}
           build-mode: none
           config-file: ./.github/codeql/codeql-config.yml
 
       - uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        if: needs.changes.outputs.docs-only != 'true'
         with:
           category: /language:${{ matrix.language }}
