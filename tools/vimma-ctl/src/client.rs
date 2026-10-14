@@ -32,6 +32,10 @@ pub enum Error {
     /// The user said no to full control while MCP is on, or did not answer (exit 4;
     /// docs/specs/vimma-mcp.md decision 29 C).
     Denied(ErrorBody),
+    /// The role asked for is off in Vimma (exit 3, like a socket that is off).
+    RoleOff(ErrorBody),
+    /// Vimma speaks only this older protocol, which has no agent role (exit 5).
+    TooOld(u64),
 }
 
 /// Longest allowed timeout; [`Client::connect`] clamps to it so the deadline cannot overflow.
@@ -46,9 +50,9 @@ impl Error {
     pub fn exit_code(&self) -> i32 {
         match self {
             Error::Server(_) => 1,
-            Error::NotRunning(_) | Error::Busy(_) => 3,
+            Error::NotRunning(_) | Error::Busy(_) | Error::RoleOff(_) => 3,
             Error::Auth(_) | Error::Impostor(_) | Error::Denied(_) => 4,
-            Error::Protocol(_) => 5,
+            Error::Protocol(_) | Error::TooOld(_) => 5,
         }
     }
 }
@@ -56,7 +60,11 @@ impl Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::Server(e) => write!(f, "{}: {}", e.code, e.message),
+            Error::Server(e) | Error::RoleOff(e) => write!(f, "{}: {}", e.code, e.message),
+            Error::TooOld(protocol) => write!(
+                f,
+                "this Vimma is too old for MCP (protocol {protocol}); update Vimma"
+            ),
             Error::NotRunning(message) | Error::Impostor(message) => f.write_str(message),
             Error::Auth(e) => write!(f, "authentication failed: {}: {}", e.code, e.message),
             Error::Denied(e) => match &e.reason {
@@ -92,15 +100,18 @@ impl Client {
     /// [`Error::NotRunning`] when nothing listens, [`Error::Auth`] when the token or protocol is
     /// refused, [`Error::Protocol`] on a malformed or late reply.
     pub fn connect(discovery: &Discovery, timeout: Duration) -> Result<Self, Error> {
-        // vimma-ctl's commands are the `full` role. A protocol 2 Vimma says which roles it
-        // serves: with only MCP on, the control socket's full side is off (vimma-mcp decision 3).
-        if !discovery.roles.contains(&Role::Full) {
-            return Err(Error::NotRunning(
-                "Vimma's control socket is off (only MCP is on); set the pref \
-                 vimma.control.enabled to true"
-                    .to_string(),
-            ));
-        }
+        Self::connect_as(discovery, timeout, Role::Full)
+    }
+
+    /// [`Client::connect`] for `role`: `Full` for vimma-ctl's own commands, `Agent` for
+    /// `vimma-ctl mcp` (docs/specs/vimma-mcp.md, decision 2). Nothing here ever asks for `Full`
+    /// on an agent's behalf.
+    ///
+    /// # Errors
+    /// As [`Client::connect`]; for `Agent` also [`Error::TooOld`] for a protocol 1 Vimma and
+    /// [`Error::RoleOff`] when its discovery file does not list the agent role.
+    pub fn connect_as(discovery: &Discovery, timeout: Duration, role: Role) -> Result<Self, Error> {
+        check_role(discovery, role)?;
         // Speak the newest protocol both sides know: 2 (role full) when the file says 2.
         let protocol = discovery.protocol.min(protocol::PROTOCOL);
         let timeout = timeout.min(MAX_TIMEOUT);
@@ -126,7 +137,7 @@ impl Client {
         })?;
         // 1. hello: a fresh nonce and no token.
         let hello = if protocol >= 2 {
-            protocol::hello_v2(&nonce, Role::Full)
+            protocol::hello_v2(&nonce, role)
         } else {
             protocol::hello(&nonce)
         };
@@ -152,7 +163,8 @@ impl Client {
         // 3. auth: now the token; 4. welcome. While MCP is on (the `agent` role is served), Vimma
         // asks the user before it welcomes a full connection: wait for that answer, then give
         // the command its own timeout.
-        let asks = protocol >= 2 && discovery.roles.contains(&Role::Agent);
+        // Only a full connection is asked about; an agent's requests are asked one by one.
+        let asks = role == Role::Full && protocol >= 2 && discovery.roles.contains(&Role::Agent);
         if asks {
             let code = random_code().map_err(|e| {
                 Error::Protocol(format!("cannot read random bytes for the code: {e}"))
@@ -180,11 +192,12 @@ impl Client {
             }
         }
         let welcome = protocol::decode_welcome(&reply).map_err(protocol_error)?;
-        if welcome.protocol != protocol || welcome.role != Role::Full {
+        if welcome.protocol != protocol || welcome.role != role {
             return Err(Error::Protocol(format!(
-                "server speaks protocol {} as {}, this vimma-ctl speaks {protocol} as full",
+                "server speaks protocol {} as {}, this vimma-ctl speaks {protocol} as {}",
                 welcome.protocol,
-                welcome.role.name()
+                welcome.role.name(),
+                role.name()
             )));
         }
         Ok(client)
@@ -197,9 +210,9 @@ impl Client {
             return match protocol::decode_response(&reply).map_err(protocol_error)? {
                 Response::Err { error, .. } if error.code == "busy" => Err(Error::Busy(error)),
                 // The role asked for is off in Vimma: like a socket that is off (exit 3).
-                Response::Err { error, .. } if error.code == "role-off" => Err(Error::NotRunning(
-                    format!("{}: {}", error.code, error.message),
-                )),
+                Response::Err { error, .. } if error.code == "role-off" => {
+                    Err(Error::RoleOff(error))
+                }
                 Response::Err { error, .. } if error.code == "denied" => Err(Error::Denied(error)),
                 Response::Err { error, .. } => Err(Error::Auth(error)),
                 Response::Ok { .. } => Err(Error::Protocol(format!(
@@ -215,9 +228,22 @@ impl Client {
     /// # Errors
     /// [`Error::Server`] for an error response, [`Error::Protocol`] for anything malformed.
     pub fn call(&mut self, command: &Command) -> Result<CommandResult, Error> {
+        let result = self.exchange(&|id| protocol::request(id, command))?;
+        protocol::decode_result(command, &result).map_err(protocol_error)
+    }
+
+    /// Send command `name` with `args` and return its result undecoded (the agent commands).
+    ///
+    /// # Errors
+    /// As [`Client::call`].
+    pub fn call_value(&mut self, name: &str, args: &Value) -> Result<Value, Error> {
+        self.exchange(&|id| protocol::request_named(id, name, args.clone()))
+    }
+
+    fn exchange(&mut self, request: &dyn Fn(u32) -> Value) -> Result<Value, Error> {
         let id = self.next_id;
         self.next_id += 1;
-        self.send(&protocol::request(id, command))?;
+        self.send(&request(id))?;
         let reply = self.receive()?;
         match protocol::decode_response(&reply).map_err(protocol_error)? {
             Response::Ok { id: got, .. } | Response::Err { id: got, .. }
@@ -228,11 +254,22 @@ impl Client {
                     None => format!("expected id {id}, got null"),
                 }))
             }
-            Response::Ok { result, .. } => {
-                protocol::decode_result(command, &result).map_err(protocol_error)
-            }
+            Response::Ok { result, .. } => Ok(result),
             Response::Err { error, .. } => Err(Error::Server(error)),
         }
+    }
+
+    /// Split the connection for a long-lived client (`vimma-ctl mcp`): the reader, whose
+    /// buffered bytes are kept, for [`read_message`] on a thread of its own; a writer; and the
+    /// next request id. Deadlines no longer apply: the caller keeps its own.
+    ///
+    /// # Errors
+    /// When the socket cannot be cloned or its timeouts cleared.
+    pub fn into_parts(self) -> io::Result<(BufReader<TcpStream>, TcpStream, u32)> {
+        let stream = self.reader.get_ref();
+        stream.set_read_timeout(None)?;
+        let writer = stream.try_clone()?;
+        Ok((self.reader, writer, self.next_id))
     }
 
     fn remaining(&self) -> Result<Duration, Error> {
@@ -243,14 +280,11 @@ impl Client {
     }
 
     fn timed_out(&self) -> Error {
-        Error::Protocol(format!("no reply within {} s", self.timeout.as_secs_f64()))
+        timed_out(self.timeout)
     }
 
     fn io_error(&self, e: &io::Error) -> Error {
-        match e.kind() {
-            io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut => self.timed_out(),
-            _ => Error::Protocol(format!("connection failed: {e}")),
-        }
+        io_error(e, self.timeout)
     }
 
     fn send(&mut self, message: &Value) -> Result<(), Error> {
@@ -264,50 +298,118 @@ impl Client {
 
     /// Read one line (at most [`MAX_LINE`] bytes plus the newline) and parse it.
     fn receive(&mut self) -> Result<Value, Error> {
-        let mut line = Vec::new();
-        loop {
-            let left = self.remaining()?;
-            self.reader
-                .get_ref()
+        let deadline = self.deadline;
+        let timeout = self.timeout;
+        read_line(&mut self.reader, &mut |stream| {
+            let left = deadline
+                .checked_duration_since(Instant::now())
+                .filter(|left| !left.is_zero())
+                .ok_or_else(|| timed_out(timeout))?;
+            stream
                 .set_read_timeout(Some(left))
-                .map_err(|e| self.io_error(&e))?;
-            let buffer = match self.reader.fill_buf() {
-                Ok(buffer) => buffer,
-                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => return Err(self.io_error(&e)),
-            };
-            if buffer.is_empty() {
-                return Err(Error::Protocol(
-                    "connection closed before a complete reply".to_string(),
-                ));
-            }
-            let (chunk, done) = match buffer.iter().position(|b| *b == b'\n') {
-                Some(end) => (&buffer[..end], true),
-                None => (buffer, false),
-            };
-            line.extend_from_slice(chunk);
-            let used = chunk.len() + usize::from(done);
-            self.reader.consume(used);
-            if line.len() > MAX_LINE + 1 {
-                return Err(Error::Protocol(format!(
-                    "reply line longer than {MAX_LINE} bytes"
-                )));
-            }
-            if done {
-                break;
-            }
-        }
-        if line.last() == Some(&b'\r') {
-            line.pop();
-        }
-        if line.len() > MAX_LINE {
-            return Err(Error::Protocol(format!(
-                "reply line longer than {MAX_LINE} bytes"
+                .map_err(|e| io_error(&e, timeout))
+        })
+        .map_err(|e| match e {
+            ReadError::Io(e) => io_error(&e, timeout),
+            ReadError::Protocol(e) => e,
+        })
+    }
+}
+
+/// Read one message from a connection split with [`Client::into_parts`], waiting as long as it
+/// takes. The same limits as every reply: one line of at most [`MAX_LINE`] bytes, strict JSON.
+///
+/// # Errors
+/// [`Error::Protocol`] when the connection closes or a line breaks the rules.
+pub fn read_message(reader: &mut BufReader<TcpStream>) -> Result<Value, Error> {
+    read_line(reader, &mut |_| Ok(())).map_err(|e| match e {
+        ReadError::Io(e) => Error::Protocol(format!("connection failed: {e}")),
+        ReadError::Protocol(e) => e,
+    })
+}
+
+enum ReadError {
+    Io(io::Error),
+    Protocol(Error),
+}
+
+/// One line: `before` runs before each read (to set its deadline).
+fn read_line(
+    reader: &mut BufReader<TcpStream>,
+    before: &mut dyn FnMut(&TcpStream) -> Result<(), Error>,
+) -> Result<Value, ReadError> {
+    let mut line = Vec::new();
+    loop {
+        before(reader.get_ref()).map_err(ReadError::Protocol)?;
+        let buffer = match reader.fill_buf() {
+            Ok(buffer) => buffer,
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(ReadError::Io(e)),
+        };
+        if buffer.is_empty() {
+            return Err(ReadError::Protocol(Error::Protocol(
+                "connection closed before a complete reply".to_string(),
             )));
         }
-        let text = String::from_utf8(line)
-            .map_err(|_| Error::Protocol("reply is not valid UTF-8".to_string()))?;
-        json::parse(&text).map_err(|e| Error::Protocol(format!("reply is not valid JSON: {e}")))
+        let (chunk, done) = match buffer.iter().position(|b| *b == b'\n') {
+            Some(end) => (&buffer[..end], true),
+            None => (buffer, false),
+        };
+        line.extend_from_slice(chunk);
+        let used = chunk.len() + usize::from(done);
+        reader.consume(used);
+        if line.len() > MAX_LINE + 1 {
+            return Err(ReadError::Protocol(Error::Protocol(format!(
+                "reply line longer than {MAX_LINE} bytes"
+            ))));
+        }
+        if done {
+            break;
+        }
+    }
+    if line.last() == Some(&b'\r') {
+        line.pop();
+    }
+    if line.len() > MAX_LINE {
+        return Err(ReadError::Protocol(Error::Protocol(format!(
+            "reply line longer than {MAX_LINE} bytes"
+        ))));
+    }
+    let text = String::from_utf8(line).map_err(|_| {
+        ReadError::Protocol(Error::Protocol("reply is not valid UTF-8".to_string()))
+    })?;
+    json::parse(&text)
+        .map_err(|e| ReadError::Protocol(Error::Protocol(format!("reply is not valid JSON: {e}"))))
+}
+
+fn timed_out(timeout: Duration) -> Error {
+    Error::Protocol(format!("no reply within {} s", timeout.as_secs_f64()))
+}
+
+fn io_error(e: &io::Error, timeout: Duration) -> Error {
+    match e.kind() {
+        io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut => timed_out(timeout),
+        _ => Error::Protocol(format!("connection failed: {e}")),
+    }
+}
+
+/// Whether the discovery file says Vimma serves `role`, before connecting.
+fn check_role(discovery: &Discovery, role: Role) -> Result<(), Error> {
+    match role {
+        // vimma-ctl's commands are the `full` role. A protocol 2 Vimma says which roles it
+        // serves: with only MCP on, the control socket's full side is off (decision 3).
+        Role::Full if !discovery.roles.contains(&Role::Full) => Err(Error::NotRunning(
+            "Vimma's control socket is off (only MCP is on); set the pref \
+             vimma.control.enabled to true"
+                .to_string(),
+        )),
+        Role::Agent if discovery.protocol < 2 => Err(Error::TooOld(discovery.protocol)),
+        Role::Agent if !discovery.roles.contains(&Role::Agent) => Err(Error::RoleOff(ErrorBody {
+            code: "role-off".into(),
+            message: "MCP is off in Vimma: run :mcp on".into(),
+            reason: None,
+        })),
+        _ => Ok(()),
     }
 }
 

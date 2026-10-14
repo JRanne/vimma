@@ -23,7 +23,11 @@ export const ROLES = Object.freeze(["agent", "full"]);
 export const MAX_LINE_LENGTH = 1024 * 1024;
 export const CONTROL_COMMANDS = Object.freeze(["send-keys", "state", "open", "reload-theme"]);
 export const RESERVED_COMMANDS = Object.freeze(["list-tabs", "screenshot", "reload-config"]);
-/** The agent role's commands (protocol 2; vimma-mcp decision 4). No other role runs them. */
+/**
+ * The agent role's commands (protocol 2; vimma-mcp decision 4). No other role runs them.
+ * `agent-cancel` withdraws one of the connection's waiting questions (decision 17, MCP's
+ * `notifications/cancelled`; sub-PR 3).
+ */
 export const AGENT_COMMANDS = Object.freeze([
   "agent-hello",
   "agent-tabs",
@@ -31,6 +35,7 @@ export const AGENT_COMMANDS = Object.freeze([
   "agent-open",
   "agent-close",
   "agent-ping",
+  "agent-cancel",
 ]);
 /** Why an agent request was `denied` (vimma-mcp decision 4). */
 export const DENY_REASONS = Object.freeze([
@@ -305,6 +310,9 @@ function checkRequest(m, errors) {
   else if (command === "agent-close") {
     noExtraFields(args, ["tab"], errors, "args.");
     checkTabArg(args, errors);
+  } else if (command === "agent-cancel") {
+    noExtraFields(args, ["id"], errors, "args.");
+    if (!isInt(args.id, 1, MAX_ID)) errors.push("id must be an integer from 1 to 2^53-1");
   } else if (
     ["state", "reload-theme", "agent-tabs", "agent-ping"].includes(/** @type {string} */ (command))
   ) {
@@ -359,6 +367,8 @@ function checkAgentResult(result, command, errors) {
     checkFields(result, "result", { strings: ["tab"] }, errors);
   } else if (command === "agent-close" && result.closed !== true) {
     errors.push("result.closed must be true");
+  } else if (command === "agent-cancel") {
+    checkFields(result, "result", { flags: ["cancelled"] }, errors);
   }
 }
 

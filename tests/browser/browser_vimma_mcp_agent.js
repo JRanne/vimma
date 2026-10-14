@@ -352,6 +352,44 @@ add_task(async function test_denials_timeouts_queue_and_mute() {
   await setSwitches({});
 });
 
+// Decision 17, sub-PR 3: MCP's notifications/cancelled withdraws the call's question. Only the
+// connection's own requests, and only while they wait; a cancel is never refused as busy.
+add_task(async function test_agent_cancel_withdraws_one_waiting_question() {
+  await setSwitches({ mcp: true });
+  const tab = await openAgentTab();
+  const c = await agentClient();
+  const ids = [0, 1, 2, 3].map(() => c.request("agent-read", { tab: idOf(tab) }));
+  await until(() => AgentGate.waiting.length === 4, "4 questions wait");
+  const first = AgentGate.waiting[0].id;
+
+  let r = await c.call("agent-cancel", { id: ids[0] });
+  Assert.deepEqual(r.result, { cancelled: true }, "the waiting question is withdrawn");
+  r = await c.response(/** @type {number} */ (ids[0]));
+  Assert.deepEqual([r.error?.code, r.error?.reason], ["denied", "cancelled"], "its call ends");
+  Assert.equal(AgentGate.waiting.length, 3, "three still wait");
+  Assert.ok(!AgentGate.waiting.some((q) => q.id === first), "the cancelled one is off the line");
+
+  r = await c.call("agent-cancel", { id: ids[0] });
+  Assert.deepEqual(r.result, { cancelled: false }, "a second cancel finds nothing");
+  r = await c.call("agent-cancel", { id: 999 });
+  Assert.deepEqual(r.result, { cancelled: false }, "an unknown id finds nothing");
+
+  const d = await agentClient("codex");
+  r = await d.call("agent-cancel", { id: ids[1] });
+  Assert.deepEqual(r.result, { cancelled: false }, "another connection cannot cancel it");
+  Assert.equal(AgentGate.waiting.length, 3, "nothing else was withdrawn");
+  r = await d.call("agent-cancel", { id: "1" });
+  Assert.equal(r.error?.code, "invalid-args", "the id is an integer");
+  d.close();
+
+  AgentGate.answer(AgentGate.waiting[0].id, { kind: "mute" });
+  for (const i of ids.slice(1)) await c.response(/** @type {number} */ (i));
+  c.close();
+  await until(() => AgentGate.waiting.length === 0, "nothing left waiting");
+  BrowserTestUtils.removeTab(tab);
+  await setSwitches({});
+});
+
 add_task(async function test_grants_per_connection_and_tool() {
   await setSwitches({ mcp: true });
   const tab = await openAgentTab();

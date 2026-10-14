@@ -62,7 +62,7 @@ only the agent workspace, and every request asks you first (§12).
 - S6. A token file left by a crash **must** be removed at start; a symlink or directory in its
   place is never followed. [`test_stale_discovery_file_removed_at_start`](../tests/browser/browser_vimma_control.js)
 - S7. Only the commands of the connection's role **must** run (`full`: the four of protocol 1;
-  `agent`: the six agent commands); anything else, and any unknown argument, is refused.
+  `agent`: the seven agent commands); anything else, and any unknown argument, is refused.
   [`test_handshake`](../tests/browser/browser_vimma_control.js),
   [`protocol version 1 with the commands of ADR-007`](../packages/vimma-core/test/control.test.mjs),
   [`protocols 1 and 2, two roles, the agent commands apart from v1's`](../packages/vimma-core/test/control-v2.test.mjs),
@@ -461,8 +461,8 @@ one workspace, **agent**, through the control socket's `agent` role. Spec:
 while MCP is on (`:mcp on`). Every check runs in the browser, never in the client: an agent with
 a shell can run `vimma-ctl` itself, or speak the protocol directly.
 
-- M1. Every agent command but `agent-hello` and `agent-ping` **must** wait for your yes, or run
-  under an unexpired grant of that connection and tool.
+- M1. Every agent command but `agent-hello`, `agent-ping` and `agent-cancel` **must** wait for
+  your yes, or run under an unexpired grant of that connection and tool.
   [`test_grants_per_connection_and_tool`](../tests/browser/browser_vimma_mcp_agent.js),
   [`15 min for (conn 1, read): reads run unasked until 15:00; opens and conn 2 ask`](../packages/vimma-core/test/agent-gate.test.mjs)
 - M2. Agent commands **must** see only tabs of the agent workspace in its container, checked
@@ -603,6 +603,23 @@ a shell can run `vimma-ctl` itself, or speak the protocol directly.
   [`! allows a dangerous one; y, a and counts do nothing there`](../packages/vimma-core/test/agent-prompt.test.mjs),
   [`a dangerous name inside makes the zip dangerous, and says which`](../packages/vimma-core/test/agent-downloads.test.mjs),
   [`any bytes: the zip lister and the magic check never throw, and stay inside the file`](../packages/vimma-core/test/fuzz/agent-downloads.fuzz.test.mjs)
-- M9. `vimma-ctl mcp`'s JSON-RPC parsing **never** panics. **⚠ gap:** `vimma-ctl mcp` is sub-PR
-  3 of [vimma-mcp](specs/vimma-mcp.md); until then the protocol 2 decoders it will use are fuzzed
-  ([`decoders_never_panic_and_accept_only_the_schema`](../tools/vimma-ctl/tests/protocol_props.rs)).
+- M9. `vimma-ctl mcp`'s JSON-RPC parsing **never** panics, and its standard output carries
+  **only** whole JSON-RPC messages, one per line (logs go to standard error); a line over 1 MiB
+  is answered with an error and never kept.
+  [`any_line_gets_one_message_or_none`](../tools/vimma-ctl/tests/mcp_props.rs),
+  [`any_outcome_is_one_tool_result`](../tools/vimma-ctl/tests/mcp_props.rs),
+  [`stdout_carries_only_json_rpc_messages`](../tools/vimma-ctl/tests/mcp.rs),
+  [`decoders_never_panic_and_accept_only_the_schema`](../tools/vimma-ctl/tests/protocol_props.rs)
+- M14. `agent-cancel` (MCP's `notifications/cancelled`) **must** withdraw only a question its own
+  connection is still waiting on, and **never** asks or counts towards the connection's limit
+  of 4 requests at once. [`test_agent_cancel_withdraws_one_waiting_question`](../tests/browser/browser_vimma_mcp_agent.js),
+  [`a_cancelled_call_withdraws_its_question_and_gets_no_response`](../tools/vimma-ctl/tests/mcp.rs)
+- M15. `vimma-ctl mcp` **must** connect only with the `agent` role, take the token only from the
+  discovery file, and refuse a tool's bad arguments (a non-http(s) URL, a URL over 65,536
+  characters, a tab that is not 1 to 20 digits, an unknown argument) before anything reaches
+  Vimma. This is defence in depth: the browser checks all of it again (M2, M6, S7), since an
+  agent with a shell can run its own client.
+  [`a_read_reaches_vimma_as_the_agent_role`](../tools/vimma-ctl/tests/mcp.rs),
+  [`the_token_never_leaves_the_handshake`](../tools/vimma-ctl/tests/mcp.rs),
+  [`bad_arguments_never_reach_vimma`](../tools/vimma-ctl/tests/mcp.rs),
+  [`bad_arguments_are_tool_errors_and_never_reach_vimma`](../tools/vimma-ctl/src/mcp.rs)

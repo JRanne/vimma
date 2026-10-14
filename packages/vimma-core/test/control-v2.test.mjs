@@ -71,6 +71,7 @@ describe("protocol 2 constants", () => {
       "agent-open",
       "agent-close",
       "agent-ping",
+      "agent-cancel",
     ]);
     expect(AGENT_COMMANDS.some((c) => CONTROL_COMMANDS.includes(c))).toBe(false);
     expect(ERROR_CODES).toContain("role-off");
@@ -178,6 +179,21 @@ describe("agent commands: args", () => {
     ]);
   });
 
+  // MCP's notifications/cancelled (vimma-mcp decision 17, sub-PR 3): withdraw one question.
+  test("agent-cancel takes one request id of the connection", () => {
+    expect(errorsOf(req("agent-cancel", { id: 4 }))).toEqual([]);
+    expect(errorsOf(req("agent-cancel", { id: 2 ** 53 - 1 }))).toEqual([]);
+    for (const id of [0, -1, 1.5, "4", null, 2 ** 53]) {
+      expect(errorsOf(req("agent-cancel", { id })), String(id)).toEqual([
+        "id must be an integer from 1 to 2^53-1",
+      ]);
+    }
+    expect(errorsOf(req("agent-cancel", {}))).toEqual(["id must be an integer from 1 to 2^53-1"]);
+    expect(errorsOf(req("agent-cancel", { id: 4, all: true }))).toEqual([
+      'unknown field "args.all"',
+    ]);
+  });
+
   test("agent-tabs and agent-ping take no args", () => {
     expect(errorsOf(req("agent-tabs"))).toEqual([]);
     expect(errorsOf(req("agent-ping", { x: 1 }))).toEqual(['unknown field "args.x"']);
@@ -209,6 +225,13 @@ describe("agent commands: results and errors", () => {
     ]);
     expect(errorsOf(ok({ ...read, selection: 3 }), { command: "agent-read" })).toEqual([
       "result.selection must be a string or null",
+    ]);
+  });
+
+  test("agent-cancel says whether a question was withdrawn", () => {
+    expect(errorsOf(ok({ cancelled: false }), { command: "agent-cancel" })).toEqual([]);
+    expect(errorsOf(ok({}), { command: "agent-cancel" })).toEqual([
+      "result.cancelled must be a boolean",
     ]);
   });
 

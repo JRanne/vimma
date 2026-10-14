@@ -263,10 +263,27 @@ async function main() {
         ctlSpawn: (/** @type {string[]} */ args, /** @type {string} */ as) =>
           sessions.ctlSpawn(args, as),
         ctlResult: (/** @type {string} */ name) => sessions.ctlResult(name),
+        mcpSend: (/** @type {any} */ spec) =>
+          sessions.mcpSend({ ...spec, ...(spec.params ? { params: fixtures(spec.params) } : {}) }),
+        mcpResult: (/** @type {string} */ name) => sessions.mcpResult(name),
+      };
+      /** `fixture:` URLs anywhere in an mcp step's params. @param {unknown} v @returns {any} */
+      const fixtures = (v) => {
+        if (typeof v === "string")
+          return v.startsWith("fixture:") ? fixtureUrl(v, pages?.base ?? null) : v;
+        if (Array.isArray(v)) return v.map(fixtures);
+        if (v && typeof v === "object") {
+          return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fixtures(x)]));
+        }
+        return v;
       };
       const teardownAll = async () => {
+        const mcp = await sessions.mcpClose();
         sessions.close();
         await quitThenTeardown();
+        if (mcp && !mcp.stdoutClean) {
+          throw new Error("vimma-ctl mcp wrote something other than MCP messages on stdout");
+        }
       };
       return { ctl: stepCtl, screenshot, restart, control, teardown: teardownAll };
     };

@@ -680,14 +680,17 @@ class Connection {
       return;
     }
     const command = /** @type {string} */ (m.command);
-    if (this.inflight >= MAX_AGENT_INFLIGHT) {
+    // A withdrawal never waits and must reach a connection whose requests all wait.
+    const counted = command !== "agent-cancel";
+    if (counted && this.inflight >= MAX_AGENT_INFLIGHT) {
       const message = `${this.inflight} requests of this agent are already waiting or running`;
       this.respond(id, { error: { code: "denied", message, reason: "busy" } });
       return;
     }
-    this.inflight++;
+    if (counted) this.inflight++;
     try {
-      const result = await runAgentCommand(this.id, this.agentState, command, m.args);
+      const rid = /** @type {number} */ (id);
+      const result = await runAgentCommand(this.id, this.agentState, command, m.args, rid);
       this.respond(id, { result });
     } catch (e) {
       if (e instanceof AgentError) {
@@ -702,7 +705,7 @@ class Connection {
         this.respond(id, { error: { code: "internal", message: "internal error" } });
       }
     } finally {
-      this.inflight--;
+      if (counted) this.inflight--;
     }
   }
 

@@ -5,8 +5,10 @@
 // rest of the scenario (opened while MCP is off, so later keys never ask), `agent` sends an
 // agent request without waiting and `agent-result` checks its answer, `ctl` runs vimma-ctl
 // without waiting (a new full connection, which asks while MCP is on) and `ctl-result` checks
-// how it ended, and `sleep` waits for a time-based rule (the 1.5 s quiet, the 1 s arming). Names carry the
-// milestone (m<N>-…) or, for regression tests, the issue (issue-<N>-…).
+// how it ended, and `sleep` waits for a time-based rule (the 1.5 s quiet, the 1 s arming). For
+// `vimma-ctl mcp` (sub-PR 3): `mcp` sends one JSON-RPC message to it over stdio (a request when
+// it names its answer with `as`, else a notification) and `mcp-result` checks the response.
+// Names carry the milestone (m<N>-…) or, for regression tests, the issue (issue-<N>-…).
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -17,8 +19,10 @@ import { setTimeout as sleep } from "node:timers/promises";
  *   "assert-state"?: Record<string, unknown>, screenshot?: string, restart?: "quit" | "kill",
  *   timeoutSeconds?: number, hold?: true, sleep?: number, agent?: AgentSend,
  *   "agent-result"?: { of: string, expect: unknown }, ctl?: { run: string[], as: string },
- *   "ctl-result"?: { of: string, expect: unknown },
+ *   "ctl-result"?: { of: string, expect: unknown }, mcp?: McpSend,
+ *   "mcp-result"?: { of: string, expect: unknown },
  * }} Step
+ * @typedef {{ method: string, params?: Record<string, unknown>, as?: string }} McpSend
  * @typedef {{ send: string, args?: Record<string, unknown>, as: string, client?: string }}
  *   AgentSend
  * @typedef {{
@@ -29,6 +33,8 @@ import { setTimeout as sleep } from "node:timers/promises";
  *   agentResult: (name: string) => Promise<unknown>,
  *   ctlSpawn: (args: string[], as: string) => void,
  *   ctlResult: (name: string) => Promise<{ exitCode: number | null, stderr: string }>,
+ *   mcpSend: (spec: McpSend) => void,
+ *   mcpResult: (name: string) => Promise<unknown>,
  * }} Control
  * @typedef {{
  *   name: string, description: string, issue?: number, pending?: string,
@@ -59,10 +65,13 @@ export const STEP_KINDS = Object.freeze([
   "agent-result",
   "ctl",
   "ctl-result",
+  "mcp",
+  "mcp-result",
 ]);
 /** The agent commands an `agent` step may send (control protocol 2). */
 const AGENT_SENDS = ["agent-tabs", "agent-read", "agent-open", "agent-close", "agent-ping"];
 const AGENT_FIELDS = new Set(["send", "args", "as", "client"]);
+const MCP_FIELDS = new Set(["method", "params", "as"]);
 const RESULT_NAME = /^[a-z0-9]+$/;
 /** The longest `sleep`, seconds: a wait for a rule's time, not a flake's. */
 const MAX_SLEEP_SECONDS = 30;
@@ -150,6 +159,10 @@ export function validateScenario(s, fileName) {
   const agentNames = new Set();
   /** @type {Set<string>} */
   const ctlNames = new Set();
+  /** @type {Set<string>} */
+  const mcpNames = new Set();
+  /** Agent and mcp answers share one namespace for `$name.path`. @param {string} n */
+  const answerTaken = (n) => agentNames.has(n) || mcpNames.has(n);
   s.steps.forEach((step, i) => {
     const at = `step ${i + 1}`;
     if (!isObject(step)) return void errors.push(`${at}: must be an object`);
@@ -196,10 +209,33 @@ export function validateScenario(s, fileName) {
           errors.push(`${at}: agent: args is an object`);
         if (typeof value.as !== "string" || !RESULT_NAME.test(value.as)) {
           errors.push(`${at}: agent: as names the answer ([a-z0-9]+)`);
-        } else if (agentNames.has(value.as)) {
+        } else if (answerTaken(value.as)) {
           errors.push(`${at}: agent: "${value.as}" is taken`);
         } else {
           agentNames.add(value.as);
+        }
+      }
+    }
+    if (kind === "mcp") {
+      if (!isObject(value)) {
+        errors.push(`${at}: mcp needs { method, params?, as? }`);
+      } else {
+        const extra = Object.keys(value).filter((k) => !MCP_FIELDS.has(k));
+        if (extra.length) errors.push(`${at}: mcp: unknown field(s) ${extra.join(", ")}`);
+        if (typeof value.method !== "string" || value.method === "") {
+          errors.push(`${at}: mcp: method is a string`);
+        }
+        if ("params" in value && !isObject(value.params)) {
+          errors.push(`${at}: mcp: params is an object`);
+        }
+        if ("as" in value) {
+          if (typeof value.as !== "string" || !RESULT_NAME.test(value.as)) {
+            errors.push(`${at}: mcp: as names the answer ([a-z0-9]+)`);
+          } else if (answerTaken(value.as)) {
+            errors.push(`${at}: mcp: "${value.as}" is taken`);
+          } else {
+            mcpNames.add(value.as);
+          }
         }
       }
     }
@@ -221,6 +257,7 @@ export function validateScenario(s, fileName) {
     for (const [k, names, what] of /** @type {const} */ ([
       ["agent-result", agentNames, "agent"],
       ["ctl-result", ctlNames, "ctl"],
+      ["mcp-result", mcpNames, "mcp"],
     ])) {
       if (kind !== k) continue;
       if (!isObject(value) || typeof value.of !== "string" || !("expect" in value)) {
@@ -334,6 +371,15 @@ export async function runSteps(
         answers[of] = answer;
         const mismatches = matchState(expect, answer, of);
         if (mismatches.length) throw new Error(mismatches.join("; "));
+      } else if (step.mcp !== undefined) {
+        const params = step.mcp.params && substitute(step.mcp.params, answers);
+        needControl("mcp").mcpSend({ ...step.mcp, ...(params ? { params } : {}) });
+      } else if (step["mcp-result"] !== undefined) {
+        const { of, expect } = step["mcp-result"];
+        const answer = await needControl("mcp-result").mcpResult(of);
+        answers[of] = answer;
+        const mismatches = matchState(expect, answer, of);
+        if (mismatches.length) throw new Error(mismatches.join("; "));
       } else if (step.ctl !== undefined) {
         needControl("ctl").ctlSpawn(step.ctl.run, step.ctl.as);
       } else if (step["ctl-result"] !== undefined) {
@@ -370,25 +416,25 @@ export async function runSteps(
 }
 
 /**
- * `args` with each string `$name.a.b` replaced by that path in the answer `name` (an
- * `agent-result` before it): `{ tab: "$open1.result.tab" }`.
+ * `args` with each string `$name.a.b`, at any depth, replaced by that path in the answer `name`
+ * (an `agent-result` or `mcp-result` before it): `{ tab: "$open1.result.tab" }`.
  * @param {Record<string, unknown>} args @param {Record<string, unknown>} answers
+ * @returns {Record<string, unknown>}
  */
 function substitute(args, answers) {
-  /** @type {Record<string, unknown>} */
-  const out = {};
-  for (const [k, v] of Object.entries(args)) {
-    if (typeof v !== "string" || !v.startsWith("$")) {
-      out[k] = v;
-      continue;
-    }
+  /** @param {unknown} v @returns {unknown} */
+  const one = (v) => {
+    if (Array.isArray(v)) return v.map(one);
+    if (isObject(v)) return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, one(x)]));
+    if (typeof v !== "string" || !v.startsWith("$")) return v;
     const [name, ...path] = v.slice(1).split(".");
     /** @type {any} */
     let value = answers[/** @type {string} */ (name)];
-    if (value === undefined) throw new Error(`${v}: no agent-result named ${name} yet`);
+    if (value === undefined)
+      throw new Error(`${v}: no agent-result or mcp-result named ${name} yet`);
     for (const p of path) value = value?.[p];
     if (value === undefined) throw new Error(`${v}: not in the answer`);
-    out[k] = value;
-  }
-  return out;
+    return value;
+  };
+  return /** @type {Record<string, unknown>} */ (one(args));
 }

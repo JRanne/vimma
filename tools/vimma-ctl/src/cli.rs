@@ -27,6 +27,8 @@ Commands:
   state [--json]      print mode, workspace and tabs (--json: the raw result)
   open URL            open an http(s), file or about URL in a new tab
   reload-theme        re-read the Omarchy theme now (prints changed or unchanged)
+  mcp                 serve MCP on stdin and stdout for an AI agent tool, through Vimma's
+                      agent workspace; every request is confirmed in Vimma (:mcp on first)
 
 Options:
   --profile DIR       the Vimma profile (default: VIMMA_PROFILE, else profiles.ini's default)
@@ -34,7 +36,8 @@ Options:
   -h, --help          show this help
   -V, --version       show the version
 
-The control socket is off unless the pref vimma.control.enabled is true.
+The control socket is off unless the pref vimma.control.enabled is true; MCP is off until
+:mcp on in Vimma. --timeout does not apply to mcp, whose calls wait for the user.
 Exit codes: 0 ok, 1 command failed, 2 usage, 3 not running, 4 auth failed, 5 protocol error.
 ";
 
@@ -51,6 +54,10 @@ pub struct Options {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Parsed {
     Run(Options),
+    /// `vimma-ctl mcp`: the MCP server over stdio (docs/specs/vimma-mcp.md, decision 1).
+    Mcp {
+        profile: Option<PathBuf>,
+    },
     Help,
     Version,
 }
@@ -63,6 +70,7 @@ pub fn parse_args(args: &[String]) -> Result<Parsed, String> {
     let mut profile = None;
     let mut timeout = DEFAULT_TIMEOUT;
     let mut json = false;
+    let mut timeout_given = false;
     let mut positional: Vec<String> = Vec::new();
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
@@ -86,6 +94,7 @@ pub fn parse_args(args: &[String]) -> Result<Parsed, String> {
             "--json" => json = true,
             "--profile" => profile = Some(PathBuf::from(value("--profile")?)),
             "--timeout" => {
+                timeout_given = true;
                 timeout = value("--timeout")?
                     .parse::<f64>()
                     .ok()
@@ -108,6 +117,18 @@ pub fn parse_args(args: &[String]) -> Result<Parsed, String> {
     let Some((name, rest)) = positional.split_first() else {
         return Err("missing command".to_string());
     };
+    if name == "mcp" {
+        if !rest.is_empty() {
+            return Err("mcp takes no arguments".to_string());
+        }
+        if timeout_given || json {
+            return Err(
+                "mcp takes no --timeout or --json: each call waits for the user's answer"
+                    .to_string(),
+            );
+        }
+        return Ok(Parsed::Mcp { profile });
+    }
     let command = match name.as_str() {
         "send-keys" if rest.is_empty() => return Err("send-keys needs KEYS".to_string()),
         "send-keys" => Command::SendKeys {
@@ -169,9 +190,37 @@ pub fn format_state(state: &State) -> String {
 
 /// Run `vimma-ctl` and return its exit code.
 pub fn run(args: &[String], env: &Env, out: &mut dyn Write, err: &mut dyn Write) -> i32 {
+    run_with_input(args, env, Box::new(std::io::empty()), out, err)
+}
+
+/// [`run`] with stdin, which `vimma-ctl mcp` reads.
+pub fn run_with_input(
+    args: &[String],
+    env: &Env,
+    input: Box<dyn std::io::Read + Send>,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> i32 {
     // Output errors (a closed pipe) cannot be reported anywhere better; the exit code stands.
     let options = match parse_args(args) {
         Ok(Parsed::Run(options)) => options,
+        Ok(Parsed::Mcp { profile }) => {
+            // The token comes from the discovery file only, read again at each connect so a
+            // restarted Vimma is found (decision 1).
+            let env = env.clone();
+            let find = move || {
+                find_profile(profile.as_deref(), &env)
+                    .and_then(|profile| read_discovery(&profile))
+                    .map_err(|e| e.0)
+            };
+            return crate::mcp_serve::serve(
+                input,
+                out,
+                &find,
+                crate::mcp_serve::parent_name(),
+                &crate::mcp_serve::Settings::default(),
+            );
+        }
         Ok(Parsed::Help) => {
             let _ = out.write_all(USAGE.as_bytes());
             return EXIT_OK;
