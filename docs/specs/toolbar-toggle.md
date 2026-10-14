@@ -1,64 +1,66 @@
 # Spec: toolbar-toggle
 
-Status: ready (not started) · Milestone: after M5 (builds on [m0-tabstrip-hidden](m0-tabstrip-hidden.md),
-the status bar of [m2-statusbar-whichkey](m2-statusbar-whichkey.md) and the config of
-[m5-config-load](m5-config-load.md)) · Area: `packages/vimma-core/src/actions.mjs`,
-`defaults.mjs`, `config.mjs`, `cmdline.mjs`, `statusbar.mjs`; `ui/toolbar.mjs` (new),
-`ui/statusbar.mjs`, `host/VimmaHost.sys.mjs`, `host/addon-ops.mjs`,
-`config/ConfigHost.sys.mjs`, `browser/themes/shared/vimma/toolbar.css` (new). No upstream patch.
+Status: accepted (not implemented) · Area: `packages/vimma-core/src/actions.mjs`, `defaults.mjs`,
+`config.mjs`, `cmdline.mjs`, `statusbar.mjs`; `ui/toolbar.mjs` (new), `ui/statusbar.mjs`,
+`host/VimmaHost.sys.mjs`, `host/addon-ops.mjs`, `config/ConfigHost.sys.mjs`,
+`browser/themes/shared/vimma/toolbar.css` (new) · Upstream patches: none · ADR: none
 
-Revised 2026-10-11 after the user's answers (below): the key is decided, and focusing the URL bar
-now shows a minimal bar (the URL field only), not the whole toolbar.
+Builds on [m0-tabstrip-hidden](m0-tabstrip-hidden.md), the status bar of
+[m2-statusbar-whichkey](m2-statusbar-whichkey.md) and the config of
+[m5-config-load](m5-config-load.md). Firefox facts were checked against the Firefox 158.0 engine
+tree (`engine/`) unless a line says otherwise.
 
-**This changes the default keymap. It lands as its own keymap PR, and only when no other keymap
-PR is open (one keymap PR at a time).**
+## Summary
 
-## The user's words
+`ctrl+b u` hides Firefox's navigation toolbar (the URL bar and the add-on buttons) in every
+window, so the window is the page and Vimma's status bar. Focusing the address bar shows a minimal
+bar with only the URL field, the site's identity and the permission icons; the full toolbar comes
+back on hover at the top edge and while an add-on popup or a toolbar panel is open. The status bar
+takes over the security and private-browsing cues the hidden bar carried. Separately, the account
+panel loses Firefox's "Get Vimma for Android or iOS" row, which advertises an app that does not
+exist.
 
-"We could also implement keybind that toggles toolbar"
+## Problem
 
-The coordinator proposed, and the user approved ("do so"):
+- Vimma already hides the tab strip and shows the page's URL in its status bar. The navigation
+  toolbar is the last row of Firefox chrome above the page, and a keyboard user rarely needs its
+  buttons: back, forward and reload have keys, add-ons have the `ctrl+b e` picker.
+- Firefox has no way to hide it. `#nav-bar` has no `toolbarname`, so no menu offers to collapse
+  it, and collapsing it naively breaks typing an address, permission prompts (they would open
+  unanchored at the window's top-left) and add-on popups.
+- The account button's panel offers "Get Vimma for Android or iOS": Firefox's mobile promo with
+  Vimma's brand name substituted. There is no Vimma mobile app.
 
-- a prefix key that toggles the navigation toolbar (`#nav-bar`: the URL bar and the add-on
-  buttons);
-- a config setting for the start state;
-- while the toolbar is hidden, focusing the URL bar shows it as a temporary overlay, like Zen's
-  compact mode. The user must never be left unable to type an address;
-- add-on buttons stay reachable through Vimma's add-on picker.
+## Behaviour
 
-The user's answers to the first draft: "go with ctrl + b u, what happens if i want to access
-toolbar when it's hidden? there should be some minimalistic bar that shows what i'm writing".
+1. `ctrl+b u` hides the toolbar in every window. `ctrl+b u` again brings it back. The notice says
+   "toolbar hidden" or "toolbar shown", and a screen reader hears it.
+2. With the toolbar hidden, `I`, `ctrl+l`, `alt+d`, `F6`, `t`, `ctrl+t`, `ctrl+b c`, a new pane and
+   the start page all still give a focused address bar. A minimal bar appears over the top of the
+   page: only the URL field, with the site's identity icon (lock or "not secure"), the typed text
+   and Firefox's suggestions below it. No back, forward or reload, no add-on buttons, no bookmarks
+   toolbar, no window controls. The page does not move.
+3. `Enter` in the minimal bar loads the page, focuses it and hides the bar. `Esc` gives up and
+   hides it too.
+4. Moving the pointer to the window's top edge shows the whole toolbar, for its buttons and the
+   window controls.
+5. `[ui] toolbar = "hidden"` in `config.toml` starts every window with the toolbar hidden.
+6. `:toolbar` toggles it, and `:toolbar show` / `:toolbar hide` set it, so `vimma-ctl` scripts can
+   set a known state.
+7. `ctrl+b e` → `Enter` on an add-on still opens its popup under its button. The whole toolbar
+   shows while the popup is open.
+8. A permission prompt (camera, location, notifications) while the toolbar is hidden shows the
+   minimal bar. The prompt points at the address bar's icon, next to the site's identity, exactly
+   as with the toolbar shown. It never appears unattributed in a corner.
+9. With the toolbar hidden, the status bar says `not secure` for a page not served over a secure
+   connection, and `private` in a private window.
+10. The account panel has no "Get Vimma for Android or iOS" row, whether the toolbar is shown or
+    hidden. Sign-in, Sync and devices stay.
 
-Added 2026-10-13, about the account panel the toolbar's account button opens: "then there is
-button "get vimma for android or iOS", i think atleast that should be removed", then "write it
-to toolbar-toggle spec" (decision 20).
-
-## User stories
-
-- As a user, `ctrl+b u` hides the toolbar in every window. The window is then the pages and
-  Vimma's status bar, which already shows the page's URL. `ctrl+b u` again brings the toolbar
-  back. The notice says "toolbar hidden" or "toolbar shown", and a screen reader hears it.
-- As a user, with the toolbar hidden, `I`, `ctrl+l`, `alt+d`, `F6`, `t`, `ctrl+t`, `ctrl+b c`,
-  a new pane, and the start page all still give me a focused address bar. A minimal bar appears
-  over the top of the page: only the URL field, with the site's identity icon (lock or "not
-  secure"), the text I type, and Firefox's suggestions below it. No back, forward or reload, no
-  add-on buttons, no bookmarks toolbar, no window controls. The page does not jump. When I press
-  `Enter` the page loads, focus goes to it, and the bar hides again. `Esc` gives up and hides it
-  too.
-- As a user, moving the pointer to the window's top edge shows the whole toolbar, for the
-  buttons and the window controls.
-- As a user, `[ui] toolbar = "hidden"` in `config.toml` starts every window with the toolbar
-  hidden.
-- As a user, `:toolbar` toggles it, and `:toolbar show` / `:toolbar hide` set it, so
-  `vimma-ctl` scripts can set it as well.
-- As a user, `ctrl+b e` → `Enter` on an add-on still opens its popup under its button. The
-  whole toolbar shows for as long as the popup is open.
-- As a user, when a site asks for a permission (camera, location, notifications) while the
-  toolbar is hidden, the minimal bar shows. The prompt points at the address bar's icon, next to
-  the site's identity, exactly as with the toolbar shown. It never appears unattributed in a corner.
-- As a user, with the toolbar hidden I can still tell an insecure page: the status bar says
-  `not secure` for a page that is not served over a secure connection. In a private window it
-  says `private`.
+Out of scope: hiding the status bar; a per-window or per-workspace toolbar state; a floating,
+centred URL bar (Zen's `floating-on-type`) or a minimal bar at the bottom; a minimal bar shorter
+than the URL field; moving the tab strip pref into `[ui]`; changing `Esc` in the URL bar while the
+toolbar is shown; the rest of Firefox's panels (a separate Firefox panels audit in plan.md).
 
 ## Research
 
@@ -74,26 +76,28 @@ to toolbar-toggle spec" (decision 20).
 - **Toggles:** `ctrl+b b` (`sidebar.toggle`, `:sidebar`) and `ctrl+b z` are per window or per
   workspace. The panel's open state is not persisted. Zoom rides in the workspace snapshot. No
   chrome visibility setting is in `config.toml` yet. Its top-level tables (`config.mjs`
-  `TOP_KEYS`) are `keys`, `modal`, `unbind`, `schema`, `workspaces`, `theme`, `panes`, `sites`,
-  `routes`, `firefox` and `bookmarks`. Newer keys are gated on `schema = 2`, as `[bookmarks]`
-  was.
+  `TOP_KEYS`) are `schema`, `keys`, `modal`, `unbind`, `workspaces`, `theme`, `panes`, `sites`,
+  `routes`, `firefox`, `bookmarks`, `private` and `mcp`. Newer keys are gated on `schema = 2`, as
+  `[bookmarks]` was.
 - **Free prefix keys** (`defaults.mjs` `keys`, `docs/bindings.md`):
-  - Bound: `? c n p 1–9 T X v - h j k l H J K L z x r enter space ) ( ^ ctrl+6 w N W D g b B a [ e`.
+  - Bound: `? c n p 1–9 T X v - h j k l H J K L z x r enter space ) ( ctrl+6 w N W D P A g b B a [ e`.
+    `P` is the private workspace and `A` the agent workspace ([vimma-mcp](vimma-mcp.md)).
   - `T` is `rename_tab`, so the suggested `ctrl+b T` is taken.
   - `t` is free, but two mochitest files use it as the "unbound by default" key
-    (`browser_vimma_config.js:122` and on, `browser_vimma_config_first_run.js:108`), and so does the guide's `config.toml` example
+    (`browser_vimma_config.js:124` and on, `browser_vimma_config_first_run.js:108`), and so does the guide's `config.toml` example
     (`new_tab = ["prefix+t"]`).
   - `u` is free. tmux does not bind it, and the only test use is a typo key (`new_tabb = "prefix+u"`)
     that does not depend on `u` being unbound.
   - A second key after the prefix never reaches Firefox, so it cannot clash with Firefox's own
     chords.
 - **URL bar paths:**
-  - `I` (`urlbar.focus`) runs `Browser:OpenLocation`, which calls `gURLBar.select()` and opens
-    the results.
+  - `I`, `ctrl+l` and `alt+d` run `focus_urlbar` (`urlbar.focus`; `ctrl+l` and `alt+d` are
+    Vimma bindings since [firefox-keys](firefox-keys.md)). It runs `Browser:OpenLocation`
+    (`host/VimmaHost.sys.mjs`, `focusUrlbar`), which calls `gURLBar.select()` and opens the
+    results.
   - `tab.new` runs `BrowserCommands.openTab` (the start page, URL bar focused).
-  - A split runs `gURLBar.select()` (`pane-ops.mjs`).
-  - All of these, and Firefox's own `ctrl+l` / `alt+d` (the same `Browser:OpenLocation`), go
-    through `UrlbarInputBase.focus()` / `select()`. `F6` is expected to as well; the mochitest
+  - A split runs `gURLBar.select()` (`host/pane-ops.mjs`).
+  - All of these go through `UrlbarInputBase.focus()` / `select()`. `F6` is expected to as well; the mochitest
     checks it rather than assuming.
 - **Status bar** (core `statusbar.mjs`): the `url` segment shows `displayUrl(url)`, which drops
   `http://` and `https://` alike. It has priority 8, so it is the first segment dropped, and it is
@@ -105,13 +109,13 @@ to toolbar-toggle spec" (decision 20).
 - **Notices** go to a persistent polite live region (m7-a11y decision 3). The status bar is
   `aria-live=off`.
 
-### Firefox (engine/)
+### Firefox (engine/, Firefox 158.0)
 
 - **Structure** (`navigator-toolbox.inc.xhtml`): `#navigator-toolbox` holds `#toolbar-menubar`,
   `#TabsToolbar`, `#nav-bar`, `#PersonalToolbar` and `#notifications-toolbar`. The last one
-  holds the global notification bars (`gNotificationBox`, `browser.js:421`) and the per-tab
+  holds the global notification bars (`gNotificationBox`, `browser.js:419`) and the per-tab
   notification deck. With the tab strip hidden, the private-browsing indicator and the titlebar
-  buttons are those in `#nav-bar` (lines 539–541).
+  buttons are those in `#nav-bar` (lines 541–543).
 - **Collapsing a toolbar:**
   - `window.setToolbarVisibility` / `CustomizableUI.setToolbarVisibility` toggles `collapsed`,
     persists it in xulstore and fires `toolbarvisibilitychange`.
@@ -122,9 +126,10 @@ to toolbar-toggle spec" (decision 20).
 - **F11 fullscreen** (`browser-fullScreenAndPointerLock.js`) is the closest prior art for "hidden
   until needed":
   - `hideNavToolbox` uses a negative `margin-top`, not collapse, so the content moves up.
-  - The `gURLBar` getter (`browser.js:379–415`) listens for `beforefocus` / `beforeselect` on
+  - The `gURLBar` getter (`browser.js:378–415`) listens for `beforefocus` / `beforeselect` on
     `#urlbar` and calls `FullScreen.showNavToolbox()` before focus lands. `UrlbarInputBase.focus()`
-    and `select()` dispatch these events (lines 870–915), and they can be cancelled.
+    and `select()` dispatch these events (`UrlbarInputBase.mjs:854–890`), and they can be
+    cancelled.
   - It keeps the toolbox shown while a chrome popup is open (`_setPopupOpen`, on document
     `popupshown` / `popuphidden`).
   - It refuses to hide while a chrome `<input>` is focused.
@@ -133,9 +138,9 @@ to toolbar-toggle spec" (decision 20).
 - **DOM fullscreen** collapses `#navigator-toolbox`. Unless the site may stay fullscreen, it
   removes pending permission prompts on entry, and a permission prompt that shows later exits
   DOM fullscreen (`_handlePermPromptShow`).
-- **Doorhangers** (`PopupNotifications.sys.mjs`, set up in `browser.js:442–508`):
-  1. `getVisibleAnchorElement` first dispatches the bubbling event `PopupNotificationsBeforeAnchor`
-     on the anchor. Firefox's own `browser-addons.js` uses it to unhide the auto-hidden
+- **Doorhangers** (`PopupNotifications.sys.mjs`, set up in `browser.js:440–506`):
+  1. `getVisibleAnchorElement` (`browser.js:469`) first dispatches the bubbling event `PopupNotificationsBeforeAnchor`
+     on the anchor (line 474). Firefox's own `browser-addons.js` (line 2388) uses it to unhide the auto-hidden
      extensions button before a prompt anchors to it.
   2. It then checks `checkVisibility({ visibilityProperty: true })`, which fails for
      `visibility: collapse` and for no frame, and passes for zero size or opacity 0.
@@ -146,13 +151,14 @@ to toolbar-toggle spec" (decision 20).
   5. `shouldSuppress` already hides doorhangers while the URL bar is focused and edited.
   6. `UpdatePopupNotificationsVisibility()` re-evaluates anchors. The URL bar calls it on focus
      and blur.
-- **Arrow panels follow their anchor:** `nsMenuPopupFrame::CheckForAnchorChange` runs every
+- **Arrow panels follow their anchor:** `nsMenuPopupFrame::CheckForAnchorChange`
+  (`layout/xul/nsMenuPopupFrame.cpp:2453`) runs every
   refresh tick and hides a popup whose anchor lost its frame or became invisible. Hiding the bar
   under an open doorhanger therefore closes it. A non-persistent prompt then counts as dismissed.
   Opening a panel on a frameless anchor positions it against the whole window. A null anchor
   puts it at the top-left.
 - **Panels with no fallback** (they need the bar shown before they open):
-  - the identity panel (`gIdentityHandler._openPopup`);
+  - the identity panel (`gIdentityHandler._openPopup`, `browser-siteIdentity.js:1294`);
   - the permission panel and the protections panel;
   - the app menu (`PanelUI`);
   - `PanelUI.showSubView`'s widget panel, which hosts browserAction popups;
@@ -161,7 +167,7 @@ to toolbar-toggle spec" (decision 20).
   PanelMultiView and `ViewPopup.attach` pass the anchor through unchecked. `ext-browserAction.js`
   `openPopup` / `triggerAction` never check the button's visibility.
 
-- **What `#nav-bar` holds** (`navigator-toolbox.inc.xhtml` 109–541):
+- **What `#nav-bar` holds** (`navigator-toolbox.inc.xhtml` 109–544):
   - outside the customizable target: the taskbar-tab favicon, titlebar spacers, the overflow
     button, `#PanelUI-button` (app menu), the private-browsing indicator and the titlebar
     buttons;
@@ -172,27 +178,39 @@ to toolbar-toggle spec" (decision 20).
     anchor icon, `#geo-notification-icon` and the rest), the blocked-permission icons and
     `#page-action-buttons` (star, reader view).
 - **The URL field's layout in this engine:**
-  - `#urlbar-container` is `flex: 400 0 auto` with a `--urlbar-container-min-width` of 140–310 px
-    (`urlbar.css` 14–83, 622–654).
+  - `#urlbar-container` is `flex: 400 0 auto` (`urlbar.css:734`) with a
+    `--urlbar-container-min-width` of 140–310 px (`urlbar.css` 14–89).
   - There is no `breakout-extend` any more (Zen still has it). The results view is a top-layer
     popover (`popover="manual"`), placed with CSS anchor positioning (`position-anchor:
---urlbar-anchor; position-area: block-end center`, `urlbar.css` 350, 546–563), so it always
+--urlbar-anchor; position-area: block-end center`, `urlbar.css` 600–603), so it always
     opens below the field, with no flip.
   - `UrlbarInputBase` allows the popover only when the field is inside a toolbar
-    (`#popoverAllowed = … !!this.closest("toolbar")`, lines 594–600). Moving `#urlbar` out of
+    (`#popoverAllowed = … !!this.closest("toolbar")`, `UrlbarInputBase.mjs:583–590`). Moving
+    `#urlbar` out of
     `#nav-bar` would leave it without a suggestions view.
-- **Overflow:** `OverflowableToolbar` (`CustomizableUI.sys.mjs` 7505 on) re-measures the nav bar
-  only on window `resize` (`#onResize`, 8377), summing children's `getBoundingClientRect` widths
-  and skipping `display: none` and positioned ones (`#getOverflowInfo`, 8019–8075). Items hidden
+- **Overflow:** `OverflowableToolbar` (`CustomizableUI.sys.mjs` 7621 on) re-measures the nav bar
+  only on window `resize` (`#onResize`, 8493), summing children's `getBoundingClientRect` widths
+  and skipping `display: none` and positioned ones (`#getOverflowInfo`, 8135 on). Items hidden
   with `visibility: hidden` keep their box, so the measurement does not change. Collapsed or
   `display: none` items would let a resize pull overflowed buttons back, and those would then
   overflow the bar when it is shown in full again.
 - **Popup windows** (`window.open` with `chromehidden`) keep `#nav-bar` with a read-only URL bar,
-  for anti-spoofing (`browser-init.js:335–340`). Extension popup windows and chromeless windows
-  hide `#nav-bar` with `display: none` (`browser-shared.css`, about line 506), and their prompts
+  for anti-spoofing (`browser-init.js:342–349`). Extension popup windows and chromeless windows
+  hide `#nav-bar` with `display: none` (`browser-shared.css:505–506`), and their prompts
   open at the top-left. Prior art, not a model.
 
-### Zen's compact mode (Zen's installed `omni.ja`, `zen-components/ZenCompactMode.mjs`, `zen-styles/zen-compact-mode.css`)
+- **Account panel:** the account button opens `PanelUI-fxa`. Its row
+  `PanelUI-fxa-menu-get-firefox-mobile` (`browser/base/content/appmenu-viewcache.inc.xhtml:739`)
+  carries the label `fxa-menu-get-firefox-mobile` = "Get { -brand-product-name } for Android or
+  iOS" (`browser/locales/en-US/browser/appmenu.ftl:181–182`). `browser-sync.js` shows the row and
+  handles its click (lines 1816 and 1921; `openGetFirefoxMobile` at 3837). With Vimma's branding
+  the label reads "Get Vimma for Android or iOS".
+
+### Zen's compact mode
+
+Read from an installed Zen's `omni.ja` (`zen-components/ZenCompactMode.mjs`,
+`zen-styles/zen-compact-mode.css`, `zen-omnibox.css`). The Zen version was not recorded when it
+was read; the findings are prior art, and nothing in the design depends on Zen's code.
 
 - **Hiding:** the mode is `zen-compact-mode="true"` on `:root`. The navbar wrapper is clipped to
   a few pixels of height (`overflow: clip`) and given `opacity: 0`. It is never collapsed, so the
@@ -218,10 +236,11 @@ to toolbar-toggle spec" (decision 20).
 - **Other:** `Esc` blurs the floating URL bar to the page. The toggle is `Accel+S`. In DOM
   fullscreen the wrapper is collapsed.
 
-## Decisions
+## Design
 
-1. **Key: `ctrl+b u`**, the user's decision ("go with ctrl + b u"; `prefix+u`, mnemonic "URL
-   bar"). It runs `toggle_toolbar`
+Numbered decisions, each with its reason and the alternatives rejected.
+
+1. **Key: `ctrl+b u`** (`prefix+u`, mnemonic "URL bar"). It runs `toggle_toolbar`
    (`toolbar.toggle`, "Show / hide the toolbar (URL bar and add-on buttons)") in the "Navigation"
    group, next to `toggle_sidebar`.
    - `T` is `rename_tab`.
@@ -259,7 +278,7 @@ to toolbar-toggle spec" (decision 20).
    - **Untouched:**
      - `#notifications-toolbar`: notification bars ("this site was prevented from opening a
        popup", crash and update bars) stay where they are and move to the top edge.
-     - The menu bar: `alt` does not show it (firefox-keys Q3: the `alt` tap is off); `F10` does.
+     - The menu bar: `alt` does not show it ([firefox-keys](firefox-keys.md) turns the `alt` tap off); `F10` does.
      - The tab strip, which keeps its own pref.
    - **Excluded:** like `tabstrip.css`, the rules do not apply to:
      - customize mode (`[customizing]`);
@@ -289,7 +308,7 @@ to toolbar-toggle spec" (decision 20).
    - Either size shows over the top of the content area, as Zen and the F11 toolbox do. Pages are
      not resized: no reflow, no `resize` event in the page, no jump. Zen's negative `margin-top`
      on the content is the reference technique. The mochitest's "page height unchanged" check
-     (test plan) is the contract, not the technique.
+     (Tests) is the contract, not the technique.
    - Reasons, and the size each asks for:
      - **a. URL bar → minimal:** `beforefocus` / `beforeselect` on `#urlbar`, the same hook
        Firefox uses for F11. This adds the reason synchronously, before `focus()` runs, so focus
@@ -392,8 +411,7 @@ to toolbar-toggle spec" (decision 20).
      shown at the size it asked for (decision 7c/d). When a full-size reason ends while a
      minimal one still holds, the bar becomes minimal, not hidden. The bar is never collapsed under an open arrow panel, so
      `CheckForAnchorChange` never closes or dismisses a prompt because of us.
-9. **Hover reveals the full toolbar; not keyboard-only.** The user did not object to hover in
-   the first draft, so it stays on.
+9. **Hover reveals the full toolbar; not keyboard-only.**
    - Pointer at the window's top 2 px, or over the revealed bar, adds a full-size hover reason. It is added
      after 150 ms and removed 600 ms after the pointer leaves both.
    - The edge is a fixed, transparent `#vimma-toolbar-edge` strip shown only while hidden, as F11's
@@ -403,6 +421,8 @@ to toolbar-toggle spec" (decision 20).
      - With a custom (CSD) titlebar the window's close, minimise and maximise buttons live in the
        hidden bar. Hover is how a mouse user reaches them, and add-on buttons.
      - The overlay never resizes the page, so a stray reveal costs nothing.
+     - If hover proves to get in the way, it can go behind a pref later; a pref is not added
+       before there is a reason for it.
      - On a tiling WM (Omarchy) the edge is the window's top, not the screen's, so the delay
        keeps a pointer crossing from the window above from flashing it.
 10. **Add-on popups show the full toolbar.**
@@ -486,19 +506,35 @@ to toolbar-toggle spec" (decision 20).
     - `TabBarVisibility` is not touched. The nav bar keeps its `browser-titlebar` class whether
       hidden or not.
 
-20. **No mobile-app promo in the account panel.** The account button's panel (`PanelUI-fxa`)
-    has a "Get Vimma for Android or iOS" row: Firefox's `PanelUI-fxa-menu-get-firefox-mobile`
-    (`browser/base/content/appmenu-viewcache.inc.xhtml:735`, label `fxa-menu-get-firefox-mobile`
-    = "Get { -brand-product-name } for Android or iOS", `browser/locales/en-US/browser/appmenu.ftl:181`,
-    handled in `browser/base/content/browser-sync.js:1782, 1890`). With Vimma's brand name it
-    advertises a mobile app that does not exist. It is hidden with `display: none` in our
-    toolbar CSS, which already restyles the nav bar this spec owns; no upstream patch and no
-    string change. The rest of the account panel (sign-in, Sync, devices) stays: Sync is kept
-    (m0-mozilla-services). Test: a mochitest opens the account panel and asserts the row is not
-    rendered (`checkVisibility()` false) while the sign-in and Sync rows still are. The wider
-    sweep of Firefox's panels is the queued Firefox panels audit (plan.md, Q-UI).
+20. **No mobile-app promo in the account panel.** The row
+    `PanelUI-fxa-menu-get-firefox-mobile` (Research → Account panel) advertises, under Vimma's
+    brand name, a mobile app that does not exist. It is hidden with `display: none` in
+    `toolbar.css`, the stylesheet this spec adds for the nav bar and the panels it opens.
+    - The rule applies whether the toolbar is shown or hidden.
+    - No upstream patch and no string change: hiding the row is enough, and a CSS rule survives
+      Firefox's string and markup churn better than a patch to `appmenu-viewcache.inc.xhtml`.
+    - The rest of the account panel (sign-in, Sync, devices) stays, because Vimma keeps Sync
+      ([m0-mozilla-services](m0-mozilla-services.md)).
+    - Other Firefox panels are out of scope; they are the queued Firefox panels audit in
+      plan.md.
 
-## Test plan
+## Security and privacy
+
+- **Site attribution.** Hiding the toolbar must not weaken anti-spoofing. Decision 7c reveals the
+  minimal bar before any permission prompt anchors, so a prompt always hangs from its icon next
+  to the identity box and the page's address, as in stock Firefox. Decision 6 collapses the bar
+  rather than making it transparent, so nothing anchors to an invisible icon. Popup windows keep
+  their read-only URL bar (decision 5).
+- **Security state.** While the bar is hidden, the status bar shows `not secure` and `private`
+  in text (decision 12), so the cues the toolbar carried stay visible.
+- **No suppression.** Vimma delays or suppresses no prompt; Firefox's
+  `security.notification_enable_delay` and `shouldSuppress` still apply (decision 11).
+- **Pages cannot reach it.** All of it is chrome CSS and chrome event listeners; a page sees no
+  new API, and the overlay never resizes the content area, so a page cannot detect the toggle
+  through `resize` events.
+- **No new data.** The state is one boolean pref; nothing is sent anywhere.
+
+## Tests
 
 Write first; paste red, then green (CLAUDE.md).
 
@@ -588,6 +624,9 @@ Write first; paste red, then green (CLAUDE.md).
       leaves the same items in the overflow menu as before.
   16. Mixed sizes: a minimal reason (URL bar focused) and a full one (downloads panel) together
       show full. Closing the panel leaves the minimal bar, not a hidden one.
+  17. Account panel (decision 20): opening `PanelUI-fxa` shows no
+      `PanelUI-fxa-menu-get-firefox-mobile` (`checkVisibility()` false), while the sign-in and
+      Sync rows still pass `checkVisibility()`; with the toolbar shown and hidden.
 - **e2e:**
   - No existing baseline changes, because the default is shown (decision 12 keeps the status bar
     identical).
@@ -601,7 +640,7 @@ Write first; paste red, then green (CLAUDE.md).
     - `Enter`.
   - The new baselines need their changelog line (see below).
 
-## Docs and changelog the implementation must update
+## Docs and changelog
 
 - **`docs/guide.md`:**
   - a "Hiding the toolbar" section covering:
@@ -626,18 +665,15 @@ Write first; paste red, then green (CLAUDE.md).
   - "Removed: the account panel's "Get Vimma for Android or iOS" row; there is no Vimma mobile
     app."
 
-## Out of scope
+## Delivery
 
-- Hiding the status bar.
-- A per-window or per-workspace toolbar state.
-- A floating, centred URL bar (Zen's `floating-on-type`), or a minimal bar at the bottom.
-- A minimal bar shorter than the URL field (the status bar's height).
-- Moving the tab strip pref into `[ui]`.
-- Changing `Esc` in the URL bar while the toolbar is shown.
+1. **Account panel row** (decision 20, test 17): adds `toolbar.css` with the rule, loaded by a
+   new `ui/toolbar.mjs` as `tabstrip.mjs` loads `tabstrip.css`. No keymap change, so it does not
+   wait for the keymap queue.
+2. **The toolbar toggle** (decisions 1–19): the action, `:toolbar`, `[ui] toolbar`, the reveal
+   logic, the status bar segments, the mochitest and the two e2e baselines. It changes the
+   default keymap, so it lands as its own keymap PR, when no other keymap PR is open.
 
-## Open questions for the user
+## Open questions
 
-None blocking. Decided by default, open to change:
-
-- **Hover at the top edge** shows the full toolbar (decision 9). The user did not object in the
-  first round. If it gets in the way, it can go behind a pref.
+None.
