@@ -1,0 +1,155 @@
+{
+  "name": "m0-mcp-stdio",
+  "description": "docs/specs/vimma-mcp.md, sub-PR 3: the real vimma-ctl mcp, spoken to over stdio as an agent tool would, on a real build. MCP initialize and tools/list answer without asking; :mcp on and y; a tools/call of vimma_open waits on the question line until y, while the window stays on main with its page selected; vimma_read_page with 15a grants 15 minutes and returns the header and the delimited text, and a second read runs unasked, and once its notice and the status bar's ran mark are gone the segment shows the grant's minutes; vimma_close_tab is denied with n and comes back as a tool error; after :mcp off a call says MCP is off. stdout carries only MCP messages throughout.",
+  "timeoutSeconds": 90,
+  "steps": [
+    { "wait-for-state": { "workspace": "main" }, "timeoutSeconds": 20 },
+    { "open": "fixture:long.html" },
+    { "wait-for-state": { "tabs": [{}, { "selected": true, "title": "long top navigate" }] } },
+    { "hold": true },
+    {
+      "mcp": {
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-11-25",
+          "capabilities": {},
+          "clientInfo": { "name": "claude-code", "version": "2.1.0" }
+        },
+        "as": "init"
+      }
+    },
+    {
+      "mcp-result": {
+        "of": "init",
+        "expect": {
+          "jsonrpc": "2.0",
+          "result": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": { "tools": {} },
+            "serverInfo": { "name": "vimma" }
+          }
+        }
+      }
+    },
+    { "mcp": { "method": "notifications/initialized" } },
+    { "mcp": { "method": "tools/list", "as": "list" } },
+    {
+      "mcp-result": {
+        "of": "list",
+        "expect": {
+          "result": {
+            "tools": [
+              { "name": "vimma_tabs", "annotations": { "readOnlyHint": true } },
+              { "name": "vimma_read_page", "annotations": { "openWorldHint": true } },
+              { "name": "vimma_open", "annotations": { "readOnlyHint": false } },
+              { "name": "vimma_close_tab", "annotations": { "destructiveHint": true } }
+            ]
+          }
+        }
+      }
+    },
+    { "keys": ": m c p space o n enter" },
+    { "sleep": 0.5 },
+    { "keys": "y" },
+    { "sleep": 1.8 },
+    {
+      "mcp": {
+        "method": "tools/call",
+        "params": { "name": "vimma_open", "arguments": { "url": "fixture:cookie.html" } },
+        "as": "open1"
+      }
+    },
+    { "sleep": 1.5 },
+    { "screenshot": "m0-mcp-stdio-question" },
+    { "keys": "y" },
+    {
+      "mcp-result": {
+        "of": "open1",
+        "expect": { "result": { "content": [{ "type": "text" }] } }
+      }
+    },
+    {
+      "assert-state": {
+        "workspace": "main",
+        "tabs": [{}, { "selected": true, "title": "long top navigate" }]
+      }
+    },
+    { "sleep": 1.8 },
+    {
+      "mcp": {
+        "method": "tools/call",
+        "params": {
+          "name": "vimma_read_page",
+          "arguments": { "tab": "$open1.result.structuredContent.tab", "format": "text" }
+        },
+        "as": "read1"
+      }
+    },
+    { "sleep": 1.5 },
+    { "keys": "1 5 a" },
+    {
+      "mcp-result": {
+        "of": "read1",
+        "expect": { "result": { "content": [{ "type": "text" }, { "type": "text" }] } }
+      }
+    },
+    {
+      "mcp": {
+        "method": "tools/call",
+        "params": {
+          "name": "vimma_read_page",
+          "arguments": { "tab": "$open1.result.structuredContent.tab" }
+        },
+        "as": "read2"
+      }
+    },
+    {
+      "mcp-result": {
+        "of": "read2",
+        "expect": { "result": { "content": [{ "type": "text" }, { "type": "text" }] } }
+      }
+    },
+    { "sleep": 3 },
+    { "screenshot": "m0-mcp-stdio-grant" },
+    { "sleep": 1.8 },
+    {
+      "mcp": {
+        "method": "tools/call",
+        "params": {
+          "name": "vimma_close_tab",
+          "arguments": { "tab": "$open1.result.structuredContent.tab" }
+        },
+        "as": "close1"
+      }
+    },
+    { "sleep": 1.5 },
+    { "keys": "n" },
+    {
+      "mcp-result": {
+        "of": "close1",
+        "expect": {
+          "result": {
+            "isError": true,
+            "content": [{ "type": "text", "text": "The user denied this request in Vimma." }]
+          }
+        }
+      }
+    },
+    { "assert-state": { "workspace": "main" } },
+    { "keys": ": m c p space o f f enter" },
+    { "sleep": 0.5 },
+    {
+      "mcp": {
+        "method": "tools/call",
+        "params": { "name": "vimma_tabs", "arguments": {} },
+        "as": "off1"
+      }
+    },
+    {
+      "mcp-result": {
+        "of": "off1",
+        "expect": { "result": { "isError": true } }
+      }
+    }
+  ]
+}

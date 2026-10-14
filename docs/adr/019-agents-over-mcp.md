@@ -23,7 +23,8 @@ process of the user's.
    JSON code, so ADR-011's no-dependency rule holds.
 2. **Control protocol 2 adds roles.** The hello names its role: `full` (protocol 1's commands;
    protocol 1 is always `full`) or `agent` (only the agent commands: `agent-hello`,
-   `agent-tabs`, `agent-read`, `agent-open`, `agent-close`, `agent-ping`). A connection's role
+   `agent-tabs`, `agent-read`, `agent-open`, `agent-close`, `agent-ping`, and `agent-cancel`,
+   which withdraws one of the connection's own waiting questions). A connection's role
    is fixed by its hello, and the server checks every command against it. Each role has its own
    switch: `vimma.control.enabled` serves `full`, and `:mcp on` (the pref `vimma.mcp.enabled`,
    or `[mcp] enabled`) serves `agent`. A hello for a role that is off gets `role-off`. The discovery file
@@ -57,8 +58,8 @@ process of the user's.
   in their window without asking.
 - With both switches on, the `full` role is still the user's to give: while MCP is on, each new
   full connection is welcomed only after a `y` in the agent question line (vimma-mcp decision
-  29, user 2026-10-13), and `:control on <minutes>` gives it for a while. Pages in the agent
-  workspace get no permission prompt and open no pop-up (decision 30), through Firefox's own
+  29), and `:control on <minutes>` gives it for a while. Pages in the agent workspace get no
+  permission prompt and open no pop-up (decision 30), through Firefox's own
   `Integration.contentPermission`, browser-scoped permissions and sandbox flags, no patch.
-- Rules M1-M10 in [docs/security.md](../security.md) §12 and S13 in §1 hold this to its tests.
+- Rules M1-M15 in [docs/security.md](../security.md) §12 and S13 in §1 hold this to its tests.
   Spec: [vimma-mcp](../specs/vimma-mcp.md).

@@ -1,0 +1,13 @@
+{
+  "description": "agent-cancel says whether a question was still waiting",
+  "kind": "response",
+  "command": "agent-cancel",
+  "message": {
+    "type": "response",
+    "id": 7,
+    "ok": true,
+    "result": {
+      "cancelled": true
+    }
+  }
+}

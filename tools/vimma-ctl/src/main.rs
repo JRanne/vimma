@@ -7,9 +7,10 @@
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let env = vimma_ctl::discovery::Env::from_process();
-    let code = vimma_ctl::cli::run(
+    let code = vimma_ctl::cli::run_with_input(
         &args,
         &env,
+        Box::new(std::io::stdin()),
         &mut std::io::stdout().lock(),
         &mut std::io::stderr().lock(),
     );

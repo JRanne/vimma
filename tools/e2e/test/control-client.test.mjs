@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { CHALLENGE_CONTEXT } from "../../../packages/vimma-core/src/control.mjs";
 import { ControlClient, ControlSessions } from "../control-client.mjs";
+import { findVimmaCtl } from "../driver.mjs";
 
 const TOKEN = "ab".repeat(32);
 
@@ -93,5 +94,49 @@ describe("ControlSessions", () => {
     const requests = seen.filter((m) => m.type === "request");
     expect(requests.map((m) => m.command)).toEqual(["agent-hello", "agent-tabs"]);
     expect(requests[0].args).toEqual({ client: { name: "claude-code" } });
+  });
+});
+
+/** @type {string | null} */
+let bin = null;
+try {
+  bin = findVimmaCtl({ env: process.env });
+} catch (e) {
+  if (process.env.E2E_REQUIRE_CTL) throw e;
+}
+
+// docs/specs/vimma-mcp.md, sub-PR 3: the real `vimma-ctl mcp` over stdio, against the minimal
+// server above (needs a built vimma-ctl; required in CI by E2E_REQUIRE_CTL).
+describe.skipIf(!bin)(`ControlSessions' mcp${bin ? "" : " (skipped: no vimma-ctl built)"}`, () => {
+  it("spawns vimma-ctl mcp once, and answers JSON-RPC by name", async () => {
+    const { port, seen } = await server((m) =>
+      m.command === "agent-hello" ? { workspace: "agent", exists: true } : { tabs: [] },
+    );
+    const profile = mkdtempSync(join(tmpdir(), "vimma-e2e-mcp-"));
+    cleanups.push(() => rmSync(profile, { recursive: true, force: true }));
+    writeFileSync(
+      join(profile, "vimma-control.json"),
+      JSON.stringify({ protocol: 2, port, token: TOKEN, pid: process.pid, roles: ["agent"] }),
+      { mode: 0o600 },
+    );
+    const sessions = new ControlSessions({ profile, bin: /** @type {string} */ (bin) });
+    cleanups.push(() => sessions.close());
+    sessions.mcpSend({
+      method: "initialize",
+      params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "e2e" } },
+      as: "init",
+    });
+    expect(await sessions.mcpResult("init")).toMatchObject({
+      jsonrpc: "2.0",
+      result: { protocolVersion: "2025-11-25", serverInfo: { name: "vimma" } },
+    });
+    sessions.mcpSend({ method: "notifications/initialized" });
+    sessions.mcpSend({ method: "tools/call", params: { name: "vimma_tabs" }, as: "tabs" });
+    const tabs = /** @type {any} */ (await sessions.mcpResult("tabs"));
+    expect(tabs.result.content[0].text).toMatch(/no tabs/);
+    const requests = seen.filter((m) => m.type === "request").map((m) => m.command);
+    expect(requests).toEqual(["agent-hello", "agent-tabs"]);
+    expect(seen.find((m) => m.type === "hello")?.role).toBe("agent");
+    expect(await sessions.mcpClose()).toMatchObject({ exitCode: 0, stdoutClean: true });
   });
 });

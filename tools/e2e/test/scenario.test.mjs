@@ -97,6 +97,38 @@ describe("validateScenario", () => {
     expect(validateScenario(scenario({ steps }), undefined).join("\n")).toMatch(message);
   });
 
+  // docs/specs/vimma-mcp.md, sub-PR 3: the real `vimma-ctl mcp`, spoken to over stdio.
+  it("accepts the mcp steps", () => {
+    expect(
+      validateScenario(
+        scenario({
+          steps: [
+            { mcp: { method: "initialize", params: { protocolVersion: "2025-11-25" }, as: "i" } },
+            { "mcp-result": { of: "i", expect: { result: { protocolVersion: "2025-11-25" } } } },
+            { mcp: { method: "notifications/initialized" } },
+            { mcp: { method: "tools/list", as: "list1" } },
+          ],
+        }),
+        undefined,
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [[{ mcp: { as: "a" } }], /step 1: mcp: method is a string/],
+    [[{ mcp: { method: 3 } }], /step 1: mcp: method is a string/],
+    [[{ mcp: { method: "ping", params: [] } }], /step 1: mcp: params is an object/],
+    [[{ mcp: { method: "ping", as: "A" } }], /step 1: mcp: as names the answer/],
+    [[{ mcp: { method: "ping", id: 1 } }], /step 1: mcp: unknown field/],
+    [[{ "mcp-result": { of: "x", expect: {} } }], /step 1: mcp-result: no mcp step/],
+    [
+      [{ agent: { send: "agent-tabs", as: "a" } }, { mcp: { method: "ping", as: "a" } }],
+      /step 2: mcp: "a" is taken/,
+    ],
+  ])("rejects mcp steps %o", (steps, message) => {
+    expect(validateScenario(scenario({ steps }), undefined).join("\n")).toMatch(message);
+  });
+
   it("wants the file named after the scenario", () => {
     expect(validateScenario(scenario({}), "m0-other.json").join("\n")).toMatch(/file name/);
   });
@@ -248,6 +280,9 @@ describe("runSteps", () => {
         ctlSpawn: (/** @type {string[]} */ args, /** @type {string} */ as) =>
           void calls.push(`ctl ${args.join(" ")} as ${as}`),
         ctlResult: async () => ({ exitCode: 0, stderr: "" }),
+        mcpSend: (/** @type {any} */ spec) =>
+          void calls.push(`mcp ${spec.method} ${JSON.stringify(spec.params ?? {})} as ${spec.as}`),
+        mcpResult: async (/** @type {string} */ name) => replies[name],
       },
     };
   };
@@ -291,6 +326,34 @@ describe("runSteps", () => {
       'agent agent-open {"url":"https://a/"} as open1',
       'agent agent-read {"tab":"42"} as read1',
       "ctl state as c1",
+    ]);
+  });
+
+  it("mcp steps send JSON-RPC, then check the answer, with $name.path anywhere in params", async () => {
+    const { ctl } = fakeCtl([{ mode: "normal" }]);
+    const fake = fakeControl();
+    await runSteps(
+      scenario({
+        steps: [
+          { mcp: { method: "tools/call", params: { name: "vimma_open" }, as: "open1" } },
+          { "mcp-result": { of: "open1", expect: { ok: true } } },
+          { mcp: { method: "notifications/initialized" } },
+          {
+            mcp: {
+              method: "tools/call",
+              params: { name: "vimma_read_page", arguments: { tab: "$open1.result.tab" } },
+              as: "read1",
+            },
+          },
+          { "mcp-result": { of: "read1", expect: { ok: true } } },
+        ],
+      }),
+      { ctl, control: fake.control, screenshot: async () => {} },
+    );
+    expect(fake.calls).toEqual([
+      'mcp tools/call {"name":"vimma_open"} as open1',
+      "mcp notifications/initialized {} as undefined",
+      'mcp tools/call {"name":"vimma_read_page","arguments":{"tab":"42"}} as read1',
     ]);
   });
 

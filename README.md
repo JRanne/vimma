@@ -93,6 +93,9 @@ do in Firefox, and Vimma starts with quieter defaults for your privacy.
   expect.
 - No studies, experiments, sponsored content or telemetry uploads. Safe Browsing stays on.
 - Scriptable: an optional, token-protected control socket and the `vimma-ctl` CLI.
+- Local AI agents (Claude Code, Codex, opencode, Copilot) through MCP: `vimma-ctl mcp` lets them
+  list, read, open and close tabs of one `agent` workspace, with its own logins, and every
+  request asks you first ([guide](docs/guide.md#connecting-an-agents-tool)).
 
 The [user guide](docs/guide.md) covers every key and option,
 [docs/limits.md](docs/limits.md) lists what does not work yet, and

@@ -253,6 +253,18 @@ pub fn request(id: u32, command: &Command) -> Value {
     ])
 }
 
+/// A request for any command by name, with its `args` as given: the agent commands, which
+/// `vimma-ctl mcp` builds and checks itself (docs/specs/vimma-mcp.md, decision 4).
+#[must_use]
+pub fn request_named(id: u32, command: &str, args: Value) -> Value {
+    object([
+        ("type", text("request")),
+        ("id", Value::Number(f64::from(id))),
+        ("command", text(command)),
+        ("args", args),
+    ])
+}
+
 /// Decode a `welcome`.
 ///
 /// # Errors
@@ -1023,7 +1035,8 @@ mod tests {
         out
     }
 
-    /// Agent commands and their results: `vimma-ctl mcp` sends and decodes them (sub-PR 3).
+    /// Agent commands and their results: `vimma-ctl mcp` sends and decodes them; mcp.rs tests
+    /// them against these fixtures.
     fn agent_only(name: &str) -> bool {
         name.starts_with("request-agent-") || name.starts_with("response-agent-")
     }

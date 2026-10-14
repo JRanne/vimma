@@ -66,7 +66,7 @@ const denied = (reason) => new AgentError("denied", DENIED[reason] ?? reason, re
  * @typedef {any} Win
  * @typedef {any} Tab
  * @typedef {{ id: string, name: string, userContextId: number }} AgentWorkspace
- * @typedef {{ agent?: { client: string, via?: string } }} AgentConn
+ * @typedef {{ agent?: { client: string, via?: string }, cancels?: Map<number, () => void> }} AgentConn
  */
 
 /** The agent workspace, or a refusal when there is none (containers off). */
@@ -186,14 +186,26 @@ function agentPrincipal(/** @type {number} */ userContextId) {
 }
 
 /**
- * Ask, and wait: resolves when allowed, throws `denied` otherwise.
+ * Ask, and wait: resolves when allowed, throws `denied` otherwise. While the question waits,
+ * `agent-cancel` with the request's id `rid` can withdraw it (decision 17: MCP's
+ * notifications/cancelled); the connection's `state.cancels` keeps the way to, until answered.
  * @param {ConnId} conn @param {string} command @param {object} what
+ * @param {AgentConn} state @param {number | undefined} rid
  */
-async function ask(conn, command, what) {
+async function ask(conn, command, what, state, rid) {
   const tool = /** @type {Record<string, string>} */ (AGENT_TOOLS)[command];
-  const outcome = await AgentGate.request(conn, /** @type {string} */ (tool), what);
-  if (!outcome.allow) throw denied(outcome.reason);
-  return outcome;
+  const onCancel = (/** @type {() => void} */ cancel) => {
+    if (rid !== undefined) (state.cancels ??= new Map()).set(rid, cancel);
+  };
+  try {
+    const outcome = await AgentGate.request(conn, /** @type {string} */ (tool), what, {
+      onCancel,
+    });
+    if (!outcome.allow) throw denied(outcome.reason);
+    return outcome;
+  } finally {
+    if (rid !== undefined) state.cancels?.delete(rid);
+  }
 }
 
 /**
@@ -295,10 +307,23 @@ const COMMANDS = {
     return {};
   },
 
-  /** @param {ConnId} conn */
-  async "agent-tabs"(conn) {
+  /**
+   * Withdraw the question of this connection's request `id`, if it still waits (decision 17,
+   * sub-PR 3). Another connection's requests are not in `state`, so out of reach.
+   * @param {ConnId} _conn @param {AgentConn} state @param {{ id: number }} args
+   */
+  "agent-cancel"(_conn, state, { id }) {
+    const cancel = state.cancels?.get(id);
+    if (!cancel) return { cancelled: false };
+    state.cancels?.delete(id);
+    cancel();
+    return { cancelled: true };
+  },
+
+  /** @param {ConnId} conn @param {AgentConn} state @param {any} _args @param {number} rid */
+  async "agent-tabs"(conn, state, _args, rid) {
     const agent = agentWorkspace();
-    await ask(conn, "agent-tabs", { count: agentTabs(agent).length });
+    await ask(conn, "agent-tabs", { count: agentTabs(agent).length }, state, rid);
     // The list as it is now, checked again (decision 7).
     const now = agentWorkspace();
     if (now.id !== agent.id) throw denied("changed");
@@ -312,12 +337,12 @@ const COMMANDS = {
     };
   },
 
-  /** @param {ConnId} conn @param {AgentConn} _state @param {any} args */
-  async "agent-read"(conn, _state, { tab: id, format = "markdown", max_chars }) {
+  /** @param {ConnId} conn @param {AgentConn} state @param {any} args @param {number} rid */
+  async "agent-read"(conn, state, { tab: id, format = "markdown", max_chars }, rid) {
     const agent = agentWorkspace();
     const asked = findAgentTab(agent, id);
     const what = { ...describeTab(asked.tab), index: asked.index };
-    await ask(conn, "agent-read", what);
+    await ask(conn, "agent-read", what, state, rid);
     const { win, tab } = stillAsAsked(agent, id, what.url);
     const limit = Math.min(
       max_chars ?? Infinity,
@@ -385,8 +410,8 @@ const COMMANDS = {
     return reply();
   },
 
-  /** @param {ConnId} conn @param {AgentConn} _state @param {any} args */
-  async "agent-open"(conn, _state, { url, tab: id }) {
+  /** @param {ConnId} conn @param {AgentConn} state @param {any} args @param {number} rid */
+  async "agent-open"(conn, state, { url, tab: id }, rid) {
     const agent = agentWorkspace();
     const uri = agentUri(url);
     const into = id === undefined ? null : findAgentTab(agent, id);
@@ -397,7 +422,7 @@ const COMMANDS = {
       host: uri.host,
       ...(current ? { tab: current.tab, title: current.title, current: current.url } : {}),
     };
-    await ask(conn, "agent-open", what);
+    await ask(conn, "agent-open", what, state, rid);
     if (!opens.take(conn, Date.now())) {
       throw new AgentError("denied", "too many opens from this agent in the last minute", "busy");
     }
@@ -431,12 +456,12 @@ const COMMANDS = {
     return { tab: tabId(tab) };
   },
 
-  /** @param {ConnId} conn @param {AgentConn} _state @param {any} args */
-  async "agent-close"(conn, _state, { tab: id }) {
+  /** @param {ConnId} conn @param {AgentConn} state @param {any} args @param {number} rid */
+  async "agent-close"(conn, state, { tab: id }, rid) {
     const agent = agentWorkspace();
     const asked = findAgentTab(agent, id);
     const what = { ...describeTab(asked.tab), index: asked.index };
-    await ask(conn, "agent-close", what);
+    await ask(conn, "agent-close", what, state, rid);
     const { win, tab } = stillAsAsked(agent, id, what.url);
     win.gBrowser.removeTab(tab, { closeWindowWithLastTab: false, skipPermitUnload: true });
     return { closed: true };
@@ -458,16 +483,17 @@ export function forgetAgentConnection(conn) {
  * @param {AgentConn} state
  * @param {string} command
  * @param {any} args
+ * @param {number} [rid]  the request's id, which `agent-cancel` names
  */
-export function runAgentCommand(conn, state, command, args) {
+export function runAgentCommand(conn, state, command, args, rid) {
   if (command === "agent-hello") {
     if (state.agent) throw new AgentError("bad-request", "agent-hello was already sent");
   } else if (!state.agent) {
     throw new AgentError("bad-request", "agent-hello must be the connection's first command");
   }
-  const run = /** @type {Record<string, (c: ConnId, s: AgentConn, a: any) => any>} */ (COMMANDS)[
-    command
-  ];
+  const run = /** @type {Record<string, (c: ConnId, s: AgentConn, a: any, r?: number) => any>} */ (
+    COMMANDS
+  )[command];
   if (!run) throw new AgentError("unknown-command", `unknown command ${command}`);
-  return run(conn, state, args);
+  return run(conn, state, args, rid);
 }

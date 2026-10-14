@@ -1,32 +1,64 @@
 # Spec: m0-control-protocol-and-vimma-ctl
 
-Status: implemented (client and contract); the server is spec m0-control-server · Milestone: M0 ·
-Area: `packages/vimma-core` (contract validator), `tools/vimma-ctl` (Rust client),
-`tests/contract/control/v1/` (fixtures)
-Prerequisites: ADR-007 (control socket), ADR-011 (vimma-ctl in Rust).
+Status: implemented · Area: `packages/vimma-core/src/control.mjs` (contract validator),
+`tools/vimma-ctl` (Rust client), `tests/contract/control/v1/` and `v2/` (fixtures); the server is
+[m0-control-server](m0-control-server.md) · Upstream patches: none · ADR:
+[ADR-007](../adr/007-control-socket.md), [ADR-011](../adr/011-vimma-ctl-rust.md),
+[ADR-019](../adr/019-agents-over-mcp.md)
 
-## User story
+## Summary
 
-As a Vimma user or the e2e harness, I can run `vimma-ctl state`, `vimma-ctl send-keys "ctrl+b c"`
-or `vimma-ctl open https://example.com` against a running Vimma, and the browser-side server
-(next spec) has a written, fixture-backed contract to implement against.
+Vimma's control socket lets scripts, window-manager bindings and the e2e harness drive a running
+Vimma: `vimma-ctl state`, `vimma-ctl send-keys "ctrl+b c"`, `vimma-ctl open https://example.com`.
+This spec is its wire contract (JSON lines over loopback TCP, a token handshake in which the
+server proves itself first, versions 1 and 2), backed by JSON fixtures that the browser-side
+server's validator and the Rust client both test against, and the client `vimma-ctl` itself.
 
-## Scope
+## Problem
 
-1. Version 1 of the control protocol (below), with JSON fixtures in
-   `tests/contract/control/v1/`: one valid and one invalid file per message type.
-2. `packages/vimma-core/src/control.mjs`: a pure validator for every v1 message and the
-   discovery file, plus `tokensEqual` (constant-time token comparison). The browser-side server
-   will import it. Vitest runs it against the fixtures.
-3. `tools/vimma-ctl/`: the Rust client (ADR-011). Subcommands `send-keys <keys>`,
-   `state [--json]`, `open <url>`; options `--profile <dir>`, `--timeout <secs>`. Its unit tests
-   decode and encode against the same fixtures; integration tests run it against a fake server.
-4. CI: Rust steps (fmt, clippy `-D warnings`, tests) in the existing `ci.yml` job (ADR-011:
-   one job on purpose, minutes are billed per job) and a crate licence check.
+Nothing outside the browser could drive Vimma: no way to script it, bind a window-manager key to
+one of its actions, or test a real build end to end. A socket for that needs a contract both
+ends can be tested against independently, since the server is JavaScript (ADR-004) and the
+client Rust (ADR-011) and they cannot share code, and it must not give the browser to any other
+local user or to a web page.
 
-## Protocol, version 1
+## Behaviour
 
-### Transport
+1. As a Vimma user with `vimma.control.enabled` on, `vimma-ctl send-keys ctrl+b c` presses those
+   keys in Vimma as if typed; `vimma-ctl state` prints the mode, pending keys, workspace and
+   tabs (`--json` for the raw result); `vimma-ctl open URL` opens a new tab; `vimma-ctl
+reload-theme` re-reads the Omarchy theme now.
+2. With the pref off (the default), there is no socket and no discovery file, and `vimma-ctl`
+   says Vimma's control socket is off (exit 3).
+3. `vimma-ctl` finds the profile by itself (`profiles.ini`), or takes `--profile DIR` or
+   `VIMMA_PROFILE`, and reports a stale discovery file, an insecure one, a busy server and a
+   server that cannot prove the token, each with its own message and exit code.
+4. The e2e harness drives a real build through the same client and protocol.
+5. With MCP on (protocol 2), an agent tool's `vimma-ctl mcp` speaks the `agent` role, and a new
+   `full` connection is welcomed only after the user's `y` ([vimma-mcp](vimma-mcp.md)).
+
+## Research
+
+- Firefox's server socket: `nsIServerSocket.init(port, loopbackOnly, backlog)` binds 127.0.0.1
+  when `loopbackOnly` is true and takes `-1` for an OS-chosen port; used as such by the server
+  spec ([m0-control-server](m0-control-server.md), which cites the engine paths).
+- Profile layout: the `profiles.ini` that Firefox's `nsToolkitProfileService` writes, with its
+  `[Install…]` sections; checked against a real profile directory (below, Profile discovery).
+- Token files: OpenSSH refuses a private key that group or others can read; the client applies
+  the same rule to the discovery file, for the same reason (the file holds a secret).
+
+## Design
+
+Scope: version 1 of the protocol with JSON fixtures in `tests/contract/control/v1/` (one valid
+and one invalid file per message type); `packages/vimma-core/src/control.mjs`, a pure validator
+for every message and the discovery file plus `tokensEqual` (constant-time token comparison),
+which the server imports; `tools/vimma-ctl/`, the Rust client, std only (ADR-011), whose JSON
+module rejects duplicate keys, lone surrogates and nesting deeper than 64; protocol 2 (roles),
+whose fixtures are in `tests/contract/control/v2/`.
+
+### Protocol, version 1
+
+#### Transport
 
 - TCP on `127.0.0.1` only (`nsIServerSocket.init(-1, /* loopbackOnly */ true, backlog)`), a
   random port chosen by the OS. Never `0.0.0.0`, never `::`.
@@ -39,7 +71,7 @@ or `vimma-ctl open https://example.com` against a running Vimma, and the browser
   field is a compatible change within version 1. Removing or renaming one needs version 2.
   Requests are strict: unknown `args` fields are `invalid-args`, so typos fail loudly.
 
-### Discovery file
+#### Discovery file
 
 When the server starts it writes `<profile>/vimma-control.json`, mode **0600**, atomically
 (write `vimma-control.json.tmp` with 0600, then rename), and deletes it on shutdown:
@@ -60,7 +92,7 @@ as "Vimma is not running (or the control socket is off)". On Linux the client al
 `pid` is alive (`/proc/<pid>`) and reports a stale file when it is not. The server removes any
 file at that path when it starts (whatever the pref) and when it stops.
 
-### Handshake
+#### Handshake
 
 Four lines, in this order; anything else, or no `welcome` within 5 s of connecting (one deadline
 for the whole handshake), closes the connection with an error. The server proves it knows the
@@ -87,11 +119,11 @@ so it never receives the token or a command (`vimma-ctl` exits 4). It does not s
 from making the client wait (no reply: the client's timeout ends it) or from learning that a
 client tried to connect.
 
-**Amended in v1, not v2** (reviews of #38): the handshake was reordered before any server
-shipped. The v1 server first lands with it, and `vimma-ctl` and the e2e harness live in the same
-repository, so no deployed peer speaks an earlier form; a v2 would only carry dead compatibility
-code. (An intermediate form sent the token in the `hello` next to the nonce, so a squatter could
-compute the proof itself; a security review found it.)
+**Why this is version 1 and not 2.** The order above (proof before token) was fixed before any
+server shipped, after the review of #38 found that an earlier form, which sent the token in the
+`hello` next to the nonce, let a squatter compute the proof itself. `vimma-ctl` and the e2e
+harness live in the same repository as the server, so no deployed peer speaks that form, and a
+version 2 for it would only carry dead compatibility code.
 
 Failure: an error response with `"id": null`, then the server closes the connection:
 
@@ -110,7 +142,7 @@ the strings differ. A wrong token (`unauthorized`), a `protocol` the server does
 connection. `busy` may come instead of a `challenge` (evicted while waiting) or instead of the
 `welcome` (8 authenticated connections).
 
-### Requests and responses
+#### Requests and responses
 
 ```json
 { "type": "request", "id": 7, "command": "state", "args": {} }
@@ -137,7 +169,7 @@ connection. `busy` may come instead of a `challenge` (evicted while waiting) or 
 | `internal`             | a bug in the server; the message says what threw                 |
 | `busy`                 | at the connection limit (handshake only; see Security)           |
 
-### Commands
+#### Commands
 
 | Command         | `args`                                                 | `result`                |
 | --------------- | ------------------------------------------------------ | ----------------------- |
@@ -193,7 +225,7 @@ else (notably `javascript:` and `data:`) is `invalid-args`. At most 65536 charac
 defaults to `tab` (a new foreground tab); `current` loads it in the selected tab. The result is
 the tab's id, as in `state`.
 
-**`reload-theme`** (added 2026-10-10, spec m5-omarchy-theme "Instant reload"). Re-reads the
+**`reload-theme`** (spec m5-omarchy-theme, "Instant reload"). Re-reads the
 Omarchy theme now instead of at the next poll: the same check as the poll (the directory in
 `vimma.theme.omarchyPath`, the same strict validation, a rejected file keeps the colours), except
 that `colors.toml` is read even when its stat looks unchanged. No args: a client cannot point the
@@ -205,7 +237,7 @@ the poll reads anyway, and changes only the theme's token stylesheet.
 Adding a command within v1: a v1 client never sends it unasked, and an older server answers it
 `unknown-command` (exit 1), which is the right message. No existing message changes shape.
 
-## Protocol, version 2 (roles; 2026-10-13)
+### Protocol, version 2 (roles)
 
 Spec: [vimma-mcp](vimma-mcp.md) (decisions 2-4), ADR-019. Fixtures:
 `tests/contract/control/v2/` (v1's are unchanged). The server speaks 1 and 2.
@@ -236,14 +268,15 @@ Spec: [vimma-mcp](vimma-mcp.md) (decisions 2-4), ADR-019. Fixtures:
   `cancelled`; no other error has a `reason`.
 - **Agent commands** (role `agent` only; `agent-hello` must come first, and only once):
 
-  | Command       | `args`                                                     | `result`                                                                         |
-  | ------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------- |
-  | `agent-hello` | `{ "client": { "name", "version"? }, "via"? }`             | `{ "workspace": "agent", "exists": true }`                                       |
-  | `agent-tabs`  | `{}`                                                       | `{ "tabs": [{ "id", "url", "title", "loading" }] }`                              |
-  | `agent-read`  | `{ "tab", "format"?: "markdown" \| "text", "max_chars"? }` | `{ "url", "title", "text", "truncated", "selection", "language", "background" }` |
-  | `agent-open`  | `{ "url", "tab"? }`                                        | `{ "tab": "<id>" }`                                                              |
-  | `agent-close` | `{ "tab" }`                                                | `{ "closed": true }`                                                             |
-  | `agent-ping`  | `{}`                                                       | `{}`                                                                             |
+  | Command        | `args`                                                     | `result`                                                                         |
+  | -------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------- |
+  | `agent-hello`  | `{ "client": { "name", "version"? }, "via"? }`             | `{ "workspace": "agent", "exists": true }`                                       |
+  | `agent-tabs`   | `{}`                                                       | `{ "tabs": [{ "id", "url", "title", "loading" }] }`                              |
+  | `agent-read`   | `{ "tab", "format"?: "markdown" \| "text", "max_chars"? }` | `{ "url", "title", "text", "truncated", "selection", "language", "background" }` |
+  | `agent-open`   | `{ "url", "tab"? }`                                        | `{ "tab": "<id>" }`                                                              |
+  | `agent-close`  | `{ "tab" }`                                                | `{ "closed": true }`                                                             |
+  | `agent-ping`   | `{}`                                                       | `{}`                                                                             |
+  | `agent-cancel` | `{ "id" }`                                                 | `{ "cancelled": true \| false }`                                                 |
 
   `name` and `version` are 1 to 64 printable characters and `via` 1 to 32 (no control
   characters, no bidirectional marks or overrides). `tab` is a tab id as `state` gives it
@@ -251,18 +284,96 @@ Spec: [vimma-mcp](vimma-mcp.md) (decisions 2-4), ADR-019. Fixtures:
   and the server caps it at `[mcp] max_read_chars`. `text` is the page text between
   `<untrusted-web-content>` and `</untrusted-web-content>` lines; a delimiter inside the page
   text is broken with a zero-width space. `selection` and `language` may be `null`.
-  `background` says the tab was not in front while it was read.
+  `background` says the tab was not in front while it was read. `agent-cancel`'s `id` is an
+  integer 1 to 2^53 − 1, the id of one of the same connection's requests.
 
-- **Asking.** Every agent command but `agent-hello` and `agent-ping` waits for the user's answer
-  in Vimma, or runs under a grant of that connection and tool. An agent connection's requests do
+- **Asking.** Every agent command but `agent-hello`, `agent-ping` and `agent-cancel` waits for
+  the user's answer in Vimma, or runs under a grant of that connection and tool. An agent connection's requests do
   not wait for each other: each is answered by `id` when its answer comes, so responses may come
   out of order. A connection with requests waiting is not closed by the 60 s idle limit. Limits: at most 4
   agent connections (of the server's 8), at most 4 requests of one agent connection waiting or
   running at once, and at most 10 `agent-open`s of one connection a minute; beyond each, `busy`.
   Strings in agent replies are well-formed Unicode (a lone surrogate becomes U+FFFD), and the
   read's `selection` is inside the untrusted-content delimiters too.
+- **Withdrawing a question.** `agent-cancel` takes back the question of one of the connection's
+  own requests while it still waits: the question leaves the line, the request is answered
+  `denied` with reason `cancelled`, and the result says `cancelled: true`. A request that is no
+  longer waiting (answered, running, or an unknown id) and any other connection's request are
+  untouched: `cancelled: false`. It never asks and is not counted in the 4 requests a
+  connection may have waiting or running, so it reaches a connection whose requests all wait.
+  `vimma-ctl mcp` sends it for MCP's `notifications/cancelled` ([vimma-mcp](vimma-mcp.md)
+  decision 17). An older protocol 2 server answers it `unknown-command`, which leaves the
+  question to time out as before.
 
-## Security
+### Profile discovery (`vimma-ctl`)
+
+`--profile <dir>` (or `VIMMA_PROFILE`) names the profile directory directly. Otherwise, on Linux:
+
+1. Root: `$XDG_CONFIG_HOME/vimma/vimma` (default `~/.config/vimma/vimma`), or the legacy
+   `~/.vimma/vimma` if it exists (spec m0-branding, `nsXREDirProvider`).
+2. `profiles.ini` there, the layout Firefox's `nsToolkitProfileService` writes:
+
+   ```ini
+   [Install4F96D1932A9F858E]
+   Default=jpa751c5.default-release
+   Locked=1
+
+   [Profile0]
+   Name=default-release
+   IsRelative=1
+   Path=jpa751c5.default-release
+   Default=1
+
+   [General]
+   StartWithLastProfile=1
+   Version=2
+   ```
+
+3. The profile is, in order: the `Default=` of the first `[Install…]` section (what the browser
+   actually starts with); else the `[Profile…]` with `Default=1`; else the only `[Profile…]`.
+   `Path` is relative to the root when `IsRelative=1`, absolute otherwise.
+   Checked against a real Firefox profile directory, whose `[Install…] Default` and
+   `[Profile…] Default=1` name different profiles: Firefox starts the install's, and so does the
+   client.
+
+### `vimma-ctl` usage and exit codes
+
+```
+vimma-ctl [--profile DIR] [--timeout SECS] send-keys KEYS
+vimma-ctl [--profile DIR] [--timeout SECS] state [--json]
+vimma-ctl [--profile DIR] [--timeout SECS] open URL
+vimma-ctl [--profile DIR] [--timeout SECS] reload-theme   # prints changed or unchanged
+vimma-ctl [--profile DIR] mcp                              # MCP over stdio (vimma-mcp)
+```
+
+| Exit | Meaning                                                                                                    |
+| ---- | ---------------------------------------------------------------------------------------------------------- |
+| 0    | success                                                                                                    |
+| 1    | the server answered with an error (code and message printed to stderr)                                     |
+| 2    | usage error                                                                                                |
+| 3    | Vimma not reachable: no profile, no or stale discovery file, insecure file, no server, `busy`, `role-off`  |
+| 4    | authentication failed (`unauthorized`, `unsupported-protocol`, no valid `proof`), or full control `denied` |
+| 5    | protocol error: malformed response, wrong id, connection closed, timeout                                   |
+
+The timeout (default 5 s, at most 3600 s) covers connect, handshake and the response; it is
+capped so the deadline cannot overflow. While the discovery file lists `agent`, the welcome of a
+`full` connection may wait up to 310 s for the user's answer, and then the command gets its own
+timeout. `vimma-ctl mcp` takes no `--timeout` or `--json`: each of its calls waits for the user,
+and it runs until its stdin closes (exit 0); [vimma-mcp](vimma-mcp.md) describes it.
+
+### What the server must do
+
+The server ([m0-control-server](m0-control-server.md), `ctl/VimmaControl.sys.mjs`) starts only
+while a role's switch is on and stops when both are off; listens loopback-only on port -1; writes
+the discovery file 0600 atomically and deletes it at `quit-application`; makes the token with
+`crypto.getRandomValues` (32 bytes, hex); enforces the limits in Security and privacy; validates
+every line with `validateMessage`, compares tokens with `tokensEqual`, enforces the 1 MiB line
+limit and the 5 s handshake deadline, and answers in the fixtures' formats; runs `send-keys`
+through the same dispatcher path as real keydowns, `state` from the host's dispatcher and
+`gBrowser`, and `open` with the triggering principal the command-line handler uses for URLs,
+only for schemes the validator allows; and answers `not-implemented` for reserved commands.
+
+## Security and privacy
 
 - **Off unless enabled.** Pref `vimma.control.enabled` (bool, default `false`) in every build,
   dev and release. With it off there is no listening socket and no discovery file. The e2e
@@ -302,62 +413,15 @@ Spec: [vimma-mcp](vimma-mcp.md) (decisions 2-4), ADR-019. Fixtures:
     a refused connection is exit 3 ("not running"); a connection dropped mid-reply (idle
     timeout, shutdown) is exit 5 "connection closed before a complete reply".
 
-**Plan §9 open question, decided for now:** the token lives in `<profile>/vimma-control.json`
-(0600), and the socket is **off by default in all builds**, release included. Revisit when the
-e2e harness or users need it on by default; changing the default is a one-line pref change plus a
-note here.
+- **Where the token lives, and the default.** The token lives in `<profile>/vimma-control.json`
+  (0600), and the socket is **off by default in all builds**, release included: nothing needs it
+  on by default, and the e2e harness turns it on in its own profile. Changing the default is a
+  one-line pref change plus a note here.
+- **Agents.** With only MCP on, the token reaches only the confined, confirmed `agent` role
+  (above, and [vimma-mcp](vimma-mcp.md) § Security and privacy). `vimma-ctl mcp` reads the token
+  from the discovery file only, and never asks for the `full` role.
 
-## Profile discovery (`vimma-ctl`)
-
-`--profile <dir>` (or `VIMMA_PROFILE`) names the profile directory directly. Otherwise, on Linux:
-
-1. Root: `$XDG_CONFIG_HOME/vimma/vimma` (default `~/.config/vimma/vimma`), or the legacy
-   `~/.vimma/vimma` if it exists (spec m0-branding, `nsXREDirProvider`).
-2. `profiles.ini` there, the layout Firefox's `nsToolkitProfileService` writes:
-
-   ```ini
-   [Install4F96D1932A9F858E]
-   Default=jpa751c5.default-release
-   Locked=1
-
-   [Profile0]
-   Name=default-release
-   IsRelative=1
-   Path=jpa751c5.default-release
-   Default=1
-
-   [General]
-   StartWithLastProfile=1
-   Version=2
-   ```
-
-3. The profile is, in order: the `Default=` of the first `[Install…]` section (what the browser
-   actually starts with); else the `[Profile…]` with `Default=1`; else the only `[Profile…]`.
-   `Path` is relative to the root when `IsRelative=1`, absolute otherwise.
-   (Checked against a real Firefox `profiles.ini`, where `[Install…] Default` and the
-   `Default=1` profile differ: the install section wins.)
-
-## `vimma-ctl` usage and exit codes
-
-```
-vimma-ctl [--profile DIR] [--timeout SECS] send-keys KEYS
-vimma-ctl [--profile DIR] [--timeout SECS] state [--json]
-vimma-ctl [--profile DIR] [--timeout SECS] open URL
-vimma-ctl [--profile DIR] [--timeout SECS] reload-theme   # prints changed or unchanged
-```
-
-| Exit | Meaning                                                                                       |
-| ---- | --------------------------------------------------------------------------------------------- |
-| 0    | success                                                                                       |
-| 1    | the server answered with an error (code and message printed to stderr)                        |
-| 2    | usage error                                                                                   |
-| 3    | Vimma not reachable: no profile, no or stale discovery file, insecure file, no server, `busy` |
-| 4    | authentication failed (`unauthorized`, `unsupported-protocol`, or no valid `proof`)           |
-| 5    | protocol error: malformed response, wrong id, connection closed, timeout                      |
-
-The timeout (default 5 s, at most 3600 s) covers connect, handshake and the response.
-
-## Tests (written first)
+## Tests
 
 - `packages/vimma-core/test/control.test.mjs` (Vitest): every fixture in
   `tests/contract/control/v1/` validates as its file name says (`*.valid.json` /
@@ -374,45 +438,40 @@ Fixture format: `{ "description", "kind", "command"?, "message" }` where `kind` 
 `welcome`, `request`, `response` or `discovery`, and `command` (responses only) says which
 command's result shape applies.
 
-## Out of scope
+Protocol 2: `packages/vimma-core/test/control-v2.test.mjs` runs every fixture in
+`tests/contract/control/v2/` (one valid and one invalid per new message, `agent-cancel`
+included) and table tests for the role, the agent commands' args and results and `denied`'s
+reason; the Rust client's tests decode the v2 server-direction fixtures, and `src/mcp.rs`
+checks that the agent commands `vimma-ctl mcp` sends and decodes match the v2 fixtures. The
+property tests in `tools/vimma-ctl/tests/protocol_props.rs` fuzz the JSON parser and every
+decoder ([m7-fuzzing](m7-fuzzing.md)). The server's side is in
+`tests/browser/browser_vimma_control.js` and `browser_vimma_mcp_agent.js`.
 
-The browser-side server (`src/browser/base/content/vimma/ctl/`), the e2e harness, macOS/Windows
-profile discovery, `list-tabs`/`screenshot`/`reload-config` beyond reserving them, AUR packaging.
+All of it was written first and seen to fail: the client's first run had every function a
+`todo!()` stub (unit "1 passed; 43 failed", integration "1 passed; 16 failed"), and the review
+follow-up (the `--timeout` cap, `busy`, the 64 KiB discovery-file cap) failed to compile before
+it was added.
 
-## What the server spec must do
+## Docs and changelog
 
-- `ctl/VimmaControl.sys.mjs`: start only when `vimma.control.enabled` is true (and stop when it
-  turns false); `nsIServerSocket` loopback-only on port -1; write the discovery file 0600
-  atomically (to `.tmp`, set 0600, rename; check in the engine tree whether `IOUtils` can create
-  the file with a mode, else rely on the 0700 profile directory for the short window) and delete
-  it at `quit-application`. Token from `crypto.getRandomValues` (32 bytes, hex).
-- Enforce the connection limits in § Security: 8 connections, 5 s handshake, 60 s idle, `busy`.
-- Validate every line with `validateMessage` from vimma-core; compare tokens with `tokensEqual`;
-  enforce the 1 MiB line limit and the 5 s hello deadline; answer in the formats of the fixtures.
-- Implement `send-keys` through the same dispatcher path as real keydowns, `state` from the host's
-  dispatcher and `gBrowser`, `open` with the triggering principal the command-line handler uses
-  for URLs (grep `nsBrowserContentHandler` / `BrowserContentHandler.sys.mjs`), only for schemes
-  the validator allows; answer `not-implemented` for reserved commands.
-- Mochitests: start/stop on the pref, file mode 0600, wrong token closes, each command; then the
-  e2e harness drives a real build with `vimma-ctl`.
+- `docs/guide.md`, "Scripting with vimma-ctl": the commands, the pref, exit codes; "Agents
+  (MCP)" for protocol 2's agent side.
+- `docs/security.md` §1 holds the socket's rules to their tests; ADR-007, ADR-011 and
+  ADR-019 record the choices.
+- Each protocol change is a `CHANGELOG.md` line in the release that ships it.
 
-## Implementation log (2026-10-09)
+## Delivery
 
-- TDD red, Vitest: `control.test.mjs` failed with "Cannot find module '../src/control.mjs'";
-  green: 88 tests, `control.mjs` 100 % lines. `cargo-license-check.test.mjs` likewise red, then
-  9 green.
-- TDD red, cargo (every function a `todo!()` stub): unit "1 passed; 43 failed", integration
-  "1 passed; 16 failed" (the passing ones read only fixtures/vimma-core, or only the fake server);
-  green: 44 unit, 17 integration. `cargo clippy --all-targets -- -D warnings` with `pedantic`,
-  no `#[allow]`.
-- `vimma-ctl` has no dependencies (ADR-011); its JSON module rejects duplicate keys, lone
-  surrogates and nesting deeper than 64.
-- Checked `profiles.ini` against a real Firefox profile directory on the dev box: its
-  `[Install…] Default` and the `[Profile…] Default=1` name different profiles; Firefox starts the
-  install's, and so does the client.
-- Review follow-up: `--timeout` capped at 3600 s (a huge value overflowed the deadline and
-  panicked); connection limits and the `busy` code specified; discovery file read capped at
-  64 KiB. Red: lib tests did not compile (`Busy`, `MAX_TIMEOUT`, `MAX_FILE_SIZE` missing),
-  integration "18 passed; 2 failed", Vitest "1 failed" (`busy`); green: 47 unit,
-  20 integration, 89 Vitest.
-- Not done here: the server; `npx surfer license-check` needs `engine/`.
+1. The protocol, its v1 fixtures, the validator and `vimma-ctl` (this spec), with CI's Rust
+   steps (fmt, clippy `-D warnings` with `pedantic`, tests) in the existing `ci.yml` job (ADR-011:
+   one job on purpose, minutes are billed per job) and a crate licence check
+   (`npm run license-check:crates`).
+2. The browser-side server: [m0-control-server](m0-control-server.md).
+3. Protocol 2 and `vimma-ctl mcp`: [vimma-mcp](vimma-mcp.md) sub-PRs 2a, 2b and 3.
+
+Out of scope: macOS and Windows profile discovery (the macOS spec takes it up),
+`list-tabs`/`screenshot`/`reload-config` beyond reserving them, AUR packaging.
+
+## Open questions
+
+None.

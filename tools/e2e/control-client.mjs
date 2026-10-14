@@ -2,12 +2,14 @@
 // vimma-ctl's one-shot runs cannot do: a full connection held for the rest of a scenario (opened
 // while MCP is off, so keys sent through it never ask), an agent connection whose requests wait
 // for the user, and vimma-ctl runs that are not awaited. The handshake is the real one: the
-// server proves the token before the client sends it.
-import { execFile } from "node:child_process";
+// server proves the token before the client sends it. Sub-PR 3: `vimma-ctl mcp` itself, spoken
+// to over stdio as an agent tool would.
+import { execFile, spawn } from "node:child_process";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { connect } from "node:net";
 import { join } from "node:path";
+import { createInterface } from "node:readline";
 import { CHALLENGE_CONTEXT } from "../../packages/vimma-core/src/control.mjs";
 
 /** How long a request may wait for the user (the longest ask_timeout plus 10 s). */
@@ -143,6 +145,8 @@ export class ControlSessions {
     this.pending = new Map();
     /** @type {Map<string, Promise<{ exitCode: number | null, stderr: string }>>} */
     this.runs = new Map();
+    /** @type {McpProcess | null} */
+    this.mcp = null;
     const self = this;
     this.held = {
       state: async () => self.result(await self.heldCall("state", {})),
@@ -225,8 +229,127 @@ export class ControlSessions {
     return p;
   }
 
+  /** `vimma-ctl mcp`, spawned at the first mcp step and kept for the scenario. */
+  mcpProcess() {
+    if (this.mcp) return this.mcp;
+    const child = spawn(this.bin, ["--profile", this.profile, "mcp"], {
+      stdio: ["pipe", "pipe", "pipe"],
+      ...(this.signal ? { signal: this.signal } : {}),
+      killSignal: "SIGKILL",
+    });
+    /** @type {McpProcess} */
+    const p = {
+      child,
+      nextId: 0,
+      ids: new Map(),
+      replies: new Map(),
+      bad: [],
+      stderr: "",
+      exitCode: undefined,
+      waiters: [],
+    };
+    const wake = () => {
+      for (const w of p.waiters.splice(0)) w();
+    };
+    child.on("error", () => {});
+    child.stdin.on("error", () => {});
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (d) => (p.stderr += d));
+    // Nothing but whole JSON-RPC messages may reach stdout (MCP stdio; spec M9).
+    createInterface({ input: child.stdout }).on("line", (line) => {
+      let m;
+      try {
+        m = JSON.parse(line);
+      } catch {
+        m = null;
+      }
+      if (m?.jsonrpc !== "2.0") p.bad.push(line);
+      else if (m.id !== undefined && m.id !== null) p.replies.set(m.id, m);
+      wake();
+    });
+    child.on("exit", (code) => {
+      p.exitCode = code;
+      wake();
+    });
+    this.mcp = p;
+    return p;
+  }
+
+  /** Send one JSON-RPC message; a request when `as` names its answer. @param {McpSend} spec */
+  mcpSend({ method, params, as }) {
+    const p = this.mcpProcess();
+    /** @type {Record<string, unknown>} */
+    const message = { jsonrpc: "2.0", method, ...(params ? { params } : {}) };
+    if (as) {
+      const id = ++p.nextId;
+      p.ids.set(as, id);
+      message.id = id;
+    }
+    p.child.stdin.write(`${JSON.stringify(message)}\n`);
+  }
+
+  /** The response to the request named `name`, once it comes (a call waits for the user). @param {string} name */
+  async mcpResult(name) {
+    const p = this.mcp;
+    const id = p?.ids.get(name);
+    if (!p || id === undefined) throw new Error(`no mcp request named ${name}`);
+    const deadline = Date.now() + ANSWER_MS;
+    for (;;) {
+      if (p.bad.length) throw new Error(`vimma-ctl mcp wrote a non-message: ${p.bad[0]}`);
+      const reply = p.replies.get(id);
+      if (reply) return reply;
+      if (p.exitCode !== undefined) {
+        throw new Error(`vimma-ctl mcp exited (${p.exitCode}) before answering: ${p.stderr}`);
+      }
+      const left = deadline - Date.now();
+      if (left <= 0) throw new Error(`vimma-ctl mcp did not answer ${name}`);
+      await new Promise((resolve) => {
+        const t = setTimeout(resolve, left);
+        p.waiters.push(() => {
+          clearTimeout(t);
+          resolve(undefined);
+        });
+      });
+    }
+  }
+
+  /** Close stdin, as an agent tool does when it is done; how it ended. */
+  async mcpClose() {
+    const p = this.mcp;
+    if (!p) return null;
+    this.mcp = null;
+    p.child.stdin.end();
+    const deadline = Date.now() + 5000;
+    while (p.exitCode === undefined && Date.now() < deadline) {
+      await new Promise((resolve) => {
+        const t = setTimeout(resolve, 100);
+        p.waiters.push(() => {
+          clearTimeout(t);
+          resolve(undefined);
+        });
+      });
+    }
+    if (p.exitCode === undefined) p.child.kill("SIGKILL");
+    return { exitCode: p.exitCode ?? null, stdoutClean: p.bad.length === 0, stderr: p.stderr };
+  }
+
   close() {
     this.full?.close();
     this.agent?.then((c) => c.close()).catch(() => {});
+    if (this.mcp) {
+      const { child } = this.mcp;
+      this.mcp = null;
+      child.stdin.end();
+      setTimeout(() => child.kill("SIGKILL"), 5000).unref();
+    }
   }
 }
+
+/**
+ * @typedef {import("./scenario.mjs").McpSend} McpSend
+ * @typedef {{
+ *   child: import("node:child_process").ChildProcessWithoutNullStreams,
+ *   nextId: number, ids: Map<string, number>, replies: Map<unknown, any>, bad: string[],
+ *   stderr: string, exitCode: number | null | undefined, waiters: Array<() => void>,
+ * }} McpProcess
+ */

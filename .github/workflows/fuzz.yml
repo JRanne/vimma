@@ -87,13 +87,13 @@ jobs:
         working-directory: tools/vimma-ctl
         run: rustup toolchain install
 
-      - name: vimma-ctl protocol parsing (proptest)
+      - name: vimma-ctl protocol and MCP parsing (proptest)
         if: ${{ !cancelled() && steps.seed.outcome == 'success' }}
         working-directory: tools/vimma-ctl
         env:
           PROPTEST_RNG_SEED: ${{ steps.seed.outputs.seed }}
           PROPTEST_CASES: "200000"
-        run: timeout 600 cargo test --locked --release --test protocol_props
+        run: timeout 600 cargo test --locked --release --test protocol_props --test mcp_props
 
       - name: Upload the seed and failing cases
         if: failure()
@@ -145,7 +145,7 @@ jobs:
             echo "and for vimma-ctl:"
             echo
             echo '```sh'
-            echo "cd tools/vimma-ctl && PROPTEST_RNG_SEED=${SEED} PROPTEST_CASES=200000 cargo test --release --test protocol_props"
+            echo "cd tools/vimma-ctl && PROPTEST_RNG_SEED=${SEED} PROPTEST_CASES=200000 cargo test --release --test protocol_props --test mcp_props"
             echo '```'
             for f in fuzz-failures/fuzz-failures/*.json fuzz-failures/*.json; do
               [ -f "$f" ] || continue

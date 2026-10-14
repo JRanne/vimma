@@ -816,11 +816,9 @@ tab count. `m` on it asks
 
 Every profile has a workspace named `agent`, for local AI agents (Claude Code, Codex, opencode,
 Copilot) to use through `vimma-ctl mcp`. It is a workspace like the others, with a container of
-its own, so its cookies and logins are apart from `main`, `work` and the rest. An agent will only
-ever reach this workspace, and every request asks you first. **Not usable yet from an agent's
-tool:** with `:mcp on`, Vimma's side runs (the control socket's agent role and the question
-below), but `vimma-ctl mcp`, the command an agent's tool starts, is still to come. Spec:
-[vimma-mcp](specs/vimma-mcp.md).
+its own, so its cookies and logins are apart from `main`, `work` and the rest. An agent only
+ever reaches this workspace, and every request asks you first. To let one in, see
+[Connecting an agent's tool](#connecting-an-agents-tool). Spec: [vimma-mcp](specs/vimma-mcp.md).
 
 - **Made for you.** A new profile gets it after `main`; an existing one at its next start. It
   is cyan, with the fingerprint icon. It has no tabs until you move one in (or an agent opens
@@ -856,6 +854,50 @@ below), but `vimma-ctl mcp`, the command an agent's tool starts, is still to com
   wins over it; then `:mcp on|off` changes nothing and says to edit the file.
 - about:vimma's **Agents (MCP)** section shows the switch, full control's state and the agent
   workspace's tab count.
+
+#### Connecting an agent's tool
+
+`vimma-ctl mcp` is the MCP server your agent's tool starts. It speaks MCP over its standard input
+and output, connects to Vimma as an agent (never with full control), and offers four tools:
+
+| Tool              | What the agent can do                                                               |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| `vimma_tabs`      | List the agent workspace's tabs: id, address, title, whether it is loading.         |
+| `vimma_read_page` | Read a tab's text, as Markdown or plain text, marked as untrusted web content.      |
+| `vimma_open`      | Open an http or https address in a new background tab there, or in one of its tabs. |
+| `vimma_close_tab` | Close one of its tabs.                                                              |
+
+1. Build `vimma-ctl` ([Scripting with vimma-ctl](#scripting-with-vimma-ctl), step 2) and put it
+   on your `PATH`.
+2. In Vimma, `:mcp on` and `y`. Full control (`vimma.control.enabled`) can stay off: agents do
+   not need it, and it is safer off.
+3. Add the server to your tool. Claude Code (tested with 2.1.287):
+
+   ```sh
+   claude mcp add --transport stdio --scope user vimma -- vimma-ctl mcp
+   ```
+
+   Codex CLI (the line checked with 0.160.0): `codex mcp add vimma -- vimma-ctl mcp`. Other tools (opencode, GitHub Copilot)
+   take the same command, `vimma-ctl mcp`, in their MCP server settings. For a profile other than
+   your default one: `vimma-ctl --profile DIR mcp`.
+
+4. Ask the agent, for example "open https://example.com in Vimma's agent workspace and tell me
+   its heading". Each call waits for your answer on the [question line](#answering-an-agent);
+   the agent says it is waiting.
+
+- **What the agent gets.** A read comes back as a line saying where the text is from and that it
+  is untrusted, then the text between `<untrusted-web-content>` delimiters a page cannot close.
+  A denial comes back as `The user denied this request in Vimma.`, and a question nobody
+  answers within `[mcp] ask_timeout` (50 s) as `No answer in Vimma within 50 s; treated as
+denied.` Codex gives up on a tool call after 60 s by default (`tool_timeout_sec`): raise it if
+  you raise `ask_timeout`.
+- **When it cannot reach Vimma**, the call says what to do: `Vimma is not running…`,
+  `MCP is off in Vimma: run :mcp on…`, or `This Vimma is too old for MCP…`. `initialize` and the
+  tool list work without Vimma, so the tool shows the server as connected either way.
+- **One connection per agent session.** It opens at the agent's first call and stays while the
+  session runs; `◇ agent` in the status bar shows it. Grants belong to it: when the session ends
+  (or Vimma restarts), they end, and the next session asks again.
+- **Cancelling** a call in the agent (`Esc` in Claude Code) takes its question off the line.
 
 #### Answering an agent
 
