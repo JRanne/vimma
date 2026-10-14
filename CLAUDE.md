@@ -27,6 +27,8 @@ Read plan.md once per milestone; read docs/specs/<current>.md every session.
 - Specs and every other Markdown file are professional documentation for outside readers. New and
   edited specs follow docs/specs/README.md. State decisions with their reasons; never record who
   asked, when, quoted chat or agent notes.
+- A PR is only for merge-ready work; anything waiting on a decision is an issue; specs merge as
+  drafts (docs/specs/README.md, "Lifecycle").
 - TDD: write the failing test, run it, paste red output; implement; paste green. Never loosen a test.
   This includes mochitests: a test written after the code does not count as red.
 - packages/vimma-core imports nothing from Firefox. Enforced by eslint; do not disable the rule.
