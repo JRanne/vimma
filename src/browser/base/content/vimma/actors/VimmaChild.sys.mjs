@@ -127,11 +127,6 @@ function selectionOnScreen(sel, win) {
   return r.bottom > 0 && r.top < win.innerHeight;
 }
 
-/** nsISelectionController.SELECTION_ATTENTION: the find's highlight of its match. */
-const SELECTION_ATTENTION = 3;
-/** nsISelectionController.SELECTION_NORMAL */
-const SELECTION_NORMAL = 1;
-
 /** nsISelectionListener reasons (spec m1-copy-mode, mouse selection). */
 const MOUSEUP_REASON = 4;
 const JS_REASON = 256;
@@ -294,8 +289,8 @@ export class VimmaChild extends JSWindowActorChild {
       el.blur();
       // Blurring hides the field's selection; the finder shows its match as ATTENTION.
       const controller = /** @type {any} */ (el).editor?.selectionController;
-      controller?.setDisplaySelection(SELECTION_ATTENTION);
-      controller?.repaintSelection(SELECTION_NORMAL);
+      controller?.setDisplaySelection(Ci.nsISelectionController.SELECTION_ATTENTION);
+      controller?.repaintSelection(Ci.nsISelectionController.SELECTION_NORMAL);
     });
   }
 
