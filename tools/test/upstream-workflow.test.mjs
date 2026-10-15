@@ -104,6 +104,29 @@ describe("upstream autopilot workflow", () => {
     expect(job(upstream, "patch-check")).toContain("tools/upstream/source-check.sh");
   });
 
+  it("every verify-sha512.py call passes a signature", () => {
+    // B1: no caller may check a hash against an unsigned SHA512SUMS. Every workflow and every
+    // shell script under tools/ that calls the verifier fetches SHA512SUMS.asc and passes it.
+    const callers = [
+      ...readdirSync(dir).map((f) => [`.github/workflows/${f}`, workflow(f)]),
+      ...readdirSync(new URL("..", import.meta.url), { recursive: true, encoding: "utf8" })
+        .filter((f) => f.endsWith(".sh"))
+        .map((f) => [`tools/${f}`, readFileSync(new URL(`../${f}`, import.meta.url), "utf8")]),
+    ];
+    const calls = callers.flatMap(([name, text]) => {
+      const joined = text.replace(/\\\n\s*/g, " ");
+      const lines = joined.split("\n").filter((l) => /^\s*[^#\s].*verify-sha512\.py/.test(l));
+      return lines.map((line) => ({ name, text, line }));
+    });
+    expect(calls.map((c) => c.name).sort()).toEqual(
+      expect.arrayContaining(["tools/upstream/firefox-source.sh", "tools/upstream/source-check.sh"]),
+    );
+    for (const { name, text, line } of calls) {
+      expect(line, name).toMatch(/--signature "?\$[a-z_{}]+\/SHA512SUMS\.asc"?/);
+      expect(text, name).toMatch(/SHA512SUMS\.asc"? -o /);
+    }
+  });
+
   it("upstream.yml checks the source through source-check.sh", () => {
     // One script for the release autopilot and the Beta canary, so their checks cannot drift.
     const block = job(upstream, "patch-check");

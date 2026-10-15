@@ -9,14 +9,16 @@
 #   tools/upstream/firefox-source.sh      run from the repository root
 #
 # Reads the Firefox version from surfer.json, downloads the source tarball to the path Surfer
-# reads (.surfer/engine/) when it is not there, and checks it against Mozilla's SHA512SUMS,
-# whether it was downloaded now or found on disk. Only then does it delete engine/ and let Surfer
+# reads (.surfer/engine/) when it is not there, and checks it against Mozilla's SHA512SUMS, whose
+# signature must be good by Mozilla's pinned release key (verify-sha512.py, ADR-021), whether the
+# tarball was downloaded now or found on disk. Only then does it delete engine/ and let Surfer
 # extract the verified file (CI_SKIP_INIT=1: no 4.7 GB git commit), and `git init` an empty
 # repository so `surfer import` applies patches inside engine/. Nothing is trusted by label: no
 # engine/ is ever reused.
 #
-# Exit status: 0 engine/ extracted from a verified tarball; 1 the tarball does not match
-# SHA512SUMS (engine/ untouched); 2 usage or a version that is not a release or Beta; any other
+# Exit status: 0 engine/ extracted from a verified tarball; 1 SHA512SUMS is not signed by
+# Mozilla's release key, cannot be checked, or does not list the tarball's hash (engine/
+# untouched); 2 usage or a version that is not a release or Beta; any other
 # non-zero status a download or extraction failure. MOZILLA_RELEASES overrides the archive's
 # releases/ URL (tests use a file:// directory).
 set -euo pipefail
@@ -47,10 +49,11 @@ if [ ! -f "$tarball" ]; then
 fi
 
 curl -fsSL --retry 3 "$base/SHA512SUMS" -o "$scratch/SHA512SUMS"
+curl -fsSL --retry 3 "$base/SHA512SUMS.asc" -o "$scratch/SHA512SUMS.asc"
 sha512sum "$tarball" > "$scratch/tarball.sha512"
-python3 "$here/verify-sha512.py" --sums "$scratch/SHA512SUMS" --name "$name" \
-  --actual "$scratch/tarball.sha512" || {
-  echo "::error::SHA-512 of $tarball does not match $base/SHA512SUMS; engine/ left untouched"
+python3 "$here/verify-sha512.py" --sums "$scratch/SHA512SUMS" \
+  --signature "$scratch/SHA512SUMS.asc" --name "$name" --actual "$scratch/tarball.sha512" || {
+  echo "::error::SHA-512 of $tarball does not match a SHA512SUMS signed by Mozilla's release key ($base); engine/ left untouched"
   # Never kept: a later run downloads afresh instead of failing on the same file forever.
   rm -f "$tarball"
   exit 1

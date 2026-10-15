@@ -5,11 +5,13 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync }
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tempDir } from "../../test/temp-dir.mjs";
+import { fakeSign, withFakeGpgv } from "./fake-gpgv.mjs";
 
 // tools/upstream/firefox-source.sh: the only way a build gets its Firefox source (spec
 // build-supply-chain, decisions 3 to 5, rules B1 and B2). The archive is a file:// directory laid
 // out as archive.mozilla.org's; Surfer is a stub in the checkout's node_modules/.bin that extracts
-// the tarball as Surfer does, records each call, and fails if asked to download. No network.
+// the tarball as Surfer does, records each call, and fails if asked to download. gpgv is a stub
+// (fake-gpgv.mjs): the real signature check is test_verify_sha512.py's. No network.
 const SCRIPT = fileURLToPath(new URL("../firefox-source.sh", import.meta.url));
 const VERSION = "158.0";
 const NAME = `source/firefox-${VERSION}.source.tar.xz`;
@@ -49,7 +51,7 @@ const sha512 = (path) => createHash("sha512").update(readFileSync(path)).digest(
 
 /**
  * An archive whose SHA512SUMS lists the genuine tarball, and a checkout to run the script in.
- * @param {{ served?: "genuine" | "tampered" | "none" }} [opts]
+ * @param {{ served?: "genuine" | "tampered" | "none", signature?: "good" | "bad" | "none" }} [opts]
  */
 function setup(opts = {}) {
   const root = tempDir("firefox-source-");
@@ -62,6 +64,9 @@ function setup(opts = {}) {
     join(dir, "SHA512SUMS"),
     `${"0".repeat(128)}  other\n${sha512(genuine)}  ${NAME}\n`,
   );
+  const signature = opts.signature ?? "good";
+  if (signature === "good") fakeSign(join(dir, "SHA512SUMS"));
+  if (signature === "bad") writeFileSync(join(dir, "SHA512SUMS.asc"), "not mozilla's\n");
   const served = opts.served ?? "genuine";
   if (served !== "none") {
     const target = join(dir, NAME);
@@ -87,7 +92,7 @@ function setup(opts = {}) {
 
 /** @param {{ base: string, work: string }} where */
 function run({ base, work }) {
-  const env = { ...process.env, MOZILLA_RELEASES: base };
+  const env = withFakeGpgv({ ...process.env, MOZILLA_RELEASES: base });
   delete env.CI_SKIP_INIT;
   return spawnSync("bash", [SCRIPT], { cwd: work, env, encoding: "utf8" });
 }
@@ -158,6 +163,25 @@ describe("firefox-source.sh", () => {
     const r = run(where);
     expect(r.status).not.toBe(0);
     expect(r.stdout + r.stderr).toMatch(/SHA-512/);
+    expect(existsSync(join(where.work, "engine", "browser", "stale.txt"))).toBe(true);
+    expect(surferCalls(where.work)).toEqual([]);
+  }, 60_000);
+
+  it("a SHA512SUMS without a good signature fails before engine/ is touched", () => {
+    const where = setup({ signature: "bad" });
+    staleEngine(where.work);
+    const r = run(where);
+    expect(r.status).toBe(1);
+    expect(r.stdout + r.stderr).toMatch(/not signed by Mozilla's release key: gpgv reported BADSIG/);
+    expect(existsSync(join(where.work, "engine", "browser", "stale.txt"))).toBe(true);
+    expect(surferCalls(where.work)).toEqual([]);
+  }, 60_000);
+
+  it("a SHA512SUMS with no signature beside it fails before engine/ is touched", () => {
+    const where = setup({ signature: "none" });
+    staleEngine(where.work);
+    const r = run(where);
+    expect(r.status).not.toBe(0);
     expect(existsSync(join(where.work, "engine", "browser", "stale.txt"))).toBe(true);
     expect(surferCalls(where.work)).toEqual([]);
   }, 60_000);
