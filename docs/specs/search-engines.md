@@ -221,7 +221,9 @@ running it, not recalled.
     bar in that workspace's tabs) is a later option and needs the URL bar's
     `keywordToURI` path to know the workspace; out of scope.
 14. **about:vimma** gains a "Search" line: the default and whether it came from the config,
-    each alias with its engine, and the errors of decision 9.
+    each alias that applied with its engine, and the errors of decision 9. An alias the apply
+    skipped (decision 9) shows only as its error, so the list never names an alias that does not
+    work.
 15. **Template and defaults.** `formatConfigTemplate` gains a commented `[search]` block (the
     example above, all commented) so the first-run file changes nothing; `defaults.toml` and the
     `defaults.test.mjs.snap` snapshot change for it (a changelog line says so).
