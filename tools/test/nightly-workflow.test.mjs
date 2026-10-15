@@ -105,5 +105,25 @@ describe("nightly.yml: a private artifact by default", () => {
     const redact = names.indexOf("Redact the Safe Browsing key from the log");
     expect(redact).toBeGreaterThan(-1);
     expect(names.indexOf("Upload log")).toBeGreaterThan(redact);
+    // A build stopped at timeout-minutes is cancelled, not failed: it still leaves its log.
+    expect(steps("build")[names.indexOf("Upload log")]?.if).toBe("failure() || cancelled()");
+    const issue = steps("report").find((s) => s.name === "Open or update the failure issue");
+    expect(issue?.run).toContain("tail -n 150 nightly-log/nightly.log");
+    // A log line holding a code fence must not end the issue's fence and render as Markdown.
+    const tick = "`";
+    expect(issue?.run).toContain(`sed 's/${tick}/\\\\${tick}/g'`);
+  });
+
+  it("the jobs that call gh name the repository, since they check nothing out", () => {
+    for (const [id, name] of [
+      ["publish", "Publish rolling nightly release"],
+      ["report", "Open or update the failure issue"],
+    ]) {
+      const step = steps(id).find((s) => s.name === name);
+      expect(step?.env, id).toMatchObject({
+        GH_TOKEN: "${{ github.token }}",
+        GH_REPO: "${{ github.repository }}",
+      });
+    }
   });
 });

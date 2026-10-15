@@ -640,9 +640,9 @@ download --force` gave `--force` to npm, and `npx --no commitlint --from A --to 
     secret is deleted. Reason: today a branch's edited `nightly.yml` can drop the `if:` that keeps
     the key on `main`; an environment policy is enforced by GitHub, outside any workflow file. This
     holds on hosted runners as much as on any other: the question is which workflow runs may read
-    the secret, not which machine runs them. The nightly keeps the key because its binaries
-    are what people run (the artifact, or the release once published, decision 23) and its mochitests assert the key is compiled in
-    (`VIMMA_EXPECT_SAFEBROWSING_KEY`). The key ships inside every keyed binary (spec
+    the secret, not which machine runs them. The nightly keeps the key because its binaries are
+    what people run (the artifact, or the release once published, decision 23) and its mochitests
+    assert the key is compiled in (`VIMMA_EXPECT_SAFEBROWSING_KEY`). The key ships inside every keyed binary (spec
     m0-safebrowsing-key), so this limits who can use it from CI, not who can read it.
 19. **Action SHA pinning becomes a repository setting too.** Every workflow already pins actions
     by commit SHA and tests enforce it for several workflows; setting `sha_pinning_required` makes
@@ -876,6 +876,7 @@ the cryptography is tested by `test_verify_sha512.py` alone.
 - `publishing the rolling release is a separate job, off unless PUBLISH_NIGHTLY_RELEASE`
 - `only the publish job may write contents, and only it releases`
 - `a failure is reported by its own job, from the redacted log artifact`
+- `the jobs that call gh name the repository, since they check nothing out`
 
 **vitest, `tools/test/self-hosted-runner.test.mjs`:**
 

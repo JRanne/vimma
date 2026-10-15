@@ -171,8 +171,9 @@ jobs:
             sed -i "s|${SB_KEY}|[redacted]|g" "$LOG"
           fi
 
+      # cancelled(): a build stopped by timeout-minutes is cancelled, not failed.
       - name: Upload log
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-log
@@ -229,14 +230,22 @@ jobs:
           gh label create nightly-failure --color B60205 \
             --description "nightly.yml failed" --force
           {
-            echo "Nightly build failed: ${RUN_URL} (full log in the run's \`nightly-log\` artifact)."
+            echo "Nightly run failed: ${RUN_URL} (the build's full log, if it got that far, is the"
+            echo "run's \`nightly-log\` artifact)."
             echo
             echo "Last 150 log lines:"
             echo
             echo '```text'
-            # The build job redacted the log before uploading it; also drop lines naming the key define.
-            tail -n 150 nightly-log/nightly.log 2>/dev/null \
-              | grep -v -i 'safebrowsing_api_key\|safebrowsing-api-key' || echo "(no log)"
+            # The build job redacted the log before uploading it; also drop lines naming the key
+            # define. Backticks are escaped so no log line can close the fence and render as
+            # Markdown (mentions, links, images).
+            if [ -s nightly-log/nightly.log ]; then
+              tail -n 150 nightly-log/nightly.log \
+                | grep -v -i 'safebrowsing_api_key\|safebrowsing-api-key' \
+                | sed 's/`/\\`/g' || true
+            else
+              echo "(no log)"
+            fi
             echo '```'
           } > issue.md
           open=$(gh issue list --label nightly-failure --state open --json number --jq '.[0].number')

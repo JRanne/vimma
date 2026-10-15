@@ -771,7 +771,8 @@ in a `build` environment, and a watch on Mozilla's release key,
   `nightly` pre-release **only** when the repository variable `PUBLISH_NIGHTLY_RELEASE` is
   `true` (unset until the release gate); the failure issue comes from a `report` job with
   `issues: write`. Neither of those checks out or runs repository code or reads a secret, and
-  the issue quotes only the log the build job redacted before uploading it. **⚠ limit:** the
+  the issue quotes only the log the build job redacted before uploading it, with backticks
+  escaped so no log line can end its code fence. **⚠ limit:** the
   repository is public, so anyone signed in to GitHub can download the artifact from the run;
   it is unpublished, not secret.
   [`the workflow and its build job can only read the repository`](../tools/test/nightly-workflow.test.mjs),
@@ -779,4 +780,5 @@ in a `build` environment, and a watch on Mozilla's release key,
   [`publishing the rolling release is a separate job, off unless PUBLISH_NIGHTLY_RELEASE`](../tools/test/nightly-workflow.test.mjs),
   [`only the publish job may write contents, and only it releases`](../tools/test/nightly-workflow.test.mjs),
   [`a failure is reported by its own job, from the redacted log artifact`](../tools/test/nightly-workflow.test.mjs),
+  [`the jobs that call gh name the repository, since they check nothing out`](../tools/test/nightly-workflow.test.mjs),
   [`only the nightly's publish and failure-issue steps get GH_TOKEN`](../tools/test/full-build-workflows.test.mjs)
