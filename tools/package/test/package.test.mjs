@@ -42,7 +42,7 @@ import { tempDir } from "../../test/temp-dir.mjs";
 
 const BRAND_DIR = fileURLToPath(new URL("../../../configs/branding/vimma/", import.meta.url));
 const MAINTAINER = "Test Maintainer <test@example.invalid>";
-const REPO = "JRanne/vimma";
+const REPO = "vimma-browser/vimma";
 
 /** @param {string} cmd */
 const has = (cmd) => spawnSync("sh", ["-c", `command -v ${cmd}`]).status === 0;
@@ -327,7 +327,7 @@ describe("PKGBUILD and .SRCINFO", () => {
     expect(build).toMatch(/^pkgrel=1$/m);
     expect(build).toMatch(/^license=\('MPL-2\.0'\)$/m);
     expect(build).toContain(
-      "https://github.com/JRanne/vimma/releases/download/v${pkgver}/vimma-${pkgver}-linux-x86_64.tar.xz",
+      "https://github.com/vimma-browser/vimma/releases/download/v${pkgver}/vimma-${pkgver}-linux-x86_64.tar.xz",
     );
     expect(build).toContain(
       `sha256sums=('${"a".repeat(64)}'\n            '${"b".repeat(64)}'\n            '${"c".repeat(64)}')`,
@@ -361,7 +361,7 @@ describe("PKGBUILD and .SRCINFO", () => {
     expect(info).toMatch(/^\tpkgrel = 1$/m);
     expect(info).toMatch(/^\tlicense = MPL-2\.0$/m);
     expect(info).toContain(
-      "\tsource = vimma-0.1.0-linux-x86_64.tar.xz::https://github.com/JRanne/vimma/releases/download/v0.1.0/vimma-0.1.0-linux-x86_64.tar.xz\n",
+      "\tsource = vimma-0.1.0-linux-x86_64.tar.xz::https://github.com/vimma-browser/vimma/releases/download/v0.1.0/vimma-0.1.0-linux-x86_64.tar.xz\n",
     );
     expect(info).toContain(
       `\tsha256sums = ${"a".repeat(64)}\n\tsha256sums = ${"b".repeat(64)}\n\tsha256sums = ${"c".repeat(64)}\n`,
@@ -638,7 +638,7 @@ describe("RUNTIME_RELEASE", () => {
 
 describe("cosign identity", () => {
   const re = new RegExp(IDENTITY_REGEXP);
-  const wf = "https://github.com/JRanne/vimma/.github/workflows/release.yml@";
+  const wf = "https://github.com/vimma-browser/vimma/.github/workflows/release.yml@";
 
   it.each(["refs/tags/v0.1.0", "refs/tags/v12.34.56", "refs/heads/main"])("accepts %s", (ref) => {
     expect(re.test(wf + ref)).toBe(true);
@@ -650,7 +650,7 @@ describe("cosign identity", () => {
     [`${wf}refs/tags/v0.1.0-rc.1`],
     [`${wf}refs/tags/v0.1.0x`],
     [`${wf}refs/pull/1/merge`],
-    ["https://github.com/JRanne/vimma/.github/workflows/nightly.yml@refs/heads/main"],
+    ["https://github.com/vimma-browser/vimma/.github/workflows/nightly.yml@refs/heads/main"],
     ["https://github.com/evil/vimma/.github/workflows/release.yml@refs/heads/main"],
     [`x${wf}refs/heads/main`],
   ])("refuses %s", (identity) => {

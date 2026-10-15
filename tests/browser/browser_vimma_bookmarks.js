@@ -5,7 +5,7 @@
 // Spec: docs/specs/bookmarks.md. `ctrl+b shift+b` toggles a bookmarks panel in the
 // side panel's slot, over Firefox's Places bookmarks, with neo-tree's keys; `ctrl+b a` and
 // `:bookmark` file the page under typed folders. By default the panel shows the Bookmarks
-// Toolbar's contents (user decision, 2026-10-10); `[bookmarks] root = "all"` the whole tree.
+// Toolbar's contents (docs/specs/bookmarks.md); `[bookmarks] root = "all"` the whole tree.
 
 "use strict";
 

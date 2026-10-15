@@ -34,6 +34,13 @@ import { LAYOUTS } from "./layouts.mjs";
  * @typedef {{ value: string, kind: "command" | "action" | "argument", description: string,
  *   label?: string }} Candidate
  */
+/** @typedef {{ name: string, description: string }} AliasCompletion */
+/**
+ * What arguments complete to: names by `ARGUMENT_KINDS` key, and `search`, the `@aliases`
+ * `:open` completes, as AliasCompletion.
+ * @typedef {Readonly<Record<string, readonly string[] | readonly AliasCompletion[]>>}
+ *   CompletionArgs
+ */
 /**
  * @typedef {object} History
  * @property {readonly string[]} entries oldest first
@@ -109,6 +116,8 @@ export const COMMANDS = Object.freeze([
     aliases: ["ts", "b"],
   }),
   cmd("sidebar", "none", "sidebar.toggle", "Open / close the side panel"),
+  // docs/specs/toolbar-toggle.md decision 2: show / hide set a known state (vimma-ctl).
+  cmd("toolbar", "optional", "toolbar.toggle", "Show / hide the toolbar (show | hide)"),
   // docs/specs/bookmarks.md: with a path, files the page without the prompt.
   cmd("bookmark", "optional", "bookmark.add", "Bookmark this page (optionally folders/title)"),
   cmd("bookmarks", "none", "bookmarks.toggle", "Open / close the bookmarks panel"),
@@ -151,6 +160,23 @@ export const COMMANDS = Object.freeze([
  * (with `npm run gen-docs`) and empties this list.
  */
 export const PENDING_ACTIONS = Object.freeze(/** @type {string[]} */ ([]));
+
+/** `:toolbar`'s words, in completion order. */
+const TOOLBAR_WORDS = Object.freeze(/** @type {const} */ (["show", "hide"]));
+
+/**
+ * `:toolbar [show|hide]` (docs/specs/toolbar-toggle.md decision 2): toggle without a word.
+ * @param {string | undefined} text
+ * @returns {{ kind: "toggle" | "show" | "hide" } | { kind: "refuse", text: string }}
+ */
+export function parseToolbarCommand(text) {
+  const word = (text ?? "").trim().toLowerCase();
+  if (!word) return { kind: "toggle" };
+  if (word === "show" || word === "hide") return { kind: word };
+  const near = closest(word, [...TOOLBAR_WORDS]);
+  const refusal = ':toolbar takes "show", "hide" or nothing';
+  return { kind: "refuse", text: near ? `${refusal}: did you mean "${near}"?` : refusal };
+}
 
 /** @type {Map<string, CommandDef>} */
 const byWord = new Map();
@@ -325,10 +351,14 @@ const CANDIDATES = [
  */
 const ARGUMENT_KINDS = Object.freeze({
   addon: { names: "addon", kind: "add-on" },
+  // docs/specs/search-engines.md, decision 11: `@alias`, while it is the only word.
+  open: { names: "search", kind: "search engine" },
+  tabnew: { names: "search", kind: "search engine" },
   layout: { names: "layout", kind: "layout", fixed: LAYOUTS },
   private: { names: "private", kind: "private workspace", fixed: ["close"] },
-  // The two a first-time user wants first, then back to following the system.
+  // The two a first-time user reaches for, then back to following the system.
   theme: { names: "theme", kind: "appearance", fixed: ["dark", "light", "system"] },
+  toolbar: { names: "toolbar", kind: "toolbar", fixed: TOOLBAR_WORDS },
   workspace: { names: "workspace", kind: "workspace" },
   wsdelete: { names: "workspace", kind: "workspace" },
   wsmove: { names: "workspace", kind: "workspace" },
@@ -365,10 +395,34 @@ function argumentCandidates(command, kind, text, names) {
 }
 
 /**
+ * `:open @g` → `open @gh ` (search-engines decision 11): the aliases starting with the one word
+ * typed, each with its engine, the words to follow after the space.
+ * @param {string} command
+ * @param {string} text
+ * @param {readonly AliasCompletion[]} aliases  from searchCompletions
+ * @returns {Candidate[]}
+ */
+function aliasCandidates(command, text, aliases) {
+  if (!/^@\S*$/.test(text)) return [];
+  const typed = text.toLowerCase();
+  return aliases
+    .filter((a) => a.name.startsWith(typed))
+    .map((a) =>
+      Object.freeze({
+        value: `${command} ${a.name} `,
+        kind: /** @type {const} */ ("argument"),
+        description: a.description,
+        label: a.name,
+      }),
+    );
+}
+
+/**
  * Completion candidates for the command word, or for the argument of a command that completes
- * one, from the names the host passes in `args` (`{ addon: [...], workspace: [...] }`).
+ * one, from the names the host passes in `args` (`{ addon: [...], workspace: [...] }`, and
+ * `search`: the `@aliases` with their engines).
  * @param {string} line
- * @param {{ limit?: number, args?: Readonly<Record<string, readonly string[]>> }} [options]
+ * @param {{ limit?: number, args?: CompletionArgs }} [options]
  * @returns {{ word: string, candidates: Candidate[] }}
  */
 export function completeCommandLine(line, { limit = 20, args = {} } = {}) {
@@ -379,9 +433,21 @@ export function completeCommandLine(line, { limit = 20, args = {} } = {}) {
     const command = byWord.get(word)?.name;
     const spec = command && Object.hasOwn(ARGUMENT_KINDS, command) ? ARGUMENT_KINDS[command] : null;
     const names =
-      spec && Object.hasOwn(args, spec.names) ? args[spec.names] : (spec?.fixed ?? undefined);
+      spec && Object.hasOwn(args, spec.names)
+        ? /** @type {readonly string[]} */ (args[spec.names])
+        : (spec?.fixed ?? undefined);
     if (!spec || !names) return { word, candidates: [] };
     const text = rest.slice(/** @type {string} */ (m[1]).length + 1);
+    if (spec.names === "search") {
+      return {
+        word,
+        candidates: aliasCandidates(
+          word,
+          text,
+          /** @type {readonly AliasCompletion[]} */ (args.search ?? []),
+        ).slice(0, limit),
+      };
+    }
     return {
       word,
       candidates: argumentCandidates(word, spec.kind, text, names).slice(0, limit),

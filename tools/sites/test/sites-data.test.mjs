@@ -9,7 +9,7 @@ describe("tools/sites/sites.json", () => {
     expect(validateSites(SITES)).toEqual([]);
   });
 
-  it("has the sites the user asked for (2026-10-12)", () => {
+  it("has the sites the suite covers", () => {
     const hosts = new Set(SITES.map((/** @type {any} */ s) => new URL(s.url).hostname));
     for (const host of [
       "github.com",

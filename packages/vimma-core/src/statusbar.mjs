@@ -28,7 +28,16 @@ export { textWidth };
  * @property {"left" | "right"} side
  * @property {number} priority      0 = most important; higher gives way first
  * @property {number} min           shortest width it may be shrunk to
- * @property {"end" | "middle" | "none"} cut
+ * @property {"end" | "middle" | "url" | "none"} cut  "url": truncateUrl with `origin`
+ * @property {UrlOrigin | null} [origin]  for `cut: "url"`
+ * @property {boolean} [keep]  never dropped: cut to its `min` while others give way, and past it
+ *   only as the last resort
+ */
+
+/**
+ * The host of a URL as the bar shows it, and its registrable domain (eTLD+1; the whole host for
+ * an IP address), both in display form, from the host (`Services.eTLD`).
+ * @typedef {{ host: string, base: string }} UrlOrigin
  */
 
 /**
@@ -38,7 +47,7 @@ export { textWidth };
  * @property {{ name: string, index: number, color?: string, private?: boolean } | null} [workspace]
  *   `private`: the private workspace (docs/specs/private-workspace.md), `◆ private`
  * @property {{ index: number, count: number, title?: string | null, url?: string | null,
- *   label?: string | null } | null} [tab]
+ *   label?: string | null, origin?: UrlOrigin | null } | null} [tab]
  * @property {{ index: number, count: number, hidden?: boolean } | null} [pane]  `hidden`: the
  *   split is kept as a view that is not shown (docs/specs/side-panel-unsplit.md decision 27)
  * @property {boolean} [loading]
@@ -50,7 +59,73 @@ export { textWidth };
  * @property {{ waiting: number, minutes: number | null, ran: boolean } | null} [agent]  local AI
  *   agents (docs/specs/vimma-mcp.md decision 24): questions waiting, the shortest grant's
  *   minutes left, a request that just ran
+ * @property {boolean} [toolbarHidden]  Firefox's toolbar is hidden (docs/specs/toolbar-toggle.md):
+ *   the bar then carries its security and private-browsing cues; shown, those are left out
+ * @property {SecurityLevel} [security]  the selected page's connection (securityFromState)
+ * @property {boolean} [privateWindow]  a private browsing window
+ * @property {readonly string[]} [sharing]  devices the page uses (sharingCues)
  */
+
+/** @typedef {"secure" | "insecure" | "neutral"} SecurityLevel */
+
+/**
+ * The selected page's connection, decided as Firefox's identity block decides it
+ * (browser-siteIdentity.js `_refreshIdentityIcons`), from the browser's own state rather than
+ * from any element: "secure" for a verified connection (Firefox's quiet lock); "insecure" for a
+ * certificate error page, a certificate exception, a broken connection (mixed content, a weak
+ * cipher) or a page not served over a secure connection; "neutral" for the rest (about: pages,
+ * files, add-on pages, the start page, http on localhost, which Firefox counts as secure).
+ * @param {{ scheme: string, secure: boolean, broken: boolean, certOverride: boolean,
+ *   errorPage: boolean, secureContext: boolean }} state  `secure`, `broken`, `certOverride`:
+ *   the STATE_IS_SECURE, STATE_IS_BROKEN and STATE_CERT_USER_OVERRIDDEN bits of
+ *   `browser.securityUI.state`; `errorPage`: a certificate or HTTPS-Only error page;
+ *   `secureContext`: the page's window is a secure context
+ * @returns {SecurityLevel}
+ */
+export function securityFromState({
+  scheme,
+  secure,
+  broken,
+  certOverride,
+  errorPage,
+  secureContext,
+}) {
+  if (errorPage) return "insecure";
+  if (scheme !== "http" && scheme !== "https") return "neutral";
+  if (certOverride || broken) return "insecure";
+  if (secure) return "secure";
+  return secureContext ? "neutral" : "insecure";
+}
+
+/**
+ * What the page is using, from Firefox's per-tab sharing state (`browser._sharingState`, as
+ * browser-sitePermissionPanel.js `updateSharingIndicator` reads it), in the address bar's order.
+ * @param {{ webRTC?: { camera?: unknown, microphone?: unknown, screen?: unknown } | null,
+ *   geo?: unknown, xr?: unknown, serial?: unknown } | null | undefined} state
+ * @returns {string[]}
+ */
+export function sharingCues(state) {
+  if (!state) return [];
+  /** @type {string[]} */
+  const out = [];
+  /**
+   * Camera and microphone are nsIMediaManagerService states (1 capturing, 2 disabled: paused);
+   * screen a string ending in "Paused" when paused (webrtcUI getCombinedStateForBrowser).
+   * @param {string} name @param {unknown} value
+   */
+  const add = (name, value) => {
+    if (!value) return;
+    const paused = value === 2 || (typeof value === "string" && value.endsWith("Paused"));
+    out.push(paused ? `${name} paused` : name);
+  };
+  add("camera", state.webRTC?.camera);
+  add("mic", state.webRTC?.microphone);
+  add("screen", state.webRTC?.screen);
+  add("location", state.geo);
+  add("XR", state.xr);
+  add("serial", state.serial);
+  return out;
+}
 
 /** `[workspaces.<name>] color` (Firefox container colours) → its readable text token. */
 export const WORKSPACE_COLOR_TOKENS = Object.freeze({
@@ -117,11 +192,95 @@ export function truncate(text, width, how) {
 }
 
 /**
- * The URL as the bar shows it: no `http(s)://`, no lone trailing `/`.
- * @param {string} url
+ * Where the host is in `text` (a URL as the bar shows it), with an IPv6 host's brackets.
+ * @param {string} text
+ * @param {string} host
+ * @returns {{ start: number, end: number } | null}
  */
-export function displayUrl(url) {
-  const m = /^https?:\/\/(.*)$/i.exec(url);
+function findHost(text, host) {
+  const scheme = text.indexOf("://");
+  const from = scheme >= 0 ? scheme + 3 : 0;
+  let start = text.indexOf(host, from);
+  if (start < 0) start = text.lastIndexOf(host);
+  if (start < 0) return null;
+  let end = start + host.length;
+  if (text[start - 1] === "[" && text[end] === "]") {
+    start -= 1;
+    end += 1;
+  }
+  return { start, end };
+}
+
+/**
+ * The URL cut to `width` columns without ever cutting its registrable domain, since with the
+ * toolbar hidden it is the only origin indicator (docs/security.md C3): the path and query go first, then the scheme with the leftmost labels of
+ * the host, whole labels at a time, as Firefox's address bar keeps the base domain in view. Only
+ * when even `…<base domain>…` does not fit is the domain's end cut. Without an origin (about:,
+ * file:, a URL with no host) the end is cut, never the middle.
+ * @param {string} text
+ * @param {number} width
+ * @param {UrlOrigin | null | undefined} origin
+ * @returns {string | null}
+ */
+export function truncateUrl(text, width, origin) {
+  if (textWidth(text) <= width) return text;
+  const at = origin ? findHost(text, origin.host) : null;
+  if (!origin || !at) return width > 0 ? truncate(text, width, "end") : null;
+  const pre = text.slice(0, at.start);
+  const host = text.slice(at.start, at.end);
+  const rest = text.slice(at.end);
+  const head = pre + host;
+  const room = width - textWidth(head);
+  if (room >= 2) return head + truncate(rest, room, "end");
+  if (room === 1) return head + ELLIPSIS;
+  const tail = rest ? ELLIPSIS : "";
+  let last = "";
+  for (const candidate of hostTails(host, origin.base, pre !== "")) {
+    if (textWidth(candidate + tail) <= width) return candidate + tail;
+    last = candidate;
+  }
+  // Narrower than the registrable domain itself: its end is cut as the last resort, rather
+  // than the address going missing (docs/security.md C3).
+  return width > 0 ? truncate(last + tail, width, "end") : null;
+}
+
+/**
+ * The host with ever more of its leftmost labels cut, down to its registrable domain.
+ * @param {string} host  as in the text (an IPv6 host with its brackets)
+ * @param {string} base
+ * @param {boolean} cutBefore  something before the host (the scheme) was cut
+ */
+function* hostTails(host, base, cutBefore) {
+  if (host === base || host === `[${base}]` || !host.endsWith(`.${base}`)) {
+    yield `${ELLIPSIS}${host}`;
+    return;
+  }
+  const labels = host.split(".");
+  const keep = base.split(".").length;
+  for (let k = 0; k <= labels.length - keep; k++) {
+    const lead = k > 0 || cutBefore ? ELLIPSIS : "";
+    yield lead + labels.slice(k).join(".");
+  }
+}
+
+/** The narrowest truncateUrl result for `text`, in columns. @param {string} text @param {UrlOrigin} origin */
+function urlMinWidth(text, origin) {
+  const at = findHost(text, origin.host);
+  if (!at) return Math.min(12, textWidth(text));
+  const host = text.slice(at.start, at.end);
+  const rest = text.slice(at.end) ? 1 : 0;
+  const tails = [...hostTails(host, origin.base, at.start > 0)];
+  return Math.min(textWidth(text), textWidth(/** @type {string} */ (tails.at(-1))) + rest);
+}
+
+/**
+ * The URL as the bar shows it: no `http(s)://`, no lone trailing `/`. `keepHttp` keeps
+ * `http://`, which is part of the warning while the toolbar is hidden (toolbar-toggle 12).
+ * @param {string} url
+ * @param {{ keepHttp?: boolean }} [options]
+ */
+export function displayUrl(url, { keepHttp = false } = {}) {
+  const m = (keepHttp ? /^https:\/\/(.*)$/i : /^https?:\/\/(.*)$/i).exec(url);
   if (!m) return url;
   const rest = /** @type {string} */ (m[1]);
   const slash = rest.indexOf("/");
@@ -155,6 +314,10 @@ export function statusSegments(input) {
     alerts = [],
     find = null,
     agent = null,
+    toolbarHidden = false,
+    security = "neutral",
+    privateWindow = false,
+    sharing = [],
   } = input;
   /** @type {Segment[]} */
   const left = [];
@@ -231,7 +394,8 @@ export function statusSegments(input) {
   }
   if (tab) {
     const title = displayLabel(tab);
-    urlShownAsTitle = !!tab.url && title === tab.url;
+    // Toolbar hidden: the URL is the origin indicator, so a title cannot stand in for it.
+    urlShownAsTitle = !toolbarHidden && !!tab.url && title === tab.url;
     left.push(
       seg({ id: "title", text: title, fg: "--vimma-fg-bright", priority: 5, min: 8, cut: "end" }),
     );
@@ -304,14 +468,70 @@ export function statusSegments(input) {
       }),
     );
   }
-  if (tab?.url && !urlShownAsTitle) {
+  if (toolbarHidden && security === "insecure") {
+    // Text, not only colour (m7-a11y); as important as a config error (toolbar-toggle 12).
+    right.push(
+      seg({
+        id: "security",
+        text: "not secure",
+        fg: "--vimma-text-error",
+        side: "right",
+        priority: 2,
+      }),
+    );
+  }
+  if (toolbarHidden && sharing.length) {
+    // The address bar's and the tab's "in use" icons, both hidden here (docs/security.md C3).
+    right.push(
+      seg({
+        id: "sharing",
+        text: `using ${sharing.join(", ")}`,
+        fg: "--vimma-text-error",
+        side: "right",
+        priority: 2,
+      }),
+    );
+  }
+  if (toolbarHidden && privateWindow && !workspace?.private) {
+    // The toolbar's private-browsing indicator; the private workspace's segment says it already.
+    right.push(
+      seg({
+        id: "private",
+        text: PRIVATE_NAME,
+        fg: PRIVATE_COLOR_TOKEN,
+        side: "right",
+        // A security cue: outranks the URL, as `not secure` and the devices in use do.
+        priority: 2,
+      }),
+    );
+  }
+  if (tab?.url && !urlShownAsTitle && toolbarHidden) {
+    // The origin indicator while the toolbar is hidden: never cut inside the registrable domain.
+    const text = displayUrl(tab.url, { keepHttp: true });
     right.push(
       seg({
         id: "url",
-        text: displayUrl(tab.url),
+        text,
         fg: "--vimma-fg-dim",
         side: "right",
-        priority: 8,
+        priority: 4.9,
+        min: tab.origin ? urlMinWidth(text, tab.origin) : Math.min(12, textWidth(text)),
+        cut: "url",
+        origin: tab.origin ?? null,
+        // Never dropped: what else gives way first, then the address is cut further.
+        keep: true,
+      }),
+    );
+  } else if (tab?.url && !urlShownAsTitle) {
+    right.push(
+      seg({
+        id: "url",
+        text: displayUrl(tab.url, { keepHttp: toolbarHidden }),
+        fg: "--vimma-fg-dim",
+        side: "right",
+        // Toolbar hidden: the bar is the only place the address shows, so it outlasts the
+        // title (5; on a tie the later segment gives way first, so just below it).
+        priority: toolbarHidden ? 4.9 : 8,
         min: 12,
         cut: "middle",
       }),
@@ -341,10 +561,24 @@ export function fitStatus(segments, width) {
           /** @type {Segment} */ (segments[a]).priority || b - a,
     );
   const current = () => /** @type {Segment[]} */ (out.filter(Boolean));
+  /** @type {number[]} segments with `keep` */
+  const kept = [];
+  let yielded = false;
   for (const i of visit) {
     const excess = statusWidth(current()) - width;
     if (excess <= 0) break;
     const s = /** @type {Segment} */ (segments[i]);
+    // A kept segment takes room only from less important ones: before anything that outranks
+    // it gives way (the mode, the error, security and in-use cues), it is cut further.
+    if (kept.length && s.priority < KEEP_YIELDS_BELOW && !yielded) {
+      yielded = true;
+      // The mode's full word gives way first, to its one-column short form; then the kept
+      // segment, down to nothing; only then the cues themselves.
+      let left = excess - shortenModes(out, left0(excess));
+      if (left > 0 && yieldKept(out, segments, kept, left)) break;
+      left = statusWidth(current()) - width;
+      if (left <= 0) break;
+    }
     const w = textWidth(s.text);
     if (s.priority === 0) {
       // never dropped: cut as far as needed, but to one column at least
@@ -355,13 +589,103 @@ export function fitStatus(segments, width) {
           : { ...s, text: truncate(s.text, room, s.cut === "middle" ? "middle" : "end") };
       continue;
     }
-    if (s.cut !== "none" && w - Math.min(s.min, w) >= excess) {
-      out[i] = { ...s, text: truncate(s.text, w - excess, s.cut) };
+    if (s.keep) {
+      // Down to its `min` now; whatever comes next gives way before it is cut further.
+      const room = Math.max(Math.min(s.min, w), w - excess);
+      kept.push(i);
+      out[i] = room >= w ? s : { ...s, text: cutUrl(s, room) };
+      continue;
+    }
+    if (s.cut === "url" && w - Math.min(s.min, w) >= excess) {
+      const text = truncateUrl(s.text, w - excess, s.origin);
+      out[i] = text === null ? null : { ...s, text };
+    } else if (s.cut !== "none" && w - Math.min(s.min, w) >= excess) {
+      out[i] = { ...s, text: truncate(s.text, w - excess, s.cut === "url" ? "end" : s.cut) };
     } else {
       out[i] = null;
     }
   }
+  // A kept segment takes back what the others freed (with its separator, if it had to go),
+  // then the mode its full word.
+  for (const i of kept) {
+    const s = /** @type {Segment} */ (segments[i]);
+    const now = out[i] ? textWidth(/** @type {Segment} */ (out[i]).text) : -1;
+    const room = now + width - statusWidth(current());
+    out[i] = room < 1 ? null : room >= textWidth(s.text) ? s : { ...s, text: cutUrl(s, room) };
+  }
+  if (yielded) {
+    segments.forEach((s, i) => {
+      const now = out[i];
+      if (s.priority !== 0 || !now) return;
+      const room = textWidth(now.text) + width - statusWidth(current());
+      out[i] =
+        room >= textWidth(s.text) ? s : { ...s, text: truncate(s.text, Math.max(1, room), "end") };
+    });
+  }
   return current();
+}
+
+/** @param {number} n */
+const left0 = (n) => Math.max(0, n);
+
+/**
+ * Cuts the modes (priority 0) toward one column to free `excess` columns; returns how many.
+ * @param {(Segment | null)[]} out
+ * @param {number} excess
+ */
+function shortenModes(out, excess) {
+  let freed = 0;
+  out.forEach((s, i) => {
+    if (!s || s.priority !== 0 || freed >= excess) return;
+    const w = textWidth(s.text);
+    const room = Math.max(1, w - (excess - freed));
+    if (room < w) {
+      out[i] = { ...s, text: truncate(s.text, room, "end") };
+      freed += w - textWidth(/** @type {Segment} */ (out[i]).text);
+    }
+  });
+  return freed;
+}
+
+/**
+ * Segments whose priority is below this (more important) outrank a kept segment: the mode's
+ * one-column short form (0), and the error, security, in-use and private cues (2). The mode's
+ * full word does not: it gives way first. docs/security.md C3 orders them so.
+ */
+const KEEP_YIELDS_BELOW = 2.5;
+
+/**
+ * Cuts the kept segments further, down to nothing as the last resort, to free `excess` columns.
+ * @param {(Segment | null)[]} out
+ * @param {readonly Segment[]} segments
+ * @param {number[]} kept
+ * @param {number} excess
+ * @returns {boolean} whether that was enough
+ */
+function yieldKept(out, segments, kept, excess) {
+  let left = excess;
+  for (const i of kept) {
+    const now = out[i];
+    if (!now || left <= 0) continue;
+    const w = textWidth(now.text);
+    const room = w - left;
+    if (room >= 1) {
+      out[i] = { ...now, text: cutUrl(/** @type {Segment} */ (segments[i]), room) };
+      left -= w - textWidth(/** @type {Segment} */ (out[i]).text);
+    } else {
+      out[i] = null;
+      left -= w + 1;
+    }
+  }
+  return left <= 0;
+}
+
+/** @param {Segment} s @param {number} width */
+function cutUrl(s, width) {
+  return (
+    (s.cut === "url" ? truncateUrl(s.text, width, s.origin) : truncate(s.text, width, "end")) ??
+    ELLIPSIS
+  );
 }
 
 /**

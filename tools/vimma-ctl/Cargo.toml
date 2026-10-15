@@ -9,7 +9,7 @@ edition = "2024"
 rust-version = "1.85"
 license = "MPL-2.0"
 description = "Command-line client for the Vimma browser's control socket"
-repository = "https://github.com/JRanne/vimma"
+repository = "https://github.com/vimma-browser/vimma"
 publish = false
 
 # No dependencies on purpose (ADR-011): std only, so the binary and its licence check stay trivial.

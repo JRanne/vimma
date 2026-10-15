@@ -1,8 +1,13 @@
-# Spec m0-pipeline: full Linux x86_64 build, rolling `nightly` release, issue on failure.
-# A full build does not fit a GitHub-hosted runner (engine/ is 22 GB after a build; 39 min on 16
-# threads), so it runs on a self-hosted runner labelled `vimma-build`. The schedule does nothing
-# until the repository variable NIGHTLY_ENABLED is `true`; a manual run (workflow_dispatch) is
-# allowed before that to test the runner. Setup: docs/runbook.md, "Nightly build runner".
+# Spec m0-pipeline: full Linux x86_64 build, issue on failure. Spec build-supply-chain,
+# decision 23: the nightly publishes no release; its package is the run's workflow artifact
+# `vimma-nightly`, kept 7 days. The repository is public, so any signed-in GitHub user can
+# download it from the run while it is kept.
+# Spec build-supply-chain: it runs on the standard GitHub-hosted runner, never a self-hosted one
+# (docs/security.md, B5), from Firefox source that tools/upstream/firefox-source.sh verifies and
+# extracts in this job, and restores nothing from the Actions cache (B1, B2). Nothing runs,
+# scheduled or manual, until the repository variable NIGHTLY_ENABLED is `true`; a manual run
+# (workflow_dispatch) must also start from main. Measured time and disk, and how to switch it
+# on: docs/runbook.md, "Full builds".
 name: nightly
 
 on:
@@ -19,41 +24,65 @@ concurrency:
 
 jobs:
   build:
-    # Manual runs only from main: a branch's edited nightly.yml must not get the secret.
+    # Manual runs only from main: a branch's edited nightly.yml must not get the secret. Manual
+    # runs need NIGHTLY_ENABLED too: a build compiles in the Safe Browsing key.
     if: >-
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'schedule' && vars.NIGHTLY_ENABLED == 'true')
-    runs-on: [self-hosted, linux, x64, vimma-build]
-    timeout-minutes: 240
+      vars.NIGHTLY_ENABLED == 'true' &&
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'schedule')
+    runs-on: ubuntu-24.04
+    # About 1.5 times the measured job, 124 min (docs/runbook.md, "Full builds"), well under
+    # GitHub's 6 hours, so a hung build fails here with its own log and failure handling.
+    timeout-minutes: 190
+    # No write token here: npm, Surfer, mach and the mochitests run in this job. The failure
+    # issue is a job of its own (`report`).
     permissions:
-      contents: write # publish the rolling `nightly` release
-      issues: write # open an issue when the build fails
+      contents: read
     env:
-      GH_TOKEN: ${{ github.token }}
       LOG: ${{ github.workspace }}/nightly.log
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Keep the git-ignored engine/ and .surfer/ between runs: re-downloading Firefox costs
-          # 12 min and a cold build 39 min. engine/ is re-downloaded when surfer.json changes.
-          clean: false
+          persist-credentials: false # this job never pushes
+
+      # No `cache` input: a build restores nothing from the Actions cache (B2).
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
 
       - name: npm ci
-        run: npm ci 2>&1 | tee -a "$LOG"
+        run: npm ci --ignore-scripts 2>&1 | tee -a "$LOG"
 
-      - name: Firefox source matching surfer.json
+      # Before the download, so a runner image that shrank fails in seconds, not after an hour of
+      # compiling. The build needs about 26 GB, the swap file 16 GB (runbook, "Full builds").
+      - name: Disk guard (a full build and its swap file need about 42 GB)
         run: |
-          set -o pipefail
-          want=$(node -p 'require("./surfer.json").version.version')
-          have=$(cat engine/.vimma-firefox-version 2>/dev/null || true)
-          if [ "$want" != "$have" ]; then
-            npx surfer download --force 2>&1 | tee -a "$LOG"
-            echo "$want" > engine/.vimma-firefox-version
+          df -h . | tail -1 | tee -a "$LOG"
+          free=$(df --output=avail -BG . | tail -1 | tr -dc 0-9)
+          if [ "$free" -lt 50 ]; then
+            echo "::error::Only ${free} GB free; the build and its swap file need about 42 GB."
+            exit 1
           fi
 
+      # The Rust stage of the build peaks at 15.3 GB of the runner's 16 GB of memory plus 10.4 GB
+      # of swap; without this file the first measured build was killed after 38 minutes
+      # (docs/runbook.md, "Full builds").
+      - name: Swap file (16 GB)
+        run: |
+          sudo fallocate -l 16G /vimma-swapfile
+          sudo chmod 600 /vimma-swapfile
+          sudo mkswap /vimma-swapfile > /dev/null
+          sudo swapon /vimma-swapfile
+          free -g
+
+      # Verified against Mozilla's SHA512SUMS and extracted afresh in this job (B1, B2).
+      - name: Firefox source (surfer.json), verified and freshly extracted
+        run: tools/upstream/firefox-source.sh 2>&1 | tee -a "$LOG"
+        shell: bash -o pipefail -e {0}
+
       # Spec m0-safebrowsing-key. The secret goes to a mode-600 file in RUNNER_TEMP (emptied by
-      # the runner per job) through a shell builtin, so our steps never echo it nor put it on a command line (the build itself passes it
-      # to the preprocessor; see the spec);
+      # the runner per job) through a shell builtin, so our steps never echo it nor put it on a
+      # command line (the build itself passes it to the preprocessor; see the spec);
       # configs/common/mozconfig reads VIMMA_SAFEBROWSING_KEYFILE. It stays until every mach call
       # (build, tests, package) is done: mach re-reads the mozconfig, which fails on a missing file.
       - name: Safe Browsing key file
@@ -73,10 +102,14 @@ jobs:
           set -o pipefail
           npm run import 2>&1 | tee -a "$LOG"
 
+      # `surfer import` needed engine/'s empty repository; mach must not see it: its taskgraph
+      # hashes the files a repository tracks to find Mozilla's toolchains for --enable-bootstrap,
+      # and finds none in an empty one. Without .git, engine/ is a source tarball to mach.
       - name: Build
         run: |
           set -o pipefail
-          npx surfer build 2>&1 | tee -a "$LOG"
+          rm -rf engine/.git
+          npx --no -- surfer build 2>&1 | tee -a "$LOG"
 
       - name: Smoke check
         run: |
@@ -116,13 +149,16 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/vimma-safebrowsing.key"
 
-      - name: Publish rolling nightly release
-        env:
-          SHA: ${{ github.sha }}
-        run: |
-          gh release delete nightly --cleanup-tag --yes || true
-          gh release create nightly dist/* --prerelease --target "$SHA" --title "Vimma nightly" \
-            --notes "Rolling nightly build of ${SHA}, $(date -u +%Y-%m-%d). Not signed (M6)."
+      # Kept a week, then deleted by GitHub. Not a release: no release page, no tag. The
+      # repository is public, so anyone signed in to GitHub can still download it from the run.
+      - name: Upload the package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vimma-nightly
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0 # already xz
 
       # Masking doesn't cover artifacts or issue bodies, which go public with the repo: scrub the
       # key from the log before either sees it.
@@ -135,30 +171,55 @@ jobs:
             sed -i "s|${SB_KEY}|[redacted]|g" "$LOG"
           fi
 
+      # cancelled(): a build stopped by timeout-minutes is cancelled, not failed.
       - name: Upload log
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-log
           path: nightly.log
           retention-days: 14
 
+  # Reads only the log the build job uploaded after scrubbing the key from it; it has no secret.
+  report:
+    needs: build
+    if: failure()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write # create or comment on the one open `nightly-failure` issue, and its label
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: nightly-log
+          path: nightly-log
+        continue-on-error: true # a build that stopped before its log upload leaves none
+
       - name: Open or update the failure issue
-        if: failure()
         env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           gh label create nightly-failure --color B60205 \
             --description "nightly.yml failed" --force
           {
-            echo "Nightly build failed: ${RUN_URL} (full log in the run's \`nightly-log\` artifact)."
+            echo "Nightly run failed: ${RUN_URL} (the build's full log, if it got that far, is the"
+            echo "run's \`nightly-log\` artifact)."
             echo
             echo "Last 150 log lines:"
             echo
             echo '```text'
-            # The log is already redacted (step above); also drop lines naming the key define.
-            tail -n 150 "$LOG" 2>/dev/null \
-              | grep -v -i 'safebrowsing_api_key\|safebrowsing-api-key' || echo "(no log)"
+            # The build job redacted the log before uploading it; also drop lines naming the key
+            # define. Backticks are escaped so no log line can close the fence and render as
+            # Markdown (mentions, links, images).
+            if [ -s nightly-log/nightly.log ]; then
+              tail -n 150 nightly-log/nightly.log \
+                | grep -v -i 'safebrowsing_api_key\|safebrowsing-api-key' \
+                | sed 's/`/\\`/g' || true
+            else
+              echo "(no log)"
+            fi
             echo '```'
           } > issue.md
           open=$(gh issue list --label nightly-failure --state open --json number --jq '.[0].number')

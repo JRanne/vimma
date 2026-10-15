@@ -9,6 +9,7 @@ import {
   historyPrevious,
   historyNext,
   resetHistoryCursor,
+  parseToolbarCommand,
 } from "../src/cmdline.mjs";
 import { ACTIONS, getAction } from "../src/actions.mjs";
 
@@ -86,6 +87,13 @@ describe("parseCommandLine: plan §2 commands", () => {
     [":theme", run("theme", "theme.appearance")],
     [":theme light", run("theme", "theme.appearance", { text: "light" })],
     [":theme_appearance", run("theme_appearance", "theme.appearance")],
+    // docs/specs/toolbar-toggle.md decision 2: toggles; show / hide set a known state.
+    [":toolbar", run("toolbar", "toolbar.toggle")],
+    [":toolbar show", run("toolbar", "toolbar.toggle", { text: "show" })],
+    [":toolbar hide", run("toolbar", "toolbar.toggle", { text: "hide" })],
+    [":toggle_toolbar", run("toggle_toolbar", "toolbar.toggle")],
+    [":show_toolbar", run("show_toolbar", "toolbar.show")],
+    [":hide_toolbar", run("hide_toolbar", "toolbar.hide")],
     // docs/specs/vimma-mcp.md decision 29 D: full control for a while.
     [":control", run("control", "control.command")],
     [":control on 15", run("control", "control.command", { text: "on 15" })],
@@ -283,8 +291,35 @@ describe("completeCommandLine", () => {
     expect(c).toMatchObject({ label: "system", kind: "argument", description: "appearance" });
   });
 
+  test(":toolbar completes show and hide", () => {
+    expect(values(":toolbar ")).toEqual(["toolbar show", "toolbar hide"]);
+    expect(values(":toolbar hi")[0]).toBe("toolbar hide");
+    const c = completeCommandLine(":toolbar sh").candidates[0];
+    expect(c).toMatchObject({ label: "show", kind: "argument", description: "toolbar" });
+  });
+
   test("no match gives no candidates", () => {
     expect(values(":qqqqqqqq")).toEqual([]);
+  });
+});
+
+describe("parseToolbarCommand: :toolbar [show|hide]", () => {
+  test("without text it toggles; show and hide set the state, in any case", () => {
+    expect(parseToolbarCommand(undefined)).toEqual({ kind: "toggle" });
+    expect(parseToolbarCommand("  ")).toEqual({ kind: "toggle" });
+    expect(parseToolbarCommand("show")).toEqual({ kind: "show" });
+    expect(parseToolbarCommand(" HIDE ")).toEqual({ kind: "hide" });
+  });
+
+  test("an unknown word is refused, with the closest name when one is close", () => {
+    expect(parseToolbarCommand("hid")).toEqual({
+      kind: "refuse",
+      text: ':toolbar takes "show", "hide" or nothing: did you mean "hide"?',
+    });
+    expect(parseToolbarCommand("sideways")).toEqual({
+      kind: "refuse",
+      text: ':toolbar takes "show", "hide" or nothing',
+    });
   });
 });
 

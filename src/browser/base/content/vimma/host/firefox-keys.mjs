@@ -42,7 +42,7 @@ export class FirefoxKeys {
   constructor(win, setting, bound = new Set()) {
     this.win = win;
     this.setting = setting;
-    /** @type {ReadonlySet<string>} chords Vimma binds: their Firefox keys are off (bound means off) */
+    /** @type {ReadonlySet<string>} chords Vimma binds: their Firefox keys are off */
     this.bound = bound;
     /** @type {string[]} chords of the setting that no key has */
     this.unmatched = [];
@@ -156,7 +156,7 @@ export class FirefoxKeys {
     }));
   }
 
-  /** Disables the keys the setting turns off, re-enables the ones we disabled that it no longer does. */
+  /** Disables the keys the setting turns off; re-enables ours that it no longer turns off. */
   apply() {
     const keys = this.keys();
     const plan = planFirefoxKeys(

@@ -10,7 +10,8 @@
 // the I/O and hands each part to the module that uses it. `:source <path>` puts another file in
 // force the same way, until config.toml changes or a plain `:source`. Writes: the first run and
 // `:config` create a missing config.toml from the commented template, never touching an existing
-// one; `:route add` appends one `[[routes]]` table (spec workspace-routing), checked to parse first.
+// one; `:route add` appends one `[[routes]]` table (spec workspace-routing), checked to parse
+// first.
 
 import {
   appendRouteText,
@@ -19,12 +20,15 @@ import {
   resolveSourcePath,
 } from "../core/config.mjs";
 import { formatConfigTemplate } from "../core/defaults.mjs";
+import { locateKeys } from "../core/toml.mjs";
 import { CONFIG_EDIT_TOPIC, CONFIG_RELOAD_TOPIC, VimmaHost } from "../host/VimmaHost.sys.mjs";
 import { openUrl } from "../host/tab-ops.mjs";
 import { McpHost } from "../host/mcp-ops.mjs";
 import { PrivateSwap } from "../host/private-swap.mjs";
+import { SearchHost } from "../search/SearchHost.sys.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
+import { Toolbar } from "../ui/toolbar.mjs";
 import { WorkspaceRouter } from "../workspaces/WorkspaceRouter.sys.mjs";
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
 
@@ -83,6 +87,13 @@ let again = false;
 let timer = null;
 /** @type {Set<Window>} */
 const windows = new Set();
+/**
+ * `[ui] toolbar` of the last config applied; null before the first. The pref is written only
+ * when it changes, so ctrl+b u lasts until a restart or an edit of that line, as a tmux `set`
+ * lasts until .tmux.conf is sourced (docs/specs/toolbar-toggle.md decision 4).
+ * @type {string | null}
+ */
+let appliedToolbar = null;
 
 /**
  * @param {string} path
@@ -107,8 +118,11 @@ function applyToWindow(win, config) {
   view.mainSize = config.panes.mainSize;
 }
 
-/** @param {ActiveConfig} next */
-function apply(next) {
+/**
+ * @param {ActiveConfig} next
+ * @param {string} text  the file it was read from, to locate `[search]`'s problems
+ */
+function apply(next, text) {
   const { config, keymap } = next;
   VimmaHost.configure({
     keymap,
@@ -123,6 +137,14 @@ function apply(next) {
   PrivateSwap.configure(config.private.placement);
   WorkspaceRouter.setRoutes(config.routes);
   McpHost.configure(config.mcp);
+  if (config.ui.toolbar !== appliedToolbar) {
+    appliedToolbar = config.ui.toolbar;
+    Toolbar.setHidden(config.ui.toolbar === "hidden");
+  }
+  // docs/specs/search-engines.md: its problems arrive later and join the file's (showErrors).
+  SearchHost.setConfig(config.search, locateKeys(text)).catch((e) =>
+    console.error("vimma: [search] not applied", e),
+  );
   // `[mcp] workspace` names the agent workspace the reconcile ensures (vimma-mcp decision 8).
   WorkspaceStore.setConfig(config.workspaces, { agent: config.mcp.workspace }).catch((e) =>
     console.error("vimma: [workspaces] not applied", e),
@@ -147,8 +169,20 @@ function report(path, list, kept) {
       }:\n  ${lines.join("\n  ")}`,
     );
   }
-  VimmaHost.configure({ configErrors: errors, configFile: PathUtils.filename(path) });
+  showErrors();
 }
+
+/**
+ * The status bar's errors: the last read's, then `[search]`'s, which only the profile's engines
+ * reveal once the file is applied (search-engines decision 9).
+ */
+function showErrors() {
+  VimmaHost.configure({
+    configErrors: [...errors, ...SearchHost.errors],
+    configFile: PathUtils.filename(errorsPath || configPath()),
+  });
+}
+SearchHost.onErrors = showErrors;
 
 /**
  * Applies `text` (the contents of `path`) when it is valid, else reports its errors.
@@ -160,7 +194,7 @@ function use(path, text) {
   const previous = active;
   const r = reloadConfig(active, text);
   active = r.active;
-  if (active !== previous) apply(active);
+  if (active !== previous) apply(active, text);
   report(path, r.errors, previous !== null);
   return r.errors.length === 0;
 }

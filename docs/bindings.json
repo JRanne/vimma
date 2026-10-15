@@ -803,6 +803,26 @@
           ]
         },
         {
+          "name": "toggle_toolbar",
+          "description": "Show / hide the toolbar (URL bar and add-on buttons)",
+          "keys": [
+            {
+              "keys": "ctrl+b u",
+              "chords": ["ctrl+b", "u"]
+            }
+          ]
+        },
+        {
+          "name": "show_toolbar",
+          "description": "Show the toolbar",
+          "keys": []
+        },
+        {
+          "name": "hide_toolbar",
+          "description": "Hide the toolbar (the address bar shows when focused)",
+          "keys": []
+        },
+        {
           "name": "scroll_down",
           "description": "Scroll down",
           "keys": [
@@ -1554,7 +1574,7 @@
         },
         {
           "name": "insert_mode",
-          "description": "Insert mode: focus the first input",
+          "description": "Insert mode: focus the last-used input",
           "keys": [
             {
               "keys": "i",

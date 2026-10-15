@@ -49,6 +49,7 @@ close_workspace = ["prefix+shift+d"]
 private_workspace = ["prefix+shift+p", "ctrl+shift+p"]
 goto_picker = ["prefix+g"]
 toggle_sidebar = ["prefix+b"]
+toggle_toolbar = ["prefix+u"]
 history_back = ["alt+left"]
 history_forward = ["alt+right"]
 reload = ["f5", "ctrl+r"]
@@ -310,6 +311,11 @@ root = "workspace"
 [private]
 placement = "swap"
 
+# Firefox's toolbar (the URL bar and add-on buttons) in every window: "shown" or "hidden".
+# Hidden, focusing the address bar shows it; ctrl+b u and :toolbar toggle it until restart.
+[ui]
+toolbar = "shown"
+
 # Local AI agents (Claude Code, Codex, opencode, Copilot) reach only the agent workspace, and
 # every request asks you first. Left out, :mcp on|off sets enabled and remembers it; set
 # here, it always wins. ask_timeout: seconds a request waits for you (10 to 300); a bare `a`
@@ -337,3 +343,14 @@ download_max_mb = 200
 # [[routes]]
 # domain = "github.com"
 # workspace = "work"
+
+# Search engines. default: an installed engine's name (as in Settings > Search), or
+# "@alias" of a URL below. Each alias is typed as @alias before the words, in the URL bar
+# and in :open and :tabnew. A URL with one %s becomes an engine; a name gives that engine
+# the alias. Set here, the default wins at every start; delete the line to choose it in
+# Settings. None by default.
+# [search]
+# default = "DuckDuckGo"
+# [search.aliases]
+# gh = "https://github.com/search?q=%s"
+# w = "Wikipedia (en)"

@@ -1,0 +1,160 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* Firefox's navigation toolbar, its URL field and suggestions, the site's identity and the
+ * panels that hang from the bar (permission prompts, the identity and add-on panels) in the
+ * theme's colours (docs/specs/toolbar-toggle.md decision 21), loaded by ui/theme-host.mjs into
+ * every window next to the token sheet. Shown, minimal or full, the bar is one surface with the
+ * status bar and the command line: --vimma-bg-dark, its text --vimma-fg; the URL field and the
+ * suggestions are --vimma-bg; a selected suggestion is a selected row (side-panel.css). Firefox
+ * paints all of it from its own tokens, so pointing those at Vimma's is enough, and the bar keeps
+ * Firefox's layout and icons. Under prefers-contrast and forced colours, Firefox's own
+ * high-contrast tokens stay.
+ * !important: Firefox sets these for a Firefox theme (the built-in dark one too) inline on the
+ * root (LightweightThemeConsumer) and on more specific selectors (browser-colors.css,
+ * :root[lwtheme] in urlbar/view-proton.css). The tokens are set on the bar and the URL bar
+ * themselves, so they win over the root's for everything inside them. */
+
+@media not ((prefers-contrast) or (forced-colors)) {
+  #nav-bar,
+  #PersonalToolbar,
+  #urlbar {
+    --toolbar-background-color: var(--vimma-bg-dark) !important;
+    --toolbar-text-color: var(--vimma-fg) !important;
+    --toolbar-color-scheme: var(--vimma-color-scheme) !important;
+    --toolbarbutton-icon-fill: var(--vimma-fg) !important;
+    --toolbarbutton-icon-fill-attention: var(--vimma-text-accent) !important;
+    --toolbarbutton-background-color-hover: color-mix(
+      in srgb,
+      currentColor 17%,
+      transparent
+    ) !important;
+    --toolbarbutton-background-color-active: color-mix(
+      in srgb,
+      currentColor 30%,
+      transparent
+    ) !important;
+    --toolbarseparator-color: var(--vimma-muted) !important;
+
+    /* The URL field: unfocused, focused and open, and its border. Its focus ring is
+     * --vimma-focus (focus.css). */
+    --toolbar-field-background-color: var(--vimma-bg) !important;
+    --toolbar-field-background-color-focus: var(--vimma-bg) !important;
+    --toolbar-field-text-color: var(--vimma-fg) !important;
+    --toolbar-field-text-color-focus: var(--vimma-fg) !important;
+    --toolbar-field-border-color: var(--vimma-muted) !important;
+    --urlbar-background-color: var(--vimma-bg) !important;
+    --urlbar-background-color-focus: var(--vimma-bg) !important;
+    /* The site's identity, the search engine and the other boxes inside the field: the text
+     * colour, tinted, as Firefox's Nova boxes are. */
+    --urlbar-box-background-color: color-mix(in srgb, currentColor 12%, transparent) !important;
+    --urlbar-box-background-color-hover: color-mix(
+      in srgb,
+      currentColor 20%,
+      transparent
+    ) !important;
+    --urlbar-box-background-color-active: color-mix(
+      in srgb,
+      currentColor 30%,
+      transparent
+    ) !important;
+    --urlbar-box-background-color-focus: var(--urlbar-box-background-color) !important;
+    --urlbar-box-text-color: var(--vimma-fg) !important;
+    --urlbar-box-text-color-hover: var(--vimma-fg) !important;
+    --urlbar-box-text-color-active: var(--vimma-fg) !important;
+    --urlbar-icon-fill-opacity: 1 !important;
+    --chrome-box-shadow: rgb(0 0 0 / 0.25) !important;
+
+    /* The suggestions: a selected row is a selected row in Vimma's lists. */
+    --urlbarview-background-color-hover: color-mix(
+      in srgb,
+      currentColor 10%,
+      transparent
+    ) !important;
+    --urlbarview-background-color-selected: var(--vimma-selection) !important;
+    --urlbarview-text-color-selected: var(--vimma-fg-bright) !important;
+    --urlbarview-text-color-secondary: var(--vimma-fg-dim) !important;
+    --urlbarview-text-color-action: var(--vimma-fg-dim) !important;
+    --urlbarview-separator-color: var(--vimma-muted) !important;
+    --urlbarView-result-button-selected-background-color: var(--vimma-selection) !important;
+    --urlbarView-result-button-selected-color: var(--vimma-fg-bright) !important;
+    --link-color: var(--vimma-text-accent) !important;
+  }
+
+  /* With the tab strip hidden, the nav bar is the titlebar (browser-titlebar), which Firefox
+   * leaves transparent over the toolbox's own colour (browser-shared.css .browser-toolbar). */
+  #nav-bar,
+  #PersonalToolbar {
+    background-color: var(--vimma-bg-dark) !important;
+    background-image: none !important;
+    color: var(--vimma-fg) !important;
+    color-scheme: var(--vimma-color-scheme) !important;
+  }
+
+  #urlbar {
+    color-scheme: var(--vimma-color-scheme) !important;
+  }
+
+  /* The panels that hang from the bar: permission prompts and the other doorhangers, the site's
+   * identity, permission and protection panels, add-on popups and the extensions menu, the app
+   * menu and downloads. They are Firefox's arrow panels, which take these tokens (popup.css).
+   * A panel is the picker's surface (picker.css): --vimma-bg-dark, bordered --vimma-muted. Its
+   * buttons: the main one the accent with its own readable text (the normal-mode badge's pair),
+   * the others the text colour, tinted. */
+  panel[type="arrow"] {
+    --panel-background-color: var(--vimma-bg-dark) !important;
+    --panel-text-color: var(--vimma-fg) !important;
+    --panel-border-color: var(--vimma-muted) !important;
+    --panel-separator-color: var(--vimma-muted) !important;
+    --panel-icon-fill: var(--vimma-fg) !important;
+    --panel-description-color: var(--vimma-fg-dim) !important;
+    --text-color-deemphasized: var(--vimma-fg-dim) !important;
+    --arrowpanel-dimmed: color-mix(in srgb, currentColor 17%, transparent) !important;
+    --arrowpanel-dimmed-further: color-mix(in srgb, currentColor 30%, transparent) !important;
+    --panel-item-hover-bgcolor: color-mix(in srgb, currentColor 17%, transparent) !important;
+    --panel-item-active-bgcolor: color-mix(in srgb, currentColor 30%, transparent) !important;
+    --background-color-canvas: var(--vimma-bg-dark) !important;
+    --text-color: var(--vimma-fg) !important;
+    --link-color: var(--vimma-text-accent) !important;
+    --link-color-hover: var(--vimma-text-accent) !important;
+    --link-color-active: var(--vimma-text-accent) !important;
+    --button-background-color: color-mix(in srgb, currentColor 12%, transparent) !important;
+    --button-background-color-hover: color-mix(in srgb, currentColor 20%, transparent) !important;
+    --button-background-color-active: color-mix(in srgb, currentColor 30%, transparent) !important;
+    --button-text-color: var(--vimma-fg) !important;
+    --button-text-color-hover: var(--vimma-fg) !important;
+    --button-text-color-active: var(--vimma-fg) !important;
+    --button-border-color: transparent !important;
+    --button-background-color-primary: var(--vimma-mode-normal) !important;
+    --button-background-color-primary-hover: color-mix(
+      in srgb,
+      var(--vimma-mode-normal) 85%,
+      var(--vimma-mode-normal-fg)
+    ) !important;
+    --button-background-color-primary-active: color-mix(
+      in srgb,
+      var(--vimma-mode-normal) 70%,
+      var(--vimma-mode-normal-fg)
+    ) !important;
+    --button-text-color-primary: var(--vimma-mode-normal-fg) !important;
+    --button-text-color-primary-hover: var(--vimma-mode-normal-fg) !important;
+    --button-text-color-primary-active: var(--vimma-mode-normal-fg) !important;
+    --button-border-color-primary: transparent !important;
+    --input-text-background-color: var(--vimma-bg) !important;
+    --input-text-color: var(--vimma-fg) !important;
+    --checkbox-checked-bgcolor: var(--vimma-mode-normal) !important;
+    --checkbox-checked-color: var(--vimma-mode-normal-fg) !important;
+    --checkbox-checked-border-color: transparent !important;
+    color-scheme: var(--vimma-color-scheme) !important;
+  }
+}
+
+/* The keys line Vimma adds to a permission prompt (host/prompt-keys.mjs): the command line's
+ * hint look (cmdline.css). */
+.vimma-prompt-keys {
+  margin: 0 var(--panel-padding, 16px) var(--space-small, 4px);
+  font-family: var(--vimma-font, monospace);
+  font-size: 0.9em;
+  color: var(--vimma-fg-dim, GrayText);
+}

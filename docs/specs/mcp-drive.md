@@ -1,12 +1,14 @@
 # Spec: mcp-drive
 
-Status: draft · Area: `packages/vimma-core/src/` (`agent-keys.mjs` new, `agent.mjs`,
+Status: accepted · Area: `packages/vimma-core/src/` (`agent-keys.mjs` new, `agent.mjs`,
 `agent-prompt.mjs`, `control.mjs`, `cmdline.mjs`); `src/browser/base/content/vimma/`
 (`ctl/agent-commands.mjs`, `ctl/AgentDrive.sys.mjs` new, `actors/VimmaActors.sys.mjs`,
 `host/agent-ui.mjs`, `host/control-ops.mjs`, `host/workspace-ops.mjs`); `tools/vimma-ctl`
 (`src/mcp.rs`, `tests/fixtures/mcp/tools-list.json`); `tests/contract/control/v2/` · Upstream
 patches: none · ADR: [ADR-019](../adr/019-agents-over-mcp.md) (unchanged; this spec stays inside
 it). No new dependency.
+
+Issue: [#252](https://github.com/vimma-browser/vimma/issues/252)
 
 Builds on [vimma-mcp](vimma-mcp.md): its agent workspace, protocol 2's `agent` role, the question
 line, grants and limits. Decision numbers of that spec are written "vimma-mcp N"; this spec's own
@@ -65,7 +67,7 @@ The user is asked once, for minutes, and after that nothing confines what the ke
    its text and its URL, marked as untrusted web content. A second call,
    `vimma_keys { tab: "7", keys: "fsd" }`, loads link `sd` in that tab.
 6. A link to another site is not followed under the `vimma_keys` answer alone: it is asked as a
-   `vimma_open` of that URL, with the whole URL shown (D18; open question 1).
+   `vimma_open` of that URL, with the whole URL shown (D18).
 7. `vimma_keys` with `ctrl+b`, `:`, `t`, `x`, `i`, `gi`, `yy`, `p`, `F`, `v` or any key outside
    the whitelist is refused before anything is asked, with a tool error that names the key and
    says why. Nothing is ever typed into a page.
@@ -74,7 +76,7 @@ The user is asked once, for minutes, and after that nothing confines what the ke
    and each new full-control connection's question ends with `(every workspace, not only "agent")`.
 9. Under a grant, each `vimma_keys` call shows a notice such as
    `claude-code pressed /"pricing"⏎ in "Pricing · Example" (grant, 12m left)`, and `:mcp log`
-   lists the last 100 agent calls, asked or granted (D14; open question 4).
+   lists the last 100 agent calls, asked or granted (D14).
 
 ## Research
 
@@ -211,7 +213,11 @@ char? }` actions (`:18`) over a compiled keymap trie, with counts in normal mode
    does not call `focus()` or ask Hyprland to move anything. If the agent tab is in a window
    other than the one where the user answered, that window switches, and the notice says
    `shown in the other window`. Agent tabs open in the most recently focused normal window
-   (vimma-mcp decision 10), so with one normal window this never arises.
+   (vimma-mcp decision 10), so with one normal window this never arises. Switching the window
+   that holds the tab is predictable and stays confined to that window, and the notice names
+   the case. Rejected: refusing with `failed`, because an agent could then never show a tab the
+   user moved to a second window; moving the tab into the window the user answered in, because
+   Vimma has no path that moves a tab between windows without reopening it.
 7. **Rate.** At most 6 `agent-show` requests per connection a minute (`busy` beyond), counted
    when asked, so a refused show cannot be retried in a loop; the mute after three denials
    (vimma-mcp decision 18) applies as to every tool.
@@ -306,8 +312,11 @@ char? }` actions (`:18`) over a compiled keymap trie, with counts in normal mode
     (`claude-code pressed 3j /"pricing"⏎ in "Pricing · Example" (grant, 12m left)`), and a
     follow names the host it loaded. `:mcp log` lists the last 100 agent calls of every tool,
     asked or granted, with time, client label, tool, tab title, keys or URL, and outcome. The log
-    is in memory only, like grants (vimma-mcp decision 22), and is cleared by `:mcp off`
-    (open question 4).
+    is in memory only, like grants (vimma-mcp decision 22), and is cleared by `:mcp off`. The log
+    exists because grants run calls unasked and their notices last seconds, so the user needs a
+    way to check afterwards. Rejected: no log, because notices alone leave no record; a log in
+    the profile, because it would store the agent workspace's browsing history on disk, which
+    vimma-mcp keeps off disk for grants.
 15. **Limits.** Checked in `vimma-ctl mcp` (vimma-mcp decision 38) and again in the browser:
     `keys` at most 512 characters; at most 32 actions per call; a count at most 99; a find query
     at most 256 characters, with no control characters; at most 30 `agent-keys` requests per
@@ -337,21 +346,29 @@ char? }` actions (`:18`) over a compiled keymap trie, with counts in normal mode
     `agent.mjs:393-396`; vimma-mcp decision 34), one link per line: the label, the link text as
     a JSON string cut at 80 characters, and the href cut at 2,048 characters. The URL and title
     are untrusted too, and `vimma-ctl mcp` puts them under `untrustedHeader`'s wording as it
-    does for reads. No page text is returned beyond link texts (open question 2); reading stays
-    `vimma_read_page`, with its own question and grant.
+    does for reads. No page text is returned beyond link texts; reading stays `vimma_read_page`,
+    with its own question and grant, so that a `vimma_keys` grant is never a read grant. Find's
+    match already lands in the selection that `vimma_read_page` returns, so "find, then read"
+    needs no text here. Rejected: up to 2,000 characters of the viewport's text, because it would
+    make a keys grant a partial read grant; that text only while a `vimma_read_page` grant is
+    held, because it adds a rule the user has to know for no reach beyond the chosen design.
 
 17. **Grants.** `vimma_keys` is a tool like the others: `15a` grants it for this connection
     (vimma-mcp decisions 20-22). A `vimma_keys` grant does not cover `vimma_open`,
     `vimma_read_page` or `vimma_show`. A follow to another site is the one step that asks again
     under a `vimma_keys` grant (D18).
-18. **A link to another site** (open question 1, recommendation b). A follow whose target's
+18. **A link to another site.** A follow whose target's
     registrable domain (eTLD+1, `Services.eTLD.getBaseDomain`,
     `netwerk/dns/nsIEffectiveTLDService.idl:93`) differs from the current page's
     is asked as a `vimma_open` of that URL, with the whole URL and the host in bold, unless the
     connection holds a `vimma_open` grant, which already means "load any URL" (vimma-mcp,
     Threat model). A no stops the call there, and the result says `stopped: "denied"` with the
     steps done. Same-site follows run under the `vimma_keys` answer. History back and forward
-    stay in the tab's own history and are not asked again.
+    stay in the tab's own history and are not asked again. This keeps vimma-mcp's rule that
+    loading a new site is shown or granted as `vimma_open`, at the cost of one question per new
+    site. Rejected: following it under the `vimma_keys` answer, because under a keys grant an
+    injected page could walk the agent to any site it links to, unseen; refusing it, because the
+    agent would have to copy the href into `vimma_open` and nothing would be gained.
 
 ### D. MCP and protocol
 
@@ -511,8 +528,8 @@ Written first and seen to fail, by layer. Each names the rule it holds.
 ## Delivery
 
 One sub-PR at a time, each with its own security review, as vimma-mcp's sub-PRs 2a-3 had.
-Issue [#252](https://github.com/JRanne/vimma/issues/252) tracks them;
-[#231](https://github.com/JRanne/vimma/issues/231) (click and fill) comes after sub-PR 3 and
+Issue [#252](https://github.com/vimma-browser/vimma/issues/252) tracks them;
+[#231](https://github.com/vimma-browser/vimma/issues/231) (click and fill) comes after sub-PR 3 and
 builds on its hint sessions.
 
 | #   | PR                                                                   | Contents                                                                                                                                                                                            |
@@ -546,48 +563,5 @@ agent workspaces; macOS (the question line and notifications follow the macOS sp
 
 ## Open questions
 
-1. **A link to another site: follow it under the `vimma_keys` answer, or ask?**
-   - a. Follow it. The agent stays in the agent workspace's container, the URL was put there by
-     the page, and downloads and permissions are already fenced (vimma-mcp decisions 30, 31).
-     Fewest questions; but under a `vimma_keys` grant an injected page can walk the agent to any
-     site it links to, unseen.
-   - b. Ask as a `vimma_open` of that URL, unless a `vimma_open` grant is in force (D18). Every
-     new site shows its whole URL once, consistent with what a `vimma_open` grant already means;
-     one more question on link-heavy tasks.
-   - c. Refuse; the agent must call `vimma_open` itself. Simplest rule, but the agent must copy
-     the href out of the link list, and nothing is gained over b.
-
-   Recommendation: b, because it keeps vimma-mcp's rule that loading a new site is shown or
-   granted as `vimma_open`, at the cost of one question per new site.
-
-2. **Should `vimma_keys` return some page text?**
-   - a. No: URL, title, scroll position, find result and link list only (D16). Reading stays
-     `vimma_read_page`, asked and granted separately, so a keys grant is never a read grant.
-   - b. Up to 2,000 characters of the text in the viewport after the last step, delimited as
-     untrusted. Saves a call after each scroll, but makes a `vimma_keys` grant a partial read
-     grant.
-   - c. b, but only while the connection also holds a `vimma_read_page` grant. Same reach as a,
-     fewer calls, and a rule the user has to know.
-
-   Recommendation: a; find's match already lands in the selection that `vimma_read_page`
-   returns, so the common "find, then read" needs no text here.
-
-3. **`vimma_show` when the agent tab is in another window than the one the user answered in?**
-   - a. Switch the window that holds the tab, without raising it, and say so in the notice (D6).
-     Predictable and confined, but the user may not see the result on a multi-monitor setup.
-   - b. Refuse with `failed` ("the agent tab is in another window"). Never surprising, but an
-     agent cannot show a tab the user moved to a second window.
-   - c. Move the tab into the window the user answered in, then switch. Shows it where the user
-     is, but Vimma has no path that moves a tab between windows without reopening it.
-
-   Recommendation: a; Vimma opens agent tabs in the most recently focused normal window, so the
-   case is rare, and the notice names it.
-
-4. **An audit log, `:mcp log`?**
-   - a. Yes, the last 100 agent calls in memory, cleared by `:mcp off` (D14). Grants run calls
-     unasked and their notices last seconds; the log lets the user check afterwards.
-   - b. No; notices and the status bar's `◇ agent ·` are enough. One command less.
-   - c. A log written to the profile. Survives a restart, but stores browsing history of the
-     agent workspace on disk, which vimma-mcp keeps out of disk for grants (decision 22).
-
-   Recommendation: a.
+None. The cross-site follow, the result's page text, a show in another window and the audit log
+are decided in D18, D16, D6 and D14.

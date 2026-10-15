@@ -125,7 +125,7 @@ const validMessage = fc.oneof(
     m: { type: "request", id: i, command, args: {} },
     o: {},
   })),
-  fc.tuple(id, fc.constantFrom("claude-code", "codex", "opencode")).map(([i, name]) => ({
+  fc.tuple(id, fc.constantFrom("example-agent", "codex", "opencode")).map(([i, name]) => ({
     m: { type: "request", id: i, command: "agent-hello", args: { client: { name } } },
     o: {},
   })),

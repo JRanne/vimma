@@ -18,8 +18,8 @@
 }
 
 :root:not([inDOMFullscreen]) #tabbrowser-tabpanels[vimma-panes][splitview] {
-  /* Space between neighbouring panes; M5's theme sets it. It goes on interior edges only, half
-   * from each side: --vimma-pane-i{l,t,r,b} are 1 on an interior edge, 0 on the area's border. */
+  /* Space between neighbouring panes, on interior edges only, half from each side:
+   * --vimma-pane-i{l,t,r,b} are 1 on an interior edge, 0 on the area's border. */
   --vimma-pane-gap: 2px;
   position: relative;
   /* What shows through the gap: the pane border, in the theme's colours (m5-omarchy-theme). */

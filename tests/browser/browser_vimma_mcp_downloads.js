@@ -2,9 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Spec: docs/specs/vimma-mcp.md decision 31 (sub-PR 2c; user: "agent should be able to download
-// etc. As long as we can have way to ensure it downloads safe things"). A download from the
-// agent workspace asks in the question line (name, size, type, host; never the URL), and a
+// Spec: docs/specs/vimma-mcp.md decision 31 (sub-PR 2c). A download from the agent workspace
+// asks in the question line (name, size, type, host; never the URL), and a
 // `vimma_download` grant covers it; it lands only in the quarantine folder, mode 0600, never
 // opened; dangerous files need `!` for that one file; http and files over the cap are refused;
 // with clamscan on PATH it is scanned before it leaves its .part name. The user's own Save Page
@@ -93,7 +92,7 @@ function configure(extra = {}) {
 
 /**
  * A fake `clamscan` (decision 31 g). Vimma runs only /usr/bin/clamscan or /usr/local/bin/clamscan,
- * and only one it cannot write (security review of #182): the test's hook puts the fake in
+ * and only one it cannot write, so a replaced scanner is never run: the test's hook puts the fake in
  * that list and, unless `owned` is asked for, lets a file of ours count as not ours. `clean`
  * exits 0, `infected` 1 with a signature, `partial` 1 with Heuristics.Encrypted, `error` 2,
  * `hang` sleeps past the timeout; `missing` leaves none.
@@ -136,7 +135,7 @@ async function scanned() {
 }
 
 add_task(async function setup() {
-  // In home: a quarantine is never in /tmp, /var/tmp or /dev/shm (security review of #182).
+  // In home: a quarantine is never in /tmp, /var/tmp or /dev/shm, where others can write.
   quarantine = await IOUtils.createUniqueDirectory(
     Services.dirsvc.get("Home", Ci.nsIFile).path,
     "vimma-test-quarantine",
@@ -201,10 +200,10 @@ async function agentTab() {
 }
 
 /** An agent connection, after its agent-hello. */
-async function agentClient(name = "claude-code") {
+async function agentClient(name = "example-agent") {
   const c = new Client(/** @type {number} */ (VimmaControl.port));
   await c.handshake({ protocol: 2, role: "agent" });
-  await c.call("agent-hello", { client: { name }, via: "claude" });
+  await c.call("agent-hello", { client: { name }, via: "example" });
   return c;
 }
 
@@ -287,8 +286,8 @@ async function clean() {
 }
 
 add_task(async function test_agent_tabs_may_download_again() {
-  // 2b's stopgap (review of #177, L3) is gone: no SANDBOXED_DOWNLOADS on agent tabs, and the
-  // download folder of an agent tab's browsing context is the quarantine folder.
+  // Agent tabs have no SANDBOXED_DOWNLOADS flag; their browsing context's download folder is the
+  // quarantine folder instead.
   const tab = await agentTab();
   const bc = tab.linkedBrowser.browsingContext;
   Assert.equal(bc.sandboxFlags & SANDBOXED_DOWNLOADS, 0, "agent tabs may start downloads");
@@ -418,7 +417,7 @@ add_task(async function test_dangerous_content_asks_again_and_no_deletes_it() {
   await clean();
 });
 
-// Security review of #182 (finding 5): a `!` for one kind of danger is not a `!` for another.
+// A `!` for one kind of danger is not a `!` for another.
 add_task(async function test_a_different_danger_in_the_bytes_asks_again() {
   const tab = await agentTab();
   const added = nextDownload();
@@ -530,7 +529,7 @@ add_task(async function test_clamav_clean_infected_error_and_missing() {
   Assert.deepEqual(await names(quarantine), ["clean.txt"], "and deleted");
   await noticed('"bad.txt": ClamAV found Vimma-Test-Signature');
 
-  // Security review of #182 (finding 7): what ClamAV could not do is asked, and no deletes it.
+  // What ClamAV could not scan is asked about, and no deletes it.
   await fakeClam("error");
   r = await run("unsure.txt", "deny");
   Assert.ok(!r.ok, "a ClamAV error asks; no deletes it");
@@ -581,7 +580,7 @@ add_task(async function test_an_agents_download_is_its_and_a_grant_covers_it() {
   AgentGate.answer(/** @type {any} */ (AgentGate.waiting[0]).id, { kind: "once" });
   await c.response(open);
   let q = await downloadQuestion();
-  Assert.equal(q.label.client, "claude-code", "the agent that opened the tab");
+  Assert.equal(q.label.client, "example-agent", "the agent that opened the tab");
   Assert.equal(AgentGate.answer(q.id, { kind: "grant", minutes: 10 })?.minutes, 10, "granted");
   Assert.ok(await settled(await added), "saved");
 
@@ -614,7 +613,7 @@ add_task(async function test_an_agents_download_is_its_and_a_grant_covers_it() {
   await clean();
 });
 
-// Security review of #182 (finding 2): a grant covers the downloads the agent's own open
+// A grant covers the downloads the agent's own open
 // started, not what the page it opened downloads later.
 add_task(async function test_a_grant_never_covers_the_pages_own_downloads() {
   const c = await agentClient();
@@ -628,7 +627,7 @@ add_task(async function test_a_grant_never_covers_the_pages_own_downloads() {
   let added = nextDownload();
   await open(fileUrl({ name: "first.txt", type: "text/plain" }));
   const q = await downloadQuestion();
-  Assert.equal(q.label.client, "claude-code", "the agent's own download");
+  Assert.equal(q.label.client, "example-agent", "the agent's own download");
   AgentGate.answer(q.id, { kind: "grant", minutes: 10 });
   Assert.ok(await settled(await added), "granted and saved");
 
@@ -691,7 +690,7 @@ add_task(async function test_a_grant_never_covers_the_pages_own_downloads() {
   await clean();
 });
 
-// Security review of #182 (finding 3): the quarantine folder must be a private folder of the
+// The quarantine folder must be a private folder of the
 // user's; one that is not is refused, and so is every download meanwhile.
 add_task(async function test_a_folder_that_is_not_private_is_refused() {
   const home = Services.dirsvc.get("Home", Ci.nsIFile).path;
@@ -715,7 +714,7 @@ add_task(async function test_a_folder_that_is_not_private_is_refused() {
   await clean();
 });
 
-// Security review of #182 (finding 4): a download is an agent download by its container, by its
+// A download is an agent download by its container, by its
 // tab's container, or by being in the quarantine folder.
 add_task(async function test_classified_by_tab_and_by_place_too() {
   const tab = await agentTab();
@@ -749,7 +748,7 @@ add_task(async function test_classified_by_tab_and_by_place_too() {
   await clean();
 });
 
-// Security review of #182 (finding 8): the other ways a download starts.
+// The other ways a download starts.
 add_task(async function test_the_dialog_the_launch_path_a_frame_and_a_blob() {
   const tab = await agentTab();
   // Firefox's "always ask" dialog: never shown for an agent tab; saved to the quarantine.

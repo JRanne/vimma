@@ -27,7 +27,7 @@ const GENERATED = [
   'export MOZ_USER_DIR="Vimma"',
   "export MOZ_APP_BASENAME=Vimma",
   "export MOZ_DISTRIBUTION_ID=dev.vimma.browser",
-  "export MOZ_SOURCE_REPO=https://github.com/JRanne/vimma",
+  "export MOZ_SOURCE_REPO=https://github.com/vimma-browser/vimma",
   "ac_add_options --enable-bootstrap",
   "ac_add_options --disable-crashreporter",
   "ac_add_options --with-version-file-path=browser/config/vimma",
@@ -179,7 +179,7 @@ describe("appIniForArtifact", () => {
 });
 
 describe("candidateTree (mirrors select_candidate_trees in mozbuild/artifacts.py)", () => {
-  const REPO = "https://github.com/JRanne/vimma";
+  const REPO = "https://github.com/vimma-browser/vimma";
 
   it("is mozilla-release for Vimma's 0.x display versions", () => {
     expect(candidateTree("0.1.0", REPO)).toBe("mozilla-release");

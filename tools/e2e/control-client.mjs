@@ -2,7 +2,7 @@
 // vimma-ctl's one-shot runs cannot do: a full connection held for the rest of a scenario (opened
 // while MCP is off, so keys sent through it never ask), an agent connection whose requests wait
 // for the user, and vimma-ctl runs that are not awaited. The handshake is the real one: the
-// server proves the token before the client sends it. Sub-PR 3: `vimma-ctl mcp` itself, spoken
+// server proves the token before the client sends it. It also runs `vimma-ctl mcp` itself, spoken
 // to over stdio as an agent tool would.
 import { execFile, spawn } from "node:child_process";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
@@ -44,7 +44,6 @@ export class ControlClient {
   }
 
   /**
-   * Connect and authenticate as `role`.
    * @param {{ port: number, token: string, role: "full" | "agent" }} o
    */
   static async connect({ port, token, role }) {
@@ -186,7 +185,7 @@ export class ControlSessions {
     this.agent ??= (async () => {
       const { port, token } = this.discovery();
       const c = await ControlClient.connect({ port, token, role: "agent" });
-      const hi = await c.call("agent-hello", { client: { name: spec.client ?? "claude-code" } });
+      const hi = await c.call("agent-hello", { client: { name: spec.client ?? "example-agent" } });
       if (!hi?.ok) throw new Error(`agent-hello: ${JSON.stringify(hi)}`);
       return c;
     })();
@@ -288,7 +287,10 @@ export class ControlSessions {
     p.child.stdin.write(`${JSON.stringify(message)}\n`);
   }
 
-  /** The response to the request named `name`, once it comes (a call waits for the user). @param {string} name */
+  /**
+   * The response to the request named `name`, once it comes (a call waits for the user).
+   * @param {string} name
+   */
   async mcpResult(name) {
     const p = this.mcp;
     const id = p?.ids.get(name);

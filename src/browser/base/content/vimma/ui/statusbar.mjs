@@ -3,16 +3,28 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // The always-visible status bar (spec: docs/specs/m2-statusbar-whichkey.md; the which-key strip
-// was dropped by the user's decision of 2026-10-09: only prefix+? lists the bindings).
+// was dropped: only prefix+? lists the bindings).
 // vimma-core decides what it says (statusbar.mjs); this module gathers the inputs from the
 // window and the host, renders at most once per frame, and never reads layout on the render
 // path: the bar's width comes from a ResizeObserver.
 
-import { fitStatus, statusAnnouncement, statusSegments } from "../core/statusbar.mjs";
+import {
+  fitStatus,
+  securityFromState,
+  sharingCues,
+  statusAnnouncement,
+  statusSegments,
+} from "../core/statusbar.mjs";
+import { HIDDEN_ATTR as TOOLBAR_HIDDEN_ATTR } from "./toolbar.mjs";
 
 /** @import { Mode } from "../core/modes.mjs" */
 /** @import { FindStatus } from "../core/find.mjs" */
 /** @import { Announced, Segment, StatusInput } from "../core/statusbar.mjs" */
+
+const lazy = /** @type {any} */ ({});
+ChromeUtils.defineESModuleGetters(lazy, {
+  BrowserUIUtils: "resource:///modules/BrowserUIUtils.sys.mjs",
+});
 
 export const STATUSBAR_ID = "vimma-statusbar";
 const STYLESHEET = "chrome://browser/skin/vimma/statusbar.css";
@@ -87,11 +99,17 @@ export class StatusBar {
     this.announced = { mode: null, notFound: null };
     /** @type {ResizeObserver | null} */
     this.resize = null;
+    /** @type {MutationObserver | null} the address bar's "in use" icons (toolbar-toggle 12) */
+    this.identity = null;
     /** @type {(() => void) | null} */
     this.unsubscribe = null;
     this.update = () => this.schedule();
     this.start = () => this.build();
-    this.progress = { onLocationChange: () => this.schedule() };
+    // The identity box (not secure, toolbar-toggle 12) follows the security state.
+    this.progress = {
+      onLocationChange: () => this.schedule(),
+      onSecurityChange: () => this.schedule(),
+    };
   }
 
   init() {
@@ -112,6 +130,8 @@ export class StatusBar {
     this.unsubscribe = null;
     this.resize?.disconnect();
     this.resize = null;
+    this.identity?.disconnect();
+    this.identity = null;
     if (this.bar) {
       for (const type of TAB_EVENTS) win.removeEventListener(type, this.update, true);
       win.removeEventListener("focus", this.update, true);
@@ -172,7 +192,7 @@ export class StatusBar {
     this.bar = bar;
 
     // Layout is fresh inside a ResizeObserver callback: measuring here forces no extra reflow.
-    // The probe is observed too, so a font change (M5's [theme] font, a zoom) re-measures the
+    // The probe is observed too, so a font change (`[theme] font`, a zoom) re-measures the
     // column even when the bar keeps its width.
     this.resize = new win.ResizeObserver((entries) => {
       let refit = false;
@@ -197,6 +217,17 @@ export class StatusBar {
     // Focus moving into or out of a field changes the mode once the host detects it.
     win.addEventListener("focus", this.update, true);
     win.gBrowser.addProgressListener(this.progress);
+    // Location, XR and serial use change no tab attribute; Firefox marks them on the address
+    // bar's sharing icons (gPermissionPanel.updateSharingIndicator), for the selected tab.
+    const permissionBox = doc.getElementById("identity-permission-box");
+    if (permissionBox) {
+      this.identity = new /** @type {any} */ (win).MutationObserver(() => this.schedule());
+      /** @type {MutationObserver} */ (this.identity).observe(permissionBox, {
+        attributes: true,
+        subtree: true,
+        attributeFilter: ["sharing", "paused"],
+      });
+    }
     this.unsubscribe = this.host.subscribe(this.update);
     this.schedule();
   }
@@ -217,7 +248,7 @@ export class StatusBar {
         index: visible.indexOf(tab) + 1,
         count: visible.length,
         title: browser.contentTitle || tab.label || null,
-        url: displaySpec(browser),
+        ...barUrl(this.win, browser),
         label: this.host.labelFor?.(tab) ?? null,
       },
       loading: tab.hasAttribute("busy"),
@@ -229,6 +260,14 @@ export class StatusBar {
       alerts: status.alerts ?? [],
       agent: status.agent ?? null,
     };
+    // docs/specs/toolbar-toggle.md decision 12: the hidden toolbar's cues; shown, none.
+    const root = this.win.document.documentElement;
+    if (root.hasAttribute(TOOLBAR_HIDDEN_ATTR)) {
+      input.toolbarHidden = true;
+      input.security = securityOf(browser);
+      input.privateWindow = root.hasAttribute("privatebrowsingmode");
+      input.sharing = sharingCues(/** @type {any} */ (browser)._sharingState);
+    }
     return input;
   }
 
@@ -283,6 +322,129 @@ export class StatusBar {
     }
     return span;
   }
+}
+
+/** @typedef {import("../core/statusbar.mjs").UrlOrigin} UrlOrigin */
+
+/**
+ * The host as the bar shows it and its registrable domain, for truncation that never cuts the
+ * latter (docs/security.md C3). The base domain is counted in labels from the
+ * ASCII form Services.eTLD answers in, then taken from the display form, so an IDN host keeps
+ * its Unicode. An IP address, or a host without a public suffix, is its own base.
+ * @param {any} uri
+ * @returns {UrlOrigin | null}
+ */
+function originOf(uri) {
+  /** @type {string} */
+  let host;
+  try {
+    host = uri.displayHost;
+  } catch {
+    return null;
+  }
+  if (!host) return null;
+  let base = host;
+  try {
+    const labels = Services.eTLD.getBaseDomain(uri).split(".").length;
+    base = host.split(".").slice(-labels).join(".");
+  } catch {
+    // An IP address or a single-label host: the whole host stays.
+  }
+  return { host, base };
+}
+
+/**
+ * The tab's address for the bar, and its origin. An initial page (about:blank, the start page)
+ * shows no address only when Firefox's address bar would show none
+ * (BrowserUIUtils.checkEmptyPageOrigin): an about:blank a page opened or wrote into reads
+ * `about:blank from <the page that controls it>` (docs/security.md C3).
+ * @param {Window} win
+ * @param {any} browser
+ * @returns {{ url: string | null, origin: UrlOrigin | null }}
+ */
+function barUrl(win, browser) {
+  const uri = browser.currentURI;
+  if (!uri) return { url: null, origin: null };
+  const initial = /** @type {any} */ (win).isInitialPage?.(uri) ?? uri.spec === "about:blank";
+  if (initial || uri.spec === "about:blank") {
+    /** @type {boolean} */
+    let empty;
+    try {
+      empty = lazy.BrowserUIUtils.checkEmptyPageOrigin(browser, uri);
+    } catch {
+      empty = uri.spec !== "about:blank";
+    }
+    if (empty) return { url: null, origin: null };
+    // The page's own principal, inherited from whoever wrote it: never the opener's current
+    // one, which may have navigated elsewhere since (C3). Unknown: the address alone.
+    const principal = [
+      browser.browsingContext?.currentWindowGlobal?.documentPrincipal,
+      browser.contentPrincipal,
+    ].find((p) => p?.isContentPrincipal);
+    if (principal) {
+      try {
+        const from = Services.io.newURI(principal.originNoSuffix);
+        const origin = originOf(from);
+        if (origin) return { url: `${uri.spec} from ${origin.host}`, origin };
+      } catch {
+        // No origin to name: the address alone.
+      }
+    }
+    return { url: uri.spec, origin: null };
+  }
+  return { url: displaySpec(browser), origin: originOf(uri) ?? innerOrigin(browser, uri) };
+}
+
+/**
+ * The origin of a URL without a host of its own: a nested one's inner URL (view-source:), else
+ * the page's principal (blob:, which carries its creator's origin), so the bar can still keep
+ * that origin's domain whole (docs/security.md C3).
+ * @param {any} browser
+ * @param {any} uri
+ * @returns {UrlOrigin | null}
+ */
+function innerOrigin(browser, uri) {
+  try {
+    const inner = uri.QueryInterface(Ci.nsINestedURI).innermostURI;
+    const origin = originOf(inner);
+    if (origin) return origin;
+  } catch {
+    // Not a nested URL.
+  }
+  const principal = browser.browsingContext?.currentWindowGlobal?.documentPrincipal;
+  if (!principal?.isContentPrincipal) return null;
+  try {
+    return originOf(Services.io.newURI(principal.originNoSuffix));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The selected page's connection, from the browser's security state as Firefox's identity
+ * block reads it (browser-siteIdentity.js), never from the address bar, so an unsent edit in
+ * the hidden address bar changes nothing (docs/security.md C3).
+ * @param {any} browser
+ */
+function securityOf(browser) {
+  const W = Ci.nsIWebProgressListener;
+  const state = browser.securityUI?.state ?? 0;
+  const doc = browser.documentURI;
+  const errorPage =
+    doc?.scheme === "about" &&
+    (doc.filePath === "certerror" ||
+      doc.filePath === "httpsonlyerror" ||
+      (doc.filePath === "neterror" && new URLSearchParams(doc.query).get("e") === "nssFailure2"));
+  return securityFromState({
+    scheme: browser.currentURI?.scheme ?? "",
+    secure: !!(state & W.STATE_IS_SECURE),
+    broken: !!(state & W.STATE_IS_BROKEN),
+    certOverride: !!(state & W.STATE_CERT_USER_OVERRIDDEN),
+    errorPage,
+    // As gIdentityHandler._getIsSecureContext: the security UI's own flag (http on the
+    // loopback address is a secure context). The parent's WindowGlobal has no isSecureContext.
+    secureContext: !!browser.securityUI?.isSecureContext,
+  });
 }
 
 /**

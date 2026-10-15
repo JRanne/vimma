@@ -51,7 +51,7 @@ export class AgentPrompt {
     const text = /** @type {HTMLElement} */ (this.text);
     text.replaceChildren(
       ...line.parts.map((p) => {
-        // Text an agent or a page chose is its own bidi run (review of #177, L6): a name or a
+        // Text an agent or a page chose is its own bidi run (security.md M4): a name or a
         // title is a <bdi>, a URL a left-to-right isolate, so neither can reorder the question.
         const tag = p.isolate === "auto" && !p.strong ? "bdi" : p.strong ? "b" : "span";
         const node = /** @type {HTMLElement} */ (doc.createElementNS(HTML_NS, tag));
@@ -76,7 +76,7 @@ export class AgentPrompt {
 
   /**
    * Keys count only `armMs` from now: after the window came to the front, lost it, or a key
-   * arrived before the line was armed (review of #177, H1; as PopupNotifications re-arms on
+   * arrived before the line was armed (security.md M4; as PopupNotifications re-arms on
    * activate). The hint hides until then.
    * @param {number} armMs
    */

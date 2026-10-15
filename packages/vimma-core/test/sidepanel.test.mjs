@@ -636,7 +636,7 @@ describe("a split in the panel", () => {
     expect(effect).toEqual({ type: "alone", id: "t3" });
   });
 
-  // Revision (decision 25): Enter applies the marks, then goes to the highlighted row.
+  // Decision 25: Enter applies the marks, then goes to the highlighted row.
   test("the user's flow: space on pane C, Enter on C: C alone, the rest a hidden view", () => {
     const { effect } = press(open(), [J, SPACE, K, ENTER]);
     expect(effect).toEqual({ type: "together", ids: ["t2", "t3"], focus: "t3", alone: "t4" });

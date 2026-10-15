@@ -1,13 +1,15 @@
 # Spec: firefox-versions
 
-Status: accepted · Area: `tools/release/` (new: `version-line.mjs`, `firefox-notes.mjs`,
+Status: accepted (sub-PRs 1 to 3 implemented, #194, #199 and #283; sub-PR 4: [#220](https://github.com/vimma-browser/vimma/issues/220)) · Area: `tools/release/` (new: `version-line.mjs`, `firefox-notes.mjs`,
 `security-release.mjs`), `.github/workflows/release-please.yml`, `nightly.yml`, `release.yml`,
 `tools/upstream/autopilot-body.mjs`, `src/browser/branding/vimma/pref/firefox-branding.js`,
 `docs/runbook.md`, `docs/security.md`, `docs/review-checklist.md`, `CONTRIBUTING.md` · Upstream
-patches: `src/toolkit/xre/nsAppRunner-cpp.patch` (new; ADR-003 register line: "1 hunk, 12 lines:
+patches: `src/toolkit/xre/nsAppRunner-cpp.patch` (new; ADR-003 register line: "1 hunk, 11 lines:
 `DumpVersion` prints `Vimma <version> · Firefox <version>` instead of `<vendor> <name> <version>`
 (firefox-versions)") · ADR: ADR-020 (new, "A security release needs no person"), ADR-015 and
 ADR-003 (register line)
+
+Issues: [#220](https://github.com/vimma-browser/vimma/issues/220)
 
 ## Summary
 
@@ -149,7 +151,7 @@ quote the same string.
 
 - `tools/upstream/autopilot-body.mjs` `prTitle` gives bump PRs the title `upstream: firefox
 <version>` (#186: `upstream: firefox 158.0`). A squash merge makes the title the commit subject,
-  which is the changelog line (CLAUDE.md).
+  which is the changelog line (CONTRIBUTING.md).
 - `commitlint` 21.2.3 with `@commitlint/config-conventional` rejects `upstream: Firefox 158.0 (MFSA
 2026-106)` (subject-case) and accepts `upstream: firefox 158.0 (MFSA 2026-106)` (checked with
   `npx commitlint`). A Markdown link in the subject would pass 100 characters with one advisory.
@@ -158,7 +160,7 @@ quote the same string.
 
 ### GitHub
 
-- Repository settings (API, `GET /repos/JRanne/vimma`): `allow_auto_merge` true, squash only.
+- Repository settings (API, `GET /repos/vimma-browser/vimma`): `allow_auto_merge` true, squash only.
 - `main` ruleset 24842084: PR required with 0 approvals, squash only, required checks `lint,
 typecheck, test, commitlint, licences`, `semgrep (…)`, `CodeQL (javascript-typescript)`,
   `CodeQL (rust)`, `mochitest (artifact build)`; CodeQL code-scanning gate; no bypass actors. It
@@ -248,7 +250,7 @@ MOZ_APP_VERSION)` and keeps the copyright suffix. Both macros are already define
     the release PR (no version bump, no changelog).
 12. **What it checks, all of which must hold** (pure function `decide()` in
     `tools/release/security-release.mjs`, given the API responses):
-    - the variable `AUTO_SECURITY_RELEASE` is `true`, the repository is `JRanne/vimma`, the event
+    - the variable `AUTO_SECURITY_RELEASE` is `true`, the repository is `vimma-browser/vimma`, the event
       is `push` and the ref `refs/heads/main`;
     - the pushed commit's subject starts `upstream: firefox ` and the commit belongs to exactly one
       merged PR (`GET /repos/{repo}/commits/{sha}/pulls`) whose base is `main`, whose head branch is
@@ -289,10 +291,11 @@ MOZ_APP_VERSION)` and keeps the copyright suffix. Both macros are already define
 
 ### Ownership and credentials
 
-17. **This spec owns the release half; m6a-updater (PR #143) owns only the bump half.** The job in
-    decisions 11 to 15 releases whatever is on `main` after a merged security bump. m6a-updater
-    keeps only auto-merging a green security bump PR, under its own variable
-    `AUTO_SECURITY_BUMP`. Releasing whatever is on `main` follows from releasing from `main` only
+17. **This spec owns the release half; spec upstream-bump-automation owns the bump half.** The
+    job in decisions 11 to 15 releases whatever is on `main` after a merged security bump.
+    Auto-merging a green bump PR belongs to upstream-bump-automation, under its variable
+    `AUTO_MERGE_UPSTREAM`; m6a-updater adds no auto-merge rule of its own (its decision 3).
+    Releasing whatever is on `main` follows from releasing from `main` only
     (decision 16). Separate variables let the release half be proven on drafts before bumps merge
     themselves. Rejected: m6a-updater owning both halves and auto-merging the release PR only
     when every entry in it is an `upstream:` line (a security fix would wait for a person
@@ -384,7 +387,7 @@ Written first and seen to fail.
 - `release-please.yml grants nothing by default and each job only what it needs`
 - `only release-title holds contents: write from GITHUB_TOKEN besides release-please` (the
   release-please job keeps the scopes it has today)
-- `security-release runs only on a push to main of JRanne/vimma`
+- `security-release runs only on a push to main of vimma-browser/vimma`
 - `no job runs on pull_request or pull_request_target`
 - `nightly and release smoke checks compare --version with versionLine`
 - `every action is pinned by a full commit SHA`

@@ -3,9 +3,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* The side panel and the bookmarks panel (ui/side-panel.mjs, ui/bookmarks-panel.mjs): the
-   pickers' look (picker.css), theme tokens when the status bar has loaded them, legible system colours otherwise. SidebarController.setPosition()
-   writes an inline `order` on every child of #browser (browser-sidebar.js), so ours is
-   !important to stay leftmost. */
+   pickers' look (picker.css), theme tokens when the status bar has loaded them, legible system
+   colours otherwise. SidebarController.setPosition() writes an inline `order` on every child of
+   #browser (browser-sidebar.js), so ours is !important to stay leftmost. */
 
 .vimma-side-panel {
   order: -1 !important;

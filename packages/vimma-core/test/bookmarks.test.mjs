@@ -125,7 +125,7 @@ describe("fromPlaces", () => {
   });
 });
 
-// User decision, 2026-10-10: the panel shows only the Bookmarks Toolbar.
+// docs/specs/bookmarks.md: the panel shows only the Bookmarks Toolbar.
 describe('fromPlaces(places, "toolbar")', () => {
   const nested = structuredClone(places);
   nested.children[1].children.push(
@@ -475,7 +475,7 @@ describe("keymap and command line", () => {
   });
 });
 
-// User decision, 2026-10-10: each workspace owns a folder in the Bookmarks Toolbar.
+// docs/specs/bookmarks.md: each workspace owns a folder in the Bookmarks Toolbar.
 describe("workspace folders", () => {
   const bar = fromPlaces(
     {

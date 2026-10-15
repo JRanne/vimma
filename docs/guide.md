@@ -9,6 +9,40 @@ Vimma is pre-alpha, so the guide is precise about what works **today** on `main`
 everything else as **planned**, with the milestone that brings it ([plan.md](../plan.md) §6).
 Known gaps are listed in [limits.md](limits.md).
 
+## Features at a glance
+
+What works today, each with the section that explains it:
+
+- **Vim on the page** ([the two layers](#the-two-layers)): `j`/`k`/`h`/`l` scroll, `d`/`u`
+  half a page, `gg`/`G` top and bottom, `H`/`L` back and forward; `f` link hints (`F` in a
+  background tab); `/` find as you type, in frames and PDFs too; `v` copy mode with Vim motions
+  and `y`; insert mode in text fields, `Esc` to leave; `:` a [command line](#the-command-line)
+  with completion and history.
+- **tmux for the window** (prefix `ctrl+b`, [keys](#keys)): tabs (`c` new, `n`/`p`, `1..9`,
+  renamed with the [goto picker](#goto-picker-and-tab-rename)); up to 4 split panes (`v`, `-`,
+  `h/j/k/l`, `z` zoom, swap, resize); tiling [layouts](#layouts) (`enter` dwindle, `space`
+  cycles tmux's presets); `ctrl+b ?` lists every binding, searchable.
+- **[Workspaces](#workspaces):** each one a container with its own logins and cookies, kept
+  with its tabs and split layout across restarts; `ctrl+^` goes back to the last one; a
+  [private workspace](#private-workspace) (`ctrl+b shift+p`); a [side panel](#side-panel)
+  (`ctrl+b b`) that shows marked tabs together as panes.
+- **[Every key is yours](#every-key-is-yours):** any binding, the prefix and the leader remap
+  in [config.toml](#configtoml), which applies on save; Firefox's own shortcuts are Vimma
+  bindings too ([Firefox's own shortcuts](#firefoxs-own-shortcuts)).
+- **[Search engines](#search-engines)** and `@aliases` from `config.toml`, such as `@gh vimma`.
+- **[Hide the toolbar](#hiding-the-toolbar)** with `ctrl+b u`: the page reaches the top of the
+  window, and the address bar comes back when you need it.
+- **[Theming](#colours-and-themes):** the bars, Firefox's toolbar and prompts, pickers, hints,
+  start page and sidebar follow your desktop theme and change with it, or take your own colours.
+- **[Accessible](#accessibility):** Vimma's own UI works with a screen reader and meets WCAG AA
+  contrast in dark and light themes.
+- **Firefox underneath** ([privacy defaults](#privacy-defaults)): the same user agent and
+  [add-on](#add-ons) compatibility as Firefox; no studies, sponsored content or telemetry
+  uploads; Safe Browsing on.
+- **Scriptable** ([vimma-ctl](#scripting-with-vimma-ctl)): a token-protected control socket;
+  local AI agents reach one [agent workspace](#agent-workspace) through MCP, and every request
+  asks you first.
+
 ## Every key is yours
 
 The keys in this guide are defaults, not decisions. Every binding, the `ctrl+b` prefix and the
@@ -34,7 +68,7 @@ details, and [bindings.md](bindings.md) lists every action's config name with it
 ### Install
 
 There are no packages or binaries yet. Tarballs, an AppImage, a `.deb` and AUR `vimma-bin` are
-planned for M6. Until then, build from source as the [README](../README.md#getting-started)
+planned for M6. Until then, build from source as [CONTRIBUTING.md](../CONTRIBUTING.md#build-and-run)
 describes: `npm ci`, `npx surfer download`, `npx surfer bootstrap`, `npm run import`,
 `npx surfer build`. The first build takes about 40 minutes on a 16-thread machine and needs
 about 35 GB of disk space (`engine/` 27 GB, the sccache compiler cache 6.8 GB, `~/.mozbuild`
@@ -140,9 +174,13 @@ Focusing a text field puts the tab in **insert** mode, so typing works as in Fir
 text areas, editable regions (`contenteditable`), ARIA text boxes, code editors (Monaco,
 CodeMirror, Ace, ProseMirror, Quill), fields inside web components and inside frames from
 other sites. Focusing a checkbox, button or link does not. `Esc` leaves insert: it takes focus
-out of the field and the tab is back in normal. `i` enters insert explicitly: it focuses the
-first text field on the page, or, on a page without one (a game), lets every key through until
-`Esc`.
+out of the field and the tab is back in normal. `i` enters insert explicitly: it goes back to
+the text field you were last in on the page, or the first text field if that one is gone, or, on
+a page without one (a game), lets every key through. Insert entered with `i` or `gi` lasts until
+`Esc`, even if the page moves focus itself (a file finder jumping to its result list, a dialog
+taking focus), so the keys you type keep going to the page. Insert entered by clicking or
+tabbing into a field follows the focus: when focus leaves the text fields, the tab is back in
+normal.
 
 Clicking into a page that is editable as a whole (a `designMode` document, such as some rich
 text editors' frames) also enters insert.
@@ -295,21 +333,86 @@ with `F11` keeps it. From the left:
 - `◇ agent` while a local AI agent is connected ([agent workspace](#agent-workspace)):
   `◇ agent 2?` when 2 of its requests wait for your answer, `◇ agent 14m` while a grant you gave
   has 14 minutes left, and `◇ agent ·` for a moment after a request ran;
-- `loading` while the page loads, then its **URL** without `https://`.
+- `loading` while the page loads, then its **URL** without `https://`;
+- with the [toolbar hidden](#hiding-the-toolbar), `not secure` in red for a page Firefox's
+  address bar would warn about (an `http:` page keeps its `http://`), `using camera, mic` (or
+  screen, location, XR, serial) while the page uses them, and `private` in a private window that
+  is not the [private workspace](#private-workspace) (which says `◆ private` already).
 
 On a narrow window the least important parts give way first: the URL is shortened in the middle,
 then dropped, then the title is shortened, and so on. The mode badge always stays. Screen
 readers announce the mode when it changes, including when focus moves into or out of a text
 field, but not every title change.
 
+With the toolbar hidden the URL is the only place the address shows, so it outlasts the title,
+a title never takes its place, and in a narrow window it loses its path and then its leftmost
+subdomains, never the site's own domain: `…evil.example…`, not `accounts.google.com…`. A blank
+page another page opened says so: `about:blank from example.com`.
+
 After `ctrl+b` (or any key that starts a longer sequence) only the pending keys show in the bar;
 no list of next keys pops up. To see the bindings, press `ctrl+b ?` (`ctrl+b shift+?` on a
 layout where `?` is shifted): the overlay is the one place that lists them.
 
+### Hiding the toolbar
+
+`ctrl+b u` hides Firefox's toolbar, the row with the URL bar, the back and reload buttons and the
+add-on buttons, in every window, and `ctrl+b u` again brings it back. The page then reaches the
+top of the window, with only the status bar below it. The notice says `toolbar hidden` or
+`toolbar shown`. `:toolbar` does the same, and `:toolbar show` and `:toolbar hide` set it either
+way (a `vimma-ctl` script can set a known state); `Tab` completes the two words. To start every
+window with it hidden, put `[ui] toolbar = "hidden"` in [config.toml](#configtoml). A toggle lasts
+until a restart or until you edit that line.
+
+- **Typing an address:** `I`, `ctrl+l`, `alt+d`, `F6`, `t`, `ctrl+t`, `ctrl+b c` and a new pane
+  all still focus the address bar. A minimal bar then shows over the top of the page: only the URL
+  field, with Firefox's suggestions below it. No site identity or buttons around it (the status
+  bar names the site), no bookmarks toolbar, no window controls. The page does not move or
+  resize.
+- **Leaving it:** `Enter` loads the page, puts focus in it and hides the bar. `Esc` works as in
+  Firefox (it closes the suggestions, then undoes what you typed), and one more `Esc` puts focus
+  back in the page and hides the bar.
+- **The whole toolbar:** `ctrl+b u` brings it back, with its buttons; moving the pointer to the
+  window's top edge does not. It also shows by itself while an add-on's popup or a panel from one
+  of its buttons (downloads, the menu, the extensions menu) is open, so the popup hangs from its
+  own button as with the toolbar shown.
+- **Permission prompts** (camera, location, notifications) show the whole address bar, without
+  the toolbar's buttons: the prompt points at its icon in the address bar, next to the site's
+  identity, exactly as with the toolbar shown. Vimma never shows one without saying which site
+  asks. Clicking the site's identity there opens its panel.
+- **Security in the status bar:** while the toolbar is hidden the status bar says `not secure`
+  for a page that is not served over a secure connection, and `private` in a private window
+  ([above](#status-bar)).
+- **Window controls:** with Firefox's own title bar (close, minimise and maximise buttons in the
+  toolbar), they hide with it and show when `ctrl+b u` brings the toolbar back. On a tiling window
+  manager such as Omarchy's, which draws no title bar, nothing changes.
+- **Left as Firefox has it:** customize mode, pop-up windows (they keep their read-only address
+  bar, so a pop-up always says where it comes from), and `F11` and video fullscreen, where
+  Firefox's own toolbar rules apply.
+
+#### Answering a permission prompt
+
+When a site asks for your location, camera, microphone or notifications, Firefox's prompt hangs
+from the address bar. Shown or hidden toolbar, you can answer it from the keyboard:
+
+| Key   | What it does                                                                              |
+| ----- | ----------------------------------------------------------------------------------------- |
+| `y`   | The prompt's main button (Allow).                                                         |
+| `n`   | Its other button (Block, or Don't allow).                                                 |
+| `Tab` | Moves focus onto its buttons, Block first; then the arrow keys, `Enter` and `Space` work. |
+| `Esc` | As in Firefox: the other button (Block).                                                  |
+
+`y` and `n` count only once the prompt has been up for half a second (Firefox's own delay for
+these buttons) with no key pressed in between; the line `y allow · n block · Tab buttons` in the
+prompt shows when they do. Any key you press meanwhile starts the wait again, so typing that was
+meant for the page never answers a prompt. While you type in a text field, `y` and `n` are text.
+The prompt never takes focus by itself. The same keys answer Firefox's other prompts in that
+panel, such as adding an add-on or saving a password.
+
 ### Colours and themes
 
 The status bar, the command line, the `ctrl+b ?` overlay, the pickers and prompts, link hints,
-notices, pane borders and the start page share one theme. Out of the box it is Vimma's own,
+notices, pane borders and the start page share one theme, and so do Firefox's toolbar, its
+address bar and suggestions, and the prompts and panels that hang from it. Out of the box it is Vimma's own,
 the palette of [vimma.dev](https://vimma.dev): near-black surfaces, grey-green text, and mint
 for the accent, the normal-mode badge and link hints. It has a dark and a light variant, and by
 default it follows your system's or Firefox's light or dark setting (`prefers-color-scheme`),
@@ -357,9 +460,14 @@ light theme) and checks it every 2 seconds, so `omarchy-theme-set` (or picking a
 Omarchy menu) recolours every open window and start page within 2 seconds, without a restart.
 The Omarchy theme decides dark or light itself; `:theme` then applies to the built-in palette,
 which shows when you set `[theme] source = "file"` (or `vimma.theme.source` to `builtin`). A
-`colors.toml` Vimma cannot read (a value that is not a `#rrggbb` colour, a missing key) is
-ignored: the colours stay as they were, and the Browser Console (`ctrl+shift+j`) says which line
-is wrong.
+theme whose `colors.toml` has only the terminal colours (`accent`, `foreground`, `background`,
+`selection_background` and `color0` to `color15`, as older and third-party themes ship it) works
+too: Vimma fills in the rest as Omarchy does, so the shades and the bright colours match your
+terminal; only the selected-row colour is darkened (or lightened) until its text reads. A
+`colors.toml` Vimma cannot read (a value that is not a `#rrggbb` colour, or no `accent`,
+`foreground`, `background` or one of the six colours, by name or as `color0` to `color7`) is
+ignored: the colours stay as they were, and `about:vimma` and the Browser Console
+(`ctrl+shift+j`) say which key is wrong.
 
 ```toml
 schema = 2
@@ -409,7 +517,7 @@ keys. A `[panel]` after a key means it works only in that mode.
 | `gg` / `G`                                                                              | Normal mode: go to the top / bottom of the page.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `H` / `L`, `ctrl+o` / `ctrl+i`, `alt+left` / `alt+right`, `ctrl+[` / `ctrl+]`           | Back / forward in the page's history (in a split, the focused pane's), `ctrl+o` / `ctrl+i` as vim's jump list. `H`, `L`, `ctrl+o`, `ctrl+i`, `ctrl+[` and `ctrl+]` in normal mode; Firefox's `alt+left` / `alt+right` in every mode, the address bar too. A count moves that many pages, stopping at the first or last: `3H`.                                                                                                                                                                                                                                                             |
 | `r`, `F5`, `ctrl+r`                                                                     | Reloads the page (in a split, the focused pane's); `r` in normal mode, Firefox's `F5` and `ctrl+r` everywhere. In insert mode `H`, `L` and `r` are typed into the field. `ctrl+F5` / `ctrl+shift+r` reload bypassing the cache.                                                                                                                                                                                                                                                                                                                                                           |
-| `i`                                                                                     | Normal mode: focus the first text field and enter insert mode.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `i`                                                                                     | Normal mode: focus the text field you were last in (else the first) and enter insert mode.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `gi`                                                                                    | Normal mode: focus the first visible text field, insert mode; `3gi` the third (or the last). With none, it says so and stays normal.                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `yy`                                                                                    | Normal mode: copies the page's URL (in a split, the focused pane's); the notice shows it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `p` / `P`                                                                               | Normal mode: opens the clipboard here / in a new tab, as `:open` / `:tabnew`: a URL loads, other text is searched. No `javascript:`, `data:`.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -904,7 +1012,7 @@ denied.` Codex gives up on a tool call after 60 s by default (`tool_timeout_sec`
 Each request an agent makes appears as one line at the foot of the window, above the status bar:
 
 ```
-◇ claude-code wants vimma_read_page: 2 "Pull requests · JRanne/vimma" github.com/JRanne/vimma/pulls   y once · 10a for 10 min · n deny · x mute
+◇ claude-code wants vimma_read_page: 2 "Pull requests · vimma-browser/vimma" github.com/vimma-browser/vimma/pulls   y once · 10a for 10 min · n deny · x mute
 ```
 
 It names the agent (as the agent calls itself), the tool, and what it touches: the tab's place,
@@ -938,7 +1046,7 @@ number of agent tabs for the tab list.
   `claude-code asks to use Vimma's agent workspace (read a page)`. It carries no address or
   title and no buttons: you answer in Vimma. `[mcp] notify = false` turns the notification off.
 - **Grants show.** `◇ agent 14m` counts down the shortest one, and each request a grant lets
-  through shows a notice (`claude-code read "Pull requests · JRanne/vimma" (grant, 14m left)`).
+  through shows a notice (`claude-code read "Pull requests · vimma-browser/vimma" (grant, 14m left)`).
   `:mcp revoke`, or `ctrl+b shift+a` with nothing waiting and then `y`, ends them all. A grant
   also ends when the agent disconnects or `:mcp off` runs, and is never written to disk.
 
@@ -1469,7 +1577,8 @@ and themes and dictionaries are not either. Like tab search, it takes every key 
 | `Esc` / `q`    | Closes the picker.                                                                                                            |
 
 **Popups.** The popup opens where Firefox opens it: under the add-on's toolbar button, or, for
-an add-on in the extensions menu (the puzzle piece), in that menu. Keyboard focus goes into the
+an add-on in the extensions menu (the puzzle piece), in that menu. With the
+[toolbar hidden](#hiding-the-toolbar), the full toolbar shows while the popup is open. Keyboard focus goes into the
 popup, so you can type at once (a password manager's search field). Keys there are the popup's,
 except Vimma's `ctrl+b` chords; `Esc` closes it and focus returns to the page. An add-on whose
 button has no popup runs the button's action instead; one without a button says so.
@@ -1511,8 +1620,11 @@ type reaches the page, and `ctrl+b` sequences still work.
 - **History.** `Up` / `Down` walk the lines you ran before, newest first. With text typed, `Up`
   recalls only lines that start with it, as in Vim. History lasts until Vimma quits; a private
   window keeps its own, forgotten when it closes.
+- `:open @` and `Tab` lists the search aliases (`@gh`, `@google`, …) with the engine each one
+  searches; the chosen one ends in a space, ready for the words.
 - `:open` and `:tabnew` refuse `javascript:` and `data:` URLs (also behind `view-source:`), with a
-  message, as `p` does. The line does not open over a fullscreen page.
+  message, as `p` does; so is a bookmark keyword that leads to one (a bookmarklet). The line does
+  not open over a fullscreen page.
 - **Errors** show under the line, which stays open so you can fix it: `:tabnwe` says
   `not a command: "tabnwe"; did you mean :tabnew?`.
 - A command name can be shortened while it stays unique (`:tabr`, `:wsp`), and leading colons
@@ -1524,7 +1636,7 @@ type reaches the page, and `ctrl+b` sequences still work.
 
 | Command                               | What it does                                                                                                                                |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `:open text`                          | Opens `text` in this tab as the URL bar would: `example.com` becomes a web address, other words a web search.                               |
+| `:open text`                          | As the URL bar would: `example.com` a web address, `@gh words` that alias's engine, a bookmark keyword its bookmark, other words a search.  |
 | `:tabnew`, `:tabnew text`             | Opens a new tab; with text, opens it there (as `:open`).                                                                                    |
 | `:q`, `:quit`                         | Closes the pane, as `ctrl+b x`; with one pane the tab, as `x`: a pinned tab is kept and the next one selected.                              |
 | `:map`, `:help`, `:h`                 | Shows every binding (the `ctrl+b ?` overlay).                                                                                               |
@@ -1547,6 +1659,7 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:source path`                        | Loads that TOML file instead of `config.toml` until `config.toml` changes or a plain `:source`.                                             |
 | `:config`                             | Opens `config.toml` in a new tab (read-only view); creates it from a commented template when it is missing.                                 |
 | `:mcp [on\|off\|revoke\|forget]`      | Agents and the [agent workspace](#agent-workspace): the status, on (asks `y/N`), off, revoke the grants, or forget its logins (asks `y/N`). |
+| `:control [on N\|off]`                | Full control for `vimma-ctl`: the status, on for `N` minutes (asks `y/N`), or off now ([below](#agent-workspace)).                          |
 | `:theme [dark\|light\|system]`        | The built-in palette dark, light or as the system is; bare, the other of dark and light (see [Colours](#colours-and-themes)).               |
 | `:about`, `:vimma`                    | Opens [about:vimma](#aboutvimma) in a new tab.                                                                                              |
 | `:addons`                             | Opens the [add-on picker](#add-ons), as `ctrl+b e`.                                                                                         |
@@ -1592,6 +1705,7 @@ Vimma's own preferences today:
 | Preference                 | Default                                | What it does                                                                                                                                                                            |
 | -------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `vimma.ui.tabstrip.hidden` | `true`                                 | Hides Firefox's tab strip (horizontal, and the vertical tab list). Set `false` to show it again; it applies at once, no restart.                                                        |
+| `vimma.ui.toolbar.hidden`  | `false`                                | Hides Firefox's toolbar in every window ([Hiding the toolbar](#hiding-the-toolbar)). `ctrl+b u` and `:toolbar` set it; `[ui] toolbar` sets it at startup. Applies at once.              |
 | `vimma.debug.keys`         | unset                                  | Create it as a boolean set to `true` to log every key Vimma sees (`{ key, mods, mode }`) to the Browser Console (`ctrl+shift+j`; enable its Debug filter).                              |
 | `vimma.startpage.newtab`   | `true`                                 | New tabs open Vimma's start page (see [The start page](#the-start-page)). Set `false` for Firefox's new tab page; it applies at once, no restart.                                       |
 | `vimma.control.enabled`    | `false`                                | Turns on the control socket for `vimma-ctl` and scripts (see [Scripting with vimma-ctl](#scripting-with-vimma-ctl)). Applies at once, no restart.                                       |
@@ -1666,14 +1780,55 @@ accent = "#ff9e64"
   `enabled`, which wins over `:mcp on|off`; `workspace`, the [agent workspace](#agent-workspace)'s
   name, default `"agent"`, never `"private"`; `ask_timeout`, 10 to 300 seconds, default 50;
   `grant_minutes`, default 10, at most `grant_max_minutes`, 1 to 1440, default 480;
-  `max_read_chars`, 1,000 to 500,000, default 200,000; `notify`, default `true`. Only
-  `workspace` and `enabled` do anything until the agent connection lands).
-- **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]`, `[firefox]`, `[bookmarks]`,
-  `[private]`, `[mcp]`,
+  `max_read_chars`, 1,000 to 500,000, default 200,000; `notify`, default `true`;
+  `download_dir` and `download_max_mb`, [above](#downloads-from-the-agent-workspace)); `[search]`
+  (the default engine and `@aliases`, [below](#search-engines)); `[ui] toolbar` (`"shown"`, the
+  default, or `"hidden"`: [Firefox's toolbar](#hiding-the-toolbar) in every window; applied at
+  startup and when the line changes, so `ctrl+b u` lasts until then).
+- **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]`, `[[routes]]`, `[firefox]`,
+  `[bookmarks]`, `[private]`, `[mcp]`, `[search]`, `[ui]`,
   `hint_chars`, `insert_editing`, `[theme] name` and `appearance`; every key,
   its type and default are in [m5-core-config-and-theme](specs/m5-core-config-and-theme.md#schema-v1)
   and [m3-m4-core-prep](specs/m3-m4-core-prep.md#config-schema-2), and
   `packages/vimma-core/defaults.toml` lists them with their defaults.
+
+### Search engines
+
+`[search]` sets the default search engine and gives engines short `@aliases`, so the file holds
+what Firefox otherwise keeps in Settings > Search:
+
+```toml
+[search]
+default = "DuckDuckGo"                    # an installed engine's name, or "@alias" of a URL below
+
+[search.aliases]
+gh = "https://github.com/search?q=%s"     # a URL with one %s becomes an engine
+w = "Wikipedia (en)"                      # an installed engine gets this alias
+```
+
+- **Using an alias:** type `@gh vimma` in the URL bar, or `:open @gh vimma` (`:tabnew` too), and
+  the words go to that engine. Firefox's own aliases (`@google`, `@ddg`, `@wikipedia`) and your
+  bookmark keywords work in `:open` the same way. To search the default engine for text that
+  starts with `@`, put `? ` before it: `:open ? @gh vimma`.
+- **Aliases:** a key is the alias without its `@` (a leading `@` in the key is dropped): a letter
+  or digit, then up to 31 of `a-z 0-9 . _ -`, case-insensitive. A URL value must be `https://`
+  or `http://` with exactly one `%s`, where the words go; Vimma adds it to Firefox as an engine
+  named after its host (`github.com`), with no search suggestions, so nothing is sent before
+  `Enter`. An `http://` URL sends your searches unencrypted, and `about:vimma` says so. Any other
+  value is an installed engine's name, as Settings > Search lists it; that engine gets the alias,
+  and its own keeps working.
+- **The default:** `default` names an installed engine, or `"@sx"` for an alias with a URL (a
+  SearXNG of your own, say). It applies to the URL bar, `:open`, `:tabnew` and `p`/`P`, in
+  private windows too unless Firefox's separate private default is on. The file wins: at every
+  start and every save Vimma sets it again, so a default chosen in Settings lasts until then.
+  Delete the `default` line to choose it in Settings instead.
+- **Removing lines** puts back what was there: without `default`, the engine you had before
+  becomes the default again (unless you have chosen another one in Settings since); an engine
+  Vimma made from a URL is removed, and an installed engine gets its old alias back.
+- **Mistakes:** a name that is not installed, or an alias another engine already has, shows in
+  the status bar and `about:vimma` like any config error, with its line and a suggestion
+  (`config.toml:3: search.default: no search engine named "DuckDuckGoo" (did you mean
+"DuckDuckGo"?)`). The rest of the file still applies; only that entry is skipped.
 
 ## Scripting with vimma-ctl
 
@@ -1863,7 +2018,7 @@ it does not help. Mozilla's tracking-protection lists update either way.
 
 **Does Vimma update itself?** No. There are no releases yet, so build a newer `main` yourself.
 Firefox's updater is not built into Vimma, so it never asks Mozilla's update server
-(`aus5.mozilla.org`) for a Firefox build. An updater of Vimma's own is planned for M6
+(`aus5.mozilla.org`) for a Firefox build. An updater of Vimma's own is planned for M6a
 ([limits.md](limits.md)).
 
 **I want the tab strip back.** Set `vimma.ui.tabstrip.hidden` to `false` in `about:config`.

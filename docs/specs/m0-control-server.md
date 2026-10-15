@@ -13,7 +13,8 @@ running browser, and with it off nothing listens and no token file exists.
 
 ## Scope
 
-- `ctl/VimmaControl.sys.mjs`: protocol v1 server. One per app: every window's `vimma.js` calls
+- `ctl/VimmaControl.sys.mjs`: protocol v1 server (protocol 2 and its roles since
+  [vimma-mcp](vimma-mcp.md)). One per app: every window's `vimma.js` calls
   `VimmaControl.init(window)`, which acts once. The pref `vimma.control.enabled` (default `false`,
   branding prefs file) starts and stops it live; starts and stops run one after another.
 - `nsIServerSocket.init(-1, /* loopbackOnly */ true, 16)`: 127.0.0.1, an OS-chosen port.
@@ -43,11 +44,11 @@ running browser, and with it off nothing listens and no token file exists.
   would test something users never do. Cost: keys go where focus is; for page-bound keys that is
   the page only while the window has focus, as with a real keyboard. `?` is sent without shift
   (vimma-core's canonical chord), which the host treats the same.
-- **`state.pending`** is `VimmaHost.status(win).pending.join(" ")`, what the status bar shows: `"prefix"`
-  after `ctrl+b`, `null` when empty. `mode` is the host's `_mode`: `help` with the overlay
-  open, else the focused page's mode (`normal` on a page with Vimma's actor, `insert` in a text
-  field, a page without the actor, or chrome; m1-actor-insert-scroll). Each tab also
-  has `index` (strip order among visible tabs) and `pinned`; clients ignore fields they do not
+- **`state.pending`** is `VimmaHost.status(win).pending.join(" ")`, what the status bar shows:
+  `"prefix"` after `ctrl+b`, `null` when empty. `mode` is the host's `_mode`: `help` with the
+  overlay open, else the focused page's mode (`normal` on a page with Vimma's actor, `insert` in a
+  text field, a page without the actor, or chrome; m1-actor-insert-scroll). Each tab also has
+  `index` (strip order among visible tabs) and `pinned`; clients ignore fields they do not
   know. `workspace` is the active workspace's name and `panes` the window's pane tree, `null`
   with one pane (shape in the protocol spec; m3-workspaces sub-spec 7).
 - **`open`**: the URL is re-parsed with `Services.io.newURI` and its scheme checked again
@@ -100,7 +101,7 @@ running browser, and with it off nothing listens and no token file exists.
   0600, port matches, pid is the parent, no `.tmp` left, handshake works, 127.0.0.2 refused. Off:
   file gone, old port refused. On again: a new token.
 - Handshake: wrong token → exact `unauthorized` response, then close; an HTTP request →
-  `bad-request`, close; protocol 2 → `unsupported-protocol`, close; right token → valid
+  `bad-request`, close; protocol 3 → `unsupported-protocol`, close; right token → valid
   `welcome` (app, version). After it: not-JSON → `bad-request`, unknown command, reserved →
   `not-implemented`, unknown args → `invalid-args`, connection still usable.
 - `send-keys ctrl+b` → `state.pending` `"prefix"`; `?` → overlay opens, host saw real keydowns,
@@ -112,10 +113,10 @@ running browser, and with it off nothing listens and no token file exists.
 - `open https://example.com/` → new selected tab, result id, content principal; `where: current`
   reuses it; `about:blank` → a new selected tab at `about:blank`; `javascript:`, `data:`,
   `chrome:` → `invalid-args`, nothing opened.
-- Limits: 8 authenticated connections, the 9th hello gets `busy` (id null, no doubled "busy:")
-  and a close, a freed slot works; 20 connections that never say hello leave 2 waiting (the
-  evicted told `busy`) and a client with the token still gets in; an oversized line → `bad-request` and a close; idle (500 ms pref) →
-  closed without a message; no hello (300 ms pref) → `bad-request` and a close.
+- Limits: 8 authenticated connections, the 9th hello gets `busy` (id null, no doubled "busy:") and a
+  close, a freed slot works; 20 connections that never say hello leave 2 waiting (the evicted told
+  `busy`) and a client with the token still gets in; an oversized line → `bad-request` and a close;
+  idle (500 ms pref) → closed without a message; no hello (300 ms pref) → `bad-request` and a close.
 - `vimma-ctl --profile <test profile> state --json` exits 0 with the live state; 5 more runs
   succeed during a flood of 30 idle connections; against a squatting socket (a stale discovery
   file with a token it does not know) it exits 4 and the squatter receives no command.
@@ -154,9 +155,9 @@ Every response is checked with `validateMessage(kind: response, command)`.
 - Merged main again (#34 status bar): `state` now reads `VimmaHost.status(win)` instead of our
   own `controlState`. Full build 981 passed, artifact build 964 passed, 0 failed.
 
-## Review of #38 (2026-10-09)
+## Hardening
 
-Must-fix:
+Two weaknesses were fixed before the server shipped:
 
 1. **Waiting connections could lock out clients.** Eight shared slots, each held ~5.7 s by a
    connection that never says hello: a reconnect loop made `vimma-ctl state` fail `busy` 10/10.
@@ -169,16 +170,16 @@ Must-fix:
    and blocks the start, a symlink is removed and not followed; (b) protocol v1 is amended: the
    `hello` carries a random `nonce`, the `welcome` a `proof` = HMAC-SHA256(token, nonce), and
    vimma-ctl sends nothing else until the proof checks out (constant time; forgeable, as the
-   token went in the hello: superseded, see the security review below); (c) vimma-ctl
+   token went in the hello: superseded, see the handshake notes below); (c) vimma-ctl
    reports a stale file when its `pid` is not alive (`/proc/<pid>`, Linux). HMAC-SHA256 is
    ~100 lines of std-only Rust (`tools/vimma-ctl/src/hmac.rs`, FIPS 180-4 and RFC 4231 vectors)
    rather than a crate (ADR-011: no dependencies); the server uses WebCrypto.
 
-Should-fix: the guide's Security section says the token is full control of the browser, that
+Further fixes: the guide's Security section says the token is full control of the browser, that
 `open` uses the system principal (`file:`, privileged `about:` pages), that stale files go at
 every start, and lists the denial-of-service limits. `shutdown()` releases the wait for the first
 window, so the `profileBeforeChange` blocker cannot hang when that window closed before its
-delayed startup. The server's own scheme check has a direct test. Nits: "busy: busy:" is gone
+delayed startup. The server's own scheme check has a direct test. "busy: busy:" is gone
 (messages no longer start with the code), more than 4 MiB of unsent output closes a client that
 stopped reading (not tested: the kernel's socket buffers would have to fill first), and `ctrl+q`
 with the help overlay open is swallowed like any key there, as when typing: documented (send
@@ -190,11 +191,11 @@ one argument, no `proof`), then 53 unit + 24 integration passed; the mochitest 2
 artifact lane. Mutation: with the server's scheme check removed, `javascript:` and `data:` passed
 through `_commands.open` (2 failures; `chrome:` crashed the browser loading it); reverted.
 
-## Security review of #38 (2026-10-09)
+## Security notes: the handshake
 
 **The proof was forgeable.** The client sent the token in the `hello`, next to the nonce, before
-checking anything, so a squatter received the key and computed HMAC(token, nonce) itself; the
-reviewer's squatter received `send-keys hunter2<cr>`. The handshake is now hello {nonce, no
+checking anything, so a squatter received the key and computed HMAC(token, nonce) itself; a test
+squatter received `send-keys hunter2<cr>`. The handshake is now hello {nonce, no
 token} → challenge {proof = HMAC-SHA256(token, "vimma-server\0" + nonce)} → auth {token} →
 welcome, still an amended v1. The client checks the proof in constant time (`black_box` around
 the fold) and sends nothing more on a mismatch. One 5 s deadline and the waiting-slot rules
@@ -206,7 +207,7 @@ is not (a squatter can make the client wait; a fast connect flood can evict a cl
 
 Red/green: Vitest 10 failed (fixtures and table tests for hello/challenge/auth), then 96
 passed; cargo did not compile (`hello` takes one argument, `expected_proof` gone), then 55 unit
-and 25 integration passed, among them the reviewer's squatter ported to `tests/cli.rs` (it answers
+and 25 integration passed, among them that squatter ported to `tests/cli.rs` (it answers
 with an HMAC keyed by any token it saw: it receives only the hello) and a squatter that never
 answers (clean timeout, exit 5); the mochitest 33 failed, then 219 passed.
 

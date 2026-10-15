@@ -1,10 +1,16 @@
 # Spec: m6-packaging
 
-Status: implemented (tooling); gated off until the owner sets up the runner, secrets and variables · Milestone: M6 · Area:
+Status: implemented (tooling); gated off until the build job runs on a hosted runner ([#224](https://github.com/vimma-browser/vimma/issues/224)) and the secrets and variables are set · Milestone: M6 · Area:
 `tools/package/`, `.github/workflows/release.yml`
 Prerequisite: release-please (`release-please.yml`) and the self-hosted `vimma-build` runner
 (`nightly.yml`), both merged. The updater spec (m0-updater, PR #15) compiles the app updater
 out; packages here rely on that (they are updated by apt, pacman or a new AppImage).
+
+Since changed: this spec assumed the `build` job runs on a self-hosted `vimma-build` runner
+and that the repository is private. The repository is public, no self-hosted runner is used or
+planned, and the `build` job moves to a GitHub-hosted runner with [#224](https://github.com/vimma-browser/vimma/issues/224) (spec
+[build-supply-chain](build-supply-chain.md), decisions 6 and 7). Until then the release stays
+off; the runner rows below describe the workflow as written, not the target.
 
 ## User story
 
@@ -27,6 +33,8 @@ packages, signs and publishes all of it without me, once I have enabled it.
   gated off until `RELEASE_ENABLED` is set.
 - `nightly.yml`: its `surfer package` step is replaced by `./mach package` (see Findings).
 - `docs/runbook.md` (Releases): enabling and verifying; `docs/guide.md`: "Installing" (planned).
+- `README.md`: the first release adds the download and latest-release badges to the badge bar
+  ([README badges](#readme-badges)).
 
 Out of scope: macOS and Windows (M7); the update manifest, MAR files and update server (separate
 spec, with the in-app updater); Flatpak (plan §9 open question); AppStream metainfo; a smoke
@@ -125,7 +133,7 @@ artifact.
 cdxgen: those scan installed package metadata, and a Firefox build has none, so they would list
 almost nothing. Firefox's own inventory is in the tree:
 
-- `metadata.component`: Vimma `V`, MPL-2.0, `pkg:github/JRanne/vimma@vV`.
+- `metadata.component`: Vimma `V`, MPL-2.0, `pkg:github/vimma-browser/vimma@vV`.
 - Firefox `version.version`, MPL-2.0 (`pkg:generic/mozilla/firefox@157.0.1`).
 - Every crates.io and git package in `engine/Cargo.lock` (`pkg:cargo/name@version`, the lockfile
   SHA-256 for registry crates, licence from `third_party/rust/<name>[-<version>]/Cargo.toml`).
@@ -155,7 +163,7 @@ packages are dev tools only and never ship, so they are not listed.
 | Key pair (`COSIGN_PRIVATE_KEY`) | generate, store, rotate a key and its password; publish the public key | `--key cosign.pub`                                                     | a leaked secret signs anything; rotation is manual                                          |
 
 **Keyless**: there is no secret to leak, and the signature proves the file came from
-`release.yml` in `JRanne/vimma`, run for a `vX.Y.Z` tag or from `main`. Users verify with
+`release.yml` in `vimma-browser/vimma`, run for a `vX.Y.Z` tag or from `main`. Users verify with
 `--certificate-identity-regexp` `IDENTITY_REGEXP` (`package.mjs`; anchored, exact repo, only
 `refs/tags/vX.Y.Z` or `refs/heads/main`) and `--certificate-oidc-issuer
 https://token.actions.githubusercontent.com`; a test keeps the runbook's command equal to it. Only the `sign` job gets `id-token: write`; it runs
@@ -180,7 +188,7 @@ Each file is signed with `cosign sign-blob --yes --bundle <file>.sigstore.json <
   `github.event_name == 'release' || github.ref == 'refs/heads/main'`, and the verify identity
   accepts only those refs.
 
-Every job has `if: vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&
+Every job has `if: vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' &&
 (github.event_name == 'release' || github.ref == 'refs/heads/main')` (manual runs too: the
 runner and secrets must be ready first). Top-level `permissions: {}`.
 `tools/package/test/release-workflow.test.mjs` checks the gate on every job, that only `sign`
@@ -223,6 +231,34 @@ idempotent.
 | `sign`      | `gh variable set SIGNING_ENABLED --body true` (keyless: no key)                                                                                |
 | `aur`       | an AUR account, its SSH key as `gh secret set AUR_SSH_KEY`, and the name `vimma-bin` still free on the AUR (check before the first push)       |
 | public repo | the runner exposure rules in the runbook (fork PRs must not reach `vimma-build`)                                                               |
+
+## README badges
+
+The README opens with a centred row of shields.io badges in one muted grey style
+(`labelColor=333333`, `color=666666`): licence (MPL-2.0), GitHub stars, CI status on `main` and
+the Firefox version Vimma is built on (read from `surfer.json`). These work before any release
+(`README.md`).
+
+The first release that publishes assets adds two more, in the same style:
+
+- total downloads,
+  `https://img.shields.io/github/downloads/vimma-browser/vimma/total?labelColor=333333&color=666666`,
+  linking to the Releases page;
+- the latest release,
+  `https://img.shields.io/github/v/release/vimma-browser/vimma?label=release&labelColor=333333&color=666666`,
+  linking to `releases/latest`.
+
+An AUR version badge (`https://img.shields.io/aur/version/vimma-bin`, same style) follows once the
+`aur` job has pushed `vimma-bin`.
+
+1. **The release badges wait for the first release.** Before a release both would read "0" or
+   "no releases", which tells a reader nothing, so they are added with the first published
+   release and not earlier.
+2. **A README edit, not a `release.yml` step.** The badges are added by hand when the first
+   release is published, because shields.io reads the counts from the GitHub and AUR APIs on
+   each view: once the badge is in the README it stays current without the workflow touching
+   the README again. Rejected: having `release.yml` commit the badges, because `main` takes
+   changes only through pull requests.
 
 ## Tests (write first)
 
@@ -291,15 +327,14 @@ repos) and is what the runbook's `cosign verify-blob` uses; `RUNTIME_RELEASE` is
 
 - Node scripts with Vitest (the repo's test runner); Python was not needed.
 
-## Review changes (2026-10-09)
+## Hardening
 
-The first review asked for: the main/release gate on every job and an anchored verify identity
-(must-fix 1); SPDX-canonical licence ids and validation against the official schema (2); the
-LGPL text and runtime notice in the AppImage plus a release-notes notice (3); smol-toml and
-clean moz.yaml versions in the SBOM (4); a fresh objdir and cache for release builds (5); the
-desktop file ID `vimma-vimma` (6); and nits (AUR releases only, `ubuntu-24.04` in `failure`,
-no empty `MOZ_APP_LAUNCHER`, the `application.ini` version check in the release build). All are
-in, test-first where there is code.
+Added before the first release, test-first where there is code: the main/release gate on every
+job and an anchored verify identity; SPDX-canonical licence ids and validation against the
+official schema; the LGPL text and runtime notice in the AppImage plus a release-notes notice;
+smol-toml and clean moz.yaml versions in the SBOM; a fresh objdir and cache for release builds;
+the desktop file ID `vimma-vimma`; AUR releases only, `ubuntu-24.04` in `failure`, no empty
+`MOZ_APP_LAUNCHER`, and the `application.ini` version check in the release build.
 
 - Install path `usr/lib/vimma` in the `.deb` (Mozilla's own `.deb` uses `usr/lib/firefox`), and
   `/opt/vimma` in the AUR package (Arch's convention for `-bin` browsers).

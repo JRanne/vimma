@@ -97,23 +97,23 @@ describe("upstream-beta.yml (the Beta canary)", () => {
     expect(job("test")).toContain("uses: ./.github/workflows/e2e.yml");
   });
 
-  it("every job is skipped outside JRanne/vimma", () => {
+  it("every job is skipped outside vimma-browser/vimma", () => {
     for (const id of JOBS) {
       expect(job(id), id).toMatch(
-        /^ {4}if: (?:>-\n\s+)?[^\n]*github\.repository == 'JRanne\/vimma'/m,
+        /^ {4}if: (?:>-\n\s+)?[^\n]*github\.repository == 'vimma-browser\/vimma'/m,
       );
     }
   });
 
   it("nothing is built from a tarball whose SHA-512 Mozilla did not publish", () => {
     // source-check.sh exits 1 on a mismatch: the job fails, so the suites and the report
-    // never see that tarball (G10), and e2e.yml checks its own download against SHA512SUMS.
+    // never see that tarball (G10), and e2e.yml checks its own download through firefox-source.sh.
     expect(job("source-check")).toContain('run: tools/upstream/source-check.sh "$VERSION"');
     expect(job("test")).toMatch(/needs: \[detect, source-check\]/);
     expect(job("test")).toContain("needs.source-check.outputs.result == 'ok'");
     expect(job("test")).toContain("needs.source-check.outputs.artifacts == 'yes'");
     expect(job("render")).toContain("needs.source-check.result == 'success'");
-    expect(e2e).toContain("python3 tools/upstream/verify-sha512.py");
+    expect(e2e).toContain("tools/upstream/firefox-source.sh");
   });
 
   it("every action is pinned by a full commit SHA", () => {
@@ -163,7 +163,7 @@ for ((i = 0; i < \${#args[@]}; i++)); do
 done
 case "$1 $2" in
   "issue list") if [[ "$*" == *"--label upstream "* ]]; then cat "${tmp}/tracking.json"; else cat "${tmp}/open.json"; fi ;;
-  "issue create") echo "https://github.com/JRanne/vimma/issues/300" ;;
+  "issue create") echo "https://github.com/vimma-browser/vimma/issues/300" ;;
 esac
 `,
       { mode: 0o755 },
@@ -173,7 +173,7 @@ esac
       RUNNER_TEMP: tmp,
       RELEASED: released,
       GH_TOKEN: "t",
-      GH_REPO: "JRanne/vimma",
+      GH_REPO: "vimma-browser/vimma",
     };
     const block = job("report");
     let status = 0;

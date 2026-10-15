@@ -117,6 +117,36 @@ function render(d) {
       : []),
   );
 
+  // docs/specs/search-engines.md decision 14: the default, the aliases, the problems.
+  const sr = d.search;
+  fill(
+    "search",
+    dl([
+      [
+        "Default engine",
+        sr.default === null
+          ? "not read yet"
+          : `${sr.default}${sr.fromConfig ? " ([search] default in config.toml)" : " (Settings)"}`,
+      ],
+      [
+        "Aliases",
+        sr.aliases.length
+          ? sr.aliases
+              .map(
+                (a) =>
+                  `${a.alias} → ${a.engine}${a.unencrypted ? " (queries sent unencrypted)" : ""}`,
+              )
+              .join(", ")
+          : sr.errors.length
+            ? "none applied: see the errors below"
+            : "none in config.toml",
+      ],
+    ]),
+    ...(sr.errors.length
+      ? [el("ul", {}, ...sr.errors.map((e) => el("li", { class: "error" }, e)))]
+      : []),
+  );
+
   // docs/specs/theme-appearance.md: the Omarchy rows only where Vimma follows Omarchy.
   const t = d.theme;
   const omarchy = t.source === "omarchy";

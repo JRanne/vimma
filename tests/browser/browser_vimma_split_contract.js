@@ -6,7 +6,7 @@
 // sub-spec 1; ADR-013's acceptance criteria). It pins the upstream behaviour we build on with
 // wrappers of three and four tabs, never only two, so a Firefox update that narrows the split
 // view fails here. The pane trees are built with vimma-core's pane ops and the rectangles come
-// from its layout(), as PaneView's will (sub-spec 2).
+// from its layout(), as PaneView's are (sub-spec 2).
 
 /* global focusContent -- from head.js */
 
@@ -91,7 +91,7 @@ function panelOf(tab) {
   return document.getElementById(tab.linkedPanel);
 }
 
-/** The content area as an integer rect at 0,0, as the host will pass it to layout(). */
+/** The content area as an integer rect at 0,0, as the host passes it to layout(). */
 function area() {
   const r = tabpanels().getBoundingClientRect();
   return { x: 0, y: 0, width: Math.round(r.width), height: Math.round(r.height) };
@@ -151,8 +151,8 @@ function pageURL(name) {
   return `data:text/html,<title>${name}</title><body style="height:5000px">${name}</body>`;
 }
 
-/** Opens one loaded background tab per name. */
 const opened = [];
+/** Opens one loaded background tab per name. */
 async function openTabs(...names) {
   const tabs = [];
   for (const name of names) {

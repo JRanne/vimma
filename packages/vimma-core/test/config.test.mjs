@@ -415,6 +415,8 @@ describe("mergeWithDefaults", () => {
         downloadDir: "~/Downloads/vimma-agent",
         downloadMaxMb: 200,
       },
+      ui: { toolbar: "shown" },
+      search: null,
     });
   });
 });

@@ -71,6 +71,9 @@ Workspaces
 Navigation
   goto_picker             ctrl+b g, b                                       Tab search: every tab, every window, recently closed
   toggle_sidebar          ctrl+b b                                          Open / close the side panel
+  toggle_toolbar          ctrl+b u                                          Show / hide the toolbar (URL bar and add-on buttons)
+  show_toolbar            (unbound)                                         Show the toolbar
+  hide_toolbar            (unbound)                                         Hide the toolbar (the address bar shows when focused)
   scroll_down             j, ctrl+e                                         Scroll down
   scroll_up               k, ctrl+y                                         Scroll up
   scroll_left             h                                                 Scroll left
@@ -145,7 +148,7 @@ Find
 
 Modes
   normal_mode             esc [insert], esc [visual]                        Back to normal mode
-  insert_mode             i                                                 Insert mode: focus the first input
+  insert_mode             i                                                 Insert mode: focus the last-used input
   copy_mode               ctrl+b [, v                                       Copy mode (caret browsing + selection)
   command_line            :                                                 Command line
   command_cancel          esc [command]                                     Close the command line

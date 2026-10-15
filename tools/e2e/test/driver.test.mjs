@@ -134,8 +134,8 @@ describe.skipIf(!bin)(
       });
     });
 
-    // Review of PR #35: the first server build answers `failed: no browser window` until the
-    // first window exists, which failed ~70 % of runs at 0.7 s.
+    // The server answers `failed: no browser window` until its first window exists; without
+    // the retry, ~70 % of runs failed at 0.7 s.
     it("ready() retries `no browser window` while the server starts up", async () => {
       fake.options.errorOn = { state: "failed" };
       fake.options.errorMessage = "no browser window";

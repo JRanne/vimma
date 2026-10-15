@@ -27,7 +27,8 @@ title.
   The status bar shows `HELP`, the mode of a modal overlay (no new core mode for M2).
 - **Items now (M3 seam).** One pseudo-workspace: the window's `selectableTabs` (visible tabs, the
   same order `ctrl+b 1..9` counts), tab ids `tab.linkedPanel`. `pickerWorkspaces(win)` in the host
-  is the one place M3 replaces with its workspace model (every workspace's tabs).
+  (now `host/goto.mjs`) is the one place M3 replaces with its workspace model (every workspace's
+  tabs).
 - **Tab rename** (`tab.rename`: `prefix+shift+t`, `:tabrename [name]`): with text (`:tabrename
 foo`, the command line's text side channel) the label is set directly; without, a one-line
   prompt `ui/rename-prompt.mjs` (`div#vimma-rename`, the command line's panel, row, prompt and

@@ -1,0 +1,106 @@
+{
+  "bookmarks-toolbar-hidden.md": [
+    "Config: `[ui] bookmarks_toolbar = \"hidden\" | \"shown\" | \"newtab\"`.",
+    "Import does not show it while it is `\"never\"`.",
+    "With toolbar-toggle.",
+    "Theme and keyboard when shown."
+  ],
+  "build-supply-chain.md": [
+    "The tarball Vimma verifies is the one Surfer extracts.",
+    "Firefox's toolchains are part of the trusted base, as Mozilla ships them.",
+    "Action SHA pinning becomes a repository setting too.",
+    "The trust boundary."
+  ],
+  "element-focus.md": [
+    "The start key is chosen when implementation starts, not in this spec.",
+    "Focus: the `ELEMENT` mode.",
+    "Frames",
+    "Shadow DOM",
+    "PDFs (pdf.js)",
+    "Performance",
+    "Accessibility"
+  ],
+  "firefox-keys.md": ["Must never be lost", "No upstream patch."],
+  "firefox-versions.md": [
+    "One function writes the line for scripts.",
+    "release-please cannot do this through configuration",
+    "One pure module, two callers.",
+    "Bump subjects carry the advisories."
+  ],
+  "live-grep.md": [
+    "The preview",
+    "The result list.",
+    "Private and agent workspaces.",
+    "Accessibility.",
+    "Theme.",
+    "Out of scope."
+  ],
+  "m6a-updater.md": [
+    "Downgrade",
+    "Complete MARs only",
+    "`type=\"minor\"`",
+    "One manifest per channel and target",
+    "The m0-updater mochitests change",
+    "Settings' \"Updates are managed by your operating system\""
+  ],
+  "macos-build.md": [
+    "Windows is not a target platform.",
+    "Linux first, macOS next.",
+    "Cross-compile on a GitHub-hosted Linux runner; never build on a hosted Mac.",
+    "No upstream patch for signing.",
+    "Hosted Macs run what was built.",
+    "Ad hoc signed until a Developer ID exists",
+    "Artifact names carry both versions."
+  ],
+  "mcp-drive.md": [
+    "No grant covers it.",
+    "Limits.",
+    "Grants.",
+    "The server's instructions",
+    "Each full connection says it too."
+  ],
+  "site-compat.md": [
+    "A separate workflow, `sites.yml`, on `ubuntu-24.04`.",
+    "Drive with `vimma-ctl`, observe with RDP",
+    "One fresh profile and browser per site",
+    "Firefox's normal user agent",
+    "Latency",
+    "Statuses per site",
+    "Output",
+    "The list is data"
+  ],
+  "tab-search.md": [
+    "Extend the goto picker; no second picker.",
+    "Private stays private.",
+    "`Enter` on another window's tab",
+    "Lazy tabs stay lazy.",
+    "Out of scope."
+  ],
+  "upstream-beta-canary.md": [
+    "test",
+    "render",
+    "report",
+    "A separate workflow, not a mode of `upstream.yml`.",
+    "The tested-build record is the run's own artifact.",
+    "Its own label, `upstream-beta`, and not `upstream`.",
+    "Findings keep the run green; only a broken canary is red (B9).",
+    "An open canary issue does not block or warn on merges to `main`."
+  ],
+  "vimma-mcp.md": [
+    "`vimma-ctl mcp`",
+    "Two switches.",
+    "Queueing.",
+    "Prompt fatigue.",
+    "The yes stands for what was asked",
+    "A grant is per connection and per tool.",
+    "A grant ends",
+    "Visible while it runs.",
+    "Segment",
+    "Commands:",
+    "Config",
+    "Migration.",
+    "ADR-019, \"Agents reach Vimma over MCP, through a confined control-socket role\"",
+    "Replies always fit and always parse.",
+    "Arguments are checked before anything reaches Vimma."
+  ]
+}

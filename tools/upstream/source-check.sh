@@ -11,13 +11,15 @@
 #
 # Streams the tarball once: tee feeds sha512sum (through a FIFO) and patch-check.py, which
 # extracts only the patched files and, with --drain, reads to the end so the hash is whole. Then
-# it verifies the hash against the version's SHA512SUMS, runs the patch-size audit and, when every
+# it checks Mozilla's signature on the version's SHA512SUMS and the hash against it
+# (verify-sha512.py, pinned release key, ADR-021), runs the patch-size audit and, when every
 # patch applies, the artifact preflight. Writes patch-check.json, patch-check.md and
 # patch-audit.txt in the current directory, and to $GITHUB_OUTPUT (when set) result=ok|fail|norun
 # and, after the preflight, artifacts and artifacts-note. $GITHUB_STEP_SUMMARY gets the summary.
 #
-# Exit status: 0 the check ran or reported that it could not (result says which), 1 the SHA-512
-# does not match Mozilla's SHA512SUMS (never report on a tarball Mozilla did not publish), 2 usage.
+# Exit status: 0 the check ran or reported that it could not (result says which), 1 SHA512SUMS is
+# not signed by Mozilla's release key, it or its signature cannot be fetched, or the SHA-512 does
+# not match it (never report on a tarball Mozilla did not publish), 2 usage.
 # MOZILLA_RELEASES overrides the archive's releases/ URL (tests use a file:// directory).
 set -euo pipefail
 
@@ -50,10 +52,17 @@ set -e
 case "$status" in
   0 | 1)
     # Hard failure on a mismatch: never report on a tarball Mozilla did not publish.
-    curl -fsSL --retry 3 "$base/SHA512SUMS" -o "$scratch/SHA512SUMS"
-    python3 "$here/verify-sha512.py" --sums "$scratch/SHA512SUMS" --name "$name" \
-      --actual "$scratch/tarball.sha512" || {
-      echo "::error::SHA-512 of $name does not match $base/SHA512SUMS"
+    # A file that cannot be fetched cannot verify the tarball: exit 1, like a bad signature.
+    unfetched() {
+      echo "::error::cannot fetch $base/$1; the tarball is not verified"
+      exit 1
+    }
+    curl -fsSL --retry 3 "$base/SHA512SUMS" -o "$scratch/SHA512SUMS" || unfetched SHA512SUMS
+    curl -fsSL --retry 3 "$base/SHA512SUMS.asc" -o "$scratch/SHA512SUMS.asc" ||
+      unfetched SHA512SUMS.asc
+    python3 "$here/verify-sha512.py" --sums "$scratch/SHA512SUMS" \
+      --signature "$scratch/SHA512SUMS.asc" --name "$name" --actual "$scratch/tarball.sha512" || {
+      echo "::error::SHA-512 of $name does not match a SHA512SUMS signed by Mozilla's release key ($base)"
       exit 1
     }
     if [ "$status" -eq 0 ]; then result=ok; else result=fail; fi

@@ -134,7 +134,7 @@ add_task(async function the_overlapping_and_the_bound_keys_are_disabled_the_othe
     () => document.getElementById("key_toggleToolbox").getAttribute("disabled") === "true",
     "the DevTools' keyset is watched too: ctrl+shift+i is Vimma's devtools",
   );
-  // Not bound by Vimma, not on the default list: still Firefox's in sub-PR 1.
+  // Not bound by Vimma, not on the default list: still Firefox's.
   for (const id of ["key_find", "key_search2", "viewBookmarksToolbarKb"]) {
     Assert.ok(!document.getElementById(id).hasAttribute("disabled"), `#${id} stays on`);
   }

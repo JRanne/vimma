@@ -45,7 +45,7 @@ export const SWAP_REFUSED = "private: the window manager refused the swap; showi
 
 /** @type {PrivatePlacement} */
 let placement = "swap";
-/** config.toml was read: until then nothing is sent, whatever it says (review of PR #151). */
+/** config.toml was read: until then nothing is sent, whatever it says. */
 let configured = false;
 /** GTK's activate for a window a batch just focused or parked comes late: it is the swap's. */
 const SETTLE_MS = 400;
@@ -355,7 +355,7 @@ function forget() {
 /**
  * The swap could not be done: whatever is in special:vimma comes out (to the other window's
  * workspace, else the active one), the pair is forgotten, and the window to show is focused.
- * A window is never left parked (review of PR #151). A refusal by Hyprland itself also turns
+ * A window is never left parked. A refusal by Hyprland itself also turns
  * the swap off until the next config reload, and says so once (decision 7).
  * @param {Dialect} dialect
  * @param {string} show  the window to show

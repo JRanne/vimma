@@ -291,7 +291,7 @@ describe("a zip's names, from its central directory (never extracted)", () => {
   });
 });
 
-// Security review of #182 (finding 1): what an entry becomes when unpacked counts too.
+// What an entry becomes when unpacked counts too (security.md M13).
 describe("a zip entry's mode and path", () => {
   test("an entry with an exec bit is an executable, whatever its name", () => {
     expect(list(makeZip([{ name: "tool", mode: 0o100755 }]))).toEqual(["tool"]);
@@ -336,7 +336,7 @@ function zipEntries(zip) {
 }
 
 describe("ClamAV's answer (decision 31 g)", () => {
-  // Security review of #182 (finding 7): what ClamAV could not open is "not fully scanned".
+  // What ClamAV could not open is "not fully scanned" (security.md M13).
   test("encrypted or over ClamAV's limits: not fully scanned, not infected", () => {
     expect(
       clamVerdict({ exitCode: 1, stdout: "/q/a.part: Heuristics.Encrypted.Zip FOUND\n" }),
@@ -392,7 +392,7 @@ describe("ClamAV's answer (decision 31 g)", () => {
 
 describe("the quarantine folder (decision 31 b)", () => {
   const home = "/home/u";
-  // Security review of #182 (finding 3): never a hidden folder of home, or one anyone can write.
+  // Never a hidden folder of home, or one anyone can write (security.md M12).
   test.each([
     ["/home/u", "your home folder"],
     ["/home/u/Downloads", "the Downloads folder itself"],

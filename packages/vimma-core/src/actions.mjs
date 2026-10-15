@@ -141,6 +141,10 @@ group("Navigation", [
   // docs/specs/tab-search.md: the goto picker is tab search.
   ["goto_picker", "goto.picker", "Tab search: every tab, every window, recently closed"],
   ["toggle_sidebar", "sidebar.toggle", "Open / close the side panel"],
+  // docs/specs/toolbar-toggle.md: Firefox's navigation toolbar, in every window.
+  ["toggle_toolbar", "toolbar.toggle", "Show / hide the toolbar (URL bar and add-on buttons)"],
+  ["show_toolbar", "toolbar.show", "Show the toolbar"],
+  ["hide_toolbar", "toolbar.hide", "Hide the toolbar (the address bar shows when focused)"],
   ["scroll_down", "scroll.down", "Scroll down"],
   ["scroll_up", "scroll.up", "Scroll up"],
   ["scroll_left", "scroll.left", "Scroll left"],
@@ -228,7 +232,7 @@ group("Find", [
 
 group("Modes", [
   ["normal_mode", "mode.normal", "Back to normal mode"],
-  ["insert_mode", "mode.insert", "Insert mode: focus the first input"],
+  ["insert_mode", "mode.insert", "Insert mode: focus the last-used input"],
   ["copy_mode", "mode.visual", "Copy mode (caret browsing + selection)"],
   ["command_line", "command.open", "Command line"],
   ["command_cancel", "command.cancel", "Close the command line"],

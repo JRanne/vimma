@@ -62,11 +62,64 @@ export const PALETTE_KEYS = Object.freeze([
   "bright_magenta",
 ]);
 
-/** Keys some stock Omarchy themes leave out, and the key standing in for each. */
-const FALLBACKS = Object.freeze({ orange: "yellow", brown: "dark_foreground" });
+/**
+ * The base set: the colours a colors.toml must give, by name or by its ANSI stand-in
+ * (BASE_ALIASES). Omarchy derives none of them either; every other key is derived from these.
+ */
+const BASE_KEYS = Object.freeze([
+  "accent",
+  "background",
+  "foreground",
+  "red",
+  "yellow",
+  "green",
+  "cyan",
+  "blue",
+  "magenta",
+]);
 
 /**
- * Vimma's own palette, dark: vimma.dev's colours (assets/css/site.css in JRanne/vimma-site).
+ * Names that stand in for a missing palette key, first match wins: Omarchy's short names, then
+ * the ANSI colours of themes made before its named palette (omarchy-theme-color,
+ * resolve_theme_colors, Omarchy 4.0.0.alpha; docs/specs/m5-core-config-and-theme.md).
+ * @type {Readonly<Record<string, readonly string[]>>}
+ */
+const BASE_ALIASES = Object.freeze({
+  background: ["bg", "color0"],
+  foreground: ["fg", "color7"],
+  dark_background: ["dark_bg"],
+  darker_background: ["darker_bg"],
+  lighter_background: ["lighter_bg"],
+  dark_foreground: ["dark_fg", "color8"],
+  light_foreground: ["light_fg"],
+  bright_foreground: ["bright_fg", "color15"],
+  muted: ["color8"],
+  red: ["color1"],
+  green: ["color2"],
+  yellow: ["color3"],
+  blue: ["color4"],
+  magenta: ["color5", "purple"],
+  cyan: ["color6"],
+  bright_red: ["color9"],
+  bright_green: ["color10"],
+  bright_yellow: ["color11"],
+  bright_blue: ["color12"],
+  bright_magenta: ["color13", "bright_purple"],
+  bright_cyan: ["color14"],
+});
+
+/** Every key parseOmarchyColors reads, so validates: the palette, its stand-ins, the terminal's
+ * selection colour. */
+const READ_KEYS = Object.freeze([
+  ...new Set([
+    ...PALETTE_KEYS.filter((k) => k !== "mode"),
+    ...Object.values(BASE_ALIASES).flat(),
+    "selection_background",
+  ]),
+]);
+
+/**
+ * Vimma's own palette, dark: vimma.dev's colours (assets/css/site.css in vimma-browser/vimma-site).
  * Mint is the accent (the normal-mode badge, focus) and the link hints; body text stays the
  * site's grey-green. Keys marked "derived" have no colour on the site: each is picked to sit with
  * the site's yellow, red and greens at about their lightness and saturation.
@@ -135,7 +188,7 @@ export const VIMMA_LIGHT = Object.freeze({
   bright_magenta: "#9150b3", // derived: magenta, brighter
 });
 
-/** Omarchy's stock tokyo-night colors.toml: the built-in palette until vimma had its own. */
+/** Omarchy's stock tokyo-night colors.toml, built in as `[theme] name = "tokyo-night"` (dark). */
 /** @type {Readonly<Palette>} */
 export const TOKYO_NIGHT = Object.freeze({
   mode: "dark",
@@ -384,7 +437,9 @@ export function contrastRatio(a, b) {
 const describe = (v) => (typeof v === "string" ? JSON.stringify(v) : `a ${typeof v}`);
 
 /**
- * Read an Omarchy colors.toml. Unknown keys (hyprland_*, …) are ignored; Omarchy owns them.
+ * Read an Omarchy colors.toml. A file with only the base set (BASE_KEYS, by name or ANSI colour)
+ * is complete: every other key is derived as Omarchy derives it (deriveMissing). Keys Vimma does
+ * not read (hyprland_*, cursor, …) are ignored; Omarchy owns them.
  * @param {string} text
  * @param {{ lightMode?: boolean }} [options]  lightMode: the theme ships a light.mode file
  * @returns {{ palette: Palette | null, errors: ThemeError[] }}
@@ -394,30 +449,106 @@ export function parseOmarchyColors(text, { lightMode = false } = {}) {
   if (!parsed.ok) return { palette: null, errors: [{ path: "", ...parsed.error }] };
   const raw = parsed.value;
   const lineOf = locateKeys(text);
+  /** @param {string} key */
+  const at = (key) => ({ line: lineOf([key]), path: formatPath([key]) });
   /** @type {ThemeError[]} */
   const errors = [];
+  /** @type {Record<string, string>} */
+  const given = {};
+  for (const key of READ_KEYS) {
+    const v = raw[key];
+    if (v === undefined) continue;
+    if (isHexColor(v)) given[key] = normalizeHex(v);
+    else
+      errors.push({
+        ...at(key),
+        message: `must be a hex colour like "#7aa2f7", got ${describe(v)}`,
+      });
+  }
+  if (raw.mode !== undefined && raw.mode !== "dark" && raw.mode !== "light") {
+    errors.push({ ...at("mode"), message: `must be "dark" or "light", got ${describe(raw.mode)}` });
+  }
   /** @type {Palette} */
   const palette = {};
   for (const key of PALETTE_KEYS) {
-    const v = raw[key];
-    const at = { line: lineOf([key]), path: formatPath([key]) };
-    if (key === "mode") {
-      if (v === undefined) palette.mode = lightMode ? "light" : "dark";
-      else if (v === "dark" || v === "light") palette.mode = v;
-      else errors.push({ ...at, message: `must be "dark" or "light", got ${describe(v)}` });
-    } else if (v === undefined) {
-      if (!(key in FALLBACKS)) errors.push({ ...at, message: `missing key "${key}"` });
-    } else if (isHexColor(v)) {
-      palette[key] = normalizeHex(v);
-    } else {
-      errors.push({ ...at, message: `must be a hex colour like "#7aa2f7", got ${describe(v)}` });
-    }
+    if (key === "mode") continue;
+    const from = [key, ...(BASE_ALIASES[key] ?? [])].find((k) => k in given);
+    if (from) palette[key] = /** @type {string} */ (given[from]);
+  }
+  for (const key of BASE_KEYS) {
+    // A key or stand-in with an invalid value is reported already, at its line.
+    if (key in palette || [key, ...(BASE_ALIASES[key] ?? [])].some((k) => k in raw)) continue;
+    const ansi = BASE_ALIASES[key]?.find((k) => k.startsWith("color"));
+    const or = ansi ? ` (or its ANSI name "${ansi}")` : "";
+    errors.push({ path: formatPath([key]), message: `missing key "${key}"${or}` });
   }
   if (errors.length) return { palette: null, errors };
-  for (const [key, from] of Object.entries(FALLBACKS)) {
-    palette[key] ??= /** @type {string} */ (palette[from]);
+  deriveMissing(palette, given);
+  palette.mode =
+    raw.mode === "dark" || raw.mode === "light"
+      ? raw.mode
+      : lightMode || channelSum(/** @type {string} */ (palette.background)) > 382
+        ? "light"
+        : "dark";
+  // In PALETTE_KEYS order, as the built-in palettes are written.
+  /** @type {Palette} */
+  const ordered = {};
+  for (const k of PALETTE_KEYS) ordered[k] = /** @type {string} */ (palette[k]);
+  return { palette: ordered, errors };
+}
+
+/**
+ * Fill the keys a colors.toml left out from the base set, in place. Each rule is Omarchy's
+ * (omarchy-theme-color, Omarchy 4.0.0.alpha), so Vimma shows what the terminal and the bar show,
+ * except where Vimma's chrome needs more (selection) or kept its own rule (brown).
+ * @param {Palette} p  the base set present, plus any other key the file gave
+ * @param {Record<string, string>} given  every colour the file gave, by its own name
+ */
+function deriveMissing(p, given) {
+  const bg = /** @type {string} */ (p.background);
+  const fg = /** @type {string} */ (p.foreground);
+  p.light_foreground ??= fg;
+  p.bright_foreground ??= fg;
+  p.lighter_background ??= bg;
+  p.dark_foreground ??= fg;
+  p.muted ??= p.dark_foreground;
+  p.dark_background ??= mix(bg, "#000000", 0.25);
+  p.darker_background ??= mix(bg, "#000000", 0.5);
+  for (const c of BRIGHT) p[`bright_${c}`] ??= mix(/** @type {string} */ (p[c]), "#ffffff", 0.2);
+  // Keys some stock themes leave out. orange is Omarchy's rule; brown (the resize badge) keeps
+  // Vimma's: Omarchy's orange at half brightness would recolour stock themes without a brown.
+  p.orange ??= /** @type {string} */ (p.yellow);
+  p.brown ??= /** @type {string} */ (p.dark_foreground);
+  // Omarchy takes the terminal's selection colour, made for selection_foreground text. Vimma draws
+  // foreground on a selected row, so the colour moves toward background until that reads.
+  if (!p.selection) {
+    const from = given.selection_background ?? given.color8 ?? bg;
+    p.selection = towardReadable(from, bg, [fg, /** @type {string} */ (p.bright_foreground)]);
   }
-  return { palette, errors };
+}
+
+/**
+ * `color`, or the first 5% step from it toward `to` on which every `texts` colour reaches
+ * MIN_CONTRAST: the hue stays, the text reads. `to` when no step does.
+ * @param {string} color  #rrggbb
+ * @param {string} to  #rrggbb
+ * @param {readonly string[]} texts  #rrggbb
+ */
+function towardReadable(color, to, texts) {
+  for (let step = 0; step <= 20; step++) {
+    const c = mix(color, to, step / 20);
+    if (texts.every((t) => contrastRatio(t, c) >= MIN_CONTRAST)) return c;
+  }
+  return to;
+}
+
+/**
+ * Red + green + blue, 0 to 765: Omarchy's test for a light background (over 382) when a theme
+ * names no mode.
+ * @param {string} hex  #rrggbb
+ */
+function channelSum(hex) {
+  return [1, 3, 5].reduce((sum, at) => sum + parseInt(hex.slice(at, at + 2), 16), 0);
 }
 
 const GENERIC_FONTS = new Set([
