@@ -62,7 +62,7 @@ jobs:
         env:
           CI_SKIP_INIT: "1"
         run: |
-          npx surfer download
+          npx --no -- surfer download
           version=$(node -p 'require("./surfer.json").version.version')
           base="https://archive.mozilla.org/pub/firefox/releases/$version"
           name="source/firefox-$version.source.tar.xz"

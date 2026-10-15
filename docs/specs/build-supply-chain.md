@@ -1,6 +1,6 @@
 # Spec: build-supply-chain
 
-Status: accepted · Area: `package.json`, `package-lock.json`, `.npmrc` (new),
+Status: accepted (sub-PR 1 implemented, #280; sub-PRs 2 to 5: [#222](https://github.com/vimma-browser/vimma/issues/222), [#223](https://github.com/vimma-browser/vimma/issues/223), [#224](https://github.com/vimma-browser/vimma/issues/224), [#225](https://github.com/vimma-browser/vimma/issues/225)) · Area: `package.json`, `package-lock.json`, `.npmrc` (new),
 `.github/dependabot.yml`, `.github/workflows/dependabot-automerge.yml`,
 `.github/workflows/release.yml`, `.github/workflows/nightly.yml`, `.github/workflows/e2e.yml`,
 `.github/workflows/sites.yml`, `.github/workflows/upstream.yml`,
@@ -11,8 +11,7 @@ Status: accepted · Area: `package.json`, `package-lock.json`, `.npmrc` (new),
 none · ADR: ADR-021 (new, "Mozilla's release key is the trust anchor for the Firefox source");
 [ADR-001](../adr/001-engine-firefox-surfer.md) gains one paragraph on how Surfer is pinned
 
-Issues: [#221](https://github.com/vimma-browser/vimma/issues/221),
-[#222](https://github.com/vimma-browser/vimma/issues/222),
+Issues: [#222](https://github.com/vimma-browser/vimma/issues/222),
 [#223](https://github.com/vimma-browser/vimma/issues/223),
 [#224](https://github.com/vimma-browser/vimma/issues/224),
 [#225](https://github.com/vimma-browser/vimma/issues/225)
@@ -358,7 +357,7 @@ checked. On a fresh hosted runner every build downloads the toolchains anew.
      reads the version from `surfer.json`, downloads
      `.surfer/engine/firefox-<version>.source.tar.xz` with `curl` when absent, downloads
      `SHA512SUMS` and `SHA512SUMS.asc`, runs `verify-sha512.py` on the tarball, deletes `engine/`
-     and only then runs `CI_SKIP_INIT=1 npx --no surfer download` (which finds the verified file
+     and only then runs `CI_SKIP_INIT=1 npx --no -- surfer download` (which finds the verified file
      and only extracts it, R3) and `git init -q engine`. `e2e.yml`, `sites.yml`, `nightly.yml` and
      `release.yml` call it. A test fails if any workflow calls `surfer download` itself.
 
@@ -425,17 +424,42 @@ checked. On a fresh hosted runner every build downloads the toolchains anew.
    (`tools/test/self-hosted-runner.test.mjs`) reads every workflow and fails when a job of a
    workflow triggered by `pull_request`, `pull_request_target`, `pull_request_review`,
    `pull_request_review_comment`, `issue_comment`, `issues`, `discussion`,
-   `discussion_comment` or `workflow_run` has a `runs-on` that names `self-hosted`, names a label
-   other than a GitHub-hosted image, or is an expression the test cannot resolve. A second test
-   holds decision 6: no workflow job names `self-hosted` at all, and both build jobs run on
-   `ubuntu-24.04`. Reason: on a public repository a self-hosted runner that pull request code
-   can reach is a machine anyone can run code on (R7). The first test is the permanent guard;
-   the second changes only with a spec that adds a machine. The test covers the workflow files
+   `discussion_comment`, `workflow_run` or `workflow_call` has a `runs-on` that names
+   `self-hosted`, names a label other than a standard GitHub-hosted image, or is an expression
+   the test cannot resolve. `workflow_call` is in the list because a called workflow runs with
+   its caller's trigger (`e2e.yml` is called by `upstream.yml` and the Beta canary). An
+   expression resolves only when it is `${{ matrix.<key> }}` over a literal list of strings in
+   the job's own `strategy.matrix`, which is not itself an expression and has no `include:`; any
+   other expression fails, because its value is not known from the file. A job that calls a
+   reusable workflow passes only when the workflow is a file of this repository, which the test
+   checks as its own file. The test parses the workflows with a YAML parser (`js-yaml`, already
+   in the lockfile through commitlint and Surfer, MIT) rather than matching text, because a
+   text match missed quoted job ids, jobs written as flow mappings and matrix keys nested in
+   other entries; a duplicate key is a parse error and fails the test. A second test holds
+   decision 6: no workflow job, whatever its triggers, targets anything but a standard
+   GitHub-hosted image, and both build jobs run on `ubuntu-24.04`. actionlint does not run in
+   CI, so its configuration declaring no self-hosted label only keeps a local run consistent. Reason: on a public repository
+   a self-hosted runner that pull request code can reach is a machine anyone can run code on
+   (R7). The first test is the permanent guard; the second changes only with a spec that adds a
+   machine.
+
+   The second test and the move of both build jobs to `ubuntu-24.04` land in sub-PR 1, not with
+   the measurement in sub-PR 4, because no self-hosted runner exists or is planned (R7, decision
+   6): the self-hosted label was configuration for a machine nobody runs, and removing it at
+   once lets the test forbid self-hosted runners in every workflow from the first delivery
+   rather than only in those an outsider can trigger. The build jobs stay switched off: the
+   nightly's manual dispatch, which `NIGHTLY_ENABLED` did not gate while its job waited for a
+   runner that did not exist, now needs `NIGHTLY_ENABLED` as well, because on a hosted runner a
+   dispatched nightly would build and publish the rolling release from Firefox source that is
+   not yet signature-checked (#222). The move therefore changes nothing that runs; on a fresh hosted runner their `clean: false` and
+   `.vimma-firefox-version` shortcut have nothing to reuse, and sub-PR 4 removes them with the
+   rest of decision 5. The test covers the workflow files
    on `main`; a fork's pull request runs its own head's workflow files, which is why the
    current fork approval setting (`all_external_contributors`, R7) matters: no outside fork's
    workflow runs before a person approves that run. `docs/security.md` records that setting as
    **⚠ setting** with the `gh api` command that shows it, because no test can read an admin
    setting with the workflow token.
+
 8. **Build jobs restore nothing from the Actions cache, and neither build uses a shared compiler
    cache.**
    `release.yml` and `nightly.yml` check out with the default `clean: true`, set up Node with
@@ -517,7 +541,11 @@ checked. On a fresh hosted runner every build downloads the toolchains anew.
 17. **No install scripts anywhere; Surfer only from `node_modules`.** A new `.npmrc` sets
     `ignore-scripts=true`, which covers every workflow, lane and developer machine. `release.yml`
     and `nightly.yml` also run `npm ci --ignore-scripts`, so the build does not depend on a file
-    a future change could drop, and every Surfer call in them is `npx --no surfer …` (R4).
+    a future change could drop, and every Surfer call in them is `npx --no -- surfer …` (R4).
+    Every other `npx` in the workflows also runs with `--no --`. The `--` is needed because,
+    once `--no` comes first, npm 10.9.4 reads every later flag as its own: `npx --no surfer
+download --force` gave `--force` to npm, and `npx --no commitlint --from A --to B --verbose`
+    ran commitlint without its arguments (checked locally and in CI).
     Reason: R5 shows nothing needs a script, and an install script is the usual way a
     compromised package runs code. Rejected: `npm audit signatures` in the build (the lockfile's
     `integrity` hashes already pin the exact bytes, so a registry signature adds no check the
@@ -598,7 +626,7 @@ New surface:
   `tools/upstream/mozilla-release-key.asc` or the fingerprint constant must cite Mozilla's
   announcement and keep every revocation.
 
-New section for `docs/security.md`, **§13. Build and release supply chain** (`release.yml`,
+New section for `docs/security.md`, **§14. Build and release supply chain** (`release.yml`,
 `nightly.yml`), with **Reach:** Mozilla's archive and Taskcluster, the npm registry, this
 repository, and GitHub's hosted runners. Each rule links its tests (Tests, below):
 
@@ -711,7 +739,7 @@ No mochitest or e2e scenario: nothing in the browser changes.
 
 ## Docs and changelog
 
-- `docs/security.md`: §13 with B1 to B7 and their test links; G4 amended; §11 gains "Build
+- `docs/security.md`: §14 with B1 to B7 and their test links; G4 amended; §11 gains "Build
   infrastructure".
 - `docs/runbook.md`, "Full builds (`nightly.yml`, `release.yml`)" (already says they run on
   GitHub-hosted runners, with the self-hosted label as a known gap): the measured time and disk
@@ -744,9 +772,14 @@ protects something that runs today.
    Surfer pin; `.npmrc`; `npm ci --ignore-scripts` and `npx --no` in `release.yml` and
    `nightly.yml`; the `release-path` Dependabot group; `dependabot-automerge.yml` also holds
    Surfer's security updates (the name check it has today, extended);
-   `self-hosted-runner.test.mjs` with its first, second and fourth tests (the build jobs' runner
-   test lands with sub-PR 4); the `surfer.json` add-on test; the ADR-001 paragraph; the runbook's
-   `sha_pinning_required` step. Rules B4, B5 and the Surfer half of B3. Smallest change with the
+   `self-hosted-runner.test.mjs` with all four tests and both build jobs on `ubuntu-24.04`
+   (decision 7); the `surfer.json` add-on test; the ADR-001 paragraph; the runbook's
+   `sha_pinning_required` step. Rules B4, B5 and the Surfer half of B3. The Surfer check
+   matches `@zen-browser/surfer` as a substring of the dependency names and the title, in any
+   case, and an update without dependency names waits for a person: the check it replaces
+   matched names joined by `","` only, while `dependabot/fetch-metadata` joins them with
+   `", "`, and so let a grouped Surfer update through. A substring match does not depend on
+   that format, and matching too much only holds a pull request for review. Smallest change with the
    largest effect: it closes Problem 3, which is live today because Dependabot runs and
    auto-merges now, and Problems 4 and 5's runner half.
 2. **`ci(upstream): verify mozilla's signature on SHA512SUMS`.** Pinned key,
@@ -758,8 +791,7 @@ protects something that runs today.
 3. **`ci(deps): hold every release-path change for review, with the package diff`.**
    `release-path.mjs`, the `classify` job and the `npm diff` summary. Completes B3.
 4. **`ci(release): full builds on hosted runners, from verified, freshly extracted source`.**
-   `firefox-source.sh`; `nightly.yml` and `release.yml` use it, run on `ubuntu-24.04` with
-   `clean: true`, the disk guard and no Actions cache; the `.vimma-firefox-version` shortcut
+   `firefox-source.sh`; `nightly.yml` and `release.yml` use it, run with `clean: true`, the disk guard and no Actions cache; the `.vimma-firefox-version` shortcut
    goes. Before merging, a temporary job in the pull request's own CI (hosted runner, no secret,
    keyless, publishes nothing) runs `firefox-source.sh`, `npm run import` and a full build, and
    records wall time, peak disk and peak memory; the numbers go into `docs/runbook.md`, set

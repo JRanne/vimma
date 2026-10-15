@@ -32,17 +32,16 @@ env:
   TAG: ${{ github.event.release.tag_name || inputs.tag }}
 
 jobs:
-  # Full build on the self-hosted machine (22 GB engine/; as nightly.yml). Read-only token, and
-  # one secret, the Google Safe Browsing key, which ships inside the binaries anyway (spec
-  # m0-safebrowsing-key): what it produces is checked, signed and uploaded by hosted jobs below.
-  # It builds in a fresh objdir with an empty compiler cache of its own, so nothing a nightly (or
-  # anything else that ran on the runner) left behind reaches signed binaries; a cold build costs
-  # ~40 min.
+  # Full build on a GitHub-hosted runner, never a self-hosted one (as nightly.yml;
+  # docs/security.md, B5). Read-only token, and one secret, the Google Safe Browsing key, which
+  # ships inside the binaries anyway (spec m0-safebrowsing-key): what it produces is checked,
+  # signed and uploaded by hosted jobs below. It builds in a fresh objdir with an empty compiler
+  # cache of its own, so nothing an earlier build left behind reaches signed binaries.
   build:
     if: >-
       vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' &&
       (github.event_name == 'release' || github.ref == 'refs/heads/main')
-    runs-on: [self-hosted, linux, x64, vimma-build]
+    runs-on: ubuntu-24.04
     timeout-minutes: 240
     permissions:
       contents: read
@@ -56,11 +55,11 @@ jobs:
         with:
           ref: refs/tags/${{ env.TAG }}
           persist-credentials: false
-          # Keep the git-ignored engine/ and .surfer/ between runs (as nightly.yml).
+          # As nightly.yml: build-supply-chain sub-PR 4 (#224) returns this to the default.
           clean: false
 
       - name: npm ci
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Fresh objdir and compiler cache for this release
         run: |
@@ -85,7 +84,7 @@ jobs:
           want=$(node -p 'require("./surfer.json").version.version')
           have=$(cat engine/.vimma-firefox-version 2>/dev/null || true)
           if [ "$want" != "$have" ]; then
-            npx surfer download --force
+            npx --no -- surfer download --force
             echo "$want" > engine/.vimma-firefox-version
           fi
 
@@ -108,7 +107,7 @@ jobs:
         run: npm run import
 
       - name: Build
-        run: npx surfer build
+        run: npx --no -- surfer build
 
       - name: Smoke check
         run: |

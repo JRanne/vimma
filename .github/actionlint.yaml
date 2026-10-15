@@ -1,4 +1,3 @@
+# No workflow targets a self-hosted runner (docs/security.md, B5), so no label is declared.
 self-hosted-runner:
-  # nightly.yml, release.yml: the full Firefox build machine (docs/runbook.md, "Nightly build runner")
-  labels:
-    - vimma-build
+  labels: []
