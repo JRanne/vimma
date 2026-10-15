@@ -590,7 +590,7 @@ add_task(async function the_status_bar_says_not_secure_and_private() {
   gBrowser.removeTab(tab);
 });
 
-// Security review of #268: with the toolbar hidden the status bar is the only origin
+// docs/security.md C3: with the toolbar hidden the status bar is the only origin
 // indicator. It keeps the registrable domain in view, is never replaced by a title, names an
 // opener-controlled about:blank, shows what the page uses, and reads the security state from
 // the browser, not from the hidden address bar.
@@ -666,7 +666,7 @@ add_task(async function an_about_blank_a_page_wrote_says_so() {
   await show();
 });
 
-// Re-review A: a blob: page keeps its origin, whatever its path says.
+// C3: a blob: page keeps its origin, whatever its path says.
 add_task(async function a_blob_page_shows_its_origin() {
   const tab = await openPage(
     PLAIN.replace("https://example.com", "https://sub1.test1.example.com"),
@@ -704,7 +704,7 @@ add_task(async function a_blob_page_shows_its_origin() {
   await show();
 });
 
-// Re-review B: the label names who wrote the blank page, even after that page navigates away.
+// C3: the label names who wrote the blank page, even after that page navigates away.
 add_task(async function an_about_blank_names_its_writer_after_the_opener_leaves() {
   const tab = await openPage();
   await hide();

@@ -403,7 +403,7 @@ describe("status bar with the toolbar hidden", () => {
   });
 });
 
-// Security review of #268, finding 1: with the toolbar hidden the status bar is the only origin
+// docs/security.md C3: with the toolbar hidden the status bar is the only origin
 // indicator, so the URL never loses its registrable domain to truncation.
 describe("the URL keeps its registrable domain while the toolbar is hidden", () => {
   const SPOOF =
@@ -464,7 +464,7 @@ describe("the URL keeps its registrable domain while the toolbar is hidden", () 
     expect(truncateUrl("login.city.kawasaki.jp/x/y", 18, jp)).toBe("…city.kawasaki.jp…");
   });
 
-  // Re-review A: nested and simple URLs (blob:, view-source:) keep the origin they carry, and
+  // C3: nested and simple URLs (blob:, view-source:) keep the origin they carry, and
   // a URL with no host is cut at its end, never in the middle, while the toolbar is hidden.
   const BLOB_HOST = "accounts.google.com.secure-login-verification-session-0123456789.evil.example";
   test.each([[50], [80], [120]])("blob:, view-source: and no host at %i columns", (width) => {
@@ -627,7 +627,7 @@ describe("sharing: devices in use while the toolbar is hidden", () => {
   });
 });
 
-// Final check of #268: the URL takes room only from less important segments. The mode, then
+// C3: the URL takes room only from less important segments. The mode, then
 // `not secure`, `private` and the devices in use come before it; the URL is cut further
 // (its end-cut domain as the last resort) rather than pushing any of them off the bar.
 describe("the security cues outrank the kept URL", () => {
