@@ -41,7 +41,7 @@ concurrency:
 
 jobs:
   detect:
-    if: github.repository == 'JRanne/vimma'
+    if: github.repository == 'vimma-browser/vimma'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -94,7 +94,7 @@ jobs:
 
   source-check:
     needs: detect
-    if: github.repository == 'JRanne/vimma' && needs.detect.outputs.run == 'true'
+    if: github.repository == 'vimma-browser/vimma' && needs.detect.outputs.run == 'true'
     runs-on: ubuntu-latest
     # Streams the ~820 MB source tarball through patch-check (~1–2 min).
     timeout-minutes: 15
@@ -131,7 +131,7 @@ jobs:
   test:
     needs: [detect, source-check]
     if: >-
-      github.repository == 'JRanne/vimma' && needs.source-check.outputs.result == 'ok' &&
+      github.repository == 'vimma-browser/vimma' && needs.source-check.outputs.result == 'ok' &&
       needs.source-check.outputs.artifacts == 'yes'
     permissions:
       contents: read
@@ -145,7 +145,7 @@ jobs:
     needs: [detect, source-check, test]
     # After failed or skipped suites too; never after a cancelled run or a failed source check.
     if: >-
-      !cancelled() && github.repository == 'JRanne/vimma' && needs.detect.outputs.run == 'true' &&
+      !cancelled() && github.repository == 'vimma-browser/vimma' && needs.detect.outputs.run == 'true' &&
       needs.source-check.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -184,7 +184,7 @@ jobs:
           VERSION: ${{ needs.detect.outputs.version }}
           SHA: ${{ github.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          OWNER: ${{ github.repository_owner }}
+          OWNER: JRanne # tools/repo.mjs MAINTAINER: an organization cannot be @-mentioned
           SOURCE_RESULT: ${{ needs.source-check.outputs.result }}
           ARTIFACTS: ${{ needs.source-check.outputs.artifacts }}
           ARTIFACTS_NOTE: ${{ needs.source-check.outputs.artifacts-note }}
@@ -215,7 +215,7 @@ jobs:
     # the issues of released versions (B7). No checkout, no repository code: gh and jq on the
     # issue.json render wrote.
     if: >-
-      !cancelled() && github.repository == 'JRanne/vimma' && github.ref == 'refs/heads/main' &&
+      !cancelled() && github.repository == 'vimma-browser/vimma' && github.ref == 'refs/heads/main' &&
       needs.detect.result == 'success' && needs.render.result != 'failure'
     runs-on: ubuntu-latest
     timeout-minutes: 5

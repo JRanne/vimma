@@ -162,8 +162,8 @@ const context = (over = {}) =>
     hasToken: false,
     issue: "42",
     branch: "upstream/firefox-157.0.2",
-    repo: "JRanne/vimma",
-    runUrl: "https://github.com/JRanne/vimma/actions/runs/1",
+    repo: "vimma-browser/vimma",
+    runUrl: "https://github.com/vimma-browser/vimma/actions/runs/1",
     owner: "JRanne",
     error: "",
     ...over,
@@ -455,7 +455,7 @@ describe("autopilot body", () => {
       context({ error: "GitHub Actions is not permitted to create or approve pull requests" }),
     );
     expect(body).toContain(
-      "https://github.com/JRanne/vimma/compare/main...upstream/firefox-157.0.2?expand=1&title=upstream%3A+firefox+157.0.2+%28MFSA+2026-105%29&body=Closes+%2342.",
+      "https://github.com/vimma-browser/vimma/compare/main...upstream/firefox-157.0.2?expand=1&title=upstream%3A+firefox+157.0.2+%28MFSA+2026-105%29&body=Closes+%2342.",
     );
     expect(body).toContain("Allow GitHub Actions to create and approve pull requests");
     expect(body).toContain("GitHub said: `GitHub Actions is not permitted");

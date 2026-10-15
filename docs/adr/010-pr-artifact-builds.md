@@ -11,7 +11,7 @@ Until now `e2e.yml` was a no-op and every mochitest had run only on the maintain
 A full build is 22 GB of `engine/` and 39 min on 16 threads, far beyond a hosted runner (14 GB
 disk). The repo becomes public (MPL-2.0); until then Actions minutes are limited. (Since changed:
 the repository is public; a hosted runner has about 85 GB free in practice, and full builds move
-to hosted runners with [#224](https://github.com/JRanne/vimma/issues/224), spec build-supply-chain, R9-R10 and decision 6.)
+to hosted runners with [#224](https://github.com/vimma-browser/vimma/issues/224), spec build-supply-chain, R9-R10 and decision 6.)
 
 ## Decision
 

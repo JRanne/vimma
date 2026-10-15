@@ -8,7 +8,7 @@ Status: draft · Area: `.github/workflows/upstream.yml`, `.github/workflows/e2e.
 `docs/limits.md` · Upstream patches: none · ADR: ADR-022 (new, "A green Firefox bump merges
 itself"), which amends [ADR-015](../adr/015-upstream-autopilot.md)
 
-Issue: [#259](https://github.com/JRanne/vimma/issues/259)
+Issue: [#259](https://github.com/vimma-browser/vimma/issues/259)
 
 ## Summary
 
@@ -19,7 +19,7 @@ gaps: the autopilot writes refreshed pref copies into the bump itself, re-export
 only lost context, asks Claude to re-export patches whose lines changed (at most three attempts),
 and sets a green bump whose diff is limited to the expected lines to merge through GitHub's
 auto-merge, behind the same required checks as every other pull request. Releasing the merged
-bump is out of scope ([#220](https://github.com/JRanne/vimma/issues/220)).
+bump is out of scope ([#220](https://github.com/vimma-browser/vimma/issues/220)).
 
 ## Problem
 
@@ -28,7 +28,7 @@ zero manual steps". Today, for Firefox 158.0 (the version `surfer.json` pins on 
 
 - **Merging.** The autopilot's `publish` job opens `upstream: firefox X.Y.Z` and stops. No
   workflow merges it. `UPSTREAM_PR_TOKEN` is not set in the repository (`gh secret list`,
-  checked against `JRanne/vimma`), so the PR is opened with `GITHUB_TOKEN`, as a draft, and the
+  checked against `vimma-browser/vimma`), so the PR is opened with `GITHUB_TOKEN`, as a draft, and the
   required checks do not run until a person marks it ready.
 - **Pref copies.** `src/browser/branding/vimma/pref/firefox-branding.js` copies three upstream
   prefs: the cfr provider (`browser.newtabpage.activity-stream.asrouter.providers.cfr`, with
@@ -84,10 +84,10 @@ drift check (docs/security.md, G2) fails the scheduled run after 3 days.
 Checked on 2026-10-15 against `main` at 1e77af6 (Firefox 158.0 pinned), GitHub CLI 2.102.0 and
 GitHub's documentation as published that day.
 
-- **Repository settings** (`gh api repos/JRanne/vimma`): `allow_auto_merge: true`, squash only,
+- **Repository settings** (`gh api repos/vimma-browser/vimma`): `allow_auto_merge: true`, squash only,
   `delete_branch_on_merge: true`. Actions workflow permissions (`…/actions/permissions/workflow`):
   default `read`, `can_approve_pull_request_reviews: true`, so the autopilot may open PRs.
-- **Ruleset `main`** (`gh api repos/JRanne/vimma/rulesets/…`): pull requests only, squash, 0
+- **Ruleset `main`** (`gh api repos/vimma-browser/vimma/rulesets/…`): pull requests only, squash, 0
   approvals, no bypass actors; required checks `lint, typecheck, test, commitlint, licences`,
   `semgrep (javascript, typescript, rust, secrets, github-actions)`,
   `CodeQL (javascript-typescript)`, `CodeQL (rust)` and `mochitest (artifact build)`; the CodeQL
@@ -221,7 +221,7 @@ differ from the original patch's. `source-check.sh` runs it after the SHA-512 ch
 15. **No auto-merge when any patch changed**, because the artifact build does not compile C++, the
     build files or configure (Research), and `docs/limits.md` requires a full-build run for any PR
     that touches patches. The PR is marked ready and mentions the owner. When the hosted full
-    build of [#224](https://github.com/JRanne/vimma/issues/224) can run on a pull request, this
+    build of [#224](https://github.com/vimma-browser/vimma/issues/224) can run on a pull request, this
     decision is revisited in that spec.
 
 ### Conflict resolution with Claude (sub-PR 4)

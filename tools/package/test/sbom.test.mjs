@@ -164,7 +164,7 @@ describe("buildSbom", () => {
         version: { product: "firefox", version: "157.0.1" },
         brands: { vimma: { release: { displayVersion: "0.1.0" } } },
       },
-      repo: "JRanne/vimma",
+      repo: "vimma-browser/vimma",
       vimmaRoot: ROOT,
       serialNumber: "urn:uuid:00000000-0000-4000-8000-000000000000",
       timestamp: "2026-10-09T00:00:00Z",
@@ -185,7 +185,7 @@ describe("buildSbom", () => {
       type: "application",
       name: "vimma",
       version: "0.1.0",
-      purl: "pkg:github/JRanne/vimma@v0.1.0",
+      purl: "pkg:github/vimma-browser/vimma@v0.1.0",
       licenses: [{ license: { id: "MPL-2.0" } }],
     });
   });

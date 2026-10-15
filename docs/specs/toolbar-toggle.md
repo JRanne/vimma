@@ -5,7 +5,7 @@ Status: accepted · Area: `packages/vimma-core/src/actions.mjs`, `defaults.mjs`,
 `host/VimmaHost.sys.mjs`, `host/addon-ops.mjs`, `config/ConfigHost.sys.mjs`,
 `browser/themes/shared/vimma/toolbar.css` (new) · Upstream patches: none · ADR: none
 
-Issue: [#216](https://github.com/JRanne/vimma/issues/216)
+Issue: [#216](https://github.com/vimma-browser/vimma/issues/216)
 
 Builds on [m0-tabstrip-hidden](m0-tabstrip-hidden.md), the status bar of
 [m2-statusbar-whichkey](m2-statusbar-whichkey.md) and the config of

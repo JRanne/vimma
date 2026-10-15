@@ -7,7 +7,7 @@ Status: draft · Area: `packages/vimma-core/src/` (`grep.mjs` new, `actions.mjs`
 `src/browser/themes/shared/vimma/picker.css` · Upstream patches: none · ADR: none. No new
 dependency.
 
-Issue: [#241](https://github.com/JRanne/vimma/issues/241)
+Issue: [#241](https://github.com/vimma-browser/vimma/issues/241)
 
 Builds on [m1-find](m1-find.md) (`/`, smartcase), [m1-copy-mode](m1-copy-mode.md) (the caret
 and `v`), [m2-picker-rename](m2-picker-rename.md) (the picker dialog and its core state

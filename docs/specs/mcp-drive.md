@@ -8,7 +8,7 @@ Status: draft · Area: `packages/vimma-core/src/` (`agent-keys.mjs` new, `agent.
 patches: none · ADR: [ADR-019](../adr/019-agents-over-mcp.md) (unchanged; this spec stays inside
 it). No new dependency.
 
-Issue: [#252](https://github.com/JRanne/vimma/issues/252)
+Issue: [#252](https://github.com/vimma-browser/vimma/issues/252)
 
 Builds on [vimma-mcp](vimma-mcp.md): its agent workspace, protocol 2's `agent` role, the question
 line, grants and limits. Decision numbers of that spec are written "vimma-mcp N"; this spec's own
@@ -513,8 +513,8 @@ Written first and seen to fail, by layer. Each names the rule it holds.
 ## Delivery
 
 One sub-PR at a time, each with its own security review, as vimma-mcp's sub-PRs 2a-3 had.
-Issue [#252](https://github.com/JRanne/vimma/issues/252) tracks them;
-[#231](https://github.com/JRanne/vimma/issues/231) (click and fill) comes after sub-PR 3 and
+Issue [#252](https://github.com/vimma-browser/vimma/issues/252) tracks them;
+[#231](https://github.com/vimma-browser/vimma/issues/231) (click and fill) comes after sub-PR 3 and
 builds on its hint sessions.
 
 | #   | PR                                                                   | Contents                                                                                                                                                                                            |

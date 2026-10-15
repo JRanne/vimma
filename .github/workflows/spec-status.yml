@@ -28,7 +28,7 @@ concurrency:
 jobs:
   check:
     name: Compare spec statuses with their issues
-    if: github.repository == 'JRanne/vimma'
+    if: github.repository == 'vimma-browser/vimma'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

@@ -1,6 +1,6 @@
 # Spec: m6-packaging
 
-Status: implemented (tooling); gated off until the build job runs on a hosted runner ([#224](https://github.com/JRanne/vimma/issues/224)) and the secrets and variables are set · Milestone: M6 · Area:
+Status: implemented (tooling); gated off until the build job runs on a hosted runner ([#224](https://github.com/vimma-browser/vimma/issues/224)) and the secrets and variables are set · Milestone: M6 · Area:
 `tools/package/`, `.github/workflows/release.yml`
 Prerequisite: release-please (`release-please.yml`) and the self-hosted `vimma-build` runner
 (`nightly.yml`), both merged. The updater spec (m0-updater, PR #15) compiles the app updater
@@ -8,7 +8,7 @@ out; packages here rely on that (they are updated by apt, pacman or a new AppIma
 
 Since changed: this spec assumed the `build` job runs on a self-hosted `vimma-build` runner
 and that the repository is private. The repository is public, no self-hosted runner is used or
-planned, and the `build` job moves to a GitHub-hosted runner with [#224](https://github.com/JRanne/vimma/issues/224) (spec
+planned, and the `build` job moves to a GitHub-hosted runner with [#224](https://github.com/vimma-browser/vimma/issues/224) (spec
 [build-supply-chain](build-supply-chain.md), decisions 6 and 7). Until then the release stays
 off; the runner rows below describe the workflow as written, not the target.
 
@@ -131,7 +131,7 @@ artifact.
 cdxgen: those scan installed package metadata, and a Firefox build has none, so they would list
 almost nothing. Firefox's own inventory is in the tree:
 
-- `metadata.component`: Vimma `V`, MPL-2.0, `pkg:github/JRanne/vimma@vV`.
+- `metadata.component`: Vimma `V`, MPL-2.0, `pkg:github/vimma-browser/vimma@vV`.
 - Firefox `version.version`, MPL-2.0 (`pkg:generic/mozilla/firefox@157.0.1`).
 - Every crates.io and git package in `engine/Cargo.lock` (`pkg:cargo/name@version`, the lockfile
   SHA-256 for registry crates, licence from `third_party/rust/<name>[-<version>]/Cargo.toml`).
@@ -161,7 +161,7 @@ packages are dev tools only and never ship, so they are not listed.
 | Key pair (`COSIGN_PRIVATE_KEY`) | generate, store, rotate a key and its password; publish the public key | `--key cosign.pub`                                                     | a leaked secret signs anything; rotation is manual                                          |
 
 **Keyless**: there is no secret to leak, and the signature proves the file came from
-`release.yml` in `JRanne/vimma`, run for a `vX.Y.Z` tag or from `main`. Users verify with
+`release.yml` in `vimma-browser/vimma`, run for a `vX.Y.Z` tag or from `main`. Users verify with
 `--certificate-identity-regexp` `IDENTITY_REGEXP` (`package.mjs`; anchored, exact repo, only
 `refs/tags/vX.Y.Z` or `refs/heads/main`) and `--certificate-oidc-issuer
 https://token.actions.githubusercontent.com`; a test keeps the runbook's command equal to it. Only the `sign` job gets `id-token: write`; it runs
@@ -186,7 +186,7 @@ Each file is signed with `cosign sign-blob --yes --bundle <file>.sigstore.json <
   `github.event_name == 'release' || github.ref == 'refs/heads/main'`, and the verify identity
   accepts only those refs.
 
-Every job has `if: vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&
+Every job has `if: vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' &&
 (github.event_name == 'release' || github.ref == 'refs/heads/main')` (manual runs too: the
 runner and secrets must be ready first). Top-level `permissions: {}`.
 `tools/package/test/release-workflow.test.mjs` checks the gate on every job, that only `sign`

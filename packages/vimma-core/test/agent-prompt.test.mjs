@@ -30,8 +30,8 @@ const read = {
   what: {
     tab: "7",
     index: 2,
-    title: "Pull requests · JRanne/vimma",
-    url: "https://github.com/JRanne/vimma/pulls",
+    title: "Pull requests · vimma-browser/vimma",
+    url: "https://github.com/vimma-browser/vimma/pulls",
   },
 };
 const open = {
@@ -64,8 +64,8 @@ describe("the question's text (decision 13)", () => {
   test("a read names the client, the tool, the tab's place, title and URL", () => {
     const line = questionLine(read, { grantMinutes: 15 });
     expect(text(line)).toBe(
-      '◇ example-agent wants vimma_read_page: 2 "Pull requests · JRanne/vimma" ' +
-        "github.com/JRanne/vimma/pulls",
+      '◇ example-agent wants vimma_read_page: 2 "Pull requests · vimma-browser/vimma" ' +
+        "github.com/vimma-browser/vimma/pulls",
     );
     expect(line.hint).toBe("y once · 15a for 15 min · n deny · x mute");
     expect(line.label).toBe(text(line));
@@ -96,8 +96,8 @@ describe("the question's text (decision 13)", () => {
     );
     const close = { ...read, tool: "vimma_close_tab" };
     expect(text(questionLine(close, { grantMinutes: 10 }))).toBe(
-      '◇ example-agent wants vimma_close_tab: 2 "Pull requests · JRanne/vimma" ' +
-        "github.com/JRanne/vimma/pulls",
+      '◇ example-agent wants vimma_close_tab: 2 "Pull requests · vimma-browser/vimma" ' +
+        "github.com/vimma-browser/vimma/pulls",
     );
   });
 
@@ -124,8 +124,8 @@ describe("the question's text (decision 13)", () => {
         .map((/** @type {any} */ p) => [p.text, p.isolate]);
     expect(iso(questionLine(read, { grantMinutes: 10 }))).toEqual([
       ["example-agent", "auto"],
-      ["Pull requests · JRanne/vimma", "auto"],
-      ["github.com/JRanne/vimma/pulls", "ltr"],
+      ["Pull requests · vimma-browser/vimma", "auto"],
+      ["github.com/vimma-browser/vimma/pulls", "ltr"],
     ]);
     expect(iso(questionLine(open, { grantMinutes: 10 }))).toEqual([
       ["example-agent", "auto"],
@@ -217,14 +217,14 @@ describe("notices and notifications (decisions 15, 16 and 23)", () => {
 
   test("a call under a grant shows what it did and the time left", () => {
     expect(ranNotice(read, 14 * MIN + 1, 0)).toBe(
-      'example-agent read "Pull requests · JRanne/vimma" (grant, 15m left)',
+      'example-agent read "Pull requests · vimma-browser/vimma" (grant, 15m left)',
     );
     expect(ranNotice(open, 59_000, 0)).toBe("example-agent opened docs.rs (grant, 1m left)");
     expect(ranNotice({ ...read, tool: "vimma_tabs", what: { count: 2 } }, MIN, 0)).toBe(
       "example-agent listed the agent tabs (grant, 1m left)",
     );
     expect(ranNotice({ ...read, tool: "vimma_close_tab" }, MIN, 0)).toBe(
-      'example-agent closed "Pull requests · JRanne/vimma" (grant, 1m left)',
+      'example-agent closed "Pull requests · vimma-browser/vimma" (grant, 1m left)',
     );
   });
 

@@ -941,7 +941,7 @@ denied.` Codex gives up on a tool call after 60 s by default (`tool_timeout_sec`
 Each request an agent makes appears as one line at the foot of the window, above the status bar:
 
 ```
-◇ claude-code wants vimma_read_page: 2 "Pull requests · JRanne/vimma" github.com/JRanne/vimma/pulls   y once · 10a for 10 min · n deny · x mute
+◇ claude-code wants vimma_read_page: 2 "Pull requests · vimma-browser/vimma" github.com/vimma-browser/vimma/pulls   y once · 10a for 10 min · n deny · x mute
 ```
 
 It names the agent (as the agent calls itself), the tool, and what it touches: the tab's place,
@@ -975,7 +975,7 @@ number of agent tabs for the tab list.
   `claude-code asks to use Vimma's agent workspace (read a page)`. It carries no address or
   title and no buttons: you answer in Vimma. `[mcp] notify = false` turns the notification off.
 - **Grants show.** `◇ agent 14m` counts down the shortest one, and each request a grant lets
-  through shows a notice (`claude-code read "Pull requests · JRanne/vimma" (grant, 14m left)`).
+  through shows a notice (`claude-code read "Pull requests · vimma-browser/vimma" (grant, 14m left)`).
   `:mcp revoke`, or `ctrl+b shift+a` with nothing waiting and then `y`, ends them all. A grant
   also ends when the agent disconnects or `:mcp off` runs, and is never written to disk.
 

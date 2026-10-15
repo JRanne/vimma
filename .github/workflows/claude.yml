@@ -75,7 +75,7 @@ jobs:
     if: |
       github.event_name == 'issues' && github.event.action == 'labeled' &&
       github.event.label.name == 'claude:go' &&
-      github.event.sender.login == github.repository_owner &&
+      github.event.sender.login == 'JRanne' &&
       contains(github.event.issue.labels.*.name, 'spec')
     runs-on: ubuntu-latest
     timeout-minutes: 90

@@ -45,7 +45,7 @@ new Firefox releases arrive as PRs.
   build: too big for hosted runners). The schedule is gated by `vars.NIGHTLY_ENABLED == 'true'`;
   `workflow_dispatch` bypasses the gate so the runner can be tested first. `clean: false` keeps
   `engine/` between runs; Firefox is re-downloaded only when `surfer.json` changes. Full e2e on
-  the nightly waits for the build-strategy ADR (TODO in the workflow). (Since changed: no self-hosted runner is used or planned; full builds move to GitHub-hosted runners with [#224](https://github.com/JRanne/vimma/issues/224), spec build-supply-chain decision 6.)
+  the nightly waits for the build-strategy ADR (TODO in the workflow). (Since changed: no self-hosted runner is used or planned; full builds move to GitHub-hosted runners with [#224](https://github.com/vimma-browser/vimma/issues/224), spec build-supply-chain decision 6.)
 - **e2e.yml** was a no-op job naming the build-strategy ADR until `docs/adr/010-*` and
   m0-build-strategy.
 - **claude.yml** follows anthropics/claude-code-action v1.0.247 (`examples/claude.yml`,

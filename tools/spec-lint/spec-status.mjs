@@ -23,6 +23,7 @@ import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { REPO } from "../repo.mjs";
 import { parseSpec } from "./spec-lint.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -142,7 +143,7 @@ async function main() {
   const { values } = parseArgs({
     options: { markdown: { type: "string" }, repo: { type: "string" } },
   });
-  const repo = values.repo ?? process.env.GITHUB_REPOSITORY ?? "JRanne/vimma";
+  const repo = values.repo ?? process.env.GITHUB_REPOSITORY ?? REPO;
   const sha = process.env.GITHUB_SHA ?? "main";
   const specs = readSpecs();
   const numbers = [...new Set(specs.flatMap((s) => s.issues))].sort((a, b) => a - b);

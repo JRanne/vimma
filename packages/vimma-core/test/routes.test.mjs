@@ -163,7 +163,7 @@ describe("domain rules", () => {
   const github = [{ domain: "github.com", workspace: "work" }];
 
   test("match the host and its subdomains, on label boundaries", () => {
-    expect(target(github, "https://github.com/JRanne/vimma")).toBe("work");
+    expect(target(github, "https://github.com/vimma-browser/vimma")).toBe("work");
     expect(target(github, "https://api.github.com/")).toBe("work");
     expect(target(github, "http://a.b.github.com/")).toBe("work");
     expect(target(github, "https://notgithub.com/")).toBeNull();

@@ -64,7 +64,7 @@ Two rows of plan §5 and issue #17:
 - **A step in ci.yml, not nightly.** Nightly runs on the self-hosted build runner (not enabled
   yet, and a different machine class); the plan wants the gate on PRs. The step costs seconds and
   no extra job minute. (Since changed: no self-hosted runner is planned; the nightly moves
-  to a hosted runner with [#224](https://github.com/JRanne/vimma/issues/224).)
+  to a hosted runner with [#224](https://github.com/vimma-browser/vimma/issues/224).)
 
 ## Review changes (2026-10-09)
 
