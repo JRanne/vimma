@@ -383,6 +383,20 @@ export function planSearch(previous, next, { engines, defaultId }) {
 }
 
 /**
+ * The aliases about:vimma lists (decision 14): those the last apply recorded, so an alias it
+ * skipped (an engine not installed, an alias already taken) shows only as its error.
+ * @param {readonly SearchAlias[]} aliases  `[search.aliases]`, resolved
+ * @param {SearchState | null} state  what the last apply recorded
+ * @returns {SearchAlias[]}
+ */
+export function appliedAliases(aliases, state) {
+  if (!state) return [];
+  const made = new Set(state.created.map((c) => c.alias));
+  const given = new Set(state.aliased.map((x) => x.alias));
+  return aliases.filter((a) => (a.kind === "template" ? made : given).has(a.alias));
+}
+
+/**
  * The aliases `:open @` completes, from the host's list (Vimma's and Firefox's own).
  * @param {readonly { alias: string, engine: string }[]} list  `alias` with its `@`
  * @returns {{ name: string, description: string }[]}

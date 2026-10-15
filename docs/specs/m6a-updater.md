@@ -1,13 +1,13 @@
 # Spec: m6a-updater
 
-Status: draft · Area: `configs/common/mozconfig`, `src/browser/branding/vimma/pref/firefox-branding.js`,
+Status: accepted · Area: `configs/common/mozconfig`, `src/browser/branding/vimma/pref/firefox-branding.js`,
 `src/browser/base/content/vimma/updates/` (new), `packages/vimma-core/src/updates.mjs` (new),
 `config.mjs`, `actions.mjs`, `cmdline.mjs`, `statusbar.mjs`, `tools/package/`, `tools/update/`
 (new), `.github/workflows/{release,nightly}.yml`, `update-publish.yml` (new),
 `tests/browser/`, `tests/e2e/`, and the repository that serves the manifest
-(`vimma-browser/vimma-site` `static/updates/`, or a dedicated one: open question 3) ·
+(`vimma-browser/vimma-updates`, new; decision 18) ·
 Upstream patches: `src/browser/moz-configure.patch` (existing, grows: "1 hunk, 6 lines:
-`MOZ_APPUPDATE_HOST` is `vimma.dev` (m6a-updater)"), `src/toolkit/mozapps/update/updater/moz-build.patch`
+`MOZ_APPUPDATE_HOST` is `updates.vimma.dev` (m6a-updater)"), `src/toolkit/mozapps/update/updater/moz-build.patch`
 (new: "1 hunk, 6 lines: channel `vimma` embeds Vimma's update certificates (m6a-updater)"),
 `src/toolkit/mozapps/update/UpdateService-sys-mjs.patch` (new: "2 hunks, 10 lines: Vimma verifies
 the update manifest before Firefox parses it (m6a-updater)") · ADR: ADR-016 (new, "Vimma's own
@@ -31,7 +31,7 @@ GitHub, read on 2026-10-11.
 ## Summary
 
 Vimma installs keep themselves current the way Firefox does. Release and nightly builds turn
-Firefox's own updater back on and point it at a static, signed manifest on vimma.dev; the updater
+Firefox's own updater back on and point it at a static, signed manifest on updates.vimma.dev; the updater
 applies complete MARs signed with Vimma's own key, never Mozilla's server. The AppImage replaces
 its own file; `.deb` and AUR installs get a status-bar hint. A release that carries a Firefox
 security fix is marked urgent and reaches installs with no person in the pipeline, and Vimma never
@@ -59,12 +59,12 @@ restarts on its own.
 ## Behaviour
 
 1. **Tarball.** As a Vimma user who installed the tarball in a directory I can write, Vimma
-   checks vimma.dev for updates every 12 hours, downloads a signed update in the background, and
+   checks updates.vimma.dev every 12 hours, downloads a signed update in the background, and
    applies it the next time I start Vimma, with my workspaces, tabs, panes and scroll positions
    intact. No request goes to Mozilla's update server.
 2. **Read-only tarball.** If the install directory is not writable, the status bar says an update
    exists and `:update` explains that the owner of the directory has to update it.
-3. **AppImage** (open question 4). Vimma downloads the new AppImage next to the running one,
+3. **AppImage** (decision 19). Vimma downloads the new AppImage next to the running one,
    checks it against the signed manifest and renames it over the old file; the next start runs
    the new version under the same path.
 4. **`.deb` and AUR.** Vimma never touches the installed files. The status bar shows
@@ -284,7 +284,8 @@ nightly --prerelease`), and its schedule does nothing until the repository varia
 ### What the design must add
 
 1. **Firefox's update XML is not authenticated.** TLS protects it in transit, but whoever
-   controls vimma.dev (the Cloudflare account, a push to `vimma-site`) can serve any XML. The MAR
+   controls the update host (the Cloudflare account, a push to the repository it serves) can
+   serve any XML. The MAR
    signature stops them from running their own code. It does not stop a rollback: an older
    **signed** Vimma on the same Firefox version passes both Firefox's selection (equal
    `appVersion`, different `buildID`) and the updater (equal product version). Nor does it stop a
@@ -298,7 +299,7 @@ nightly --prerelease`), and its schedule does nothing until the repository varia
    changing `moz.build` would embed `dep1.der`/`dep2.der`. The certificate choice must be Vimma's
    before the first updater-enabled build ships.
 4. **A `.deb` from a GitHub Release is not updated by apt.** There is no Vimma apt repository, so
-   the hint says "download the new `.deb`" until one exists (open question 5). The AUR package is
+   the hint says "download the new `.deb`" (decision 20). The AUR package is
    updated by the user's AUR helper.
 5. **The MAR download sends GitHub cookies.** The `<patch URL>` is
    `github.com/…/releases/download/…`, which redirects to a signed, expiring asset URL; the
@@ -310,16 +311,16 @@ nightly --prerelease`), and its schedule does nothing until the repository varia
    "no person in the pipeline" promise holds for bumps whose patches apply as they are; this spec
    does not add a second auto-merge rule (decision 3).
 7. **Cloudflare Workers static assets** cap a file at 25 MiB, so MARs (about 80 to 115 MB)
-   cannot live on vimma.dev; they stay on GitHub Releases, as Zen's do.
+   cannot live on the update host; they stay on GitHub Releases, as Zen's do.
 
 ## Design
 
 ### 1. Channels and URLs
 
-| Channel | `app.update.channel` | MAR channel ID  | Manifest                                                                       | Built by      |
-| ------- | -------------------- | --------------- | ------------------------------------------------------------------------------ | ------------- |
-| release | `vimma`              | `vimma`         | `https://vimma.dev/updates/browser/Linux_x86_64-gcc3/vimma/update.xml`         | `release.yml` |
-| nightly | `vimma-nightly`      | `vimma-nightly` | `https://vimma.dev/updates/browser/Linux_x86_64-gcc3/vimma-nightly/update.xml` | `nightly.yml` |
+| Channel | `app.update.channel` | MAR channel ID  | Manifest                                                                               | Built by      |
+| ------- | -------------------- | --------------- | -------------------------------------------------------------------------------------- | ------------- |
+| release | `vimma`              | `vimma`         | `https://updates.vimma.dev/updates/browser/Linux_x86_64-gcc3/vimma/update.xml`         | `release.yml` |
+| nightly | `vimma-nightly`      | `vimma-nightly` | `https://updates.vimma.dev/updates/browser/Linux_x86_64-gcc3/vimma-nightly/update.xml` | `nightly.yml` |
 
 - The compile-time channel stays `vimma` for both (it also picks the certificates and, through
   `MOZ_APP_REMOTINGNAME`, the desktop file ID `vimma-vimma`; m6-packaging). The nightly tarball
@@ -327,16 +328,13 @@ nightly --prerelease`), and its schedule does nothing until the repository varia
   `defaults/pref/channel-prefs.js` and `update-settings.ini` inside it. Updates never touch those
   files, so a nightly install stays nightly and a release install never accepts a nightly MAR
   (error 22).
-- `MOZ_APPUPDATE_HOST` = `vimma.dev`, set by one `set_config` line in the existing
+- `MOZ_APPUPDATE_HOST` = `updates.vimma.dev`, set by one `set_config` line in the existing
   `src/browser/moz-configure.patch`. The path is Firefox's fixed template.
-- Everything on vimma.dev is a committed static file; there is no server code. `update.xml` per
-  channel is generated and signed by the release workflow (§7).
-- **The host is open question 3.** Every binary embeds the host for life (an install can only
-  move to another host through an update from the old one), and the bot that publishes the
-  manifest needs write access to whatever repository serves it. This spec writes the proposal as
-  `vimma.dev/updates/…` served from `vimma-site`; under the recommended option the host becomes
-  `updates.vimma.dev`, served from a dedicated repository, and nothing else in the design
-  changes.
+- Everything on updates.vimma.dev is a committed static file in the repository
+  `vimma-browser/vimma-updates`, deployed by Cloudflare Workers Builds; there is no server code.
+  `update.xml` per channel is generated and signed by the release workflow (§7). Every binary
+  embeds the host for life (an install can only move to another host through an update from the
+  old one), which is why the host is a name of its own (decision 18).
 
 ### 2. The manifest
 
@@ -371,7 +369,7 @@ nightly --prerelease`), and its schedule does nothing until the repository varia
   signatures (a MAR starts `MAR1`), so the one key cannot be tricked into signing across uses.
   `key=` names the key by the first 8 hex digits of its SPKI SHA-256; the comment may hold up to
   four `key=… sig=…` pairs (rotation, §6), and one that verifies under a pinned key is enough.
-- Served with `Cache-Control: no-cache` (a `static/_headers` rule in vimma-site).
+- Served with `Cache-Control: no-cache` (a `_headers` rule in `vimma-updates`).
 
 ### 3. Install types and how each package sets its mode
 
@@ -391,7 +389,7 @@ Detection order in `VimmaUpdates.sys.mjs`: `AppConstants.MOZ_UPDATER` false → 
 else Firefox's updater, and `aus.canUsuallyApplyUpdates` (`UpdateService.sys.mjs:4156`) tells
 writable from read-only.
 
-**AppImage: Vimma replaces the file** (open question 4). The squashfs is read-only, so MARs
+**AppImage: Vimma replaces the file** (decision 19). The squashfs is read-only, so MARs
 cannot apply. Vimma's module, after a verified manifest offers a newer build, downloads
 `vimmaAppImage` to
 `<dir of $APPIMAGE>/.vimma-update-<buildID>.AppImage.part` (anonymous request, decision 1), checks
@@ -503,10 +501,12 @@ the built updater from an installed tarball; if it does, that hunk joins the sam
 **Primary and secondary.** The updater accepts either slot, so:
 
 - **primary**: the online key every release is signed with;
-- **secondary**: a cold recovery key, generated offline and kept off any network, used only to
-  sign the one release that replaces a leaked or lost primary.
+- **secondary**: a cold recovery key, generated by the maintainer on an offline machine and kept
+  off any network (decision 17), used only to sign the one release that replaces a leaked or
+  lost primary.
 
-**Where the primary key lives** is open question 1. The options:
+**Where the primary key lives**: Google Cloud KMS, reached through GitHub OIDC (option C below,
+decision 16). The options that were weighed:
 
 | Option                                                                  | Automation | If CI or a workflow is compromised                                                                                                                            | If the key leaks                                     | Cost / setup                                                                                                                                |
 | ----------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -540,7 +540,7 @@ primary only.
 emergency release with the **cold secondary** that embeds a fresh primary and the same secondary,
 publish it with `vimmaUrgency="security"`, and say so in a GitHub advisory. Until clients update,
 the attacker can sign MARs but also needs to serve a manifest; that is signed with the same key,
-so they additionally need vimma.dev or a TLS interception, and HTTPS and the separate site
+so they additionally need the update host or a TLS interception, and HTTPS and the separate host
 credentials are the remaining wall. **If both leak:** there is no in-band recovery; the advisory
 tells users to reinstall from a release whose updater carries new keys (checked with cosign).
 
@@ -569,8 +569,8 @@ being configured). Every job below also keeps m6-packaging's gate (`release` eve
 - **Direct push, not a PR**, to the manifest repository, because a PR would need a merge, a
   manual step. The deploy key can write only that repository, and the commit touches only the
   `updates/` tree. A CI check there cannot stop a bad push, because Cloudflare deploys without
-  waiting for CI (Research, "Vimma today"); in `vimma-site` the push also needs a ruleset bypass
-  for the deploy key. Both are the trade-offs of open question 3. The host cannot forge an update
+  waiting for CI (Research, "Vimma today"); the manifest repository holds nothing else, so the
+  push can change only manifests (decision 18). The host cannot forge an update
   (the XML is signed); its compromise can only withhold or replay, which rules 3 to 5 catch.
 - **Release secrets stay isolated** (plan §8): the build job never sees the update key, the site
   key or a write token; the agent workflow (`claude.yml`) gets none of them; each secret lives in a GitHub
@@ -586,6 +586,9 @@ then the same `update-sign` and `update-publish` jobs (shared as a reusable work
 asset URL with a build-ID file name (`vimma-nightly-<buildID>-linux-x86_64.complete.mar`), because
 the rolling release replaces its assets; the previous MAR is kept as an asset until the next build
 so a client that just read the old manifest can still download it.
+While the release gate holds, `nightly.yml` publishes no `nightly` release: it keeps each build
+as a private workflow artifact (`docs/runbook.md`). The nightly manifest jobs
+above therefore start only when public nightly releases do (decision 23).
 
 **The bump and release halves of the security path** are other specs' (decision 3): spec
 upstream-bump-automation merges a green bump PR under `AUTO_MERGE_UPSTREAM`, and spec
@@ -600,9 +603,9 @@ advisory", so the issue shows the whole path from advisory to installs.
    system-principal channels with no browsing context whose URL is the selected patch's URL or its
    redirect, and clears `Cookie`. This is a privacy measure, so failing open is acceptable, unlike
    verification.
-2. **vimma.dev serves `/updates/` publicly with no access rule.** vimma.dev is a public site with
-   no Cloudflare Access in front of it, so clients can fetch the manifest as soon as it is
-   committed. Rejected: keeping the manifest behind an access rule until publication (clients
+2. **updates.vimma.dev serves `/updates/` publicly with no access rule**, so that clients can
+   fetch the manifest as soon as it is committed; vimma.dev has no Cloudflare Access in front of
+   it either. Rejected: keeping the manifest behind an access rule until publication (clients
    cannot authenticate to it, and nothing on the path is secret: the manifest is the same static
    file for every install).
 3. **This spec auto-merges nothing.** Spec upstream-bump-automation merges a green bump PR under
@@ -629,7 +632,7 @@ mar` needs the host `mar` tool from the same objdir. Nothing here can ship befor
 6. **`type="minor"`** always (Firefox's "major" UI is for unsupported operating systems).
 7. **One manifest per channel and target**; aarch64 and macOS add files later.
 8. **The m0-updater mochitests change**: on a build with `VIMMA_UPDATES=1`, `MOZ_UPDATER` is true
-   and the URL is vimma.dev; "no request to aus5" stays a test in both builds.
+   and the URL is updates.vimma.dev; "no request to aus5" stays a test in both builds.
 9. **Settings' "Updates are managed by your operating system"** is accurate for `.deb` and AUR;
    for the AppImage it is not, and the guide says Vimma updates the file itself. No string patch.
 10. **A hook in `UpdateService.sys.mjs`, not an observer** (§4), because a moved hook fails
@@ -655,17 +658,81 @@ mar` needs the host `mar` tool from the same objdir. Nothing here can ship befor
     release stays vulnerable, and a check sends no identifier (Security and privacy). The guide's
     "Updates" section names the off switch. Rejected: off by default, because the people who never
     change a default are the ones a security update most needs to reach.
+16. **The primary key lives in Google Cloud KMS, HSM protection level, reached through GitHub
+    OIDC** (§6, option C), because the signing job can then only ask for signatures while it runs,
+    every signature is in the cloud audit log, and the key cannot be exported, so revoking the IAM
+    binding ends a compromise; this keeps a long-lived signing secret out of CI, as m6-packaging
+    did by choosing cosign keyless. It costs about 2.50 USD a month for the RSA-4096 key version
+    (0.003424658 USD per hour, and 0.03 USD per 10,000 signing operations;
+    `cloud.google.com/kms/pricing`, read 2026-10-15). The signing integration (Google's PKCS#11
+    library loaded into NSS for `signmar`, or a digest-signing step) has not been tried with
+    `signmar`; sub-PR 1 tries it, and the library gets a licence check before it is used.
+    Rejected: a GitHub Actions secret (Zen's way), because anything that runs in the signing job
+    could copy the key out once and silently, and a copied key signs from anywhere with no log;
+    it remains the fallback only if the KMS integration proves unworkable, which would reopen
+    this decision in this spec.
+17. **The maintainer generates the cold secondary once, on an offline machine, and keeps its
+    private half offline** (paper or a USB stick in a safe), because the secondary matters only
+    when the primary is lost or leaked, and an offline copy held by the one person who already
+    publishes releases is the smallest trusted set; only its public DER enters the repository.
+    Rejected: a second trusted person, because it adds a party who can sign a Vimma update; a
+    second KMS key, because it is not offline and shares the cloud account's failure modes with
+    the primary.
+18. **The manifest is served from `updates.vimma.dev`, a new repository
+    `vimma-browser/vimma-updates` that holds only manifests, deployed by Cloudflare Workers
+    Builds with a `_headers` file**, because the bot that pushes manifests should be able to
+    write nothing else, and a hostname of its own lets the hosting move to another provider by
+    DNS alone, without a client update. It costs one more repository, one more Worker and one DNS
+    record. Rejected: `vimma.dev/updates/…` from `vimma-site`, because its deploy key would need a
+    bypass of the site's ruleset and could then push any site change straight to production
+    (Cloudflare deploys without waiting for CI); GitHub Pages on a subdomain, because Pages
+    answers with `Cache-Control: max-age=600` that the repository cannot change (seen on
+    `updates.zen-browser.app` on 2026-10-15), so a client may get a copy up to 10 minutes old.
+19. **The AppImage replaces its own file** after a verified manifest offers a newer build (§3),
+    because an AppImage has no package manager to fall back on and updates without a person are
+    the point of this spec; Vimma then writes a file outside its profile, and the file keeps its
+    old name. A directory Vimma cannot write falls back to the hint. Rejected: a hint only, because
+    an AppImage install would stay on its old Firefox until its owner acts; downloading next to
+    the old file with a hint to swap, because a person still acts and two large files sit side
+    by side.
+20. **`.deb` installs get a hint only** ("download the new `.deb`", with a link to the release),
+    because an apt repository would be a second signing system (a signed `Release` file, a second
+    key with its own ceremony and custody, hosting for every `.deb`) for one package format. It is
+    revisited when `.deb` users ask for one.
+21. **An urgent update shows the red status-bar segment and asks the `(y/N)` restart question once
+    per session**, asked again after 24 hours (Behaviour 6, §5), because a security fix that is
+    staged but never applied protects nobody, and once a day is rare enough not to train a reflex
+    `n`. Vimma still never restarts on its own (decision 11). Rejected: the red segment only,
+    because it is easy to stop seeing.
+22. **A bad update is handled by rolling forward only**: the maintainer pulls the update (a newer
+    manifest with an empty `<updates/>`, Docs and changelog) and ships a fixed release; installs
+    that already took the bad one stay on it until the fix arrives. Reason: downgrade protection
+    is a security property of the whole design. Rejected: keeping the previous version on disk
+    for a user-run rollback, because it is a local downgrade path that rules 3 and 4 (§4)
+    otherwise forbid and can bring back the Firefox with the security hole; holding normal
+    releases back for 48 hours, because nightly users already run a release's code days before it
+    ships, which is the soak a delay would add.
+23. **M6a closes on exit test 1 (the local N to N+1 e2e) and a `workflow_dispatch` dry run of
+    `update-sign` and `update-publish` that pushes nothing; the security rehearsal runs with the
+    first security release after the release gate lifts**, because publishing a manifest that
+    installs follow is publishing a release, the gate holds until the maintainer has
+    daily-driven Vimma, and everything the rehearsal adds over exit test 1 is the pipeline, which
+    the dry run covers up to the push. `UPDATES_ENABLED` stays off until then. Rejected: turning
+    on the nightly manifest before the gate, because it opens the gate for nightly users (and
+    nightly builds are private workflow artifacts until the gate lifts, so they have no public
+    MAR to offer); keeping M6a open until the gate lifts, because the work that can be verified
+    would wait on a decision unrelated to it.
 
 ### 9. Not in this spec
 
-Partial MARs; macOS, Windows and aarch64 manifests; an apt repository (open question 5); Flatpak;
+Partial MARs; macOS, Windows and aarch64 manifests; an apt repository (decision 20); Flatpak;
 a cookie-less download mirror; changing the remoting name or compile-time channel; a "Vimma does
 not update itself" Fluent patch (no longer needed for tarballs); background updates while Vimma is
 closed (Linux has no update agent).
 
 ## Security and privacy
 
-**Trust chain.** TLS to vimma.dev, then the manifest signature (§2, §4), then the MAR signature
+**Trust chain.** TLS to updates.vimma.dev, then the manifest signature (§2, §4), then the MAR signature
 checked by the updater against two embedded keys (§6). Each compromise and what it allows:
 
 | Compromised                                 | Can                                                                    | Cannot                                                                             |
@@ -678,11 +745,11 @@ checked by the updater against two embedded keys (§6). Each compromise and what
 
 **Privacy.**
 
-- **What a check sends**: `GET https://vimma.dev/updates/browser/Linux_x86_64-gcc3/<channel>/update.xml`
+- **What a check sends**: `GET https://updates.vimma.dev/updates/browser/Linux_x86_64-gcc3/<channel>/update.xml`
   (plus `?force=1` for `:update` or Firefox's "Check for updates"), Firefox's standard user agent,
   no cookies (`LOAD_ANONYMOUS` from the hook; Vimma's fetch uses `credentials: "omit"`). No Vimma
   version, build ID, locale, OS version or identifier: every install of a channel requests the
-  same static file. Cloudflare sees the IP address and the time; vimma.dev has no analytics.
+  same static file. Cloudflare sees the IP address and the time; the update host has no analytics.
 - **What a download sends**: a GET to GitHub for the MAR (or AppImage) with the cookie header
   stripped (decision 1); GitHub sees the IP address. A cookie-less mirror (an R2 bucket on a
   separate hostname) is possible later and not needed for the guarantee.
@@ -723,7 +790,7 @@ Written first and seen to fail.
 - **Tools** `tools/update/test/manifest.test.mjs`: XML from fixtures (attributes, sizes, hashes,
   nightly names, empty `<updates/>`), urgency from fixture commit logs (a `security`-labelled
   bump, an unknown-advisory bump, none), signing round trip with a test key, the deploy commit
-  touching only `static/updates/**`. `tools/package/test/package.test.mjs`: `is-packaged-app` and
+  touching only `updates/**`. `tools/package/test/package.test.mjs`: `is-packaged-app` and
   its content in AppDir, `.deb` and PKGBUILD, absent from the tarball; `--channel nightly`
   rewrites both channel files. `release-workflow.test.mjs` / a new `update-workflow.test.mjs`:
   gates, environments, that only `update-sign` gets the key or `id-token` among the new jobs, only
@@ -768,7 +835,7 @@ Written first and seen to fail.
   6. **bad signature**: the **shipped** `updater` (Vimma's certificates) given the
      `mycert`-signed MAR → `failed: 19`; the Vimma verifier given an XML signed by an unknown key →
      no download.
-- **Security rehearsal (M6a exit test 2; when it runs is open question 8)**: with
+- **Security rehearsal (M6a exit test 2; runs after the release gate lifts, decision 23)**: with
   `AUTO_MERGE_UPSTREAM=all` (spec upstream-bump-automation), `AUTO_SECURITY_RELEASE=true` (spec
   firefox-versions) and a real Firefox security release whose patches apply as they are, the
   tracking issue shows advisory → bump PR merged → release → `update.xml` served → a scheduled job
@@ -782,13 +849,13 @@ Written first and seen to fail.
   updates, the status-bar notices, the urgent `y/N` prompt, `:update` and `:restart`, that Vimma
   never restarts on its own, `[updates] check`, what a check sends, the AppImage keeping its file
   name. "Installing" loses "Vimma has no in-app updater"; the FAQ "Does Vimma update itself?"
-  changes; "Privacy defaults" says Firefox's updater is built in and asks vimma.dev only;
+  changes; "Privacy defaults" says Firefox's updater is built in and asks updates.vimma.dev only;
   "config.toml" gains `[updates]` in "What applies live" and "Schema". `docs/bindings.md` is
   regenerated (`npm run gen-docs`) for the two actions.
 - `docs/runbook.md`, "Release packages": the key ceremony and where the public DERs and their
   hashes are; the chosen key option's setup (environment, OIDC/IAM or secret); `UPDATES_ENABLED`;
   `SITE_DEPLOY_KEY` (a deploy key with write on the manifest repository only); rotation and the
-  leaked-key procedure; how to pull a bad update (open question 7): publish a newer serial with an
+  leaked-key procedure; how to pull a bad update (decision 22): publish a newer serial with an
   empty `<updates/>` through `workflow_dispatch` of `update-publish.yml` (committing the previous
   `update.xml` again does not work, because the replay rule refuses its older serial).
 - `docs/security.md`: the update trust chain and the compromise table above.
@@ -796,19 +863,19 @@ Written first and seen to fail.
   name.
 - README: the feature list gains "updates itself (tarball, AppImage), signed with Vimma's own
   key; package installs get a hint"; Status unchanged until the first release.
-- `CHANGELOG.md` [Unreleased], Added: "Vimma updates itself from vimma.dev with updates signed by
+- `CHANGELOG.md` [Unreleased], Added: "Vimma updates itself from updates.vimma.dev with updates signed by
   its own key; security updates are marked and ask once to restart." The maintainer adds it at
   merge time.
 
 ## Delivery
 
-Implementation starts only once open questions 1 to 3 are decided, because the keys and the
-update host are built into every updater-enabled binary; ADR-016 records the answers. Sub-PRs, in order, each
+The key custody and the update host (decisions 16 to 18) are built into every updater-enabled
+binary; ADR-016 records them in sub-PR 1. Sub-PRs, in order, each
 independently mergeable and tested:
 
 1. **Build and keys** (mozconfig, the three patches, `keys.mjs` generation, prefs, ADR-016, the
    ADR-003 register lines): done when a `VIMMA_UPDATES=1` build has
-   `[AppUpdate] URL=https://vimma.dev/…`, `update-settings.ini` says `vimma`, the `updater` binary
+   `[AppUpdate] URL=https://updates.vimma.dev/…`, `update-settings.ini` says `vimma`, the `updater` binary
    contains Vimma's primary DER's bytes and not `dep1.der`'s, and the built updater applies a
    test-signed MAR from an installed tarball (rpath question answered).
 2. **Core** (`updates.mjs`, `config.mjs`, `actions.mjs`, `cmdline.mjs`, `statusbar.mjs`): the
@@ -822,117 +889,4 @@ independently mergeable and tested:
 
 ## Open questions
 
-Questions 1 to 3 block implementation, because their answers are built into every
-updater-enabled binary. The others can be answered before the sub-PR that needs them.
-
-1. **Where does the primary signing key live?**
-   - (a) A GitHub Actions secret in an `update-signing` environment limited to `main` and `v*`
-     tags (Zen's way): no setup or cost, but anything that runs in that job can copy the key out,
-     once and silently, and a copied key signs from anywhere with no log.
-   - (b) Google Cloud KMS, HSM protection level, reached through GitHub OIDC: the job can only ask
-     for signatures while it runs, every signature is in the cloud audit log, and the key cannot
-     be exported, so revoking the IAM binding ends a compromise. It needs a cloud account, about
-     2.50 USD a month for the RSA-4096 key version (0.003424658 USD per hour, and 0.03 USD per
-     10,000 signing operations; `cloud.google.com/kms/pricing`, read 2026-10-15) and a signing
-     integration: Google's PKCS#11 library loaded into NSS for `signmar`, or a digest-signing
-     step. Neither has been tried with `signmar` yet (sub-PR 1 checks it), and the library is a
-     new tool that needs a licence check.
-
-   A self-hosted machine or a hardware token is not an option, because Vimma has no self-hosted
-   machine and none is planned (§6). Recommendation: **(b)**, because it keeps a long-lived
-   signing secret out of CI, as m6-packaging did by choosing cosign keyless, and adds an audit
-   trail; (a) is the fallback if no cloud account is wanted. Either way the cold secondary
-   (question 2) is the recovery path.
-
-2. **Who generates and keeps the cold secondary key, and where?**
-   - (a) The maintainer, once, on an offline machine; the private half on paper or a USB stick in
-     a safe.
-   - (b) A second trusted person: survives the maintainer's absence, but adds a party who can
-     sign a Vimma update.
-   - (c) A second cloud KMS key: no physical custody, but it is not offline and shares the
-     cloud account's failure modes with the primary.
-
-   Recommendation: **(a)**, because the secondary only matters when the primary is lost or
-   leaked, and an offline copy held by the one person who already publishes releases is the
-   smallest trusted set; only its public DER enters the repository.
-
-3. **Which host serves the manifest, from which repository?** The host is built into every
-   binary (§1).
-   - (a) `vimma.dev/updates/…` from `vimma-site`, as written above: no new setup, but the
-     publishing deploy key needs a bypass of `vimma-site`'s ruleset, and with it could push any
-     change to the site straight to production, because Cloudflare deploys without waiting for
-     CI. Site and updates also share one deployment.
-   - (b) `updates.vimma.dev` from a new repository `vimma-browser/vimma-updates` that holds only
-     the manifests, deployed by Cloudflare Workers Builds with a `_headers` file: the deploy key
-     reaches no site code, the site's ruleset stays without a bypass, and the update host can
-     later move to another provider by DNS alone. It costs one more repository, one more Worker
-     and one DNS record.
-   - (c) GitHub Pages from a dedicated repository on a vimma.dev subdomain (Zen's way): no
-     Cloudflare project, but Pages answers with `Cache-Control: max-age=600` that the repository
-     cannot change (seen on `updates.zen-browser.app` on 2026-10-15), so a client may get a copy
-     up to 10 minutes old; whether Firefox's `Cache-Control: no-cache` request header bypasses
-     the CDN was not measured.
-
-   Recommendation: **(b)**, because the bot that pushes manifests should be able to write
-   nothing else, and a hostname of its own keeps hosting changeable without a client update.
-
-4. **Does Vimma replace its own AppImage file?**
-   - (a) Yes (§3): Vimma downloads the new AppImage, checks it against the signed manifest and
-     renames it over the running file, so AppImage users update with no action. Vimma then
-     writes a file outside its profile, and the file keeps its old name.
-   - (b) No, a hint as for `.deb`: Vimma writes nothing outside the profile, but an AppImage
-     install stays on its old Firefox until its owner downloads a new file.
-   - (c) Download the new AppImage next to the old one and hint to swap them: no overwrite, but
-     a person still acts, and two large files sit side by side.
-
-   Recommendation: **(a)**, because an AppImage has no package manager to fall back on, and
-   updates without a person are the point of this spec; a directory Vimma cannot write falls
-   back to (b).
-
-5. **`.deb` users: a hint only, or an apt repository?**
-   - (a) A hint, "download the new `.deb`", with a link to the release.
-   - (b) An apt repository on the update host: `.deb` installs update with the system, but it
-     adds a signed `Release` file, a second signing key with its own ceremony and custody, and
-     hosting for every `.deb`.
-
-   Recommendation: **(a) now**, because an apt repository is a second signing system for one
-   package format; revisit it when `.deb` users ask for it.
-
-6. **How insistent is an urgent (security) update?**
-   - (a) The red status-bar segment, and the `(y/N)` restart question in the command line once
-     per session, asked again after 24 hours (Behaviour 6).
-   - (b) The red status-bar segment only.
-
-   Recommendation: **(a)**, because a security fix that is staged but never applied protects
-   nobody, and once a day is rare enough not to train a reflex `n`. Vimma never restarts on its
-   own in either case (decision 11).
-
-7. **How is a bad update handled?**
-   - (a) Roll forward only: the maintainer pulls the update (a newer manifest with an empty
-     `<updates/>`, Docs and changelog) and ships a fixed release; installs that already took
-     the bad one stay on it until the fix arrives.
-   - (b) Roll forward, and also keep the previous version on disk for a user-run rollback (a copy
-     of the install directory, about the size of the tarball, or the previous AppImage): a
-     person can go back at once, but it is a local downgrade path that the replay and downgrade
-     rules (§4) otherwise forbid, and it can bring back the Firefox with the security hole.
-   - (c) Roll forward, and hold normal (non-security) releases back from the release manifest
-     for 48 hours after publication, so a bad release can be pulled before most installs take
-     it; security releases go out at once.
-
-   Recommendation: **(a)**, because downgrade protection is a security property of the whole
-   design, and nightly users already run a release's code days before it ships, which is the
-   soak (c) would add.
-
-8. **When does M6a's second exit test (Tests, "Security rehearsal") run, given the release
-   gate?** Publishing a manifest that installs follow is publishing a release.
-   - (a) M6a closes on exit test 1 (the local N to N+1 e2e) and a `workflow_dispatch` dry run
-     of `update-sign` and `update-publish` that pushes nothing; `UPDATES_ENABLED` stays off,
-     and the rehearsal runs with the first security release after the gate lifts.
-   - (b) Turn on the nightly channel's manifest before the gate, because the rolling `nightly`
-     release is already a public prerelease: the rehearsal can run earlier, but it opens the
-     gate for nightly users.
-   - (c) M6a stays open until the gate lifts.
-
-   Recommendation: **(a)**, because the gate holds until the maintainer has daily-driven Vimma,
-   and everything the rehearsal adds over exit test 1 is the pipeline, which the dry run covers
-   up to the push.
+None. The questions this spec raised are answered in §8, decisions 16 to 23.

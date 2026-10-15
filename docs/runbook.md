@@ -19,6 +19,7 @@ Repository: <https://github.com/vimma-browser/vimma>; `MOZ_SOURCE_REPO` in `conf
 ```sh
 npx surfer setup-project   # interactive: name vimma, Firefox release
 npx surfer download
+npm run verify-source      # the tarball against Mozilla's signed SHA512SUMS (ADR-021)
 npx surfer bootstrap
 npx surfer build
 npm start                  # tools/start.mjs: the build with ~/.cache/vimma-dev-profile
@@ -542,9 +543,9 @@ min, e2e ≈ 6 min (5.5 min wall, ADR-010), Semgrep ≈ 1 min, CodeQL a few minu
 e2e.yml has no paths filter: "mochitest (artifact build)" is a required check, so the workflow
 starts on every PR, and on a docs-only one the job skips by `if:` in seconds (above). The upstream autopilot runs 6 × 1 min a day, plus ≈ 16 min (issue, patch check, the
 e2e suites, PR) when a release is found (spec m7-upstream-autopilot); claude.yml only when
-triggered. `nightly.yml` and `release.yml` run their full builds on GitHub-hosted runners too
-once [#224](https://github.com/vimma-browser/vimma/issues/224) lands (until then both are off; "Full
-builds" below). Usage is listed in Settings → Billing → Usage.
+triggered. `nightly.yml` and `release.yml` run their full builds on GitHub-hosted runners too:
+about 124 min per nightly and 117 min per release, free on a standard runner, and off until
+their variables are set ("Full builds" below). Usage is listed in Settings → Billing → Usage.
 
 The bench step adds about half a minute to each CI run. `mutation.yml` is the largest scheduled
 cost: a full run (first Sunday of the month) is estimated at 60–90 min on the 2-CPU runner
@@ -805,18 +806,102 @@ self-hosted runner or a label that is not a standard GitHub-hosted image
 `node_modules/.bin/surfer` fails the job instead of fetching whatever npm package is called
 `surfer`.
 
-**Known gap.** The build jobs still carry the shortcuts of a persistent machine (`clean: false`,
-`engine/.vimma-firefox-version`), harmless on a fresh hosted runner but not yet removed, and a
-cold build on the standard runner is not measured. Both workflows stay switched off, scheduled
-and manual runs alike (`NIGHTLY_ENABLED` and `RELEASE_ENABLED` unset) until build-supply-chain sub-PR 4,
-[#224](https://github.com/vimma-browser/vimma/issues/224), gives them a fresh, verified extraction
-of the Firefox source, measures a cold build, and records the time, disk and the steps to switch
-them on in this section. Until then a full build runs only on a
-developer's machine ("First Firefox build" above).
+Both build jobs run on `ubuntu-24.04` and start from nothing: a clean checkout, Node from
+`.nvmrc` with no npm cache, no Actions cache and no compiler cache (rule B2). The Firefox source
+comes only from `tools/upstream/firefox-source.sh`, which downloads the tarball `surfer.json`
+names, checks it against Mozilla's `SHA512SUMS` and Mozilla's signature on it (rule B1, next
+section), deletes `engine/` and lets Surfer extract the verified file. After `npm run import` the build step deletes `engine/.git`: `surfer import` needs
+that empty repository, but with it `mach` finds none of Mozilla's toolchains for
+`--enable-bootstrap` (spec build-supply-chain, R14).
+
+Measured on 2026-10-15 (run 38723067541, image `ubuntu-24.04` 20261012.334.1, 4 CPUs, 16 GB of
+memory, Firefox 158.0, a keyless build of `main` as the nightly builds it):
+
+| Step                                        | Time    | Disk, memory                                                  |
+| ------------------------------------------- | ------- | ------------------------------------------------------------- |
+| Free disk before anything                   |         | 86 GB of 145 GB                                               |
+| `npm ci`, `firefox-source.sh`, import       | 1 min   | tarball 0.8 GB, tree 4.7 GB                                   |
+| `surfer build` (cold, empty sccache)        | 113 min | 26 GB (`engine/` 21 GB, `~/.mozbuild` 2.5 GB, sccache 2.7 GB) |
+| Peak memory (the Rust stage, minutes 20-35) |         | 15.3 GB of 16 GB, plus 10.4 GB of swap                        |
+| Full mochitest suite                        | 7 min   | 78 tests, 6,355 checks, 0 unexpected                          |
+| `./mach package`                            | 2.4 min | 87 MB tarball                                                 |
+| Whole job                                   | 124 min | peak 42 GB used including the swap file                       |
+
+Without the 16 GB swap file both jobs create, the first measured build was killed after 38 min
+(run 38718105585, exit 143, while the Rust stage held all of memory). `timeout-minutes` is about
+1.5 times the measured job: 190 for the nightly, 180 for the release (which runs no
+mochitests). Each job's disk guard fails at once when less than 50 GB is free: the build needs
+about 26 GB and the swap file 16 GB. The free space is a property of the runner image, not a
+documented guarantee (GitHub documents 14 GB); if the guard fails, the image has shrunk, and
+removing preinstalled toolsets (`/usr/local/lib/android` alone is about 9 GB) is the first fix.
+
+**Switching them on.** Both stay off until a repository variable says otherwise:
+
+```sh
+gh workflow run nightly.yml --ref main                # one manual nightly from main, to check it
+gh variable set NIGHTLY_ENABLED --body true           # then the 03:00 UTC schedule
+gh variable set RELEASE_ENABLED --body true           # releases: only at the release gate
+```
 
 What the nightly does once it runs: a full build of `main`, the full mochitest suite on it, the
-rolling `nightly` pre-release, and on failure the log as an artifact and an issue labelled
-`nightly-failure` (comment `@claude` on it to hand it to Claude Code).
+package as the run's `vimma-nightly` artifact (kept 7 days), and on failure the log as the
+`nightly-log` artifact and an issue labelled `nightly-failure` (comment `@claude` on it to hand
+it to Claude Code). It creates, replaces and deletes no release: nightlies stay off the release
+page until the release gate (spec [build-supply-chain](specs/build-supply-chain.md), decision
+23). The artifact is not private: the repository is public, so anyone signed in to GitHub can
+download it from the run page or the API for the 7 days it is kept, and its name and size are
+listed without signing in. To get the latest one:
+
+```sh
+run=$(gh run list -w nightly.yml -s success -L 1 --json databaseId --jq '.[0].databaseId')
+gh run download "$run" -n vimma-nightly -D ~/Downloads/vimma-nightly
+```
+
+The `build` job holds a read-only token. Only the `report` job (`issues: write`) can write, and
+it checks out and runs nothing from the repository: it opens the failure issue from the
+redacted log. No job can write contents. Publishing nightlies as a release again is a workflow
+change, reviewed in its own PR, when the release gate lifts. A `nightly` release published
+before this change stays until `gh release delete nightly --cleanup-tag --yes` removes it.
+
+### Mozilla's release key (ADR-021)
+
+Every path that gets Firefox source (`firefox-source.sh`, `source-check.sh`,
+`npm run verify-source`) accepts a tarball only when its SHA-512 is in a `SHA512SUMS` signed by
+Mozilla's release key, pinned in `tools/upstream/mozilla-release-key.asc` with the primary
+fingerprint `14F26682D0916CDD81E37B6D61B7B526D98F0353` in `tools/upstream/verify-sha512.py`
+(docs/security.md B1). The current signing subkey, `827E…7AA3`, expires 2028-08-05.
+
+**When Mozilla rotates the signing subkey** (announced on the Mozilla Security Blog; until the
+update lands, the autopilot, the canary and PR CI fail on releases the new subkey signed, with
+`gpgv reported ERRSIG, NO_PUBKEY`):
+
+```sh
+curl -fsSL https://archive.mozilla.org/pub/firefox/nightly/latest-mozilla-central/KEY \
+  -o tools/upstream/mozilla-release-key.asc
+gpg --show-keys --with-subkey-fingerprints tools/upstream/mozilla-release-key.asc
+```
+
+Check, before opening the pull request: the primary fingerprint is still `14F2 6682 D091 6CDD
+81E3 7B6D 61B7 B526 D98F 0353`; the new subkey's fingerprint and expiry are the ones in Mozilla's
+announcement; every subkey marked `revoked` before is still revoked (the 2025 subkey
+`09BE…0256` above all); the file is the same as the `KEY` beside the newest release
+(`releases/<version>/KEY`). Cite the announcement in the pull request. Update the subkey and
+expiry in ADR-021 and in this section, and add the new release's `SHA512SUMS` and `.asc` to the
+fixtures only if a test needs a signature by the new subkey. A different primary fingerprint is
+not a routine update: stop, and review ADR-021.
+
+The pull request fails the required check "Mozilla release key unchanged or approved"
+(`.github/workflows/key-guard.yml`) until a maintainer, after the checks above, adds the
+`key-rotation-approved` label; adding it re-runs the check. Any change to
+`mozilla-release-key.asc`, or to a line of `verify-sha512.py` that names `PINNED_FINGERPRINT` or
+`KEY_FILE` (a comment included), needs the label, and so does any change to the guard itself
+(`.github/workflows/key-guard.yml`, `tools/ci/key-guard.mjs`, `tools/ci/test/key-guard.test.mjs`):
+review such a change as a change to the key check. Never add it to a pull request whose key change
+is not a reviewed rotation; remove it if a later push changes the key again, since the label
+stays on the pull request across pushes.
+
+The synthetic signature fixtures in `tools/upstream/fixtures/sums/synthetic/` come from
+`tools/upstream/fixtures/sums/make-synthetic.sh` (throwaway keys, no secret key committed).
 
 ### Google Safe Browsing key (spec m0-safebrowsing-key)
 
@@ -1091,8 +1176,7 @@ on `main`), never code from the release branch, and keep no token in their check
 
 When a GitHub Release is published (release-please, above), `release.yml` builds Vimma, packages
 it on a hosted runner, signs, uploads to that release and pushes AUR `vimma-bin`. Its `build` job
-runs on `ubuntu-24.04` too; the cold build there is measured with
-[#224](https://github.com/vimma-browser/vimma/issues/224) ("Full builds" above). **Every job is off until `RELEASE_ENABLED` is `true`**, manual runs included.
+builds on `ubuntu-24.04` from freshly verified source in about 2 hours ("Full builds" above). **Every job is off until `RELEASE_ENABLED` is `true`**, manual runs included.
 
 | Asset                             | What                                                            |
 | --------------------------------- | --------------------------------------------------------------- |

@@ -387,9 +387,14 @@ Taskcluster index) and this repository. Nothing here runs code from a pull reque
   [`unknown security status (advisories unreadable) uses the security limit`](../tools/upstream/test/releases.test.mjs),
   [`an unreachable advisories page: security unknown, labelled security, a warning`](../tools/upstream/test/autopilot.test.mjs)
 - G4. Nothing is **ever** reported on or built from a Firefox source tarball whose SHA-512
-  differs from Mozilla's `SHA512SUMS`.
+  differs from a signed `SHA512SUMS` (B1), a run artifact included: the patch-check report is
+  uploaded only after the source check verified the tarball.
   [`nothing is built from a tarball whose SHA-512 Mozilla did not publish`](../tools/test/upstream-workflow.test.mjs),
-  [`test_mismatch_exits_one_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py)
+  [`test_good_signature_but_a_different_hash_fails_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py),
+  [`the source check fails on a SHA512SUMS whose signature is not good`](../tools/upstream/test/source-check.test.mjs),
+  [`a report on a tarball that failed verification is never uploaded`](../tools/test/upstream-workflow.test.mjs),
+  [`a tampered tarball already on disk fails like a downloaded one`](../tools/upstream/test/firefox-source.test.mjs),
+  [`no workflow runs surfer download itself`](../tools/test/full-build-workflows.test.mjs)
 - G5. A bump PR is **never** opened ready for review unless every patch applies and the suites
   passed on the new release; otherwise it is a draft that names the conflicting files and hunks.
   [`a ready PR only when patches apply, suites pass and a token starts CI`](../tools/upstream/test/autopilot.test.mjs),
@@ -435,10 +440,11 @@ Taskcluster index) and this repository. Nothing here runs code from a pull reque
   [`fences test output and cuts the body to 60,000 characters`](../tools/upstream/test/canary.test.mjs),
   [`surfer.json on main pins a Firefox release, never a beta`](../tools/test/surfer-pin.test.mjs)
 - G10. The Beta canary **must never** build from or report on a Beta source tarball whose SHA-512
-  differs from that Beta's `SHA512SUMS`: the source check fails the run before the suites or the
-  issue (G4 for Betas).
+  differs from that Beta's signed `SHA512SUMS` (B1): the source check fails the run before the
+  suites or the issue (G4 for Betas).
   [`nothing is built from a tarball whose SHA-512 Mozilla did not publish`](../tools/test/upstream-beta-workflow.test.mjs),
-  [`test_mismatch_exits_one_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py)
+  [`test_good_signature_but_a_different_hash_fails_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py),
+  [`a report on a tarball that failed verification is never uploaded`](../tools/test/upstream-workflow.test.mjs)
 
 ## 11. Out of scope and trust boundaries
 
@@ -674,15 +680,74 @@ Spec: [build-supply-chain](specs/build-supply-chain.md), [ADR-001](adr/001-engin
 **Reach:** Mozilla's archive and Taskcluster, the npm registry, this repository, and GitHub's
 hosted runners. Dependabot pull requests run and auto-merge today, whether or not a build runs.
 
-**Planned:** the spec's later deliveries add B1 (Mozilla's signature on the Firefox source,
-[#222](https://github.com/vimma-browser/vimma/issues/222)), the rest of B3 (every package in the
+**Planned:** the spec's later deliveries add the rest of B3 (every package in the
 release path held for review, with its published diff,
-[#223](https://github.com/vimma-browser/vimma/issues/223)), B2 (every build extracts its own
-verified source and restores nothing from the Actions cache,
-[#224](https://github.com/vimma-browser/vimma/issues/224)), and B6 and B7 (the Safe Browsing key
+[#223](https://github.com/vimma-browser/vimma/issues/223)), and B6 and B7 (the Safe Browsing key
 in a `build` environment, and a watch on Mozilla's release key,
 [#225](https://github.com/vimma-browser/vimma/issues/225)).
 
+- B1. Nothing is **ever** built from, or reported on, a Firefox source tarball unless its SHA-512
+  is listed in a `SHA512SUMS` carrying exactly one good signature by a valid signing subkey of
+  Mozilla's release key `14F26682D0916CDD81E37B6D61B7B526D98F0353`, pinned in
+  `tools/upstream/mozilla-release-key.asc` ([ADR-021](adr/021-mozilla-release-key.md)); a
+  revoked or expired subkey, another key, a second signature, a signed message in place of a
+  detached signature, or a missing signature fails. The verdict comes from `gpgv`'s status lines,
+  never its exit status, which is 0 for the revoked, compromised subkey. Every verification goes
+  through `tools/upstream/verify-sha512.py`, called by `firefox-source.sh` (every build, PR CI
+  included) and `source-check.sh` (the autopilot and the Beta canary); a tarball already on disk
+  is verified like a downloaded one. On a contributor's machine, `npx surfer download` checks
+  nothing, so `npm run import`, the first step of every local build and lane, refuses an
+  `engine/` until `npm run verify-source` has verified the tarball it came from for
+  `surfer.json`'s version (a record in `engine/.git`, which `firefox-source.sh` writes too). That
+  record guards against building an unverified download, not against someone who can already
+  write to `engine/`.
+  `firefox-source.sh` also refuses a `surfer.json` with a `version.candidate`, which Surfer would
+  fetch from `candidates/` unverified.
+  A pull request that changes the pinned key file, or a line of `verify-sha512.py` that names
+  `PINNED_FINGERPRINT` or `KEY_FILE`, fails the required check "Mozilla release key unchanged or
+  approved" (`.github/workflows/key-guard.yml`, `tools/ci/key-guard.mjs`) until a maintainer adds
+  the `key-rotation-approved` label, which needs triage access to the repository. No automation
+  or agent adds that label; a maintainer adds it only after the checks in `docs/runbook.md`,
+  "Mozilla's release key", and removes it if a later push changes the key again, since the label
+  stays on the pull request across pushes. The check runs the base branch's copy of the script.
+  A pull request that changes the guard itself (`.github/workflows/key-guard.yml`,
+  `tools/ci/key-guard.mjs` or its tests) needs the same label, because under `pull_request` such
+  a pull request still runs its own copy of the workflow and could rewrite it to pass; the
+  label requirement on the guard's files is what makes that change visible, and the `main`
+  ruleset, which requires the check by its name, is what makes it binding. The one exception is
+  the pull request that first adds the guard to a base branch without one. Its scope is the
+  key, the fingerprint and the guard: it does not see a change that weakens `verify-sha512.py`
+  elsewhere (its call sites or its status checks); review of `tools/upstream/` covers that.
+  [`test_good_signature_from_mozillas_current_subkey_passes`](../tools/upstream/test_verify_sha512.py),
+  [`test_signature_by_the_revoked_compromised_subkey_fails`](../tools/upstream/test_verify_sha512.py),
+  [`test_signature_by_another_key_fails`](../tools/upstream/test_verify_sha512.py),
+  [`test_a_second_signature_beside_mozillas_fails`](../tools/upstream/test_verify_sha512.py),
+  [`test_signature_by_an_expired_subkey_fails`](../tools/upstream/test_verify_sha512.py),
+  [`test_one_changed_byte_in_sha512sums_fails_the_signature`](../tools/upstream/test_verify_sha512.py),
+  [`test_missing_signature_or_gpgv_cannot_check_and_exits_two`](../tools/upstream/test_verify_sha512.py),
+  [`test_pinned_key_is_mozillas_primary_with_the_compromised_subkey_revoked`](../tools/upstream/test_verify_sha512.py),
+  [`a SHA512SUMS without a good signature fails before engine/ is touched`](../tools/upstream/test/firefox-source.test.mjs),
+  [`the source check fails on a SHA512SUMS whose signature is not good`](../tools/upstream/test/source-check.test.mjs),
+  [`test_a_signed_message_in_place_of_a_detached_signature_fails`](../tools/upstream/test_verify_sha512.py),
+  [`fails a tampered tarball`](../tools/upstream/test/verify-source.test.mjs),
+  [`--require refuses an engine/ never verified, or verified for another version`](../tools/upstream/test/verify-source.test.mjs),
+  [`npm run import refuses an engine/ whose source was never verified`](../tools/test/upstream-workflow.test.mjs),
+  [`every verify-sha512.py call passes a signature`](../tools/test/upstream-workflow.test.mjs),
+  [`refuses a surfer.json with a version.candidate, before anything is fetched`](../tools/upstream/test/firefox-source.test.mjs),
+  [`fails a changed key file without the label`](../tools/ci/test/key-guard.test.mjs),
+  [`fails a change to any of the guard's own files without the label, and passes it with`](../tools/ci/test/key-guard.test.mjs),
+  [`passes the pull request that first adds the guard to a base without one`](../tools/ci/test/key-guard.test.mjs),
+  [`fails a changed fingerprint without the label, and passes it with`](../tools/ci/test/key-guard.test.mjs),
+  [`passes event values to run: through env only`](../tools/ci/test/key-guard.test.mjs),
+  [`still judges when started through a symlinked path`](../tools/ci/test/key-guard.test.mjs)
+- B2. A nightly or release build **never** builds from an `engine/` it did not extract in the
+  same job from the tarball it verified, and **never** restores a tree, an objdir or a compiler
+  cache from the Actions cache; a release **must** build in a fresh objdir with an empty
+  compiler cache.
+  [`a tarball already on disk is verified again and engine/ is extracted from it afresh`](../tools/upstream/test/firefox-source.test.mjs),
+  [`no workflow reads or writes engine/.vimma-firefox-version`](../tools/test/full-build-workflows.test.mjs),
+  [`the build jobs check out clean and restore nothing from the Actions cache`](../tools/test/full-build-workflows.test.mjs),
+  [`a release builds in a fresh objdir with an empty compiler cache`](../tools/test/full-build-workflows.test.mjs)
 - B3. Surfer **must** be pinned to one exact version, locked by its integrity hash, and a
   Dependabot update of Surfer **never** merges without a person, security updates and grouped
   updates included, whatever the format of Dependabot's metadata; an update whose dependency
@@ -721,3 +786,18 @@ in a `build` environment, and a watch on Mozilla's release key,
   [`triggers are read in every spelling YAML allows`](../tools/test/self-hosted-runner.test.mjs),
   [`no workflow names a self-hosted runner, and both build jobs run on ubuntu-24.04`](../tools/test/self-hosted-runner.test.mjs),
   [`each build job runs only from main or for a release`](../tools/test/self-hosted-runner.test.mjs)
+- B8. The nightly **never** creates, replaces or deletes a release, and no job of it can write
+  contents. Its `build` job, which runs npm, Surfer, `mach` and the mochitests, holds
+  `contents: read` only and keeps its package as a workflow artifact for 7 days. The failure
+  issue comes from a `report` job with `issues: write`, which checks out and runs no repository
+  code, reads no secret, and quotes only the log the build job redacted before uploading it,
+  with backticks escaped so no log line can end its code fence. **⚠ limit:** the artifact is
+  not private. The repository is public, so anyone signed in to GitHub can download it for the
+  7 days it is kept, and its name and size are listed without signing in. It holds the same
+  package, and the same compiled-in Safe Browsing key, as a keyed release build.
+  [`the workflow and its build job can only read the repository`](../tools/test/nightly-workflow.test.mjs),
+  [`the build job keeps the package as a workflow artifact for 7 days`](../tools/test/nightly-workflow.test.mjs),
+  [`no job creates, edits or deletes a release, and none can write contents`](../tools/test/nightly-workflow.test.mjs),
+  [`a failure is reported by its own job, from the redacted log artifact`](../tools/test/nightly-workflow.test.mjs),
+  [`the report job names the repository, since it checks nothing out`](../tools/test/nightly-workflow.test.mjs),
+  [`only the nightly's failure-issue step gets GH_TOKEN`](../tools/test/full-build-workflows.test.mjs)

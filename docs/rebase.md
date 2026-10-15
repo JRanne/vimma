@@ -14,16 +14,16 @@ Background: [ADR-002](adr/002-upstream-release-channel.md),
 
 ## At a glance
 
-| #   | Step                                      | Where                                         | Time                    |
-| --- | ----------------------------------------- | --------------------------------------------- | ----------------------- |
-| 1   | Autopilot: issue, patch check, suites, PR | `upstream.yml`, hosted runners                | ≤ 6 h after the release |
-| 2   | Download the new source                   | your machine                                  | 12.5 min                |
-| 3   | Import; fix any patch that fails          | your machine                                  | 1 min, plus fixes       |
-| 4   | Full build + full mochitest suite         | your machine (the hosted nightly, after #224) | 39 min cold + suite     |
-| 5   | Artifact build + suite (preflight first)  | autopilot, `e2e.yml` on the PR                | 5 min                   |
-| 6   | Version files, branding prefs, cfr, SB    | autopilot (checks prefs), your machine        | 5 min                   |
-| 7   | Split-view contract (M4 canary)           | both builds                                   | part of the suite       |
-| 8   | Mark ready, CI, merge                     | GitHub                                        | CI ≈ 8 min              |
+| #   | Step                                      | Where                                            | Time                                     |
+| --- | ----------------------------------------- | ------------------------------------------------ | ---------------------------------------- |
+| 1   | Autopilot: issue, patch check, suites, PR | `upstream.yml`, hosted runners                   | ≤ 6 h after the release                  |
+| 2   | Download the new source                   | your machine                                     | 12.5 min                                 |
+| 3   | Import; fix any patch that fails          | your machine                                     | 1 min, plus fixes                        |
+| 4   | Full build + full mochitest suite         | your machine, and the hosted nightly after merge | 39 min cold + suite (nightly: about 2 h) |
+| 5   | Artifact build + suite (preflight first)  | autopilot, `e2e.yml` on the PR                   | 5 min                                    |
+| 6   | Version files, branding prefs, cfr, SB    | autopilot (checks prefs), your machine           | 5 min                                    |
+| 7   | Split-view contract (M4 canary)           | both builds                                      | part of the suite                        |
+| 8   | Mark ready, CI, merge                     | GitHub                                           | CI ≈ 8 min                               |
 
 **When the autopilot's PR is green (the common case) you do only step 8**, until auto-merge of
 a green bump is built ([#259](https://github.com/vimma-browser/vimma/issues/259)), which removes that
@@ -86,15 +86,16 @@ prepared change there. The autopilot's tracking issue then already has the work 
    `tools/upstream/patch-check.py --tarball - --drain`: only the patched files are extracted, so
    the disk is barely touched; about 1–2 min. The same stream goes through `tee` into
    `sha512sum`, and `tools/upstream/verify-sha512.py` compares it with the
-   `source/firefox-X.Y.Z.source.tar.xz` line of `SHA512SUMS` next to it. **A mismatch fails the
-   run**: no PR. We do not check the GPG signature on `SHA512SUMS`: HTTPS from
-   archive.mozilla.org is the trust anchor. Then `patch-audit.py` (ADR-003 register) and the
-   artifact preflight (`artifact-preflight.mjs`: is Mozilla's build of the tarball's revision in
-   the Taskcluster index?). The reports are the run's `patch-check` artifact (30 days).
+   `source/firefox-X.Y.Z.source.tar.xz` line of `SHA512SUMS` next to it, after checking that
+   `SHA512SUMS.asc` is a good signature by Mozilla's release key, pinned in the repository
+   (ADR-021, docs/security.md B1). **A bad or missing signature, or a mismatch, fails the run**:
+   no PR. Then `patch-audit.py` (ADR-003 register) and the artifact preflight
+   (`artifact-preflight.mjs`: is Mozilla's build of the tarball's revision in the Taskcluster
+   index?). The reports are the run's `patch-check` artifact (30 days).
 4. **`test`** (read-only). Only when every patch applies and the artifacts exist: `e2e.yml`, called
    with the new version. It bumps `surfer.json` in its own checkout and does what PR CI does:
-   `surfer download` (SHA-512 checked again), `npm run import`, the branding prefs test, the
-   upstream-prefs check (cfr provider and Safe Browsing lists, step 6), the artifact build,
+   `firefox-source.sh` (signature and SHA-512 checked again), `npm run import`, the branding
+   prefs test, the upstream-prefs check (cfr provider and Safe Browsing lists, step 6), the artifact build,
    `tests/browser/` and `tests/e2e/`. Without artifacts the suites are skipped and the PR says
    so: run steps 2–4 on your machine (the full-build path).
 5. **`publish`** (the only job that can push). Pushes `upstream/firefox-X.Y.Z` with one commit,
@@ -163,10 +164,12 @@ On your machine, in the repo:
 ```sh
 gh pr checkout <PR number>                  # branch upstream/firefox-X.Y
 npx surfer download --force                 # deletes engine/ (and its 20 GB objdir), fetches X.Y
-echo X.Y > engine/.vimma-firefox-version    # what nightly.yml compares against surfer.json
+npm run verify-source                       # the tarball against Mozilla's signed SHA512SUMS
 ```
 
 `surfer download` reads the version from `surfer.json` and caches the tarball in `.surfer/engine/`.
+It checks no hash or signature; `npm run verify-source` checks that tarball against Mozilla's
+signed `SHA512SUMS` (ADR-021) and fails if it does not match. Do not build from it if it fails.
 Expect ≈ 12.5 min, `.surfer/` ≈ 0.8 GB and `engine/` ≈ 7.6 GB (runbook, First Firefox build).
 Surfer commits the pristine tree as `Firefox X.Y` in `engine/.git`: that commit is what
 `surfer export` diffs against, and what patch-check reads by default.
@@ -420,8 +423,10 @@ is deliberately not built; a person merges.
   release is a decision to write down in the drift issue.
 - **After merge, before a release:** revert on `main` through a PR (`git revert <merge commit>`,
   `revert:` with a body saying why). That restores `surfer.json` and any re-exported patches. The
-  nightly re-downloads the old version by itself (`engine/.vimma-firefox-version` differs).
-  Locally: `npx surfer download --force && npm run import && npx surfer build`. The release's
+  nightly builds the old version by itself: every build downloads and verifies the version
+  `surfer.json` names (`tools/upstream/firefox-source.sh`).
+  Locally: `npx surfer download --force && npm run verify-source && npm run import && npx surfer
+build`. The release's
   branch still exists, so the autopilot does not reopen it; delete the branch (or run with
   `-f rebuild=true`) once the cause is fixed.
 - **After a release:** do not ship an older Firefox (it reintroduces the fixed security bugs). Fix

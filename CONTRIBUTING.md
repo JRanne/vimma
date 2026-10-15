@@ -18,6 +18,8 @@ How to build, run and test Vimma, and how changes get in. For why Vimma exists, 
 ```sh
 npm ci                  # dev tools, including Surfer
 npx surfer download     # Firefox source for the version in surfer.json, into engine/
+npm run verify-source   # that tarball against Mozilla's signed SHA512SUMS (needs gpgv);
+                        # npm run import refuses an engine/ it has not verified
 npx surfer bootstrap    # Mozilla's toolchains into ~/.mozbuild (once)
 npm run import          # apply Vimma's files and patches, select the vimma brand
 npx surfer build        # full build
