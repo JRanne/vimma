@@ -95,7 +95,7 @@ describe("the dialect probe (decision 3)", () => {
       version: "0.56.2",
     });
   });
-  test("a probe reply that is neither dialect's is no Hyprland (review, PR #151)", () => {
+  test("a probe reply that is neither dialect's is no Hyprland", () => {
     expect(detectDialect(version, "error: nope")).toEqual({ error: "neither dialect" });
     expect(detectDialect(version, "")).toEqual({ error: "neither dialect" });
     expect(detectDialect(version, 'Invalid dispatcher, requested "hl.dsp.no_op()"')).toEqual({

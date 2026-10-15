@@ -26,6 +26,9 @@ describe("findCommentWording", () => {
     ["// Spec: decision 30 (user, 2026-10-13): pages in the agent workspace", "(user,"],
     ["  foo(); // review of #38: a reconnect loop", "review of #38"],
     ["/* the coordinator assumed it */", "coordinator"],
+    ["/** config.toml was read (review of PR #151). */", "review of pr #151"],
+    ['  test("neither dialect", () => {}); // (review, PR #151)', "review, pr #151"],
+    ['// The user (2026-10-12): "it should be possible"', "user (2026-"],
   ])("flags %j", (src, phrase) => {
     expect(phrases(src)).toEqual([phrase]);
   });
