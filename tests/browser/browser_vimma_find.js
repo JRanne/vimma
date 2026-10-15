@@ -342,6 +342,7 @@ function box(browser) {
       value: el.value,
       focused: content.document.activeElement === el,
       selected: el.value.slice(el.selectionStart, el.selectionEnd),
+      display: el.editor?.selectionController.getDisplaySelection(),
     };
   });
 }
@@ -365,6 +366,12 @@ async function assertMatchInBox(browser, what) {
   Assert.ok(!now.focused, `${what}: the box does not keep the focus`);
   Assert.equal(now.selected, "needle", `${what}: the match stays selected`);
   Assert.equal(now.value, "needle", `${what}: nothing was typed into the box`);
+  // The blurred box draws its match the way the find bar does (#264).
+  Assert.equal(
+    now.display,
+    Ci.nsISelectionController.SELECTION_ATTENTION,
+    `${what}: the match shows as the find's attention highlight`,
+  );
 }
 
 add_task(async function a_match_in_a_text_field_stays_in_normal_mode() {

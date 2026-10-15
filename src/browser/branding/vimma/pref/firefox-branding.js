@@ -96,8 +96,8 @@ pref("browser.safebrowsing.provider.google5.lists", "goog-phish-proto,googpub-ph
 pref("browser.safebrowsing.downloads.remote.enabled", false);
 
 // System add-on updates (spec m0-updater): Mozilla's update server (aus5) is asked with our
-// version, build, OS and locale, and answers nothing for 157; webcompat fixes come through Remote
-// Settings instead. App updates are off at build time (configs/common/mozconfig). Add-on updates
+// version, build, OS and locale, and answers an empty update list for release versions (the spec
+// records each check); webcompat fixes come through Remote Settings instead. App updates are off at build time (configs/common/mozconfig). Add-on updates
 // from AMO (extensions.update.*) and OpenH264/Widevine (media.gmp-manager.url) stay on.
 pref("extensions.systemAddon.update.enabled", false);
 pref("extensions.systemAddon.update.url", "");
