@@ -32,18 +32,20 @@ env:
   TAG: ${{ github.event.release.tag_name || inputs.tag }}
 
 jobs:
-  # Full build on the self-hosted machine (22 GB engine/; as nightly.yml). Read-only token, and
-  # one secret, the Google Safe Browsing key, which ships inside the binaries anyway (spec
-  # m0-safebrowsing-key): what it produces is checked, signed and uploaded by hosted jobs below.
-  # It builds in a fresh objdir with an empty compiler cache of its own, so nothing a nightly (or
-  # anything else that ran on the runner) left behind reaches signed binaries; a cold build costs
-  # ~40 min.
+  # Full build on the standard GitHub-hosted runner, from Firefox source firefox-source.sh
+  # verifies and extracts in this job, restoring nothing from the Actions cache (spec
+  # build-supply-chain, B1 and B2). Read-only token, and one secret, the Google Safe Browsing key,
+  # which ships inside the binaries anyway (spec m0-safebrowsing-key): what it produces is
+  # checked, signed and uploaded by the jobs below. It builds in a fresh objdir with an empty
+  # compiler cache of its own, so the rule holds on any runner (docs/runbook.md, "Full builds").
   build:
     if: >-
       vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' &&
       (github.event_name == 'release' || github.ref == 'refs/heads/main')
-    runs-on: [self-hosted, linux, x64, vimma-build]
-    timeout-minutes: 240
+    runs-on: ubuntu-24.04
+    # About 1.5 times the measured job, 117 min (docs/runbook.md, "Full builds"), well under
+    # GitHub's 6 hours, so a hung build fails here with its own log and failure handling.
+    timeout-minutes: 180
     permissions:
       contents: read
     steps:
@@ -56,8 +58,11 @@ jobs:
         with:
           ref: refs/tags/${{ env.TAG }}
           persist-credentials: false
-          # Keep the git-ignored engine/ and .surfer/ between runs (as nightly.yml).
-          clean: false
+
+      # No `cache` input: a build restores nothing from the Actions cache (B2).
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
 
       - name: npm ci
         run: npm ci
@@ -66,7 +71,7 @@ jobs:
         run: |
           objdir="$GITHUB_WORKSPACE/engine/obj-release"
           cache="$RUNNER_TEMP/sccache-release"
-          # The nightly's sccache server would keep serving its own cache: stop it first.
+          # A server left running by anything before this job would keep serving its own cache.
           "$HOME/.mozbuild/sccache/sccache" --stop-server || true
           rm -rf "$objdir" "$cache"
           mkdir -p "$cache"
@@ -80,14 +85,31 @@ jobs:
             const config = JSON.parse(readFileSync("surfer.json", "utf8"));
             console.log("Vimma " + releaseVersion(config, process.env.TAG));'
 
-      - name: Firefox source matching surfer.json
+      # Before the download, so a runner image that shrank fails in seconds, not after an hour of
+      # compiling. The build needs about 26 GB, the swap file 16 GB (runbook, "Full builds").
+      - name: Disk guard (a full build and its swap file need about 42 GB)
         run: |
-          want=$(node -p 'require("./surfer.json").version.version')
-          have=$(cat engine/.vimma-firefox-version 2>/dev/null || true)
-          if [ "$want" != "$have" ]; then
-            npx surfer download --force
-            echo "$want" > engine/.vimma-firefox-version
+          df -h . | tail -1
+          free=$(df --output=avail -BG . | tail -1 | tr -dc 0-9)
+          if [ "$free" -lt 50 ]; then
+            echo "::error::Only ${free} GB free; the build and its swap file need about 42 GB."
+            exit 1
           fi
+
+      # The Rust stage of the build peaks at 15.3 GB of the runner's 16 GB of memory plus 10.4 GB
+      # of swap; without this file the first measured build was killed after 38 minutes
+      # (docs/runbook.md, "Full builds").
+      - name: Swap file (16 GB)
+        run: |
+          sudo fallocate -l 16G /vimma-swapfile
+          sudo chmod 600 /vimma-swapfile
+          sudo mkswap /vimma-swapfile > /dev/null
+          sudo swapon /vimma-swapfile
+          free -g
+
+      # Verified against Mozilla's SHA512SUMS and extracted afresh in this job (B1, B2).
+      - name: Firefox source (surfer.json), verified and freshly extracted
+        run: tools/upstream/firefox-source.sh
 
       # As nightly.yml: the secret goes to a mode-600 file through a shell builtin, never echoed;
       # configs/common/mozconfig reads VIMMA_SAFEBROWSING_KEYFILE. It stays until the last mach
@@ -107,8 +129,12 @@ jobs:
       - name: Import patches and our sources
         run: npm run import
 
+      # As nightly.yml: mach must not see engine/'s empty repository, or --enable-bootstrap finds
+      # none of Mozilla's toolchains (its taskgraph hashes only the files a repository tracks).
       - name: Build
-        run: npx surfer build
+        run: |
+          rm -rf engine/.git
+          npx surfer build
 
       - name: Smoke check
         run: |

@@ -79,7 +79,6 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Fixed
 
-- Insert mode: after `i` or `gi`, a page that moves focus itself (a file finder jumping to its result list, a dialog taking focus) no longer drops the tab back to normal mode, so the keys you type keep going to the page instead of running Vimma commands; only `Esc` or a new page ends it. `i` now goes back to the text field you were last in on the page, and falls back to the first one (#165). The help-text snapshot changed with `i`'s new description.
 - Omarchy themes whose `colors.toml` has only the terminal colours (accent, foreground, background, color0–color15, such as Event Horizon) are no longer rejected: Vimma derives the rest as Omarchy does (#266).
 - A find whose match is in a text field (`/` then Enter) keeps the match highlighted the way Firefox's find bar does, instead of showing it greyed out (#270).
 - The e2e baseline `m3-private-workspace` was re-recorded: it predated the start page's version footer (#159) and `:theme` hint (#173), and the scenario now opens the private window only once the search service is ready, so its URL bar always names the default engine ("Search with Google or enter address" and its icon) instead of sometimes showing the engine-less placeholder and magnifier (#236).

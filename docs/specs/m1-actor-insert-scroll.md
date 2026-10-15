@@ -109,9 +109,7 @@ actions that are not implemented yet (parallel spec).
 - **`i` (`mode.insert`).** The child focuses the first visible, enabled, editable text field
   (`input` not in the excluded types, `textarea`, contenteditable) and the focusin enters
   insert. With none, the host enters insert anyway: an explicit pass-through for pages that
-  capture keys (games), left with `Esc`. (Since changed: `i` first returns to the field last
-  used, and insert from `i` or `gi` lasts until `Esc` or a new document whatever the page does
-  with focus; [insert-focus](insert-focus.md).)
+  capture keys (games), left with `Esc`.
 - **Scrolling** runs in the focused frame's child (`Services.focus.focusedContentBrowsingContext`
   when it belongs to the browser, else the top frame); a frame with nothing to scroll answers
   false and the top frame scrolls instead. Target: the nearest scrollable ancestor of the

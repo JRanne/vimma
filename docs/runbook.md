@@ -525,9 +525,9 @@ min, e2e ≈ 6 min (5.5 min wall, ADR-010), Semgrep ≈ 1 min, CodeQL a few minu
 e2e.yml has no paths filter: "mochitest (artifact build)" is a required check, so the workflow
 starts on every PR, and on a docs-only one the job skips by `if:` in seconds (above). The upstream autopilot runs 6 × 1 min a day, plus ≈ 16 min (issue, patch check, the
 e2e suites, PR) when a release is found (spec m7-upstream-autopilot); claude.yml only when
-triggered. `nightly.yml` and `release.yml` run their full builds on GitHub-hosted runners too
-once [#224](https://github.com/vimma-browser/vimma/issues/224) lands (until then both are off; "Full
-builds" below). Usage is listed in Settings → Billing → Usage.
+triggered. `nightly.yml` and `release.yml` run their full builds on GitHub-hosted runners too:
+about 124 min per nightly and 117 min per release, free on a standard runner, and off until
+their variables are set ("Full builds" below). Usage is listed in Settings → Billing → Usage.
 
 The bench step adds about half a minute to each CI run. `mutation.yml` is the largest scheduled
 cost: a full run (first Sunday of the month) is estimated at 60–90 min on the 2-CPU runner
@@ -781,14 +781,42 @@ forks, a self-hosted runner is a machine anyone who opens a pull request could r
 it would hold the Safe Browsing key between runs (spec
 [build-supply-chain](specs/build-supply-chain.md), decisions 6 and 7). Do not register one.
 
-**Known gap.** The build jobs of `nightly.yml` and `release.yml` still name
-`[self-hosted, linux, x64, vimma-build]`, a label no runner serves, and keep `engine/` between
-runs (`clean: false`, `engine/.vimma-firefox-version`). Both workflows stay switched off
-(`NIGHTLY_ENABLED` and `RELEASE_ENABLED` unset) until build-supply-chain sub-PR 4,
-[#224](https://github.com/vimma-browser/vimma/issues/224), moves them to `ubuntu-24.04` with a fresh,
-verified extraction of the Firefox source, measures a cold build there, and records the time,
-disk and the steps to switch them on in this section. Until then a full build runs only on a
-developer's machine ("First Firefox build" above).
+Both build jobs run on `ubuntu-24.04` and start from nothing: a clean checkout, Node from
+`.nvmrc` with no npm cache, no Actions cache and no compiler cache (rule B2). The Firefox source
+comes only from `tools/upstream/firefox-source.sh`, which downloads the tarball `surfer.json`
+names, checks it against Mozilla's `SHA512SUMS`, deletes `engine/` and lets Surfer extract the
+verified file. After `npm run import` the build step deletes `engine/.git`: `surfer import` needs
+that empty repository, but with it `mach` finds none of Mozilla's toolchains for
+`--enable-bootstrap` (spec build-supply-chain, R14).
+
+Measured on 2026-10-15 (run 38723067541, image `ubuntu-24.04` 20261012.334.1, 4 CPUs, 16 GB of
+memory, Firefox 158.0, a keyless build of `main` as the nightly builds it):
+
+| Step                                        | Time    | Disk, memory                                                  |
+| ------------------------------------------- | ------- | ------------------------------------------------------------- |
+| Free disk before anything                   |         | 86 GB of 145 GB                                               |
+| `npm ci`, `firefox-source.sh`, import       | 1 min   | tarball 0.8 GB, tree 4.7 GB                                   |
+| `surfer build` (cold, empty sccache)        | 113 min | 26 GB (`engine/` 21 GB, `~/.mozbuild` 2.5 GB, sccache 2.7 GB) |
+| Peak memory (the Rust stage, minutes 20-35) |         | 15.3 GB of 16 GB, plus 10.4 GB of swap                        |
+| Full mochitest suite                        | 7 min   | 78 tests, 6,355 checks, 0 unexpected                          |
+| `./mach package`                            | 2.4 min | 87 MB tarball                                                 |
+| Whole job                                   | 124 min | peak 42 GB used including the swap file                       |
+
+Without the 16 GB swap file both jobs create, the first measured build was killed after 38 min
+(run 38718105585, exit 143, while the Rust stage held all of memory). `timeout-minutes` is about
+1.5 times the measured job: 190 for the nightly, 180 for the release (which runs no
+mochitests). Each job's disk guard fails at once when less than 50 GB is free: the build needs
+about 26 GB and the swap file 16 GB. The free space is a property of the runner image, not a
+documented guarantee (GitHub documents 14 GB); if the guard fails, the image has shrunk, and
+removing preinstalled toolsets (`/usr/local/lib/android` alone is about 9 GB) is the first fix.
+
+**Switching them on.** Both stay off until a repository variable says otherwise:
+
+```sh
+gh workflow run nightly.yml --ref main                # one manual nightly from main, to check it
+gh variable set NIGHTLY_ENABLED --body true           # then the 03:00 UTC schedule
+gh variable set RELEASE_ENABLED --body true           # releases: only at the release gate
+```
 
 What the nightly does once it runs: a full build of `main`, the full mochitest suite on it, the
 rolling `nightly` pre-release, and on failure the log as an artifact and an issue labelled
@@ -1064,8 +1092,7 @@ on `main`), never code from the release branch, and keep no token in their check
 
 When a GitHub Release is published (release-please, above), `release.yml` builds Vimma, packages
 it on a hosted runner, signs, uploads to that release and pushes AUR `vimma-bin`. Its `build` job
-still names the self-hosted label that no runner serves; it moves to a hosted runner with
-[#224](https://github.com/vimma-browser/vimma/issues/224) ("Full builds" above). **Every job is off until `RELEASE_ENABLED` is `true`**, manual runs included.
+builds on `ubuntu-24.04` from freshly verified source in about 2 hours ("Full builds" above). **Every job is off until `RELEASE_ENABLED` is `true`**, manual runs included.
 
 | Asset                             | What                                                            |
 | --------------------------------- | --------------------------------------------------------------- |

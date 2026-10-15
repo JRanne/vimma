@@ -32,6 +32,6 @@ export class VimmaParent extends JSWindowActorParent {
     const trigger = msg.data?.trigger;
     const descriptor = parseDescriptor(msg.data?.descriptor);
     if (!browser || !TRIGGERS.has(trigger) || !descriptor) return;
-    VimmaHost.onFocusReport(browser, { descriptor, trigger, frame: this.browsingContext });
+    VimmaHost.onFocusReport(browser, { descriptor, trigger });
   }
 }

@@ -1,6 +1,6 @@
 # Spec: firefox-versions
 
-Status: accepted (sub-PRs 1 to 3 implemented, #194, #199 and #283; sub-PR 4: [#220](https://github.com/vimma-browser/vimma/issues/220)) · Area: `tools/release/` (new: `version-line.mjs`, `firefox-notes.mjs`,
+Status: accepted (sub-PRs 1 and 2 implemented, #194 and #199; sub-PRs 3 and 4: [#219](https://github.com/vimma-browser/vimma/issues/219), [#220](https://github.com/vimma-browser/vimma/issues/220)) · Area: `tools/release/` (new: `version-line.mjs`, `firefox-notes.mjs`,
 `security-release.mjs`), `.github/workflows/release-please.yml`, `nightly.yml`, `release.yml`,
 `tools/upstream/autopilot-body.mjs`, `src/browser/branding/vimma/pref/firefox-branding.js`,
 `docs/runbook.md`, `docs/security.md`, `docs/review-checklist.md`, `CONTRIBUTING.md` · Upstream
@@ -9,7 +9,8 @@ patches: `src/toolkit/xre/nsAppRunner-cpp.patch` (new; ADR-003 register line: "1
 (firefox-versions)") · ADR: ADR-020 (new, "A security release needs no person"), ADR-015 and
 ADR-003 (register line)
 
-Issues: [#220](https://github.com/vimma-browser/vimma/issues/220)
+Issues: [#219](https://github.com/vimma-browser/vimma/issues/219),
+[#220](https://github.com/vimma-browser/vimma/issues/220)
 
 ## Summary
 
@@ -291,11 +292,10 @@ MOZ_APP_VERSION)` and keeps the copyright suffix. Both macros are already define
 
 ### Ownership and credentials
 
-17. **This spec owns the release half; spec upstream-bump-automation owns the bump half.** The
-    job in decisions 11 to 15 releases whatever is on `main` after a merged security bump.
-    Auto-merging a green bump PR belongs to upstream-bump-automation, under its variable
-    `AUTO_MERGE_UPSTREAM`; m6a-updater adds no auto-merge rule of its own (its decision 3).
-    Releasing whatever is on `main` follows from releasing from `main` only
+17. **This spec owns the release half; m6a-updater (PR #143) owns only the bump half.** The job in
+    decisions 11 to 15 releases whatever is on `main` after a merged security bump. m6a-updater
+    keeps only auto-merging a green security bump PR, under its own variable
+    `AUTO_SECURITY_BUMP`. Releasing whatever is on `main` follows from releasing from `main` only
     (decision 16). Separate variables let the release half be proven on drafts before bumps merge
     themselves. Rejected: m6a-updater owning both halves and auto-merging the release PR only
     when every entry in it is an `upstream:` line (a security fix would wait for a person

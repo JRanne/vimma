@@ -390,6 +390,8 @@ Taskcluster index) and this repository. Nothing here runs code from a pull reque
   differs from Mozilla's `SHA512SUMS`.
   [`nothing is built from a tarball whose SHA-512 Mozilla did not publish`](../tools/test/upstream-workflow.test.mjs),
   [`test_mismatch_exits_one_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py)
+  [`a tampered tarball already on disk fails like a downloaded one`](../tools/upstream/test/firefox-source.test.mjs),
+  [`no workflow runs surfer download itself`](../tools/test/full-build-workflows.test.mjs)
 - G5. A bump PR is **never** opened ready for review unless every patch applies and the suites
   passed on the new release; otherwise it is a draft that names the conflicting files and hunks.
   [`a ready PR only when patches apply, suites pass and a token starts CI`](../tools/upstream/test/autopilot.test.mjs),
@@ -638,29 +640,24 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   [`bad_arguments_never_reach_vimma`](../tools/vimma-ctl/tests/mcp.rs),
   [`bad_arguments_are_tool_errors_and_never_reach_vimma`](../tools/vimma-ctl/src/mcp.rs)
 
-## 13. Page modes (`actors/VimmaParent.sys.mjs`, `host/VimmaHost.sys.mjs`)
+## 13. Build and release supply chain (`release.yml`, `nightly.yml`)
 
-Whether a key is Vimma's or the page's depends on the tab's mode, which the content actor's focus
-reports move. Specs: [m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md),
-[insert-focus](specs/insert-focus.md).
+How the binaries Vimma publishes are built from Mozilla's source, Vimma's repository and the
+npm packages that drive the build. Spec: [build-supply-chain](specs/build-supply-chain.md).
 
-**Reach:** pages, through focus changes in their own frames.
+**Reach:** Mozilla's archive and Taskcluster, the npm registry, this repository, and GitHub's
+hosted runners, on which both builds run (`ubuntu-24.04`).
 
-- K1. Only the frame that has focus **may** report focus for a tab, and a report that is not a
-  well-formed descriptor **must** be dropped; a report changes only its own tab's mode.
-  [`only_the_focused_frame_may_report`](../tests/browser/browser_vimma_insert_scroll.js),
-  [`malformed_descriptors_are_dropped`](../tests/browser/browser_vimma_insert_scroll.js)
-- K2. After `i` or `gi`, a page **must not** turn the user's keys into Vimma commands by moving
-  focus: only `Esc` or another top document ends that insert (a page restored from the
-  back-forward cache is the same document).
-  [`after_i_the_page_moving_focus_off_the_field_keeps_insert`](../tests/browser/browser_vimma_insert_focus.js),
-  [`after_i_the_page_blurring_the_field_keeps_insert`](../tests/browser/browser_vimma_insert_focus.js),
-  [`after_gi_the_page_moving_focus_off_the_field_keeps_insert`](../tests/browser/browser_vimma_insert_focus.js),
-  [`explicit_insert_ends_with_the_page`](../tests/browser/browser_vimma_insert_focus.js)
-- K3. `i` **must** focus only a field of its own tab: the field the user last used, asked of the
-  frame and document that reported it (still in the tab, not discarded, same inner window), which
-  focuses only a connected, visible, editable element of that document; otherwise the top frame's
-  first field.
-  [`i_focuses_the_field_last_used_in_a_cross_origin_frame`](../tests/browser/browser_vimma_insert_focus.js),
-  [`i_falls_back_to_the_first_field_when_the_last_frame_navigated`](../tests/browser/browser_vimma_insert_focus.js),
-  [`i_falls_back_to_the_first_field_when_the_last_is_gone`](../tests/browser/browser_vimma_insert_focus.js)
+**Planned:** the spec's other rules (B1, Mozilla's signature on `SHA512SUMS`; B3 to B7, the npm
+packages, self-hosted runners, the build environment and the key watch) enter this section with
+their tests in the sub-PRs that build each. Until B1 lands, G4 holds for builds: every build
+gets its source through `tools/upstream/firefox-source.sh`, which checks the tarball's SHA-512.
+
+- B2. A nightly or release build **never** builds from an `engine/` it did not extract in the
+  same job from the tarball it verified, and **never** restores a tree, an objdir or a compiler
+  cache from the Actions cache; a release **must** build in a fresh objdir with an empty
+  compiler cache.
+  [`a tarball already on disk is verified again and engine/ is extracted from it afresh`](../tools/upstream/test/firefox-source.test.mjs),
+  [`no workflow reads or writes engine/.vimma-firefox-version`](../tools/test/full-build-workflows.test.mjs),
+  [`the build jobs check out clean and restore nothing from the Actions cache`](../tools/test/full-build-workflows.test.mjs),
+  [`a release builds in a fresh objdir with an empty compiler cache`](../tools/test/full-build-workflows.test.mjs)

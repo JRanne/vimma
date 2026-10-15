@@ -49,13 +49,12 @@ function load(browser, url) {
 }
 
 /**
- * The runners, given how the host enters explicit insert in a tab and shows a notice in its
- * window.
- * @param {(browser: any) => void} enterInsert
+ * The runners, given how the host sets a tab's page mode and shows a notice in its window.
+ * @param {(browser: any, mode: "insert") => void} setMode
  * @param {(browser: any, text: string) => void} notify
  * @returns {Record<string, (browser: any, action: Action) => void>}
  */
-export function pageRunners(enterInsert, notify) {
+export function pageRunners(setMode, notify) {
   /** `p` / `P`: the clipboard as a URL or a search, through `:open`'s path; never a script. */
   const openClipboard = (/** @type {any} */ b, /** @type {"current" | "tab"} */ where) => {
     const win = b.ownerDocument.defaultView;
@@ -83,7 +82,7 @@ export function pageRunners(enterInsert, notify) {
     "page.open_clipboard_new_tab": (b) => openClipboard(b, "tab"),
     // Insert only once a field has focus: with none, the page stays in normal (unlike `i`).
     "page.focus_input": async (b, a) => {
-      if (await VimmaActors.focusNthInput(b, a.count)) enterInsert(b);
+      if (await VimmaActors.focusNthInput(b, a.count)) setMode(b, "insert");
       else notify(b, NO_FIELD);
     },
     "page.url_up": (b, a) => goTo(b, urlUp(b.currentURI?.spec ?? "", a.count)),

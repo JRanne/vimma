@@ -151,8 +151,6 @@ export class VimmaChild extends JSWindowActorChild {
   #watched = null;
   /** A drag and drop started since the last mousedown: its end is no selection gesture. */
   #dragging = false;
-  /** @type {WeakRef<Element> | null} the text field that last took focus here, for `i` */
-  #lastField = null;
   /** This actor is focusing an element (`i`, a hint): the focus is the user's, not the find's. */
   #focusing = false;
   /** Tells the parent about a selection the user made with the mouse (spec m1-copy-mode). */
@@ -222,11 +220,7 @@ export class VimmaChild extends JSWindowActorChild {
           this.#unfocusFindMatch(/** @type {HTMLInputElement} */ (target));
           return;
         }
-        const el = target?.nodeType === 1 ? target : deepActiveElement(doc);
-        if (el && !FRAMES.has(el.localName) && isEditable(describe(el)).editable) {
-          this.#lastField = new WeakRef(el);
-        }
-        this.#report(el, "focusin");
+        this.#report(target?.nodeType === 1 ? target : deepActiveElement(doc), "focusin");
         return;
       }
       case "focusout":
@@ -353,8 +347,6 @@ export class VimmaChild extends JSWindowActorChild {
       }
       case "Vimma:FocusInput":
         return this.#focusInput(msg.data?.count);
-      case "Vimma:FocusLast":
-        return this.#focusLast();
       case "Vimma:Edit": {
         // ctrl+w, ctrl+u, ctrl+h after the page left them alone (key-handling-batch § 2): the
         // editor's own command on the focused text field, so undo works.
@@ -506,21 +498,6 @@ export class VimmaChild extends JSWindowActorChild {
     if (typeof html.click === "function") html.click();
     else el.dispatchEvent(new win.MouseEvent("click", init));
     return true;
-  }
-
-  /**
-   * Focuses the text field that last took focus in this document, if it is still in it, visible
-   * and editable (`i`, docs/specs/insert-focus.md).
-   * @returns {boolean} whether it took focus
-   */
-  #focusLast() {
-    const el = /** @type {HTMLElement | undefined} */ (this.#lastField?.deref());
-    if (!el?.isConnected || el.ownerDocument !== this.document) return false;
-    if (!isEditable(describe(el)).editable || !el.checkVisibility({ visibilityProperty: true })) {
-      return false;
-    }
-    this.#focus(el);
-    return deepActiveElement(this.document) === el;
   }
 
   /**

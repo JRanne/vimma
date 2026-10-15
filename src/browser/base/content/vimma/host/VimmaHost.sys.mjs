@@ -11,12 +11,7 @@
 
 import { VimmaActors } from "../actors/VimmaActors.sys.mjs";
 import { createDispatcher } from "../core/dispatcher.mjs";
-import {
-  insertEditCommand,
-  insertModeAfterFocus,
-  isEditable,
-  matchSiteRule,
-} from "../core/editable.mjs";
+import { insertEditCommand, insertModeAfterFocus, matchSiteRule } from "../core/editable.mjs";
 import { HintError, hintKey, startHints } from "../core/hints.mjs";
 import { chordFromEvent, formatKey } from "../core/keys.mjs";
 import { compileKeymap } from "../core/keymap.mjs";
@@ -752,40 +747,10 @@ const browserModes = new WeakMap();
  * @param {PageMode} mode
  */
 function setBrowserMode(browser, mode) {
-  if (mode !== "insert") explicitInsert.delete(browser);
   if ((browserModes.get(browser) ?? "normal") === mode) return;
   browserModes.set(browser, mode);
   VimmaHost.onModeChange(browser, mode);
 }
-
-/**
- * Tabs in explicit insert (`i`, `gi`; docs/specs/insert-focus.md): the inner window ID of the
- * top document it was entered on. Focus reports from that document do not end it; Esc does, as
- * does any other change to normal mode (setBrowserMode). A new top document starts over.
- * @type {WeakMap<object, number>}
- */
-const explicitInsert = new WeakMap();
-
-/** @param {any} browser */
-function topWindowId(browser) {
-  return browser.browsingContext?.currentWindowGlobal?.innerWindowId ?? 0;
-}
-
-/**
- * Enters explicit insert in `browser`'s tab.
- * @param {any} browser
- */
-function enterExplicitInsert(browser) {
-  setBrowserMode(browser, "insert");
-  explicitInsert.set(browser, topWindowId(browser));
-}
-
-/**
- * The frame of each tab whose text field last took focus, and its document's inner window ID,
- * so `i` can go back to that field.
- * @type {WeakMap<object, { frame: any, windowId: number }>}  browser → BrowsingContext and ID
- */
-const lastFieldFrame = new WeakMap();
 
 /**
  * Shows `text` as the notice of the window that owns `browser`.
@@ -828,10 +793,9 @@ export const CONTENT_RUNNERS = Object.freeze({
   "hint.follow": (b, a) => VimmaHost._startHints(b, a),
   "hint.follow_new_tab": (b, a) => VimmaHost._startHints(b, a),
   // Explicit insert, even with no text field to focus (pass-through for pages that take keys).
-  // The field the user was last in comes first, then the page's first one (insert-focus).
   "mode.insert": (b) => {
-    enterExplicitInsert(b);
-    VimmaActors.focusInput(b, lastFieldFrame.get(b));
+    setBrowserMode(b, "insert");
+    VimmaActors.focusInput(b);
   },
   // Find in page over Firefox's find bar (m1-find).
   "find.forward": (b) => findOf(b)?.start(b, false),
@@ -841,7 +805,7 @@ export const CONTENT_RUNNERS = Object.freeze({
   // Copy mode: caret, selection and yank in the focused frame (m1-copy-mode).
   ...copyModeRunners(setBrowserMode, noticeFor),
   // yy, p / P, gi, gu / gU, gf (m1-actor-insert-scroll, follow-up: normal-mode extras).
-  ...pageRunners(enterExplicitInsert, noticeFor),
+  ...pageRunners(setBrowserMode, noticeFor),
 });
 
 /**
@@ -1387,23 +1351,13 @@ export const VimmaHost = {
   /**
    * A focus report from the content actor (VimmaParent) for a tab's <browser>.
    * @param {any} browser
-   * @param {{ descriptor: EditableDescriptor, trigger: InsertTrigger, frame?: any }} report
-   *   `frame`: the BrowsingContext that reported
+   * @param {{ descriptor: EditableDescriptor, trigger: InsertTrigger }} report
    */
-  onFocusReport(browser, { descriptor, trigger, frame }) {
+  onFocusReport(browser, { descriptor, trigger }) {
     const mode = browserModes.get(browser) ?? "normal";
-    const site = siteInsert(browser);
-    if (frame && trigger === "focusin" && isEditable(descriptor, { site }).editable) {
-      lastFieldFrame.set(browser, {
-        frame,
-        windowId: frame.currentWindowGlobal?.innerWindowId ?? 0,
-      });
-    }
-    // A page moving focus about (a file finder focusing its result list) does not end the
-    // explicit insert of `i` or `gi`; a report from a newer top document than its own does.
-    if (mode === "insert" && explicitInsert.get(browser) === topWindowId(browser)) return;
     // Copy mode lasts until a text field takes focus (m1-copy-mode).
     const copy = mode === "visual";
+    const site = siteInsert(browser);
     const next = insertModeAfterFocus({ mode: copy ? "normal" : mode, trigger, descriptor, site });
     if (copy && next !== "insert") return;
     setBrowserMode(browser, next === "insert" ? "insert" : "normal");

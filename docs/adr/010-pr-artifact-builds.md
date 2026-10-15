@@ -10,8 +10,10 @@ Firefox artifact build, and which works with the release source tarballs Surfer 
 Until now `e2e.yml` was a no-op and every mochitest had run only on the maintainer's machine.
 A full build is 22 GB of `engine/` and 39 min on 16 threads, far beyond a hosted runner (14 GB
 disk). The repo becomes public (MPL-2.0); until then Actions minutes are limited. (Since changed:
-the repository is public; a hosted runner has about 85 GB free in practice, and full builds move
-to hosted runners with [#224](https://github.com/vimma-browser/vimma/issues/224), spec build-supply-chain, R9-R10 and decision 6.)
+the repository is public, and a standard hosted runner has about 86 GB free in practice. A cold
+full build there takes 113 min and fits with a 16 GB swap file, so the nightly and release
+builds run on hosted runners: spec build-supply-chain, R9, R10 and R15; docs/runbook.md, "Full
+builds". PRs still use artifact builds: a full build per push would make every PR wait 2 hours.)
 
 ## Decision
 
@@ -27,7 +29,7 @@ to hosted runners with [#224](https://github.com/vimma-browser/vimma/issues/224)
 `target.common.tests.tar.zst`) and builds our front end on top.
 
 Tests that only a full build can pass carry `skip-if = ["artifact"]` in `browser.toml`.
-**Until the nightly runner is live (none is registered and `NIGHTLY_ENABLED` is unset), those
+**Until the hosted nightly is switched on (`NIGHTLY_ENABLED` is unset), those
 tests and all compiled-in build-config behaviour run only on local full builds.** A PR that
 touches `*.patch`, `configs/`, `moz.configure` or branding must therefore report a local
 `npm run mochitest -- tests/browser/` on the full build (PR template checkbox). Once the nightly
