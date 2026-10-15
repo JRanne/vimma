@@ -5,7 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tempDir } from "../../test/temp-dir.mjs";
-import { fakeSign, withFakeGpgv } from "./fake-gpgv.mjs";
+import { fakeSign, fakeSignature, withFakeGpgv } from "./fake-gpgv.mjs";
 
 // tools/upstream/source-check.sh: the source check upstream.yml runs on a release and the Beta
 // canary runs on a Beta (spec upstream-beta-canary, B3 and Design step 2). The archive is a
@@ -38,7 +38,10 @@ function archive(version, opts = {}) {
   writeFileSync(join(dir, "SHA512SUMS"), sums(hash, name));
   const signature = opts.signature ?? "good";
   if (signature === "good") fakeSign(join(dir, "SHA512SUMS"));
-  if (signature === "bad") writeFileSync(join(dir, "SHA512SUMS.asc"), "not mozilla's\n");
+  if (signature === "bad") {
+    // A signature packet over other bytes: gpgv itself answers BADSIG.
+    writeFileSync(join(dir, "SHA512SUMS.asc"), fakeSignature("other bytes"));
+  }
   const work = join(root, "work");
   mkdirSync(work);
   return { base: `file://${join(root, "releases")}`, work };
@@ -93,7 +96,9 @@ describe("source-check.sh", () => {
   it("the source check fails when SHA512SUMS has no signature beside it", () => {
     const where = archive("158.0", { signature: "none" });
     const r = run("158.0", where);
-    expect(r.status).not.toBe(0);
+    // Exit 1, as documented: never report on a tarball that could not be verified.
+    expect(r.status).toBe(1);
+    expect(r.stdout + r.stderr).toMatch(/SHA512SUMS\.asc/);
     expect(r.output).not.toContain("result=");
   }, 60_000);
 

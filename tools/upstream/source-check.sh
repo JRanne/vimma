@@ -18,8 +18,8 @@
 # and, after the preflight, artifacts and artifacts-note. $GITHUB_STEP_SUMMARY gets the summary.
 #
 # Exit status: 0 the check ran or reported that it could not (result says which), 1 SHA512SUMS is
-# not signed by Mozilla's release key or the SHA-512 does not match it (never report on a tarball
-# Mozilla did not publish), 2 usage.
+# not signed by Mozilla's release key, it or its signature cannot be fetched, or the SHA-512 does
+# not match it (never report on a tarball Mozilla did not publish), 2 usage.
 # MOZILLA_RELEASES overrides the archive's releases/ URL (tests use a file:// directory).
 set -euo pipefail
 
@@ -52,8 +52,14 @@ set -e
 case "$status" in
   0 | 1)
     # Hard failure on a mismatch: never report on a tarball Mozilla did not publish.
-    curl -fsSL --retry 3 "$base/SHA512SUMS" -o "$scratch/SHA512SUMS"
-    curl -fsSL --retry 3 "$base/SHA512SUMS.asc" -o "$scratch/SHA512SUMS.asc"
+    # A file that cannot be fetched cannot verify the tarball: exit 1, like a bad signature.
+    unfetched() {
+      echo "::error::cannot fetch $base/$1; the tarball is not verified"
+      exit 1
+    }
+    curl -fsSL --retry 3 "$base/SHA512SUMS" -o "$scratch/SHA512SUMS" || unfetched SHA512SUMS
+    curl -fsSL --retry 3 "$base/SHA512SUMS.asc" -o "$scratch/SHA512SUMS.asc" ||
+      unfetched SHA512SUMS.asc
     python3 "$here/verify-sha512.py" --sums "$scratch/SHA512SUMS" \
       --signature "$scratch/SHA512SUMS.asc" --name "$name" --actual "$scratch/tarball.sha512" || {
       echo "::error::SHA-512 of $name does not match a SHA512SUMS signed by Mozilla's release key ($base)"

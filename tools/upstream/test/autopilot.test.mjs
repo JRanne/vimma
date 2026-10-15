@@ -334,6 +334,12 @@ describe("autopilot body", () => {
     });
   });
 
+  it("the PR body says the tarball matched a SHA512SUMS Mozilla signed", () => {
+    expect(prBody(context())).toContain(
+      "| Source tarball | SHA-512 matches a `SHA512SUMS` signed by Mozilla's release key |",
+    );
+  });
+
   it("summarises the patch check: applies, conflicts, did not run", () => {
     expect(patchLine(cleanReport, "ok")).toBe("2 patches apply (1 clean, 1 offset)");
     expect(patchLine(failingReport, "fail")).toBe("**1 of 2 do not apply** (1 clean, 1 failed)");

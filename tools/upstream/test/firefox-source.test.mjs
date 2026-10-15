@@ -5,7 +5,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync }
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tempDir } from "../../test/temp-dir.mjs";
-import { fakeSign, withFakeGpgv } from "./fake-gpgv.mjs";
+import { fakeSign, fakeSignature, withFakeGpgv } from "./fake-gpgv.mjs";
 
 // tools/upstream/firefox-source.sh: the only way a build gets its Firefox source (spec
 // build-supply-chain, decisions 3 to 5, rules B1 and B2). The archive is a file:// directory laid
@@ -66,7 +66,10 @@ function setup(opts = {}) {
   );
   const signature = opts.signature ?? "good";
   if (signature === "good") fakeSign(join(dir, "SHA512SUMS"));
-  if (signature === "bad") writeFileSync(join(dir, "SHA512SUMS.asc"), "not mozilla's\n");
+  if (signature === "bad") {
+    // A signature packet over other bytes: gpgv itself answers BADSIG.
+    writeFileSync(join(dir, "SHA512SUMS.asc"), fakeSignature("other bytes"));
+  }
   const served = opts.served ?? "genuine";
   if (served !== "none") {
     const target = join(dir, NAME);
@@ -125,6 +128,10 @@ describe("firefox-source.sh", () => {
       encoding: "utf8",
     });
     expect(ls.stdout).toBe("");
+    // What `npm run import` checks (verify-source.sh --require) before it builds anything.
+    expect(readFileSync(join(where.work, "engine", ".git", "vimma-source-verified"), "utf8")).toBe(
+      `${VERSION} ${sha512(where.genuine)}\n`,
+    );
   }, 60_000);
 
   it("a tampered tarball fails before engine/ is touched", () => {

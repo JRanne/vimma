@@ -62,4 +62,7 @@ python3 "$here/verify-sha512.py" --sums "$scratch/SHA512SUMS" \
 rm -rf engine
 CI_SKIP_INIT=1 npx --no -- surfer download
 git init -q engine
+# What `npm run import` checks before building (verify-source.sh --require): this engine/ was
+# extracted from a tarball verified for this version.
+echo "$version $(cut -d' ' -f1 "$scratch/tarball.sha512")" > engine/.git/vimma-source-verified
 echo "firefox-source: engine/ extracted from the verified $name"

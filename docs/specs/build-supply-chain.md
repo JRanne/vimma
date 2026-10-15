@@ -426,8 +426,15 @@ import` needs the empty repository to apply patches inside `engine/`, and `mach`
    same `verify-sha512.py`. Reason: a local `engine/` needs Surfer's commit of the pristine tree,
    which `surfer export` diffs against and `tools/lanes/lanes.mjs` resets lanes to, and
    `firefox-source.sh` makes an empty repository instead. The check runs after Surfer extracts,
-   so it protects the build, not the extraction; the setup steps in `CONTRIBUTING.md` and
-   `docs/rebase.md` run it before anything is built.
+   so it protects the build, not the extraction. It records the verified version and hash in
+   `engine/.git/vimma-source-verified` (as `firefox-source.sh` does), and `npm run import` starts
+   with `verify-source.sh --require`, which refuses an `engine/` without that record for
+   `surfer.json`'s version. Reason: import is the first step of every local build and every
+   lane, and the check is offline and instant, so B1 holds on a contributor's machine without
+   relying on a setup step being remembered. The record lives in `engine/.git` because Surfer's
+   `--force` deletes it with `engine/`, a lane's `git clean` keeps it, and a lane's copy of
+   `engine/` carries it. It is a guard against building an unverified download, not against
+   someone who can write to `engine/`.
 
 4. **The tarball Vimma verifies is the one Surfer extracts.** Vimma downloads the tarball itself
    and verifies the file at the path Surfer reads (R3), in the same job, immediately before
@@ -746,6 +753,8 @@ keeps only public keys and signatures, so no test run starts a `gpg-agent`):
 - `test_a_second_signature_beside_mozillas_fails`
 - `test_signature_by_an_expired_subkey_fails`
 - `test_the_status_must_name_the_pinned_primary_key`
+- `test_a_detached_signature_by_the_given_key_passes`
+- `test_a_signed_message_in_place_of_a_detached_signature_fails`
 - `test_one_changed_byte_in_sha512sums_fails_the_signature`
 - `test_good_signature_but_a_different_hash_fails_naming_expected_and_actual`
 - `test_missing_signature_or_gpgv_cannot_check_and_exits_two`
@@ -791,10 +800,17 @@ the cryptography is tested by `test_verify_sha512.py` alone.
 - `fails a tampered tarball`
 - `fails when SHA512SUMS is not signed by Mozilla's release key`
 - `fails when there is no tarball to check`
+- `records the verified version in engine/'s repository, where a lane copy keeps it`
+- `records nothing when the check fails`
+- `--require passes an engine/ verified for surfer.json's version, offline`
+- `--require refuses an engine/ never verified, or verified for another version`
+- `--require refuses when there is no engine/`
 
 **vitest, `tools/test/upstream-workflow.test.mjs`** (sub-PR 2, extends the existing file):
 
 - `every verify-sha512.py call passes a signature`
+- `a report on a tarball that failed verification is never uploaded`
+- `npm run import refuses an engine/ whose source was never verified`
 
 **vitest, `tools/deps/test/release-path.test.mjs`** (fixture lockfiles):
 

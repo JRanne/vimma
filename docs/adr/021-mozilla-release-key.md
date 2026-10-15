@@ -33,6 +33,14 @@ new one ("Updated GPG key for signing Firefox and Thunderbird Releases", Mozilla
   included), `source-check.sh` (the upstream autopilot and the Beta canary) and
   `npm run verify-source` (a contributor's `npx surfer download`). A missing signature, a
   signature that is not good, or a hash mismatch fails; nothing is extracted or reported first.
+- The signature file must hold one detached signature and nothing else: one armoured
+  `PGP SIGNATURE` block (or binary data) of signature packets only, checked before `gpgv` runs,
+  and a `PLAINTEXT` status line is refused too. A signed message carries its own data, and a
+  `gpgv` that checked that data would report a good signature over bytes the script never reads.
+- On a contributor's machine `npm run import` starts with `verify-source.sh --require`, which
+  refuses an `engine/` with no record (in `engine/.git`) that its tarball was verified for
+  `surfer.json`'s version. The record is written by `npm run verify-source` and by
+  `firefox-source.sh`, is deleted with `engine/`, and is copied into lanes with it.
 
 ## Key rotation
 
@@ -65,7 +73,10 @@ subkey.
 ## Consequences
 
 - `gpgv` is a requirement of every build and of `npm run verify-source` (Ubuntu: package
-  `gpgv`; macOS: GnuPG).
+  `gpgv`; macOS: GnuPG). An existing checkout runs `npm run verify-source` once before its next
+  `npm run import`.
+- A signature cannot tell the release from a superseded build candidate of the same version,
+  which Mozilla signs with the same key (`docs/limits.md`).
 - The repository carries Mozilla's signed `SHA512SUMS` of two releases as test fixtures (about
   1.7 MB), because a signature covers the whole file.
 - docs/security.md, B1 and G4.

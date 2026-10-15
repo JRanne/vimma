@@ -130,6 +130,27 @@ describe("upstream autopilot workflow", () => {
     }
   });
 
+  it("a report on a tarball that failed verification is never uploaded", () => {
+    // source-check.sh writes `result` only after the signature and hash are verified, so an
+    // upload gated on it never publishes patch-check output from an unverified tarball (G4, G10).
+    for (const [name, step] of [
+      ["upstream.yml", "Upload the patch-check report"],
+      ["upstream-beta.yml", "Upload the source check"],
+    ]) {
+      const text = workflow(name);
+      const at = text.indexOf(`- name: ${step}`);
+      expect(at, name).toBeGreaterThan(0);
+      const cond = /\n\s+if: (.*)\n/.exec(text.slice(at))?.[1];
+      expect(cond, name).toBe("always() && steps.check.outputs.result != ''");
+    }
+  });
+
+  it("npm run import refuses an engine/ whose source was never verified", () => {
+    // B1 on a contributor's machine: import is the first step of every local build and lane.
+    const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
+    expect(pkg.scripts.import).toMatch(/^tools\/upstream\/verify-source\.sh --require && /);
+  });
+
   it("upstream.yml checks the source through source-check.sh", () => {
     // One script for the release autopilot and the Beta canary, so their checks cannot drift.
     const block = job(upstream, "patch-check");

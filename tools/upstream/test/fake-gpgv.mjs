@@ -11,6 +11,9 @@ import { tempDir } from "../../test/temp-dir.mjs";
 //
 // The stub prints the status lines gpgv prints for a good signature by Mozilla's current subkey
 // when the signature file is fakeSignature() of the signed file, and BADSIG otherwise.
+// fakeSignature() is one OpenPGP signature packet (new format, tag 2) whose body names the
+// signed file's hash, so it passes verify-sha512.py's "signature packets only" check; the stub
+// reads the body after the 2-byte packet header.
 
 const MOZILLA = "14F26682D0916CDD81E37B6D61B7B526D98F0353";
 const SUBKEY = "827E658608679618CD349F93678E455D76767AA3";
@@ -21,7 +24,7 @@ set -euo pipefail
 sig=\${@: -2:1}
 data=\${@: -1}
 echo "[GNUPG:] NEWSIG"
-if [ "$(cat "$sig")" = "fake-signature sha512:$(sha512sum < "$data" | cut -d' ' -f1)" ]; then
+if [ "$(tail -c +3 "$sig")" = "fake-signature sha512:$(sha512sum < "$data" | cut -d' ' -f1)" ]; then
   echo "[GNUPG:] GOODSIG 678E455D76767AA3 Mozilla Software Releases <release@mozilla.com>"
   echo "[GNUPG:] VALIDSIG ${SUBKEY} 2026-10-08 1791400000 0 4 0 1 10 00 ${MOZILLA}"
 else
@@ -30,9 +33,13 @@ else
 fi
 `;
 
-/** The fake signature over `data` that the stub accepts. @param {Buffer | string} data */
-export const fakeSignature = (data) =>
-  `fake-signature sha512:${createHash("sha512").update(data).digest("hex")}`;
+/** The fake signature packet over `data` that the stub accepts. @param {Buffer | string} data */
+export function fakeSignature(data) {
+  const body = Buffer.from(
+    `fake-signature sha512:${createHash("sha512").update(data).digest("hex")}`,
+  );
+  return Buffer.concat([Buffer.from([0xc2, body.length]), body]);
+}
 
 /** Writes `<sums>.asc` with the fake signature over the file `sums`. @param {string} sums */
 export function fakeSign(sums) {

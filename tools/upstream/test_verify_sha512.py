@@ -86,9 +86,19 @@ class Verify(unittest.TestCase):
         self.assertIn("NO_PUBKEY", r.stderr)
 
     def test_a_second_signature_beside_mozillas_fails(self):
+        # Two armoured blocks in one file are refused before gpgv runs.
         r = self.verify(sig=SYNTHETIC / "two-signatures.asc")
         self.assertEqual(r.returncode, 1)
         self.assertIn("not signed by Mozilla's release key", r.stderr)
+        self.assertIn("not exactly one armoured signature block", r.stderr)
+        # The same two signatures as one binary file get to gpgv, which sees two.
+        module = load_module()
+        mozilla = (CURRENT / "SHA512SUMS.asc").read_text()
+        other = (SYNTHETIC / "other.asc").read_text()
+        binary = self.tmp / "two-signatures.sig"
+        binary.write_bytes(module.dearmor(mozilla, "SIGNATURE") + module.dearmor(other, "SIGNATURE"))
+        r = self.verify(sig=binary)
+        self.assertEqual(r.returncode, 1)
         self.assertIn("NO_PUBKEY", r.stderr)
 
     def test_signature_by_an_expired_subkey_fails(self):
@@ -113,6 +123,32 @@ class Verify(unittest.TestCase):
             module.signature_verdict(good.replace("GOODSIG", "EXPSIG").format(MOZILLA), MOZILLA)
         with self.assertRaises(module.Untrusted):
             module.signature_verdict("", MOZILLA)
+        # gpgv saw signed data inside the .asc itself: never a detached signature.
+        with self.assertRaises(module.Untrusted):
+            module.signature_verdict(
+                good.format(MOZILLA) + "[GNUPG:] PLAINTEXT 62 0 SHA512SUMS\n", MOZILLA
+            )
+
+    def packet_case(self, asc):
+        module = load_module()
+        packets = SYNTHETIC / "packets"
+        return module, lambda: module.check_signature(
+            (packets / "SHA512SUMS").read_bytes(), packets / asc, packets / "key.asc",
+            (packets / "fingerprint").read_text().strip(),
+        )
+
+    def test_a_detached_signature_by_the_given_key_passes(self):
+        _, check = self.packet_case("detached.asc")
+        self.assertRegex(check(), r"^[0-9A-F]{40}$")
+
+    def test_a_signed_message_in_place_of_a_detached_signature_fails(self):
+        # Its own literal data, not SHA512SUMS, is what it signs; the .asc must hold signature
+        # packets only, whatever a gpgv version does with it.
+        for asc in ("opaque.asc", "clearsign.asc"):
+            module, check = self.packet_case(asc)
+            with self.subTest(asc), self.assertRaises(module.Untrusted) as caught:
+                check()
+            self.assertIn("not a detached signature", str(caught.exception))
 
     def test_one_changed_byte_in_sha512sums_fails_the_signature(self):
         data = bytearray((CURRENT / "SHA512SUMS").read_bytes())
