@@ -1,6 +1,6 @@
 # Spec: build-supply-chain
 
-Status: accepted (sub-PR 1 implemented; sub-PRs 2 to 5: [#222](https://github.com/vimma-browser/vimma/issues/222), [#223](https://github.com/vimma-browser/vimma/issues/223), [#224](https://github.com/vimma-browser/vimma/issues/224), [#225](https://github.com/vimma-browser/vimma/issues/225)) · Area: `package.json`, `package-lock.json`, `.npmrc` (new),
+Status: accepted (sub-PR 1 implemented, #280; sub-PRs 2 to 5: [#222](https://github.com/vimma-browser/vimma/issues/222), [#223](https://github.com/vimma-browser/vimma/issues/223), [#224](https://github.com/vimma-browser/vimma/issues/224), [#225](https://github.com/vimma-browser/vimma/issues/225)) · Area: `package.json`, `package-lock.json`, `.npmrc` (new),
 `.github/dependabot.yml`, `.github/workflows/dependabot-automerge.yml`,
 `.github/workflows/release.yml`, `.github/workflows/nightly.yml`, `.github/workflows/e2e.yml`,
 `.github/workflows/sites.yml`, `.github/workflows/upstream.yml`,
