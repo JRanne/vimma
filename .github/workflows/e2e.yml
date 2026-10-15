@@ -19,7 +19,7 @@ name: e2e
 
 on:
   pull_request:
-    # ready_for_review: PRs opened with GITHUB_TOKEN (claude.yml, upstream.yml) do not trigger
+    # ready_for_review: PRs opened by bot workflows with GITHUB_TOKEN do not trigger
     # workflows; marking them ready (or a manual run) starts this as the owner.
     types: [opened, synchronize, reopened, ready_for_review]
     # No paths filter: "mochitest (artifact build)" is a required check on main, so it must

@@ -311,7 +311,7 @@ async function main() {
     if (rewritten.length) {
       console.log(
         `\nBaselines rewritten: ${rewritten.join(", ")}. Check them by eye and commit with a ` +
-          "changelog line saying why (CLAUDE.md: never change a baseline without one).",
+          "changelog line saying why (CONTRIBUTING.md: never change a baseline without one).",
       );
     }
     return exitCode(results);

@@ -23,7 +23,7 @@ import {
 import { textWidth } from "../src/textwidth.mjs";
 
 const MIN = 60_000;
-const label = { client: "claude-code", via: "claude" };
+const label = { client: "example-agent", via: "example" };
 const read = {
   tool: "vimma_read_page",
   label,
@@ -64,7 +64,7 @@ describe("the question's text (decision 13)", () => {
   test("a read names the client, the tool, the tab's place, title and URL", () => {
     const line = questionLine(read, { grantMinutes: 15 });
     expect(text(line)).toBe(
-      '◇ claude-code wants vimma_read_page: 2 "Pull requests · JRanne/vimma" ' +
+      '◇ example-agent wants vimma_read_page: 2 "Pull requests · JRanne/vimma" ' +
         "github.com/JRanne/vimma/pulls",
     );
     expect(line.hint).toBe("y once · 15a for 15 min · n deny · x mute");
@@ -73,7 +73,9 @@ describe("the question's text (decision 13)", () => {
 
   test("an open shows the full URL with its host in bold", () => {
     const line = questionLine(open, { grantMinutes: 10 });
-    expect(text(line)).toBe("◇ claude-code wants vimma_open: https://docs.rs/serde/latest/serde/");
+    expect(text(line)).toBe(
+      "◇ example-agent wants vimma_open: https://docs.rs/serde/latest/serde/",
+    );
     expect(line.parts.filter((p) => p.strong).map((p) => p.text)).toEqual(["docs.rs"]);
   });
 
@@ -83,18 +85,18 @@ describe("the question's text (decision 13)", () => {
       what: { ...open.what, tab: "7", title: "Old", current: "https://a.b/" },
     };
     expect(text(questionLine(into, { grantMinutes: 10 }))).toBe(
-      '◇ claude-code wants vimma_open: https://docs.rs/serde/latest/serde/ in "Old"',
+      '◇ example-agent wants vimma_open: https://docs.rs/serde/latest/serde/ in "Old"',
     );
   });
 
   test("the tab list and a close", () => {
     const tabs = { tool: "vimma_tabs", label, what: { count: 4 } };
     expect(text(questionLine(tabs, { grantMinutes: 10 }))).toBe(
-      "◇ claude-code wants vimma_tabs: the list of agent tabs (4)",
+      "◇ example-agent wants vimma_tabs: the list of agent tabs (4)",
     );
     const close = { ...read, tool: "vimma_close_tab" };
     expect(text(questionLine(close, { grantMinutes: 10 }))).toBe(
-      '◇ claude-code wants vimma_close_tab: 2 "Pull requests · JRanne/vimma" ' +
+      '◇ example-agent wants vimma_close_tab: 2 "Pull requests · JRanne/vimma" ' +
         "github.com/JRanne/vimma/pulls",
     );
   });
@@ -105,7 +107,7 @@ describe("the question's text (decision 13)", () => {
     expect(line.hint).toBe("y allow · n deny");
   });
 
-  // Review of #177 (M2): the code vimma-ctl printed, so a racing client's question is told apart.
+  // The code vimma-ctl printed tells a racing client's question apart.
   test("full control shows the client's code, in bold", () => {
     const line = questionLine({ ...full, what: { code: "7F3K" } }, { grantMinutes: 10 });
     expect(text(line)).toBe("◇ vimma-ctl with code 7F3K wants full control — y/N");
@@ -113,7 +115,7 @@ describe("the question's text (decision 13)", () => {
     expect(line.hint).toBe("y if the code is the one vimma-ctl printed · n deny");
   });
 
-  // Review of #177 (L6): text an agent or a page chooses is isolated, so a right-to-left run
+  // Text an agent or a page chooses is isolated, so a right-to-left run
   // in a title or a client name cannot reorder the rest of the question.
   test("the client name and titles are isolated, URLs are isolated left to right", () => {
     const iso = (/** @type {any} */ line) =>
@@ -121,12 +123,12 @@ describe("the question's text (decision 13)", () => {
         .filter((/** @type {any} */ p) => p.isolate)
         .map((/** @type {any} */ p) => [p.text, p.isolate]);
     expect(iso(questionLine(read, { grantMinutes: 10 }))).toEqual([
-      ["claude-code", "auto"],
+      ["example-agent", "auto"],
       ["Pull requests · JRanne/vimma", "auto"],
       ["github.com/JRanne/vimma/pulls", "ltr"],
     ]);
     expect(iso(questionLine(open, { grantMinutes: 10 }))).toEqual([
-      ["claude-code", "auto"],
+      ["example-agent", "auto"],
       ["https://", "ltr"],
       ["docs.rs", "ltr"],
       ["/serde/latest/serde/", "ltr"],
@@ -205,42 +207,42 @@ describe("the keys (decisions 13 and 20)", () => {
 describe("notices and notifications (decisions 15, 16 and 23)", () => {
   test("a grant says what and for how long, and when it was capped", () => {
     expect(grantNotice(read, { minutes: 15, capped: false })).toBe(
-      "claude-code may use vimma_read_page for 15 min (:mcp revoke ends it)",
+      "example-agent may use vimma_read_page for 15 min (:mcp revoke ends it)",
     );
     expect(grantNotice(read, { minutes: 480, capped: true })).toBe(
-      "claude-code may use vimma_read_page for 480 min, the most [mcp] grant_max_minutes allows " +
+      "example-agent may use vimma_read_page for 480 min, the most [mcp] grant_max_minutes allows " +
         "(:mcp revoke ends it)",
     );
   });
 
   test("a call under a grant shows what it did and the time left", () => {
     expect(ranNotice(read, 14 * MIN + 1, 0)).toBe(
-      'claude-code read "Pull requests · JRanne/vimma" (grant, 15m left)',
+      'example-agent read "Pull requests · JRanne/vimma" (grant, 15m left)',
     );
-    expect(ranNotice(open, 59_000, 0)).toBe("claude-code opened docs.rs (grant, 1m left)");
+    expect(ranNotice(open, 59_000, 0)).toBe("example-agent opened docs.rs (grant, 1m left)");
     expect(ranNotice({ ...read, tool: "vimma_tabs", what: { count: 2 } }, MIN, 0)).toBe(
-      "claude-code listed the agent tabs (grant, 1m left)",
+      "example-agent listed the agent tabs (grant, 1m left)",
     );
     expect(ranNotice({ ...read, tool: "vimma_close_tab" }, MIN, 0)).toBe(
-      'claude-code closed "Pull requests · JRanne/vimma" (grant, 1m left)',
+      'example-agent closed "Pull requests · JRanne/vimma" (grant, 1m left)',
     );
   });
 
   test("denials and timeouts", () => {
-    expect(deniedNotice(read, "user")).toBe("denied claude-code's vimma_read_page");
+    expect(deniedNotice(read, "user")).toBe("denied example-agent's vimma_read_page");
     expect(deniedNotice(read, "timeout")).toBe("agent request timed out (denied)");
     expect(deniedNotice(read, "mute")).toBe(
-      "denied claude-code's vimma_read_page; muted until it reconnects",
+      "denied example-agent's vimma_read_page; muted until it reconnects",
     );
     expect(deniedNotice(full, "user")).toBe("denied vimma-ctl full control");
   });
 
   test("the desktop notification names the client and the kind of request, never a URL", () => {
     expect(agentAlertText(read)).toBe(
-      "claude-code asks to use Vimma's agent workspace (read a page)",
+      "example-agent asks to use Vimma's agent workspace (read a page)",
     );
     expect(agentAlertText(open)).toBe(
-      "claude-code asks to use Vimma's agent workspace (open a page)",
+      "example-agent asks to use Vimma's agent workspace (open a page)",
     );
     expect(agentAlertText(full)).toBe("vimma-ctl asks for full control of Vimma");
     for (const q of [read, open]) expect(agentAlertText(q)).not.toMatch(/github|docs\.rs|http/);
@@ -304,7 +306,7 @@ describe(":control (decision 29 D)", () => {
   });
 });
 
-// Review of #177 (L4): the end time of :control on fails closed.
+// The end time of :control on fails closed.
 describe(":control's end time", () => {
   const now = 1_800_000_000_000;
   test("no pref: no end time (control set in about:config)", () => {
@@ -356,7 +358,7 @@ describe("a download's question (decision 31 a, d)", () => {
   test("name, size, type and extension, and the host in bold; no URL", () => {
     const line = questionLine(download, { grantMinutes: 10 });
     expect(text(line)).toBe(
-      '◇ claude-code wants vimma_download: "report.pdf" 2.1 MB application/pdf (.pdf) ' +
+      '◇ example-agent wants vimma_download: "report.pdf" 2.1 MB application/pdf (.pdf) ' +
         "from example.com",
     );
     expect(line.parts.filter((p) => p.strong).map((p) => p.text)).toEqual(["example.com"]);
@@ -366,7 +368,7 @@ describe("a download's question (decision 31 a, d)", () => {
   test("an unknown size and type say so", () => {
     const what = { name: "blob", size: -1, type: "", ext: "", host: "example.com" };
     expect(text(questionLine({ ...download, what }, { grantMinutes: 10 }))).toBe(
-      '◇ claude-code wants vimma_download: "blob" unknown size unknown type from example.com',
+      '◇ example-agent wants vimma_download: "blob" unknown size unknown type from example.com',
     );
   });
 
@@ -374,13 +376,13 @@ describe("a download's question (decision 31 a, d)", () => {
     const what = { ...download.what, name: "setup.sh", danger: "a script" };
     const line = questionLine({ ...download, what }, { grantMinutes: 10 });
     expect(text(line)).toBe(
-      '◇ claude-code wants vimma_download: "setup.sh" 2.1 MB application/pdf (.pdf) ' +
+      '◇ example-agent wants vimma_download: "setup.sh" 2.1 MB application/pdf (.pdf) ' +
         "from example.com — ⚠ a script",
     );
     expect(line.hint).toBe("! allow this one file · n deny");
   });
 
-  // Security review of #182 (finding 7): when ClamAV could not scan it, keeping it is asked.
+  // When ClamAV could not scan it, keeping it is asked.
   test("ClamAV could not scan it: y keeps it, anything else deletes it", () => {
     const what = { ...download.what, unscanned: "ClamAV failed" };
     const line = questionLine({ ...download, what }, { grantMinutes: 10 });
@@ -425,10 +427,10 @@ describe("a download's question (decision 31 a, d)", () => {
 
   test("under a grant, the notice; the notification names no file or host", () => {
     expect(ranNotice(download, 9 * MIN, 0)).toBe(
-      'claude-code downloads "report.pdf" (grant, 9m left)',
+      'example-agent downloads "report.pdf" (grant, 9m left)',
     );
     expect(agentAlertText(download)).toBe(
-      "claude-code asks to use Vimma's agent workspace (download a file)",
+      "example-agent asks to use Vimma's agent workspace (download a file)",
     );
   });
 });

@@ -114,8 +114,7 @@ npm run import && npx surfer build     # mach reconfigures; the 2026-10-10 full 
 
 Upstream sources and anything outside `engine/` are never written; a second run changes
 nothing. Things outside the repo that name the old path (a launcher such as
-`~/.local/bin/vimma-dev`, a `.desktop` file, `~/.claude/projects/<path>` memory) are yours to
-update. A lane (below) does not need this: `npm run lane:setup -- --force` rebuilds it.
+`~/.local/bin/vimma-dev` or a `.desktop` file) are yours to update. A lane (below) does not need this: `npm run lane:setup -- --force` rebuilds it.
 
 ## Testing
 
@@ -258,7 +257,7 @@ npm run e2e -- --xvfb --update-baselines --filter <scenario>   # refused when CI
 ```
 
 look at the new PNG, and commit it with a changelog line saying which baseline changed and why
-(CLAUDE.md: never edit a baseline without one). A missing baseline fails; nothing creates one
+(CONTRIBUTING.md: never edit a baseline without one). A missing baseline fails; nothing creates one
 silently. Fonts differ between machines: if CI's diff exceeds 0.5 % on a baseline made locally,
 take CI's actual image from the `e2e-output` artifact of the failed run (kept 7 days) instead.
 A missing baseline also leaves `<name>.actual.png` there, so a new scenario's first baseline
@@ -421,10 +420,10 @@ these workflows has a `paths` filter; a job or step skipped by `if:` reports suc
 
 **Residual risk:** any job token with `contents: write` (`spec-pr` in claude.yml, upstream.yml,
 nightly.yml, release-please.yml) can push branches and tags; the ruleset has no bypass actors, so
-none of them can push to `main` itself. Mitigations: those jobs run no
-Claude-written code with that token (claude.yml's Claude job is read-only), Claude runs only for
-the owner (`claude:go` added by the owner; `@claude` from owner/member/collaborator), and GitHub
-Actions minutes and logs show every push. Check `git log origin/main` if anything looks off.
+none of them can push to `main` itself. Mitigations: those jobs never run code the agent wrote
+with that token (claude.yml's agent job is read-only), the agent runs only for the owner
+(`claude:go` added by the owner; `@claude` from owner/member/collaborator), and GitHub Actions
+minutes and logs show every push. Check `git log origin/main` if anything looks off.
 
 ### Docs-only pull requests (issue #245)
 
@@ -939,7 +938,7 @@ Actions, Mondays 06:00 Helsinki, releases at least 3 days old, minor and patch g
 PR per ecosystem, majors one PR each. Actions stay pinned to commit SHAs. Security updates
 (Dependabot alerts) open at once. `dependabot-automerge.yml` enables GitHub auto-merge (squash)
 for security, patch and minor updates, so GitHub merges them once every required check is
-green; majors, every GitHub Actions update (workflows hold write tokens and the Claude secret)
+green; majors, every GitHub Actions update (workflows hold write tokens and the model API secret)
 and `@zen-browser/surfer` version updates get a comment and stay open for review. Policy in
 CONTRIBUTING.md, "Dependency updates". Needs: Dependabot alerts and security updates on
 (Settings → Code security), and "Allow auto-merge" on (it is).
@@ -993,7 +992,7 @@ while the release gate is closed (below). Nothing is built or uploaded by releas
   `force-tag-creation`; it is harmless for a published release), and drop that test line in
   `release-workflow.test.mjs`. Publish any drafts still waiting, oldest first. Then turn on
   packaging (below, "Release packages", step 7).
-- **The changelog line is the commit subject; the body explains why** (CLAUDE.md). release-please
+- **The changelog line is the commit subject; the body explains why** (CONTRIBUTING.md). release-please
   writes subjects only. Firefox bumps are `upstream: firefox X.Y.Z (MFSA YYYY-N)` (upstream.yml),
   so a security dot release alone still produces a release PR (ADR-015: merged within 3 days).
 - **The Firefox version in titles and headings** (spec firefox-versions). release-please can only

@@ -152,7 +152,7 @@ quote the same string.
 
 - `tools/upstream/autopilot-body.mjs` `prTitle` gives bump PRs the title `upstream: firefox
 <version>` (#186: `upstream: firefox 158.0`). A squash merge makes the title the commit subject,
-  which is the changelog line (CLAUDE.md).
+  which is the changelog line (CONTRIBUTING.md).
 - `commitlint` 21.2.3 with `@commitlint/config-conventional` rejects `upstream: Firefox 158.0 (MFSA
 2026-106)` (subject-case) and accepts `upstream: firefox 158.0 (MFSA 2026-106)` (checked with
   `npx commitlint`). A Markdown link in the subject would pass 100 characters with one advisory.

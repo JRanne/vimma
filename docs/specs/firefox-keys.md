@@ -616,7 +616,7 @@ Each is its own keymap PR, in this order, one open at a time:
 - **defaults.toml** via `npm run gen-docs`.
 - **toolbar-toggle.md**: "`alt` still shows it" becomes "`alt` does not (firefox-keys Q3); `F10`
   does" (sub-PR 1).
-- **CHANGELOG.md** is the maintainer's at merge time (CLAUDE.md), not these PRs'.
+- **CHANGELOG.md** is the maintainer's at merge time (CONTRIBUTING.md), not these PRs'.
 
 ## Out of scope
 

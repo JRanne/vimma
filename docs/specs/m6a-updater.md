@@ -540,7 +540,7 @@ being configured). Every job below also keeps m6-packaging's gate (`release` eve
   check fails a bot commit that touches anything else. The site cannot forge an update (the XML is
   signed); its compromise can only withhold or replay, which rules 3 to 5 catch.
 - **Release secrets stay isolated** (plan §8): the build job never sees the update key, the site
-  key or a write token; Claude's workflows get none of them; each secret lives in a GitHub
+  key or a write token; the agent workflow (`claude.yml`) gets none of them; each secret lives in a GitHub
   environment whose deployment rule allows only `main` and `v*` tags.
 - A re-run is idempotent: the MAR upload uses `--clobber`, and `update-publish` commits nothing
   when the file is unchanged.

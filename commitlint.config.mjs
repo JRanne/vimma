@@ -25,8 +25,8 @@ export default {
         "revert",
       ],
     ],
-    // The subject is the changelog line; the body explains why (CLAUDE.md). feat, fix and reverts
-    // must have a body.
+    // The subject is the changelog line; the body explains why (CONTRIBUTING.md). feat, fix and
+    // reverts must have a body.
     // Footers (`Closes #3`, `BREAKING CHANGE:`) and trailers do not count as a body.
     "body-required-for-types": [2, "always", ["feat", "fix", "revert"]],
   },
