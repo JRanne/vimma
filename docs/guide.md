@@ -32,8 +32,9 @@ What works today, each with the section that explains it:
 - **[Search engines](#search-engines)** and `@aliases` from `config.toml`, such as `@gh vimma`.
 - **[Hide the toolbar](#hiding-the-toolbar)** with `ctrl+b u`: the page reaches the top of the
   window, and the address bar comes back when you need it.
-- **[Theming](#colours-and-themes):** the bars, Firefox's toolbar and prompts, pickers, hints,
-  start page and sidebar follow your desktop theme and change with it, or take your own colours.
+- **[Theming](#colours-and-themes):** the bars, Firefox's toolbar, menus, dialogs and settings
+  pages, pickers, hints, start page and sidebar follow your desktop theme and change with it, or
+  take your own colours.
 - **[Accessible](#accessibility):** Vimma's own UI works with a screen reader and meets WCAG AA
   contrast in dark and light themes.
 - **Firefox underneath** ([privacy defaults](#privacy-defaults)): the same user agent and
@@ -475,7 +476,15 @@ help overlay. Firefox's own sidebar (history, bookmarks and synced tabs, opened 
 sidebar button or the View menu) follows the theme as well: its launcher strip and panel
 are on the same surface as Vimma's side panel, with the theme's text, edge and focus colours (the
 search box, the open panel's button in the launcher and the lists' scrollbars included), and
-an open sidebar recolours with the rest of the window.
+an open sidebar recolours with the rest of the window. So do Firefox's other surfaces: the find
+bar, the menu bar (`F10`) and every menu, the dialogs a page opens (`alert`, `confirm`,
+`prompt`), the print settings, and Firefox's own pages: Settings and its dialogs, Add-ons,
+Downloads (`about:downloads`), Troubleshooting (`about:support`), `about:config`,
+`about:profiles` and `about:processes`. Their accent (the selected category, checkboxes, main
+buttons) is the normal-mode badge's colour. Settings' default-browser card shows its text and
+button without Firefox's mascot. With your system's high-contrast setting on, these surfaces keep
+Firefox's own high-contrast colours. Pages that Firefox loads in a web content process, such as
+`about:logins` and Firefox's error pages, keep Firefox's colours.
 
 **Dark, light or the system's: `:theme`.** The start page says it too:
 
