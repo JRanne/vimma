@@ -55,6 +55,33 @@ describe("release.yml", () => {
     expect(on).not.toMatch(/pull_request|push:/);
   });
 
+  // Arch users install from the release with only the PKGBUILD (spec m6-packaging, "Arch Linux
+  // without the AUR"): it is an asset like the others, so SHA256SUMS and a cosign bundle cover it.
+  it("signs and uploads the PKGBUILD and SRCINFO with the other assets", () => {
+    const sign = all.get("sign") ?? "";
+    const publish = all.get("publish") ?? "";
+    expect(sign).toMatch(
+      /for f in dist\/vimma\* dist\/PKGBUILD dist\/SRCINFO dist\/SHA256SUMS; do/,
+    );
+    expect(publish).toMatch(
+      /gh release upload "\$TAG" dist\/vimma\* dist\/PKGBUILD\* dist\/SRCINFO\* dist\/SHA256SUMS\* /,
+    );
+  });
+
+  it("builds and installs the release PKGBUILD on Arch Linux before anything is signed", () => {
+    const pkg = all.get("package") ?? "";
+    expect(pkg).toContain("tools/package/arch-smoke.sh");
+  });
+
+  it("pushes only the PKGBUILD and .SRCINFO to the AUR, removing the old source files", () => {
+    const aur = all.get("aur") ?? "";
+    expect(aur).toContain("cp dist/aur/PKGBUILD dist/aur/.SRCINFO aur/");
+    expect(aur).toContain(
+      "git rm -q --ignore-unmatch vimma.desktop vimma-vimma.desktop vimma-open",
+    );
+    expect(aur).toContain("git add PKGBUILD .SRCINFO\n");
+  });
+
   // A draft release fires no `published` (spec release-versioning): only that type may start it.
   it("runs on a published release only, so a draft starts nothing", () => {
     const on = text.slice(text.indexOf("\non:\n"), text.indexOf("\npermissions:"));

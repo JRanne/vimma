@@ -1,0 +1,50 @@
+# Spec m6-packaging, "Arch Linux without the AUR": the vimma-bin PKGBUILD that release.yml
+# publishes is built and installed with makepkg -si in an Arch Linux container, from a stub
+# tarball served on localhost, whenever the packaging code changes. release.yml's package job
+# runs the same script on the real release build.
+name: pkgbuild
+
+on:
+  pull_request:
+    paths:
+      - tools/package/**
+      - tools/release/version-line.mjs
+      - tools/version-files/version-files.mjs
+      - tools/repo.mjs
+      - surfer.json
+      - .github/workflows/pkgbuild.yml
+  push:
+    branches: [main]
+    paths:
+      - tools/package/**
+      - tools/release/version-line.mjs
+      - tools/version-files/version-files.mjs
+      - tools/repo.mjs
+      - surfer.json
+      - .github/workflows/pkgbuild.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pkgbuild-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  arch:
+    name: PKGBUILD on Arch Linux (makepkg -si)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # package.mjs and version-line.mjs use Node's built-in modules only: no npm install.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Build and install the PKGBUILD from a stub tarball
+        run: tools/package/arch-smoke.sh --stub
