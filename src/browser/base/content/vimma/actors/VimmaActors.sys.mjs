@@ -36,8 +36,12 @@ let registered = false;
 
 /** Hint collections so far; a reply or an activation from an older one is ignored. */
 let hintGen = 0;
-/** The generation of the last blur (Esc), across tabs. */
-let blurGen = 0;
+/**
+ * The generation of each tab's last blur (Esc). Per tab, so a content process cannot count the
+ * Esc presses of other tabs.
+ * @type {WeakMap<object, number>}
+ */
+const blurGens = new WeakMap();
 /** The live collection of each window; another window's `f` must not void it. */
 /** @type {WeakMap<object, number>} */
 const liveGen = new WeakMap();
@@ -195,7 +199,8 @@ export const VimmaActors = {
     const bc = framesFor(browser)[0];
     const actor = actorFor(bc);
     if (!actor) return null;
-    const gen = ++blurGen;
+    const gen = (blurGens.get(browser) ?? 0) + 1;
+    blurGens.set(browser, gen);
     actor.sendAsyncMessage("Vimma:Blur", { gen });
     return { windowId: bc.currentWindowGlobal?.innerWindowId ?? 0, gen };
   },

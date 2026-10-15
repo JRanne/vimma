@@ -258,6 +258,9 @@ export class VimmaChild extends JSWindowActorChild {
         // already has focus (the page put it back after Esc), fires no focus event.
         const el = this.#editableRoot() ?? this.#focusedFieldUnder(event.originalTarget);
         if (el) this.#report(el, "focusin");
+        // Any other click is the user's too, though it may move no focus (a toolbar item that
+        // prevents its mousedown): what the page focuses after it is not the page's own doing.
+        else if (event.isTrusted) this.sendAsyncMessage("Vimma:Click");
         return;
       }
       case "dragstart":

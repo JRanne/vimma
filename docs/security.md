@@ -670,10 +670,12 @@ reports move. Specs: [m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md),
   [`i_focuses_the_field_last_used_in_a_cross_origin_frame`](../tests/browser/browser_vimma_insert_focus.js),
   [`i_falls_back_to_the_first_field_when_the_last_frame_navigated`](../tests/browser/browser_vimma_insert_focus.js),
   [`i_falls_back_to_the_first_field_when_the_last_is_gone`](../tests/browser/browser_vimma_insert_focus.js)
-- K4. After `Esc`, a page **must not** put the tab back in insert by focusing a field from its own
-  script, and a focus report sent before the `Esc` **must not** undo it; only the user's next
-  focus (a click, a key the page gets, `i`, `gi`, a hint) or another top document ends this. A
-  report's `user` and `gen` fields can only narrow what it does after `Esc`.
+- K4. After `Esc`, a page **must not** put the tab back in insert by focusing a field other than
+  while it handles the user's input, and a focus report sent before the `Esc` **must not** undo
+  it; only the user's next action (a click, a key the page gets, `i`, `gi`, a hint) or another
+  top document ends this. This holds for an uncompromised content process: a report's `user` and
+  `gen` fields and `Vimma:Click` come from the content process, so a compromised one can do what
+  K1 allows, no more.
   [`after_esc_a_page_refocusing_its_field_stays_in_normal`](../tests/browser/browser_vimma_insert_focus.js),
   [`after_esc_on_a_trapping_page_i_click_and_tab_enter_insert`](../tests/browser/browser_vimma_insert_focus.js),
   [`esc_right_after_tab_into_a_cross_origin_frame_stays_in_normal`](../tests/browser/browser_vimma_insert_focus.js)

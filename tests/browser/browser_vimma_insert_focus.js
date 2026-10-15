@@ -416,6 +416,30 @@ add_task(async function a_page_focusing_a_field_after_a_click_enters_insert() {
   });
 });
 
+add_task(async function a_page_focusing_a_field_after_a_click_on_no_control_enters_insert() {
+  await withPage(async (browser) => {
+    await pageFocuses(browser, "first");
+    await waitForMode(browser, "insert");
+    await leaveInsert(browser);
+    // A click on something that takes no focus (a toolbar item that prevents its mousedown),
+    // then the page focuses a field a task later: the click is the user's.
+    await SpecialPowers.spawn(browser, [], () => {
+      const doc = content.document;
+      const item = doc.createElement("div");
+      item.id = "item";
+      item.textContent = "item";
+      item.addEventListener("mousedown", (e) => e.preventDefault());
+      item.addEventListener("click", () => {
+        content.setTimeout(() => doc.getElementById("second").focus(), 0);
+      });
+      doc.body.prepend(item);
+    });
+    await BrowserTestUtils.synthesizeMouseAtCenter("#item", {}, browser);
+    await waitForActive(browser, "second");
+    await waitForMode(browser, "insert");
+  });
+});
+
 // Behaviour 7: a focus report the frame sent before Esc reached it does not undo the Esc.
 add_task(async function esc_right_after_tab_into_a_cross_origin_frame_stays_in_normal() {
   await withPage(async (browser) => {

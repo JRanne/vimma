@@ -1445,6 +1445,15 @@ export const VimmaHost = {
   },
 
   /**
+   * The user clicked in the focused frame of `browser` (VimmaParent) where no focus report
+   * says so: it ends the hold of Esc (insert-focus behaviour 6).
+   * @param {any} browser
+   */
+  onUserClick(browser) {
+    escapeHold.delete(browser);
+  },
+
+  /**
    * The user selected text with the mouse in the focused frame of `browser` (VimmaParent):
    * normal mode enters copy mode with that selection, so `y` copies it and motions extend it.
    * Insert mode keeps it (a text field's selection is its own).
