@@ -12,6 +12,8 @@ maintainer). Plan §4, step 5. Each item is ticked, or answered "n/a" with a rea
 - [ ] No test was weakened: no loosened assertion, removed case or new skip without a reason.
 - [ ] No new action without a docs line: `npm run gen-docs` was run and `docs/bindings.md` is
       current.
+- [ ] A feature that is not finished in this PR is behind `pref("vimma.feature.<name>", false)`;
+      the PR that finishes it removes the pref (`CONTRIBUTING.md`, "Unfinished features").
 - [ ] A config schema change comes with a migration and a new contract fixture pair.
 - [ ] No new upstream `.patch` without a line in ADR-003's patch register. Boundary changes have
       an ADR.
@@ -22,5 +24,8 @@ maintainer). Plan §4, step 5. Each item is ticked, or answered "n/a" with a rea
 - [ ] User-visible change → update `docs/guide.md` (and its "Features at a glance" or the README status if it changes what works).
 - [ ] User-visible change → a line in `CHANGELOG.md` `[Unreleased]` (the maintainer adds it at merge time, so
       parallel PRs do not conflict).
+- [ ] A change to `tools/upstream/mozilla-release-key.asc` or `PINNED_FINGERPRINT` in
+      `tools/upstream/verify-sha512.py` cites Mozilla's announcement and keeps every revocation
+      (ADR-021; `docs/runbook.md`, "Mozilla's release key").
 - [ ] Every commit is a Conventional Commit with a body. The subject is the changelog line; the body
       explains why.

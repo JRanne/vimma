@@ -141,7 +141,7 @@ jobs:
         env:
           E2E_REQUIRE_CTL: "1"
           E2E_REQUIRE_XVFB: "1"
-        run: npx vitest run tools/e2e/
+        run: npx --no -- vitest run tools/e2e/
 
       # Disk guards. Measured (PR #8): ~13 GB free before the download; the tarball (0.8 GB) and
       # tree (4.7 GB) leave ~8.3 GB once the tarball is deleted; build and tests then use 1.2 GB,
@@ -155,23 +155,13 @@ jobs:
             exit 1
           fi
 
-      - name: Firefox source tarball (surfer.json), unpacked without history
-        env:
-          CI_SKIP_INIT: "1" # Surfer's own switch: skips `git init` + commit of 4.7 GB
+      # Surfer does not check the tarball: firefox-source.sh downloads it, compares it with
+      # Mozilla's SHA512SUMS (a mismatch fails here), and only then lets Surfer unpack it without
+      # history into a fresh engine/ with an empty repository, so `git apply` in `surfer import`
+      # resolves paths inside engine/ (spec build-supply-chain, decision 3).
+      - name: Firefox source tarball (surfer.json), verified and unpacked without history
         run: |
-          npx surfer download
-          # Surfer does not check the tarball: compare it with Mozilla's SHA512SUMS (as upstream.yml
-          # does) before anything is built from it. A mismatch fails here.
-          version=$(node -p 'require("./surfer.json").version.version')
-          base="https://archive.mozilla.org/pub/firefox/releases/$version"
-          name="source/firefox-$version.source.tar.xz"
-          sha512sum ".surfer/engine/firefox-$version.source.tar.xz" > "$RUNNER_TEMP/tarball.sha512"
-          curl -fsSL --retry 3 "$base/SHA512SUMS" -o "$RUNNER_TEMP/SHA512SUMS"
-          python3 tools/upstream/verify-sha512.py --sums "$RUNNER_TEMP/SHA512SUMS" --name "$name" \
-            --actual "$RUNNER_TEMP/tarball.sha512"
-          # An empty repo, so `git apply` in `surfer import` resolves paths inside engine/
-          # rather than against this checkout.
-          git init -q engine
+          tools/upstream/firefox-source.sh
           # The runner has ~7.5 GB free once unpacked; the 0.8 GB tarball is not needed again.
           rm -f .surfer/engine/firefox-*.source.tar.xz
           df -h . | tail -1
@@ -184,7 +174,7 @@ jobs:
       - name: Branding prefs keep upstream's (tools/branding/test)
         id: branding
         continue-on-error: ${{ steps.mode.outputs.beta == 'true' }}
-        run: npx vitest run tools/branding/
+        run: npx --no -- vitest run tools/branding/
 
       # The cfr provider and Safe Browsing lists we copy from upstream (docs/rebase.md, step 6):
       # a stale copy shadows upstream's. Fails with the line to paste.

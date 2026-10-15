@@ -428,9 +428,14 @@ Taskcluster index) and this repository. Nothing here runs code from a pull reque
   [`unknown security status (advisories unreadable) uses the security limit`](../tools/upstream/test/releases.test.mjs),
   [`an unreachable advisories page: security unknown, labelled security, a warning`](../tools/upstream/test/autopilot.test.mjs)
 - G4. Nothing is **ever** reported on or built from a Firefox source tarball whose SHA-512
-  differs from Mozilla's `SHA512SUMS`.
+  differs from a signed `SHA512SUMS` (B1), a run artifact included: the patch-check report is
+  uploaded only after the source check verified the tarball.
   [`nothing is built from a tarball whose SHA-512 Mozilla did not publish`](../tools/test/upstream-workflow.test.mjs),
-  [`test_mismatch_exits_one_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py)
+  [`test_good_signature_but_a_different_hash_fails_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py),
+  [`the source check fails on a SHA512SUMS whose signature is not good`](../tools/upstream/test/source-check.test.mjs),
+  [`a report on a tarball that failed verification is never uploaded`](../tools/test/upstream-workflow.test.mjs),
+  [`a tampered tarball already on disk fails like a downloaded one`](../tools/upstream/test/firefox-source.test.mjs),
+  [`no workflow runs surfer download itself`](../tools/test/full-build-workflows.test.mjs)
 - G5. A bump PR is **never** opened ready for review unless every patch applies and the suites
   passed on the new release; otherwise it is a draft that names the conflicting files and hunks.
   [`a ready PR only when patches apply, suites pass and a token starts CI`](../tools/upstream/test/autopilot.test.mjs),
@@ -476,10 +481,11 @@ Taskcluster index) and this repository. Nothing here runs code from a pull reque
   [`fences test output and cuts the body to 60,000 characters`](../tools/upstream/test/canary.test.mjs),
   [`surfer.json on main pins a Firefox release, never a beta`](../tools/test/surfer-pin.test.mjs)
 - G10. The Beta canary **must never** build from or report on a Beta source tarball whose SHA-512
-  differs from that Beta's `SHA512SUMS`: the source check fails the run before the suites or the
-  issue (G4 for Betas).
+  differs from that Beta's signed `SHA512SUMS` (B1): the source check fails the run before the
+  suites or the issue (G4 for Betas).
   [`nothing is built from a tarball whose SHA-512 Mozilla did not publish`](../tools/test/upstream-beta-workflow.test.mjs),
-  [`test_mismatch_exits_one_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py)
+  [`test_good_signature_but_a_different_hash_fails_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py),
+  [`a report on a tarball that failed verification is never uploaded`](../tools/test/upstream-workflow.test.mjs)
 
 ## 11. Out of scope and trust boundaries
 
@@ -678,3 +684,125 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   [`the_token_never_leaves_the_handshake`](../tools/vimma-ctl/tests/mcp.rs),
   [`bad_arguments_never_reach_vimma`](../tools/vimma-ctl/tests/mcp.rs),
   [`bad_arguments_are_tool_errors_and_never_reach_vimma`](../tools/vimma-ctl/src/mcp.rs)
+
+## 13. Page modes (`actors/VimmaParent.sys.mjs`, `host/VimmaHost.sys.mjs`)
+
+Whether a key is Vimma's or the page's depends on the tab's mode, which the content actor's focus
+reports move. Specs: [m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md),
+[insert-focus](specs/insert-focus.md).
+
+**Reach:** pages, through focus changes in their own frames.
+
+- K1. Only the frame that has focus **may** report focus for a tab, and a report that is not a
+  well-formed descriptor **must** be dropped; a report changes only its own tab's mode.
+  [`only_the_focused_frame_may_report`](../tests/browser/browser_vimma_insert_scroll.js),
+  [`malformed_descriptors_are_dropped`](../tests/browser/browser_vimma_insert_scroll.js)
+- K2. After `i` or `gi`, a page **must not** turn the user's keys into Vimma commands by moving
+  focus: only `Esc` or another top document ends that insert (a page restored from the
+  back-forward cache is the same document).
+  [`after_i_the_page_moving_focus_off_the_field_keeps_insert`](../tests/browser/browser_vimma_insert_focus.js),
+  [`after_i_the_page_blurring_the_field_keeps_insert`](../tests/browser/browser_vimma_insert_focus.js),
+  [`after_gi_the_page_moving_focus_off_the_field_keeps_insert`](../tests/browser/browser_vimma_insert_focus.js),
+  [`explicit_insert_ends_with_the_page`](../tests/browser/browser_vimma_insert_focus.js)
+- K3. `i` **must** focus only a field of its own tab: the field the user last used, asked of the
+  frame and document that reported it (still in the tab, not discarded, same inner window), which
+  focuses only a connected, visible, editable element of that document; otherwise the top frame's
+  first field.
+  [`i_focuses_the_field_last_used_in_a_cross_origin_frame`](../tests/browser/browser_vimma_insert_focus.js),
+  [`i_falls_back_to_the_first_field_when_the_last_frame_navigated`](../tests/browser/browser_vimma_insert_focus.js),
+  [`i_falls_back_to_the_first_field_when_the_last_is_gone`](../tests/browser/browser_vimma_insert_focus.js)
+
+## 14. Build and release supply chain (`release.yml`, `nightly.yml`)
+
+Vimma's binaries are built from Mozilla's Firefox source, this repository, and the npm packages
+that drive the build, chiefly Surfer. These rules keep what reaches a build pinned and reviewed.
+Spec: [build-supply-chain](specs/build-supply-chain.md), [ADR-001](adr/001-engine-firefox-surfer.md).
+
+**Reach:** Mozilla's archive and Taskcluster, the npm registry, this repository, and GitHub's
+hosted runners. Dependabot pull requests run and auto-merge today, whether or not a build runs.
+
+**Planned:** the spec's later deliveries add the rest of B3 (every package in the
+release path held for review, with its published diff,
+[#223](https://github.com/vimma-browser/vimma/issues/223)), and B6 and B7 (the Safe Browsing key
+in a `build` environment, and a watch on Mozilla's release key,
+[#225](https://github.com/vimma-browser/vimma/issues/225)).
+
+- B1. Nothing is **ever** built from, or reported on, a Firefox source tarball unless its SHA-512
+  is listed in a `SHA512SUMS` carrying exactly one good signature by a valid signing subkey of
+  Mozilla's release key `14F26682D0916CDD81E37B6D61B7B526D98F0353`, pinned in
+  `tools/upstream/mozilla-release-key.asc` ([ADR-021](adr/021-mozilla-release-key.md)); a
+  revoked or expired subkey, another key, a second signature, a signed message in place of a
+  detached signature, or a missing signature fails. The verdict comes from `gpgv`'s status lines,
+  never its exit status, which is 0 for the revoked, compromised subkey. Every verification goes
+  through `tools/upstream/verify-sha512.py`, called by `firefox-source.sh` (every build, PR CI
+  included) and `source-check.sh` (the autopilot and the Beta canary); a tarball already on disk
+  is verified like a downloaded one. On a contributor's machine, `npx surfer download` checks
+  nothing, so `npm run import`, the first step of every local build and lane, refuses an
+  `engine/` until `npm run verify-source` has verified the tarball it came from for
+  `surfer.json`'s version (a record in `engine/.git`, which `firefox-source.sh` writes too). That
+  record guards against building an unverified download, not against someone who can already
+  write to `engine/`.
+  `firefox-source.sh` also refuses a `surfer.json` with a `version.candidate`, which Surfer would
+  fetch from `candidates/` unverified.
+  [`test_good_signature_from_mozillas_current_subkey_passes`](../tools/upstream/test_verify_sha512.py),
+  [`test_signature_by_the_revoked_compromised_subkey_fails`](../tools/upstream/test_verify_sha512.py),
+  [`test_signature_by_another_key_fails`](../tools/upstream/test_verify_sha512.py),
+  [`test_a_second_signature_beside_mozillas_fails`](../tools/upstream/test_verify_sha512.py),
+  [`test_signature_by_an_expired_subkey_fails`](../tools/upstream/test_verify_sha512.py),
+  [`test_one_changed_byte_in_sha512sums_fails_the_signature`](../tools/upstream/test_verify_sha512.py),
+  [`test_missing_signature_or_gpgv_cannot_check_and_exits_two`](../tools/upstream/test_verify_sha512.py),
+  [`test_pinned_key_is_mozillas_primary_with_the_compromised_subkey_revoked`](../tools/upstream/test_verify_sha512.py),
+  [`a SHA512SUMS without a good signature fails before engine/ is touched`](../tools/upstream/test/firefox-source.test.mjs),
+  [`the source check fails on a SHA512SUMS whose signature is not good`](../tools/upstream/test/source-check.test.mjs),
+  [`test_a_signed_message_in_place_of_a_detached_signature_fails`](../tools/upstream/test_verify_sha512.py),
+  [`fails a tampered tarball`](../tools/upstream/test/verify-source.test.mjs),
+  [`--require refuses an engine/ never verified, or verified for another version`](../tools/upstream/test/verify-source.test.mjs),
+  [`npm run import refuses an engine/ whose source was never verified`](../tools/test/upstream-workflow.test.mjs),
+  [`every verify-sha512.py call passes a signature`](../tools/test/upstream-workflow.test.mjs),
+  [`refuses a surfer.json with a version.candidate, before anything is fetched`](../tools/upstream/test/firefox-source.test.mjs)
+- B2. A nightly or release build **never** builds from an `engine/` it did not extract in the
+  same job from the tarball it verified, and **never** restores a tree, an objdir or a compiler
+  cache from the Actions cache; a release **must** build in a fresh objdir with an empty
+  compiler cache.
+  [`a tarball already on disk is verified again and engine/ is extracted from it afresh`](../tools/upstream/test/firefox-source.test.mjs),
+  [`no workflow reads or writes engine/.vimma-firefox-version`](../tools/test/full-build-workflows.test.mjs),
+  [`the build jobs check out clean and restore nothing from the Actions cache`](../tools/test/full-build-workflows.test.mjs),
+  [`a release builds in a fresh objdir with an empty compiler cache`](../tools/test/full-build-workflows.test.mjs)
+- B3. Surfer **must** be pinned to one exact version, locked by its integrity hash, and a
+  Dependabot update of Surfer **never** merges without a person, security updates and grouped
+  updates included, whatever the format of Dependabot's metadata; an update whose dependency
+  names are missing waits for a person too. **⚠ gap:** `ajv` itself still auto-merges its
+  patch, minor and security updates, and so do the packages Surfer and `ajv` depend on, until
+  [#223](https://github.com/vimma-browser/vimma/issues/223) holds the whole release path.
+  [`package.json pins Surfer to an exact version, locked by integrity`](../tools/test/build-supply-chain.test.mjs),
+  [`a Surfer update is never auto-merged, security updates included`](../tools/test/build-supply-chain.test.mjs),
+  [`Surfer is held whatever the separator, quoting or case, or when only the title names it`](../tools/test/build-supply-chain.test.mjs),
+  [`an update whose dependency list is empty waits for a person`](../tools/test/build-supply-chain.test.mjs),
+  [`the release-path group comes before the minor and patch group`](../tools/test/build-supply-chain.test.mjs)
+- B4. An npm install **never** runs install scripts, and the build **must** run Surfer only from
+  `node_modules`, never a package `npx` fetches, and **never** lets Surfer fetch an add-on.
+  [`.npmrc turns install scripts off for every install`](../tools/test/build-supply-chain.test.mjs),
+  [`release and nightly install with npm ci --ignore-scripts and run Surfer with npx --no`](../tools/test/build-supply-chain.test.mjs),
+  [`no workflow lets npx fetch a package`](../tools/test/build-supply-chain.test.mjs),
+  [`surfer.json lists no add-ons`](../tools/test/build-supply-chain.test.mjs)
+- B5. A workflow **never** targets a self-hosted runner: every job runs on a standard
+  GitHub-hosted image or calls a workflow file of this repository, and a `runs-on` expression
+  that cannot be resolved to a hosted image fails. The test parses each workflow as YAML and
+  fails on any shape it does not recognise. A job of a workflow that a pull request, a comment,
+  an issue or another workflow run can trigger is held to this as the permanent guard; the build
+  jobs run only from `main` or for a release, and only once `NIGHTLY_ENABLED` or
+  `RELEASE_ENABLED` is set. **⚠ setting:** fork pull request approval is
+  `all_external_contributors`
+  (`gh api repos/vimma-browser/vimma/actions/permissions/fork-pr-contributor-approval`), so a
+  fork's own workflow files run only once a person approves the run; and the organization has
+  no self-hosted runner (`gh api orgs/vimma-browser/actions/runners`, organization owners only),
+  since an organization runner shared with this repository is invisible to every
+  repository-level check.
+  [`no workflow an outsider can trigger runs a job on a self-hosted runner`](../tools/test/self-hosted-runner.test.mjs),
+  [`a runs-on expression in such a workflow fails unless it resolves to a hosted image`](../tools/test/self-hosted-runner.test.mjs),
+  [`a quoted job id is a job of its own`](../tools/test/self-hosted-runner.test.mjs),
+  [`a job written as a flow mapping is checked`](../tools/test/self-hosted-runner.test.mjs),
+  [`a matrix key is read only from the job's own strategy.matrix`](../tools/test/self-hosted-runner.test.mjs),
+  [`triggers are read in every spelling YAML allows`](../tools/test/self-hosted-runner.test.mjs),
+  [`no workflow names a self-hosted runner, and both build jobs run on ubuntu-24.04`](../tools/test/self-hosted-runner.test.mjs),
+  [`each build job runs only from main or for a release`](../tools/test/self-hosted-runner.test.mjs)

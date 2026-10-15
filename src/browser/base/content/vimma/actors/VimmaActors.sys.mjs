@@ -330,11 +330,30 @@ export const VimmaActors = {
   },
 
   /**
-   * Focuses the first visible text field in the top frame (`i`).
+   * `i`: focuses the text field the user was last in, if its frame still shows the same
+   * document and still has it, else the first visible text field in the top frame. Only a frame
+   * of this tab is asked, and only the document that reported the field (a frame that has since
+   * loaded another page, perhaps from another site, is not).
    * @param {any} browser XULBrowserElement
+   * @param {{ frame: any, windowId: number }} [last] the frame (BrowsingContext) and its
+   *   document's inner window ID
    */
-  focusInput(browser) {
-    actorFor(browser.browsingContext)?.sendAsyncMessage("Vimma:FocusInput");
+  async focusInput(browser, last) {
+    const top = browser.browsingContext;
+    const frame = last?.frame;
+    if (
+      frame &&
+      !frame.isDiscarded &&
+      frame.top === top &&
+      frame.currentWindowGlobal?.innerWindowId === last.windowId
+    ) {
+      try {
+        if (await actorFor(frame)?.sendQuery("Vimma:FocusLast")) return;
+      } catch {
+        // The frame navigated or closed while asked: the top frame's first field it is.
+      }
+    }
+    actorFor(top)?.sendAsyncMessage("Vimma:FocusInput");
   },
 
   /**
@@ -371,6 +390,15 @@ export const VimmaActors = {
    */
   findAnchor(browser) {
     actorFor(browser.browsingContext)?.sendAsyncMessage("Vimma:FindAnchor");
+  },
+
+  /**
+   * Tells the frame a find bar closed on that the close is through (VimmaChild #findClosed).
+   * Sent after the find bar's close(), so the frame gets it after the finder's own messages.
+   * @param {any} bc BrowsingContext the finder sent its close to
+   */
+  findClosed(bc) {
+    actorFor(bc)?.sendAsyncMessage("Vimma:FindClosed");
   },
 
   /**

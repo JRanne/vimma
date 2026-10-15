@@ -1,19 +1,19 @@
 # Spec: build-supply-chain
 
-Status: accepted · Area: `package.json`, `package-lock.json`, `.npmrc` (new),
+Status: accepted (sub-PRs 1 and 2 implemented, #280 and #289; sub-PRs 3 to 5: [#223](https://github.com/vimma-browser/vimma/issues/223), [#224](https://github.com/vimma-browser/vimma/issues/224), [#225](https://github.com/vimma-browser/vimma/issues/225)) · Area: `package.json`, `package-lock.json`, `.npmrc` (new),
 `.github/dependabot.yml`, `.github/workflows/dependabot-automerge.yml`,
 `.github/workflows/release.yml`, `.github/workflows/nightly.yml`, `.github/workflows/e2e.yml`,
 `.github/workflows/sites.yml`, `.github/workflows/upstream.yml`,
 `tools/upstream/verify-sha512.py`, `tools/upstream/source-check.sh`,
-`tools/upstream/firefox-source.sh` (new), `tools/upstream/mozilla-release-key.asc` (new),
+`tools/upstream/firefox-source.sh` (new), `tools/upstream/verify-source.sh` (new),
+`tools/upstream/mozilla-release-key.asc` (new),
 `tools/upstream/mozilla-key-check.py` (new), `tools/deps/release-path.mjs` (new),
-`docs/security.md`, `docs/runbook.md`, `docs/rebase.md`, `CONTRIBUTING.md` · Upstream patches:
+`docs/security.md`, `docs/runbook.md`, `docs/rebase.md`, `docs/review-checklist.md`,
+`CONTRIBUTING.md` · Upstream patches:
 none · ADR: ADR-021 (new, "Mozilla's release key is the trust anchor for the Firefox source");
 [ADR-001](../adr/001-engine-firefox-surfer.md) gains one paragraph on how Surfer is pinned
 
-Issues: [#221](https://github.com/vimma-browser/vimma/issues/221),
-[#222](https://github.com/vimma-browser/vimma/issues/222),
-[#223](https://github.com/vimma-browser/vimma/issues/223),
+Issues: [#223](https://github.com/vimma-browser/vimma/issues/223),
 [#224](https://github.com/vimma-browser/vimma/issues/224),
 [#225](https://github.com/vimma-browser/vimma/issues/225)
 
@@ -232,8 +232,9 @@ diff of the published package is small and is exactly the code that runs.
 - No self-hosted runner is registered (`GET /repos/vimma-browser/vimma/actions/runners`:
   `total_count` 0), and no repository variables are set, so `RELEASE_ENABLED` and
   `NIGHTLY_ENABLED` are unset and neither build runs.
-- The repository owner is a user account, so runner groups and larger runners (R11) are not
-  available.
+- The repository is owned by the organisation `vimma-browser`, on GitHub's Free plan
+  (`GET /orgs/vimma-browser`: `"plan": {"name": "free"}`, read 2026-10-15). Larger runners
+  (R11) need the Team plan.
 - GitHub's guidance on self-hosted runners: "Self-hosted runners should almost never be used for
   public repositories on GitHub, because any user can open pull requests against the repository
   and compromise the environment".
@@ -295,11 +296,21 @@ runners are only available for organizations and enterprises using the GitHub Te
 Enterprise Cloud plans" and "are not free for public repositories". Linux x64 per-minute prices:
 4-core $0.012, 8-core $0.022, 16-core $0.042, 32-core $0.082. "Larger runners"
 (`docs.github.com/en/actions/reference/runners/larger-runners`): 8-core has 32 GB RAM and 300 GB
-SSD, 16-core 64 GB and 600 GB. Zen Browser, whose Surfer Vimma uses, builds Linux on a
-self-hosted machine for x86_64 releases and on a third-party runner service
-(`blacksmith-8vcpu-ubuntu-2404`) otherwise, after freeing disk with
-`jlumbroso/free-disk-space` (`zen-browser/desktop`, `.github/workflows/linux-release-build.yml`
-at a8a94c1, 2026-09-02).
+SSD, 16-core 64 GB and 600 GB. How other Firefox forks build Linux, from their workflow files (read
+2026-10-15):
+
+| Fork        | Where the Linux build runs                                                                                                                                                                     | Source                                                                                                           |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Zen Browser | a self-hosted machine for x86_64 releases, `blacksmith-8vcpu-ubuntu-2404` (a third-party runner service) otherwise, after `jlumbroso/free-disk-space`; sccache in the Actions cache when asked | `zen-browser/desktop`, `.github/workflows/linux-release-build.yml` at dceca78                                    |
+| Floorp      | GitHub's standard `ubuntu-latest`, `timeout-minutes: 360`, a swap file of up to 30 GB, `mach build --jobs` at three quarters of the CPUs, sccache in the Actions cache                         | `Floorp-Projects/Floorp-Runtime`, `.github/workflows/common-build.yml` and `scripts/allocate-swap.sh` at 7dd6197 |
+| Waterfox    | `namespace-profile-legacy-linux-md` (Namespace, a third-party runner service), `timeout-minutes: 120`                                                                                          | `BrowserWorks/Waterfox`, `.github/workflows/build.yml` at 1de140d                                                |
+| LibreWolf   | Codeberg's Forgejo Actions on LibreWolf's own runner `epsilon`, in its own container image                                                                                                     | `codeberg.org/librewolf/bsys6`, `.forgejo/workflows/build-release.yml` at 53fbe77                                |
+
+Floorp is the one fork that builds Firefox on GitHub's free runner. Its Linux x86_64 jobs took
+112 and 125 minutes for a plain build and 181 and 187 minutes for the two compiling stages of a
+profile-guided build (runs 38477641016, 38551492598 and 38639808666, 2026-10-13 and 2026-10-14,
+`GET /repos/Floorp-Projects/Floorp-Runtime/actions/runs/<id>/jobs`), with a compiler cache whose
+hit rate the logs do not show.
 
 **R12. A compiler cache in the Actions cache.** sccache's GitHub Actions backend
 (`github.com/mozilla/sccache`, `docs/GHA.md`, read 2026-10-14) is enabled with
@@ -322,6 +333,43 @@ with `mach artifact toolchain`, which checks the artifact against the digest in 
 (`python/mozbuild/mozbuild/artifact_commands.py:344-379`). Both files were read in Firefox
 157.0.1 and are byte-identical in 158.0. The signature on the chain-of-trust file is not
 checked. On a fresh hosted runner every build downloads the toolchains anew.
+
+**R14. `--enable-bootstrap` in a tree with an empty git repository.** The first full build on a
+hosted runner (run 38717749386, 2026-10-15, Firefox 158.0) stopped in configure after 18 s:
+"Error loading tasks for kind fetch: … `taskcluster/scripts/misc/fetch-onnxruntime-deps.sh` did
+not match anything", then "checking for the target C compiler... /usr/bin/clang" and "ERROR:
+Cannot find ccache". The file is in the tarball. To find a toolchain, configure loads the
+taskgraph, which hashes each toolchain's inputs with `hash_paths`
+(`taskcluster/gecko_taskgraph/util/hash.py:23-46`, 158.0); that lists files through
+`get_repository_object(...).get_tracked_files_finder()`, and in a git repository that is
+`git ls-files` (`python/mozversioncontrol/mozversioncontrol/repo/git.py:278-280`). The empty
+repository `e2e.yml` creates with `git init` for `surfer import` tracks nothing, so no toolchain
+resolves and configure falls back to the system compiler and finds no `sccache`. Without `.git`,
+`get_repository_object` returns `SrcRepository` for any tree with `config/milestone.txt`
+(`mozversioncontrol/factory.py:124-127`), whose finder lists every file on disk except what
+`.gitignore` excludes (`repo/source.py:119-140`): the source-tarball case Linux distributions
+build. The next run removed `engine/.git` after `npm run import` and configure found Mozilla's
+toolchains. The artifact build in `e2e.yml` does not compile and is unaffected. A developer's
+`engine/`, which Surfer commits in full without `CI_SKIP_INIT`, tracks every file and is
+unaffected too.
+
+**R15. A cold full build on the standard runner, measured.** A temporary workflow on a branch
+that was never merged (`measure-full-build.yml`, read-only token, no secret, publishes nothing)
+ran the nightly's steps on `ubuntu-24.04` (image 20261012.334.1, 4 CPUs, 16 GB of memory) for
+Firefox 158.0 and Vimma's `main` at ac9d17f, keyless, with an empty sccache:
+
+- Run 38718105585: killed after 38 minutes of `surfer build` with exit 143 and no further log
+  line; the steps marked `if: always()` did not run either. It had no swap beyond the image's
+  2 GB, and the next run shows memory full at that point of the build.
+- Run 38723067541, the same with a 16 GB swap file: `npm ci`, the source download and extraction
+  and `npm run import` 1 minute; `surfer build` 113 minutes; the full mochitest suite 7 minutes
+  (78 tests, 6,355 checks, 0 unexpected); `./mach package` 2.4 minutes (87 MB); the whole job
+  124 minutes. `vimma --version` printed "Vimma 0.1.0 · Firefox 158.0".
+- Memory, sampled each minute: 12.5 GB at minute 20, then 15.3 GB of 16 GB plus 10.4 GB of swap
+  between minutes 25 and 35 (the Rust crates), and 2.5 to 5.7 GB for the rest of the build.
+- Disk: 86 GB free of 145 GB at the start; 42 GB used by the end, of which the swap file is
+  16 GB, `engine/` 21 GB, `~/.mozbuild` 2.5 GB and the sccache directory 2.7 GB.
+- sccache: 5,323 compilations, 3 cache hits, as expected for an empty cache.
 
 ## Design
 
@@ -358,14 +406,35 @@ checked. On a fresh hosted runner every build downloads the toolchains anew.
      reads the version from `surfer.json`, downloads
      `.surfer/engine/firefox-<version>.source.tar.xz` with `curl` when absent, downloads
      `SHA512SUMS` and `SHA512SUMS.asc`, runs `verify-sha512.py` on the tarball, deletes `engine/`
-     and only then runs `CI_SKIP_INIT=1 npx --no surfer download` (which finds the verified file
+     and only then runs `CI_SKIP_INIT=1 npx --no -- surfer download` (which finds the verified file
      and only extracts it, R3) and `git init -q engine`. `e2e.yml`, `sites.yml`, `nightly.yml` and
-     `release.yml` call it. A test fails if any workflow calls `surfer download` itself.
+     `release.yml` call it. A test fails if any workflow calls `surfer download` itself. The two
+     full builds delete `engine/.git` after `npm run import` and before `surfer build`: `surfer
+import` needs the empty repository to apply patches inside `engine/`, and `mach` must not
+     see it, or `--enable-bootstrap` resolves none of Mozilla's toolchains (R14). Rejected:
+     `git add -A` in `engine/` so the repository tracks the tree (minutes of hashing 4.7 GB for
+     an index nothing else reads); committing the tree as Surfer does without `CI_SKIP_INIT`
+     (most of Surfer's 12.5 minutes, R3).
 
    Reason: the hash and signature logic exists once, so the release path, PR CI, the autopilot
    and the canary cannot drift apart, as the canary spec already intends for `source-check.sh`.
    `MOZILLA_RELEASES` overrides the archive URL in both scripts so tests can use a `file://`
    directory.
+
+   A contributor's machine keeps `npx surfer download`, and `tools/upstream/verify-source.sh`
+   (`npm run verify-source`, sub-PR 2) checks the tarball it left in `.surfer/engine/` with the
+   same `verify-sha512.py`. Reason: a local `engine/` needs Surfer's commit of the pristine tree,
+   which `surfer export` diffs against and `tools/lanes/lanes.mjs` resets lanes to, and
+   `firefox-source.sh` makes an empty repository instead. The check runs after Surfer extracts,
+   so it protects the build, not the extraction. It records the verified version and hash in
+   `engine/.git/vimma-source-verified` (as `firefox-source.sh` does), and `npm run import` starts
+   with `verify-source.sh --require`, which refuses an `engine/` without that record for
+   `surfer.json`'s version. Reason: import is the first step of every local build and every
+   lane, and the check is offline and instant, so B1 holds on a contributor's machine without
+   relying on a setup step being remembered. The record lives in `engine/.git` because Surfer's
+   `--force` deletes it with `engine/`, a lane's `git clean` keeps it, and a lane's copy of
+   `engine/` carries it. It is a guard against building an unverified download, not against
+   someone who can write to `engine/`.
 
 4. **The tarball Vimma verifies is the one Surfer extracts.** Vimma downloads the tarball itself
    and verifies the file at the path Surfer reads (R3), in the same job, immediately before
@@ -390,14 +459,16 @@ checked. On a fresh hosted runner every build downloads the toolchains anew.
 
 6. **Full builds run on GitHub-hosted runners: the standard `ubuntu-24.04` runner when a cold
    build, the nightly's mochitests and packaging finish in under 4 hours on it; otherwise a
-   larger hosted runner, at least for the release.** Sub-PR 4 measures that time. Neither build
-   workflow names a self-hosted runner.
+   larger hosted runner, at least for the release.** Measured: 124 minutes for the nightly's
+   job (R15), so both builds run on the standard runner, free of charge. Neither build workflow
+   names a self-hosted runner.
    - The standard runner comes first because it is free for a public repository and already
      exceeds what the build needs: 16 GB RAM is twice Mozilla's recommendation, and 85 GB of
      free disk is almost three times the build's 30 GB, though only 14 GB is documented (R9,
-     R10). Its only open point is time: at least 116 minutes of compiling on 4 CPUs by the
-     thread-minute estimate (R10). A release, built with an empty cache, takes the full cold
-     time; the nightly runs unattended at 03:00 UTC, so a long build costs only latency.
+     R10). Its only open point was time: at least 116 minutes of compiling on 4 CPUs by the
+     thread-minute estimate (R10), 113 measured (R15). A release, built with an empty cache,
+     takes the full cold time; the nightly runs unattended at 03:00 UTC, so a long build costs
+     only latency. Floorp builds on the same runner in similar times (R11).
    - The 4-hour threshold leaves the 1.5× margin of decision 10 inside GitHub's 6-hour job limit
      (R9).
    - Above the threshold, a larger hosted runner is preferred because it keeps the trust boundary
@@ -405,8 +476,13 @@ checked. On a fresh hosted runner every build downloads the toolchains anew.
      roughly the reference machine's 39 minutes, about $1.60 per build at $0.042 per minute
      (estimated from R11's prices, not measured). Only the release, built a few times a month,
      has to move there; the nightly may stay on the standard runner if it fits there. Larger
-     runners require the repository to move to an organisation on the GitHub Team plan (R7,
-     R11), which changes its URL, settings and rulesets.
+     runners need the `vimma-browser` organisation on the GitHub Team plan (R7, R11). Not needed
+     while R15 holds.
+   - Rejected: splitting one build over several jobs to stay under the job limit. The build fits
+     one job, and carrying `engine/` or an objdir from job to job would break B2.
+   - Rejected: freeing disk by removing the image's preinstalled toolsets, as Zen and Floorp do
+     (R11). The build and its swap file use 42 GB of the 86 GB free (R15); removing them costs
+     minutes per build. It stays the first fix if the disk guard (decision 9) ever fails.
    - Rejected: a third-party runner service, as Zen Browser uses for non-release builds (R11). It
      is faster and cheaper than a larger hosted runner, but adds a party that runs the build and
      holds the Safe Browsing key, outside the trust boundary of decision 20.
@@ -425,17 +501,42 @@ checked. On a fresh hosted runner every build downloads the toolchains anew.
    (`tools/test/self-hosted-runner.test.mjs`) reads every workflow and fails when a job of a
    workflow triggered by `pull_request`, `pull_request_target`, `pull_request_review`,
    `pull_request_review_comment`, `issue_comment`, `issues`, `discussion`,
-   `discussion_comment` or `workflow_run` has a `runs-on` that names `self-hosted`, names a label
-   other than a GitHub-hosted image, or is an expression the test cannot resolve. A second test
-   holds decision 6: no workflow job names `self-hosted` at all, and both build jobs run on
-   `ubuntu-24.04`. Reason: on a public repository a self-hosted runner that pull request code
-   can reach is a machine anyone can run code on (R7). The first test is the permanent guard;
-   the second changes only with a spec that adds a machine. The test covers the workflow files
+   `discussion_comment`, `workflow_run` or `workflow_call` has a `runs-on` that names
+   `self-hosted`, names a label other than a standard GitHub-hosted image, or is an expression
+   the test cannot resolve. `workflow_call` is in the list because a called workflow runs with
+   its caller's trigger (`e2e.yml` is called by `upstream.yml` and the Beta canary). An
+   expression resolves only when it is `${{ matrix.<key> }}` over a literal list of strings in
+   the job's own `strategy.matrix`, which is not itself an expression and has no `include:`; any
+   other expression fails, because its value is not known from the file. A job that calls a
+   reusable workflow passes only when the workflow is a file of this repository, which the test
+   checks as its own file. The test parses the workflows with a YAML parser (`js-yaml`, already
+   in the lockfile through commitlint and Surfer, MIT) rather than matching text, because a
+   text match missed quoted job ids, jobs written as flow mappings and matrix keys nested in
+   other entries; a duplicate key is a parse error and fails the test. A second test holds
+   decision 6: no workflow job, whatever its triggers, targets anything but a standard
+   GitHub-hosted image, and both build jobs run on `ubuntu-24.04`. actionlint does not run in
+   CI, so its configuration declaring no self-hosted label only keeps a local run consistent. Reason: on a public repository
+   a self-hosted runner that pull request code can reach is a machine anyone can run code on
+   (R7). The first test is the permanent guard; the second changes only with a spec that adds a
+   machine.
+
+   The second test and the move of both build jobs to `ubuntu-24.04` land in sub-PR 1, not with
+   the measurement in sub-PR 4, because no self-hosted runner exists or is planned (R7, decision
+   6): the self-hosted label was configuration for a machine nobody runs, and removing it at
+   once lets the test forbid self-hosted runners in every workflow from the first delivery
+   rather than only in those an outsider can trigger. The build jobs stay switched off: the
+   nightly's manual dispatch, which `NIGHTLY_ENABLED` did not gate while its job waited for a
+   runner that did not exist, now needs `NIGHTLY_ENABLED` as well, because on a hosted runner a
+   dispatched nightly would build and publish the rolling release from Firefox source that is
+   not yet signature-checked (#222). The move therefore changes nothing that runs; on a fresh hosted runner their `clean: false` and
+   `.vimma-firefox-version` shortcut have nothing to reuse, and sub-PR 4 removes them with the
+   rest of decision 5. The test covers the workflow files
    on `main`; a fork's pull request runs its own head's workflow files, which is why the
    current fork approval setting (`all_external_contributors`, R7) matters: no outside fork's
    workflow runs before a person approves that run. `docs/security.md` records that setting as
    **⚠ setting** with the `gh api` command that shows it, because no test can read an admin
    setting with the workflow token.
+
 8. **Build jobs restore nothing from the Actions cache, and neither build uses a shared compiler
    cache.**
    `release.yml` and `nightly.yml` check out with the default `clean: true`, set up Node with
@@ -448,23 +549,27 @@ checked. On a fresh hosted runner every build downloads the toolchains anew.
    cache by integrity, but the release gains nothing from it worth the exception.
 
    The nightly does not keep sccache in the Actions cache either, while a cold nightly fits its
-   runner (decision 6). A shared cache could shorten nightlies that change little, but: the
-   cache a full build produces is not measured (R10) and may exceed the 10 GB free per
-   repository, so it would thrash and evict the npm caches the pull request jobs use, or cost
-   $0.07 per GiB-month beyond that (R12); rate limits can drop its writes (R12); and every job on
+   runner (decision 6, R15). A shared cache could shorten nightlies that change little, and one
+   cold build's cache, 2.7 GB (R15), would fit the 10 GB free per repository beside the npm
+   caches the pull request jobs use; but rate limits can drop its writes (R12), and every job on
    `main` can write it, so a nightly built from it is only as trustworthy as every such job. The
    release could not use it in any case. If nightly time becomes the constraint, a later change
-   revisits this with the measured cache size, a cache key prefix only `nightly.yml` writes, and
-   R12's eviction behaviour checked against that size.
+   revisits this with a cache key prefix only `nightly.yml` writes and R12's eviction behaviour
+   checked against that size.
 
-9. **A disk guard before the download.** Both build jobs check free space on the workspace's
-   file system and fail when it is under 40 GB, naming the measured need (about 30 GB, R10). The
-   guard comes before the download, so a runner image that shrinks fails in seconds, not after an
-   hour of compiling. Reason: the 85 GB free today is not documented (R9).
-10. **The job time limit follows the measurement.** `timeout-minutes` for both build jobs is set
-    in sub-PR 4 to about 1.5 times the measured cold build plus the job's other steps, and at
-    most 345 (15 minutes under GitHub's 6-hour limit, R9), so a hung build fails with the
-    job's own log upload and failure issue rather than being cancelled by GitHub.
+9. **A disk guard before the download, and a 16 GB swap file.** Both build jobs check free
+   space on the workspace's file system and fail when it is under 50 GB, naming the measured
+   need (about 26 GB for the build and 16 GB for the swap file, R15). The guard comes before the
+   download, so a runner image that shrinks fails in seconds, not after an hour of compiling.
+   Reason: the 86 GB free today is not documented (R9). Each job then creates and enables a
+   16 GB swap file. Reason: the Rust stage needs about 26 GB of memory and swap together, and
+   without the file the build was killed (R15). Rejected: fewer parallel jobs instead of swap
+   (as Floorp does both, R11), which lengthens the whole build to spare one stage.
+10. **The job time limit follows the measurement.** `timeout-minutes` is about 1.5 times the
+    measured job (R15): 190 for the nightly (124 minutes) and 180 for the release (about 117
+    minutes, as it runs no mochitests), and never above 345 (15 minutes under GitHub's 6-hour
+    limit, R9), so a hung build fails with the job's own log upload and failure issue rather
+    than being cancelled by GitHub.
 11. **Firefox's toolchains are part of the trusted base, as Mozilla ships them.** Each build
     fetches its toolchains through `--enable-bootstrap` (R13), checked by `mach` against the
     digests in Taskcluster's chain-of-trust files, over HTTPS. This spec adds no check of its own
@@ -517,7 +622,11 @@ checked. On a fresh hosted runner every build downloads the toolchains anew.
 17. **No install scripts anywhere; Surfer only from `node_modules`.** A new `.npmrc` sets
     `ignore-scripts=true`, which covers every workflow, lane and developer machine. `release.yml`
     and `nightly.yml` also run `npm ci --ignore-scripts`, so the build does not depend on a file
-    a future change could drop, and every Surfer call in them is `npx --no surfer …` (R4).
+    a future change could drop, and every Surfer call in them is `npx --no -- surfer …` (R4).
+    Every other `npx` in the workflows also runs with `--no --`. The `--` is needed because,
+    once `--no` comes first, npm 10.9.4 reads every later flag as its own: `npx --no surfer
+download --force` gave `--force` to npm, and `npx --no commitlint --from A --to B --verbose`
+    ran commitlint without its arguments (checked locally and in CI).
     Reason: R5 shows nothing needs a script, and an install script is the usual way a
     compromised package runs code. Rejected: `npm audit signatures` in the build (the lockfile's
     `integrity` hashes already pin the exact bytes, so a registry signature adds no check the
@@ -598,7 +707,7 @@ New surface:
   `tools/upstream/mozilla-release-key.asc` or the fingerprint constant must cite Mozilla's
   announcement and keep every revocation.
 
-New section for `docs/security.md`, **§13. Build and release supply chain** (`release.yml`,
+New section for `docs/security.md`, **§14. Build and release supply chain** (`release.yml`,
 `nightly.yml`), with **Reach:** Mozilla's archive and Taskcluster, the npm registry, this
 repository, and GitHub's hosted runners. Each rule links its tests (Tests, below):
 
@@ -634,13 +743,18 @@ Written first and seen to fail.
 
 **Python, `tools/upstream/test_verify_sha512.py`** (real fixtures in
 `tools/upstream/fixtures/sums/`: `SHA512SUMS` and `SHA512SUMS.asc` of 157.0.1 and 153.0, about
-630 KB each; throwaway keys made with `gpg --quick-gen-key` in a temporary `GNUPGHOME` for the
-synthetic cases):
+860 KB each; for the synthetic cases, signatures by throwaway keys made with
+`gpg --quick-gen-key` in a temporary `GNUPGHOME` by `fixtures/sums/make-synthetic.sh`, which
+keeps only public keys and signatures, so no test run starts a `gpg-agent`):
 
 - `test_good_signature_from_mozillas_current_subkey_passes` (157.0.1)
 - `test_signature_by_the_revoked_compromised_subkey_fails` (153.0, `REVKEYSIG` with exit 0, R2)
 - `test_signature_by_another_key_fails`
+- `test_a_second_signature_beside_mozillas_fails`
 - `test_signature_by_an_expired_subkey_fails`
+- `test_the_status_must_name_the_pinned_primary_key`
+- `test_a_detached_signature_by_the_given_key_passes`
+- `test_a_signed_message_in_place_of_a_detached_signature_fails`
 - `test_one_changed_byte_in_sha512sums_fails_the_signature`
 - `test_good_signature_but_a_different_hash_fails_naming_expected_and_actual`
 - `test_missing_signature_or_gpgv_cannot_check_and_exits_two`
@@ -656,17 +770,50 @@ same key without the 2026-08-06 subkey and revocation):
 - `test_an_unchanged_key_reports_nothing`
 
 **vitest, `tools/upstream/test/firefox-source.test.mjs`** (runs the script with
-`MOZILLA_RELEASES` pointing at a `file://` fixture directory and a stub `surfer` on `PATH`):
+`MOZILLA_RELEASES` pointing at a `file://` fixture directory and a stub `surfer` in the
+checkout's `node_modules/.bin`, where `npx --no` finds it):
 
 - `a tampered tarball fails before engine/ is touched`
-- `a SHA512SUMS without a good signature fails before engine/ is touched`
+- `a SHA512SUMS without a good signature fails before engine/ is touched` (sub-PR 2)
+- `a SHA512SUMS with no signature beside it fails before engine/ is touched` (sub-PR 2)
 - `a tarball already on disk is verified again and engine/ is extracted from it afresh`
 - `a tampered tarball already on disk fails like a downloaded one`
 - `a missing tarball is downloaded by the script, never by Surfer`
+- `fails when the archive has no SHA512SUMS, before engine/ is touched`
+- `refuses surfer.json version … before it reaches a URL`
+- `refuses a surfer.json with a version.candidate, before anything is fetched` (Surfer downloads
+  a candidate from `candidates/` with no hash check, a file the script never verified)
+- `a SHA512SUMS that does not list the tarball exits 2, keeping the tarball and engine/`
 
 **vitest, `tools/upstream/test/source-check.test.mjs`** (extends the existing file):
 
 - `the source check fails on a SHA512SUMS whose signature is not good`
+- `the source check fails when SHA512SUMS has no signature beside it`
+
+The script tests (`firefox-source`, `source-check`, `verify-source`) cannot carry Mozilla's real
+signature, because their tarballs are made by the test. They put a `gpgv` stub
+(`tools/upstream/test/fake-gpgv.mjs`) first on `PATH`, which answers like `gpgv` for a good
+signature by Mozilla's current subkey only when the `.asc` names the signed file's hash, and
+`BADSIG` otherwise. The scripts therefore keep no test override of the key or the fingerprint;
+the cryptography is tested by `test_verify_sha512.py` alone.
+
+**vitest, `tools/upstream/test/verify-source.test.mjs`** (sub-PR 2):
+
+- `passes the tarball surfer download left when Mozilla's signed SHA512SUMS lists it`
+- `fails a tampered tarball`
+- `fails when SHA512SUMS is not signed by Mozilla's release key`
+- `fails when there is no tarball to check`
+- `records the verified version in engine/'s repository, where a lane copy keeps it`
+- `records nothing when the check fails`
+- `--require passes an engine/ verified for surfer.json's version, offline`
+- `--require refuses an engine/ never verified, or verified for another version`
+- `--require refuses when there is no engine/`
+
+**vitest, `tools/test/upstream-workflow.test.mjs`** (sub-PR 2, extends the existing file):
+
+- `every verify-sha512.py call passes a signature`
+- `a report on a tarball that failed verification is never uploaded`
+- `npm run import refuses an engine/ whose source was never verified`
 
 **vitest, `tools/deps/test/release-path.test.mjs`** (fixture lockfiles):
 
@@ -678,20 +825,27 @@ same key without the 2026-08-06 subkey and revocation):
 
 **vitest, `tools/test/build-supply-chain.test.mjs`** (reads the workflow and config files):
 
-- `release and nightly get Firefox source only through firefox-source.sh`
-- `no workflow runs surfer download itself`
-- `no workflow reads or writes engine/.vimma-firefox-version`
-- `the build jobs check out clean and restore nothing from the Actions cache`
-- `a release builds in a fresh objdir with an empty compiler cache`
-- `the build jobs check for 40 GB free before downloading Firefox source`
 - `release and nightly install with npm ci --ignore-scripts and run Surfer with npx --no`
 - `.npmrc turns install scripts off for every install`
 - `package.json pins Surfer to an exact version`
 - `surfer.json lists no add-ons`
-- `every verify-sha512.py call passes a signature`
 - `the Safe Browsing key comes only from the build environment, in the two build jobs`
 - `dependabot-automerge classifies on base-branch code with a read-only token`
 - `the release-path group comes before the minor and patch group`
+
+**vitest, `tools/test/full-build-workflows.test.mjs`** (sub-PR 4, the two build jobs):
+
+- `<workflow> gets Firefox source only through firefox-source.sh`
+- `no workflow runs surfer download itself`
+- `no workflow reads or writes engine/.vimma-firefox-version`
+- `the build jobs check out clean and restore nothing from the Actions cache`
+- `a release builds in a fresh objdir with an empty compiler cache`
+- `<workflow> checks for 50 GB free before downloading Firefox source`
+- `<workflow> drops engine/'s empty repository between import and build`
+- `<workflow> adds a 16 GB swap file before building`
+- `<workflow> stops itself before GitHub's 6-hour job limit`
+- `only the nightly's publish and failure-issue steps get GH_TOKEN` (the token that can write
+  releases and issues never reaches npm, Surfer, mach or the mochitests)
 
 **vitest, `tools/test/self-hosted-runner.test.mjs`:**
 
@@ -703,7 +857,9 @@ same key without the 2026-08-06 subkey and revocation):
 **Existing tests that change:** `tools/test/safebrowsing-workflows.test.mjs` (the key comes from
 the `build` environment instead of a repository secret), `tools/test/upstream-workflow.test.mjs`
 (G4 cites the signed check; the `detect` job runs the key check),
-`tools/test/sites-workflow.test.mjs` (the SHA512SUMS check is `firefox-source.sh`; its
+`tools/test/upstream-beta-workflow.test.mjs` (`e2e.yml` checks its download through
+`firefox-source.sh`), `tools/test/sites-workflow.test.mjs` (the SHA512SUMS check is
+`firefox-source.sh`; its
 hosted-runner assertion moves into `self-hosted-runner.test.mjs`),
 `tools/package/test/release-workflow.test.mjs` (the release build job's runner and checkout).
 
@@ -711,7 +867,7 @@ No mochitest or e2e scenario: nothing in the browser changes.
 
 ## Docs and changelog
 
-- `docs/security.md`: §13 with B1 to B7 and their test links; G4 amended; §11 gains "Build
+- `docs/security.md`: §14 with B1 to B7 and their test links; G4 amended; §11 gains "Build
   infrastructure".
 - `docs/runbook.md`, "Full builds (`nightly.yml`, `release.yml`)" (already says they run on
   GitHub-hosted runners, with the self-hosted label as a known gap): the measured time and disk
@@ -744,29 +900,39 @@ protects something that runs today.
    Surfer pin; `.npmrc`; `npm ci --ignore-scripts` and `npx --no` in `release.yml` and
    `nightly.yml`; the `release-path` Dependabot group; `dependabot-automerge.yml` also holds
    Surfer's security updates (the name check it has today, extended);
-   `self-hosted-runner.test.mjs` with its first, second and fourth tests (the build jobs' runner
-   test lands with sub-PR 4); the `surfer.json` add-on test; the ADR-001 paragraph; the runbook's
-   `sha_pinning_required` step. Rules B4, B5 and the Surfer half of B3. Smallest change with the
+   `self-hosted-runner.test.mjs` with all four tests and both build jobs on `ubuntu-24.04`
+   (decision 7); the `surfer.json` add-on test; the ADR-001 paragraph; the runbook's
+   `sha_pinning_required` step. Rules B4, B5 and the Surfer half of B3. The Surfer check
+   matches `@zen-browser/surfer` as a substring of the dependency names and the title, in any
+   case, and an update without dependency names waits for a person: the check it replaces
+   matched names joined by `","` only, while `dependabot/fetch-metadata` joins them with
+   `", "`, and so let a grouped Surfer update through. A substring match does not depend on
+   that format, and matching too much only holds a pull request for review. Smallest change with the
    largest effect: it closes Problem 3, which is live today because Dependabot runs and
    auto-merges now, and Problems 4 and 5's runner half.
 2. **`ci(upstream): verify mozilla's signature on SHA512SUMS`.** Pinned key,
-   `verify-sha512.py --signature`, `source-check.sh` and the `e2e.yml` and `sites.yml` checks
-   use it; ADR-021; G4 amended; `docs/rebase.md`. Because `upstream.yml` and the Beta canary both
+   `verify-sha512.py --signature`, `source-check.sh` and `firefox-source.sh` use it (and through
+   the latter `e2e.yml`, `sites.yml` and both builds, if sub-PR 4 lands first; otherwise the
+   inline checks in `e2e.yml` and `sites.yml`); `npm run verify-source` for a contributor's
+   `npx surfer download`; ADR-021; G4 amended; `docs/rebase.md`; the runbook's "Mozilla's
+   release key" section and the review-checklist line. Because `upstream.yml` and the Beta canary both
    run `source-check.sh`, one change covers both. B1 for PR CI, the autopilot and the canary,
    which run today, and the autopilot opens pull requests that may merge without a person
    (ADR-020).
 3. **`ci(deps): hold every release-path change for review, with the package diff`.**
    `release-path.mjs`, the `classify` job and the `npm diff` summary. Completes B3.
 4. **`ci(release): full builds on hosted runners, from verified, freshly extracted source`.**
-   `firefox-source.sh`; `nightly.yml` and `release.yml` use it, run on `ubuntu-24.04` with
-   `clean: true`, the disk guard and no Actions cache; the `.vimma-firefox-version` shortcut
+   `firefox-source.sh`; `nightly.yml`, `release.yml`, `e2e.yml` and `sites.yml` use it; the
+   builds run on `ubuntu-24.04` with `clean: true`, the disk guard, the swap file and no Actions
+   cache, and drop `engine/.git` before building (R14); the `.vimma-firefox-version` shortcut
    goes. Before merging, a temporary job in the pull request's own CI (hosted runner, no secret,
    keyless, publishes nothing) runs `firefox-source.sh`, `npm run import` and a full build, and
    records wall time, peak disk and peak memory; the numbers go into `docs/runbook.md`, set
    `timeout-minutes` (decision 10), and select the runner (decision 6); the job is removed before
-   merge. ADR-010 and ADR-015 corrected. B1 for builds, B2. If the measured time is 4 hours or
-   more, the sub-PR still lands with both builds switched off, and the release job moves to a
-   larger hosted runner (decision 6) before the release gate.
+   merge. ADR-010 and ADR-015 corrected. B1 for builds (the hash; the signature with sub-PR 2),
+   B2. The measurement (R15) ran from a separate branch that was never proposed for merging, so
+   the pull request never carried the temporary job; it took 124 minutes, so both builds stay on
+   the standard runner.
 5. **`ci(release): the safe browsing key in a build environment; key rotation watch`.** The
    `build` environment (created and the secret moved by a repository administrator before
    merging, steps in the runbook), `environment: build` in both jobs, `mozilla-key-check.py` in

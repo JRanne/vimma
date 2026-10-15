@@ -18,6 +18,8 @@ How to build, run and test Vimma, and how changes get in. For why Vimma exists, 
 ```sh
 npm ci                  # dev tools, including Surfer
 npx surfer download     # Firefox source for the version in surfer.json, into engine/
+npm run verify-source   # that tarball against Mozilla's signed SHA512SUMS (needs gpgv);
+                        # npm run import refuses an engine/ it has not verified
 npx surfer bootstrap    # Mozilla's toolchains into ~/.mozbuild (once)
 npm run import          # apply Vimma's files and patches, select the vimma brand
 npx surfer build        # full build
@@ -127,6 +129,24 @@ Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
   asked or which review found it; `npm run lint` (`npm run comment-wording`) checks the wording.
 - **Pull requests.** A pull request is only for work that is ready to merge. Work that waits on a
   decision is a question in its issue, not an open pull request.
+- **Unfinished features.** `main` is always releasable, because a merged Firefox security bump
+  can release it with no person in the loop
+  ([docs/specs/firefox-versions.md](docs/specs/firefox-versions.md), decision 16). A feature that
+  lands over several pull requests therefore goes behind a pref that defaults off:
+  - Add `pref("vimma.feature.<name>", false);` to
+    `src/browser/branding/vimma/pref/firefox-branding.js`, with a comment naming the spec.
+  - Read it with `Services.prefs.getBoolPref("vimma.feature.<name>", false)`. While it is off,
+    nothing of the feature shows: no key, command, panel or status bar segment.
+  - Tests turn it on: `SpecialPowers.pushPrefEnv({ set: [["vimma.feature.<name>", true]] })` in a
+    mochitest, the `prefs` of an e2e scenario.
+  - The pull request that finishes the feature removes the pref, every read of it and the test
+    setup that turns it on, and adds the docs and changelog line a user-visible change needs.
+  - Try an unfinished feature by setting the pref to `true` in `about:config`.
+
+  `tools/test/feature-prefs.test.mjs` fails when a `vimma.feature.*` default is not `false`, or
+  when code reads one with a `true` fallback. A feature that fits in one pull request needs no
+  pref.
+
 - **TDD.** Write the failing test and run it, then implement until it passes. Never loosen a test.
 - **Commits.** Use Conventional Commits with a body: the subject is the changelog line; the body
   explains why.
@@ -181,9 +201,16 @@ its Rust toolchain and the GitHub Actions current:
   turns on auto-merge for security, patch and minor updates. They merge only once every
   required check above passes, licences included: a new licence or a new version of a package
   with a licence exception fails `npm run license-check` until a person reviews it.
-- **Majors need review.** Major updates, every GitHub Actions update (workflows hold write
-  tokens) and `@zen-browser/surfer` version updates get a comment and wait for a person to read
-  the changelog, fix what breaks and merge.
+- **Majors need review.** Major updates and every GitHub Actions update (workflows hold write
+  tokens) get a comment and wait for a person to read the changelog, fix what breaks and merge.
+- **Surfer is always reviewed.** `@zen-browser/surfer` drives the Firefox build, so it is pinned
+  to an exact version and no update of it auto-merges, security updates included. It comes in
+  its own `release-path` group with `ajv`; review it with
+  `npm diff --diff=@zen-browser/surfer@<old> --diff=@zen-browser/surfer@<new>`, which shows the
+  published code that will run.
+- **No install scripts.** `.npmrc` sets `ignore-scripts=true`, so `npm ci` and `npm install` run
+  no package's install scripts (`npm run` still runs ours). A new dependency that needs one is a
+  security decision for its PR, not a reason to drop the setting.
 - **By hand.** Node in `.nvmrc` (see the bench baseline in [docs/runbook.md](docs/runbook.md))
   and the Semgrep image digest in `semgrep.yml` are not covered; bump them in their own PR.
 

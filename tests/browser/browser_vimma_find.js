@@ -332,7 +332,8 @@ add_task(async function slash_and_n_in_the_pdf_viewer() {
 });
 
 /**
- * The fixture's search box: its value, whether it has focus, and its selected text.
+ * The fixture's search box: its value, whether it has focus, its selected text, and how many
+ * times it lost the focus since the last countBoxBlurs.
  * @param {XULBrowserElement} browser
  */
 function box(browser) {
@@ -343,20 +344,43 @@ function box(browser) {
       focused: content.document.activeElement === el,
       selected: el.value.slice(el.selectionStart, el.selectionEnd),
       display: el.editor?.selectionController.getDisplaySelection(),
+      blurs: Number(el.dataset.blurs ?? 0),
     };
   });
 }
 
 /**
- * Waits until the find has selected the match in the search box, and checks the box let the
- * focus go and the tab stayed in normal mode (#164).
+ * Counts the search box's blurs from zero, in its data-blurs attribute. Closing the find bar
+ * on a match in the box focuses it (Finder.focusContent), and the tab gives the focus back a
+ * task later (VimmaChild #unfocusFindMatch): only that blur shows the hand-off is over. Before
+ * it the box can show the match selected while not yet focused, or hold the focus, and a key
+ * sent then types into it (#282).
+ * @param {XULBrowserElement} browser
+ */
+function countBoxBlurs(browser) {
+  return SpecialPowers.spawn(browser, [], () => {
+    const el = content.document.getElementById("box");
+    if (el.dataset.blurs === undefined) {
+      el.addEventListener("blur", () => {
+        el.dataset.blurs = String(Number(el.dataset.blurs) + 1);
+      });
+    }
+    el.dataset.blurs = "0";
+  });
+}
+
+/**
+ * Waits until the find has put its match in the search box, and checks the box let the focus
+ * go and the tab stayed in normal mode (#164).
  * @param {XULBrowserElement} browser
  * @param {string} what
+ * @param {{ focused?: boolean }} [how] focused: the find focused the box (countBoxBlurs before
+ *   it), so the wait is for the box to lose that focus again; else for the match's selection
  */
-async function assertMatchInBox(browser, what) {
+async function assertMatchInBox(browser, what, { focused = true } = {}) {
   await TestUtils.waitForCondition(async () => {
     const now = await box(browser);
-    return now.selected === "needle" || now.focused;
+    return focused ? now.blurs > 0 : now.selected === "needle";
   }, `${what}: the find reached the search box`);
   // Focus reports follow the selection: the unbound key flushes them (and must not land in
   // the box).
@@ -376,6 +400,7 @@ async function assertMatchInBox(browser, what) {
 
 add_task(async function a_match_in_a_text_field_stays_in_normal_mode() {
   await withPage(async (browser) => {
+    await countBoxBlurs(browser);
     type("/needle");
     EventUtils.synthesizeKey("KEY_Enter");
     await TestUtils.waitForCondition(() => findBarHidden(), "Enter closes the find bar");
@@ -385,9 +410,10 @@ add_task(async function a_match_in_a_text_field_stays_in_normal_mode() {
     await waitForSelection(browser, "p1:needle", "n steps from the box to the next match");
     EventUtils.synthesizeKey("n");
     await waitForSelection(browser, "p2:needle", "n: the next match");
-    // From the page back into the box: here the finder focuses the box itself (typeaheadfind).
+    // From the page back into the box: the finder selects the match there and, in this test,
+    // leaves the focus where it is (no focus or blur event reaches the box).
     EventUtils.synthesizeKey("n");
-    await assertMatchInBox(browser, "n wrapping into the box");
+    await assertMatchInBox(browser, "n wrapping into the box", { focused: false });
     EventUtils.synthesizeKey("N");
     await waitForSelection(browser, "p2:needle", "N steps back out of the box");
 
@@ -401,6 +427,7 @@ add_task(async function a_match_in_a_text_field_stays_in_normal_mode() {
 
 add_task(async function the_text_field_a_find_matched_still_takes_i_and_a_click() {
   await withPage(async (browser) => {
+    await countBoxBlurs(browser);
     type("/needle");
     EventUtils.synthesizeKey("KEY_Enter");
     await TestUtils.waitForCondition(() => findBarHidden(), "Enter closes the find bar");
