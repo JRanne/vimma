@@ -291,14 +291,24 @@ text that pages, add-ons and bookmarks choose.
     [`sharing: devices in use while the toolbar is hidden`](../packages/vimma-core/test/statusbar.test.mjs),
     [`the_status_bar_shows_camera_and_mic_in_use`](../tests/browser/browser_vimma_toolbar.js)
   - A permission prompt **must** hang from its own icon in the address bar, next to the site's
-    identity and address, as with the toolbar shown, and **never** open unanchored: if its icon
-    cannot be revealed, the toolbar comes back first. Pop-up windows **must** keep their
-    read-only address bar.
-    [`a_permission_prompt_shows_the_minimal_bar`](../tests/browser/browser_vimma_toolbar.js),
+    identity and address, as with the toolbar shown (the prompt bar), and **never** open
+    unanchored: if its icon cannot be revealed, the toolbar comes back first. The minimal bar for
+    typing an address shows no identity; the status bar above is the origin indicator then. Pop-up
+    windows **must** keep their read-only address bar.
+    [`a_permission_prompt_hangs_from_its_icon`](../tests/browser/browser_vimma_toolbar.js),
+    [`the_identity_panel_shows_the_site_identity`](../tests/browser/browser_vimma_toolbar.js),
     [`a_failed_reveal_for_a_prompt_shows_the_toolbar`](../tests/browser/browser_vimma_toolbar.js),
     [`exclusions`](../tests/browser/browser_vimma_toolbar.js)
-  - Accepted, low: a page can time a reveal under the pointer (a permission request or a
-    download shows the bar); see the spec's Security section.
+  - Vimma's keys for a permission prompt (`y`, `n`, `Tab`; toolbar shown or hidden) **must
+    not** answer it before it has shown for `security.notification_enable_delay` with no key in
+    between (any key restarts the wait), **never** from a text field, and go through Firefox's
+    own buttons, so Firefox's click delay still applies. The prompt **never** takes focus by
+    itself; `Tab` focuses the secondary (Block) button first.
+    [`doorhangerKey`](../packages/vimma-core/test/prompt-keys.test.mjs),
+    [`permission_prompts_answer_y_and_n`](../tests/browser/browser_vimma_toolbar.js)
+  - Accepted, low: a page can time a reveal under the pointer (a permission request shows the
+    prompt bar, a download the full toolbar); there is no hover reveal. See the spec's Security
+    section.
 
 ## 7. Omarchy hook and the `vimma-open` launcher
 

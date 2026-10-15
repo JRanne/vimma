@@ -441,7 +441,9 @@ function securityOf(browser) {
     broken: !!(state & W.STATE_IS_BROKEN),
     certOverride: !!(state & W.STATE_CERT_USER_OVERRIDDEN),
     errorPage,
-    secureContext: !!browser.browsingContext?.currentWindowGlobal?.isSecureContext,
+    // As gIdentityHandler._getIsSecureContext: the security UI's own flag (http on the
+    // loopback address is a secure context). The parent's WindowGlobal has no isSecureContext.
+    secureContext: !!browser.securityUI?.isSecureContext,
   });
 }
 

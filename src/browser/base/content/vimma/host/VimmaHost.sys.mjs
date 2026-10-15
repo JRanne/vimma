@@ -105,6 +105,7 @@ import {
 import { McpHost } from "./mcp-ops.mjs";
 import { ControlHost } from "./control-ops.mjs";
 import { AgentUi } from "./agent-ui.mjs";
+import { PromptKeys } from "./prompt-keys.mjs";
 import { AgentPrompt } from "../ui/agent-prompt.mjs";
 import { parsePrivateCommand } from "../core/privatews.mjs";
 import { findWorkspace } from "../core/workspaces.mjs";
@@ -194,6 +195,7 @@ const PAGE_FIRST_MAX = 16;
  * @property {CommandLine} cmdline  the `:` line (m1-cmdline)
  * @property {TabStrip | null} tabStrip  hides Firefox's tab strip (m0-tabstrip-hidden)
  * @property {Toolbar | null} toolbar  hides Firefox's toolbar (docs/specs/toolbar-toggle.md)
+ * @property {PromptKeys | null} promptKeys  y and n for Firefox's permission prompts
  * @property {number | null} timer   pending-sequence timeout (dispatcher.flush)
  * @property {() => void} onCancelHints  resize, a mouse click in chrome
  * @property {HintSession | null} hint
@@ -1061,6 +1063,7 @@ export const VimmaHost = {
       }),
       tabStrip: null,
       toolbar: null,
+      promptKeys: null,
       timer: null,
       onCancelHints: () => this._cancelHints(state),
       hint: null,
@@ -1237,6 +1240,27 @@ export const VimmaHost = {
     } catch (e) {
       console.error("vimma: toolbar toggle unavailable", e);
     }
+    // Firefox's permission prompts from the keyboard (toolbar-toggle decision 11a).
+    try {
+      const promptKeys = new PromptKeys(win, {
+        inField: () => this._mode(state) === "insert",
+        otherOpen: () =>
+          state.help.isOpen ||
+          state.picker.isOpen ||
+          state.wsPicker.isOpen ||
+          state.addonPicker.isOpen ||
+          state.cmdline.isOpen ||
+          state.rename.isOpen ||
+          state.panel.isOpen ||
+          state.bookmarks.isOpen ||
+          state.agentPrompt.isOpen,
+        pending: () => state.dispatcher.pending().length > 0,
+      });
+      promptKeys.init();
+      state.promptKeys = promptKeys;
+    } catch (e) {
+      console.error("vimma: permission prompt keys unavailable", e);
+    }
     try {
       const statusBar = new StatusBar(win, {
         status: () => this.status(win),
@@ -1300,6 +1324,7 @@ export const VimmaHost = {
     state.bookmarks.destroy();
     state.tabStrip?.uninit();
     state.toolbar?.uninit();
+    state.promptKeys?.uninit();
     WindowWorkspaces.uninit(win);
     state.statusBar?.uninit();
     state.find.destroy();
@@ -1571,6 +1596,8 @@ export const VimmaHost = {
       this._emit(state);
       return;
     }
+    // Then an open permission prompt's y, n and Tab (toolbar-toggle decision 11a).
+    if (state.promptKeys?.onKey(e)) return;
     const chord = chordFromEvent(e);
     if (!chord) return; // a bare modifier
     const key = formatKey(chord);

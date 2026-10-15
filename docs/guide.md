@@ -32,8 +32,8 @@ What works today, each with the section that explains it:
 - **[Search engines](#search-engines)** and `@aliases` from `config.toml`, such as `@gh vimma`.
 - **[Hide the toolbar](#hiding-the-toolbar)** with `ctrl+b u`: the page reaches the top of the
   window, and the address bar comes back when you need it.
-- **[Theming](#colours-and-themes):** the bars, pickers, hints, start page and sidebar follow
-  your desktop theme and change with it, or take your own colours.
+- **[Theming](#colours-and-themes):** the bars, Firefox's toolbar and prompts, pickers, hints,
+  start page and sidebar follow your desktop theme and change with it, or take your own colours.
 - **[Accessible](#accessibility):** Vimma's own UI works with a screen reader and meets WCAG AA
   contrast in dark and light themes.
 - **Firefox underneath** ([privacy defaults](#privacy-defaults)): the same user agent and
@@ -365,32 +365,54 @@ until a restart or until you edit that line.
 
 - **Typing an address:** `I`, `ctrl+l`, `alt+d`, `F6`, `t`, `ctrl+t`, `ctrl+b c` and a new pane
   all still focus the address bar. A minimal bar then shows over the top of the page: only the URL
-  field, with the site's identity (the lock, or "not secure") and Firefox's suggestions below it.
-  No buttons, no bookmarks toolbar, no window controls. The page does not move or resize.
+  field, with Firefox's suggestions below it. No site identity or buttons around it (the status
+  bar names the site), no bookmarks toolbar, no window controls. The page does not move or
+  resize.
 - **Leaving it:** `Enter` loads the page, puts focus in it and hides the bar. `Esc` works as in
   Firefox (it closes the suggestions, then undoes what you typed), and one more `Esc` puts focus
   back in the page and hides the bar.
-- **The whole toolbar:** move the pointer to the window's top edge and the full toolbar shows,
-  with its buttons; it goes 0.6 seconds after the pointer leaves it. It also shows while an
-  add-on's popup or a panel from one of its buttons (downloads, the menu, the extensions menu) is
-  open, so the popup hangs from its own button as with the toolbar shown.
-- **Permission prompts** (camera, location, notifications) show the minimal bar: the prompt
-  points at its icon in the address bar, next to the site's identity, exactly as with the toolbar
-  shown. Vimma never shows one without saying which site asks.
+- **The whole toolbar:** `ctrl+b u` brings it back, with its buttons; moving the pointer to the
+  window's top edge does not. It also shows by itself while an add-on's popup or a panel from one
+  of its buttons (downloads, the menu, the extensions menu) is open, so the popup hangs from its
+  own button as with the toolbar shown.
+- **Permission prompts** (camera, location, notifications) show the whole address bar, without
+  the toolbar's buttons: the prompt points at its icon in the address bar, next to the site's
+  identity, exactly as with the toolbar shown. Vimma never shows one without saying which site
+  asks. Clicking the site's identity there opens its panel.
 - **Security in the status bar:** while the toolbar is hidden the status bar says `not secure`
   for a page that is not served over a secure connection, and `private` in a private window
   ([above](#status-bar)).
 - **Window controls:** with Firefox's own title bar (close, minimise and maximise buttons in the
-  toolbar), they hide with it and show with the full toolbar at the top edge. On a tiling window
+  toolbar), they hide with it and show when `ctrl+b u` brings the toolbar back. On a tiling window
   manager such as Omarchy's, which draws no title bar, nothing changes.
 - **Left as Firefox has it:** customize mode, pop-up windows (they keep their read-only address
   bar, so a pop-up always says where it comes from), and `F11` and video fullscreen, where
   Firefox's own toolbar rules apply.
 
+#### Answering a permission prompt
+
+When a site asks for your location, camera, microphone or notifications, Firefox's prompt hangs
+from the address bar. Shown or hidden toolbar, you can answer it from the keyboard:
+
+| Key   | What it does                                                                              |
+| ----- | ----------------------------------------------------------------------------------------- |
+| `y`   | The prompt's main button (Allow).                                                         |
+| `n`   | Its other button (Block, or Don't allow).                                                 |
+| `Tab` | Moves focus onto its buttons, Block first; then the arrow keys, `Enter` and `Space` work. |
+| `Esc` | As in Firefox: the other button (Block).                                                  |
+
+`y` and `n` count only once the prompt has been up for half a second (Firefox's own delay for
+these buttons) with no key pressed in between; the line `y allow · n block · Tab buttons` in the
+prompt shows when they do. Any key you press meanwhile starts the wait again, so typing that was
+meant for the page never answers a prompt. While you type in a text field, `y` and `n` are text.
+The prompt never takes focus by itself. The same keys answer Firefox's other prompts in that
+panel, such as adding an add-on or saving a password.
+
 ### Colours and themes
 
 The status bar, the command line, the `ctrl+b ?` overlay, the pickers and prompts, link hints,
-notices, pane borders and the start page share one theme. Out of the box it is Vimma's own,
+notices, pane borders and the start page share one theme, and so do Firefox's toolbar, its
+address bar and suggestions, and the prompts and panels that hang from it. Out of the box it is Vimma's own,
 the palette of [vimma.dev](https://vimma.dev): near-black surfaces, grey-green text, and mint
 for the accent, the normal-mode badge and link hints. It has a dark and a light variant, and by
 default it follows your system's or Firefox's light or dark setting (`prefers-color-scheme`),

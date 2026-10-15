@@ -3,26 +3,26 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Hides Firefox's navigation toolbar (spec: docs/specs/toolbar-toggle.md). The pref
-// vimma.ui.toolbar.hidden is one state for every window; toolbar.css collapses the bar, keyed on
-// a root attribute that follows it live. While the bar is hidden, each window keeps a set of
-// reasons to reveal it, each asking for the minimal bar (the URL field) or the full one: the
-// URL bar about to take focus, focus inside the bar, a doorhanger or a panel anchored in it,
-// the pointer at the top edge, an add-on popup. The largest size asked for wins; with none the
-// bar collapses again. Every reveal that focus or a popup needs happens before it, from
-// Firefox's own events (`beforefocus`, `beforeselect`, `PopupNotificationsBeforeAnchor`,
-// `popupshowing`), so nothing is focused in, or anchored to, a collapsed element.
+// vimma.ui.toolbar.hidden is one state for every window; toolbar.css hides the bar, keyed on a
+// root attribute that follows it live. While the bar is hidden, each window keeps a set of
+// reasons to reveal it, each asking for one of three sizes: the minimal bar (the URL field
+// alone, to type an address), the prompt bar (the field with the site's identity and the
+// prompts' icons, for a prompt or a panel hanging from them) or the full toolbar (a panel or an
+// add-on popup hanging from a button). The reasons: the URL bar about to take focus, focus
+// inside the bar, a doorhanger or a panel anchored in it, a mouse button held on it, an add-on
+// popup. The largest size asked for wins; with none the bar hides again. Every reveal that focus
+// or a popup needs happens before it, from Firefox's own events (`beforefocus`, `beforeselect`,
+// `PopupNotificationsBeforeAnchor`, `popupshowing`), so nothing is focused in, or anchored to, a
+// hidden element.
 
 export const TOOLBAR_PREF = "vimma.ui.toolbar.hidden";
 export const HIDDEN_ATTR = "vimma-toolbar-hidden";
 export const REVEALED_ATTR = "vimma-toolbar-revealed";
 export const MINIMAL_ATTR = "vimma-toolbar-minimal";
-export const EDGE_ID = "vimma-toolbar-edge";
+export const PROMPT_ATTR = "vimma-toolbar-prompt";
 export const REVEAL_FAILED = "toolbar shown: the address bar could not be revealed";
 export const PROMPT_REVEAL_FAILED = "toolbar shown: a prompt's icon could not be revealed";
 const STYLESHEET = "chrome://browser/skin/vimma/toolbar.css";
-/** The pointer rests at the edge this long before the bar shows, and leaves it this long. */
-const HOVER_SHOW_MS = 150;
-const HOVER_HIDE_MS = 600;
 /** F6 moves focus later than its keydown (after a remote page's reply): this long at most. */
 const F6_MS = 1000;
 /** A reveal held for a popup that has not opened after this long ends. */
@@ -30,9 +30,9 @@ const AWAIT_POPUP_MS = 5000;
 /** Where Firefox's own toolbox rules apply instead of ours (toolbar.css). */
 const FIREFOX_OWNS =
   "[customizing], [popup-window], [taskbartab], [inFullscreen], [inDOMFullscreen]";
-const HOVER_ZONE = `#navigator-toolbox, #${EDGE_ID}`;
 const VISIBLE = { visibilityProperty: true };
-const HTML_NS = "http://www.w3.org/1999/xhtml";
+/** In the URL field itself: the minimal bar is enough for them (its input, the suggestions). */
+const IN_FIELD = ".urlbar-input-box, .urlbarView";
 const WINDOW_EVENTS = [
   "keydown",
   "beforefocus",
@@ -42,13 +42,13 @@ const WINDOW_EVENTS = [
   "popupshowing",
   "popuphidden",
   "PopupNotificationsBeforeAnchor",
-  "mouseover",
-  "mouseout",
   "mousedown",
   "mouseup",
 ];
 
-/** @typedef {"minimal" | "full"} Size */
+/** @typedef {"minimal" | "prompt" | "full"} Size */
+/** @type {readonly Size[]} smallest first */
+const SIZES = ["minimal", "prompt", "full"];
 
 /**
  * @typedef {Window & {
@@ -98,17 +98,12 @@ export class Toolbar {
     this.reasons = new Map();
     /** @type {Set<unknown>} reasons that end once a popup anchored in the bar shows */
     this.awaiting = new Set();
-    /** what the root attributes said last: "", "minimal" or "full" */
-    this.shown = "";
+    /** what the root attributes said last: "" or a size */
+    this.shown = /** @type {"" | Size} */ ("");
     /** inside a PopupNotificationsBeforeAnchor: Firefox is anchoring right now */
     this.anchoring = false;
-    this.hoverIn = 0;
-    this.hoverOut = 0;
-    /** a mouse button went down on the bar and is not up yet (or only just) */
-    this.pressing = false;
     this.onPref = () => this.apply();
     this.onEvent = (/** @type {Event} */ e) => this.handleEvent(e);
-    this.start = () => this.addEdge();
   }
 
   init() {
@@ -121,22 +116,13 @@ export class Toolbar {
     Services.prefs.addObserver(TOOLBAR_PREF, this.onPref);
     for (const type of WINDOW_EVENTS) win.addEventListener(type, this.onEvent, true);
     win.document.documentElement.toggleAttribute(HIDDEN_ATTR, Toolbar.hidden);
-    if (win.document.readyState === "loading") {
-      win.addEventListener("DOMContentLoaded", this.start, { once: true });
-    } else {
-      this.addEdge();
-    }
   }
 
   uninit() {
     const win = this.win;
     Services.prefs.removeObserver(TOOLBAR_PREF, this.onPref);
     for (const type of WINDOW_EVENTS) win.removeEventListener(type, this.onEvent, true);
-    win.removeEventListener("DOMContentLoaded", this.start);
-    win.clearTimeout(this.hoverIn);
-    win.clearTimeout(this.hoverOut);
-    win.document.getElementById(EDGE_ID)?.remove();
-    for (const attr of [HIDDEN_ATTR, REVEALED_ATTR, MINIMAL_ATTR]) {
+    for (const attr of [HIDDEN_ATTR, REVEALED_ATTR, MINIMAL_ATTR, PROMPT_ATTR]) {
       win.document.documentElement.removeAttribute(attr);
     }
     instances.delete(win);
@@ -188,7 +174,6 @@ export class Toolbar {
       this.reasons.delete("urlbar");
       this.reasons.delete("focus");
     }
-    if (!hidden) this.reasons.delete("hover");
     doc.documentElement.toggleAttribute(HIDDEN_ATTR, hidden);
     this.update();
     // The status bar carries the hidden toolbar's cues (decision 12).
@@ -198,7 +183,9 @@ export class Toolbar {
   /** @private */
   update() {
     let size = /** @type {"" | Size} */ ("");
-    for (const s of this.reasons.values()) if (s === "full" || !size) size = s;
+    for (const s of this.reasons.values()) {
+      if (!size || SIZES.indexOf(s) > SIZES.indexOf(size)) size = s;
+    }
     const shown = this.win.document.documentElement.hasAttribute(HIDDEN_ATTR) ? size : "";
     this.reveal(shown);
     if (shown === this.shown) return;
@@ -221,7 +208,9 @@ export class Toolbar {
   reveal(size) {
     const root = this.win.document.documentElement;
     root.toggleAttribute(REVEALED_ATTR, !!size);
-    root.toggleAttribute(MINIMAL_ATTR, size === "minimal");
+    // The prompt bar is the minimal one with the site's identity and the prompts' icons.
+    root.toggleAttribute(MINIMAL_ATTR, size === "minimal" || size === "prompt");
+    root.toggleAttribute(PROMPT_ATTR, size === "prompt");
   }
 
   /** @param {Event} e */
@@ -252,21 +241,11 @@ export class Toolbar {
         this.beforeAnchor(/** @type {Element} */ (e.target));
         break;
       case "mousedown":
-        if (this.inBar(e.target)) this.pressing = true;
+        this.pressed(e.target);
         break;
       case "mouseup":
-        if (this.pressing) this.win.setTimeout(() => (this.pressing = false), 0);
-        break;
-      case "mouseover":
-        if (this.inHoverZone(e.target)) this.hoverEnter();
-        break;
-      case "mouseout":
-        if (
-          this.inHoverZone(e.target) &&
-          !this.inHoverZone(/** @type {MouseEvent} */ (e).relatedTarget)
-        ) {
-          this.hoverLeave();
-        }
+        // After the click this mouseup makes, which opens the icon's panel (reason d).
+        if (this.reasons.has("pointer")) this.win.setTimeout(() => this.release("pointer"), 0);
         break;
     }
   }
@@ -316,25 +295,42 @@ export class Toolbar {
 
   /**
    * Reasons a and b: the URL bar (focused, or its results open) asks for minimal; focus on an
-   * item of the bar for the size it is in: the site's identity and the permission icons are in
-   * the minimal bar, the buttons only in the full one.
+   * item of the bar for the size that shows it: the site's identity and the prompts' icons in
+   * the prompt bar, the buttons only in the full one.
    * @private
    */
   focusChanged() {
     const urlbar = this.win.gURLBar;
     if (urlbar?.focused || urlbar?.view?.isOpen) this.hold("urlbar", "minimal");
-    else if (this.reasons.has("urlbar") && this.pointerOnBar()) {
-      // A click on the bar's own icons (the site's identity, a permission) takes focus from
-      // the field on mousedown: the bar stays under the pointer, or the click would land on
-      // the page (decision 9: the bar stays while the pointer is over it).
-      this.hold("pointer", this.reasons.get("urlbar") ?? "minimal");
-      this.release("urlbar");
-      this.hoverLeave();
-    } else this.release("urlbar");
+    else this.release("urlbar");
     const focused = this.focusedElement();
-    if (focused && this.inBar(focused)) {
-      this.hold("focus", focused.closest("#urlbar") ? "minimal" : "full");
-    } else this.release("focus");
+    if (focused && this.inBar(focused)) this.hold("focus", this.sizeFor(focused));
+    else this.release("focus");
+  }
+
+  /**
+   * Reason h: a mouse button goes down on the revealed bar. A click on the site's identity or a
+   * prompt's icon takes focus from the field, or closes the prompt hanging from it, before the
+   * click lands: the bar keeps its size until the button is up, so the click reaches the icon,
+   * whose panel then holds the bar (reason d).
+   * @private
+   * @param {EventTarget | null} target
+   */
+  pressed(target) {
+    if (this.shown && this.inBar(target)) this.hold("pointer", this.shown);
+  }
+
+  /**
+   * The size of bar that shows `node`: the minimal bar holds the URL field and its suggestions;
+   * the prompt bar the rest of the field (the site's identity, the prompts' icons, page
+   * actions); the full bar everything else.
+   * @private
+   * @param {Element} node
+   * @returns {Size}
+   */
+  sizeFor(node) {
+    if (!node.closest("#urlbar")) return "full";
+    return node.closest(IN_FIELD) ? "minimal" : "prompt";
   }
 
   /** Reason c: a doorhanger is about to anchor in the bar. @private @param {Element} anchor */
@@ -342,7 +338,7 @@ export class Toolbar {
     if (!this.inBar(anchor)) return;
     this.anchoring = true;
     try {
-      this.hold("doorhanger", anchor.closest("#urlbar") ? "minimal" : "full");
+      this.hold("doorhanger", this.sizeFor(anchor));
       // A prompt must never open unanchored (docs/security.md C3): if its icon is still not
       // visible, the toolbar comes back before Firefox picks a fallback anchor.
       if (this.applies && !anchor.checkVisibility(VISIBLE)) this.revealFailed(PROMPT_REVEAL_FAILED);
@@ -370,7 +366,7 @@ export class Toolbar {
     if (popup?.localName === "tooltip") return;
     const anchor = popup?.anchorNode ?? popup?.triggerNode;
     if (!this.inBar(anchor)) return;
-    this.hold(popup, anchor.closest("#urlbar") ? "minimal" : "full");
+    this.hold(popup, this.sizeFor(anchor));
     for (const key of [...this.awaiting]) {
       this.awaiting.delete(key);
       this.reasons.delete(key);
@@ -387,49 +383,6 @@ export class Toolbar {
     }
   }
 
-  /** Reason e: the pointer at the top edge or over the revealed bar. @private */
-  hoverEnter() {
-    this.win.clearTimeout(this.hoverOut);
-    this.hoverOut = 0;
-    if (this.reasons.has("hover") || this.hoverIn || !this.applies) return;
-    this.hoverIn = this.win.setTimeout(() => {
-      this.hoverIn = 0;
-      this.hold("hover", "full");
-    }, HOVER_SHOW_MS);
-  }
-
-  /** @private */
-  hoverLeave() {
-    this.win.clearTimeout(this.hoverIn);
-    this.hoverIn = 0;
-    if (!this.reasons.has("hover") && !this.reasons.has("pointer")) return;
-    this.win.clearTimeout(this.hoverOut);
-    this.hoverOut = this.win.setTimeout(() => {
-      this.hoverOut = 0;
-      const doc = this.win.document;
-      const still = doc.querySelectorAll(HOVER_ZONE);
-      if ([...still].some((el) => el.matches(":hover"))) return;
-      this.reasons.delete("pointer");
-      this.release("hover");
-      this.update();
-    }, HOVER_HIDE_MS);
-  }
-
-  /** @private */
-  addEdge() {
-    const doc = this.win.document;
-    if (doc.getElementById(EDGE_ID) || !doc.body) return;
-    const edge = doc.createElementNS(HTML_NS, "div");
-    edge.id = EDGE_ID;
-    edge.setAttribute("aria-hidden", "true");
-    doc.body.append(edge);
-  }
-
-  /** @private */
-  pointerOnBar() {
-    return this.pressing || !!this.win.document.getElementById("nav-bar")?.matches(":hover");
-  }
-
   /** @private */
   focusInBar() {
     const focused = this.focusedElement();
@@ -444,10 +397,5 @@ export class Toolbar {
   /** @private @param {any} node */
   inBar(node) {
     return !!node?.closest?.("#nav-bar");
-  }
-
-  /** @private @param {any} node */
-  inHoverZone(node) {
-    return !!node?.closest?.(HOVER_ZONE);
   }
 }

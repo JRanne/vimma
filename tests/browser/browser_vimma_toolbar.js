@@ -3,9 +3,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Spec: docs/specs/toolbar-toggle.md. ctrl+b u hides Firefox's navigation toolbar in every
-// window; focusing the address bar shows a minimal bar (the URL field and the site's identity
-// only) over the page, which keeps its size; Enter and Esc hide it again; a permission prompt
-// and the identity panel show the minimal bar, an add-on popup and hover the full toolbar; the
+// window; focusing the address bar shows a minimal bar (the URL field only) over the page, which
+// keeps its size; Enter and Esc hide it again; a permission prompt and the identity panel show
+// the URL field with the site's identity, an add-on popup the full toolbar; permission prompts
+// answer y and n; the bar, the field, its suggestions and the prompts follow the theme; the
 // status bar says `not secure` and `private`; `[ui] toolbar` sets it from config.toml; the
 // account panel has no mobile-app row.
 
@@ -15,7 +16,7 @@
 requestLongerTimeout(4);
 
 /* global focusContent -- from head.js */
-/* global PopupNotifications, gCustomizeMode, gNavToolbox, CustomizableUI, PanelMultiView,
+/* global PopupNotifications, SitePermissions, gCustomizeMode, gNavToolbox, CustomizableUI, PanelMultiView,
    PanelUI -- browser window globals (browser.js) */
 
 const { VimmaHost } = ChromeUtils.importESModule(
@@ -35,6 +36,7 @@ const PREF = "vimma.ui.toolbar.hidden";
 const HIDDEN = "vimma-toolbar-hidden";
 const REVEALED = "vimma-toolbar-revealed";
 const MINIMAL = "vimma-toolbar-minimal";
+const PROMPT = "vimma-toolbar-prompt";
 const DIR = getRootDirectory(gTestPath).replace(
   "chrome://mochitests/content",
   "https://example.com",
@@ -64,6 +66,8 @@ const shows = (el) => !!el?.checkVisibility(VISIBLE);
 const root = (win = window) => win.document.documentElement;
 const barCollapsed = (win = window) => !shows($("nav-bar", win));
 const minimal = (win = window) => root(win).hasAttribute(MINIMAL);
+/** The URL field with the site's identity and the prompts' icons, still no buttons. */
+const promptSize = (win = window) => minimal(win) && root(win).hasAttribute(PROMPT);
 const revealedFull = (win = window) =>
   root(win).hasAttribute(REVEALED) && !root(win).hasAttribute(MINIMAL);
 const noticeText = (win = window) => $("vimma-notice-live", win)?.textContent ?? "";
@@ -99,24 +103,29 @@ async function escapeUrlbar() {
   await until(() => !gURLBar.focused, "Esc leaves the URL bar");
 }
 
-/**
- * The minimal bar is up: only the URL field and the site's identity (a page has one; Firefox
- * shows none on a new tab).
- */
-function assertMinimal(what, { page = true } = {}) {
+/** Everything in the bar but the URL field itself: buttons, and the chrome around the field. */
+const NOT_IN_MINIMAL = [
+  "back-button",
+  "stop-reload-button",
+  "unified-extensions-button",
+  "PanelUI-button",
+  "PersonalToolbar",
+  "identity-box",
+  "trust-icon-container",
+  "page-action-buttons",
+];
+
+/** The minimal bar is up: only the URL field, no button and no identity chrome around it. */
+function assertMinimal(what) {
   Assert.ok(gURLBar.focused, `${what}: the URL bar has focus`);
-  Assert.ok(shows(gURLBar), `${what}: the URL bar is visible`);
-  Assert.ok(minimal(), `${what}: the bar is minimal`);
-  if (page) Assert.ok(shows($("identity-box")), `${what}: the identity box shows`);
+  Assert.ok(shows(gURLBar.inputField), `${what}: the URL field is visible`);
+  Assert.ok(minimal() && !promptSize(), `${what}: the bar is minimal`);
   Assert.ok(shows($("urlbar-container")), `${what}: the URL field shows`);
-  for (const id of [
-    "back-button",
-    "stop-reload-button",
-    "unified-extensions-button",
-    "PanelUI-button",
-    "PersonalToolbar",
-  ]) {
+  for (const id of NOT_IN_MINIMAL) {
     Assert.ok(!shows($(id)), `${what}: #${id} does not show`);
+  }
+  for (const sel of [".searchmode-switcher", ".urlbar-go-button"]) {
+    Assert.ok(!shows(gURLBar.querySelector(sel)), `${what}: ${sel} does not show`);
   }
   for (const el of $("nav-bar").querySelectorAll(".titlebar-buttonbox-container")) {
     Assert.ok(!shows(el), `${what}: the window controls do not show`);
@@ -251,7 +260,7 @@ add_task(async function focusing_the_url_bar_shows_the_minimal_bar() {
     keys();
     const fresh = await opened;
     await until(() => gURLBar.focused, `${what}: the new tab's URL bar has focus`);
-    assertMinimal(what, { page: false });
+    assertMinimal(what);
     gBrowser.removeTab(fresh);
     await until(() => !gURLBar.focused || gBrowser.selectedTab === tab, "back to the page");
   }
@@ -259,7 +268,7 @@ add_task(async function focusing_the_url_bar_shows_the_minimal_bar() {
   await focusContent(browser);
   prefix("v");
   await until(() => !!PaneViews.get(window)?.panes && gURLBar.focused, "ctrl+b v: a pane");
-  assertMinimal("ctrl+b v", { page: false });
+  assertMinimal("ctrl+b v");
   PaneViews.get(window).close();
   await until(() => !PaneViews.get(window)?.panes, "the split is closed");
 
@@ -337,8 +346,9 @@ add_task(async function enter_and_esc_hide_the_minimal_bar() {
   gBrowser.removeTab(tab);
 });
 
-// 5: a permission prompt shows the minimal bar and hangs from its own icon.
-add_task(async function a_permission_prompt_shows_the_minimal_bar() {
+// 5: a permission prompt shows the URL field with the site's identity and hangs from its own
+// icon.
+add_task(async function a_permission_prompt_hangs_from_its_icon() {
   const tab = await openPage();
   await hide();
   let removed = false;
@@ -357,7 +367,10 @@ add_task(async function a_permission_prompt_shows_the_minimal_bar() {
     removed = true;
     origRemove();
   };
-  Assert.ok(minimal(), "the bar is minimal, not full");
+  Assert.ok(promptSize(), "the bar shows the URL field with the site's identity, not in full");
+  for (const id of ["back-button", "unified-extensions-button", "PanelUI-button"]) {
+    Assert.ok(!shows($(id)), `no #${id}`);
+  }
   const anchor = PopupNotifications.panel.anchorNode;
   Assert.equal(anchor?.id, "geo-notification-icon", "the prompt anchors to its own icon");
   Assert.ok(shows(anchor), "which is visible");
@@ -379,37 +392,165 @@ add_task(async function a_permission_prompt_shows_the_minimal_bar() {
   await show();
 });
 
-// 6: the site's identity panel (Firefox's trust panel, or the identity panel where that is
-// off), from the minimal bar, keeps it up while open.
-add_task(async function the_identity_panel_keeps_the_minimal_bar() {
+// 5a: a permission prompt from the keyboard (decision 11a): y and n once it is armed, a key
+// typed on through it starts the delay again, a field's keys never answer it, Tab moves focus
+// onto its buttons, where Enter is the focused button's.
+add_task(async function permission_prompts_answer_y_and_n() {
+  const DELAY = 400;
+  await SpecialPowers.pushPrefEnv({ set: [["security.notification_enable_delay", DELAY]] });
   const tab = await openPage();
   await hide();
-  EventUtils.synthesizeKey("I", { shiftKey: true });
-  await until(() => gURLBar.focused, "I");
-  // Firefox's results open after the focus and close every other popup: let them, then close
-  // them, as a user would before opening the panel.
-  await until(() => gURLBar.view.isOpen, "the results open");
-  EventUtils.synthesizeKey("KEY_Escape");
-  await until(() => !gURLBar.view.isOpen && gURLBar.focused, "Esc closes them");
-  const button = [$("trust-icon-container"), $("identity-icon-box")].find(shows);
-  Assert.ok(button, "the site's identity button shows in the minimal bar");
-  const shown = BrowserTestUtils.waitForEvent(document, "popupshown", false, (e) =>
-    e.target.anchorNode?.closest?.("#urlbar"),
+  const browser = tab.linkedBrowser;
+  const panel = PopupNotifications.panel;
+  const principal = () => browser.contentPrincipal;
+  const geo = () => SitePermissions.getForPrincipal(principal(), "geo", browser).state;
+  const forget = () => SitePermissions.removeFromPrincipal(principal(), "geo", browser);
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  /** Asks for the location; resolves with the prompt once it shows. */
+  const ask = async () => {
+    const shown = BrowserTestUtils.waitForEvent(panel, "popupshown");
+    await SpecialPowers.spawn(browser, [], () => {
+      content.navigator.geolocation.getCurrentPosition(
+        () => {},
+        () => {},
+      );
+    });
+    await shown;
+    return /** @type {any} */ (panel.firstElementChild);
+  };
+  const hintOf = (n) => n.querySelector(".vimma-prompt-keys");
+  const closed = () => BrowserTestUtils.waitForEvent(panel, "popuphidden");
+
+  let n = await ask();
+  Assert.ok(!shows(hintOf(n)), "no keys hint before the prompt is armed");
+  EventUtils.synthesizeKey("y");
+  await wait(DELAY / 4);
+  Assert.equal(panel.state, "open", "y before the prompt is armed answers nothing");
+  await until(() => shows(hintOf(n)), "the keys hint shows once armed");
+  Assert.ok(hintOf(n).textContent.startsWith("y allow · n block"), hintOf(n).textContent);
+  EventUtils.synthesizeKey("j");
+  Assert.ok(!shows(hintOf(n)), "a key typed on through the prompt disarms it again");
+  EventUtils.synthesizeKey("y");
+  await wait(DELAY / 4);
+  Assert.equal(panel.state, "open", "and y right after it answers nothing");
+  Assert.equal(geo(), SitePermissions.UNKNOWN, "nothing decided yet");
+  await until(() => shows(hintOf(n)), "armed again");
+  let hidden = closed();
+  EventUtils.synthesizeKey("n");
+  await hidden;
+  Assert.equal(geo(), SitePermissions.BLOCK, "n blocks");
+  forget();
+
+  // A page field has focus: what is typed there is the field's.
+  await SpecialPowers.spawn(browser, [], () => {
+    const input = content.document.createElement("input");
+    input.id = "vimma-prompt-field";
+    content.document.body.append(input);
+    input.focus();
+  });
+  n = await ask();
+  await until(() => shows(hintOf(n)), "armed");
+  EventUtils.synthesizeKey("y");
+  EventUtils.synthesizeKey("n");
+  await wait(DELAY / 2);
+  Assert.equal(panel.state, "open", "y and n typed in a field answer nothing");
+  const typed = await SpecialPowers.spawn(
+    browser,
+    [],
+    () => content.document.getElementById("vimma-prompt-field").value,
   );
-  // What a click on it runs (navigator-toolbox.js); a click with the mouse also hovers the
-  // bar, which then shows in full (decision 9).
-  if (button.id === "trust-icon-container") window.gTrustPanelHandler.showPopup({ reason: "test" });
-  else window.gIdentityHandler.handleIdentityButtonEvent(new MouseEvent("click", { button: 0 }));
+  Assert.equal(typed, "yn", "they went into the field");
+  Assert.equal(geo(), SitePermissions.UNKNOWN, "nothing decided");
+
+  // Tab from the page: focus on the prompt's first button, with a visible ring; Enter there.
+  await SpecialPowers.spawn(browser, [], () => content.document.activeElement.blur());
+  await focusContent(browser);
+  await until(() => VimmaHost.status(window).mode === "normal", "normal mode");
+  EventUtils.synthesizeKey("KEY_Tab");
+  const focused = () => {
+    let el = Services.focus.focusedElement;
+    while (el?.shadowRoot?.activeElement) el = el.shadowRoot.activeElement;
+    return el;
+  };
+  await until(() => n.contains(focused()?.getRootNode().host ?? focused()), "Tab: in the prompt");
+  const inner = focused();
+  Assert.equal(
+    inner.getRootNode().host,
+    n.secondaryButton,
+    "on its first button, the secondary one (Block)",
+  );
+  Assert.ok(inner.matches(":focus-visible"), "with a visible focus ring");
+  hidden = closed();
+  EventUtils.synthesizeKey("KEY_Enter");
+  await hidden;
+  Assert.equal(geo(), SitePermissions.BLOCK, "Enter runs the focused button");
+  forget();
+
+  // Esc, from the page, is Firefox's: the prompt's Esc action, its secondary button.
+  n = await ask();
+  await until(() => shows(hintOf(n)), "armed");
+  hidden = closed();
+  EventUtils.synthesizeKey("KEY_Escape");
+  await hidden;
+  Assert.equal(geo(), SitePermissions.BLOCK, "Esc blocks, as in Firefox");
+  forget();
+
+  n = await ask();
+  await until(() => shows(hintOf(n)), "armed");
+  hidden = closed();
+  EventUtils.synthesizeKey("y");
+  await hidden;
+  Assert.equal(geo(), SitePermissions.ALLOW, "y allows");
+  forget();
+
+  await SpecialPowers.popPrefEnv();
+  gBrowser.removeTab(tab);
+  await show();
+});
+
+// 6: the site's identity panel (Firefox's trust panel, or the identity panel where that is
+// off) opens with a click on the site's identity in the prompt bar, hangs from it and keeps the
+// prompt bar up while open. The minimal bar has no identity to click; the full toolbar has.
+add_task(async function the_identity_panel_shows_the_site_identity() {
+  const tab = await openPage();
+  await hide();
+  const shownPrompt = BrowserTestUtils.waitForEvent(PopupNotifications.panel, "popupshown");
+  await SpecialPowers.spawn(tab.linkedBrowser, [], () => {
+    content.navigator.geolocation.getCurrentPosition(
+      () => {},
+      () => {},
+    );
+  });
+  await shownPrompt;
+  Assert.ok(promptSize(), "a prompt shows the prompt bar");
+  const button = [$("trust-icon-container"), $("identity-icon-box")].find(shows);
+  Assert.ok(button, "the site's identity button shows in it");
+  const shown = BrowserTestUtils.waitForEvent(
+    document,
+    "popupshown",
+    false,
+    (e) => e.target.anchorNode?.closest?.("#urlbar") && e.target !== PopupNotifications.panel,
+  );
+  // A click with the mouse: the press closes the prompt before the click lands, and the bar
+  // must stay under the pointer meanwhile (reason h).
+  EventUtils.synthesizeMouseAtCenter(button, {});
   const popup = (await shown).target;
   Assert.ok(button.contains(popup.anchorNode) || popup.anchorNode === button, "anchored to it");
-  Assert.ok(minimal(), "the bar is minimal while the panel is open");
+  Assert.ok(promptSize(), "the prompt bar shows while the panel is open, not in full");
+  Assert.ok(!shows($("back-button")), "no buttons");
   await new Promise((r) => setTimeout(r, 300));
   Assert.equal(popup.state, "open", "the panel stays open");
   Assert.ok(!barCollapsed(), "and so does the bar");
   PanelMultiView.hidePopup(popup);
   await until(() => popup.state === "closed", "the panel closes");
-  gBrowser.selectedBrowser.focus();
-  await until(() => barCollapsed(), "focus back in the page: the bar hides");
+  // Firefox shows the prompt again, which still waits for an answer.
+  await until(() => PopupNotifications.panel.state === "open", "the prompt is back");
+  Assert.ok(promptSize(), "with the prompt bar");
+  const hidden = BrowserTestUtils.waitForEvent(PopupNotifications.panel, "popuphidden");
+  PopupNotifications.panel.firstElementChild.secondaryButton.click();
+  await hidden;
+  await until(() => barCollapsed(), "answered: the bar hides");
+  SitePermissions.removeFromPrincipal(tab.linkedBrowser.contentPrincipal, "geo", tab.linkedBrowser);
   gBrowser.removeTab(tab);
   await show();
 });
@@ -811,6 +952,16 @@ add_task(async function not_secure_comes_from_the_browser_state() {
   await new Promise((r) => setTimeout(r, 300));
   Assert.equal(segText("security"), "not secure", "still not secure");
   gBrowser.removeTab(tab);
+  // http on the loopback address is a secure context, which Firefox's address bar does not
+  // call not secure (gIdentityHandler._getIsSecureContext).
+  const loopback = await openPage(
+    getRootDirectory(gTestPath).replace("chrome://mochitests/content", "http://127.0.0.1:8888") +
+      "file_vimma_plain.html",
+  );
+  await until(() => segText("url")?.includes("127.0.0.1"), "the loopback page is shown");
+  await new Promise((r) => setTimeout(r, 300));
+  Assert.equal(segText("security"), null, "http on 127.0.0.1: not called not secure");
+  gBrowser.removeTab(loopback);
   await show();
   await SpecialPowers.popPrefEnv();
 });
@@ -885,33 +1036,17 @@ add_task(async function config_sets_the_toolbar() {
   gBrowser.removeTab(tab);
 });
 
-// 14: hover at the top edge shows the full toolbar; leaving hides it; typing survives it.
-add_task(async function hover_shows_the_full_toolbar() {
+// 14: the pointer at the window's top edge reveals nothing: the bar shows for the address, a
+// prompt or a popup, and `ctrl+b u` brings the whole toolbar back.
+add_task(async function the_top_edge_reveals_nothing() {
   const tab = await openPage();
   await hide();
-  const edge = $("vimma-toolbar-edge");
-  Assert.ok(edge && shows(edge), "the edge strip is there while hidden");
-  EventUtils.synthesizeMouse(edge, 20, 1, { type: "mousemove" });
-  await until(() => revealedFull(), "hovering the edge shows the full toolbar");
-  Assert.ok(shows($("back-button")) && shows($("PanelUI-button")), "with its buttons");
-  EventUtils.synthesizeMouseAtCenter(tab.linkedBrowser, { type: "mousemove" });
-  await until(() => barCollapsed(), "leaving hides it");
-
-  await focusContent(tab.linkedBrowser);
-  EventUtils.synthesizeKey("I", { shiftKey: true });
-  await until(() => gURLBar.focused, "I");
-  EventUtils.sendString("abc");
-  await until(() => gURLBar.value === "abc", "typed");
-  const before = $("urlbar-container").getBoundingClientRect();
-  EventUtils.synthesizeMouse($("nav-bar"), 3, 3, { type: "mousemove" });
-  await until(() => revealedFull(), "hovering the minimal bar shows the full one");
-  const after = $("urlbar-container").getBoundingClientRect();
-  Assert.deepEqual([after.x, after.y, after.width], [before.x, before.y, before.width], "no jump");
-  Assert.ok(gURLBar.focused && gURLBar.value === "abc", "focus and text kept");
-  EventUtils.synthesizeMouseAtCenter(tab.linkedBrowser, { type: "mousemove" });
-  await until(() => minimal(), "leaving: back to the minimal bar");
-  await escapeUrlbar();
-  await until(() => barCollapsed(), "hidden");
+  Assert.equal($("vimma-toolbar-edge"), null, "no hover strip at the top edge");
+  EventUtils.synthesizeMouse(document.documentElement, 20, 0, { type: "mousemove" });
+  EventUtils.synthesizeMouse(document.documentElement, 20, 1, { type: "mousemove" });
+  await new Promise((r) => setTimeout(r, 400));
+  Assert.ok(barCollapsed(), "the pointer at the top edge leaves the bar hidden");
+  Assert.ok(!root().hasAttribute(REVEALED), "nothing is revealed");
   gBrowser.removeTab(tab);
   await show();
 });

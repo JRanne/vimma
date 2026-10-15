@@ -29,6 +29,9 @@ const FOCUS_SHEET = "chrome://browser/skin/vimma/focus.css";
  * (spec firefox-sidebar-theme). */
 const SIDEBAR_SHEET = "chrome://browser/skin/vimma/firefox-sidebar.css";
 const SIDEBAR_PAGE_SHEET = "chrome://browser/skin/vimma/firefox-sidebar-page.css";
+/** Firefox's toolbar, URL field, suggestions and the panels hanging from the bar in the tokens
+ * (spec toolbar-toggle decision 21). */
+const TOOLBAR_SHEET = "chrome://browser/skin/vimma/firefox-toolbar.css";
 const SOURCE_PREF = "vimma.theme.source";
 const PATH_PREF = "vimma.theme.omarchyPath";
 const POLL_PREF = "vimma.theme.pollMs";
@@ -433,7 +436,8 @@ export const ThemeHost = {
   /**
    * Once per browser window (vimma.js), before its UI is built: the current tokens as an author
    * sheet, swapped in place on every theme change; focus.css, which gives Firefox's focus colour
-   * the tokens' --vimma-focus; and firefox-sidebar.css, which gives Firefox's sidebar the tokens.
+   * the tokens' --vimma-focus; firefox-sidebar.css, which gives Firefox's sidebar the tokens; and
+   * firefox-toolbar.css, which gives them to its toolbar and the panels hanging from it.
    * Every document the sidebar's browser loads gets the tokens too (spec firefox-sidebar-theme).
    * @param {Window} win
    */
@@ -443,6 +447,7 @@ export const ThemeHost = {
     win.windowUtils.loadSheetUsingURIString(uri, win.windowUtils.AUTHOR_SHEET);
     win.windowUtils.loadSheetUsingURIString(FOCUS_SHEET, win.windowUtils.AUTHOR_SHEET);
     win.windowUtils.loadSheetUsingURIString(SIDEBAR_SHEET, win.windowUtils.AUTHOR_SHEET);
+    win.windowUtils.loadSheetUsingURIString(TOOLBAR_SHEET, win.windowUtils.AUTHOR_SHEET);
     windows.set(win, uri);
     win.addEventListener(
       "unload",
