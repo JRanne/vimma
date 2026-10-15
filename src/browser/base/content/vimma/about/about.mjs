@@ -81,9 +81,11 @@ function renderUpdates(u) {
       "Checks",
       u.enabled
         ? `on, every ${u.intervalHours} hours`
-        : u.from === "config"
-          ? "off ([updates] check = false in config.toml)"
-          : "off (vimma.update.enabled)",
+        : u.from === "config-errors"
+          ? "off until config.toml's errors are fixed"
+          : u.from === "config"
+            ? "off ([updates] check = false in config.toml)"
+            : "off (vimma.update.enabled)",
     ],
     ["Install type", INSTALL_TYPES[u.installType] ?? u.installType],
     ["Channel", u.channel],

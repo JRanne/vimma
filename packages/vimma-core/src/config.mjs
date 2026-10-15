@@ -911,6 +911,21 @@ export function reloadConfig(active, text) {
 }
 
 /**
+ * `[updates] check` as the file says it, even when the file as a whole has errors elsewhere
+ * (docs/specs/m6a-updater.md decision 31): a boolean, or null when the TOML does not parse or
+ * the key is missing or not a boolean.
+ * @param {string} text
+ * @returns {boolean | null}
+ */
+export function rawUpdatesCheck(text) {
+  const parsed = parseToml(text, { integersAsBigInt: true });
+  if (!parsed.ok) return null;
+  const updates = parsed.value.updates;
+  const check = isTable(updates) ? updates.check : undefined;
+  return typeof check === "boolean" ? check : null;
+}
+
+/**
  * `:route add` (spec workspace-routing): the text to append to config.toml for a `domain` rule,
  * or the whole file to create when it is missing (`text` null: the template plus the rule).
  * The result must parse: a file with errors now, an older schema or an inline `routes = [...]`

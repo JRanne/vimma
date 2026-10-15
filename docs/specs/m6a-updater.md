@@ -766,7 +766,27 @@ mar` needs the host `mar` tool from the same objdir. Nothing here can ship befor
 30. **The manifest URL is the pref `vimma.update.url`, and it may use only `%BUILD_TARGET%` and
     `%CHANNEL%` and only `https`**, because then a check sends nothing but the platform and the
     channel even when the pref is changed, and a changed URL still has to serve a manifest signed
-    by a pinned key. Plain `http` is allowed only in automation, for a local test host.
+    by a pinned key. Plain `http` is allowed only in automation, for a local test host. Vimma's
+    fetch also refuses redirects (`redirect: "error"`), because a static manifest never moves and
+    a redirect could lead the request to plain http or another host; and it sends
+    `Accept-Language` empty, because Necko otherwise adds the profile's languages
+    (`nsHttpHandler::AddStandardRequestHeaders`, Firefox 158.0), which say something about the
+    user. The other headers Necko adds (user agent, `Accept`, `Accept-Encoding`, `Priority`,
+    `Sec-Fetch-*`) are the same for every install of a build.
+31. **A config.toml with errors never turns checks on.** When the file cannot be applied, a
+    `[updates] check = false` that can still be read from its TOML holds; otherwise the config in
+    force before keeps its value, and when only the defaults stand in for the broken file (at
+    startup) no check runs until it is fixed, because the defaults would otherwise silently undo
+    an opt-out that the broken file still states; about:vimma says "off until config.toml's
+    errors are fixed".
+32. **A manifest response may hold at most 256 KiB, counted after decompression**: a larger
+    `Content-Length` is refused before reading, and the body is read as a stream and cancelled
+    past the cap, because a compromised host could otherwise send a body or a gzip or brotli bomb
+    large enough to exhaust the parent process's memory before the signature is checked. It
+    counts as a refused manifest.
+33. **A serial more than a day ahead of the clock is refused**, because the replay rule would
+    otherwise let one manifest signed with a wrong clock lock every profile that accepted it out
+    of every later manifest; a day leaves room for a client clock that is slightly behind.
 
 ### 9. Not in this spec
 
@@ -792,9 +812,9 @@ checked by the updater against two embedded keys (§6). Each compromise and what
 
 - **What a check sends**: `GET https://updates.vimma.dev/updates/browser/Linux_x86_64-gcc3/<channel>/update.xml`
   (plus `?force=1` for `:update` or Firefox's "Check for updates"), Firefox's standard user agent,
-  no cookies (`LOAD_ANONYMOUS` from the hook; Vimma's fetch uses `credentials: "omit"`). No Vimma
-  version, build ID, locale, OS version or identifier: every install of a channel requests the
-  same static file. Cloudflare sees the IP address and the time; the update host has no analytics.
+  no cookies (`LOAD_ANONYMOUS` from the hook; Vimma's fetch uses `credentials: "omit"`), an empty
+  `Accept-Language` and no redirect followed (decision 30). No Vimma version, build ID, locale, OS
+  version or identifier: every install of a channel requests the same static file. Cloudflare sees the IP address and the time; the update host has no analytics.
 - **What a download sends**: a GET to GitHub for the MAR (or AppImage) with the cookie header
   stripped (decision 1); GitHub sees the IP address. A cookie-less mirror (an R2 bucket on a
   separate hostname) is possible later and not needed for the guarantee.

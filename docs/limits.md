@@ -298,6 +298,9 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
   Firefox's updater, staged updates and the AppImage replacing its own file are M6a's later
   sub-PRs ([m6a-updater](specs/m6a-updater.md), Delivery). No signed manifest is published
   until the first public release, so until then a check finds nothing.
+- The "no news for N days" warning counts from the last manifest Vimma accepted: an install
+  that has never accepted one (its host always failed, or withheld the feed from the start)
+  shows nothing, because a host that does not answer is kept quiet (m6a-updater, decision 27).
 - No crash reporting: builds have no crash reporter, so crashes leave only a local core dump.
   Opt-in reporting to our own server is M6 ([m0-mozilla-services](specs/m0-mozilla-services.md)).
 - Once Vimma writes its `false` for sponsored address-bar suggestions, that value looks like the

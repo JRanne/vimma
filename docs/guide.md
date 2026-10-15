@@ -2059,15 +2059,18 @@ accepted. It installs nothing; it tells you.
 
 - **What a check sends:** a GET for
   `https://updates.vimma.dev/updates/browser/Linux_x86_64-gcc3/<channel>/update.xml`, with no
-  cookies, no referrer and no cache. It names your platform and update channel and nothing else:
-  no Vimma version, build, locale or identifier, so every install on a channel asks for the same
+  cookies, no referrer, an empty `Accept-Language` and no cache, and follows no redirect. It names
+  your platform and update channel and nothing else: no Vimma version, build, language or
+  identifier, so every install on a channel asks for the same
   file. The host sees your IP address and the time.
 - **Problems:** a host that does not answer (you are offline, or no release is published yet) is
   not shown in the status bar; about:vimma has the reason. A file that answers but fails the
   checks three times in a row shows `updates: check failed`, and one that is older than 45 days
   (7 for nightly builds) shows `updates: no news for N days`.
 - **Off:** `[updates] check = false` in [config.toml](#configtoml), or `vimma.update.enabled` =
-  `false` in `about:config`, stops every request; about:vimma then says checks are off.
+  `false` in `about:config`, stops every request; about:vimma then says checks are off. A
+  `config.toml` with errors never turns checks back on: its `check = false` still holds, and
+  while Vimma runs on its defaults because of the errors, it does not check at all.
 
 ## Privacy defaults
 

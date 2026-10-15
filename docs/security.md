@@ -1000,31 +1000,44 @@ _Pages_ and _extensions_ cannot reach it.
   [`no pinned key at all refuses every manifest (before the key ceremony)`](../packages/vimma-core/test/updates.test.mjs),
   [`every pinned key is an RSA-4096 SPKI whose id matches, one per slot`](../packages/vimma-core/test/updates.test.mjs),
   [`refusals_show_after_three_in_a_row`](../tests/browser/browser_vimma_update_check.js)
-- UP2. A verified manifest is **never** accepted for another channel or platform, or with a
-  serial older than one this profile accepted or than the running build's ID (replay), and an
-  older or equal build is **never** offered (downgrade). Withholding updates or serving an old
+- UP2. A verified manifest is **never** accepted for another channel or platform, with a serial
+  older than one this profile accepted or than the running build's ID (replay), or with a serial
+  more than a day ahead of the clock, and an older or equal build is **never** offered
+  (downgrade). Withholding updates or serving an old
   manifest for long is what a compromised host can still do; the feed's age shows after 45 days
   (7 for nightly).
   [`channel and target mismatches are refused`](../packages/vimma-core/test/updates.test.mjs),
   [`replay: a serial below the one accepted, or below this build, is refused; equal is accepted`](../packages/vimma-core/test/updates.test.mjs),
   [`downgrade: an older or equal build is no offer, not an error`](../packages/vimma-core/test/updates.test.mjs),
   [`a release feed older than 45 days and a nightly one older than 7 are stale`](../packages/vimma-core/test/updates.test.mjs),
-  [`replay_is_refused_and_downgrade_offers_nothing`](../tests/browser/browser_vimma_update_check.js)
-- UP3. A check **never** sends cookies, a referrer or anything that identifies the install: the
-  request is an anonymous, uncached GET whose URL may carry only the platform and the update
-  channel (`%BUILD_TARGET%`, `%CHANNEL%`), over https (plain http only in automation).
+  [`replay_is_refused_and_downgrade_offers_nothing`](../tests/browser/browser_vimma_update_check.js),
+  [`a serial more than a day ahead of the clock is refused; up to a day is accepted`](../packages/vimma-core/test/updates.test.mjs),
+  [`a_serial_from_the_future_is_refused`](../tests/browser/browser_vimma_update_check.js)
+- UP3. A check **never** sends cookies, a referrer, the user's languages or anything that
+  identifies the install: the request is an anonymous, uncached GET with an empty
+  `Accept-Language` whose URL may carry only the platform and the update channel
+  (`%BUILD_TARGET%`, `%CHANNEL%`), over https (plain http only in automation), and it **never**
+  follows a redirect. Its other headers are Necko's, the same for every install of a build.
   [`newer_build_is_offered_and_the_request_is_anonymous`](../tests/browser/browser_vimma_update_check.js),
   [`the_url_may_name_only_platform_and_channel`](../tests/browser/browser_vimma_update_check.js),
+  [`redirects_are_not_followed`](../tests/browser/browser_vimma_update_check.js),
   [`ask updates.vimma.dev with the platform and channel only`](../tools/branding/test/branding-prefs.test.mjs)
 - UP4. With `[updates] check = false` or `vimma.update.enabled` = `false`, and in a build run from
-  its objdir, Vimma **never** makes an update request.
+  its objdir, Vimma **never** makes an update request. A `config.toml` with errors **never**
+  turns checks on: a `check = false` still readable in it holds, and while only the defaults
+  stand in for the broken file no check runs.
   [`off_by_pref_or_config_sends_nothing`](../tests/browser/browser_vimma_update_check.js),
-  [`a_source_build_checks_nothing`](../tests/browser/browser_vimma_update_check.js)
-- UP5. Manifest text is parsed **only** after its signature verifies, and only in the one format
+  [`a_source_build_checks_nothing`](../tests/browser/browser_vimma_update_check.js),
+  [`a_config_with_errors_still_turns_checks_off`](../tests/browser/browser_vimma_update_check.js),
+  [`a file with errors: a readable check = false holds; else the config in force, or held`](../packages/vimma-core/test/updates.test.mjs)
+- UP5. A response is read **only** up to 256 KiB, counted after decompression: a larger
+  `Content-Length` is refused unread, and a longer body or a compression bomb is cancelled at the
+  cap. Manifest text is parsed **only** after its signature verifies, and only in the one format
   the release pipeline writes: at most 64 KiB, no DTD or entity declarations, at most one
   `<update>`. The commands about:vimma shows are built from a SemVer version and shell-quoted
   paths, never from free text in the manifest; a saved result (the pref `vimma.update.last`) is
   checked the same way when read back.
+  [`an_oversized_or_compressed_bomb_response_is_refused`](../tests/browser/browser_vimma_update_check.js),
   [`an oversized manifest is refused before any crypto`](../packages/vimma-core/test/updates.test.mjs),
   [`shellQuote leaves plain paths alone and quotes the rest`](../packages/vimma-core/test/updates.test.mjs),
   [`tarball: quit, then unpack over the install's parent directory, quoted`](../packages/vimma-core/test/updates.test.mjs),

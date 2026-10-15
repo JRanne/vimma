@@ -18,11 +18,12 @@ import {
   updateNotice,
   updateSteps,
   updateVersionLine,
+  updatesCheckAfterRead,
   updatesEnabled,
   verifyManifest,
 } from "../src/updates.mjs";
 import { UPDATE_KEYS } from "../src/update-keys.mjs";
-import { parseConfig } from "../src/config.mjs";
+import { parseConfig, rawUpdatesCheck } from "../src/config.mjs";
 import { DEFAULT_CONFIG, formatDefaultsToml } from "../src/defaults.mjs";
 import { parseCommandLine } from "../src/cmdline.mjs";
 import { getAction } from "../src/actions.mjs";
@@ -357,9 +358,20 @@ describe("judgeManifest (§4 rules 2 to 4)", () => {
     appVersion: "158.0",
     buildId: "20261020000000",
     serial: /** @type {string | null} */ (null),
+    now: Date.parse("2026-10-29T00:00:00Z"),
   };
   /** @param {Parameters<typeof manifest>[0]} [o] */
   const parsed = (o) => /** @type {any} */ (parseManifest(manifest(o))).manifest;
+
+  test("a serial more than a day ahead of the clock is refused; up to a day is accepted", () => {
+    const at = (/** @type {string} */ iso) => ({ ...running, now: Date.parse(iso) });
+    // serial 2026-10-28 04:12:07 UTC
+    expect(judgeManifest(parsed(), at("2026-10-27T04:12:08Z"), compare).ok).toBe(true);
+    expect(judgeManifest(parsed(), at("2026-10-27T04:12:06Z"), compare)).toEqual({
+      ok: false,
+      reason: "future: serial 20261028041207 is more than a day ahead of this clock",
+    });
+  });
 
   test("a newer Firefox version is offered", () => {
     expect(judgeManifest(parsed(), running, compare)).toMatchObject({
@@ -640,6 +652,39 @@ describe("[updates] check (config.toml, schema 2) and the pref", () => {
         message: "is new in schema 2: put schema = 2 at the top of the file",
       },
     ]);
+  });
+
+  test("a file with errors: a readable check = false holds; else the config in force, or held", () => {
+    const broken = "schema = 2\n[updates]\ncheck = false\n[keys]\nnope = 1\n";
+    expect(rawUpdatesCheck(broken)).toBe(false);
+    expect(rawUpdatesCheck("schema = 2\n[updates\n")).toBeNull();
+    expect(rawUpdatesCheck("schema = 2\n[updates]\ncheck = 'no'\n")).toBeNull();
+    expect(
+      updatesCheckAfterRead({ errors: 0, inForce: true, raw: null, hadConfig: false }),
+    ).toEqual({
+      check: true,
+      held: false,
+    });
+    expect(
+      updatesCheckAfterRead({ errors: 1, inForce: true, raw: false, hadConfig: true }),
+    ).toEqual({
+      check: false,
+      held: false,
+    });
+    // Defaults stand in for a broken file at startup: no check until it is fixed.
+    expect(
+      updatesCheckAfterRead({ errors: 1, inForce: true, raw: null, hadConfig: false }),
+    ).toEqual({
+      check: false,
+      held: true,
+    });
+    // A config was in force before: it stays, its check with it.
+    expect(updatesCheckAfterRead({ errors: 1, inForce: true, raw: null, hadConfig: true })).toEqual(
+      {
+        check: true,
+        held: false,
+      },
+    );
   });
 
   test("either the file or the pref turns checks off", () => {

@@ -20,6 +20,16 @@ export const SIGNATURE_ALGORITHM = Object.freeze({ name: "RSASSA-PKCS1-v1_5", ha
 export const REFUSALS_SHOWN = 3;
 /** Days after which a feed counts as stale (spec §4 rule 5). */
 export const STALE_DAYS = Object.freeze({ release: 45, nightly: 7 });
+/**
+ * How far ahead of the clock a serial may be (decision 33): a pipeline clock error must not lock
+ * every profile out of later manifests through the replay rule.
+ */
+export const FUTURE_SERIAL_MS = 86_400_000;
+/**
+ * The most a manifest response may hold, counted after decompression (decision 32); the manifest
+ * itself is at most MAX_MANIFEST_CHARS characters.
+ */
+export const MAX_RESPONSE_BYTES = 256 * 1024;
 /** Where release assets are downloaded from (m6-packaging's file names). */
 export const RELEASES_URL = "https://github.com/vimma-browser/vimma/releases";
 /**
@@ -342,7 +352,8 @@ export function parseManifest(body) {
  * Rules 2 to 4 (spec §4): the right channel and target, no replay, no downgrade.
  * @param {Manifest} manifest
  * @param {{ channel: string, target: string, appVersion: string, buildId: string,
- *   serial: string | null }} running  `serial`: the highest this profile accepted
+ *   serial: string | null, now: number }} running  `serial`: the highest this profile
+ *   accepted; `now`: the clock, ms since the epoch
  * @param {(a: string, b: string) => number} compare  Firefox's version comparison
  * @returns {{ ok: true, serial: string, offer: Offer | null } | { ok: false, reason: string }}
  */
@@ -360,6 +371,13 @@ export function judgeManifest(manifest, running, compare) {
     };
   }
   const serial = BigInt(manifest.serial);
+  const issued = serialTime(manifest.serial);
+  if (issued === null || issued > running.now + FUTURE_SERIAL_MS) {
+    return {
+      ok: false,
+      reason: `future: serial ${manifest.serial} is more than a day ahead of this clock`,
+    };
+  }
   if (running.serial !== null && serial < BigInt(running.serial)) {
     return {
       ok: false,
@@ -384,6 +402,17 @@ export function judgeManifest(manifest, running, compare) {
 }
 
 /**
+ * A serial (`YYYYMMDDhhmmss`, UTC) as ms since the epoch, or null.
+ * @param {string} serial
+ */
+function serialTime(serial) {
+  const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(serial);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, s] = m.map(Number);
+  return Date.UTC(/** @type {number} */ (y), /** @type {number} */ (mo) - 1, d, h, mi, s);
+}
+
+/**
  * Rule 5 (spec §4): how many whole days old the feed is, when that is past its channel's limit;
  * else null.
  * @param {string} serial
@@ -391,10 +420,8 @@ export function judgeManifest(manifest, running, compare) {
  * @param {number} now  ms since the epoch
  */
 export function staleDays(serial, channel, now) {
-  const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(serial);
-  if (!m) return null;
-  const [, y, mo, d, h, mi, s] = m.map(Number);
-  const at = Date.UTC(/** @type {number} */ (y), /** @type {number} */ (mo) - 1, d, h, mi, s);
+  const at = serialTime(serial);
+  if (at === null) return null;
   const days = Math.floor((now - at) / 86400000);
   const limit = channel.endsWith("-nightly") ? STALE_DAYS.nightly : STALE_DAYS.release;
   return days > limit ? days : null;
@@ -522,6 +549,23 @@ export function updateSteps(type, offer, where) {
  */
 export function updateVersionLine(offer) {
   return `Vimma ${offer.displayVersion} · Firefox ${offer.appVersion}`;
+}
+
+/**
+ * `[updates] check` after a read of config.toml (decision 31). A file with errors never turns
+ * checks on: a `check = false` still readable in it holds; otherwise the config in force before
+ * keeps its value, and when only the defaults stand in for the broken file checks are held off
+ * until it is fixed.
+ * @param {{ errors: number, inForce: boolean, raw: boolean | null, hadConfig: boolean }} read
+ *   `inForce`: `updates.check` of the config in force after the read; `raw`: rawUpdatesCheck;
+ *   `hadConfig`: a config (not the fallback) was in force before the read
+ * @returns {{ check: boolean, held: boolean }}
+ */
+export function updatesCheckAfterRead({ errors, inForce, raw, hadConfig }) {
+  if (!errors) return { check: inForce, held: false };
+  if (raw === false) return { check: false, held: false };
+  if (!hadConfig) return { check: false, held: true };
+  return { check: inForce, held: false };
 }
 
 /**

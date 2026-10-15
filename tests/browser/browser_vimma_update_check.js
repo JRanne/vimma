@@ -46,7 +46,13 @@ async function makeKey() {
 
 let key;
 let stranger;
-let serial = 20300101000000;
+/**
+ * Serials are UTC times and may be at most a day ahead of the clock (decision 33); six hours
+ * ahead keeps them above this build's ID, which is local time.
+ */
+let serial = Number(
+  new Date(Date.now() + 6 * 3600 * 1000).toISOString().replace(/\D/g, "").slice(0, 14),
+);
 
 /**
  * A signed manifest. Each call has a newer serial unless one is given.
@@ -159,9 +165,31 @@ add_task(async function newer_build_is_offered_and_the_request_is_anonymous() {
       query: `target=${encodeURIComponent(TARGET)}&channel=${encodeURIComponent(CHANNEL)}`,
       cookie: false,
       referer: false,
+      headers: log[0].headers,
     },
     "the request names the platform and channel only, with no cookie",
   );
+  // What Necko adds (nsHttpHandler::AddStandardRequestHeaders and the channel): the same for
+  // every install of a build, and no language (decision 30).
+  Assert.equal(log[0].headers["accept-language"], "", "Accept-Language is sent empty");
+  const allowed = [
+    "host",
+    "user-agent",
+    "accept",
+    "accept-language",
+    "accept-encoding",
+    "connection",
+    "priority",
+    "pragma",
+    "cache-control",
+    "sec-fetch-dest",
+    "sec-fetch-mode",
+    "sec-fetch-site",
+    "te",
+  ];
+  for (const name of Object.keys(log[0].headers)) {
+    Assert.ok(allowed.includes(name), `header ${name} is one every install sends alike`);
+  }
   Assert.equal(Services.prefs.getStringPref("vimma.update.serial"), String(serial));
 });
 
@@ -315,5 +343,69 @@ add_task(async function a_damaged_saved_result_is_dropped_not_thrown() {
     Assert.equal(s.offer, null, saved);
     Assert.equal(s.refusals, 0, saved);
   }
+  VimmaUpdates._reset();
+});
+
+add_task(async function an_oversized_or_compressed_bomb_response_is_refused() {
+  for (const query of ["big", "bigstream"]) {
+    await SpecialPowers.pushPrefEnv({ set: [["vimma.update.url", `${HOST}?${query}`]] });
+    const r = await VimmaUpdates.check();
+    Assert.equal(r.outcome, "refused", query);
+    Assert.equal(r.reason, "manifest: the response is larger than 256 KiB", query);
+    await SpecialPowers.popPrefEnv();
+  }
+  // 16 MiB of spaces, gzip-compressed to 16 KiB: fetch inflates it as it reads.
+  const bomb = `${getRootDirectory(gTestPath).replace(
+    "chrome://mochitests/content",
+    "https://example.com",
+  )}file_vimma_update_bomb.gz`;
+  await SpecialPowers.pushPrefEnv({ set: [["vimma.update.url", bomb]] });
+  const r = await VimmaUpdates.check();
+  Assert.equal(r.outcome, "refused");
+  Assert.equal(r.reason, "manifest: the response is larger than 256 KiB");
+  await SpecialPowers.popPrefEnv();
+  VimmaUpdates._reset();
+});
+
+add_task(async function redirects_are_not_followed() {
+  for (const to of ["http", "host"]) {
+    await fetch(`${HOST}?reset`);
+    await serve(await manifest());
+    await SpecialPowers.pushPrefEnv({ set: [["vimma.update.url", `${HOST}?redirect=${to}`]] });
+    const r = await VimmaUpdates.check();
+    Assert.equal(r.outcome, "unreachable", to);
+    await SpecialPowers.popPrefEnv();
+    const log = await requests();
+    Assert.deepEqual(
+      log.map((e) => e.query),
+      [`redirect=${to}`],
+      `the ${to} redirect's target was never requested`,
+    );
+  }
+  VimmaUpdates._reset();
+});
+
+add_task(async function a_config_with_errors_still_turns_checks_off() {
+  await fetch(`${HOST}?reset`);
+  await serve(await manifest());
+  const file = PathUtils.join(dir, "broken.toml");
+  await IOUtils.writeUTF8(
+    file,
+    "schema = 2\n[updates]\ncheck = false\n[keys]\nnot_an_action = 1\n",
+  );
+  await ConfigHost.reload(file);
+  Assert.ok(ConfigHost.errors.length > 0, "the file has errors");
+  await until(() => !VimmaUpdates.status().enabled, "check = false honoured from the broken file");
+  Assert.equal((await VimmaUpdates.check()).outcome, "off");
+  Assert.deepEqual(await requests(), [], "no request");
+  await ConfigHost.reload();
+  await until(() => VimmaUpdates.status().enabled, "back on with the defaults");
+});
+
+add_task(async function a_serial_from_the_future_is_refused() {
+  await serve(await manifest({ at: "20991231000000" }));
+  const r = await VimmaUpdates.check();
+  Assert.equal(r.outcome, "refused");
+  Assert.ok(r.reason.startsWith("future: "), r.reason);
   VimmaUpdates._reset();
 });

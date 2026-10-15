@@ -11,6 +11,7 @@
 // and, three times in a row, shown. Pure rules live in core/updates.mjs.
 
 import {
+  MAX_RESPONSE_BYTES,
   installTypeFrom,
   judgeManifest,
   parseManifest,
@@ -88,6 +89,11 @@ const fresh = () => ({
 
 /** @type {UpdateState} */
 let state = fresh();
+/**
+ * config.toml has errors and only the defaults stand in for it: no check until it is fixed
+ * (decision 31).
+ */
+let held = false;
 /** `[updates] check` of the config in force; null before config.toml is read. */
 let configCheck = /** @type {boolean | null} */ (null);
 /** @type {Promise<UpdateState> | null} */
@@ -119,6 +125,7 @@ function notify() {
 }
 
 function enabled() {
+  if (held) return false;
   return updatesEnabled({
     pref: Services.prefs.getBoolPref(ENABLED_PREF, true),
     config: configCheck === null ? null : { check: configCheck },
@@ -254,10 +261,53 @@ function finish(next) {
   return state;
 }
 
+const TOO_LARGE = "manifest: the response is larger than 256 KiB";
+
+/**
+ * The response body as text, or null past MAX_RESPONSE_BYTES (decision 32). The cap counts the
+ * bytes fetch hands over, which are already decompressed, so a gzip or brotli bomb stops there
+ * too; the rest is never read.
+ * @param {Response} response
+ * @param {AbortController} abort
+ * @returns {Promise<string | null>}
+ */
+async function readCapped(response, abort) {
+  const length = Number(response.headers.get("Content-Length") ?? "0");
+  if (length > MAX_RESPONSE_BYTES) {
+    abort.abort();
+    return null;
+  }
+  const reader = /** @type {ReadableStream<Uint8Array>} */ (response.body).getReader();
+  /** @type {Uint8Array[]} */
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_RESPONSE_BYTES) {
+      await reader.cancel().catch(() => {});
+      abort.abort();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) {
+    bytes.set(c, at);
+    at += c.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 async function runCheck() {
   const where = await installInfo();
   if (!enabled()) return finish({ outcome: "off", reason: null, offer: null });
   if (where.type === "source") return finish({ outcome: "source", reason: null, offer: null });
+  /** @param {string} reason */
+  const refuse = (reason) =>
+    finish({ outcome: "refused", reason, offer: null, refusals: state.refusals + 1 });
   /** @type {string} */
   let text;
   // AbortSignal.timeout needs a window; a system module has none.
@@ -268,6 +318,10 @@ async function runCheck() {
       credentials: "omit",
       cache: "no-store",
       referrerPolicy: "no-referrer",
+      // A static manifest never moves: a redirect to http or another host is refused (decision 30).
+      redirect: "error",
+      // Necko adds the profile's languages; an empty value says nothing about the user.
+      headers: { "Accept-Language": "" },
       signal: abort.signal,
     });
     if (!response.ok) {
@@ -276,16 +330,15 @@ async function runCheck() {
         reason: `the update host answered ${response.status}`,
       });
     }
-    text = await response.text();
+    const body = await readCapped(response, abort);
+    if (body === null) return refuse(TOO_LARGE);
+    text = body;
   } catch (e) {
     const why = /** @type {any} */ (e)?.message ?? String(e);
     return finish({ outcome: "unreachable", reason: `the update host did not answer: ${why}` });
   } finally {
     lazy.clearTimeout(timer);
   }
-  /** @param {string} reason */
-  const refuse = (reason) =>
-    finish({ outcome: "refused", reason, offer: null, refusals: state.refusals + 1 });
   const verified = await verifyManifest(text, pinnedKeys(), crypto.subtle);
   if (!verified.ok) return refuse(verified.reason);
   const parsed = parseManifest(verified.body);
@@ -299,6 +352,7 @@ async function runCheck() {
       appVersion: Services.appinfo.version,
       buildId: Services.appinfo.appBuildID,
       serial: stored,
+      now: Date.now(),
     },
     (a, b) => Services.vc.compare(a, b),
   );
@@ -339,12 +393,14 @@ export const VimmaUpdates = {
   },
 
   /**
-   * `[updates]` of the config in force (ConfigHost).
-   * @param {{ check: boolean }} updates
+   * `[updates]` of the config in force (ConfigHost, through core updatesCheckAfterRead).
+   * @param {{ check: boolean, held?: boolean }} updates
    */
   configure(updates) {
-    if (configCheck === updates.check) return;
+    const heldNow = updates.held === true;
+    if (configCheck === updates.check && held === heldNow) return;
     configCheck = updates.check;
+    held = heldNow;
     notify();
   },
 
@@ -377,7 +433,7 @@ export const VimmaUpdates = {
     const { offer } = state;
     return {
       enabled: enabled(),
-      from: configCheck === false ? "config" : "pref",
+      from: held ? "config-errors" : configCheck === false ? "config" : "pref",
       installType: where.type,
       channel: channel(),
       intervalHours: Services.prefs.getIntPref(INTERVAL_PREF, 43200) / 3600,
@@ -405,7 +461,11 @@ export const VimmaUpdates = {
 
   /** The current result, synchronously (tests, the status bar). */
   status() {
-    return { ...state, enabled: enabled(), from: configCheck === false ? "config" : "pref" };
+    return {
+      ...state,
+      enabled: enabled(),
+      from: held ? "config-errors" : configCheck === false ? "config" : "pref",
+    };
   },
 
   /** @param {() => void} fn  called after every check and configure */

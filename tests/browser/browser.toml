@@ -254,4 +254,8 @@ support-files = ["file_vimma_addon_updates.json"]
 support-files = ["file_vimma_plain.html", "file_vimma_slow.sjs"]
 
 ["browser_vimma_update_check.js"]
-support-files = ["file_vimma_update_manifest.sjs"]
+support-files = [
+  "file_vimma_update_manifest.sjs",
+  "file_vimma_update_bomb.gz",
+  "file_vimma_update_bomb.gz^headers^",
+]
