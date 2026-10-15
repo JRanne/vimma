@@ -703,6 +703,12 @@ in a `build` environment, and a watch on Mozilla's release key,
   write to `engine/`.
   `firefox-source.sh` also refuses a `surfer.json` with a `version.candidate`, which Surfer would
   fetch from `candidates/` unverified.
+  A pull request that changes the pinned key file, or a line of `verify-sha512.py` that names
+  `PINNED_FINGERPRINT` or `KEY_FILE`, fails the required check "Mozilla release key unchanged or
+  approved" (`.github/workflows/key-guard.yml`, `tools/ci/key-guard.mjs`) until a maintainer adds
+  the `key-rotation-approved` label, which needs triage access to the repository. The check runs
+  the base branch's copy of the script; it does not stop a pull request that also rewrites the
+  workflow, which review of `.github/` covers.
   [`test_good_signature_from_mozillas_current_subkey_passes`](../tools/upstream/test_verify_sha512.py),
   [`test_signature_by_the_revoked_compromised_subkey_fails`](../tools/upstream/test_verify_sha512.py),
   [`test_signature_by_another_key_fails`](../tools/upstream/test_verify_sha512.py),
@@ -718,7 +724,10 @@ in a `build` environment, and a watch on Mozilla's release key,
   [`--require refuses an engine/ never verified, or verified for another version`](../tools/upstream/test/verify-source.test.mjs),
   [`npm run import refuses an engine/ whose source was never verified`](../tools/test/upstream-workflow.test.mjs),
   [`every verify-sha512.py call passes a signature`](../tools/test/upstream-workflow.test.mjs),
-  [`refuses a surfer.json with a version.candidate, before anything is fetched`](../tools/upstream/test/firefox-source.test.mjs)
+  [`refuses a surfer.json with a version.candidate, before anything is fetched`](../tools/upstream/test/firefox-source.test.mjs),
+  [`fails a changed key file without the label`](../tools/ci/test/key-guard.test.mjs),
+  [`fails a changed fingerprint without the label, and passes it with`](../tools/ci/test/key-guard.test.mjs),
+  [`passes event values to run: through env only`](../tools/ci/test/key-guard.test.mjs)
 - B2. A nightly or release build **never** builds from an `engine/` it did not extract in the
   same job from the tarball it verified, and **never** restores a tree, an objdir or a compiler
   cache from the Actions cache; a release **must** build in a fresh objdir with an empty

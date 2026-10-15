@@ -874,6 +874,14 @@ expiry in ADR-021 and in this section, and add the new release's `SHA512SUMS` an
 fixtures only if a test needs a signature by the new subkey. A different primary fingerprint is
 not a routine update: stop, and review ADR-021.
 
+The pull request fails the required check "Mozilla release key unchanged or approved"
+(`.github/workflows/key-guard.yml`) until a maintainer, after the checks above, adds the
+`key-rotation-approved` label; adding it re-runs the check. Any change to
+`mozilla-release-key.asc`, or to a line of `verify-sha512.py` that names `PINNED_FINGERPRINT` or
+`KEY_FILE` (a comment included), needs the label. Never add it to a pull request whose key change
+is not a reviewed rotation; remove it if a later push changes the key again, since the label
+stays on the pull request across pushes.
+
 The synthetic signature fixtures in `tools/upstream/fixtures/sums/synthetic/` come from
 `tools/upstream/fixtures/sums/make-synthetic.sh` (throwaway keys, no secret key committed).
 

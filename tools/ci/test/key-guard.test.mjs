@@ -1,0 +1,309 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// tools/ci/key-guard.mjs fails a pull request that changes Mozilla's pinned release key or the
+// fingerprint pinned in verify-sha512.py, unless a maintainer added the key-rotation-approved
+// label (ADR-021, docs/security.md B1, docs/runbook.md "Mozilla's release key").
+
+import { describe, expect, it } from "vitest";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { tempDir } from "../../test/temp-dir.mjs";
+import {
+  APPROVAL_LABEL,
+  KEY_PATH,
+  VERIFIER_PATH,
+  keyChanges,
+  parseLabels,
+  pinnedLines,
+  verdict,
+} from "../key-guard.mjs";
+
+const ROOT = fileURLToPath(new URL("../../..", import.meta.url));
+const SCRIPT = fileURLToPath(new URL("../key-guard.mjs", import.meta.url));
+
+const VERIFIER = [
+  '"""Checks SHA512SUMS against PINNED_FINGERPRINT below."""',
+  "import re",
+  'PINNED_FINGERPRINT = "14F26682D0916CDD81E37B6D61B7B526D98F0353"',
+  'KEY_FILE = Path(__file__).resolve().with_name("mozilla-release-key.asc")',
+  'HASH = re.compile(r"[0-9a-f]{128}")',
+  "def check_signature(sums, signature, key_file=KEY_FILE, fingerprint=PINNED_FINGERPRINT):",
+  "    return 0",
+  "",
+].join("\n");
+const KEY = "-----BEGIN PGP PUBLIC KEY BLOCK-----\nmQINBF...\n-----END PGP PUBLIC KEY BLOCK-----\n";
+const side = (/** @type {Partial<{key: string|null, verifier: string|null}>} */ over = {}) => ({
+  key: KEY,
+  verifier: VERIFIER,
+  ...over,
+});
+
+describe("the guarded paths", () => {
+  it("name the real key file and verifier, which pin the fingerprint", () => {
+    expect(KEY_PATH).toBe("tools/upstream/mozilla-release-key.asc");
+    expect(VERIFIER_PATH).toBe("tools/upstream/verify-sha512.py");
+    const verifier = readFileSync(join(ROOT, VERIFIER_PATH), "utf8");
+    expect(verifier).toMatch(/^PINNED_FINGERPRINT = "[0-9A-F]{40}"$/m);
+    expect(pinnedLines(verifier)?.some((l) => l.startsWith("PINNED_FINGERPRINT ="))).toBe(true);
+    expect(readFileSync(join(ROOT, KEY_PATH), "utf8")).toContain("BEGIN PGP PUBLIC KEY BLOCK");
+    expect(APPROVAL_LABEL).toBe("key-rotation-approved");
+  });
+});
+
+describe("pinnedLines", () => {
+  it("keeps every line that names PINNED_FINGERPRINT or KEY_FILE, in order", () => {
+    expect(pinnedLines(VERIFIER)).toEqual([
+      '"""Checks SHA512SUMS against PINNED_FINGERPRINT below."""',
+      'PINNED_FINGERPRINT = "14F26682D0916CDD81E37B6D61B7B526D98F0353"',
+      'KEY_FILE = Path(__file__).resolve().with_name("mozilla-release-key.asc")',
+      "def check_signature(sums, signature, key_file=KEY_FILE, fingerprint=PINNED_FINGERPRINT):",
+    ]);
+  });
+
+  it("a missing file has no lines", () => {
+    expect(pinnedLines(null)).toBeNull();
+  });
+});
+
+describe("keyChanges", () => {
+  it("finds nothing when neither file changed", () => {
+    expect(keyChanges(side(), side())).toEqual([]);
+  });
+
+  it("ignores a change elsewhere in the verifier", () => {
+    const after = side({ verifier: VERIFIER.replace("{128}", "{128,}") + "# more\n" });
+    expect(keyChanges(side(), after)).toEqual([]);
+  });
+
+  it.each([
+    ["a changed key file", { key: KEY.replace("BF...", "BG...") }, KEY_PATH],
+    ["a deleted key file", { key: null }, KEY_PATH],
+    ["a whitespace-only key change", { key: KEY + "\n" }, KEY_PATH],
+  ])("reports %s", (_, over, named) => {
+    const changes = keyChanges(side(), side(over));
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toContain(named);
+  });
+
+  it("reports a key file that appears", () => {
+    expect(keyChanges(side({ key: null }), side())[0]).toContain(KEY_PATH);
+  });
+
+  it.each([
+    ["a new fingerprint", VERIFIER.replace('"14F2', '"AAAA')],
+    ["a second assignment", VERIFIER + 'PINNED_FINGERPRINT = "' + "A".repeat(40) + '"\n'],
+    ["a fingerprint indented into a block", VERIFIER + '    PINNED_FINGERPRINT = "x"\n'],
+    ["another key file", VERIFIER.replace('with_name("mozilla', 'with_name("other')],
+    ["a changed default argument", VERIFIER.replace("fingerprint=PINNED", "fingerprint=OTHER")],
+    ["a deleted verifier", null],
+  ])("reports %s", (_, verifier) => {
+    const changes = keyChanges(side(), side({ verifier }));
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toContain(VERIFIER_PATH);
+  });
+
+  it("reports both files when both changed", () => {
+    const after = side({ key: "x", verifier: VERIFIER.replace('"14F2', '"AAAA') });
+    expect(keyChanges(side(), after)).toHaveLength(2);
+  });
+});
+
+describe("parseLabels", () => {
+  it.each([
+    ["[]", []],
+    ['["security","key-rotation-approved"]', ["security", "key-rotation-approved"]],
+  ])("reads %s", (json, labels) => {
+    expect(parseLabels(json)).toEqual(labels);
+  });
+
+  it.each(["", "null", "{}", '"key-rotation-approved"', "[1]", "[null]", "not json"])(
+    "refuses %j",
+    (json) => {
+      expect(() => parseLabels(json)).toThrow();
+    },
+  );
+});
+
+describe("verdict", () => {
+  const change = [`${KEY_PATH} changed`];
+
+  it("passes when nothing changed, with or without the label", () => {
+    expect(verdict([], []).ok).toBe(true);
+    expect(verdict([], [APPROVAL_LABEL]).ok).toBe(true);
+  });
+
+  it("fails a change without the label, and names the label", () => {
+    const v = verdict(change, ["security"]);
+    expect(v.ok).toBe(false);
+    expect(v.message).toContain(APPROVAL_LABEL);
+    expect(v.message).toContain(KEY_PATH);
+  });
+
+  it("passes a change with the label", () => {
+    const v = verdict(change, ["security", APPROVAL_LABEL]);
+    expect(v.ok).toBe(true);
+    expect(v.message).toContain(KEY_PATH);
+  });
+
+  it.each(["Key-Rotation-Approved", "key-rotation-approved ", "key-rotation"])(
+    "does not take %j for the label",
+    (label) => {
+      expect(verdict(change, [label]).ok).toBe(false);
+    },
+  );
+});
+
+describe("the command line", () => {
+  const GIT_ENV = {
+    GIT_AUTHOR_NAME: "t",
+    GIT_AUTHOR_EMAIL: "t@example.com",
+    GIT_COMMITTER_NAME: "t",
+    GIT_COMMITTER_EMAIL: "t@example.com",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+  };
+  /** @param {string} cwd @param {string[]} args */
+  const git = (cwd, ...args) =>
+    execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, ...GIT_ENV } });
+
+  /** @param {string} dir */
+  const commit = (dir, msg = "c") => {
+    git(dir, "add", "-A");
+    git(dir, "commit", "-q", "--allow-empty", "-m", msg);
+    return git(dir, "rev-parse", "HEAD").trim();
+  };
+
+  /** A repo with the two files on main, and `change` on a branch made from it. */
+  function repo(/** @type {(dir: string) => void} */ change) {
+    const dir = tempDir("vimma-key-guard-");
+    git(dir, "init", "-q", "-b", "main");
+    mkdirSync(join(dir, "tools", "upstream"), { recursive: true });
+    writeFileSync(join(dir, KEY_PATH), KEY);
+    writeFileSync(join(dir, VERIFIER_PATH), VERIFIER);
+    const base = commit(dir, "base");
+    git(dir, "checkout", "-q", "-b", "pr");
+    change(dir);
+    const head = commit(dir, "head");
+    return { dir, base, head };
+  }
+
+  /**
+   * @param {{dir: string, base: string, head: string}} r
+   * @param {string | null} labels  PR_LABELS, as toJSON(...labels.*.name) gives it; null unsets it
+   */
+  function run(r, labels = "[]", base = r.base) {
+    /** @type {Record<string, string | undefined>} */
+    const env = { ...process.env, ...GIT_ENV, PR_LABELS: labels ?? undefined };
+    if (labels === null) delete env.PR_LABELS;
+    const res = spawnSync(process.execPath, [SCRIPT, "--base", base, "--head", r.head], {
+      cwd: r.dir,
+      encoding: "utf8",
+      env,
+    });
+    return { status: res.status, out: res.stdout + res.stderr };
+  }
+
+  it("passes a pull request that leaves the key alone", () => {
+    const r = repo((dir) => writeFileSync(join(dir, "README.md"), "hi\n"));
+    const res = run(r);
+    expect(res.status).toBe(0);
+  });
+
+  it("fails a changed key file without the label", () => {
+    const r = repo((dir) => writeFileSync(join(dir, KEY_PATH), KEY + "more\n"));
+    const res = run(r, '["security"]');
+    expect(res.status).toBe(1);
+    expect(res.out).toContain(KEY_PATH);
+    expect(res.out).toContain(APPROVAL_LABEL);
+  });
+
+  it("fails a changed fingerprint without the label, and passes it with", () => {
+    const r = repo((dir) =>
+      writeFileSync(join(dir, VERIFIER_PATH), VERIFIER.replace('"14F2', '"AAAA')),
+    );
+    expect(run(r).status).toBe(1);
+    expect(run(r, JSON.stringify([APPROVAL_LABEL])).status).toBe(0);
+  });
+
+  it("fails a deleted key file", () => {
+    const r = repo((dir) => rmSync(join(dir, KEY_PATH)));
+    expect(run(r).status).toBe(1);
+  });
+
+  it("judges the pull request's own changes, not a newer main", () => {
+    // main moves on (an approved rotation lands) after the branch was made: the branch changed
+    // nothing, so it passes even though base and head hold different keys.
+    const r = repo((dir) => writeFileSync(join(dir, "README.md"), "hi\n"));
+    git(r.dir, "checkout", "-q", "main");
+    writeFileSync(join(r.dir, KEY_PATH), KEY + "rotated\n");
+    const newMain = commit(r.dir, "rotation");
+    expect(run(r, "[]", newMain).status).toBe(0);
+  });
+
+  it("sees a change that a later commit of the branch does not undo", () => {
+    const r = repo((dir) => {
+      writeFileSync(join(dir, KEY_PATH), "other\n");
+      commit(dir, "swap key");
+      writeFileSync(join(dir, "README.md"), "hi\n");
+    });
+    expect(run(r).status).toBe(1);
+  });
+
+  it.each([
+    ["missing labels", null],
+    ["labels that are not a list of names", "{}"],
+  ])("cannot check with %s (exit 2)", (_, labels) => {
+    const r = repo((dir) => writeFileSync(join(dir, "README.md"), "hi\n"));
+    expect(run(r, labels).status).toBe(2);
+  });
+
+  it("refuses a base or head that is not a commit hash (exit 2)", () => {
+    const r = repo((dir) => writeFileSync(join(dir, "README.md"), "hi\n"));
+    expect(run(r, "[]", "main").status).toBe(2);
+    expect(run(r, "[]", "--output=/tmp/x").status).toBe(2);
+  });
+});
+
+describe("workflow wiring", () => {
+  const text = readFileSync(join(ROOT, ".github", "workflows", "key-guard.yml"), "utf8");
+
+  it("runs on pull_request, never pull_request_target, for every label change and push", () => {
+    expect(text).toMatch(/^ {2}pull_request:\n {4}types: \[(.*)\]$/m);
+    const types = /^ {4}types: \[(.*)\]$/m.exec(text)?.[1].split(/,\s*/) ?? [];
+    expect(types.sort()).toEqual(["labeled", "opened", "reopened", "synchronize", "unlabeled"]);
+    expect(text).not.toMatch(/^\s*pull_request_target:/m);
+  });
+
+  it("holds contents: read and nothing else", () => {
+    expect(text).toMatch(/^permissions:\n {2}contents: read\n\n/m);
+    expect(text).not.toMatch(/^ +permissions:/m);
+    expect(text).toContain("persist-credentials: false");
+  });
+
+  it("has the job name the ruleset requires", () => {
+    expect(text).toMatch(/^ {4}name: Mozilla release key unchanged or approved$/m);
+  });
+
+  it("passes event values to run: through env only", () => {
+    expect(text).toContain("PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}");
+    expect(text).toContain("BASE: ${{ github.event.pull_request.base.sha }}");
+    expect(text).toContain("HEAD: ${{ github.event.pull_request.head.sha }}");
+    const runs = text.split(/^ {8}run: /m).slice(1);
+    expect(runs.length).toBeGreaterThan(0);
+    for (const block of runs) expect(block.split(/^ {6}- /m)[0]).not.toContain("${{");
+  });
+
+  it("runs the guard as the base branch has it, falling back to the pull request's only when the base has none", () => {
+    expect(text).toContain('git show "$BASE:tools/ci/key-guard.mjs"');
+  });
+
+  it("pins every action by commit", () => {
+    const uses = [...text.matchAll(/uses: (\S+)/g)].map((m) => m[1]);
+    expect(uses.length).toBeGreaterThan(0);
+    for (const u of uses) expect(u).toMatch(/@[0-9a-f]{40}$/);
+  });
+});
