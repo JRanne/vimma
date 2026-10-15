@@ -80,7 +80,8 @@ export function jobs(text) {
   const out = new Map();
   if (at < 0) return out;
   const body = text.slice(at).replace(/^jobs:\s*\n/, "");
-  const end = body.search(/^\S/m);
+  // The next top-level key ends the jobs; a comment in column 0 does not.
+  const end = body.search(/^[^\s#]/m);
   const parts = (end < 0 ? body : body.slice(0, end)).split(
     /^ {2}([A-Za-z_][\w-]*):[^\S\n]*(?:#.*)?$/m,
   );

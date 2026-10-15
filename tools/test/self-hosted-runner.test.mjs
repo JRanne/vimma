@@ -38,6 +38,16 @@ describe("self-hosted runners", () => {
     expect(triggers(workflow("ci.yml"))).toContain("pull_request");
     expect(triggers(workflow("e2e.yml"))).toContain("workflow_call");
     expect(runsOn(jobs(workflow("upstream.yml")).get("test") ?? "")).toEqual({ kind: "reusable" });
+    // Every runs-on in a file belongs to a parsed job, so no job escapes the checks below.
+    for (const { name, text } of workflows) {
+      const inJobs = [...jobs(text).values()].join("\n").match(/^ {4}runs-on:/gm)?.length ?? 0;
+      expect(inJobs, name).toBe(text.match(/^\s+runs-on:/gm)?.length ?? 0);
+    }
+    // A comment in column 0 between jobs does not end the jobs map.
+    const commented = synthetic("  pull_request:", "ubuntu-24.04").concat(
+      "# a note\n  b:\n    runs-on: self-hosted\n    steps:\n      - run: true\n",
+    );
+    expect([...jobs(commented).keys()]).toEqual(["a", "b"]);
   });
 
   it("no workflow an outsider can trigger runs a job on a self-hosted runner", () => {
