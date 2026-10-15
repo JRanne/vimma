@@ -397,7 +397,9 @@ Problems found (each one becomes its own issue or spec; none is fixed here):
    `click()` of a hint. The follow still navigates. To check: whether a user's click does the
    same, and whether the actor should skip the synthetic mouse events on `<video>` overlays.
 3. **`i` focuses the first text field** (above). That is intended, but it means Vimma has no
-   pure pass-through mode for sites with their own single-key shortcuts. The shortcut report
+   pure pass-through mode for sites with their own single-key shortcuts. (Since changed: a page
+   moving focus no longer ends insert entered with `i`, and `i` returns to the field last used;
+   [insert-focus](insert-focus.md).) The shortcut report
    lists 15 of 22 sites where that matters, mostly `/` (13 sites) and `?` (7).
 4. **Insert check skips.** GitHub PR pages, MDN, doc.rust-lang.org and Vercel docs show search
    as a button that opens a dialog, so the suite finds no field to focus, and Excalidraw has no

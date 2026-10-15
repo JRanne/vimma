@@ -330,11 +330,21 @@ export const VimmaActors = {
   },
 
   /**
-   * Focuses the first visible text field in the top frame (`i`).
+   * `i`: focuses the text field the user was last in, if `frame` (the frame it was in) still
+   * has it, else the first visible text field in the top frame.
    * @param {any} browser XULBrowserElement
+   * @param {any} [frame] BrowsingContext
    */
-  focusInput(browser) {
-    actorFor(browser.browsingContext)?.sendAsyncMessage("Vimma:FocusInput");
+  async focusInput(browser, frame) {
+    const top = browser.browsingContext;
+    if (frame && !frame.isDiscarded && frame.top === top) {
+      try {
+        if (await actorFor(frame)?.sendQuery("Vimma:FocusLast")) return;
+      } catch {
+        // The frame navigated or closed while asked: the top frame's first field it is.
+      }
+    }
+    actorFor(top)?.sendAsyncMessage("Vimma:FocusInput");
   },
 
   /**
