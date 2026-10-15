@@ -11,6 +11,11 @@
 
 const GIT_REVERT = /^(Revert|Reapply) "/;
 const TRAILER = /^(BREAKING[ -]CHANGE|[A-Za-z][\w-]*)(: | #)/;
+/**
+ * The header Dependabot writes with the prefixes in .github/dependabot.yml. It capitalises `Bump`
+ * and fills the body with release notes over 100 columns; neither is configurable.
+ */
+const DEPENDABOT_HEADER = /^(build|ci)\(deps(-dev)?\): Bump \S/;
 
 /**
  * @param {{ type?: string | null, header?: string | null, body?: string | null }} parsed
@@ -32,7 +37,9 @@ export function bodyRequiredForTypes(parsed, when = "always", types = []) {
  * Replaces commitlint's default ignores (set `defaultIgnores: false`). Those skip every
  * `Revert "…"` commit, which would let a body-less revert through; here a git-style revert is
  * skipped only when it has a body (git writes "This reverts commit …"). Merges and
- * fixup!/squash!/amend! commits stay ignored.
+ * fixup!/squash!/amend! commits stay ignored. Dependabot's commits, and the squash of its pull
+ * requests (title and body), are skipped when the header is Dependabot's and the body names it
+ * (its `Signed-off-by` trailer, or the PR description's "Dependabot will resolve…").
  * @param {string} message
  */
 export function ignoreCommit(message) {
@@ -41,6 +48,7 @@ export function ignoreCommit(message) {
     return true;
   }
   if (/^(amend|fixup|squash)!/.test(header)) return true;
+  if (DEPENDABOT_HEADER.test(header) && /\bdependabot\b/i.test(rest.join("\n"))) return true;
   if (GIT_REVERT.test(header)) {
     return rest.some((line) => line.trim() !== "" && !TRAILER.test(line));
   }

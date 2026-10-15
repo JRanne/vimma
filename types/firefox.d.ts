@@ -29,6 +29,10 @@ declare const Services: {
     newURI(spec: string): { readonly scheme: string; readonly spec: string };
     newChannelFromURIWithLoadInfo(uri: unknown, loadInfo: unknown): any;
   };
+  // engine/netwerk/dns/nsIEffectiveTLDService.idl
+  eTLD: {
+    getBaseDomain(uri: unknown, additionalParts?: number): string;
+  };
   // engine/dom/interfaces/base/nsIFocusManager.idl
   focus: {
     readonly focusedElement: Element | null;

@@ -38,4 +38,5 @@ export * from "./routes.mjs";
 export * from "./pageurl.mjs";
 export * from "./layouts.mjs";
 export * from "./privatews.mjs";
+export * from "./prompt-keys.mjs";
 export * from "./hyprswap.mjs";

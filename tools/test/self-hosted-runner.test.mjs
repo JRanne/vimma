@@ -8,8 +8,8 @@ import {
   workflowRunnerProblems,
 } from "./workflow-runners.mjs";
 
-// js-yaml applies `<<:` merge keys and GitHub does not: a runs-on that only a merge key supplies
-// passes here, but GitHub rejects that workflow, so it fails closed there instead.
+// js-yaml 5 loads `<<:` as a plain key, as GitHub does: a runs-on that only a merge key supplies
+// is no runs-on, and fails here.
 // docs/specs/build-supply-chain.md, decision 7; docs/security.md, B5. On a public repository a
 // self-hosted runner that pull request code can reach is a machine anyone can run code on, and
 // Vimma registers no self-hosted runner at all, so no workflow may target one.
@@ -56,7 +56,14 @@ describe("self-hosted runners: shapes that must fail closed", () => {
     const text = onPullRequest(
       "  a:\n    runs-on: ubuntu-24.04\n    runs-on: vimma-build\n    steps:\n      - run: true\n",
     );
-    expect(() => workflowRunnerProblems(text)).toThrow();
+    expect(() => workflowRunnerProblems(text)).toThrow(/duplicated mapping key/);
+  });
+
+  it("a runs-on that only a `<<:` merge key supplies fails, as GitHub does not merge", () => {
+    const text =
+      "name: t\non:\n  pull_request:\npermissions: {}\nx-base: &base\n  runs-on: ubuntu-24.04\n" +
+      "jobs:\n  a:\n    <<: *base\n    steps:\n      - run: true\n";
+    expect(workflowRunnerProblems(text)).toEqual(["a: no runs-on"]);
   });
 
   it("a matrix key is read only from the job's own strategy.matrix", () => {

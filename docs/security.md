@@ -258,6 +258,57 @@ text that pages, add-ons and bookmarks choose.
   arguments, the path after `--` and no shell, on an agent download in the quarantine folder
   (M13; [vimma-mcp](specs/vimma-mcp.md) decision 31 g). [`never builds code from text: no eval, Function or sandbox evaluation`](../tools/security/test/chrome-source.test.mjs),
   [`never starts a process, but clamscan on an agent download`](../tools/security/test/chrome-source.test.mjs)
+- C3. With Firefox's toolbar hidden ([toolbar-toggle](specs/toolbar-toggle.md)), the status bar
+  is the only origin indicator: the page reaches the window's top, so there is no line of death.
+  - The status bar **must** always show the selected page's real address with its registrable
+    domain whole: truncation **never** cuts inside it (the path, then the leftmost labels go
+    first), also for a `blob:` or `view-source:` address (the origin it carries), and **never**
+    in the middle of an address without a host. A page title **never** takes the address's
+    place. The bar's order is: the mode's one-column short form, then the error, `not secure`,
+    `private` and in-use cues, then the address, then the rest (the mode's full word, the title,
+    the tab position, the workspace). The address takes room only from what comes after it: it
+    is cut to `…<domain>…` while the rest gives way, and cut further, its domain's end as the
+    last resort, rather than push a cue or the mode's short form off the bar. An about:blank a page opened or controls **must** read
+    `about:blank from <the origin that wrote it>`, never nothing.
+    [`the URL keeps its registrable domain while the toolbar is hidden`](../packages/vimma-core/test/statusbar.test.mjs),
+    [`the_status_bar_keeps_the_registrable_domain`](../tests/browser/browser_vimma_toolbar.js),
+    [`an_about_blank_a_page_wrote_says_so`](../tests/browser/browser_vimma_toolbar.js),
+    [`a_blob_page_shows_its_origin`](../tests/browser/browser_vimma_toolbar.js),
+    [`an_about_blank_names_its_writer_after_the_opener_leaves`](../tests/browser/browser_vimma_toolbar.js),
+    [`the security cues outrank the kept URL`](../packages/vimma-core/test/statusbar.test.mjs)
+  - It **must** say `not secure` wherever Firefox's address bar would warn (plain http, a
+    certificate error page or exception, mixed content), read from the browser's security state,
+    never from the hidden address bar, and `private` in a private window.
+    [`securityFromState`](../packages/vimma-core/test/statusbar.test.mjs),
+    [`not_secure_comes_from_the_browser_state`](../tests/browser/browser_vimma_toolbar.js),
+    [`the_status_bar_says_not_secure_and_private`](../tests/browser/browser_vimma_toolbar.js)
+  - It **must** say which devices the selected page uses (camera, microphone, screen, location,
+    XR, serial; `paused` where Firefox says so), the cues the hidden address bar and tab strip
+    carried. It does not cover background tabs or the other pane of a split (only the selected
+    tab is read, and the tab strip is hidden), nor Firefox's camera and microphone grace period
+    after a stream ends; on Linux the desktop's global WebRTC indicator still shows background
+    capture.
+    [`sharing: devices in use while the toolbar is hidden`](../packages/vimma-core/test/statusbar.test.mjs),
+    [`the_status_bar_shows_camera_and_mic_in_use`](../tests/browser/browser_vimma_toolbar.js)
+  - A permission prompt **must** hang from its own icon in the address bar, next to the site's
+    identity and address, as with the toolbar shown (the prompt bar), and **never** open
+    unanchored: if its icon cannot be revealed, the toolbar comes back first. The minimal bar for
+    typing an address shows no identity; the status bar above is the origin indicator then. Pop-up
+    windows **must** keep their read-only address bar.
+    [`a_permission_prompt_hangs_from_its_icon`](../tests/browser/browser_vimma_toolbar.js),
+    [`the_identity_panel_shows_the_site_identity`](../tests/browser/browser_vimma_toolbar.js),
+    [`a_failed_reveal_for_a_prompt_shows_the_toolbar`](../tests/browser/browser_vimma_toolbar.js),
+    [`exclusions`](../tests/browser/browser_vimma_toolbar.js)
+  - Vimma's keys for a permission prompt (`y`, `n`, `Tab`; toolbar shown or hidden) **must
+    not** answer it before it has shown for `security.notification_enable_delay` with no key in
+    between (any key restarts the wait), **never** from a text field, and go through Firefox's
+    own buttons, so Firefox's click delay still applies. The prompt **never** takes focus by
+    itself; `Tab` focuses the secondary (Block) button first.
+    [`doorhangerKey`](../packages/vimma-core/test/prompt-keys.test.mjs),
+    [`permission_prompts_answer_y_and_n`](../tests/browser/browser_vimma_toolbar.js)
+  - Accepted, low: a page can time a reveal under the pointer (a permission request shows the
+    prompt bar, a download the full toolbar); there is no hover reveal. See the spec's Security
+    section.
 
 ## 7. Omarchy hook and the `vimma-open` launcher
 

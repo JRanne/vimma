@@ -128,3 +128,54 @@ describe("repo commitlint config (CLI)", () => {
     expect(commitlint("docs: x\n").status).toBe(0);
   });
 });
+
+describe("Dependabot's commits (repo commitlint config, CLI)", () => {
+  // Dependabot writes `Bump` in sentence case and a body of release notes with lines over 100
+  // columns; neither can be configured in .github/dependabot.yml.
+  const signedOff = "Signed-off-by: dependabot[bot] <support@github.com>";
+  const longLine = `- ${"release note ".repeat(12)}`;
+
+  it("accepts a Dependabot commit on its branch", () => {
+    const message = [
+      "build(deps-dev): Bump the npm-minor-patch group with 2 updates",
+      "",
+      "Bumps the npm-minor-patch group with 2 updates: vitest and @vitest/coverage-v8.",
+      longLine,
+      "",
+      signedOff,
+      "",
+    ].join("\n");
+    const run = commitlint(message);
+    expect(run.output).toBe("");
+    expect(run.status).toBe(0);
+  });
+
+  it("accepts the squash of a Dependabot pull request (title and body)", () => {
+    const message = [
+      "build(deps): Bump js-yaml from 4.3.2 to 5.4.3 (#288)",
+      "",
+      longLine,
+      "",
+      "Dependabot will resolve any conflicts with this PR as long as you don't alter it yourself.",
+      "",
+    ].join("\n");
+    expect(commitlint(message).status).toBe(0);
+  });
+
+  it("accepts a GitHub Actions update", () => {
+    const message = `ci(deps): Bump actions/checkout from 7.0.1 to 7.1.0\n\n${signedOff}\n`;
+    expect(commitlint(message).status).toBe(0);
+  });
+
+  it("still rejects a sentence-case `Bump` that does not come from Dependabot", () => {
+    const run = commitlint("build(deps): Bump x from 1 to 2\n\nBy hand.\n");
+    expect(run.status).not.toBe(0);
+    expect(run.output).toMatch(/subject-case/);
+  });
+
+  it("still rejects another header with Dependabot's trailer", () => {
+    const run = commitlint(`feat: Bump everything\n\nBody.\n\n${signedOff}\n`);
+    expect(run.status).not.toBe(0);
+    expect(run.output).toMatch(/subject-case/);
+  });
+});

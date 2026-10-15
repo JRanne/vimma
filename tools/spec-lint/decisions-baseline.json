@@ -76,15 +76,6 @@
     "Lazy tabs stay lazy.",
     "Out of scope."
   ],
-  "toolbar-toggle.md": [
-    "Key: `ctrl+b u`",
-    "One state for all windows, held in a pref.",
-    "What hides:",
-    "Permission prompts and security.",
-    "Hiding with focus inside the bar.",
-    "The find bar",
-    "No upstream patch."
-  ],
   "upstream-beta-canary.md": [
     "test",
     "render",

@@ -1,0 +1,103 @@
+{
+  "name": "issue-216-toolbar-hidden",
+  "issue": 216,
+  "description": "docs/specs/toolbar-toggle.md: ctrl+b u hides Firefox's toolbar, and the page (fixture edge.html, its blue band at its top edge; the shot waits out the notice) reaches the top of the window with the status bar below (toolbar-hidden.png); I shows the minimal bar over the page, only the URL field with the typed address, the page not resized (its title, edge <innerHeight>, unchanged) (toolbar-minimal.png); Enter loads the address and the bar hides again. Firefox's suggestions are off, so the minimal-bar shot holds only the field and its one heuristic row.",
+  "timeoutSeconds": 60,
+  "prefs": {
+    "browser.urlbar.suggest.searches": false,
+    "browser.urlbar.suggest.history": false,
+    "browser.urlbar.suggest.bookmark": false,
+    "browser.urlbar.suggest.openpage": false,
+    "browser.urlbar.suggest.topsites": false,
+    "browser.urlbar.suggest.engines": false,
+    "browser.urlbar.suggest.quickactions": false,
+    "browser.urlbar.suggest.recentsearches": false,
+    "browser.urlbar.suggest.trending": false
+  },
+  "steps": [
+    {
+      "wait-for-state": {
+        "workspace": "main"
+      },
+      "timeoutSeconds": 20
+    },
+    {
+      "open": "fixture:edge.html"
+    },
+    {
+      "wait-for-state": {
+        "mode": "normal",
+        "tabs": [
+          {},
+          {
+            "selected": true
+          }
+        ]
+      }
+    },
+    {
+      "keys": "ctrl+b u"
+    },
+    {
+      "sleep": 2.5
+    },
+    {
+      "wait-for-state": {
+        "tabs": [
+          {},
+          {
+            "title": "edge 779",
+            "selected": true
+          }
+        ]
+      }
+    },
+    {
+      "screenshot": "toolbar-hidden"
+    },
+    {
+      "keys": "shift+i"
+    },
+    {
+      "wait-for-state": {
+        "mode": "insert"
+      }
+    },
+    {
+      "keys": "a b o u t : b l a n k"
+    },
+    {
+      "sleep": 1
+    },
+    {
+      "screenshot": "toolbar-minimal"
+    },
+    {
+      "assert-state": {
+        "mode": "insert",
+        "tabs": [
+          {},
+          {
+            "title": "edge 779",
+            "selected": true
+          }
+        ]
+      }
+    },
+    {
+      "keys": "enter"
+    },
+    {
+      "wait-for-state": {
+        "mode": "normal",
+        "tabs": [
+          {},
+          {
+            "url": "about:blank",
+            "selected": true
+          }
+        ]
+      }
+    }
+  ]
+}

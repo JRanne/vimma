@@ -1,0 +1,26 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- toolbar-hidden: a page whose top edge is a band, so a screenshot shows where it starts, and
+     no text, whose font differs between machines. It
+     titles itself "edge <innerHeight>" and keeps the title current on every resize, so a
+     scenario reads from state whether the page got the hidden toolbar's rows, and that the
+     minimal bar, an overlay, did not resize it. -->
+<meta charset="utf-8" />
+<title>edge</title>
+<style>
+  html {
+    height: 100%;
+    background: #e8e8e8;
+  }
+  body {
+    margin: 0;
+    border-top: 24px solid #3070c0;
+  }
+</style>
+<script>
+  const show = () => (document.title = `edge ${window.innerHeight}`);
+  window.addEventListener("resize", show);
+  show();
+</script>

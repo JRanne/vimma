@@ -30,8 +30,10 @@ What works today, each with the section that explains it:
   in [config.toml](#configtoml), which applies on save; Firefox's own shortcuts are Vimma
   bindings too ([Firefox's own shortcuts](#firefoxs-own-shortcuts)).
 - **[Search engines](#search-engines)** and `@aliases` from `config.toml`, such as `@gh vimma`.
-- **[Theming](#colours-and-themes):** the bars, pickers, hints, start page and sidebar follow
-  your desktop theme and change with it, or take your own colours.
+- **[Hide the toolbar](#hiding-the-toolbar)** with `ctrl+b u`: the page reaches the top of the
+  window, and the address bar comes back when you need it.
+- **[Theming](#colours-and-themes):** the bars, Firefox's toolbar and prompts, pickers, hints,
+  start page and sidebar follow your desktop theme and change with it, or take your own colours.
 - **[Accessible](#accessibility):** Vimma's own UI works with a screen reader and meets WCAG AA
   contrast in dark and light themes.
 - **Firefox underneath** ([privacy defaults](#privacy-defaults)): the same user agent and
@@ -354,21 +356,86 @@ with `F11` keeps it. From the left:
 - `◇ agent` while a local AI agent is connected ([agent workspace](#agent-workspace)):
   `◇ agent 2?` when 2 of its requests wait for your answer, `◇ agent 14m` while a grant you gave
   has 14 minutes left, and `◇ agent ·` for a moment after a request ran;
-- `loading` while the page loads, then its **URL** without `https://`.
+- `loading` while the page loads, then its **URL** without `https://`;
+- with the [toolbar hidden](#hiding-the-toolbar), `not secure` in red for a page Firefox's
+  address bar would warn about (an `http:` page keeps its `http://`), `using camera, mic` (or
+  screen, location, XR, serial) while the page uses them, and `private` in a private window that
+  is not the [private workspace](#private-workspace) (which says `◆ private` already).
 
 On a narrow window the least important parts give way first: the URL is shortened in the middle,
 then dropped, then the title is shortened, and so on. The mode badge always stays. Screen
 readers announce the mode when it changes, including when focus moves into or out of a text
 field, but not every title change.
 
+With the toolbar hidden the URL is the only place the address shows, so it outlasts the title,
+a title never takes its place, and in a narrow window it loses its path and then its leftmost
+subdomains, never the site's own domain: `…evil.example…`, not `accounts.google.com…`. A blank
+page another page opened says so: `about:blank from example.com`.
+
 After `ctrl+b` (or any key that starts a longer sequence) only the pending keys show in the bar;
 no list of next keys pops up. To see the bindings, press `ctrl+b ?` (`ctrl+b shift+?` on a
 layout where `?` is shifted): the overlay is the one place that lists them.
 
+### Hiding the toolbar
+
+`ctrl+b u` hides Firefox's toolbar, the row with the URL bar, the back and reload buttons and the
+add-on buttons, in every window, and `ctrl+b u` again brings it back. The page then reaches the
+top of the window, with only the status bar below it. The notice says `toolbar hidden` or
+`toolbar shown`. `:toolbar` does the same, and `:toolbar show` and `:toolbar hide` set it either
+way (a `vimma-ctl` script can set a known state); `Tab` completes the two words. To start every
+window with it hidden, put `[ui] toolbar = "hidden"` in [config.toml](#configtoml). A toggle lasts
+until a restart or until you edit that line.
+
+- **Typing an address:** `I`, `ctrl+l`, `alt+d`, `F6`, `t`, `ctrl+t`, `ctrl+b c` and a new pane
+  all still focus the address bar. A minimal bar then shows over the top of the page: only the URL
+  field, with Firefox's suggestions below it. No site identity or buttons around it (the status
+  bar names the site), no bookmarks toolbar, no window controls. The page does not move or
+  resize.
+- **Leaving it:** `Enter` loads the page, puts focus in it and hides the bar. `Esc` works as in
+  Firefox (it closes the suggestions, then undoes what you typed), and one more `Esc` puts focus
+  back in the page and hides the bar.
+- **The whole toolbar:** `ctrl+b u` brings it back, with its buttons; moving the pointer to the
+  window's top edge does not. It also shows by itself while an add-on's popup or a panel from one
+  of its buttons (downloads, the menu, the extensions menu) is open, so the popup hangs from its
+  own button as with the toolbar shown.
+- **Permission prompts** (camera, location, notifications) show the whole address bar, without
+  the toolbar's buttons: the prompt points at its icon in the address bar, next to the site's
+  identity, exactly as with the toolbar shown. Vimma never shows one without saying which site
+  asks. Clicking the site's identity there opens its panel.
+- **Security in the status bar:** while the toolbar is hidden the status bar says `not secure`
+  for a page that is not served over a secure connection, and `private` in a private window
+  ([above](#status-bar)).
+- **Window controls:** with Firefox's own title bar (close, minimise and maximise buttons in the
+  toolbar), they hide with it and show when `ctrl+b u` brings the toolbar back. On a tiling window
+  manager such as Omarchy's, which draws no title bar, nothing changes.
+- **Left as Firefox has it:** customize mode, pop-up windows (they keep their read-only address
+  bar, so a pop-up always says where it comes from), and `F11` and video fullscreen, where
+  Firefox's own toolbar rules apply.
+
+#### Answering a permission prompt
+
+When a site asks for your location, camera, microphone or notifications, Firefox's prompt hangs
+from the address bar. Shown or hidden toolbar, you can answer it from the keyboard:
+
+| Key   | What it does                                                                              |
+| ----- | ----------------------------------------------------------------------------------------- |
+| `y`   | The prompt's main button (Allow).                                                         |
+| `n`   | Its other button (Block, or Don't allow).                                                 |
+| `Tab` | Moves focus onto its buttons, Block first; then the arrow keys, `Enter` and `Space` work. |
+| `Esc` | As in Firefox: the other button (Block).                                                  |
+
+`y` and `n` count only once the prompt has been up for half a second (Firefox's own delay for
+these buttons) with no key pressed in between; the line `y allow · n block · Tab buttons` in the
+prompt shows when they do. Any key you press meanwhile starts the wait again, so typing that was
+meant for the page never answers a prompt. While you type in a text field, `y` and `n` are text.
+The prompt never takes focus by itself. The same keys answer Firefox's other prompts in that
+panel, such as adding an add-on or saving a password.
+
 ### Colours and themes
 
 The status bar, the command line, the `ctrl+b ?` overlay, the pickers and prompts, link hints,
-notices, pane borders and the start page share one theme. Out of the box it is Vimma's own,
+notices, pane borders and the start page share one theme, and so do Firefox's toolbar, its
+address bar and suggestions, and the prompts and panels that hang from it. Out of the box it is Vimma's own,
 the palette of [vimma.dev](https://vimma.dev): near-black surfaces, grey-green text, and mint
 for the accent, the normal-mode badge and link hints. It has a dark and a light variant, and by
 default it follows your system's or Firefox's light or dark setting (`prefers-color-scheme`),
@@ -1507,7 +1574,8 @@ and themes and dictionaries are not either. Like the goto picker, it takes every
 | `Esc` / `q`    | Closes the picker.                                                                                                            |
 
 **Popups.** The popup opens where Firefox opens it: under the add-on's toolbar button, or, for
-an add-on in the extensions menu (the puzzle piece), in that menu. Keyboard focus goes into the
+an add-on in the extensions menu (the puzzle piece), in that menu. With the
+[toolbar hidden](#hiding-the-toolbar), the full toolbar shows while the popup is open. Keyboard focus goes into the
 popup, so you can type at once (a password manager's search field). Keys there are the popup's,
 except Vimma's `ctrl+b` chords; `Esc` closes it and focus returns to the page. An add-on whose
 button has no popup runs the button's action instead; one without a button says so.
@@ -1633,6 +1701,7 @@ Vimma's own preferences today:
 | Preference                 | Default                                | What it does                                                                                                                                                                            |
 | -------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `vimma.ui.tabstrip.hidden` | `true`                                 | Hides Firefox's tab strip (horizontal, and the vertical tab list). Set `false` to show it again; it applies at once, no restart.                                                        |
+| `vimma.ui.toolbar.hidden`  | `false`                                | Hides Firefox's toolbar in every window ([Hiding the toolbar](#hiding-the-toolbar)). `ctrl+b u` and `:toolbar` set it; `[ui] toolbar` sets it at startup. Applies at once.              |
 | `vimma.debug.keys`         | unset                                  | Create it as a boolean set to `true` to log every key Vimma sees (`{ key, mods, mode }`) to the Browser Console (`ctrl+shift+j`; enable its Debug filter).                              |
 | `vimma.startpage.newtab`   | `true`                                 | New tabs open Vimma's start page (see [The start page](#the-start-page)). Set `false` for Firefox's new tab page; it applies at once, no restart.                                       |
 | `vimma.control.enabled`    | `false`                                | Turns on the control socket for `vimma-ctl` and scripts (see [Scripting with vimma-ctl](#scripting-with-vimma-ctl)). Applies at once, no restart.                                       |
@@ -1709,9 +1778,11 @@ accent = "#ff9e64"
   `grant_minutes`, default 10, at most `grant_max_minutes`, 1 to 1440, default 480;
   `max_read_chars`, 1,000 to 500,000, default 200,000; `notify`, default `true`;
   `download_dir` and `download_max_mb`, [above](#downloads-from-the-agent-workspace)); `[search]`
-  (the default engine and `@aliases`, [below](#search-engines)).
+  (the default engine and `@aliases`, [below](#search-engines)); `[ui] toolbar` (`"shown"`, the
+  default, or `"hidden"`: [Firefox's toolbar](#hiding-the-toolbar) in every window; applied at
+  startup and when the line changes, so `ctrl+b u` lasts until then).
 - **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]`, `[[routes]]`, `[firefox]`,
-  `[bookmarks]`, `[private]`, `[mcp]`, `[search]`,
+  `[bookmarks]`, `[private]`, `[mcp]`, `[search]`, `[ui]`,
   `hint_chars`, `insert_editing`, `[theme] name` and `appearance`; every key,
   its type and default are in [m5-core-config-and-theme](specs/m5-core-config-and-theme.md#schema-v1)
   and [m3-m4-core-prep](specs/m3-m4-core-prep.md#config-schema-2), and
