@@ -155,6 +155,8 @@ export class VimmaChild extends JSWindowActorChild {
   #lastField = null;
   /** This actor is focusing an element (`i`, a hint): the focus is the user's, not the find's. */
   #focusing = false;
+  /** @type {WeakRef<HTMLInputElement> | null} the text field a find focused and we blurred */
+  #findMatchField = null;
   /** Tells the parent about a selection the user made with the mouse (spec m1-copy-mode). */
   #selectionListener = {
     QueryInterface: ChromeUtils.generateQI(["nsISelectionListener"]),
@@ -266,14 +268,18 @@ export class VimmaChild extends JSWindowActorChild {
    */
   #focusedByFind(el) {
     if (this.#focusing || this.contentWindow?.windowUtils.isHandlingUserInput) return false;
-    let finder;
+    return this.#foundEditable() === el;
+  }
+
+  /** The text field the finder's last match is in, if this frame has searched. */
+  #foundEditable() {
     try {
       // Only a frame that has searched has a Finder; reading it must not create one.
-      finder = /** @type {any} */ (this.manager.getActor("Finder"))._finder;
+      const finder = /** @type {any} */ (this.manager.getActor("Finder"))._finder;
+      return finder?._fastFind?.foundEditable ?? null;
     } catch {
-      return false;
+      return null;
     }
-    return !!finder && finder._fastFind?.foundEditable === el;
   }
 
   /**
@@ -293,11 +299,35 @@ export class VimmaChild extends JSWindowActorChild {
         el.setSelectionRange(start, end);
       }
       el.blur();
-      // Blurring hides the field's selection; the finder shows its match as ATTENTION.
-      const controller = /** @type {any} */ (el).editor?.selectionController;
-      controller?.setDisplaySelection(Ci.nsISelectionController.SELECTION_ATTENTION);
-      controller?.repaintSelection(Ci.nsISelectionController.SELECTION_NORMAL);
+      this.#findMatchField = new WeakRef(el);
+      this.#showFindMatch(el);
     });
+  }
+
+  /**
+   * Draws the match in a blurred text field the way the finder draws one: blurring hides the
+   * field's selection, and the finder shows its match as ATTENTION.
+   * @param {HTMLInputElement} el
+   */
+  #showFindMatch(el) {
+    const controller = /** @type {any} */ (el).editor?.selectionController;
+    controller?.setDisplaySelection(Ci.nsISelectionController.SELECTION_ATTENTION);
+    controller?.repaintSelection(Ci.nsISelectionController.SELECTION_NORMAL);
+  }
+
+  /**
+   * The find bar closed on a match (sent after its close, so after the finder's
+   * Finder:FindbarClose). That message's enableSelection sets the match's field back to
+   * SELECTION_ON, and it can reach this process after #unfocusFindMatch blurred the field: the
+   * two Finder messages are separate IPC messages, and the blur runs in between when the second
+   * comes late. Shows the match as the find's again.
+   */
+  #findClosed() {
+    const el = this.#findMatchField?.deref();
+    this.#findMatchField = null;
+    // Still focused: the blur is yet to run, and shows the match itself.
+    if (!el?.isConnected || deepActiveElement(this.document) === el) return;
+    if (this.#foundEditable() === el) this.#showFindMatch(el);
   }
 
   /**
@@ -369,6 +399,8 @@ export class VimmaChild extends JSWindowActorChild {
       }
       case "Vimma:FindAnchor":
         return this.#findAnchor();
+      case "Vimma:FindClosed":
+        return this.#findClosed();
       case "Vimma:Selection": {
         // An agent's read (docs/specs/vimma-mcp.md, decision 4): the page's selected text, if
         // any, cut at `max` characters; a copy, nothing in the page changes.
