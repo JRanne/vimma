@@ -70,8 +70,8 @@ describe("release-please-config.json", () => {
   const manifest = json("../../../.release-please-manifest.json");
   const surfer = json("../../../surfer.json");
 
-  // The user's decision (2026-10-12): every release bumps the patch, breaking changes too; the
-  // move to 0.2.0 or 1.0.0 is theirs, by a Release-As footer (runbook "Releases").
+  // Every release bumps the patch, breaking changes too; the move to 0.2.0 or 1.0.0 is the
+  // maintainer's, by a Release-As footer (runbook "Releases").
   it("bumps only the patch, whatever the commits say", () => {
     expect(config.versioning).toBe("always-bump-patch");
     expect(config.packages["."].versioning).toBeUndefined();

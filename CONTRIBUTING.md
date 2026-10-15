@@ -122,6 +122,9 @@ Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
   that page). Boundary changes and new upstream patches need an ADR in `docs/adr/`. Every
   Markdown file states decisions with their reasons, never who asked for them or when;
   `npm run lint` (`tools/md-wording`) fails on that kind of wording.
+- **Comments.** A comment says why: a constraint, a Firefox quirk with its source path, a
+  decision with its spec or `docs/security.md` rule. It does not restate the code or record who
+  asked or which review found it; `npm run lint` (`npm run comment-wording`) checks the wording.
 - **Pull requests.** A pull request is only for work that is ready to merge. Work that waits on a
   decision is a question in its issue, not an open pull request.
 - **TDD.** Write the failing test and run it, then implement until it passes. Never loosen a test.

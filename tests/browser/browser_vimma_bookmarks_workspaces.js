@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Spec: docs/specs/bookmarks.md, decisions 11 and 12 (user decision, 2026-10-10). Each
+// Spec: docs/specs/bookmarks.md, decisions 11 and 12. Each
 // workspace owns a folder in the Bookmarks Toolbar, linked by its Places guid: the bookmarks
 // panel shows the current workspace's folder, ctrl+b a and :bookmark file there (`@name/` in
 // another's), a rename renames the folder, and deleting a workspace asks what becomes of it.

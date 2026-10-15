@@ -108,7 +108,7 @@ export default [
   },
   {
     // Agent pages launch no app: the component registrar wraps the external-protocol chooser
-    // (docs/specs/vimma-mcp.md, review of #177 L3).
+    // (docs/security.md M10).
     files: ["src/**/vimma/ctl/AgentPages.sys.mjs"],
     languageOptions: { globals: { Components: "readonly" } },
   },

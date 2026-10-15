@@ -23,7 +23,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 export const CONTROL_ENABLED_PREF = "vimma.control.enabled";
 /**
  * When `:control on <minutes>` ends: ms since the epoch, as a string (no 2038 limit); absent:
- * no end. Anything else turns control off (review of #177, L4; core controlEnd).
+ * no end. Anything else turns control off (security.md S13; core controlEnd).
  */
 export const CONTROL_UNTIL_PREF = "vimma.control.enabledUntilMs";
 

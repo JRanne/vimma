@@ -65,6 +65,11 @@ jobs:
       - name: No process wording in Markdown (npm run md-wording)
         run: npm run md-wording
 
+      # Code comments say why, not who asked or which review found it (#275).
+      - name: No process wording in code comments (npm run comment-wording)
+        if: steps.classify.outputs.docs-only != 'true'
+        run: npm run comment-wording
+
       # Spec and ADR statuses, a live spec's issue line, and a reason for every new decision
       # (docs/specs/README.md).
       - name: Spec statuses and decision reasons (npm run spec-lint)

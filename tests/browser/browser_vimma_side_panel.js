@@ -158,7 +158,7 @@ add_task(async function hidden_by_default_and_prefix_b_opens_it_on_the_left() {
 });
 
 add_task(async function space_n_does_not_open_it_by_default() {
-  // The leader has no default bindings (user decision, 2026-10-10); config.toml can add one.
+  // The leader has no default bindings; config.toml can add one.
   await focusPage();
   EventUtils.synthesizeKey(" ");
   EventUtils.synthesizeKey("n");

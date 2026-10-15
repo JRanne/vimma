@@ -448,7 +448,7 @@ Still runs on a docs-only pull request: prettier, commitlint, `npm run md-wordin
 `npm run test:py` (it reads ADR-003), the gen-docs freshness step, the Vitest files listed in
 `MARKDOWN_TESTS`, Semgrep and CodeQL.
 
-Skipped: eslint, typecheck, the full Vitest suite with coverage, the bench, the licence checks,
+Skipped: eslint, `npm run comment-wording`, typecheck, the full Vitest suite with coverage, the bench, the licence checks,
 cargo, the MPL header check, and `mochitest (artifact build)` with the e2e scenarios (the job
 `changes` gates the job).
 

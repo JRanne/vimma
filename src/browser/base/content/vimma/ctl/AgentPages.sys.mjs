@@ -171,7 +171,7 @@ function denyFor(uri, originAttributes, browserId) {
 }
 
 /**
- * A document's window global was created (review of #177, L1): whatever served it (the network,
+ * A document's window global was created (security.md M10): whatever served it (the network,
  * a service worker, the cache, bfcache), a top-level agent document gets its WebRTC deny before
  * it can ask. Frames ask with the top-level principal (permission delegation).
  * @param {any} wgp  a WindowGlobalParent
@@ -195,7 +195,7 @@ function sweep() {
       if (!isAgentContainer(tab.userContextId)) continue;
       const browser = tab.linkedBrowser;
       const bc = browser?.browsingContext;
-      // A document keeps the flags it loaded with (review of #177, L2): a page already loaded
+      // A document keeps the flags it loaded with (security.md M10): a page already loaded
       // without the flag is reloaded, so the flag applies to it now, not at its next navigation.
       const loaded = !tab.hasAttribute("pending") && browser?.currentURI?.spec !== "about:blank";
       if (bc && sandbox(bc) && loaded) browser.reload();
@@ -226,7 +226,7 @@ const CHOOSER_CONTRACT = "@mozilla.org/content-dispatch-chooser;1";
 const CHOOSER_CID = Components.ID("{a69ebe05-6906-408c-b7ed-a626713b04f3}");
 
 /**
- * External protocols (review of #177, L3): an agent page that sets `location = "zoommtg:…"`
+ * External protocols (security.md M10): an agent page that sets `location = "zoommtg:…"`
  * would launch another app, and Firefox's "always open" choice for a site is not per
  * container. The chooser is wrapped, so a load in the agent container launches nothing; every
  * other load goes to Firefox's own chooser unchanged.

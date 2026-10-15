@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Spec: docs/specs/vimma-mcp.md decision 30 (user, 2026-10-13): pages in the agent workspace's
+// Spec: docs/specs/vimma-mcp.md decision 30: pages in the agent workspace's
 // container ask for no permission and open no pop-up. Every nsIContentPermissionPrompt request
 // from the agent container is cancelled (Integration.contentPermission); camera, microphone and
 // screen are denied by a session DENY on each origin that loads there (WebRTCParent and
@@ -218,7 +218,7 @@ add_task(async function test_agent_tabs_open_no_popups() {
   BrowserTestUtils.removeTab(mine);
 });
 
-// Review of #177 (M1), user decision 2026-10-13: "Per workspace". Site permissions are kept per
+// Site permissions are kept per workspace (security.md M10, P7): per
 // container (permissions.isolateBy.userContext), so an ALLOW given in the default container or
 // in `work` never reaches the agent workspace, and `work`'s own ALLOW still works in `work`.
 add_task(async function test_site_permissions_are_per_workspace() {
@@ -258,7 +258,7 @@ add_task(async function test_site_permissions_are_per_workspace() {
   Services.perms.removeAll();
 });
 
-// Review of #177 (L1): a document a service worker serves has no HTTP response, so the camera
+// security.md M10: a document a service worker serves has no HTTP response, so the camera
 // deny is set when its window global is created, whatever served it.
 add_task(async function test_a_page_from_a_service_worker_is_denied_too() {
   await SpecialPowers.pushPrefEnv({
@@ -300,7 +300,7 @@ add_task(async function test_a_page_from_a_service_worker_is_denied_too() {
   BrowserTestUtils.removeTab(tab);
 });
 
-// Review of #177 (L2): a document keeps the sandbox flags it loaded with. When the agent
+// security.md M10: a document keeps the sandbox flags it loaded with. When the agent
 // workspace changes (a sweep), an agent tab that loaded without the flag is reloaded, so the
 // flag applies to the page in it, not only to its next navigation.
 add_task(async function test_a_sweep_reloads_agent_tabs_that_loaded_unsandboxed() {
@@ -330,7 +330,7 @@ add_task(async function test_a_sweep_reloads_agent_tabs_that_loaded_unsandboxed(
   BrowserTestUtils.removeTab(tab);
 });
 
-// Review of #177 (L3): an agent page cannot launch another app through an external protocol
+// security.md M10: an agent page cannot launch another app through an external protocol
 // (zoommtg:, mailto: …; Firefox's "always open" choice is shared across containers). Its
 // downloads are asked and quarantined: browser_vimma_mcp_downloads.js (sub-PR 2c).
 add_task(async function test_agent_pages_launch_no_app() {

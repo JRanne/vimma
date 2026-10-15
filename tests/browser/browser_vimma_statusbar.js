@@ -223,7 +223,7 @@ add_task(async function notice_sits_above_the_bar() {
   });
 });
 
-// The user's decision (2026-10-09): only prefix+? lists the bindings; there is no which-key strip.
+// Only prefix+? lists the bindings; there is no which-key strip (docs/specs/m2-statusbar-whichkey.md).
 add_task(async function prefix_alone_shows_no_list() {
   await BrowserTestUtils.withNewTab(TITLE_PAGE, async (browser) => {
     await focusContent(browser);
