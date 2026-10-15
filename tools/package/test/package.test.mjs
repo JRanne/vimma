@@ -30,6 +30,7 @@ import {
   packageRelease,
   parseIni,
   pkgbuild,
+  PKGBUILD_INSTALL_COMMAND,
   IDENTITY_REGEXP,
   RUNTIME_RELEASE,
   thirdPartyNotes,
@@ -43,6 +44,18 @@ import { tempDir } from "../../test/temp-dir.mjs";
 const BRAND_DIR = fileURLToPath(new URL("../../../configs/branding/vimma/", import.meta.url));
 const MAINTAINER = "Test Maintainer <test@example.invalid>";
 const REPO = "vimma-browser/vimma";
+
+/**
+ * The Markdown files these tests read, as literal URLs so tools/ci/docs-only.mjs's check finds
+ * this file among the tests a docs-only pull request runs.
+ * @type {Record<string, URL>}
+ */
+const DOCS = {
+  "docs/guide.md": new URL("../../../docs/guide.md", import.meta.url),
+  "docs/runbook.md": new URL("../../../docs/runbook.md", import.meta.url),
+  "docs/specs/m6-packaging.md": new URL("../../../docs/specs/m6-packaging.md", import.meta.url),
+  "docs/specs/m6a-updater.md": new URL("../../../docs/specs/m6a-updater.md", import.meta.url),
+};
 
 /** @param {string} cmd */
 const has = (cmd) => spawnSync("sh", ["-c", `command -v ${cmd}`]).status === 0;
@@ -157,6 +170,8 @@ describe("version and names", () => {
       appimage: "vimma-0.1.0-x86_64.AppImage",
       deb: "vimma_0.1.0_amd64.deb",
       sbom: "vimma-0.1.0.cdx.json",
+      pkgbuild: "PKGBUILD",
+      srcinfo: "SRCINFO",
       checksums: "SHA256SUMS",
     });
   });
@@ -308,17 +323,35 @@ describe("Debian control", () => {
 });
 
 describe("PKGBUILD and .SRCINFO", () => {
+  const desktop = desktopEntry({ wmClass: "vimma-vimma" });
+  const launcher = readFileSync(LAUNCHER, "utf8");
   const input = {
     version: "0.1.0",
     maintainer: MAINTAINER,
     repo: REPO,
     tarballSha256: "a".repeat(64),
-    desktopSha256: "b".repeat(64),
+    desktop,
     desktopId: "vimma-vimma",
-    launcherSha256: "c".repeat(64),
+    launcher,
+    installSource: /** @type {"pkgbuild-release" | "aur"} */ ("pkgbuild-release"),
   };
   const build = pkgbuild(input);
   const info = srcinfo(input);
+
+  /**
+   * What a quoted here-document in the PKGBUILD writes to `target`.
+   * @param {string} text the PKGBUILD
+   * @param {string} target
+   */
+  const heredoc = (text, target) => {
+    const open = `cat > "${target}" <<'`;
+    const at = text.indexOf(open);
+    if (at < 0) throw new Error(`no here-document writes ${target}`);
+    const eol = text.indexOf("\n", at);
+    const delimiter = text.slice(at + open.length, eol - 1);
+    const end = text.indexOf(`\n${delimiter}\n`, eol);
+    return text.slice(eol + 1, end + 1);
+  };
 
   it("points at the release tarball with its SHA-256 filled in", () => {
     expect(build).toMatch(/^# Maintainer: Test Maintainer <test@example\.invalid>$/m);
@@ -329,25 +362,80 @@ describe("PKGBUILD and .SRCINFO", () => {
     expect(build).toContain(
       "https://github.com/vimma-browser/vimma/releases/download/v${pkgver}/vimma-${pkgver}-linux-x86_64.tar.xz",
     );
-    expect(build).toContain(
-      `sha256sums=('${"a".repeat(64)}'\n            '${"b".repeat(64)}'\n            '${"c".repeat(64)}')`,
+    expect(build).toContain(`sha256sums=('${"a".repeat(64)}')`);
+  });
+
+  it("needs nothing but itself: the tarball is its only source", () => {
+    const source = /^source=\(([^)]*)\)$/m.exec(build)?.[1] ?? "";
+    expect(source.trim().split(/\s+/)).toHaveLength(1);
+    expect(source).toMatch(/^"vimma-\$\{pkgver\}-linux-x86_64\.tar\.xz::https:\/\//);
+    expect(info.match(/^\tsource = /gm)).toHaveLength(1);
+    expect(info.match(/^\tsha256sums = /gm)).toHaveLength(1);
+  });
+
+  it("says in its header how to install it from the release", () => {
+    expect(PKGBUILD_INSTALL_COMMAND).toBe(
+      "curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si",
     );
+    expect(build).toContain(`\n#   ${PKGBUILD_INSTALL_COMMAND}\n`);
   });
 
   it("is valid bash", () => {
     expect(spawnSync("bash", ["-n"], { input: build }).status).toBe(0);
   });
 
-  it("installs the desktop file under the remoting name", () => {
-    expect(build).toContain("'vimma-vimma.desktop'");
-    expect(build).toContain('"$pkgdir/usr/share/applications/vimma-vimma.desktop"');
-    expect(info).toContain("\tsource = vimma-vimma.desktop\n");
+  it("writes the desktop file inline, byte for byte, under the remoting name", () => {
+    expect(heredoc(build, "$pkgdir/usr/share/applications/vimma-vimma.desktop")).toBe(desktop);
   });
 
-  it("installs vimma-open next to vimma and on PATH", () => {
-    expect(build).toContain('install -Dm755 "$srcdir/vimma-open" "$pkgdir/opt/vimma/vimma-open"');
+  it("writes vimma-open inline, byte for byte, next to vimma and on PATH", () => {
+    expect(heredoc(build, "$pkgdir/opt/vimma/vimma-open")).toBe(launcher);
+    expect(build).toContain('chmod 755 "$pkgdir/opt/vimma/vimma-open"');
     expect(build).toContain('ln -s /opt/vimma/vimma-open "$pkgdir/usr/bin/vimma-open"');
-    expect(info).toContain("\tsource = vimma-open\n");
+  });
+
+  it("marks the install source in is-packaged-app, per variant", () => {
+    expect(build).toContain(
+      `printf '%s\\n' 'vimma-package=pkgbuild-release' > "$pkgdir/opt/vimma/is-packaged-app"`,
+    );
+    const aur = pkgbuild({ ...input, installSource: "aur" });
+    expect(aur).toContain(
+      `printf '%s\\n' 'vimma-package=aur' > "$pkgdir/opt/vimma/is-packaged-app"`,
+    );
+    expect(aur.replace("=aur'", "=pkgbuild-release'")).toBe(build);
+    expect(() =>
+      pkgbuild({ ...input, installSource: /** @type {"aur"} */ (/** @type {unknown} */ ("deb")) }),
+    ).toThrow(/install source/);
+  });
+
+  it("refuses inline content that would end its here-document early", () => {
+    expect(() => pkgbuild({ ...input, launcher: `${launcher}VIMMA_OPEN_EOF\n` })).toThrow(
+      /VIMMA_OPEN_EOF/,
+    );
+    expect(() => pkgbuild({ ...input, desktop: `${desktop}VIMMA_DESKTOP_EOF\n` })).toThrow(
+      /VIMMA_DESKTOP_EOF/,
+    );
+    expect(() => pkgbuild({ ...input, launcher: "no final newline" })).toThrow(/newline/);
+  });
+
+  // Both are interpolated into double-quoted shell words that makepkg runs, as root at install.
+  it.each(['x/y")$(touch /tmp/pwn)("', "x/$(id)", 'x/"y', "x/y\nz", "x", "x/y/z"])(
+    "refuses repo %j",
+    (repo) => {
+      expect(() => pkgbuild({ ...input, repo })).toThrow(/repo/);
+      expect(() => srcinfo({ ...input, repo })).toThrow(/repo/);
+    },
+  );
+
+  it.each(["$(touch /tmp/pwn)", "vimma`id`", 'vimma"', "vimma\nx", "a/b", ""])(
+    "refuses desktop id %j",
+    (desktopId) => {
+      expect(() => pkgbuild({ ...input, desktopId })).toThrow(/desktop id/);
+    },
+  );
+
+  it("accepts the repository and desktop id it is built with", () => {
+    expect(() => pkgbuild({ ...input, repo: "some-org/vimma.fork_2" })).not.toThrow();
   });
 
   it("refuses a pre-release: the AUR gets releases only", () => {
@@ -363,9 +451,7 @@ describe("PKGBUILD and .SRCINFO", () => {
     expect(info).toContain(
       "\tsource = vimma-0.1.0-linux-x86_64.tar.xz::https://github.com/vimma-browser/vimma/releases/download/v0.1.0/vimma-0.1.0-linux-x86_64.tar.xz\n",
     );
-    expect(info).toContain(
-      `\tsha256sums = ${"a".repeat(64)}\n\tsha256sums = ${"b".repeat(64)}\n\tsha256sums = ${"c".repeat(64)}\n`,
-    );
+    expect(info).toContain(`\tsha256sums = ${"a".repeat(64)}\n`);
     expect(info).toMatch(/\npkgname = vimma-bin\n$/);
   });
 
@@ -521,18 +607,26 @@ describe("packageRelease on a fake ./mach package tarball", () => {
     expect(contents).toMatch(/\.\/usr\/bin\/vimma -> \.\.\/lib\/vimma\/vimma/);
   });
 
-  it("writes the AUR files with the release tarball's SHA-256", () => {
-    const aur = result.aurDir;
+  it("writes the release PKGBUILD and SRCINFO with the release tarball's SHA-256", () => {
     const tarSum = sha256(readFileSync(join(out, "vimma-0.1.0-linux-x86_64.tar.xz")));
-    const desktopSum = sha256(readFileSync(join(aur, "vimma-vimma.desktop")));
-    const launcherSum = sha256(readFileSync(LAUNCHER));
-    const build = readFileSync(join(aur, "PKGBUILD"), "utf8");
-    expect(build).toContain(
-      `sha256sums=('${tarSum}'\n            '${desktopSum}'\n            '${launcherSum}')`,
-    );
-    expect(mode(join(aur, "vimma-open"))).toBe(0o755);
-    expect(readFileSync(join(aur, ".SRCINFO"), "utf8")).toContain(`\tsha256sums = ${tarSum}\n`);
+    const build = readFileSync(join(out, "PKGBUILD"), "utf8");
+    expect(build).toContain(`sha256sums=('${tarSum}')`);
+    expect(build).toContain("'vimma-package=pkgbuild-release'");
     expect(build).toMatch(/^# Maintainer: Test Maintainer/m);
+    expect(readFileSync(join(out, "SRCINFO"), "utf8")).toContain(`\tsha256sums = ${tarSum}\n`);
+  });
+
+  it("writes the AUR variant, which differs only in its install source", () => {
+    const aur = result.aurDir;
+    expect(readdirSync(aur).sort()).toEqual([".SRCINFO", "PKGBUILD"]);
+    const build = readFileSync(join(aur, "PKGBUILD"), "utf8");
+    expect(build).toContain("'vimma-package=aur'");
+    expect(build.replace("=aur'", "=pkgbuild-release'")).toBe(
+      readFileSync(join(out, "PKGBUILD"), "utf8"),
+    );
+    expect(readFileSync(join(aur, ".SRCINFO"), "utf8")).toBe(
+      readFileSync(join(out, "SRCINFO"), "utf8"),
+    );
   });
 
   it("writes SHA256SUMS that sha256sum -c accepts, for every release file", () => {
@@ -541,7 +635,12 @@ describe("packageRelease on a fake ./mach package tarball", () => {
       .trim()
       .split("\n")
       .map((line) => line.split("  ")[1]);
-    const expected = ["vimma-0.1.0-linux-x86_64.tar.xz", "vimma-0.1.0-x86_64.AppImage"];
+    const expected = [
+      "PKGBUILD",
+      "SRCINFO",
+      "vimma-0.1.0-linux-x86_64.tar.xz",
+      "vimma-0.1.0-x86_64.AppImage",
+    ];
     if (deb) expected.push("vimma_0.1.0_amd64.deb");
     expect(names).toEqual(expected.sort());
     expect(spawnSync("sha256sum", ["-c", "SHA256SUMS"], { cwd: out }).status).toBe(0);
@@ -550,7 +649,9 @@ describe("packageRelease on a fake ./mach package tarball", () => {
   it("leaves only release files in the output dir", () => {
     const files = readdirSync(out).sort();
     expect(files).toContain("SHA256SUMS");
-    expect(files.every((f) => /^(vimma|SHA256SUMS|aur$|notes$)/.test(f))).toBe(true);
+    expect(files.every((f) => /^(vimma|SHA256SUMS|PKGBUILD$|SRCINFO$|aur$|notes$)/.test(f))).toBe(
+      true,
+    );
   });
 });
 
@@ -657,11 +758,26 @@ describe("cosign identity", () => {
     expect(re.test(identity)).toBe(false);
   });
 
-  it("is the regexp the runbook tells users to verify with", () => {
-    const runbook = readFileSync(new URL("../../../docs/runbook.md", import.meta.url), "utf8");
-    expect(runbook).toContain(`--certificate-identity-regexp '${IDENTITY_REGEXP}'`);
-    expect(runbook).toContain(
-      "--certificate-oidc-issuer https://token.actions.githubusercontent.com",
-    );
-  });
+  it.each(["docs/runbook.md", "docs/guide.md"])(
+    "is the regexp %s tells users to verify with",
+    (path) => {
+      const text = readFileSync(DOCS[path], "utf8");
+      expect(text).toContain(`--certificate-identity-regexp '${IDENTITY_REGEXP}'`);
+      expect(text).toContain(
+        "--certificate-oidc-issuer https://token.actions.githubusercontent.com",
+      );
+    },
+  );
+});
+
+describe("the documented Arch Linux command", () => {
+  /** @param {string} path relative to the repository root */
+  const doc = (path) => readFileSync(DOCS[path], "utf8");
+
+  it.each(["docs/guide.md", "docs/specs/m6a-updater.md", "docs/specs/m6-packaging.md"])(
+    "%s gives the command the PKGBUILD's header gives",
+    (path) => {
+      expect(doc(path).replace(/\n\s*/g, " ")).toContain(PKGBUILD_INSTALL_COMMAND);
+    },
+  );
 });

@@ -81,19 +81,67 @@ versions, such as `Vimma 0.5.2 · Firefox 158.0`, and its notes link the Mozilla
 advisories of the Firefox it moves to. It will carry, for Linux x86_64 (`X.Y.Z` is the Vimma
 version):
 
-| File                              | Install                                                                                  |
-| --------------------------------- | ---------------------------------------------------------------------------------------- |
-| `vimma_X.Y.Z_amd64.deb`           | `sudo apt install ./vimma_X.Y.Z_amd64.deb` (Debian 12+, Ubuntu 22.04+)                   |
-| `vimma-X.Y.Z-x86_64.AppImage`     | `chmod +x vimma-X.Y.Z-x86_64.AppImage && ./vimma-X.Y.Z-x86_64.AppImage`                  |
-| `vimma-X.Y.Z-linux-x86_64.tar.xz` | `tar -xJf vimma-X.Y.Z-linux-x86_64.tar.xz && ./vimma/vimma`                              |
-| AUR `vimma-bin`                   | `yay -S vimma-bin` or `git clone https://aur.archlinux.org/vimma-bin.git && makepkg -si` |
+| File                              | Install                                                                 |
+| --------------------------------- | ----------------------------------------------------------------------- |
+| `vimma_X.Y.Z_amd64.deb`           | `sudo apt install ./vimma_X.Y.Z_amd64.deb` (Debian 12+, Ubuntu 22.04+)  |
+| `vimma-X.Y.Z-x86_64.AppImage`     | `chmod +x vimma-X.Y.Z-x86_64.AppImage && ./vimma-X.Y.Z-x86_64.AppImage` |
+| `vimma-X.Y.Z-linux-x86_64.tar.xz` | `tar -xJf vimma-X.Y.Z-linux-x86_64.tar.xz && ./vimma/vimma`             |
+| `PKGBUILD` (Arch Linux)           | the command in [Arch Linux](#arch-linux) below                          |
 
-The `.deb` and the AUR package add Vimma to your application menu and offer it for web links,
+The `.deb` and the Arch package add Vimma to your application menu and offer it for web links,
 but never make it your default browser on their own: `xdg-settings set default-web-browser
-vimma-vimma.desktop` does that. Vimma has no in-app updater: update through apt, your AUR helper, or by
-downloading the next AppImage or tarball. Next to the files are `SHA256SUMS`, a CycloneDX SBOM
+vimma-vimma.desktop` does that. Vimma has no in-app updater: update through apt, by rerunning the
+Arch command, or by downloading the next AppImage or tarball. Next to the files are `SHA256SUMS`, a CycloneDX SBOM
 (`vimma-X.Y.Z.cdx.json`) and cosign signatures (`*.sigstore.json`); how to check them is in
 [runbook.md](runbook.md#release-packages-releaseyml-spec-m6-packaging) ("Verify a release").
+
+#### Arch Linux
+
+Each release carries a `PKGBUILD` for the `vimma-bin` package. It needs no other file: it
+downloads the release tarball, checks it against the SHA-256 written into it, and installs Vimma
+to `/opt/vimma` with `vimma` and `vimma-open` on your `PATH`, a desktop entry and icons. In an
+empty directory (makepkg leaves its build files there), run as your normal user:
+
+```sh
+curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si
+```
+
+`makepkg -si` installs the libraries Vimma needs with pacman, asks for your password to install
+the package, and refuses to run as root. To update, run the same command again in the same
+directory: it fetches the newest release's `PKGBUILD`, and pacman replaces the installed
+version. Once the in-app updater arrives, it shows this command when a new release is out
+([spec m6a-updater](specs/m6a-updater.md)). `sudo pacman -R vimma-bin` removes Vimma; your
+profile stays in your home directory.
+
+A new release counts as the latest as soon as it is published, but its files are uploaded about
+two hours later, when the release build finishes. In that window, or if that build failed,
+`curl` prints `curl: (22) The requested URL returned error: 404` and exits; the `PKGBUILD` you
+already have stays as it was and `makepkg` does not run. Try again later.
+
+To check the `PKGBUILD` before you build it, download it with the release's checksums and their
+signature, verify the signature with [cosign](https://github.com/sigstore/cosign), then the
+checksum:
+
+```sh
+base=https://github.com/vimma-browser/vimma/releases/latest/download
+curl -fL -O "$base/PKGBUILD" -O "$base/SHA256SUMS" -O "$base/SHA256SUMS.sigstore.json"
+cosign verify-blob --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/vimma-browser/vimma/\.github/workflows/release\.yml@refs/(heads/main|tags/v[0-9]+\.[0-9]+\.[0-9]+)$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS   # PKGBUILD: OK
+makepkg -si
+```
+
+The `PKGBUILD` pins the SHA-256 of the tarball it downloads, so checking the `PKGBUILD` covers
+what it installs. Every file of the release is in `SHA256SUMS` ("Verify a release" in
+[runbook.md](runbook.md#release-packages-releaseyml-spec-m6-packaging)).
+
+The package marks itself as installed by a package manager (`/opt/vimma/is-packaged-app`), as
+Firefox's own distribution packages do. Like them, it then does not show Firefox's warning that
+"some security features may offer less protection" when your kernel does not allow unprivileged
+user namespaces, which the content sandbox uses ([limits.md](limits.md#platforms-and-packaging)).
+The same package will be on the AUR as `vimma-bin` once it is published there; AUR helpers such
+as `yay -S vimma-bin` will then install and update it.
 
 ### First launch, with its own profile
 
