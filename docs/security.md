@@ -637,3 +637,45 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   [`the_token_never_leaves_the_handshake`](../tools/vimma-ctl/tests/mcp.rs),
   [`bad_arguments_never_reach_vimma`](../tools/vimma-ctl/tests/mcp.rs),
   [`bad_arguments_are_tool_errors_and_never_reach_vimma`](../tools/vimma-ctl/src/mcp.rs)
+
+## 13. Build and release supply chain (`release.yml`, `nightly.yml`)
+
+Vimma's binaries are built from Mozilla's Firefox source, this repository, and the npm packages
+that drive the build, chiefly Surfer. These rules keep what reaches a build pinned and reviewed.
+Spec: [build-supply-chain](specs/build-supply-chain.md), [ADR-001](adr/001-engine-firefox-surfer.md).
+
+**Reach:** Mozilla's archive and Taskcluster, the npm registry, this repository, and GitHub's
+hosted runners. Dependabot pull requests run and auto-merge today, whether or not a build runs.
+
+**Planned:** the spec's later deliveries add B1 (Mozilla's signature on the Firefox source,
+[#222](https://github.com/vimma-browser/vimma/issues/222)), the rest of B3 (every package in the
+release path held for review, with its published diff,
+[#223](https://github.com/vimma-browser/vimma/issues/223)), B2 (every build extracts its own
+verified source and restores nothing from the Actions cache,
+[#224](https://github.com/vimma-browser/vimma/issues/224)), and B6 and B7 (the Safe Browsing key
+in a `build` environment, and a watch on Mozilla's release key,
+[#225](https://github.com/vimma-browser/vimma/issues/225)).
+
+- B3. Surfer **must** be pinned to one exact version, locked by its integrity hash, and a
+  Dependabot update of Surfer **never** merges without a person, security updates and grouped
+  updates included. **⚠ gap:** the packages Surfer and `ajv` depend on are not held yet
+  ([#223](https://github.com/vimma-browser/vimma/issues/223)).
+  [`package.json pins Surfer to an exact version, locked by integrity`](../tools/test/build-supply-chain.test.mjs),
+  [`a Surfer update is never auto-merged, security updates included`](../tools/test/build-supply-chain.test.mjs),
+  [`the release-path group comes before the minor and patch group`](../tools/test/build-supply-chain.test.mjs)
+- B4. An npm install **never** runs install scripts, and the build **must** run Surfer only from
+  `node_modules`, never a package `npx` fetches, and **never** lets Surfer fetch an add-on.
+  [`.npmrc turns install scripts off for every install`](../tools/test/build-supply-chain.test.mjs),
+  [`release and nightly install with npm ci --ignore-scripts and run Surfer with npx --no`](../tools/test/build-supply-chain.test.mjs),
+  [`surfer.json lists no add-ons`](../tools/test/build-supply-chain.test.mjs)
+- B5. A workflow **never** targets a self-hosted runner: every job runs on a standard
+  GitHub-hosted image, and a `runs-on` expression that cannot be resolved to one fails. A job of
+  a workflow that a pull request, a comment, an issue or another workflow run can trigger is
+  held to this as the permanent guard; the build jobs run only from `main` or for a release.
+  **⚠ setting:** fork pull request approval is `all_external_contributors`
+  (`gh api repos/vimma-browser/vimma/actions/permissions/fork-pr-contributor-approval`), so a
+  fork's own workflow files run only once a person approves the run.
+  [`no workflow an outsider can trigger runs a job on a self-hosted runner`](../tools/test/self-hosted-runner.test.mjs),
+  [`a runs-on expression in such a workflow fails unless it resolves to a hosted image`](../tools/test/self-hosted-runner.test.mjs),
+  [`no workflow names a self-hosted runner, and both build jobs run on ubuntu-24.04`](../tools/test/self-hosted-runner.test.mjs),
+  [`each build job runs only from main or for a release`](../tools/test/self-hosted-runner.test.mjs)

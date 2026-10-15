@@ -181,9 +181,16 @@ its Rust toolchain and the GitHub Actions current:
   turns on auto-merge for security, patch and minor updates. They merge only once every
   required check above passes, licences included: a new licence or a new version of a package
   with a licence exception fails `npm run license-check` until a person reviews it.
-- **Majors need review.** Major updates, every GitHub Actions update (workflows hold write
-  tokens) and `@zen-browser/surfer` version updates get a comment and wait for a person to read
-  the changelog, fix what breaks and merge.
+- **Majors need review.** Major updates and every GitHub Actions update (workflows hold write
+  tokens) get a comment and wait for a person to read the changelog, fix what breaks and merge.
+- **Surfer is always reviewed.** `@zen-browser/surfer` drives the Firefox build, so it is pinned
+  to an exact version and no update of it auto-merges, security updates included. It comes in
+  its own `release-path` group with `ajv`; review it with
+  `npm diff --diff=@zen-browser/surfer@<old> --diff=@zen-browser/surfer@<new>`, which shows the
+  published code that will run.
+- **No install scripts.** `.npmrc` sets `ignore-scripts=true`, so `npm ci` and `npm install` run
+  no package's install scripts (`npm run` still runs ours). A new dependency that needs one is a
+  security decision for its PR, not a reason to drop the setting.
 - **By hand.** Node in `.nvmrc` (see the bench baseline in [docs/runbook.md](docs/runbook.md))
   and the Semgrep image digest in `semgrep.yml` are not covered; bump them in their own PR.
 

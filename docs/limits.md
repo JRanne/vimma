@@ -355,9 +355,10 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
 - PR CI runs the mochitests on an artifact build, which cannot see compiled-in config: the C++
   `--version` string, `MOZ_APP_NAME` and the crash-reporter flag
   ([ADR-010](adr/010-pr-artifact-builds.md), Known gaps).
-- The nightly full build is not live: `nightly.yml` and `release.yml` still name a self-hosted
-  runner label that no runner serves, and stay switched off until they move to GitHub-hosted
-  runners ([#224](https://github.com/vimma-browser/vimma/issues/224); [runbook](runbook.md), "Full
+- The nightly full build is not live: `nightly.yml` and `release.yml` run on GitHub-hosted
+  runners, but stay switched off until a cold build there is measured and both get a fresh,
+  verified extraction of the Firefox source
+  ([#224](https://github.com/vimma-browser/vimma/issues/224); [runbook](runbook.md), "Full
   builds"). Until then `skip-if = ["artifact"]` tests run only on local full builds. PRs that touch patches, `configs/`,
   `moz.configure` or branding must report a full-build run
   ([ADR-010](adr/010-pr-artifact-builds.md), [runbook](runbook.md)).

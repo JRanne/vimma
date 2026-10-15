@@ -1,8 +1,9 @@
 # Spec m0-pipeline: full Linux x86_64 build, rolling `nightly` release, issue on failure.
-# A full build does not fit a GitHub-hosted runner (engine/ is 22 GB after a build; 39 min on 16
-# threads), so it runs on a self-hosted runner labelled `vimma-build`. The schedule does nothing
-# until the repository variable NIGHTLY_ENABLED is `true`; a manual run (workflow_dispatch) is
-# allowed before that to test the runner. Setup: docs/runbook.md, "Nightly build runner".
+# Runs on a GitHub-hosted runner, never a self-hosted one (docs/security.md, B5; spec
+# build-supply-chain, decisions 6 and 7). The time and disk a cold build needs there are measured
+# before the schedule is switched on (build-supply-chain sub-PR 4, #224). The schedule does
+# nothing until the repository variable NIGHTLY_ENABLED is `true`; a manual run
+# (workflow_dispatch) from main is allowed before that. Setup: docs/runbook.md, "Full builds".
 name: nightly
 
 on:
@@ -23,7 +24,7 @@ jobs:
     if: >-
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'schedule' && vars.NIGHTLY_ENABLED == 'true')
-    runs-on: [self-hosted, linux, x64, vimma-build]
+    runs-on: ubuntu-24.04
     timeout-minutes: 240
     permissions:
       contents: write # publish the rolling `nightly` release
@@ -34,12 +35,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Keep the git-ignored engine/ and .surfer/ between runs: re-downloading Firefox costs
-          # 12 min and a cold build 39 min. engine/ is re-downloaded when surfer.json changes.
+          # A hosted runner starts empty, so nothing is kept between runs; build-supply-chain
+          # sub-PR 4 (#224) returns this to the default and removes the cached-engine shortcut.
           clean: false
 
       - name: npm ci
-        run: npm ci 2>&1 | tee -a "$LOG"
+        run: npm ci --ignore-scripts 2>&1 | tee -a "$LOG"
 
       - name: Firefox source matching surfer.json
         run: |
@@ -47,7 +48,7 @@ jobs:
           want=$(node -p 'require("./surfer.json").version.version')
           have=$(cat engine/.vimma-firefox-version 2>/dev/null || true)
           if [ "$want" != "$have" ]; then
-            npx surfer download --force 2>&1 | tee -a "$LOG"
+            npx --no surfer download --force 2>&1 | tee -a "$LOG"
             echo "$want" > engine/.vimma-firefox-version
           fi
 
@@ -76,7 +77,7 @@ jobs:
       - name: Build
         run: |
           set -o pipefail
-          npx surfer build 2>&1 | tee -a "$LOG"
+          npx --no surfer build 2>&1 | tee -a "$LOG"
 
       - name: Smoke check
         run: |
