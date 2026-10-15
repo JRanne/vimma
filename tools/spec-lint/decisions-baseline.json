@@ -69,13 +69,6 @@
     "Output",
     "The list is data"
   ],
-  "tab-search.md": [
-    "Extend the goto picker; no second picker.",
-    "Private stays private.",
-    "`Enter` on another window's tab",
-    "Lazy tabs stay lazy.",
-    "Out of scope."
-  ],
   "upstream-beta-canary.md": [
     "test",
     "render",
