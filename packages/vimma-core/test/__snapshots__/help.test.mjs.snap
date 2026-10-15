@@ -145,6 +145,10 @@ Find
   find_backward           ?                                                 Search backwards in page
   find_next               ctrl+g, f3, n                                     Next match
   find_previous           ctrl+shift+g, shift+f3, N                         Previous match
+  live_grep               ctrl+b f g                                        Live grep: search the text of the workspace's tabs
+  grep_next               ]q                                                Next result of the last live grep
+  grep_previous           [q                                                Previous result of the last live grep
+  grep_resume             (unbound)                                         Live grep again with the last query (:grep)
 
 Modes
   normal_mode             esc [insert], esc [visual]                        Back to normal mode

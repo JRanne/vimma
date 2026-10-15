@@ -27,14 +27,6 @@
     "One pure module, two callers.",
     "Bump subjects carry the advisories."
   ],
-  "live-grep.md": [
-    "The preview",
-    "The result list.",
-    "Private and agent workspaces.",
-    "Accessibility.",
-    "Theme.",
-    "Out of scope."
-  ],
   "m6a-updater.md": [
     "Downgrade",
     "Complete MARs only",

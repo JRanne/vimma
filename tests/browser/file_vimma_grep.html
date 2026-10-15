@@ -1,0 +1,65 @@
+<!doctype html>
+<!-- Live grep fixture (docs/specs/live-grep.md). Query parameters: `title`; `t`, lines of text
+     separated by `|`, one paragraph each; `pad`, filler paragraphs before and after them; `long`, a line of that many `a`s; `frames`, that many srcdoc iframes with a match each; `blank`, an iframe with no text;
+     `frame`, an iframe from another site after them, with the line `needle in frame`; `shadow`, an open and a closed shadow root with a match each. -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>grep fixture</title>
+  </head>
+  <body>
+    <script>
+      const p = new URLSearchParams(location.search);
+      const FRAME_URL =
+        "https://example.org/browser/browser/base/zen-components/tests/browser/" +
+        "file_vimma_grep.html?t=needle%20in%20frame";
+      document.title = p.get("title") || "grep fixture";
+      const pad = () => {
+        for (let i = 0; i < Number(p.get("pad") || 0); i++) {
+          const filler = document.createElement("p");
+          filler.textContent = `filler ${i}`;
+          document.body.append(filler);
+        }
+      };
+      pad();
+      for (const line of (p.get("t") || "").split("|")) {
+        const el = document.createElement("p");
+        el.textContent = line;
+        document.body.append(el);
+      }
+      pad();
+      if (p.has("shadow")) {
+        for (const mode of ["open", "closed"]) {
+          const host = document.createElement("div");
+          const root = host.attachShadow({ mode });
+          const span = document.createElement("span");
+          span.textContent = `needle in ${mode} shadow`;
+          root.append(span);
+          document.body.append(host);
+        }
+      }
+      if (p.get("long")) {
+        const el = document.createElement("p");
+        el.textContent = "a".repeat(Number(p.get("long")));
+        document.body.append(el);
+      }
+      for (let i = 0; i < Number(p.get("frames") || 0); i++) {
+        const frame = document.createElement("iframe");
+        frame.srcdoc = `<p>needle frame ${i}</p>`;
+        document.body.append(frame);
+      }
+      if (p.has("blank")) {
+        const frame = document.createElement("iframe");
+        frame.srcdoc = "<p> </p>";
+        document.body.append(frame);
+      }
+      if (p.has("frame")) {
+        // A fixed page on another site (the test server's example.org), never a URL from the
+        // query, so the fixture loads nothing a link could choose.
+        const frame = document.createElement("iframe");
+        frame.src = FRAME_URL;
+        document.body.append(frame);
+      }
+    </script>
+  </body>
+</html>

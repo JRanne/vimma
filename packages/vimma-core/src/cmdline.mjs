@@ -115,6 +115,10 @@ export const COMMANDS = Object.freeze([
   cmd("tabsearch", "optional", "goto.picker", "Tab search, with the text as its query", {
     aliases: ["ts", "b"],
   }),
+  // docs/specs/live-grep.md decision 2: with text opens with that query; alone resumes.
+  cmd("grep", "optional", "grep.resume", "Live grep (with text: that query; alone: the last)", {
+    textAction: "grep.open",
+  }),
   cmd("sidebar", "none", "sidebar.toggle", "Open / close the side panel"),
   // docs/specs/toolbar-toggle.md decision 2: show / hide set a known state (vimma-ctl).
   cmd("toolbar", "optional", "toolbar.toggle", "Show / hide the toolbar (show | hide)"),

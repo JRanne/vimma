@@ -88,6 +88,8 @@ export default [
         BrowsingContext: "readonly",
         Ci: "readonly",
         Components: "readonly",
+        // Live grep's matching worker (actors/grep-worker.mjs), started by the child.
+        ChromeWorker: "readonly",
       },
     },
   },

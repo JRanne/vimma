@@ -26,11 +26,12 @@ ChromeUtils.defineESModuleGetters(lazy, {
 const isBrowserWindow = (w) => !w.closed && w.toolbar?.visible !== false && !!w.gBrowser;
 
 /**
- * The windows tab search lists, this one first, then the rest most recent first.
+ * The windows tab search lists, this one first, then the rest most recent first. Live grep's
+ * wider scopes take the same windows (host/grep.mjs).
  * @param {Window} win
  * @returns {Window[]}
  */
-function windowsFrom(win) {
+export function windowsFrom(win) {
   const others = /** @type {Window[]} */ (lazy.BrowserWindowTracker.orderedWindows).filter(
     (w) => w !== win && isBrowserWindow(w),
   );
@@ -130,14 +131,17 @@ export function goToTab(win, target, tabId) {
 
 /**
  * Enter on a recently closed row: the tab reopens in this window (its container, so its
- * workspace, comes with its saved state) and is selected; a closed window reopens.
+ * workspace, comes with its saved state) and is selected; a closed window reopens. Live grep's
+ * closed rows reopen the same way (host/grep.mjs).
  * @param {Window} win
  * @param {string} id  `closed:<closedId>` or `closedwin:<closedId>`
+ * @returns {any} the reopened tab or window; undefined when the entry is gone (restored or
+ *   forgotten since it was listed)
  */
 export function reopenClosed(win, id) {
   const m = /^closed(win)?:(\d+)$/.exec(id);
-  if (!m) return;
+  if (!m) return undefined;
   const closedId = Number(m[2]);
-  if (m[1]) lazy.SessionStore.undoCloseById(closedId);
-  else lazy.SessionStore.undoCloseById(closedId, isPrivateBrowsing(win), win);
+  if (m[1]) return lazy.SessionStore.undoCloseById(closedId);
+  return lazy.SessionStore.undoCloseById(closedId, isPrivateBrowsing(win), win);
 }

@@ -108,6 +108,8 @@ const keys = {
   // Vimma's way (go to the one private workspace, or open it).
   private_workspace: ["prefix+shift+p", "ctrl+shift+p"],
   goto_picker: ["prefix+g"],
+  // docs/specs/live-grep.md decision 2: prefix+f is the find group, Telescope's <leader>fg.
+  live_grep: ["prefix+f g"],
   toggle_sidebar: ["prefix+b"],
   // docs/specs/toolbar-toggle.md: u for URL bar; tmux leaves it free.
   toggle_toolbar: ["prefix+u"],
@@ -207,6 +209,9 @@ const modal = {
     "<C-6>": "workspace.last",
     "]w": "workspace.next",
     "[w": "workspace.previous",
+    // unimpaired's quickfix keys over the last live grep's results (live-grep decision 8).
+    "]q": "grep.next",
+    "[q": "grep.previous",
     yy: "page.yank_url",
     p: "page.open_clipboard",
     P: "page.open_clipboard_new_tab",

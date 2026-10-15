@@ -136,6 +136,17 @@ describe("normal-mode extras (yy, p, P, gi, gu, gU, gf)", () => {
     expect(actionAt("normal", keys)).toBe(id);
   });
 
+  test("]q and [q step the grep list in normal mode (live-grep)", () => {
+    expect(actionAt("normal", ["]", "q"])).toBe("grep.next");
+    expect(actionAt("normal", ["[", "q"])).toBe("grep.previous");
+  });
+
+  test("prefix+f is a group: no action of its own, g under it (live-grep decision 2)", () => {
+    const f = compileKeymap().trie("normal").children.get("ctrl+b")?.children.get("f");
+    expect(f?.action).toBeFalsy();
+    expect([...(f?.children.keys() ?? [])]).toEqual(["g"]);
+  });
+
   test("y alone is a prefix in normal mode, not an action of its own", () => {
     const y = compileKeymap().trie("normal").children.get("y");
     expect(y?.action).toBeFalsy();

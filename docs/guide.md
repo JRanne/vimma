@@ -323,6 +323,67 @@ is on screen), as Vim's starts at the cursor.
 
 `ctrl+f` still opens Firefox's own find bar, where `Enter` goes to the next match.
 
+### Live grep
+
+`ctrl+b f g` searches the text of every tab in your workspace as you type, as Telescope's
+`live_grep` searches files in Neovim. `/` finds text in one page; live grep finds the page.
+
+- **The picker** covers the page area, from below the toolbar (or the window's top when the
+  toolbar is hidden) to the status bar. The prompt, titled `Live Grep`, is at the bottom, with
+  `matches listed / found` on its right. Results stack above it, the best one next to the prompt
+  and marked `>`. Each row shows its window (`w1` is this one), the tab's number (the one
+  `ctrl+b 1..9` uses) and title, its host, `:line:`, and the line with the match highlighted. A line is a paragraph, list item, heading or table cell (text after a `<br>`
+  or in `pre` text starts a new one), numbered in the page. On the right, `Grep Preview` shows
+  the ten lines before and after the selected match, the matched line highlighted; its title
+  names the match's window, workspace, tab and host in full. In a window
+  narrower than 900 pixels the preview is hidden and the results take the whole width.
+- **The query** is a regular expression in JavaScript's syntax (`err(or)?s?\b`, `\d+ ms`), matched
+  line by line. Case follows ripgrep's smart case: all lower case ignores case, a capital letter
+  matches it. Text that is not a valid expression, such as `c++(`, is searched as typed and the
+  prompt says `literal`.
+- **Keys.** You type into the prompt. `ctrl+n` / `↓` move down the list, toward the best result,
+  `ctrl+p` / `↑` up; `Tab` / `shift+Tab` jump to the next / previous tab's first result.
+  `ctrl+d` / `ctrl+u` scroll the preview (without a preview, `ctrl+u` clears the prompt;
+  `ctrl+w` and `Backspace` always edit it). `Esc` leaves the prompt for browsing: `j` / `k`,
+  `gg` (top) and `G` (the best result), `/` or `i` back to the prompt, and `Esc` or `q` close.
+- **`ctrl+space`** keeps the results and filters them by fuzzy matching, as Telescope's refine:
+  the prompt says `fuzzy`, and `Esc` goes back to the search.
+- **The scope box** above the results says what is being searched, before you type: its title
+  names the scope (`Scope: this workspace · ctrl+s`), and a line per window gives its mark, its
+  workspaces with their tab counts and how many tabs are not loaded, for example
+  `w1 this window: work 12, notes 3 · 15 tabs, 2 not loaded`.
+- **`ctrl+s`** widens the search: this workspace → this window (every workspace in it) → all
+  windows → all windows and recently closed tabs and windows → back to this workspace. The
+  scope starts at this workspace each time live grep opens. `Enter` on a result in another
+  window brings that window to the front and selects the match there.
+- **Recently closed** tabs and windows are searched by their title and URL only, since Firefox
+  keeps no page text for them: at most the 25 tabs and 5 windows Firefox remembers. They are
+  listed after the open tabs' results, labelled `closed` or `closed window`; `Enter` reopens the
+  tab in this window and goes there, or reopens the window.
+- **`Enter`** goes to the result: it selects the tab (and the pane that shows it in a split),
+  selects the match with find's highlight and scrolls it to the middle. You are in normal mode;
+  `v` starts copy mode with the match selected, so `v` `y` copies it. If the page changed since
+  the search, the same match is found again; if it is gone, a notice says
+  `match no longer on the page`.
+- **`]q` / `[q`** go to the next / previous result of that search afterwards, across tabs (and
+  windows, in the wider scopes) and wrapping, as Vim's quickfix list; a notice says where you are (`grep 3/12`). `:grep` alone
+  opens live grep again with the last query; `:grep text` opens it with that text.
+- **Not searched:** tabs that have not loaded since a restart (they are listed at the far end as
+  `not loaded`; `Enter` opens one, so you can search again), form fields, text drawn on a canvas,
+  images, closed `<details>`, PDFs, and pages Vimma cannot read (`view-source:`). A page in a
+  frame from another site is searched; its rows say `↳ host`.
+- **Limits.** A search stops in a page, or in the closed tabs' titles, after a second
+  (`timed out`, so a pattern that would backtrack for ever never freezes the page or Vimma), covers at most 100 frames a tab and the first
+  million characters of a page (`cut`), and lists at most 2,000 results; a query over 1,000
+  characters is not run (`too long`).
+- **Private and agent tabs.** From a normal window live grep never sees the
+  [private workspace](#private-workspace), open or recently closed, in any scope; in the private
+  workspace it sees only private tabs. The [agent workspace](#agent-workspace)'s tabs are
+  searched only when the scope includes them (from `this window` on), listed last and marked
+  `◇ agent`.
+- Page text stays in the page's own process while the picker is open and is dropped when it
+  closes; Vimma keeps only the lines it shows, in memory, and never writes them to disk.
+
 ### Copy mode
 
 `v` (or `ctrl+b [`, as in tmux) enters copy mode: a caret appears at the start of the first text
@@ -597,6 +658,7 @@ keys. A `[panel]` after a key means it works only in that mode.
 | `ctrl+b 1..9`, `alt+1..8`, `alt+9`                                                      | Tab 1 to 9, counting visible tabs (pinned tabs first); Firefox's `alt+9` is the last tab. With fewer tabs than N, nothing happens. `ctrl+shift+pageup` / `ctrl+shift+pagedown` move the tab left / right among them.                                                                                                                                                                                                                                                                                                                                                                      |
 | `:`                                                                                     | Normal mode: opens the command line at the bottom of the window ([below](#the-command-line)). In a text field `:` is typed.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `ctrl+b g`, `b`                                                                         | Opens tab search over the page, ready to type (`b` in normal mode): every tab of every workspace and window, and the recently closed ones ([below](#tab-search-and-tab-rename)).                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `ctrl+b f g`                                                                            | Opens [live grep](#live-grep): search the text of the workspace's tabs as you type. `]q` / `[q` in normal mode step through its results afterwards.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `ctrl+b shift+t`                                                                        | Renames the tab ([below](#tab-search-and-tab-rename)); an empty name restores the page title.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `ctrl+b a`                                                                              | Bookmarks the page; type folders before its title: `work/docs/title` ([below](#bookmarks)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `ctrl+b shift+b`                                                                        | Opens or closes the bookmarks panel ([below](#bookmarks)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -1704,6 +1766,7 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:tabrename [name]`                   | Renames the tab; without a name, opens the rename prompt.                                                                                   |
 | `:ls`                                 | Opens [tab search](#tab-search-and-tab-rename).                                                                                             |
 | `:tabsearch [text]`, `:ts`, `:b`      | Opens tab search with the text already typed.                                                                                               |
+| `:grep text`, `:grep`                 | Opens [live grep](#live-grep) with that text; alone, with the last query.                                                                   |
 | `:vsplit`/`:vs`, `:split`/`:sp`       | Splits the pane right / down, as `ctrl+b v` / `ctrl+b -`.                                                                                   |
 | `:layout [name]`                      | Arranges the panes in the named preset ([Layouts](#layouts)); Tab completes the names. Without one, the next preset.                        |
 | `:wsnext`/`:wn`, `:wsprev`/`:wp`      | Next / previous workspace, as `ctrl+b )` / `ctrl+b (`.                                                                                      |
