@@ -84,7 +84,9 @@ describe("source-check.sh", () => {
     const where = archive("158.0", { signature: "bad" });
     const r = run("158.0", where);
     expect(r.status).toBe(1);
-    expect(r.stdout + r.stderr).toMatch(/not signed by Mozilla's release key: gpgv reported BADSIG/);
+    expect(r.stdout + r.stderr).toMatch(
+      /not signed by Mozilla's release key: gpgv reported BADSIG/,
+    );
     expect(r.output).not.toContain("result=");
   }, 60_000);
 

@@ -119,7 +119,10 @@ describe("upstream autopilot workflow", () => {
       return lines.map((line) => ({ name, text, line }));
     });
     expect(calls.map((c) => c.name).sort()).toEqual(
-      expect.arrayContaining(["tools/upstream/firefox-source.sh", "tools/upstream/source-check.sh"]),
+      expect.arrayContaining([
+        "tools/upstream/firefox-source.sh",
+        "tools/upstream/source-check.sh",
+      ]),
     );
     for (const { name, text, line } of calls) {
       expect(line, name).toMatch(/--signature "?\$[a-z_{}]+\/SHA512SUMS\.asc"?/);

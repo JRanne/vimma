@@ -19,6 +19,7 @@ Repository: <https://github.com/vimma-browser/vimma>; `MOZ_SOURCE_REPO` in `conf
 ```sh
 npx surfer setup-project   # interactive: name vimma, Firefox release
 npx surfer download
+npm run verify-source      # the tarball against Mozilla's signed SHA512SUMS (ADR-021)
 npx surfer bootstrap
 npx surfer build
 npm start                  # tools/start.mjs: the build with ~/.cache/vimma-dev-profile
@@ -808,8 +809,8 @@ self-hosted runner or a label that is not a standard GitHub-hosted image
 Both build jobs run on `ubuntu-24.04` and start from nothing: a clean checkout, Node from
 `.nvmrc` with no npm cache, no Actions cache and no compiler cache (rule B2). The Firefox source
 comes only from `tools/upstream/firefox-source.sh`, which downloads the tarball `surfer.json`
-names, checks it against Mozilla's `SHA512SUMS`, deletes `engine/` and lets Surfer extract the
-verified file. After `npm run import` the build step deletes `engine/.git`: `surfer import` needs
+names, checks it against Mozilla's `SHA512SUMS` and Mozilla's signature on it (rule B1, next
+section), deletes `engine/` and lets Surfer extract the verified file. After `npm run import` the build step deletes `engine/.git`: `surfer import` needs
 that empty repository, but with it `mach` finds none of Mozilla's toolchains for
 `--enable-bootstrap` (spec build-supply-chain, R14).
 
@@ -845,6 +846,36 @@ gh variable set RELEASE_ENABLED --body true           # releases: only at the re
 What the nightly does once it runs: a full build of `main`, the full mochitest suite on it, the
 rolling `nightly` pre-release, and on failure the log as an artifact and an issue labelled
 `nightly-failure` (comment `@claude` on it to hand it to Claude Code).
+
+### Mozilla's release key (ADR-021)
+
+Every path that gets Firefox source (`firefox-source.sh`, `source-check.sh`,
+`npm run verify-source`) accepts a tarball only when its SHA-512 is in a `SHA512SUMS` signed by
+Mozilla's release key, pinned in `tools/upstream/mozilla-release-key.asc` with the primary
+fingerprint `14F26682D0916CDD81E37B6D61B7B526D98F0353` in `tools/upstream/verify-sha512.py`
+(docs/security.md B1). The current signing subkey, `827E…7AA3`, expires 2028-08-05.
+
+**When Mozilla rotates the signing subkey** (announced on the Mozilla Security Blog; until the
+update lands, the autopilot, the canary and PR CI fail on releases the new subkey signed, with
+`gpgv reported ERRSIG, NO_PUBKEY`):
+
+```sh
+curl -fsSL https://archive.mozilla.org/pub/firefox/nightly/latest-mozilla-central/KEY \
+  -o tools/upstream/mozilla-release-key.asc
+gpg --show-keys --with-subkey-fingerprints tools/upstream/mozilla-release-key.asc
+```
+
+Check, before opening the pull request: the primary fingerprint is still `14F2 6682 D091 6CDD
+81E3 7B6D 61B7 B526 D98F 0353`; the new subkey's fingerprint and expiry are the ones in Mozilla's
+announcement; every subkey marked `revoked` before is still revoked (the 2025 subkey
+`09BE…0256` above all); the file is the same as the `KEY` beside the newest release
+(`releases/<version>/KEY`). Cite the announcement in the pull request. Update the subkey and
+expiry in ADR-021 and in this section, and add the new release's `SHA512SUMS` and `.asc` to the
+fixtures only if a test needs a signature by the new subkey. A different primary fingerprint is
+not a routine update: stop, and review ADR-021.
+
+The synthetic signature fixtures in `tools/upstream/fixtures/sums/synthetic/` come from
+`tools/upstream/fixtures/sums/make-synthetic.sh` (throwaway keys, no secret key committed).
 
 ### Google Safe Browsing key (spec m0-safebrowsing-key)
 

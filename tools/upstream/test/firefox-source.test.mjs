@@ -172,7 +172,9 @@ describe("firefox-source.sh", () => {
     staleEngine(where.work);
     const r = run(where);
     expect(r.status).toBe(1);
-    expect(r.stdout + r.stderr).toMatch(/not signed by Mozilla's release key: gpgv reported BADSIG/);
+    expect(r.stdout + r.stderr).toMatch(
+      /not signed by Mozilla's release key: gpgv reported BADSIG/,
+    );
     expect(existsSync(join(where.work, "engine", "browser", "stale.txt"))).toBe(true);
     expect(surferCalls(where.work)).toEqual([]);
   }, 60_000);
