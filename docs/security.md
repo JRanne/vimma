@@ -703,6 +703,21 @@ in a `build` environment, and a watch on Mozilla's release key,
   write to `engine/`.
   `firefox-source.sh` also refuses a `surfer.json` with a `version.candidate`, which Surfer would
   fetch from `candidates/` unverified.
+  A pull request that changes the pinned key file, or a line of `verify-sha512.py` that names
+  `PINNED_FINGERPRINT` or `KEY_FILE`, fails the required check "Mozilla release key unchanged or
+  approved" (`.github/workflows/key-guard.yml`, `tools/ci/key-guard.mjs`) until a maintainer adds
+  the `key-rotation-approved` label, which needs triage access to the repository. No automation
+  or agent adds that label; a maintainer adds it only after the checks in `docs/runbook.md`,
+  "Mozilla's release key", and removes it if a later push changes the key again, since the label
+  stays on the pull request across pushes. The check runs the base branch's copy of the script.
+  A pull request that changes the guard itself (`.github/workflows/key-guard.yml`,
+  `tools/ci/key-guard.mjs` or its tests) needs the same label, because under `pull_request` such
+  a pull request still runs its own copy of the workflow and could rewrite it to pass; the
+  label requirement on the guard's files is what makes that change visible, and the `main`
+  ruleset, which requires the check by its name, is what makes it binding. The one exception is
+  the pull request that first adds the guard to a base branch without one. Its scope is the
+  key, the fingerprint and the guard: it does not see a change that weakens `verify-sha512.py`
+  elsewhere (its call sites or its status checks); review of `tools/upstream/` covers that.
   [`test_good_signature_from_mozillas_current_subkey_passes`](../tools/upstream/test_verify_sha512.py),
   [`test_signature_by_the_revoked_compromised_subkey_fails`](../tools/upstream/test_verify_sha512.py),
   [`test_signature_by_another_key_fails`](../tools/upstream/test_verify_sha512.py),
@@ -718,7 +733,13 @@ in a `build` environment, and a watch on Mozilla's release key,
   [`--require refuses an engine/ never verified, or verified for another version`](../tools/upstream/test/verify-source.test.mjs),
   [`npm run import refuses an engine/ whose source was never verified`](../tools/test/upstream-workflow.test.mjs),
   [`every verify-sha512.py call passes a signature`](../tools/test/upstream-workflow.test.mjs),
-  [`refuses a surfer.json with a version.candidate, before anything is fetched`](../tools/upstream/test/firefox-source.test.mjs)
+  [`refuses a surfer.json with a version.candidate, before anything is fetched`](../tools/upstream/test/firefox-source.test.mjs),
+  [`fails a changed key file without the label`](../tools/ci/test/key-guard.test.mjs),
+  [`fails a change to any of the guard's own files without the label, and passes it with`](../tools/ci/test/key-guard.test.mjs),
+  [`passes the pull request that first adds the guard to a base without one`](../tools/ci/test/key-guard.test.mjs),
+  [`fails a changed fingerprint without the label, and passes it with`](../tools/ci/test/key-guard.test.mjs),
+  [`passes event values to run: through env only`](../tools/ci/test/key-guard.test.mjs),
+  [`still judges when started through a symlinked path`](../tools/ci/test/key-guard.test.mjs)
 - B2. A nightly or release build **never** builds from an `engine/` it did not extract in the
   same job from the tarball it verified, and **never** restores a tree, an objdir or a compiler
   cache from the Actions cache; a release **must** build in a fresh objdir with an empty
