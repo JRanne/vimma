@@ -97,7 +97,7 @@ action set).
 - **`tab.new`** calls `BrowserCommands.openTab()`, Firefox's `ctrl+t` path: the new-tab page (the
   harness's prefs make it `about:blank`, so the test waits for `TabOpen`, not
   `waitForNewTab`), appended at the end, URL bar focused.
-- **`tab.close` behaves like Firefox's `ctrl+w`** (review round 1; `closeTabOrWindow` with a
+- **`tab.close` behaves like Firefox's `ctrl+w`** (`closeTabOrWindow` with a
   modifier event, browser-commands.js:377-388): on a pinned tab it
   selects the first unpinned tab instead of closing; otherwise `gBrowser.removeCurrentTab` with
   `animate` and ctrl+w's keyboard `metricsContext`, and the last tab closes the window unless

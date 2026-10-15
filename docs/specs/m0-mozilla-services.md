@@ -181,7 +181,7 @@ ships.
 - **Red/green**: before, the mochitest failed 22 of 35 checks (every default above still
   Firefox's, `MOZ_CRASHREPORTER` true, a default `services.settings.server` check written wrong
   and fixed to `prefHasDefaultValue`); with the Suggest task added, 37/37 pass. All five Vimma
-  mochitests pass (99 checks). Review round: the new promo prefs and the migration test failed
+  mochitests pass (99 checks). Hardening: the new promo prefs and the migration test failed
   5 of 47 (`Vimma's value is set again - false == true`); after the fix 47/47, all 109 checks
   pass. No C++ rebuild (prefs and our module are symlinked into `dist/bin`).
 - **Zen and LibreWolf.** Zen: generated `zen.js` included from `firefox.js`; Normandy off with

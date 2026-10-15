@@ -283,8 +283,8 @@ the existing G1 to G10) with their tests:
   `upstream/firefox-*` branches. Every action stays pinned by a full commit SHA.
 - `SAFEBROWSING_API_KEY` reaches no job of the autopilot, as before.
 
-These workflows hold write tokens and secrets, so sub-PRs 1, 2 and 4 get a review by a fresh
-agent before merging (CLAUDE.md).
+These workflows hold write tokens and secrets, so sub-PRs 1, 2 and 4 get an independent security
+review before merging ([docs/review-checklist.md](../review-checklist.md)).
 
 ## Tests
 

@@ -42,6 +42,14 @@ export const PATTERNS = [
   /\bhand-?over\b/gi,
   /\bfirst\s+draft\b(?!\s+release)/gi,
   /claude\.ai\/code\/session/gi,
+  // a review as the source of a reason: "Security review of #182", "security review, finding 2",
+  // "Review round 1", "PR #148 review"; the reason stays, the attribution goes
+  // (process-wording: quotes what the patterns match)
+  /\b(?:security\s+)?review(?:\s+of\s+(?:PR\s+)?#\d+|,\s+(?:finding\s+\d+|PR\s+#\d+)|\s+round\b)/gi,
+  /\bPR\s+#\d+(?:'s)?\s+review\b/gi,
+  // the contributor instructions for coding agents, not a reason a reader can check; the pointers
+  // that send agents there (README, CONTRIBUTING) carry a marker
+  /\bCLAUDE\.md\b/gi,
 ];
 
 const MARKER = /<!--\s*process-wording:\s*\S[^>]*-->/;

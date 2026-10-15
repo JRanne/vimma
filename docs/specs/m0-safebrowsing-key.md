@@ -169,7 +169,7 @@ before a release; not in CI (PR CI is keyless and the nightly is not live).
   compares with an expectation passed in, rather than branching on AppConstants alone.
 - **Build cost**: after rebasing onto PR #15 (`--disable-updater`), `npm run import` then
   `./mach build` took 101 s: the objdir had already been fully rebuilt with `--disable-updater`
-  for PR #15's own review, so this measures only the key (reconfigure, `AppConstants` and
+  for PR #15's own testing, so this measures only the key (reconfigure, `AppConstants` and
   dependants). The artifact build took 21 s. The list prefs need no build (`dist/bin` symlinks
   the branding file).
 - **Red/green.** Vitest: 4 failing (`expectSafeBrowsingKey is not a function`), then 8/8.

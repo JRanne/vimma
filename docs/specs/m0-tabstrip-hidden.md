@@ -114,7 +114,7 @@ tokens (M5); a settings UI for the pref.
 - **Verified:** red run 13 passed / 21 failed; green 31/0; full suite 151/0. Mutation: making
   `fallbackAnchor()` return `null` while hidden fails "gTabsPanel.canOpen with the strip hidden"
   (reverted). Headless has no CSD, so the window-controls test sets `customtitlebar` itself.
-- **Review round 1 (2026-10-09):** the runtime wraps of `TabBarVisibility.update` and
+- **Hardening:** the runtime wraps of `TabBarVisibility.update` and
   `gTabsPanel` are gone. A one-hunk patch fails loudly at `surfer import` on a rebase (the
   nightly catches it); a wrap of upstream internals would break silently at runtime. List All
   Tabs while hidden is dropped on purpose. Popups keep Firefox's strip; the host starts

@@ -9,7 +9,7 @@ Read plan.md once per milestone; read docs/specs/<current>.md every session.
 
 - npm test # Vitest for packages/vimma-core (fast, run constantly)
 - npm run typecheck # tsc --checkJs over src/**/vimma/** and packages/**
-- npm run lint # eslint + prettier check + process wording in Markdown (tools/md-wording)
+- npm run lint # eslint, prettier, the Markdown and comment wording checks (tools/md-wording), spec-lint
 - npm run gen-docs # regenerate docs/bindings.md, docs/bindings.json, defaults.toml from actions.mjs
 - npm run import # sync-core + surfer import: symlink src/ and tests/ into engine/; rerun after editing packages/vimma-core
 - npx surfer build --ui # rebuild our UI only; plain ./mach build after a moz.build change.
@@ -39,7 +39,8 @@ Read plan.md once per milestone; read docs/specs/<current>.md every session.
 - Conventional Commits with a body; the subject is the changelog line; the body explains why.
   commitlint: lower-case subject, body lines ≤ 100 columns. Squash bodies go through `npx commitlint`
   before the merge, chained with `&&` so a failure blocks it.
-- User-visible change → update docs/guide.md (and the README feature list or status if it changes what works).
+- User-visible change → update docs/guide.md (and the guide's Features at a glance, or the README status,
+  if it changes what works).
 - User-visible change → a line in CHANGELOG.md [Unreleased] (the maintainer adds it at merge time, so
   parallel PRs do not conflict). Exception: a PR that changes a snapshot or baseline adds its own line.
 - Keymap changes (actions.mjs, defaults.mjs) go one PR at a time: each regenerates bindings docs and

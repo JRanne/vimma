@@ -142,7 +142,7 @@ Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
   glance" too when it changes what works), and the README's status line if it changes that. See
   [docs/review-checklist.md](docs/review-checklist.md).
 - **Agents.** [CLAUDE.md](CLAUDE.md) sets the rules for AI coding agents. They apply to human
-  contributors too.
+  contributors too. <!-- process-wording: points at the coding agents' rules file -->
 
 Before pushing, run `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:py`,
 `npm run license-check` and `npx surfer license-check`.

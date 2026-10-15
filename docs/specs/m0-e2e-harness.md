@@ -180,8 +180,8 @@ emitted as `::notice::` and written to the step summary), 1 otherwise, 2 for usa
   pixels red over a dimmed copy) go to `e2e-output/` (git-ignored).
 - **Baselines** live in `tests/e2e/baselines/<name>.png`. A missing baseline fails (never
   created silently). `--update-baselines` (explicit, never default, refused when `CI` is set)
-  writes them; per CLAUDE.md every baseline change needs a changelog line, i.e. a commit whose
-  subject says which baseline changed and why.
+  writes them; per [CONTRIBUTING.md](../../CONTRIBUTING.md) every baseline change needs a
+  changelog line, i.e. a commit whose subject says which baseline changed and why.
 - **Dependencies**: none. pixelmatch (ISC, small) was considered; a byte-wise diff with a
   tolerance is ~30 lines, and PNG handling is `node:zlib` plus a CRC table, so there is nothing
   to licence-check or keep updated.
@@ -282,7 +282,7 @@ The server; macOS/Windows; parallel scenarios; performance timers (plan §5 Perf
   and x11-apps (`xwd`) are not; rustup is. Hence capture through `-fbdir`, no apt step.
 - No new dependency: `npm run license-check` and `license-check:crates` unchanged.
 
-## Review round 1 (2026-10-09)
+## Hardening
 
 Supersedes the sections above where they differ.
 
@@ -318,7 +318,7 @@ Supersedes the sections above where they differ.
   `header_size` below 100, `byte_order` other than 0/1, a zero or > 16384 dimension and
   `bytes_per_line` < width × bytes per pixel are rejected. A fast-check property corrupts every
   header field (2000 runs): the decoder returns a well-formed image or throws an `Error`.
-- **Nits.** "Baselines rewritten" is printed only when a screenshot step wrote one, naming it.
+- **Output.** "Baselines rewritten" is printed only when a screenshot step wrote one, naming it.
 - TDD: red, 13 failed in launcher/driver/runner, and the XWD file hung on the 0xFFFFFFFF mask
   (killed by `timeout`); green: 120 passed, 1 skipped (Xvfb, absent on the dev box).
 - Manual check against the current local full build, which now has the control server: steps 1

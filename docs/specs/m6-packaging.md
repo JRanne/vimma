@@ -297,15 +297,14 @@ repos) and is what the runbook's `cosign verify-blob` uses; `RUNTIME_RELEASE` is
 
 - Node scripts with Vitest (the repo's test runner); Python was not needed.
 
-## Review changes (2026-10-09)
+## Hardening
 
-The first review asked for: the main/release gate on every job and an anchored verify identity
-(must-fix 1); SPDX-canonical licence ids and validation against the official schema (2); the
-LGPL text and runtime notice in the AppImage plus a release-notes notice (3); smol-toml and
-clean moz.yaml versions in the SBOM (4); a fresh objdir and cache for release builds (5); the
-desktop file ID `vimma-vimma` (6); and nits (AUR releases only, `ubuntu-24.04` in `failure`,
-no empty `MOZ_APP_LAUNCHER`, the `application.ini` version check in the release build). All are
-in, test-first where there is code.
+Added before the first release, test-first where there is code: the main/release gate on every
+job and an anchored verify identity; SPDX-canonical licence ids and validation against the
+official schema; the LGPL text and runtime notice in the AppImage plus a release-notes notice;
+smol-toml and clean moz.yaml versions in the SBOM; a fresh objdir and cache for release builds;
+the desktop file ID `vimma-vimma`; AUR releases only, `ubuntu-24.04` in `failure`, no empty
+`MOZ_APP_LAUNCHER`, and the `application.ini` version check in the release build.
 
 - Install path `usr/lib/vimma` in the `.deb` (Mozilla's own `.deb` uses `usr/lib/firefox`), and
   `/opt/vimma` in the AUR package (Arch's convention for `-bin` browsers).

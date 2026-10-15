@@ -49,7 +49,7 @@ new Firefox releases arrive as PRs.
 - **e2e.yml** was a no-op job naming the build-strategy ADR until `docs/adr/010-*` and
   m0-build-strategy.
 - **claude.yml** follows anthropics/claude-code-action v1.0.247 (`examples/claude.yml`,
-  `docs/setup.md`, `docs/security.md`), hardened after review:
+  `docs/setup.md`, `docs/security.md`), hardened as follows:
   - `github_token: github.token` on every job, so the job `permissions:` block is the token Claude
     gets (otherwise the action uses the Claude app's installation token with contents,
     pull-requests and issues write). The Claude app is not needed.

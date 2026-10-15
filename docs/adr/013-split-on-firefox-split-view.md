@@ -168,7 +168,7 @@ Decision: all four criteria hold with our own files only. The contingency patch
 
 ## Verification
 
-Claims confirmed by an independent review of PR #25 against the engine tree (Firefox 157.0.1):
+Claims checked against the engine tree (Firefox 157.0.1):
 
 - `browser/app/profile/firefox.js:2842`: `browser.tabs.splitView.enabled` defaults to `true`,
   with no `#ifdef`.

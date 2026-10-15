@@ -120,7 +120,7 @@ from making the client wait (no reply: the client's timeout ends it) or from lea
 client tried to connect.
 
 **Why this is version 1 and not 2.** The order above (proof before token) was fixed before any
-server shipped, after the review of #38 found that an earlier form, which sent the token in the
+server shipped, once a security check found that an earlier form, which sent the token in the
 `hello` next to the nonce, let a squatter compute the proof itself. `vimma-ctl` and the e2e
 harness live in the same repository as the server, so no deployed peer speaks that form, and a
 version 2 for it would only carry dead compatibility code.
@@ -450,8 +450,8 @@ decoder ([m7-fuzzing](m7-fuzzing.md)). The server's side is in
 `tests/browser/browser_vimma_control.js` and `browser_vimma_mcp_agent.js`.
 
 All of it was written first and seen to fail: the client's first run had every function a
-`todo!()` stub (unit "1 passed; 43 failed", integration "1 passed; 16 failed"), and the review
-follow-up (the `--timeout` cap, `busy`, the 64 KiB discovery-file cap) failed to compile before
+`todo!()` stub (unit "1 passed; 43 failed", integration "1 passed; 16 failed"), and the
+hardening (the `--timeout` cap, `busy`, the 64 KiB discovery-file cap) failed to compile before
 it was added.
 
 ## Docs and changelog

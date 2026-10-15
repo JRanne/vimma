@@ -5,9 +5,9 @@
 
 // The code comments' counterpart of process-wording.mjs: a comment says why the code is the way
 // it is, for readers who were not part of the work. This check (npm run lint, and CI) fails on a
-// comment that records the process instead: the Markdown check's phrases, plus review
-// attributions ("review of #N", "review, finding N"), quoted answers ("user: '...'") and pointers
-// to the contributor instructions file. A reason from a review stays; its attribution goes.
+// comment that records the process instead: the Markdown check's phrases (review attributions
+// and pointers to the contributor instructions file among them), plus dated and quoted answers
+// ("user: '...'"). A reason from a review stays; its attribution goes.
 //
 // Only comments are read: `//`, `/* */` (JavaScript, Rust, CSS) and `#` (shell, YAML, Python,
 // TOML), found by a line scan that does not parse strings. A comment block is a run of lines that
@@ -26,15 +26,10 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 const CODE_PATTERNS = [
   ...PATTERNS,
-  // a review as the source of a reason: "Security review of #182", "security review, finding 2"
-  // (process-wording: quotes what the pattern matches)
-  /\b(?:security\s+)?review(?:\s+of\s+(?:PR\s+)?#\d+|,\s+(?:finding\s+\d+|PR\s+#\d+))/gi,
   // a dated answer: "The user (2026-10-12): ..." (process-wording: quotes the match)
   /\buser\s+\(20\d\d-/gi,
   // a quoted answer: user: "agent should be able to …" (process-wording: quotes the match)
   /\buser:\s*["'“‘]/gi,
-  // the contributor instructions for coding agents, not a reason a reader can check
-  /\bCLAUDE\.md\b/gi,
 ];
 
 const MARKER = /\bprocess-wording:\s*\S/;

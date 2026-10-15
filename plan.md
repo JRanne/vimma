@@ -155,6 +155,7 @@ Key mechanics:
 
 Repository layout (Surfer convention: `src/` mirrors the Firefox tree; `.patch` files for upstream edits, whole files for ours):
 
+<!-- process-wording: the layout lists the coding agents' rules file -->
 ```
 vimma/
   surfer.json                     # upstream Firefox version, branding, build options
@@ -302,6 +303,7 @@ Release checklist (`release.yml`, automated; `docs/runbook.md` "Release packages
 
 ## 8. Working with coding agents
 
+<!-- process-wording: this section is about coding agents and names their rules file -->
 The repo holds the memory. `CLAUDE.md`, specs, ADRs, tests and the changelog are what every fresh session reads, local or headless.
 
 **Plan-first, one spec per session.** Plan mode → plan saved to `docs/specs/<feature>.md` listing tests to write, files to touch, upstream patches needed (ideally none), ADR check → approve → run. Every spec follows `docs/specs/README.md`: the template, verified facts, and professional prose with no record of who asked for what. Drift past the spec means stop and split.
@@ -332,6 +334,7 @@ The repo holds the memory. `CLAUDE.md`, specs, ADRs, tests and the changelog are
 - Make the agent prove it: every "tests pass" is pasted output; CI is the arbiter.
 - Keep the UI loop fast: `surfer build --ui && surfer run` under a minute locally, or both of you will skip it.
 - Re-read `CLAUDE.md` monthly; delete rules that no longer bite.
+  <!-- process-wording: the coding agents' rules file, in the section about agents -->
 - Treat agent output as a confident junior's PR, especially around `tabbrowser` and SessionStore: Firefox's own source and Zen's components are the tiebreak, not memory.
 
 ---
@@ -363,3 +366,4 @@ Open questions to settle in M0 (each becomes an ADR or a line in `docs/limits.md
 ## 10. Where the rest went
 
 The first-session checklist that was here is done (M0), and the starter `CLAUDE.md` that was appendix A grew into the repository's [`CLAUDE.md`](CLAUDE.md), which is the version to read.
+<!-- process-wording: points at the coding agents' rules file that replaced the appendix -->

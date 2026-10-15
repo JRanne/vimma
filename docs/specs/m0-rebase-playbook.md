@@ -49,7 +49,7 @@ tests were added red later. One was the Markdown table with `|` in a path (`Asse
 The other was the repo without a commit (`patch-check: …/engine: no commit 'HEAD'`, exit 2 instead
 of 1). Green: `npm run test:py` → `Ran 48 tests … OK`.
 
-Review round (PR #31): 15 new tests. They cover create, delete, rename and malformed fixtures;
+Hardening (PR #31): 15 new tests. They cover create, delete, rename and malformed fixtures;
 "did not run" in both modes, plus for a crash and for `--list-files`; `--drain`; the milestone
 escaping; and `test_verify_sha512.py`. Red: `Ran 63 tests … FAILED (failures=8, errors=5)`.
 Two already passed: create/delete, and the missing-SHA512SUMS case, which exited 2 only because
@@ -81,7 +81,7 @@ the script itself was missing. Green: `Ran 63 tests … OK`.
   download failure shows up as exit 2 (an empty or truncated xz stream), and the PR body says the
   check did not run. Simulated with a 300 MB prefix of the 157.0.1 tarball:
   `cannot read tarball -: unexpected end of data`, status 2, "norun".
-- **Tarball hash (review decision).** The workflow streams the tarball once: `tee` feeds a FIFO
+- **Tarball hash.** The workflow streams the tarball once: `tee` feeds a FIFO
   read by `sha512sum` and patch-check, which runs with `--drain` so it reads to the end and the
   hash covers the whole file. The hash is compared with the `source/firefox-X.Y.source.tar.xz`
   line of `https://archive.mozilla.org/pub/firefox/releases/X.Y/SHA512SUMS`
