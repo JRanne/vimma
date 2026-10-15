@@ -580,6 +580,23 @@ add_task(async function replies_to_an_older_query_never_replace_newer_results() 
   EventUtils.synthesizeKey("KEY_Escape");
 });
 
+add_task(async function a_long_tab_title_is_cut_to_300_characters() {
+  await reset();
+  const title = `${"t".repeat(400)} end`;
+  await openFixture({ title, t: "longtitleneedle" });
+  await openGrep();
+  type("longtitleneedle");
+  await resultsSettle(1);
+  const row = VimmaHost._grep(window).state.rows[0];
+  Assert.equal(row.title, title.slice(0, 300), "the row holds the first 300 characters");
+  Assert.ok(
+    rows()[0].getAttribute("aria-label").length < 400,
+    "and the option's name is bounded by it",
+  );
+  EventUtils.synthesizeKey("KEY_Escape");
+  EventUtils.synthesizeKey("KEY_Escape");
+});
+
 add_task(async function results_name_their_tab_and_the_count_is_announced() {
   await reset();
   await openFixture({ title: "Spoken", t: "retry budget is 3" });
@@ -770,16 +787,12 @@ add_task(async function all_windows_searches_the_other_windows_and_enter_goes_th
   await focused;
   await until(() => Services.focus.activeWindow === other, "the other window comes to the front");
   Assert.equal(other.gBrowser.selectedTab, farTab, "its tab is selected");
-  await until(
-    () =>
-      SpecialPowers.spawn(farTab.linkedBrowser, [], () => String(content.getSelection())).then(
-        (t) => t === "farneedle",
-      ),
-    "the match is selected there",
-  );
-  const sel = await SpecialPowers.spawn(farTab.linkedBrowser, [], () =>
-    String(content.getSelection()),
-  );
+  // One query at a time: a poll left in flight when the window closes rejects in the next task.
+  let sel = "";
+  for (let i = 0; i < 100 && sel !== "farneedle"; i++) {
+    if (i) await new Promise((r) => setTimeout(r, 50));
+    sel = await SpecialPowers.spawn(farTab.linkedBrowser, [], () => String(content.getSelection()));
+  }
   Assert.equal(sel, "farneedle", "the match is selected there");
   await BrowserTestUtils.closeWindow(other);
   await SimpleTest.promiseFocus(window);

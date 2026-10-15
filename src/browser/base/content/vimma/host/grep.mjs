@@ -37,6 +37,7 @@ import { GrepMatcher } from "../actors/grep-matcher.mjs";
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
 import { pickerWorkspaces, tabById } from "./goto.mjs";
 import { isPrivateBrowsing, isPrivateWorkspace } from "./private-ops.mjs";
+import { reopenClosed, windowsFrom } from "./tab-search.mjs";
 import { GrepPicker } from "../ui/grep.mjs";
 
 /** @import { GrepClosedEntry, GrepClosedRow, GrepFrame, GrepList, GrepMatchRow, GrepPickerState, GrepRow, GrepTab } from "../core/grep.mjs" */
@@ -47,7 +48,6 @@ const { clearTimeout, setTimeout } = ChromeUtils.importESModule(
 );
 const lazy = /** @type {any} */ ({});
 ChromeUtils.defineESModuleGetters(lazy, {
-  BrowserWindowTracker: "resource:///modules/BrowserWindowTracker.sys.mjs",
   SessionStore: "moz-src:///browser/components/sessionstore/SessionStore.sys.mjs",
 });
 
@@ -76,9 +76,6 @@ const TITLE_MAX = 300;
  */
 const gBrowserOf = (win) => /** @type {any} */ (win).gBrowser;
 
-/** @param {any} w */
-const isBrowserWindow = (w) => !w.closed && w.toolbar?.visible !== false && !!w.gBrowser;
-
 /**
  * The windows a scope searches (decision 10): this one, and for `windows` and `closed` every
  * other browser window on the same side of the private line, most recently used first, as tab
@@ -90,10 +87,7 @@ const isBrowserWindow = (w) => !w.closed && w.toolbar?.visible !== false && !!w.
 function scopeWindows(win, scope) {
   if (scope !== "windows" && scope !== "closed") return [win];
   const priv = isPrivateBrowsing(win);
-  const others = /** @type {Window[]} */ (lazy.BrowserWindowTracker.orderedWindows).filter(
-    (w) => w !== win && isBrowserWindow(w) && isPrivateBrowsing(w) === priv,
-  );
-  return [win, ...others];
+  return windowsFrom(win).filter((w) => isPrivateBrowsing(w) === priv);
 }
 
 /**
@@ -671,16 +665,11 @@ export class GrepSession {
    * @param {GrepClosedRow} row
    */
   reopen(row) {
-    const SessionStore = lazy.SessionStore;
-    // A stale id (restored or forgotten since the search) reopens nothing.
-    if (row.closedWindow) {
-      const w = SessionStore.undoCloseById(row.closedId);
-      if (w && typeof w.focus === "function") w.focus();
-      else this.host.notice(CLOSED_GONE_TEXT);
-    } else {
-      const tab = SessionStore.undoCloseById(row.closedId, isPrivateBrowsing(this.win), this.win);
-      if (!tab) this.host.notice(CLOSED_GONE_TEXT);
-    }
+    // Tab search's reopening; a stale id (restored or forgotten since the search) reopens
+    // nothing, and says so.
+    const reopened = reopenClosed(this.win, row.id);
+    if (!reopened) this.host.notice(CLOSED_GONE_TEXT);
+    else if (row.closedWindow && typeof reopened.focus === "function") reopened.focus();
   }
 
   /**

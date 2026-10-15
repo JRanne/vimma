@@ -939,10 +939,10 @@ Rules:
   content process (one a process, shared by its frames), and on recently closed titles and URLs
   only in a worker thread of the parent process, line by line, and a query **must** be stopped
   when it has run for 1 second, answering `timed out`; a frame's newer query replaces its older
-  one, as a picker session's newer closed query replaces its older one, and a frame drops a query older than one it has seen in this picker session. A
-  backtracking pattern therefore costs at most a second of one worker thread a query, and
-  neither the page nor the browser's own window stops responding. A query over 1,000 characters
-  is not sent.
+  one, as a picker session's newer closed query replaces its older one, and a frame drops a
+  query older than one it has seen in this picker session. A backtracking pattern therefore
+  costs at most a second of one worker thread a query, and neither the page nor the browser's
+  own window stops responding. A query over 1,000 characters is not sent.
   [`a_frame_answers_timed_out_within_its_budget`](../tests/browser/browser_vimma_live_grep.js),
   [`a_catastrophic_pattern_never_freezes_the_page`](../tests/browser/browser_vimma_live_grep.js),
   [`a_frame_drops_an_older_query`](../tests/browser/browser_vimma_live_grep.js),
