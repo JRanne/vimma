@@ -386,7 +386,7 @@ Limits:
 | -------------------------- | ---------------------------------- | ------------------------- | ------------------------------------------ |
 | `ci.yml`                   | push to `main`, PRs, manual        | `ubuntu-latest`           | nothing                                    |
 | `e2e.yml`                  | PRs, manual, upstream.yml          | `ubuntu-24.04`            | nothing (ADR-010)                          |
-| `nightly.yml`              | 03:00 UTC, manual                  | `ubuntu-24.04`            | off until #224; then `NIGHTLY_ENABLED`     |
+| `nightly.yml`              | 03:00 UTC, manual                  | `ubuntu-24.04`            | the `NIGHTLY_ENABLED` variable             |
 | `upstream.yml`             | every 4 h (`:17`), manual          | `ubuntu-latest` + e2e.yml | allow Actions to open PRs; optional token  |
 | `claude.yml`               | `@claude`, `spec`+`claude:go`      | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
 | `release-please.yml`       | push to `main`, manual             | `ubuntu-latest`           | Actions may open PRs; optional token       |
@@ -722,10 +722,9 @@ If the step does fail without a slowing change, that is a flake: quarantine per 
 issue with the log; do not re-run to green), and look at the numbers before touching thresholds.
 
 **Node is pinned exactly** in `.nvmrc`; ci, e2e, mutation, fuzz, sites, release-please and claude
-use `node-version-file: .nvmrc`. Exceptions, none of which runs the bench: release.yml's package job
-checks out a release tag (tags from before `.nvmrc` lack it) and stays on major 22; the
-nightly and release build jobs, as written today, use the runner's own Node for Surfer
-(#224 rewrites both). The baseline is keyed on the exact version because a V8 patch can move these numbers. A
+use `node-version-file: .nvmrc`, and so do the nightly and release build jobs. One exception, which
+does not run the bench: release.yml's package job checks out a release tag (tags from before
+`.nvmrc` lack it) and stays on major 22. The baseline is keyed on the exact version because a V8 patch can move these numbers. A
 Node bump is therefore its own PR, by hand (Dependabot has no `.nvmrc` support): its bench
 step falls back to the previous version's entries with a warning, and that PR records the new key.
 

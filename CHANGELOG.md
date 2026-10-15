@@ -6,6 +6,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
+- Arch Linux: each release carries a vimma-bin PKGBUILD; `curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si` installs or updates Vimma without the AUR (#300).
 - Live grep: `ctrl+b f g` searches the text of every tab in your workspace as you type, like Telescope's `live_grep`: the `Live Grep` prompt at the bottom, the results above it with the best one next to it, and a preview of the lines around the selected match on the right. The query is a regular expression with ripgrep's smart case (text that is not one is searched as typed); a scope box says which windows, workspaces and tabs are searched, every row names its window, tab and host, and `ctrl+s` widens the search from the workspace to the window, to every window, and to the titles and URLs of recently closed tabs and windows (`Enter` reopens one); `ctrl+space` refines the results fuzzily. `Enter` selects the tab and the match in normal mode, `]q` / `[q` step through the results afterwards, and `:grep text` opens it with that text, `:grep` with the last query. Tabs not loaded since a restart are listed, never loaded; private tabs never reach a normal window. The help-text and `defaults.toml` snapshots gained `live_grep`, `grep_next`, `grep_previous` and `grep_resume`, and the e2e baselines `live-grep` and `live-grep-jump` are new.
 - Tab search: `ctrl+b g` (`b`, `:ls`) opens ready to type and finds tabs in every workspace and window and recently closed tabs and windows; rows show workspace, window, audio and agent markers, and `:tabsearch text` (`:ts`, `:b`) opens it with text typed. The help-text snapshot changed with the action's new description.
 - `ctrl+b u`, `:toolbar [show|hide]` and `[ui] toolbar = "hidden"` hide Firefox's toolbar in every window: the page reaches the top of the window. Focusing the address bar (`I`, `ctrl+l`, `F6`, a new tab) shows a minimal bar over the page with only the URL field, and `Enter` or `Esc` hides it again; a permission prompt or the site's identity panel shows the whole address bar and hangs from its icon as with the toolbar shown; the full toolbar shows while an add-on popup or a toolbar panel is open, and `ctrl+b u` brings it back otherwise; the status bar says `not secure` and `private` meanwhile. Shown or hidden, the toolbar, its URL field and suggestions and the prompts and panels hanging from it follow Vimma's theme, and a permission prompt answers `y` (allow) and `n` (block) once armed, `Tab` moving onto its buttons. The account panel no longer offers "Get Vimma for Android or iOS", an app that does not exist. The help-text and `defaults.toml` snapshots gained the three actions and `[ui]`; the e2e baselines `toolbar-hidden` and `toolbar-minimal` are new, and `m0-happy-path-help`, `m0-mcp-stdio-question`, `m0-mcp-stdio-grant`, `m3-private-workspace` and `m4-split-panes` show the themed toolbar.
@@ -63,6 +64,10 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Changed
 
+- Firefox's find bar, menus, dialogs (page alerts, prompts, print settings) and its own pages (Settings, Add-ons, Downloads, Troubleshooting, about:config) follow the Vimma/Omarchy theme; Settings no longer shows Firefox's mascot (#305).
+- Nightly builds are a 7-day workflow artifact instead of a public pre-release until the first release; the build job holds no write token (#292).
+- Release and nightly builds run on GitHub-hosted runners from a freshly downloaded, checksum-verified Firefox source (#286).
+- Surfer is pinned and never auto-merged, npm install scripts are off, and no workflow can target a self-hosted runner (#280).
 - Repository links, update URLs and the release signing identity point at vimma-browser/vimma (#278).
 - Firefox 158.0 ([MFSA 2026-106](https://www.mozilla.org/en-US/security/advisories/mfsa2026-106/)).
 - The e2e baseline `m0-happy-path-help` was re-recorded on Firefox 158.0, which antialiases the bindings overlay's text slightly differently (1.26 % of pixels, every row in place) and draws its scrollbar thumb 3 px shorter; nothing else in the screenshot changed.
@@ -82,6 +87,9 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Fixed
 
+- `Esc` leaves insert mode on pages that put focus back into a field, and right after `Tab` into a frame from another site (#301).
+- about:vimma's Search line no longer lists a search alias that config.toml names but Vimma could not apply (#297).
+- A find match in a text field no longer loses its highlight colour when the find bar closes under load (#285).
 - Insert mode: after `i` or `gi`, a page that moves focus itself (a file finder jumping to its result list, a dialog taking focus) no longer drops the tab back to normal mode, so the keys you type keep going to the page instead of running Vimma commands; only `Esc` or a new page ends it. `i` now goes back to the text field you were last in on the page, and falls back to the first one (#165). The help-text snapshot changed with `i`'s new description.
 - Omarchy themes whose `colors.toml` has only the terminal colours (accent, foreground, background, color0–color15, such as Event Horizon) are no longer rejected: Vimma derives the rest as Omarchy does (#266).
 - A find whose match is in a text field (`/` then Enter) keeps the match highlighted the way Firefox's find bar does, instead of showing it greyed out (#270).
@@ -110,6 +118,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Security
 
+- The Firefox source is accepted only when Mozilla's release key signed its SHA512SUMS; `npm run verify-source` checks a local download (#289).
 - A quarterly audit checks every change to Firefox's own code against its register entry, size budget and review date, and opens an issue with the report.
 - Firefox security updates on autopilot: every 4 hours CI checks Mozilla's releases and advisories, opens a tracking issue, verifies the source, checks the patches, runs every test suite and opens the update pull request. A security release left unshipped for 3 days fails CI and opens an issue.
 - Every parser of outside input (control protocol, `config.toml`, routing rules, key notation, the command line, Omarchy theme files, `vimma-ctl`) is fuzzed in CI and nightly. Fuzzing found and fixed unbounded TOML nesting, `constructor`-named keys crashing a reload, a slow IPv6 pattern, an 8 s freeze on a huge `:` paste and a malformed control message wedging its connection.
