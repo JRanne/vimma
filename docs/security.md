@@ -640,18 +640,50 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   [`bad_arguments_never_reach_vimma`](../tools/vimma-ctl/tests/mcp.rs),
   [`bad_arguments_are_tool_errors_and_never_reach_vimma`](../tools/vimma-ctl/src/mcp.rs)
 
-## 13. Build and release supply chain (`release.yml`, `nightly.yml`)
+## 13. Page modes (`actors/VimmaParent.sys.mjs`, `host/VimmaHost.sys.mjs`)
 
-How the binaries Vimma publishes are built from Mozilla's source, Vimma's repository and the
-npm packages that drive the build. Spec: [build-supply-chain](specs/build-supply-chain.md).
+Whether a key is Vimma's or the page's depends on the tab's mode, which the content actor's focus
+reports move. Specs: [m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md),
+[insert-focus](specs/insert-focus.md).
+
+**Reach:** pages, through focus changes in their own frames.
+
+- K1. Only the frame that has focus **may** report focus for a tab, and a report that is not a
+  well-formed descriptor **must** be dropped; a report changes only its own tab's mode.
+  [`only_the_focused_frame_may_report`](../tests/browser/browser_vimma_insert_scroll.js),
+  [`malformed_descriptors_are_dropped`](../tests/browser/browser_vimma_insert_scroll.js)
+- K2. After `i` or `gi`, a page **must not** turn the user's keys into Vimma commands by moving
+  focus: only `Esc` or another top document ends that insert (a page restored from the
+  back-forward cache is the same document).
+  [`after_i_the_page_moving_focus_off_the_field_keeps_insert`](../tests/browser/browser_vimma_insert_focus.js),
+  [`after_i_the_page_blurring_the_field_keeps_insert`](../tests/browser/browser_vimma_insert_focus.js),
+  [`after_gi_the_page_moving_focus_off_the_field_keeps_insert`](../tests/browser/browser_vimma_insert_focus.js),
+  [`explicit_insert_ends_with_the_page`](../tests/browser/browser_vimma_insert_focus.js)
+- K3. `i` **must** focus only a field of its own tab: the field the user last used, asked of the
+  frame and document that reported it (still in the tab, not discarded, same inner window), which
+  focuses only a connected, visible, editable element of that document; otherwise the top frame's
+  first field.
+  [`i_focuses_the_field_last_used_in_a_cross_origin_frame`](../tests/browser/browser_vimma_insert_focus.js),
+  [`i_falls_back_to_the_first_field_when_the_last_frame_navigated`](../tests/browser/browser_vimma_insert_focus.js),
+  [`i_falls_back_to_the_first_field_when_the_last_is_gone`](../tests/browser/browser_vimma_insert_focus.js)
+
+## 14. Build and release supply chain (`release.yml`, `nightly.yml`)
+
+Vimma's binaries are built from Mozilla's Firefox source, this repository, and the npm packages
+that drive the build, chiefly Surfer. These rules keep what reaches a build pinned and reviewed.
+Spec: [build-supply-chain](specs/build-supply-chain.md), [ADR-001](adr/001-engine-firefox-surfer.md).
 
 **Reach:** Mozilla's archive and Taskcluster, the npm registry, this repository, and GitHub's
-hosted runners, on which both builds run (`ubuntu-24.04`).
+hosted runners. Dependabot pull requests run and auto-merge today, whether or not a build runs.
 
-**Planned:** the spec's other rules (B1, Mozilla's signature on `SHA512SUMS`; B3 to B7, the npm
-packages, self-hosted runners, the build environment and the key watch) enter this section with
-their tests in the sub-PRs that build each. Until B1 lands, G4 holds for builds: every build
-gets its source through `tools/upstream/firefox-source.sh`, which checks the tarball's SHA-512.
+**Planned:** the spec's later deliveries add B1 (Mozilla's signature on the Firefox source,
+[#222](https://github.com/vimma-browser/vimma/issues/222)), the rest of B3 (every package in the
+release path held for review, with its published diff,
+[#223](https://github.com/vimma-browser/vimma/issues/223)), and B6 and B7 (the Safe Browsing key
+in a `build` environment, and a watch on Mozilla's release key,
+[#225](https://github.com/vimma-browser/vimma/issues/225)). Until B1 lands, G4 holds for builds:
+every build gets its source through `tools/upstream/firefox-source.sh`, which checks the
+tarball's SHA-512.
 
 - B2. A nightly or release build **never** builds from an `engine/` it did not extract in the
   same job from the tarball it verified, and **never** restores a tree, an objdir or a compiler
@@ -661,3 +693,41 @@ gets its source through `tools/upstream/firefox-source.sh`, which checks the tar
   [`no workflow reads or writes engine/.vimma-firefox-version`](../tools/test/full-build-workflows.test.mjs),
   [`the build jobs check out clean and restore nothing from the Actions cache`](../tools/test/full-build-workflows.test.mjs),
   [`a release builds in a fresh objdir with an empty compiler cache`](../tools/test/full-build-workflows.test.mjs)
+- B3. Surfer **must** be pinned to one exact version, locked by its integrity hash, and a
+  Dependabot update of Surfer **never** merges without a person, security updates and grouped
+  updates included, whatever the format of Dependabot's metadata; an update whose dependency
+  names are missing waits for a person too. **⚠ gap:** `ajv` itself still auto-merges its
+  patch, minor and security updates, and so do the packages Surfer and `ajv` depend on, until
+  [#223](https://github.com/vimma-browser/vimma/issues/223) holds the whole release path.
+  [`package.json pins Surfer to an exact version, locked by integrity`](../tools/test/build-supply-chain.test.mjs),
+  [`a Surfer update is never auto-merged, security updates included`](../tools/test/build-supply-chain.test.mjs),
+  [`Surfer is held whatever the separator, quoting or case, or when only the title names it`](../tools/test/build-supply-chain.test.mjs),
+  [`an update whose dependency list is empty waits for a person`](../tools/test/build-supply-chain.test.mjs),
+  [`the release-path group comes before the minor and patch group`](../tools/test/build-supply-chain.test.mjs)
+- B4. An npm install **never** runs install scripts, and the build **must** run Surfer only from
+  `node_modules`, never a package `npx` fetches, and **never** lets Surfer fetch an add-on.
+  [`.npmrc turns install scripts off for every install`](../tools/test/build-supply-chain.test.mjs),
+  [`release and nightly install with npm ci --ignore-scripts and run Surfer with npx --no`](../tools/test/build-supply-chain.test.mjs),
+  [`no workflow lets npx fetch a package`](../tools/test/build-supply-chain.test.mjs),
+  [`surfer.json lists no add-ons`](../tools/test/build-supply-chain.test.mjs)
+- B5. A workflow **never** targets a self-hosted runner: every job runs on a standard
+  GitHub-hosted image or calls a workflow file of this repository, and a `runs-on` expression
+  that cannot be resolved to a hosted image fails. The test parses each workflow as YAML and
+  fails on any shape it does not recognise. A job of a workflow that a pull request, a comment,
+  an issue or another workflow run can trigger is held to this as the permanent guard; the build
+  jobs run only from `main` or for a release, and only once `NIGHTLY_ENABLED` or
+  `RELEASE_ENABLED` is set. **⚠ setting:** fork pull request approval is
+  `all_external_contributors`
+  (`gh api repos/vimma-browser/vimma/actions/permissions/fork-pr-contributor-approval`), so a
+  fork's own workflow files run only once a person approves the run; and the organization has
+  no self-hosted runner (`gh api orgs/vimma-browser/actions/runners`, organization owners only),
+  since an organization runner shared with this repository is invisible to every
+  repository-level check.
+  [`no workflow an outsider can trigger runs a job on a self-hosted runner`](../tools/test/self-hosted-runner.test.mjs),
+  [`a runs-on expression in such a workflow fails unless it resolves to a hosted image`](../tools/test/self-hosted-runner.test.mjs),
+  [`a quoted job id is a job of its own`](../tools/test/self-hosted-runner.test.mjs),
+  [`a job written as a flow mapping is checked`](../tools/test/self-hosted-runner.test.mjs),
+  [`a matrix key is read only from the job's own strategy.matrix`](../tools/test/self-hosted-runner.test.mjs),
+  [`triggers are read in every spelling YAML allows`](../tools/test/self-hosted-runner.test.mjs),
+  [`no workflow names a self-hosted runner, and both build jobs run on ubuntu-24.04`](../tools/test/self-hosted-runner.test.mjs),
+  [`each build job runs only from main or for a release`](../tools/test/self-hosted-runner.test.mjs)

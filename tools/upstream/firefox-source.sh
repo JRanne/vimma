@@ -60,6 +60,6 @@ python3 "$here/verify-sha512.py" --sums "$scratch/SHA512SUMS" \
 }
 
 rm -rf engine
-CI_SKIP_INIT=1 npx --no surfer download
+CI_SKIP_INIT=1 npx --no -- surfer download
 git init -q engine
 echo "firefox-source: engine/ extracted from the verified $name"

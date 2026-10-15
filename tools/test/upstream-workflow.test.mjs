@@ -99,7 +99,7 @@ describe("upstream autopilot workflow", () => {
     const script = readFileSync(new URL("../upstream/firefox-source.sh", import.meta.url), "utf8");
     const verify = script.indexOf('python3 "$here/verify-sha512.py"');
     expect(verify).toBeGreaterThan(0);
-    expect(script.indexOf("npx --no surfer download")).toBeGreaterThan(verify);
+    expect(script.indexOf("npx --no -- surfer download")).toBeGreaterThan(verify);
     expect(source).toContain('python3 "$here/verify-sha512.py"');
     expect(job(upstream, "patch-check")).toContain("tools/upstream/source-check.sh");
   });
