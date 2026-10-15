@@ -137,7 +137,9 @@ function render(d) {
                   `${a.alias} → ${a.engine}${a.unencrypted ? " (queries sent unencrypted)" : ""}`,
               )
               .join(", ")
-          : "none in config.toml",
+          : sr.errors.length
+            ? "none applied: see the errors below"
+            : "none in config.toml",
       ],
     ]),
     ...(sr.errors.length

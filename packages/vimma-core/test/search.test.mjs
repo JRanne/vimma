@@ -4,6 +4,7 @@ import { parseConfig } from "../src/config.mjs";
 import { completeCommandLine } from "../src/cmdline.mjs";
 import { formatConfigTemplate, formatDefaultsToml } from "../src/defaults.mjs";
 import {
+  appliedAliases,
   parseSearchState,
   planSearch,
   resolveSearch,
@@ -562,6 +563,31 @@ describe(":open @ completion", () => {
     expect(complete("open @gh foo")).toEqual([]);
     expect(complete("open example.com")).toEqual([]);
     expect(complete("open ")).toEqual([]);
+  });
+});
+
+describe("appliedAliases (about:vimma's Search line)", () => {
+  const resolved = resolveSearch({
+    aliases: {
+      gh: "https://github.com/search?q=%s",
+      w: "Wikipedia (en)",
+      typo: "Wikipdia (en)",
+      taken: "https://example.com/?q=%s",
+    },
+  });
+  const aliases = resolved?.aliases ?? [];
+
+  test("lists only the aliases the last apply made or gave an engine", () => {
+    const state = {
+      created: [{ alias: "gh", id: "u1", name: "github.com", url: "x" }],
+      aliased: [{ alias: "w", id: "wiki", replaced: "" }],
+      default: null,
+    };
+    expect(appliedAliases(aliases, state).map((a) => a.alias)).toEqual(["gh", "w"]);
+  });
+
+  test("lists none before anything applied", () => {
+    expect(appliedAliases(aliases, null)).toEqual([]);
   });
 });
 
