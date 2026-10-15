@@ -852,3 +852,58 @@ in a `build` environment, and a watch on Mozilla's release key,
   [`a failure is reported by its own job, from the redacted log artifact`](../tools/test/nightly-workflow.test.mjs),
   [`the report job names the repository, since it checks nothing out`](../tools/test/nightly-workflow.test.mjs),
   [`only the nightly's failure-issue step gets GH_TOKEN`](../tools/test/full-build-workflows.test.mjs)
+
+## 15. Update check (`updates/VimmaUpdates.sys.mjs`)
+
+Spec: [m6a-updater](specs/m6a-updater.md) (delivery 1). Vimma fetches one signed manifest from
+`updates.vimma.dev` every 12 hours and on `:update`, and tells the status bar and about:vimma
+whether a newer release exists. It downloads and installs nothing. Who can reach it: whoever
+controls the update host or the network path (TLS stops the path), _you_ through `about:config`
+and `config.toml`, and the control socket's full role (`app.update_check`, as it can run
+`app.quit`). The agent role reaches no action, so a local AI agent cannot trigger a check.
+_Pages_ and _extensions_ cannot reach it.
+
+- UP1. A manifest is accepted **only** when its signature (RSASSA-PKCS1-v1_5, SHA-384, over
+  `vimma-update-xml-v1\n` and the file) verifies under a key pinned in the build
+  (`core/update-keys.mjs`); keys from the pref `vimma.update.testKeys` count only when
+  `Cu.isInAutomation`. An unsigned, altered or otherwise signed manifest offers nothing, and a
+  build with no pinned key refuses every manifest.
+  [`a key that is not pinned is refused, even with a valid signature`](../packages/vimma-core/test/updates.test.mjs),
+  [`one flipped byte in the body fails`](../packages/vimma-core/test/updates.test.mjs),
+  [`a signature over the body without the domain prefix fails`](../packages/vimma-core/test/updates.test.mjs),
+  [`no pinned key at all refuses every manifest (before the key ceremony)`](../packages/vimma-core/test/updates.test.mjs),
+  [`every pinned key is an RSA-4096 SPKI whose id matches, one per slot`](../packages/vimma-core/test/updates.test.mjs),
+  [`refusals_show_after_three_in_a_row`](../tests/browser/browser_vimma_update_check.js)
+- UP2. A verified manifest is **never** accepted for another channel or platform, or with a
+  serial older than one this profile accepted or than the running build's ID (replay), and an
+  older or equal build is **never** offered (downgrade). Withholding updates or serving an old
+  manifest for long is what a compromised host can still do; the feed's age shows after 45 days
+  (7 for nightly).
+  [`channel and target mismatches are refused`](../packages/vimma-core/test/updates.test.mjs),
+  [`replay: a serial below the one accepted, or below this build, is refused; equal is accepted`](../packages/vimma-core/test/updates.test.mjs),
+  [`downgrade: an older or equal build is no offer, not an error`](../packages/vimma-core/test/updates.test.mjs),
+  [`a release feed older than 45 days and a nightly one older than 7 are stale`](../packages/vimma-core/test/updates.test.mjs),
+  [`replay_is_refused_and_downgrade_offers_nothing`](../tests/browser/browser_vimma_update_check.js)
+- UP3. A check **never** sends cookies, a referrer or anything that identifies the install: the
+  request is an anonymous, uncached GET whose URL may carry only the platform and the update
+  channel (`%BUILD_TARGET%`, `%CHANNEL%`), over https (plain http only in automation).
+  [`newer_build_is_offered_and_the_request_is_anonymous`](../tests/browser/browser_vimma_update_check.js),
+  [`the_url_may_name_only_platform_and_channel`](../tests/browser/browser_vimma_update_check.js),
+  [`ask updates.vimma.dev with the platform and channel only`](../tools/branding/test/branding-prefs.test.mjs)
+- UP4. With `[updates] check = false` or `vimma.update.enabled` = `false`, and in a build run from
+  its objdir, Vimma **never** makes an update request.
+  [`off_by_pref_or_config_sends_nothing`](../tests/browser/browser_vimma_update_check.js),
+  [`a_source_build_checks_nothing`](../tests/browser/browser_vimma_update_check.js)
+- UP5. Manifest text is parsed **only** after its signature verifies, and only in the one format
+  the release pipeline writes: at most 64 KiB, no DTD or entity declarations, at most one
+  `<update>`. The commands about:vimma shows are built from a SemVer version and shell-quoted
+  paths, never from free text in the manifest.
+  [`an oversized manifest is refused before any crypto`](../packages/vimma-core/test/updates.test.mjs),
+  [`shellQuote leaves plain paths alone and quotes the rest`](../packages/vimma-core/test/updates.test.mjs),
+  [`tarball: quit, then unpack over the install's parent directory, quoted`](../packages/vimma-core/test/updates.test.mjs)
+
+**Key custody** (spec §6, decisions 16 and 17): the primary manifest key is a non-exportable
+Google Cloud KMS key that only the release workflow's `update-signing` environment can ask to
+sign, through GitHub OIDC; the secondary is generated and kept offline by the maintainer. Their
+setup is in [runbook.md](runbook.md#update-signing-keys-and-the-update-host-spec-m6a-updater).
+Until both public keys are pinned in `update-keys.mjs`, every manifest is refused (UP1).

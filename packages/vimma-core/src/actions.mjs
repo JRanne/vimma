@@ -180,6 +180,8 @@ group("Browser", [
   ["close_window", "window.close", "Close the window"],
   ["restore_window", "window.restore", "Reopen the last closed window"],
   ["quit", "app.quit", "Quit (asks first)"],
+  // docs/specs/m6a-updater.md: no default key; :update.
+  ["check_updates", "app.update_check", "Check for a newer Vimma"],
   ["reload_hard", "page.reload_hard", "Reload, bypassing the cache"],
   ["stop_loading", "page.stop", "Stop loading the page"],
   ["go_home", "page.home", "Go to the home page"],

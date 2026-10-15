@@ -102,6 +102,7 @@ Browser
   close_window            ctrl+shift+w                                      Close the window
   restore_window          ctrl+shift+n                                      Reopen the last closed window
   quit                    ctrl+q                                            Quit (asks first)
+  check_updates           (unbound)                                         Check for a newer Vimma
   reload_hard             ctrl+f5, ctrl+shift+r                             Reload, bypassing the cache
   stop_loading            esc                                               Stop loading the page
   go_home                 alt+home                                          Go to the home page

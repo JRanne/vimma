@@ -107,6 +107,12 @@ export default [
     languageOptions: { globals: { Cu: "readonly" } },
   },
   {
+    // Test keys and a test install type are honoured only under a harness: Cu.isInAutomation
+    // (docs/specs/m6a-updater.md §4 rule 1).
+    files: ["src/**/vimma/updates/VimmaUpdates.sys.mjs"],
+    languageOptions: { globals: { Cu: "readonly" } },
+  },
+  {
     // Agent pages launch no app: the component registrar wraps the external-protocol chooser
     // (docs/security.md M10).
     files: ["src/**/vimma/ctl/AgentPages.sys.mjs"],

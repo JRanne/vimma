@@ -36,6 +36,8 @@ What works today, each with the section that explains it:
   start page and sidebar follow your desktop theme and change with it, or take your own colours.
 - **[Accessible](#accessibility):** Vimma's own UI works with a screen reader and meets WCAG AA
   contrast in dark and light themes.
+- **[Update checks](#updates):** the status bar says when a newer Vimma exists (red for a
+  security release), and `:update` shows the exact commands for how you installed it.
 - **Firefox underneath** ([privacy defaults](#privacy-defaults)): the same user agent and
   [add-on](#add-ons) compatibility as Firefox; no studies, sponsored content or telemetry
   uploads; Safe Browsing on.
@@ -90,8 +92,8 @@ version):
 
 The `.deb` and the AUR package add Vimma to your application menu and offer it for web links,
 but never make it your default browser on their own: `xdg-settings set default-web-browser
-vimma-vimma.desktop` does that. Vimma has no in-app updater: update through apt, your AUR helper, or by
-downloading the next AppImage or tarball. Next to the files are `SHA256SUMS`, a CycloneDX SBOM
+vimma-vimma.desktop` does that. Vimma checks for newer releases and tells you how to update each
+of these ([Updates](#updates)); it does not yet install them itself. Next to the files are `SHA256SUMS`, a CycloneDX SBOM
 (`vimma-X.Y.Z.cdx.json`) and cosign signatures (`*.sigstore.json`); how to check them is in
 [runbook.md](runbook.md#release-packages-releaseyml-spec-m6-packaging) ("Verify a release").
 
@@ -1638,6 +1640,7 @@ type reaches the page, and `ctrl+b` sequences still work.
 | `:addons`                             | Opens the [add-on picker](#add-ons), as `ctrl+b e`.                                                                                         |
 | `:addon name`                         | Opens that add-on's popup; `Tab` completes the name ([Add-ons](#add-ons)).                                                                  |
 | `:bug`                                | Opens about:vimma and copies its redacted report to the clipboard, for a bug report.                                                        |
+| `:update`                             | Checks for a newer Vimma now; when there is one, opens about:vimma's Updates section with the exact commands ([Updates](#updates)).         |
 
 A command that is not built yet says so for a moment, as its keys do.
 
@@ -1648,6 +1651,10 @@ Refresh for the current state. It is an ordinary page, so `j` / `k` scroll it.
 
 - **Version:** Vimma's version, the Firefox release it is built on, the build ID and the update
   channel.
+- **Updates:** whether checks are on, how Vimma was installed, the last check and its result
+  (with the reason when the manifest was refused), the newer version if there is one, its
+  urgency, the manifest's serial and the key that signed it, and the exact commands to update
+  ([Updates](#updates)).
 - **Upstream patches:** how many patches to Firefox's own files the build carries, each with its
   hunk count (the fewer, the easier a Firefox update).
 - **Modes and keys:** each window's mode, and the last 20 keys Vimma saw with what each did
@@ -1757,9 +1764,10 @@ accent = "#ff9e64"
   `download_dir` and `download_max_mb`, [above](#downloads-from-the-agent-workspace)); `[search]`
   (the default engine and `@aliases`, [below](#search-engines)); `[ui] toolbar` (`"shown"`, the
   default, or `"hidden"`: [Firefox's toolbar](#hiding-the-toolbar) in every window; applied at
-  startup and when the line changes, so `ctrl+b u` lasts until then).
+  startup and when the line changes, so `ctrl+b u` lasts until then); `[updates] check`
+  (`true`, the default, or `false`: no [update check](#updates) at all).
 - **Schema:** `schema = 2` at the top enables `[panes]`, `[sites]`, `[[routes]]`, `[firefox]`,
-  `[bookmarks]`, `[private]`, `[mcp]`, `[search]`, `[ui]`,
+  `[bookmarks]`, `[private]`, `[mcp]`, `[search]`, `[ui]`, `[updates]`,
   `hint_chars`, `insert_editing`, `[theme] name` and `appearance`; every key,
   its type and default are in [m5-core-config-and-theme](specs/m5-core-config-and-theme.md#schema-v1)
   and [m3-m4-core-prep](specs/m3-m4-core-prep.md#config-schema-2), and
@@ -1875,6 +1883,42 @@ slots busy. Turn the pref off to stop either.
 With the help overlay open, plain keys go to the overlay, as when typing; chords that work in
 every mode (`ctrl+q`, `ctrl+t`) still run.
 
+## Updates
+
+Every 12 hours, and 30 seconds after startup if the last check is older, Vimma fetches one small
+signed file from `updates.vimma.dev` that names the newest release of its update channel. It
+checks the file's signature against the keys built into Vimma and refuses anything else: a file
+signed by another key, one for another channel or platform, or one older than a file it already
+accepted. It installs nothing; it tells you.
+
+- **A newer version:** the status bar's right side shows `⇡ 0.3.1 available`, dim. A release that
+  carries a Firefox security fix shows `⇡ 0.3.1 security: :update` in the error colour.
+- **`:update`** checks at once. When a newer version exists it opens `about:vimma` at its
+  Updates section, with the exact commands for how you installed Vimma; otherwise it says
+  `Vimma 0.1.0 is up to date`, or why the check failed.
+- **The commands, by install:**
+
+  | Installed with           | `:update` shows                                                                                    |
+  | ------------------------ | -------------------------------------------------------------------------------------------------- |
+  | The release's `PKGBUILD` | `curl -LO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si` |
+  | AUR `vimma-bin`          | `yay -Syu vimma-bin` (or your AUR helper's equivalent)                                             |
+  | `.deb`                   | `curl -LO …/vimma_X.Y.Z_amd64.deb && sudo apt install ./vimma_X.Y.Z_amd64.deb`                     |
+  | Tarball                  | quit Vimma, then `curl -L …/vimma-X.Y.Z-linux-x86_64.tar.xz \| tar -xJ -C <the install's parent>`  |
+  | AppImage                 | download the new AppImage next to yours and rename it over it; the next start runs it              |
+  | A build from source      | nothing: source builds never check (pull and rebuild)                                              |
+
+- **What a check sends:** a GET for
+  `https://updates.vimma.dev/updates/browser/Linux_x86_64-gcc3/<channel>/update.xml`, with no
+  cookies, no referrer and no cache. It names your platform and update channel and nothing else:
+  no Vimma version, build, locale or identifier, so every install on a channel asks for the same
+  file. The host sees your IP address and the time.
+- **Problems:** a host that does not answer (you are offline, or no release is published yet) is
+  not shown in the status bar; about:vimma has the reason. A file that answers but fails the
+  checks three times in a row shows `updates: check failed`, and one that is older than 45 days
+  (7 for nightly builds) shows `updates: no news for N days`.
+- **Off:** `[updates] check = false` in [config.toml](#configtoml), or `vimma.update.enabled` =
+  `false` in `about:config`, stops every request; about:vimma then says checks are off.
+
 ## Privacy defaults
 
 Vimma starts quieter than Firefox: no studies, no sponsored content and no telemetry uploads.
@@ -1897,7 +1941,8 @@ name, then toggle or edit it). Spec:
 Kept as in Firefox: Remote Settings (CRLite certificate revocation, intermediate certificates),
 the add-on blocklist, Firefox Sync, add-ons from addons.mozilla.org and their updates, and
 Google Safe Browsing (see below). Firefox's app updater is not built into Vimma, and system add-on
-updates are off, so neither asks Mozilla's update server. The one remaining request there is for
+updates are off, so neither asks Mozilla's update server; Vimma's own [update check](#updates)
+asks `updates.vimma.dev` only. The one remaining request there is for
 the OpenH264 and Widevine plugins, which video calls and DRM video need.
 
 Sites see Firefox 158's user agent, with no Vimma token, and add-ons see Firefox's version
@@ -1989,10 +2034,10 @@ default (see [Safe Browsing](#safe-browsing)). A build without a key fetches no 
 malware lists; Settings then shows "Block dangerous and deceptive content" unticked, and ticking
 it does not help. Mozilla's tracking-protection lists update either way.
 
-**Does Vimma update itself?** No. There are no releases yet, so build a newer `main` yourself.
+**Does Vimma update itself?** Not yet. It checks for a newer release and tells you how to update
+([Updates](#updates)); installing updates itself is planned for M6a ([limits.md](limits.md)).
 Firefox's updater is not built into Vimma, so it never asks Mozilla's update server
-(`aus5.mozilla.org`) for a Firefox build. An updater of Vimma's own is planned for M6a
-([limits.md](limits.md)).
+(`aus5.mozilla.org`) for a Firefox build.
 
 **I want the tab strip back.** Set `vimma.ui.tabstrip.hidden` to `false` in `about:config`.
 

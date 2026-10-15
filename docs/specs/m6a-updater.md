@@ -1,7 +1,8 @@
 # Spec: m6a-updater
 
-Status: accepted · Area: `configs/common/mozconfig`, `src/browser/branding/vimma/pref/firefox-branding.js`,
+Status: accepted (sub-PR 1 implemented; sub-PRs 2 to 5 open) · Area: `configs/common/mozconfig`, `src/browser/branding/vimma/pref/firefox-branding.js`,
 `src/browser/base/content/vimma/updates/` (new), `packages/vimma-core/src/updates.mjs` (new),
+`packages/vimma-core/src/update-keys.mjs` (new), `vimma/about/`,
 `config.mjs`, `actions.mjs`, `cmdline.mjs`, `statusbar.mjs`, `tools/package/`, `tools/update/`
 (new), `.github/workflows/{release,nightly}.yml`, `update-publish.yml` (new),
 `tests/browser/`, `tests/e2e/`, and the repository that serves the manifest
@@ -340,10 +341,9 @@ nightly --prerelease`), and its schedule does nothing until the repository varia
 
 ```xml
 <?xml version="1.0"?>
-<updates>
+<updates vimmaChannel="vimma" vimmaTarget="Linux_x86_64-gcc3" vimmaSerial="20261028041207">
   <update type="minor" appVersion="158.0.1" platformVersion="158.0.1" buildID="20261028031500"
           displayVersion="0.3.1" detailsURL="https://github.com/vimma-browser/vimma/releases/tag/v0.3.1"
-          vimmaChannel="vimma" vimmaTarget="Linux_x86_64-gcc3" vimmaSerial="20261028041207"
           vimmaUrgency="security" vimmaAdvisories="MFSA 2026-110">
     <patch type="complete" size="98113536" hashFunction="sha512" hashValue="…"
            URL="https://github.com/vimma-browser/vimma/releases/download/v0.3.1/vimma-0.3.1-linux-x86_64.complete.mar"/>
@@ -356,8 +356,9 @@ nightly --prerelease`), and its schedule does nothing until the repository varia
 
 (Values are illustrative.)
 
-- One `<update>`, the newest build of the channel; an empty `<updates/>` (still signed) means
-  "nothing offered". Nightlies use `displayVersion="0.3.1-nightly.20261028"`.
+- One `<update>`, the newest build of the channel; an `<updates>` with no `<update>` (still
+  signed, still with its channel, target and serial) means "nothing offered". The channel,
+  target and serial sit on `<updates>` (decision 25). Nightlies use `displayVersion="0.3.1-nightly.20261028"`.
 - `appVersion` is Firefox's version and `displayVersion` Vimma's (What the design must add, 2);
   together they are the version line `Vimma 0.3.1 · Firefox 158.0.1` that about:vimma and
   `:update` show, written by the same rule as `tools/release/version-line.mjs`.
@@ -384,7 +385,9 @@ nightly --prerelease`), and its schedule does nothing until the repository varia
 | Artifact build (CI)    | Mozilla's prebuilt             | ADR-010 gap, unchanged                                                                                                      | the verifier hook is Vimma's, so it refuses aus5's unsigned XML; never shipped |
 
 Firefox only tests that the file exists; the `vimma-package=` line is for Vimma's hint text.
-Detection order in `VimmaUpdates.sys.mjs`: `AppConstants.MOZ_UPDATER` false → source build;
+Detection order in `VimmaUpdates.sys.mjs`: no `omni.ja` in the GRE directory (a build run from
+its objdir) → source build (decision 28; once sub-PR 2 builds the updater in, `AppConstants.MOZ_UPDATER`
+false also means a source build);
 `isPackagedApp` and `$APPIMAGE` set → AppImage; `isPackagedApp` → read the file's package name;
 else Firefox's updater, and `aus.canUsuallyApplyUpdates` (`UpdateService.sys.mjs:4156`) tells
 writable from read-only.
@@ -453,16 +456,16 @@ Vimma did not sign or roll a profile back.
 Core decides from plain data (`updateNotice(state)` in `updates.mjs`: install type, Firefox
 updater state, offered and running versions, urgency, last check, now); the host renders it.
 
-| State                                | Status bar (right side)                    | Colour                                  | Extra                                                                  |
-| ------------------------------------ | ------------------------------------------ | --------------------------------------- | ---------------------------------------------------------------------- |
-| Downloading / staging                | nothing                                    |                                         | silent                                                                 |
-| Staged, normal                       | `⇡ 0.3.1 on restart`                       | `--vimma-fg-dim`                        | applies at the next start, whenever that is                            |
-| Staged, urgent                       | `⇡ 0.3.1 security: :restart`               | `--vimma-text-error`                    | the once-per-session `y/N` question (Behaviour 6), re-asked after 24 h |
-| Package hint (`.deb`, AUR)           | `⇡ 0.3.1 available` (`security` if urgent) | `--vimma-fg-dim` / `--vimma-text-error` | `:update` shows the full hint text and the release link                |
-| AppImage replaced                    | `⇡ 0.3.1 on restart`                       | as staged                               | as staged                                                              |
-| Verification or check failed 3 times | `updates: check failed`                    | `--vimma-text-yellow`                   | reason in about:vimma                                                  |
-| Stale feed (rule 5)                  | `updates: no news for N days`              | `--vimma-text-yellow`                   | once a day                                                             |
-| Checks off                           | `updates: off`                             | `--vimma-fg-dim`                        | once per session                                                       |
+| State                                                        | Status bar (right side)                                 | Colour                                  | Extra                                                                                                                     |
+| ------------------------------------------------------------ | ------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Downloading / staging                                        | nothing                                                 |                                         | silent                                                                                                                    |
+| Staged, normal                                               | `⇡ 0.3.1 on restart`                                    | `--vimma-fg-dim`                        | applies at the next start, whenever that is                                                                               |
+| Staged, urgent                                               | `⇡ 0.3.1 security: :restart`                            | `--vimma-text-error`                    | the once-per-session `y/N` question (Behaviour 6), re-asked after 24 h                                                    |
+| Offered, not staged (packages; every install until sub-PR 3) | `⇡ 0.3.1 available`, urgent `⇡ 0.3.1 security: :update` | `--vimma-fg-dim` / `--vimma-text-error` | `:update` opens about:vimma's Updates section: the exact commands for the install type and the release link (decision 29) |
+| AppImage replaced                                            | `⇡ 0.3.1 on restart`                                    | as staged                               | as staged                                                                                                                 |
+| Manifest refused 3 times in a row (decision 27)              | `updates: check failed`                                 | `--vimma-text-yellow`                   | reason in about:vimma                                                                                                     |
+| Stale feed (rule 5)                                          | `updates: no news for N days`                           | `--vimma-text-yellow`                   | once a day                                                                                                                |
+| Checks off                                                   | `updates: off`                                          | `--vimma-fg-dim`                        | once per session                                                                                                          |
 
 - The urgent question uses the command line's `y/N` form, as the add-on picker's removal
   question does (`packages/vimma-core/src/addons.mjs:100`). `y` runs `app.restart`.
@@ -723,6 +726,35 @@ mar` needs the host `mar` tool from the same objdir. Nothing here can ship befor
     MAR to offer); keeping M6a open until the gate lifts, because the work that can be verified
     would wait on a decision unrelated to it.
 
+24. **The manifest's channel, target and serial are attributes of `<updates>`, not of
+    `<update>`**, because a manifest that offers nothing (decision 22's pull of a bad update)
+    still needs a serial for the replay rule and a channel and target for rule 2; Firefox's
+    parser reads only the `<update>` children and ignores attributes on the root.
+25. **Delivery starts with "check and tell"**: Vimma's own signed-manifest check for every
+    packaged install, before Firefox's updater is built in, because telling an install that a
+    newer (often security) release exists, with the exact steps for its install type, needs no
+    build change, no MAR pipeline and no key inside a binary, so it can ship while the updater
+    sub-PRs wait for the full builds (decision 4). The manifest key is pinned in
+    `update-keys.mjs`, an ordinary file, so it can change in any release (decision 12).
+26. **A host that does not answer is not shown in the status bar**, only in about:vimma and the
+    browser console, because updates.vimma.dev serves nothing until the release gate lifts
+    (decision 23) and a laptop offline for a day would otherwise warn every user; a manifest that
+    arrives and fails verification still counts toward `updates: check failed`, because that is
+    what a tampered host or a broken pipeline produces. A failed check keeps an offer already
+    verified.
+27. **A build run from its objdir never checks**, detected by the missing `omni.ja` (every
+    package has one), because its build ID is newer than every release's and its requests would
+    only add traffic from development and test runs; about:vimma says "not checked (source
+    build)". A test may set the install type through a pref honoured only when
+    `Cu.isInAutomation`.
+28. **`:update` opens about:vimma's Updates section when an update exists**, because the exact
+    commands (the PKGBUILD URL, a quoted install path) are longer than the command line and need
+    to be selectable to copy; "up to date", "off" and failures stay one-line notices.
+29. **The manifest URL is the pref `vimma.update.url`, and it may use only `%BUILD_TARGET%` and
+    `%CHANNEL%` and only `https`**, because then a check sends nothing but the platform and the
+    channel even when the pref is changed, and a changed URL still has to serve a manifest signed
+    by a pinned key. Plain `http` is allowed only in automation, for a local test host.
+
 ### 9. Not in this spec
 
 Partial MARs; macOS, Windows and aarch64 manifests; an apt repository (decision 20); Flatpak;
@@ -870,18 +902,27 @@ Written first and seen to fail.
 ## Delivery
 
 The key custody and the update host (decisions 16 to 18) are built into every updater-enabled
-binary; ADR-016 records them in sub-PR 1. Sub-PRs, in order, each
-independently mergeable and tested:
+binary; ADR-016 records them in sub-PR 2. Sub-PRs, in order, each independently mergeable and
+tested:
 
-1. **Build and keys** (mozconfig, the three patches, `keys.mjs` generation, prefs, ADR-016, the
+1. **Check and tell** (decision 26; no build change): `updates.mjs` (signature, parsing, rules 1
+   to 5, `updateNotice`, the steps per install type), `update-keys.mjs` (the pinned public keys,
+   empty until the key ceremony in `docs/runbook.md`), `[updates] check` in `config.mjs`, the
+   action `app.update_check` and `:update`, the status bar's update segment,
+   `vimma/updates/VimmaUpdates.sys.mjs` (Vimma's own fetch for every packaged install, every
+   12 hours and on `:update`), about:vimma's Updates section and its report line, and
+   `app.update.interval` 43200. Tests: `updates.test.mjs`, `branding-prefs.test.mjs`,
+   `browser_vimma_update_check.js` (a local manifest host and a key generated in the test).
+2. **Build and keys** (mozconfig, the three patches, `keys.mjs` generation from the DER files, so
+   that `update-keys.mjs` and the updater's certificates have one source, prefs, ADR-016, the
    ADR-003 register lines): done when a `VIMMA_UPDATES=1` build has
    `[AppUpdate] URL=https://updates.vimma.dev/…`, `update-settings.ini` says `vimma`, the `updater` binary
    contains Vimma's primary DER's bytes and not `dep1.der`'s, and the built updater applies a
    test-signed MAR from an installed tarball (rpath question answered).
-2. **Core** (`updates.mjs`, `config.mjs`, `actions.mjs`, `cmdline.mjs`, `statusbar.mjs`): the
-   Vitest cases.
-3. **Host** (`vimma/updates/VimmaUpdates.sys.mjs`, the verifier host, AppImage replacement,
-   status bar and prompt wiring, about:vimma, control `state` field): the mochitests.
+3. **Host for Firefox's updater** (the `UpdateService-sys-mjs.patch` hook calling the same
+   verifier, the staged notices, the urgent prompt, `:restart`, `updates: off` once per session,
+   AppImage replacement, the anonymous MAR download, the control `state` field): the remaining
+   mochitests.
 4. **Packaging and pipeline** (`package.mjs`, `tools/update/`, `release.yml`, `nightly.yml`,
    `update-publish.yml`): workflow tests and a dry run. Lands after the
    build-supply-chain implementation, whose full builds this extends (decision 4).

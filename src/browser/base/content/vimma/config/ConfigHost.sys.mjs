@@ -29,6 +29,7 @@ import { SearchHost } from "../search/SearchHost.sys.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
 import { Toolbar } from "../ui/toolbar.mjs";
+import { VimmaUpdates } from "../updates/VimmaUpdates.sys.mjs";
 import { WorkspaceRouter } from "../workspaces/WorkspaceRouter.sys.mjs";
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
 
@@ -137,6 +138,7 @@ function apply(next, text) {
   PrivateSwap.configure(config.private.placement);
   WorkspaceRouter.setRoutes(config.routes);
   McpHost.configure(config.mcp);
+  VimmaUpdates.configure(config.updates);
   if (config.ui.toolbar !== appliedToolbar) {
     appliedToolbar = config.ui.toolbar;
     Toolbar.setHidden(config.ui.toolbar === "hidden");

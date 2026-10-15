@@ -1,0 +1,648 @@
+// docs/specs/m6a-updater.md, delivery 1 ("check and tell"): the signed manifest, its rules, the
+// status-bar notice and the update steps per install type. Keys are generated here; no network.
+import { describe, test, expect, beforeAll } from "vitest";
+import {
+  MANIFEST_PREFIX,
+  MAX_MANIFEST_CHARS,
+  base64Decode,
+  base64Encode,
+  installTypeFrom,
+  judgeManifest,
+  parseManifest,
+  shellQuote,
+  signatureComment,
+  signedBytes,
+  spkiKeyId,
+  splitManifest,
+  staleDays,
+  updateNotice,
+  updateSteps,
+  updateVersionLine,
+  updatesEnabled,
+  verifyManifest,
+} from "../src/updates.mjs";
+import { UPDATE_KEYS } from "../src/update-keys.mjs";
+import { parseConfig } from "../src/config.mjs";
+import { DEFAULT_CONFIG, formatDefaultsToml } from "../src/defaults.mjs";
+import { parseCommandLine } from "../src/cmdline.mjs";
+import { getAction } from "../src/actions.mjs";
+import { compileKeymap } from "../src/keymap.mjs";
+import { statusSegments } from "../src/statusbar.mjs";
+import { THEME_TOKENS } from "../src/theme.mjs";
+
+const subtle = globalThis.crypto.subtle;
+const ALG = { name: "RSASSA-PKCS1-v1_5", hash: "SHA-384" };
+
+/** @returns {Promise<{ pair: CryptoKeyPair, spki: string, id: string }>} */
+async function makeKey() {
+  const pair = /** @type {CryptoKeyPair} */ (
+    await subtle.generateKey(
+      { ...ALG, modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]) },
+      true,
+      ["sign", "verify"],
+    )
+  );
+  const der = new Uint8Array(await subtle.exportKey("spki", pair.publicKey));
+  return { pair, spki: base64Encode(der), id: await spkiKeyId(subtle, der) };
+}
+
+/** @type {Awaited<ReturnType<typeof makeKey>>} */ let primary;
+/** @type {Awaited<ReturnType<typeof makeKey>>} */ let secondary;
+/** @type {Awaited<ReturnType<typeof makeKey>>} */ let stranger;
+
+beforeAll(async () => {
+  [primary, secondary, stranger] = await Promise.all([makeKey(), makeKey(), makeKey()]);
+});
+
+const pinned = () => [
+  { id: primary.id, slot: "primary", spki: primary.spki },
+  { id: secondary.id, slot: "secondary", spki: secondary.spki },
+];
+
+/**
+ * @param {string} body
+ * @param {Awaited<ReturnType<typeof makeKey>>} key
+ * @param {Uint8Array} [bytes]  what is signed, when not signedBytes(body)
+ */
+async function sig(body, key, bytes = signedBytes(body)) {
+  return {
+    key: key.id,
+    sig: base64Encode(new Uint8Array(await subtle.sign(ALG, key.pair.privateKey, bytes))),
+  };
+}
+
+/** @param {string} body @param {...Awaited<ReturnType<typeof makeKey>>} keys */
+async function signed(body, ...keys) {
+  const sigs = await Promise.all(keys.map((k) => sig(body, k)));
+  return body + signatureComment(sigs);
+}
+
+/**
+ * The manifest of spec §2 (channel, target and serial on <updates>, decision 25).
+ * @param {{ serial?: string, channel?: string, target?: string, update?: Record<string, string>
+ *   | null }} [o]
+ */
+function manifest({
+  serial = "20261028041207",
+  channel = "vimma",
+  target = "Linux_x86_64-gcc3",
+  update = {},
+} = {}) {
+  const head =
+    '<?xml version="1.0"?>\n' +
+    `<updates vimmaChannel="${channel}" vimmaTarget="${target}" vimmaSerial="${serial}">\n`;
+  if (update === null) return `${head}</updates>\n`;
+  const attrs = {
+    type: "minor",
+    appVersion: "158.0.1",
+    platformVersion: "158.0.1",
+    buildID: "20261028031500",
+    displayVersion: "0.3.1",
+    detailsURL: "https://github.com/vimma-browser/vimma/releases/tag/v0.3.1",
+    vimmaUrgency: "normal",
+    ...update,
+  };
+  const list = Object.entries(attrs)
+    .map(([k, v]) => `${k}="${v}"`)
+    .join(" ");
+  return (
+    `${head}  <update ${list}>\n` +
+    '    <patch type="complete" size="98113536" hashFunction="sha512" hashValue="ab"' +
+    ' URL="https://github.com/vimma-browser/vimma/releases/download/v0.3.1/x.mar"/>\n' +
+    "  </update>\n</updates>\n"
+  );
+}
+
+describe("the manifest signature (spec §2, §4 rule 1)", () => {
+  test("a manifest signed by the primary or the secondary verifies, and names the slot", async () => {
+    const body = manifest();
+    const a = await verifyManifest(await signed(body, primary), pinned(), subtle);
+    expect(a).toEqual({ ok: true, body, key: { id: primary.id, slot: "primary" } });
+    const b = await verifyManifest(await signed(body, secondary), pinned(), subtle);
+    expect(b).toMatchObject({ ok: true, key: { id: secondary.id, slot: "secondary" } });
+  });
+
+  test("a trailing newline after the comment is allowed; nothing else is", async () => {
+    const text = await signed(manifest(), primary);
+    expect(text.endsWith("-->\n")).toBe(true);
+    expect((await verifyManifest(text.slice(0, -1), pinned(), subtle)).ok).toBe(true);
+    expect(await verifyManifest(`${text}<!-- x -->\n`, pinned(), subtle)).toMatchObject({
+      ok: false,
+      reason: expect.stringMatching(/^unsigned/),
+    });
+  });
+
+  test("a key that is not pinned is refused, even with a valid signature", async () => {
+    const r = await verifyManifest(await signed(manifest(), stranger), pinned(), subtle);
+    expect(r).toEqual({ ok: false, reason: "signature: not signed by a pinned key" });
+  });
+
+  test("no pinned key at all refuses every manifest (before the key ceremony)", async () => {
+    const r = await verifyManifest(await signed(manifest(), primary), [], subtle);
+    expect(r).toEqual({ ok: false, reason: "signature: no pinned key in this build" });
+  });
+
+  test("one flipped byte in the body fails", async () => {
+    const text = await signed(manifest(), primary);
+    const flipped = text.replace('appVersion="158.0.1"', 'appVersion="158.0.2"');
+    expect(await verifyManifest(flipped, pinned(), subtle)).toEqual({
+      ok: false,
+      reason: "signature: does not verify",
+    });
+  });
+
+  test("one flipped character in the signature fails", async () => {
+    const text = await signed(manifest(), primary);
+    const at = text.indexOf("sig=") + 10;
+    const c = text[at] === "A" ? "B" : "A";
+    const flipped = text.slice(0, at) + c + text.slice(at + 1);
+    expect(await verifyManifest(flipped, pinned(), subtle)).toEqual({
+      ok: false,
+      reason: "signature: does not verify",
+    });
+  });
+
+  test("a key id that is changed in the comment no longer names a pinned key", async () => {
+    const text = await signed(manifest(), primary);
+    const other = text.replace(`key=${primary.id}`, "key=00000000");
+    expect(await verifyManifest(other, pinned(), subtle)).toEqual({
+      ok: false,
+      reason: "signature: not signed by a pinned key",
+    });
+  });
+
+  test("missing or second comment, unsigned XML, malformed pairs: unsigned", async () => {
+    const body = manifest();
+    const text = await signed(body, primary);
+    const cases = [
+      body,
+      `${text}${signatureComment([await sig(body, primary)])}`,
+      body + "<!-- vimma-signature v1 -->\n",
+      body + `<!-- vimma-signature v2 key=${primary.id} sig=AAAA -->\n`,
+      body + `<!-- vimma-signature v1 key=XYZ sig=AAAA -->\n`,
+      body.slice(0, -1) + text.slice(body.length), // no newline before the comment
+    ];
+    for (const c of cases) {
+      const r = await verifyManifest(c, pinned(), subtle);
+      expect(r.ok, c.slice(-80)).toBe(false);
+      expect(/** @type {any} */ (r).reason).toMatch(/^unsigned/);
+    }
+  });
+
+  test("a signature over the body without the domain prefix fails", async () => {
+    const body = manifest();
+    const bare = await sig(body, primary, new TextEncoder().encode(body));
+    const r = await verifyManifest(body + signatureComment([bare]), pinned(), subtle);
+    expect(r).toEqual({ ok: false, reason: "signature: does not verify" });
+    expect(MANIFEST_PREFIX).toBe("vimma-update-xml-v1\n");
+  });
+
+  test("several signatures (rotation): one valid under a pinned key is enough", async () => {
+    const body = manifest();
+    const text = await signed(body, stranger, secondary);
+    expect(await verifyManifest(text, pinned(), subtle)).toMatchObject({
+      ok: true,
+      key: { slot: "secondary" },
+    });
+    const five = await Promise.all([1, 2, 3, 4, 5].map(() => sig(body, primary)));
+    expect(await verifyManifest(body + signatureComment(five), pinned(), subtle)).toMatchObject({
+      ok: false,
+      reason: expect.stringMatching(/^unsigned/),
+    });
+  });
+
+  test("an oversized manifest is refused before any crypto", async () => {
+    const big = manifest().replace(
+      "<updates ",
+      `<!--${"x".repeat(MAX_MANIFEST_CHARS)}-->\n<updates `,
+    );
+    const r = await verifyManifest(await signed(big, primary), pinned(), subtle);
+    expect(r).toEqual({ ok: false, reason: "manifest: larger than 64 KiB" });
+  });
+
+  test("splitManifest returns the body and the pairs", async () => {
+    const body = manifest();
+    const text = await signed(body, primary, secondary);
+    const r = splitManifest(text);
+    expect(r).toMatchObject({ ok: true, body });
+    expect(/** @type {any} */ (r).signatures.map((/** @type {any} */ s) => s.key)).toEqual([
+      primary.id,
+      secondary.id,
+    ]);
+  });
+
+  test("base64 round trip and the key id (first 8 hex of the SPKI's SHA-256)", async () => {
+    const bytes = new Uint8Array([0, 1, 2, 250, 251, 252, 253, 254, 255]);
+    expect(base64Decode(base64Encode(bytes))).toEqual(bytes);
+    expect(base64Encode(new TextEncoder().encode("Man"))).toBe("TWFu");
+    expect(base64Encode(new TextEncoder().encode("Ma"))).toBe("TWE=");
+    expect(() => base64Decode("@@@@")).toThrow();
+    const der = base64Decode(primary.spki);
+    const hash = new Uint8Array(await subtle.digest("SHA-256", der));
+    const hex = [...hash.slice(0, 4)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    expect(primary.id).toBe(hex);
+  });
+});
+
+describe("pinned keys (update-keys.mjs)", () => {
+  test("every pinned key is an RSA-4096 SPKI whose id matches, one per slot", async () => {
+    const slots = UPDATE_KEYS.map((k) => k.slot);
+    expect(new Set(slots).size).toBe(slots.length);
+    for (const k of UPDATE_KEYS) {
+      expect(["primary", "secondary"]).toContain(k.slot);
+      const der = base64Decode(k.spki);
+      expect(await spkiKeyId(subtle, der)).toBe(k.id);
+      const key = await subtle.importKey("spki", der, ALG, true, ["verify"]);
+      expect(/** @type {any} */ (key.algorithm).modulusLength).toBe(4096);
+    }
+  });
+});
+
+describe("parseManifest", () => {
+  test("reads the channel, target, serial and the offer", () => {
+    const r = parseManifest(
+      manifest({ update: { vimmaUrgency: "security", vimmaAdvisories: "MFSA 2026-110" } }),
+    );
+    expect(r).toEqual({
+      ok: true,
+      manifest: {
+        channel: "vimma",
+        target: "Linux_x86_64-gcc3",
+        serial: "20261028041207",
+        update: {
+          appVersion: "158.0.1",
+          buildId: "20261028031500",
+          displayVersion: "0.3.1",
+          detailsUrl: "https://github.com/vimma-browser/vimma/releases/tag/v0.3.1",
+          urgent: true,
+          advisories: ["MFSA 2026-110"],
+        },
+      },
+    });
+  });
+
+  test("an empty <updates> offers nothing but still carries its serial", () => {
+    expect(parseManifest(manifest({ update: null }))).toMatchObject({
+      ok: true,
+      manifest: { serial: "20261028041207", update: null },
+    });
+    const selfClosing =
+      '<?xml version="1.0"?>\n<updates vimmaChannel="vimma" vimmaTarget="t" vimmaSerial="20261028041207"/>\n';
+    expect(parseManifest(selfClosing)).toMatchObject({ ok: true, manifest: { update: null } });
+  });
+
+  test("entities in attributes are decoded", () => {
+    const r = parseManifest(
+      manifest({
+        update: { detailsURL: "https://github.com/vimma-browser/vimma/releases?a=1&amp;b=2" },
+      }),
+    );
+    expect(/** @type {any} */ (r).manifest.update.detailsUrl).toBe(
+      "https://github.com/vimma-browser/vimma/releases?a=1&b=2",
+    );
+  });
+
+  test.each([
+    ["not XML", "hello\n"],
+    ["two updates", manifest().replace("</updates>", '<update appVersion="1"></update></updates>')],
+    ["a DOCTYPE", manifest().replace("<updates", "<!DOCTYPE x>\n<updates")],
+    ["no serial", manifest().replace(/ vimmaSerial="\d+"/, "")],
+    ["a serial that is not a time", manifest({ serial: "2026" })],
+    ["a version that is not SemVer", manifest({ update: { displayVersion: "0.3.1; rm -rf ~" } })],
+    ["a Firefox version with spaces", manifest({ update: { appVersion: "158 .0" } })],
+    ["a build ID that is not digits", manifest({ update: { buildID: "2026-10-28" } })],
+    ["details on plain http", manifest({ update: { detailsURL: "http://example.com/" } })],
+    ["an unknown urgency", manifest({ update: { vimmaUrgency: "panic" } })],
+    ["duplicate attributes", manifest({ update: { type: 'minor" type="major' } })],
+  ])("refuses %s", (_name, body) => {
+    const r = parseManifest(body);
+    expect(r.ok).toBe(false);
+    expect(/** @type {any} */ (r).reason).toMatch(/^manifest: /);
+  });
+});
+
+/** A Firefox-like version comparison for the tests (the host passes Services.vc.compare). */
+const compare = (/** @type {string} */ a, /** @type {string} */ b) => {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d) return d;
+  }
+  return 0;
+};
+
+describe("judgeManifest (§4 rules 2 to 4)", () => {
+  const running = {
+    channel: "vimma",
+    target: "Linux_x86_64-gcc3",
+    appVersion: "158.0",
+    buildId: "20261020000000",
+    serial: /** @type {string | null} */ (null),
+  };
+  /** @param {Parameters<typeof manifest>[0]} [o] */
+  const parsed = (o) => /** @type {any} */ (parseManifest(manifest(o))).manifest;
+
+  test("a newer Firefox version is offered", () => {
+    expect(judgeManifest(parsed(), running, compare)).toMatchObject({
+      ok: true,
+      serial: "20261028041207",
+      offer: { displayVersion: "0.3.1", appVersion: "158.0.1" },
+    });
+  });
+
+  test("channel and target mismatches are refused", () => {
+    expect(judgeManifest(parsed({ channel: "vimma-nightly" }), running, compare)).toEqual({
+      ok: false,
+      reason: 'channel: the manifest is for "vimma-nightly", this install is on "vimma"',
+    });
+    expect(judgeManifest(parsed({ target: "Darwin_aarch64-gcc3" }), running, compare)).toEqual({
+      ok: false,
+      reason:
+        'target: the manifest is for "Darwin_aarch64-gcc3", this install is "Linux_x86_64-gcc3"',
+    });
+  });
+
+  test("replay: a serial below the one accepted, or below this build, is refused; equal is accepted", () => {
+    const seen = { ...running, serial: "20261028041208" };
+    expect(judgeManifest(parsed(), seen, compare)).toEqual({
+      ok: false,
+      reason: "replay: serial 20261028041207 is older than 20261028041208, already accepted",
+    });
+    expect(judgeManifest(parsed(), { ...running, serial: "20261028041207" }, compare).ok).toBe(
+      true,
+    );
+    const newer = { ...running, buildId: "20261101000000" };
+    expect(judgeManifest(parsed({ update: null }), newer, compare)).toEqual({
+      ok: false,
+      reason: "replay: serial 20261028041207 is older than this build (20261101000000)",
+    });
+  });
+
+  test("downgrade: an older or equal build is no offer, not an error", () => {
+    const older = parsed({ update: { appVersion: "157.0.1" } });
+    expect(judgeManifest(older, running, compare)).toMatchObject({ ok: true, offer: null });
+    const sameFx = { ...running, appVersion: "158.0.1" };
+    const at = (/** @type {string} */ buildID) =>
+      judgeManifest(parsed({ update: { buildID } }), sameFx, compare);
+    expect(at("20261019000000")).toMatchObject({ ok: true, offer: null });
+    expect(at("20261020000000")).toMatchObject({ ok: true, offer: null });
+    expect(at("20261021000000")).toMatchObject({ ok: true, offer: { buildId: "20261021000000" } });
+  });
+
+  test("build IDs compare as numbers, not strings", () => {
+    const sameFx = { ...running, appVersion: "158.0.1", buildId: "9" };
+    const r = judgeManifest(parsed({ update: { buildID: "10" } }), sameFx, compare);
+    expect(r).toMatchObject({ ok: true, offer: { buildId: "10" } });
+  });
+
+  test("an empty manifest is accepted and offers nothing", () => {
+    expect(judgeManifest(parsed({ update: null }), running, compare)).toEqual({
+      ok: true,
+      serial: "20261028041207",
+      offer: null,
+    });
+  });
+});
+
+describe("staleDays (§4 rule 5)", () => {
+  const at = (/** @type {string} */ iso) => Date.parse(iso);
+  test("a release feed older than 45 days and a nightly one older than 7 are stale", () => {
+    const serial = "20261001000000";
+    expect(staleDays(serial, "vimma", at("2026-11-15T00:00:00Z"))).toBeNull();
+    expect(staleDays(serial, "vimma", at("2026-11-16T00:00:01Z"))).toBe(46);
+    expect(staleDays(serial, "vimma-nightly", at("2026-10-08T00:00:00Z"))).toBeNull();
+    expect(staleDays(serial, "vimma-nightly", at("2026-10-09T12:00:00Z"))).toBe(8);
+  });
+});
+
+describe("updateNotice (§5, the rows delivery 1 has)", () => {
+  const offer = { displayVersion: "0.3.1", urgent: false };
+  const state = {
+    enabled: true,
+    installType: /** @type {const} */ ("tarball"),
+    offer: /** @type {{ displayVersion: string, urgent: boolean } | null} */ (null),
+    refusals: 0,
+    staleDays: /** @type {number | null} */ (null),
+  };
+
+  test("nothing when up to date, before any check, or when the host did not answer", () => {
+    expect(updateNotice(state)).toBeNull();
+  });
+
+  test("an offer: ⇡ 0.3.1 available, dim; urgent: red, and says what to type", () => {
+    expect(updateNotice({ ...state, offer })).toEqual({
+      text: "⇡ 0.3.1 available",
+      tone: "info",
+    });
+    expect(updateNotice({ ...state, offer: { ...offer, urgent: true } })).toEqual({
+      text: "⇡ 0.3.1 security: :update",
+      tone: "urgent",
+    });
+  });
+
+  test("three refused manifests in a row: updates: check failed; fewer: nothing", () => {
+    expect(updateNotice({ ...state, refusals: 2 })).toBeNull();
+    expect(updateNotice({ ...state, refusals: 3 })).toEqual({
+      text: "updates: check failed",
+      tone: "warn",
+    });
+  });
+
+  test("a stale feed says so; an offer wins over it", () => {
+    expect(updateNotice({ ...state, staleDays: 46 })).toEqual({
+      text: "updates: no news for 46 days",
+      tone: "warn",
+    });
+    expect(updateNotice({ ...state, staleDays: 46, offer })?.text).toBe("⇡ 0.3.1 available");
+  });
+
+  test("checks off or a source build: nothing, offer or not (decision 14)", () => {
+    expect(updateNotice({ ...state, enabled: false, offer, staleDays: 50 })).toBeNull();
+    expect(updateNotice({ ...state, installType: "source", offer })).toBeNull();
+  });
+});
+
+describe("the status-bar segment", () => {
+  const base = { mode: /** @type {const} */ ("normal") };
+  test("the notice is a right-side segment in its tone's colour, a theme token", () => {
+    const tones = /** @type {const} */ ([
+      ["info", "--vimma-fg-dim"],
+      ["urgent", "--vimma-text-error"],
+      ["warn", "--vimma-text-yellow"],
+    ]);
+    for (const [tone, fg] of tones) {
+      const s = statusSegments({ ...base, update: { text: "⇡ 0.3.1 available", tone } }).find(
+        (x) => x.id === "update",
+      );
+      expect(s).toMatchObject({ side: "right", fg, text: "⇡ 0.3.1 available" });
+      expect(THEME_TOKENS.map((t) => t.name)).toContain(fg);
+    }
+    expect(statusSegments(base).some((s) => s.id === "update")).toBe(false);
+  });
+
+  test("an urgent notice outlasts the title; a plain one gives way before it", () => {
+    const seg = (/** @type {"info" | "urgent"} */ tone) =>
+      /** @type {any} */ (
+        statusSegments({ ...base, update: { text: "x", tone } }).find((s) => s.id === "update")
+      );
+    expect(seg("urgent").priority).toBeLessThan(5);
+    expect(seg("info").priority).toBeGreaterThan(5);
+  });
+});
+
+describe("install type (§3)", () => {
+  test.each([
+    [{ packaged: false, marker: null, appImage: null }, "source"],
+    [{ packaged: false, marker: "vimma-package=deb\n", appImage: null }, "source"],
+    [{ packaged: true, marker: null, appImage: null }, "tarball"],
+    [{ packaged: true, marker: "vimma-package=deb\n", appImage: null }, "deb"],
+    [{ packaged: true, marker: "vimma-package=aur\n", appImage: null }, "aur"],
+    [
+      { packaged: true, marker: "vimma-package=pkgbuild-release\n", appImage: null },
+      "pkgbuild-release",
+    ],
+    [{ packaged: true, marker: "vimma-package=appimage\n", appImage: null }, "appimage"],
+    [{ packaged: true, marker: "", appImage: "/home/u/Vimma.AppImage" }, "appimage"],
+    [{ packaged: true, marker: "", appImage: null }, "packaged"],
+    [{ packaged: true, marker: "vimma-package=snap\n", appImage: null }, "packaged"],
+  ])("%j → %s", (input, type) => {
+    expect(installTypeFrom(input)).toBe(type);
+  });
+});
+
+describe("updateSteps (:update and about:vimma)", () => {
+  const offer = {
+    appVersion: "158.0.1",
+    buildId: "20261028031500",
+    displayVersion: "0.3.1",
+    detailsUrl: "https://github.com/vimma-browser/vimma/releases/tag/v0.3.1",
+    urgent: false,
+    advisories: [],
+  };
+  const where = { installDir: "/home/u/apps/vimma", appImage: null };
+  const dl = "https://github.com/vimma-browser/vimma/releases/download/v0.3.1";
+
+  test("pkgbuild-release: the exact curl … && makepkg -si command (decision 24)", () => {
+    expect(updateSteps("pkgbuild-release", offer, where).commands).toEqual([
+      "curl -LO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si",
+    ]);
+  });
+
+  test("aur: the AUR helper", () => {
+    const s = updateSteps("aur", offer, where);
+    expect(s.text).toMatch(/AUR helper/);
+    expect(s.commands).toEqual(["yay -Syu vimma-bin"]);
+  });
+
+  test("deb: download the new .deb and install it with apt", () => {
+    expect(updateSteps("deb", offer, where).commands).toEqual([
+      `curl -LO ${dl}/vimma_0.3.1_amd64.deb && sudo apt install ./vimma_0.3.1_amd64.deb`,
+    ]);
+    const pre = { ...offer, displayVersion: "0.4.0-rc.1" };
+    expect(updateSteps("deb", pre, where).commands[0]).toContain("vimma_0.4.0~rc.1_amd64.deb");
+  });
+
+  test("tarball: quit, then unpack over the install's parent directory, quoted", () => {
+    const s = updateSteps("tarball", offer, {
+      installDir: "/home/u/my apps/vimma",
+      appImage: null,
+    });
+    expect(s.text).toMatch(/^Quit Vimma/);
+    expect(s.commands).toEqual([
+      `curl -L ${dl}/vimma-0.3.1-linux-x86_64.tar.xz | tar -xJ -C '/home/u/my apps'`,
+    ]);
+  });
+
+  test("appimage: download next to the file and rename it over, quoted", () => {
+    const s = updateSteps("appimage", offer, {
+      installDir: "/tmp/.mount",
+      appImage: "/home/u/it's.AppImage",
+    });
+    expect(s.commands).toEqual([
+      `curl -L -o '/home/u/it'\\''s.AppImage.new' ${dl}/vimma-0.3.1-x86_64.AppImage` +
+        ` && chmod +x '/home/u/it'\\''s.AppImage.new'` +
+        ` && mv '/home/u/it'\\''s.AppImage.new' '/home/u/it'\\''s.AppImage'`,
+    ]);
+  });
+
+  test("an unknown package and a source build: words and the release page only", () => {
+    expect(updateSteps("packaged", offer, where)).toMatchObject({ commands: [] });
+    expect(updateSteps("source", offer, where).text).toMatch(/rebuild/);
+    for (const t of /** @type {const} */ (["packaged", "source", "deb", "tarball"])) {
+      expect(updateSteps(t, offer, where).link).toBe(offer.detailsUrl);
+    }
+  });
+
+  test("shellQuote leaves plain paths alone and quotes the rest", () => {
+    expect(shellQuote("/opt/vimma")).toBe("/opt/vimma");
+    expect(shellQuote("/a b")).toBe("'/a b'");
+    expect(shellQuote("a'b")).toBe("'a'\\''b'");
+    expect(shellQuote("$(x)")).toBe("'$(x)'");
+  });
+});
+
+describe("the version line", () => {
+  test("Vimma 0.3.1 · Firefox 158.0.1, and a nightly's", () => {
+    expect(updateVersionLine({ displayVersion: "0.3.1", appVersion: "158.0.1" })).toBe(
+      "Vimma 0.3.1 · Firefox 158.0.1",
+    );
+    expect(
+      updateVersionLine({ displayVersion: "0.3.1-nightly.20261028", appVersion: "158.0.1" }),
+    ).toBe("Vimma 0.3.1-nightly.20261028 · Firefox 158.0.1");
+  });
+});
+
+describe("[updates] check (config.toml, schema 2) and the pref", () => {
+  /** @param {string[]} lines */
+  const v2 = (...lines) => ["schema = 2", ...lines].join("\n") + "\n";
+
+  test("defaults to on; false turns it off", () => {
+    expect(parseConfig(v2()).config?.updates).toEqual({ check: true });
+    expect(parseConfig(v2("[updates]", "check = false")).config?.updates).toEqual({
+      check: false,
+    });
+    expect(DEFAULT_CONFIG.updates).toEqual({ check: true });
+    expect(formatDefaultsToml()).toMatch(/^\[updates\]\n(#.*\n)*check = true$/m);
+  });
+
+  test("a wrong type, an unknown key and schema 1 are errors", () => {
+    const errs = (/** @type {string} */ t) =>
+      parseConfig(t).errors.map((e) => ({ line: e.line, path: e.path, message: e.message }));
+    expect(errs(v2("[updates]", 'check = "no"'))).toEqual([
+      { line: 3, path: "updates.check", message: "expected a boolean, got a string" },
+    ]);
+    expect(errs(v2("[updates]", "chekc = false"))).toEqual([
+      { line: 3, path: "updates.chekc", message: 'unknown key "chekc"' },
+    ]);
+    expect(errs("schema = 1\n[updates]\ncheck = false\n")).toEqual([
+      {
+        line: 2,
+        path: "updates",
+        message: "is new in schema 2: put schema = 2 at the top of the file",
+      },
+    ]);
+  });
+
+  test("either the file or the pref turns checks off", () => {
+    expect(updatesEnabled({ pref: true, config: { check: true } })).toBe(true);
+    expect(updatesEnabled({ pref: false, config: { check: true } })).toBe(false);
+    expect(updatesEnabled({ pref: true, config: { check: false } })).toBe(false);
+    expect(updatesEnabled({ pref: true, config: null })).toBe(true);
+  });
+});
+
+describe(":update and check_updates", () => {
+  test(":update runs app.update_check", () => {
+    expect(parseCommandLine(":update")).toEqual({
+      kind: "run",
+      command: "update",
+      action: { id: "app.update_check" },
+    });
+  });
+
+  test("check_updates exists and has no default key", () => {
+    expect(getAction("check_updates")?.id).toBe("app.update_check");
+    expect(compileKeymap().bindingsFor("check_updates")).toEqual([]);
+  });
+});

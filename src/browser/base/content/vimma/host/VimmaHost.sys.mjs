@@ -42,6 +42,7 @@ import { bookmarksRoot, loadTree, observeBookmarks, setBookmarksRoot } from "./b
 import { gotoItems, pickerWorkspaces, tabById } from "./goto.mjs";
 import { getTabLabel, setTabLabel } from "./tab-labels.mjs";
 import { SearchHost } from "../search/SearchHost.sys.mjs";
+import { VimmaUpdates } from "../updates/VimmaUpdates.sys.mjs";
 import { refusedScheme } from "../core/pageurl.mjs";
 import {
   BLOCKED_URL_TEXT,
@@ -477,6 +478,35 @@ function addonOp(s, op, id) {
 }
 
 /**
+ * `:update` (docs/specs/m6a-updater.md): checks now and says the result; an update opens
+ * about:vimma's Updates section, which shows the exact steps for this install.
+ * @param {WindowState} s
+ */
+async function checkUpdates(s) {
+  s.notice.show("checking for updates…");
+  const r = await VimmaUpdates.check();
+  switch (r.outcome) {
+    case "offer": {
+      const offer = /** @type {NonNullable<typeof r.offer>} */ (r.offer);
+      s.notice.show(`Vimma ${offer.displayVersion} is available`);
+      openOrSay(s, "about:vimma#updates", "tab");
+      return;
+    }
+    case "current":
+      s.notice.show(`Vimma ${VimmaUpdates.runningVersion} is up to date`);
+      return;
+    case "off":
+      s.notice.show("updates are off ([updates] check or vimma.update.enabled)");
+      return;
+    case "source":
+      s.notice.show("a source build: pull and rebuild to update");
+      return;
+    default:
+      s.notice.show(`update check ${r.outcome}: ${r.reason}`, { error: true });
+  }
+}
+
+/**
  * What the bookmark effects run with.
  * @param {WindowState} s
  */
@@ -687,6 +717,12 @@ export const RUNNERS = Object.freeze({
   // docs/specs/firefox-keys.md decision 4: the Browser and Developer tools actions, each what
   // Firefox's key ran (browser-ops.mjs).
   ...browserRunners((win, text) => states.get(win)?.notice.show(text)),
+  "app.update_check": (/** @type {WindowState} */ s) => {
+    checkUpdates(s).catch((e) => {
+      console.error("vimma: :update failed", e);
+      s.notice.show(`update check failed: ${e?.message ?? e}`, { error: true });
+    });
+  },
   // docs/specs/bookmarks.md: the bookmarks panel, in the side panel's slot and mode.
   "bookmarks.toggle": (/** @type {WindowState} */ s) => {
     s.notice.hide();
@@ -1343,7 +1379,8 @@ export const VimmaHost = {
    *   pane?: { index: number, count: number } | null, configErrors?: readonly ConfigError[],
    *   configFile?: string, alerts?: readonly string[],
    *   workspace?: { name: string, index: number, color?: string, private?: boolean } | null,
-   *   agent?: { waiting: number, minutes: number | null, ran: boolean } | null }}
+   *   agent?: { waiting: number, minutes: number | null, ran: boolean } | null,
+   *   update?: import("../core/updates.mjs").UpdateNotice | null }}
    */
   status(win) {
     const state = states.get(win);
@@ -1361,6 +1398,8 @@ export const VimmaHost = {
       alerts: WorkspaceStore.alert ? [WorkspaceStore.alert] : [],
       // docs/specs/vimma-mcp.md decision 24: `◇ agent`, `◇ agent 2?`, `◇ agent 14m`.
       agent: AgentUi.status(),
+      // docs/specs/m6a-updater.md §5: `⇡ 0.3.1 available`, or an update problem.
+      update: VimmaUpdates.notice(),
     };
   },
 
@@ -2034,3 +2073,11 @@ export const VimmaHost = {
     state.timer = null;
   },
 };
+
+// A finished update check redraws every status bar (docs/specs/m6a-updater.md §5).
+VimmaUpdates.addListener(() => {
+  for (const win of windows) {
+    const state = states.get(win);
+    if (state) VimmaHost._emit(state);
+  }
+});

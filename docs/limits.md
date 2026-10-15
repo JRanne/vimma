@@ -294,8 +294,10 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
 - Safe Browsing's `goog-harmful-proto` list is requested but did not arrive in the smoke run
   with our key (phishing, malware and unwanted did); treat it as unavailable. See
   [m0-safebrowsing-key](specs/m0-safebrowsing-key.md).
-- No update mechanism of our own and no update manifest until M6a
-  ([m0-app-version](specs/m0-app-version.md), Out of scope).
+- Vimma checks for a newer release and shows how to update, but installs nothing itself yet:
+  Firefox's updater, staged updates and the AppImage replacing its own file are M6a's later
+  sub-PRs ([m6a-updater](specs/m6a-updater.md), Delivery). No signed manifest is published
+  until the first public release, so until then a check finds nothing.
 - No crash reporting: builds have no crash reporter, so crashes leave only a local core dump.
   Opt-in reporting to our own server is M6 ([m0-mozilla-services](specs/m0-mozilla-services.md)).
 - Once Vimma writes its `false` for sponsored address-bar suggestions, that value looks like the

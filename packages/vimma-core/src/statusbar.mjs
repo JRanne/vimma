@@ -64,7 +64,10 @@ export { textWidth };
  * @property {SecurityLevel} [security]  the selected page's connection (securityFromState)
  * @property {boolean} [privateWindow]  a private browsing window
  * @property {readonly string[]} [sharing]  devices the page uses (sharingCues)
+ * @property {UpdateNotice | null} [update]  a newer Vimma, or an update problem
+ *   (docs/specs/m6a-updater.md §5, updateNotice)
  */
+/** @import { UpdateNotice } from "./updates.mjs" */
 
 /** @typedef {"secure" | "insecure" | "neutral"} SecurityLevel */
 
@@ -139,6 +142,13 @@ export const WORKSPACE_COLOR_TOKENS = Object.freeze({
   blue: "--vimma-text-blue",
   cyan: "--vimma-text-cyan",
   green: "--vimma-text-green",
+});
+
+/** An update notice's tone → its text token (docs/specs/m6a-updater.md §5). */
+const UPDATE_TONES = Object.freeze({
+  info: "--vimma-fg-dim",
+  urgent: "--vimma-text-error",
+  warn: "--vimma-text-yellow",
 });
 
 const ELLIPSIS = "…";
@@ -318,6 +328,7 @@ export function statusSegments(input) {
     security = "neutral",
     privateWindow = false,
     sharing = [],
+    update = null,
   } = input;
   /** @type {Segment[]} */
   const left = [];
@@ -465,6 +476,20 @@ export function statusSegments(input) {
         side: "right",
         // Just below the workspace's: it gives way before it, after the tab and title.
         priority: 3.5,
+      }),
+    );
+  }
+  if (update) {
+    right.push(
+      seg({
+        id: "update",
+        text: update.text,
+        fg: UPDATE_TONES[update.tone],
+        side: "right",
+        // A security update outlasts the title (5); the rest give way before it.
+        priority: update.tone === "urgent" ? 3 : 6.5,
+        min: 8,
+        cut: "end",
       }),
     );
   }

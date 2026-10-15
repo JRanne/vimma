@@ -242,3 +242,6 @@ support-files = ["file_vimma_addon_updates.json"]
 
 ["browser_vimma_browser_keys.js"]
 support-files = ["file_vimma_plain.html", "file_vimma_slow.sjs"]
+
+["browser_vimma_update_check.js"]
+support-files = ["file_vimma_update_manifest.sjs"]
