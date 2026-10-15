@@ -753,7 +753,7 @@ add_task(async function rows_name_their_window_tab_and_host() {
   Assert.equal(row.querySelector(".vimma-grep-host")?.textContent, "example.com", "its host");
   const where = dialog().querySelector(".vimma-grep-preview .vimma-grep-title");
   await until(() => where.textContent.includes("Hosted"), "the preview names the result's tab");
-  Assert.ok(where.textContent.split(" · ").includes("example.com"), "and its host");
+  Assert.equal(where.textContent.split(" · ").at(-1), "example.com", "and its host, last");
   Assert.ok(where.textContent.includes("w1"), "and its window");
   EventUtils.synthesizeKey("KEY_Escape");
   EventUtils.synthesizeKey("KEY_Escape");
