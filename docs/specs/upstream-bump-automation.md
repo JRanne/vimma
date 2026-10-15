@@ -1,6 +1,6 @@
 # Spec: upstream-bump-automation
 
-Status: draft · Area: `.github/workflows/upstream.yml`, `.github/workflows/e2e.yml`,
+Status: accepted · Area: `.github/workflows/upstream.yml`, `.github/workflows/e2e.yml`,
 `.github/workflows/upstream-resolve.yml` (new), `tools/upstream/source-check.sh`,
 `tools/upstream/patch-check.py`, `tools/upstream/upstream-prefs.mjs`,
 `tools/upstream/autopilot-body.mjs`, `tools/upstream/bump-diff.mjs` (new),
@@ -264,6 +264,24 @@ github.repository` and `head_branch` starting with `upstream/firefox-`), because
 21. **A resolved bump waits for the maintainer**, because it changes patches (decision 15) and a
     model wrote the change; the PR body names each patch Claude changed with a link to its diff.
 
+### Rollout
+
+22. **Auto-merge starts with dot releases only**: `AUTO_MERGE_UPSTREAM` is set to `dot` once
+    sub-PR 2 merges, and to `all` once Vimma has been daily-driven, because security dot releases
+    then reach `main` within hours while majors, which change more of Firefox, still get the
+    maintainer's review (the Firefox 158.0 bump, #186, needed a patch re-export and four
+    front-end fixes beyond the version). Merging to `main` publishes nothing, since releases are
+    gated separately (spec release-versioning). Rejected: `all` at once, because a major would
+    land on the maintainer's dev build unreviewed; leaving the variable unset until daily-driving,
+    because nothing would change in practice until then.
+23. **CI gives patches that fail to Claude, authenticated with `CLAUDE_CODE_OAUTH_TOKEN`** (the
+    maintainer's subscription, from `claude setup-token`), and sub-PR 4 is built last, so that the
+    earlier sub-PRs do not wait for it. The run sends Vimma's patches and the affected Firefox
+    source to Anthropic's API; both are public. Rejected: an `ANTHROPIC_API_KEY` with a spend
+    limit, because it adds per-use billing for a job that runs a few times a year; no Claude in
+    CI, because a failing patch would then always wait for a person even when its re-export is
+    mechanical.
+
 ## Security and privacy
 
 The change adds write paths, so `docs/security.md` section 10 gains guarantees (numbered after
@@ -346,21 +364,4 @@ tokens or secrets and get a fresh security review.
 
 ## Open questions
 
-1. **When does auto-merge start, and for which releases?** ADR-015 rejected auto-merge until
-   Vimma has been daily-driven. Options: (a) build sub-PR 2 and set `AUTO_MERGE_UPSTREAM=dot` once
-   it merges, `all` after daily-driving: security dot releases reach `main` within hours, while
-   majors, which change more of Firefox, still get the maintainer's eye (the Firefox 158.0 bump,
-   #186, needed a patch re-export and four front-end fixes beyond the version); (b) set `all` at once:
-   the fastest path to the M7 exit criterion, but a major lands on the maintainer's dev build
-   unreviewed; (c) build it and leave the variable unset until daily-driving: no change in
-   practice until then. Merging to `main` publishes nothing either way, since releases are gated
-   separately. Recommendation: (a).
-2. **Should CI run Claude on patches that fail?** It needs `CLAUDE_CODE_OAUTH_TOKEN` (the
-   maintainer's subscription, from `claude setup-token`) or `ANTHROPIC_API_KEY` (billed per use; a
-   spend limit can be set in the Anthropic Console), and it sends Vimma's patches and Firefox's
-   source to Anthropic's API. Options: (a) yes, with the OAuth token; (b) yes, with an API key and a
-   monthly spend limit; (c) no: sub-PR 4 is dropped and a failing patch stays with a person, with
-   the hunks in the PR. The Firefox 158.0 bump (#186) needed one patch re-exported
-   (`src/browser/base/moz-build.patch`, a build file, which decision 15 keeps out of auto-merge
-   anyway) and front-end fixes no re-export would have covered. Recommendation: (a), and build
-   sub-PR 4 last, so the earlier sub-PRs do not wait for it.
+None. The rollout questions are answered in Design, decisions 22 and 23.
