@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Fixture for browser_vimma_insert_focus.js: a long page whose script moves focus the way
+   - sites do. Typing "go" into #first moves focus to the result list, as a file finder does. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vimma insert focus</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      #tall {
+        height: 20000px;
+        width: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <input id="first" />
+    <input id="second" />
+    <div id="editor" contenteditable="true">editor</div>
+    <ul id="results" tabindex="-1">
+      <li>result</li>
+    </ul>
+    <button id="button" type="button">button</button>
+    <iframe
+      id="frame"
+      src="https://example.org/browser/browser/base/zen-components/tests/browser/file_vimma_frame.html"
+    ></iframe>
+    <div id="tall"></div>
+    <script>
+      document.getElementById("first").addEventListener("input", (e) => {
+        if (e.target.value === "go") document.getElementById("results").focus();
+      });
+    </script>
+  </body>
+</html>

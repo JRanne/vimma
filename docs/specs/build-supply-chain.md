@@ -626,7 +626,7 @@ New surface:
   `tools/upstream/mozilla-release-key.asc` or the fingerprint constant must cite Mozilla's
   announcement and keep every revocation.
 
-New section for `docs/security.md`, **§13. Build and release supply chain** (`release.yml`,
+New section for `docs/security.md`, **§14. Build and release supply chain** (`release.yml`,
 `nightly.yml`), with **Reach:** Mozilla's archive and Taskcluster, the npm registry, this
 repository, and GitHub's hosted runners. Each rule links its tests (Tests, below):
 
@@ -739,7 +739,7 @@ No mochitest or e2e scenario: nothing in the browser changes.
 
 ## Docs and changelog
 
-- `docs/security.md`: §13 with B1 to B7 and their test links; G4 amended; §11 gains "Build
+- `docs/security.md`: §14 with B1 to B7 and their test links; G4 amended; §11 gains "Build
   infrastructure".
 - `docs/runbook.md`, "Full builds (`nightly.yml`, `release.yml`)" (already says they run on
   GitHub-hosted runners, with the self-hosted label as a known gap): the measured time and disk

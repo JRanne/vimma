@@ -42,8 +42,7 @@
     "`type=\"minor\"`",
     "One manifest per channel and target",
     "The m0-updater mochitests change",
-    "Settings' \"Updates are managed by your operating system\"",
-    "Vimma never restarts on its own"
+    "Settings' \"Updates are managed by your operating system\""
   ],
   "macos-build.md": [
     "Windows is not a target platform.",
