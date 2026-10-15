@@ -92,12 +92,12 @@ async function openAgentTab(url = PAGE) {
 }
 
 /** An agent connection, after its agent-hello. */
-async function agentClient(name = "claude-code") {
+async function agentClient(name = "example-agent") {
   const c = new Client(/** @type {number} */ (VimmaControl.port));
   const welcome = await c.handshake({ protocol: 2, role: "agent" });
   Assert.equal(welcome.type, "welcome", "an agent connection is welcomed");
   Assert.equal(welcome.role, "agent", "as the agent role");
-  const hi = await c.call("agent-hello", { client: { name }, via: "claude" });
+  const hi = await c.call("agent-hello", { client: { name }, via: "example" });
   Assert.deepEqual(hi.result, { workspace: agent().name, exists: true }, "agent-hello answers");
   return c;
 }
@@ -465,8 +465,7 @@ add_task(async function test_agent_read_loads_a_lazy_tab_in_the_background() {
   await setSwitches({});
 });
 
-// ---------------------------------------------------------------------------------------------
-// Review of #176.
+// ---- limits and tab checks on agent commands ------------------------------------------------
 
 /** Run `fn` in the tab's page. @param {any} tab @param {any[]} args @param {Function} fn */
 const inPage = (tab, args, fn) => SpecialPowers.spawn(tab.linkedBrowser, args, fn);

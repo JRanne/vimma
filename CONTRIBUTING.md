@@ -102,10 +102,10 @@ mochitest run on a full build.
 
 ## How Vimma is built
 
-Vimma is built with AI coding agents (Claude Code). Features start as written specs, are built
-test-first by the agents, reviewed, and checked by CI and by the security model in
-[docs/security.md](docs/security.md). [CLAUDE.md](CLAUDE.md) holds the rules the agents follow.
-The author tries each change in daily use before it goes into a release.
+Vimma is built with AI coding agents. Features start as written specs, are built test-first by
+the agents, reviewed, and checked by CI and by the security model in
+[docs/security.md](docs/security.md). The author tries each change in daily use before it goes
+into a release.
 
 ## Workflow
 
@@ -129,6 +129,12 @@ Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
   explains why.
   `npx commitlint --from origin/main` checks this, and CI rejects `feat`, `fix` and `revert`
   commits without a body.
+- **Changelog.** A user-visible change gets a line in `CHANGELOG.md` `[Unreleased]`. The
+  maintainer adds it at merge time, so parallel pull requests do not conflict; a pull request that
+  changes a baseline or snapshot adds its own line (next item).
+- **Screenshot baselines and snapshots.** Never change one without a changelog line that says
+  why it changed: an updated baseline is a visible change, and the line is how a reviewer knows it
+  was meant. `npm run e2e -- --update-baselines` writes new baselines and reminds you of this.
 - **Docs.** A user-visible change updates [docs/guide.md](docs/guide.md) (its "Features at a
   glance" too when it changes what works), and the README's status line if it changes that. See
   [docs/review-checklist.md](docs/review-checklist.md).

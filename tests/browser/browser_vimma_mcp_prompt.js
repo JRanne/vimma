@@ -69,11 +69,11 @@ async function setSwitches({ control = false, mcp = false }) {
 }
 
 /** An agent connection, after its agent-hello. */
-async function agentClient(name = "claude-code") {
+async function agentClient(name = "example-agent") {
   const c = new Client(/** @type {number} */ (VimmaControl.port));
   const welcome = await c.handshake({ protocol: 2, role: "agent" });
   Assert.equal(welcome.role, "agent", "an agent connection");
-  await c.call("agent-hello", { client: { name }, via: "claude" });
+  await c.call("agent-hello", { client: { name }, via: "example" });
   return c;
 }
 
@@ -104,7 +104,7 @@ add_task(async function test_the_line_opens_arms_and_ignores_stray_keys() {
   await until(lineOpen, "the question opens by itself");
   Assert.equal(
     lineText(),
-    "◇ claude-code wants vimma_tabs: the list of agent tabs (0)",
+    "◇ example-agent wants vimma_tabs: the list of agent tabs (0)",
     "it says who wants what",
   );
   Assert.equal(line().getAttribute("role"), "alertdialog", "an alertdialog");
@@ -159,7 +159,7 @@ add_task(async function test_n_esc_enter_deny_and_x_mutes() {
     Assert.equal(r.error?.code, "denied", `${key} denies`);
     Assert.equal(r.error?.reason, "user", "as the user's no");
     await until(
-      () => noticeText() === "denied claude-code's vimma_tabs",
+      () => noticeText() === "denied example-agent's vimma_tabs",
       `${key}: the notice says so`,
     );
     // Three noes in a row would mute: a yes in between keeps the connection asking.
@@ -196,7 +196,7 @@ add_task(async function test_a_count_and_a_grant_minutes_shown_in_the_status_bar
   for (const key of ["1", "5", "a"]) EventUtils.synthesizeKey(key);
   Assert.ok((await c.response(id)).ok, "15a allows");
   await until(
-    () => noticeText() === "claude-code may use vimma_tabs for 15 min (:mcp revoke ends it)",
+    () => noticeText() === "example-agent may use vimma_tabs for 15 min (:mcp revoke ends it)",
     "the grant notice",
   );
   await until(() => segment() === "◇ agent 15m", "the status bar counts the grant down");
@@ -204,7 +204,7 @@ add_task(async function test_a_count_and_a_grant_minutes_shown_in_the_status_bar
   const r = await c.call("agent-tabs");
   Assert.ok(r.ok, "the next call runs unasked");
   await until(
-    () => noticeText() === "claude-code listed the agent tabs (grant, 15m left)",
+    () => noticeText() === "example-agent listed the agent tabs (grant, 15m left)",
     "and shows what it did",
   );
   Assert.ok(!lineOpen(), "without a question");

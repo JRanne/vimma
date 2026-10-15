@@ -1,5 +1,6 @@
 /**
- * commitlint plugin for Vimma (CLAUDE.md: the subject is the changelog line; the body explains why).
+ * commitlint plugin for Vimma (CONTRIBUTING.md: the subject is the changelog line; the body explains
+ * why).
  *
  * Rule `body-required-for-types`: commits of the listed types must have a non-empty body. Usage:
  * `"body-required-for-types": [2, "always", ["feat", "fix", "revert"]]`.

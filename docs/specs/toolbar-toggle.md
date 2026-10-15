@@ -538,7 +538,7 @@ Numbered decisions, each with its reason and the alternatives rejected.
 
 ## Tests
 
-Write first; paste red, then green (CLAUDE.md).
+Write first; paste red, then green (CONTRIBUTING.md, "TDD").
 
 - **Vitest:**
   - `actions.test.mjs` / `defaults.test.mjs`: `toggle_toolbar` on `prefix+u` reaches
@@ -658,7 +658,7 @@ Write first; paste red, then green (CLAUDE.md).
 - **`docs/bindings.md`** and `packages/vimma-core/defaults.toml`: `npm run gen-docs`.
 - **README feature list:** one line ("hide the toolbar; it comes back when you need the address
   bar").
-- **CHANGELOG `[Unreleased]`:** added by the maintainer at merge time, per CLAUDE.md. Suggested
+- **CHANGELOG `[Unreleased]`:** added by the maintainer at merge time, per CONTRIBUTING.md. Suggested
   lines:
   - "Added: `ctrl+b u` and `[ui] toolbar` hide the toolbar; typing an address shows a minimal
     bar with only the URL field, and the full toolbar comes back on hover and for add-on popups."

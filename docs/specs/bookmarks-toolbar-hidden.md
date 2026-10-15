@@ -284,7 +284,7 @@ cannot change the browser-wide pref.
 
 ## Tests
 
-Written first and seen to fail (red, then green, per CLAUDE.md).
+Written first and seen to fail (red, then green, per CONTRIBUTING.md).
 
 - **Vitest**
   - `tools/branding/test/branding-prefs.test.mjs`: given the branding pref file, then

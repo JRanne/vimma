@@ -1,8 +1,8 @@
 # Vimma — implementation plan
 
-Vimma is a keyboard-first browser built as a Firefox fork: Neovim-style modal control of the page, a tmux-style prefix keymap (`ctrl+b`) for tabs, panes and workspaces, `prefix+?` discoverability from the first build, workspaces as isolated containers, an on-demand side panel, an always-visible status bar, and an Omarchy-native look. Built by one person with Claude Code, no deadline, with a pipeline that tests, rebases on upstream and releases without anyone watching.
+Vimma is a keyboard-first browser built as a Firefox fork: Neovim-style modal control of the page, a tmux-style prefix keymap (`ctrl+b`) for tabs, panes and workspaces, `prefix+?` discoverability from the first build, workspaces as isolated containers, an on-demand side panel, an always-visible status bar, and an Omarchy-native look. Built by one person with AI coding agents, no deadline, with a pipeline that tests, rebases on upstream and releases without anyone watching.
 
-This file is the contract between you and Claude Code. Specs, ADRs, tests and the changelog in the repo refine it; nothing in a chat transcript overrides it.
+This file is the contract between you and the coding agents. Specs, ADRs, tests and the changelog in the repo refine it; nothing in a chat transcript overrides it.
 
 ---
 
@@ -158,7 +158,7 @@ Repository layout (Surfer convention: `src/` mirrors the Firefox tree; `.patch` 
 ```
 vimma/
   surfer.json                     # upstream Firefox version, branding, build options
-  CLAUDE.md                       # rules Claude Code reads every session
+  CLAUDE.md                       # rules coding agents read every session
   CHANGELOG.md
   package.json                    # surfer, vitest, tsc, eslint, prettier, commitlint
   tsconfig.json                   # checkJs over src/**/vimma/** and packages/**
@@ -192,10 +192,10 @@ vimma/
 Loop: spec → failing tests → implement → review → changelog → merge → dogfood. You decide and review; machines do the rest.
 
 1. **Discovery (M0).** Read Surfer docs and Zen's `desktop` repo structure, `tabbrowser.js`, `browser.js`, Zen's split view and workspaces components, Tridactyl's hint algorithm, tmux's keymap. Output: ADR-001…008, `docs/limits.md`, `actions.mjs`.
-2. **Specification (per feature).** `docs/specs/<feature>.md`: user story, default bindings, config keys, socket commands, acceptance criteria as Given/When/Then, out of scope. One Claude Code session in size. Merged to `main` at once as a draft, with its open questions; the feature's GitHub issue (label `planned`) asks them (`docs/specs/README.md`, "Lifecycle").
+2. **Specification (per feature).** `docs/specs/<feature>.md`: user story, default bindings, config keys, socket commands, acceptance criteria as Given/When/Then, out of scope. One agent session in size. Merged to `main` at once as a draft, with its open questions; the feature's GitHub issue (label `planned`) asks them (`docs/specs/README.md`, "Lifecycle").
 3. **Design (boundary changes).** ADR for anything touching the dispatcher contract, config schema, socket protocol, state file, or a new upstream patch. Numbered, never edited after acceptance.
-4. **Implementation (TDD, §5).** Branch `feat/<slug>`, Conventional Commits with a body. Claude Code may open the PR itself when the issue carries `claude:go` (a label only you add).
-5. **Review.** CI + e2e green before merging (no approving review is required); `main` is protected by the repository ruleset "main": pull requests only, squash merge, required checks (`docs/runbook.md`). Claude Code reviews first in a fresh session with the spec open and posts the checklist from `docs/review-checklist.md`: tests prove the behaviour, no test weakened, no new action without a docs line, config change has a migration, no new upstream `.patch` without an ADR line, no new dependency without licence check.
+4. **Implementation (TDD, §5).** Branch `feat/<slug>`, Conventional Commits with a body. The `claude.yml` agent may open the PR itself when the issue carries `claude:go` (a label only you add).
+5. **Review.** CI + e2e green before merging (no approving review is required); `main` is protected by the repository ruleset "main": pull requests only, squash merge, required checks (`docs/runbook.md`). A fresh agent session reviews first with the spec open and posts the checklist from `docs/review-checklist.md`: tests prove the behaviour, no test weakened, no new action without a docs line, config change has a migration, no new upstream `.patch` without an ADR line, no new dependency without licence check.
 6. **Release.** release-plz-style automation (JS equivalent: `release-please`) keeps a release PR with version + changelog; merging tags; the release workflow builds, signs, publishes.
 7. **Operate.** `about:vimma` shows mode, last 20 key events, active overrides, config errors, upstream Firefox version and patch count; `:bug` copies a redacted report. Weekly maintenance run below.
 
@@ -203,12 +203,12 @@ Loop: spec → failing tests → implement → review → changelog → merge �
 
 | Trigger | Job | Green | Red |
 | --- | --- | --- | --- |
-| Every push / PR | `ci.yml`: eslint, prettier, `tsc --checkJs`, Vitest for `vimma-core` with coverage gate (90 %), commitlint, licence check | Merge allowed | Blocked; Claude Code asked to fix if it authored the PR |
+| Every push / PR | `ci.yml`: eslint, prettier, `tsc --checkJs`, Vitest for `vimma-core` with coverage gate (90 %), commitlint, licence check | Merge allowed | Blocked; the authoring agent is asked to fix it |
 | Every PR | `e2e.yml`: UI-only build (`surfer build --ui` on a cached engine, or artifact build; decided in M0), mochitest browser-chrome suite, socket-driven e2e under Xvfb, screenshot diffs (0.5 % tolerance) | Merge allowed | Blocked; flaky test quarantined after 2 unexplained failures + issue |
-| Nightly 03:00 | `nightly.yml`: full build Linux x86_64 (+ aarch64, macOS when enabled), full e2e on the build, publish rolling `nightly` release | Nightly updated | Issue with logs + failing test, assigned to Claude Code |
-| Every 4 h | `upstream.yml`: poll `product-details.mozilla.org`; on a new Firefox release or dot release open `upstream: update to Firefox X.Y` PR bumping `surfer.json`, run `surfer import`, build, test | Auto-merge if patches applied cleanly and e2e green; release PR follows | Claude Code attempts conflict resolution (≤3 pushes), else you get a summary with the failing hunks |
+| Nightly 03:00 | `nightly.yml`: full build Linux x86_64 (+ aarch64, macOS when enabled), full e2e on the build, publish rolling `nightly` release | Nightly updated | Issue with logs + failing test, assigned to a coding agent |
+| Every 4 h | `upstream.yml`: poll `product-details.mozilla.org`; on a new Firefox release or dot release open `upstream: update to Firefox X.Y` PR bumping `surfer.json`, run `surfer import`, build, test | Auto-merge if patches applied cleanly and e2e green; release PR follows | A coding agent attempts conflict resolution (≤3 pushes), else you get a summary with the failing hunks |
 | Weekly | Dependabot: npm deps, Cargo crates, GitHub Actions versions | Patch/minor auto-merged after CI (never GitHub Actions) | PR stays open |
-| Sunday | `maintenance.yml` (Claude Code, bounded): triage issues, re-run quarantined tests, refresh `docs/limits.md`, review patch sizes and propose moving code out of `.patch` files, write `docs/weekly.md` | PRs waiting Monday | Report lists what it could not do |
+| Sunday | `maintenance.yml` (coding agent, bounded): triage issues, re-run quarantined tests, refresh `docs/limits.md`, review patch sizes and propose moving code out of `.patch` files, write `docs/weekly.md` | PRs waiting Monday | Report lists what it could not do |
 | Tag `v*` | `release.yml`: tarball, AppImage, `.deb`, macOS `.dmg` when enabled; cosign signatures, SBOM; AUR `vimma-bin` push; update manifest for the in-app updater; GitHub Release notes from changelog | Users update | Tag deleted, issue opened |
 | Firefox security dot release | Same as upstream job, flagged `security`; release PR auto-approved and merged if e2e green → release within 7 days without you | | |
 
@@ -218,7 +218,7 @@ Loop: spec → failing tests → implement → review → changelog → merge �
 
 ## 5. TDD policy and test pyramid
 
-Tests first; implementation only to make them pass. Claude Code writes the failing test, runs it, pastes the red output, implements, pastes the green, refactors. PRs with tests written after code or assertions loosened to pass are rejected.
+Tests first; implementation only to make them pass. The author writes the failing test, runs it, pastes the red output, implements, pastes the green, refactors. PRs with tests written after code or assertions loosened to pass are rejected.
 
 | Layer | Covers | Tooling | Gate |
 | --- | --- | --- | --- |
@@ -229,7 +229,7 @@ Tests first; implementation only to make them pass. Claude Code writes the faili
 | Performance | Key-to-action latency in core (< 50 µs), key-to-paint in the window (< 5 ms), startup to first paint | Vitest bench for core; e2e timers | Regression > 10 % fails CI |
 | Rebase | Patch set applies to the new upstream; UI smoke after rebase | `surfer import` in `upstream.yml` + the e2e happy paths | Any failure blocks the upstream PR |
 
-Rules: test names are sentences from the spec; `vimma-core` imports nothing from Firefox (enforced by an eslint rule); no retries in CI, flaky = quarantine + issue same day; Claude Code never edits a screenshot baseline or snapshot without a changelog line; a bug fix starts with a failing test at the lowest layer that can reproduce it.
+Rules: test names are sentences from the spec; `vimma-core` imports nothing from Firefox (enforced by an eslint rule); no retries in CI, flaky = quarantine + issue same day; nobody edits a screenshot baseline or snapshot without a changelog line; a bug fix starts with a failing test at the lowest layer that can reproduce it.
 
 ---
 
@@ -241,7 +241,7 @@ The backlog is GitHub issues, one per planned feature: [`label:planned`](https:/
 
 | | Milestone | Status | Scope | Gate |
 | --- | --- | --- | --- | --- |
-| M0 | **Fork boots + pipeline** (3 wks) | Done | `surfer setup-project` on current Firefox release; branding; CI with Vitest, tsc, eslint, mochitest skeleton; e2e harness launching the build under Xvfb; nightly build; `upstream.yml`; Claude Code workflows; `vimma-core` dispatcher + key notation with tests; `VimmaHost` capturing keys; `prefix+?` overlay from the binding table; native tab strip hidden by CSS | Your build runs; `ctrl+b ?` shows the bindings over any page **including `about:preferences` and the PDF viewer**; CI green on a trivial PR |
+| M0 | **Fork boots + pipeline** (3 wks) | Done | `surfer setup-project` on current Firefox release; branding; CI with Vitest, tsc, eslint, mochitest skeleton; e2e harness launching the build under Xvfb; nightly build; `upstream.yml`; agent workflows (`claude.yml`); `vimma-core` dispatcher + key notation with tests; `VimmaHost` capturing keys; `prefix+?` overlay from the binding table; native tab strip hidden by CSS | Your build runs; `ctrl+b ?` shows the bindings over any page **including `about:preferences` and the PDF viewer**; CI green on a trivial PR |
 | M1 | **Modal page layer** (4 wks) | Done | JSWindowActor pair; insert-mode detection; scrolling; `hints.js` + hint mode; find via `gBrowser.finder`; `:` command line with completion from `actions.mjs`; copy mode (caret browsing + selection); `Esc` semantics | A day of browsing without the mouse on ordinary sites |
 | M2 | **Tabs, status bar** (3 wks) | Done | Prefix tab keys over `gBrowser`; tab rename (label override persisted); status bar; ~~which-key strip while prefix pending~~ (dropped: only `prefix+?` lists bindings); `prefix+g` basic picker | The keys to learn first (`prefix+c`, `prefix+v`/`-`, `prefix+h/j/k/l`, `prefix+w`) all work (minus panes); screenshot baselines recorded |
 | M3 | **Workspaces + side panel** (4 wks) | Done | Container-backed workspaces; hidden tabs; `prefix+)`/`prefix+(`; `prefix+w` picker; `prefix+b` side panel with `panel` mode; SessionStore persistence + restore; `[workspaces]` config | Login in `work` invisible in `personal`; restart restores workspaces, tabs, scroll positions |
@@ -296,11 +296,11 @@ Release checklist (`release.yml`, automated; `docs/runbook.md` "Release packages
 - [ ] SBOM + cosign keyless signatures on every artifact
 - [ ] AUR `vimma-bin` pushed; update manifest regenerated and published
 - [ ] GitHub Release with changelog section; `nightly` tag moved
-- [ ] Any failure deletes the tag and opens an issue assigned to Claude Code
+- [ ] Any failure deletes the tag and opens an issue assigned to a coding agent
 
 ---
 
-## 8. Working with Claude Code
+## 8. Working with coding agents
 
 The repo holds the memory. `CLAUDE.md`, specs, ADRs, tests and the changelog are what every fresh session reads, local or headless.
 
@@ -320,8 +320,8 @@ The repo holds the memory. `CLAUDE.md`, specs, ADRs, tests and the changelog are
 - `@claude` in an issue/PR comment answers and reviews (read-only contents). Issue with `spec` + `claude:go` → implemented in a worktree, draft PR. Only you add `claude:go`.
 - Failed nightly, failed upstream rebase, failed Dependabot PR → bounded fix: ≤ 3 pushes, each must add or change a test; never edits workflows, baselines, lint config or `surfer.json` pins to get green.
 - Sunday maintenance: fixed checklist, token budget, opens PRs, never merges.
-- Its PRs carry `bot`; auto-merge only for Dependabot and clean upstream bumps, never for Claude Code PRs.
-- Scoped token: Claude itself gets read-only contents; a separate job without Claude pushes its branch and opens the PR (contents + pull-requests write); no release, AUR, signing or update-server secrets.
+- Its PRs carry `bot`; auto-merge only for Dependabot and clean upstream bumps, never for agent PRs.
+- Scoped token: the agent itself gets read-only contents; a separate job without the agent pushes its branch and opens the PR (contents + pull-requests write); no release, AUR, signing or update-server secrets.
 
 **Practices that pay off here:**
 
@@ -329,10 +329,10 @@ The repo holds the memory. `CLAUDE.md`, specs, ADRs, tests and the changelog are
 - Git worktrees per spec; the headless runner does the same.
 - Hooks: `PostToolUse` runs prettier + the Vitest file for the touched core module; after edits under `src/**/vimma/ui/**` it runs `surfer build --ui` and the matching mochitest; `Stop` refuses to end if `vimma-core` gained an export without a test or if `src/` changed without a Conventional Commit body.
 - Small, verifiable asks: "make `prefix+shift+t` rename the tab; tests in `dispatcher.test.mjs` and `browser_vimma_tab_rename.js`".
-- Make Claude Code prove it: every "tests pass" is pasted output; CI is the arbiter.
+- Make the agent prove it: every "tests pass" is pasted output; CI is the arbiter.
 - Keep the UI loop fast: `surfer build --ui && surfer run` under a minute locally, or both of you will skip it.
 - Re-read `CLAUDE.md` monthly; delete rules that no longer bite.
-- Treat Claude Code output as a confident junior's PR, especially around `tabbrowser` and SessionStore: Firefox's own source and Zen's components are the tiebreak, not memory.
+- Treat agent output as a confident junior's PR, especially around `tabbrowser` and SessionStore: Firefox's own source and Zen's components are the tiebreak, not memory.
 
 ---
 
