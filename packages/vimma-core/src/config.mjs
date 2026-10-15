@@ -69,6 +69,7 @@ import { resolveSearch, validateSearch } from "./search.mjs";
  * @property {{ root: BookmarksRoot }} bookmarks          `[bookmarks]` (schema 2)
  * @property {{ placement: PrivatePlacement }} private    `[private]` (schema 2), private-swap
  * @property {McpConfig} mcp                             `[mcp]` (schema 2), docs/specs/vimma-mcp.md
+ * @property {{ toolbar: ToolbarSetting }} ui             `[ui]` (schema 2), toolbar-toggle
  * @property {ResolvedSearch | null} search              `[search]` (schema 2), null without it;
  *   docs/specs/search-engines.md
  */
@@ -82,6 +83,7 @@ import { resolveSearch, validateSearch } from "./search.mjs";
  */
 
 /** @typedef {"swap" | "window"} PrivatePlacement */
+/** @typedef {"shown" | "hidden"} ToolbarSetting */
 
 /**
  * Which of Firefox's own shortcuts are off (docs/specs/key-handling-batch.md § 1).
@@ -170,6 +172,7 @@ const TOP_KEYS = [
   "bookmarks",
   "private",
   "mcp",
+  "ui",
   "search",
 ];
 const KEYMAP_SECTIONS = new Set(["keys", "modal", "unbind"]);
@@ -200,6 +203,7 @@ const SCHEMA_2_KEYS = [
   "theme.appearance",
   "private",
   "mcp",
+  "ui",
   "search",
 ];
 /** `[bookmarks]` (docs/specs/bookmarks.md, decision 2). */
@@ -209,6 +213,11 @@ export const PRIVATE_PLACEMENTS = Object.freeze(
   /** @type {PrivatePlacement[]} */ (["swap", "window"]),
 );
 const PRIVATE_KEYS = ["placement"];
+/** `[ui] toolbar` (docs/specs/toolbar-toggle.md, decision 3). */
+export const TOOLBAR_SETTINGS = Object.freeze(
+  /** @type {ToolbarSetting[]} */ (["shown", "hidden"]),
+);
+const UI_KEYS = ["toolbar"];
 /** `[mcp]` (docs/specs/vimma-mcp.md, decision 26) and its bounds. */
 const MCP_KEYS = [
   "enabled",
@@ -509,6 +518,17 @@ function validate(raw, declared) {
     }
   }
 
+  if (declared >= 2 && isTable(raw.ui)) {
+    for (const [key, v] of Object.entries(raw.ui)) {
+      const path = ["ui", key];
+      if (key !== "toolbar") unknownKey(path, key, UI_KEYS);
+      else if (typeof v !== "string") typeError(path, v, "a string");
+      else if (!TOOLBAR_SETTINGS.includes(/** @type {ToolbarSetting} */ (v))) {
+        fail(path, 'must be "shown" or "hidden"', closest(v, TOOLBAR_SETTINGS));
+      }
+    }
+  }
+
   if (declared >= 2 && isTable(raw.mcp)) validateMcp(raw.mcp, { fail, typeError, unknownKey });
 
   // docs/specs/search-engines.md, decision 2.
@@ -770,6 +790,7 @@ export function mergeWithDefaults(user, workspaceOrder, siteOrder) {
     bookmarks: { root: user.bookmarks?.root ?? "workspace" },
     private: { placement: user.private?.placement ?? "swap" },
     mcp: resolveMcp(user.mcp),
+    ui: { toolbar: user.ui?.toolbar ?? "shown" },
     search: resolveSearch(user.search),
   };
 }
