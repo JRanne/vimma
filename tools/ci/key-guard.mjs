@@ -20,6 +20,7 @@
 // the checkout.
 
 import { execFileSync } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 export const KEY_PATH = "tools/upstream/mozilla-release-key.asc";
@@ -46,7 +47,8 @@ export function pinnedLines(verifier) {
 
 /**
  * @typedef {{ key: string | null, verifier: string | null }} Side
- *   the two files' text at one commit; null when the file is missing there
+ *   at one commit: the key file's tree entry (mode and object id, so the bytes and a switch to a
+ *   symlink both count) and the verifier's text; null when the file is missing there
  */
 
 /**
@@ -110,6 +112,21 @@ export function verdict(changes, labels) {
 }
 
 /**
+ * A path's tree entry at a commit ("<mode> <type> <object id>"), or null when it has none.
+ * @param {string} rev
+ * @param {string} path
+ * @param {string} cwd
+ */
+function entryAt(rev, path, cwd) {
+  const out = execFileSync("git", ["ls-tree", "--full-tree", rev, "--", path], {
+    cwd,
+    encoding: "utf8",
+  });
+  const line = out.split("\n").find((l) => l.endsWith(`\t${path}`));
+  return line ? line.slice(0, line.indexOf("\t")) : null;
+}
+
+/**
  * A file's text at a commit, or null when the commit does not have it.
  * @param {string} rev
  * @param {string} path
@@ -145,7 +162,7 @@ export function sides(base, head, cwd = process.cwd()) {
   }).trim();
   /** @param {string} rev @returns {Side} */
   const at = (rev) => ({
-    key: fileAt(rev, KEY_PATH, cwd),
+    key: entryAt(rev, KEY_PATH, cwd),
     verifier: fileAt(rev, VERIFIER_PATH, cwd),
   });
   return { before: at(mergeBase), after: at(head) };
@@ -165,7 +182,9 @@ function main(argv) {
   return ok ? 0 : 1;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+// realpath: import.meta.url is the resolved path, argv[1] the path as given. Started through a
+// symlink, a plain comparison is false and the script would exit 0 without a verdict.
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   let status;
   try {
     status = main(process.argv.slice(2));

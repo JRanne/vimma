@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tempDir } from "../../test/temp-dir.mjs";
@@ -266,6 +266,38 @@ describe("the command line", () => {
     expect(run(r, "[]", "main").status).toBe(2);
     expect(run(r, "[]", "--output=/tmp/x").status).toBe(2);
   });
+
+  it("fails a renamed key file or verifier", () => {
+    const key = repo((dir) => git(dir, "mv", KEY_PATH, KEY_PATH + ".old"));
+    expect(run(key).status).toBe(1);
+    const verifier = repo((dir) => git(dir, "mv", VERIFIER_PATH, "tools/upstream/verify.py"));
+    expect(run(verifier).status).toBe(1);
+  });
+
+  it("fails a key file replaced by a symlink to another key", () => {
+    const r = repo((dir) => {
+      writeFileSync(join(dir, "tools", "upstream", "other.asc"), KEY);
+      rmSync(join(dir, KEY_PATH));
+      symlinkSync("other.asc", join(dir, KEY_PATH));
+    });
+    expect(run(r).status).toBe(1);
+  });
+
+  it("still judges when started through a symlinked path", () => {
+    // Node resolves import.meta.url to the real path but leaves argv[1] as given; a check that
+    // compared the two would skip main() and exit 0 without a verdict.
+    const r = repo((dir) => writeFileSync(join(dir, KEY_PATH), "other\n"));
+    const real = tempDir("vimma-key-guard-real-");
+    copyFileSync(SCRIPT, join(real, "key-guard.mjs"));
+    const link = join(tempDir("vimma-key-guard-link-"), "via");
+    symlinkSync(real, link);
+    const res = spawnSync(
+      process.execPath,
+      [join(link, "key-guard.mjs"), "--base", r.base, "--head", r.head],
+      { cwd: r.dir, encoding: "utf8", env: { ...process.env, ...GIT_ENV, PR_LABELS: "[]" } },
+    );
+    expect(res.status).toBe(1);
+  });
 });
 
 describe("workflow wiring", () => {
@@ -299,6 +331,11 @@ describe("workflow wiring", () => {
 
   it("runs the guard as the base branch has it, falling back to the pull request's only when the base has none", () => {
     expect(text).toContain('git show "$BASE:tools/ci/key-guard.mjs"');
+    // A base that is not there is an error, not a reason to run the pull request's copy, and the
+    // fallback is taken only when the base commit lacks the file.
+    expect(text).toContain('git cat-file -e "$BASE^{commit}" || exit 2');
+    expect(text).toMatch(/if git cat-file -e "\$BASE:tools\/ci\/key-guard\.mjs"/);
+    expect(text).not.toContain("2>/dev/null");
   });
 
   it("pins every action by commit", () => {

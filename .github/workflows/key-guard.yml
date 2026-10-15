@@ -40,7 +40,10 @@ jobs:
           PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: |
           guard="$RUNNER_TEMP/key-guard.mjs"
-          if ! git show "$BASE:tools/ci/key-guard.mjs" > "$guard" 2>/dev/null; then
+          git cat-file -e "$BASE^{commit}" || exit 2
+          if git cat-file -e "$BASE:tools/ci/key-guard.mjs"; then
+            git show "$BASE:tools/ci/key-guard.mjs" > "$guard"
+          else
             echo "No key guard on the base: running the pull request's copy"
             cp tools/ci/key-guard.mjs "$guard"
           fi
