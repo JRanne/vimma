@@ -32,6 +32,27 @@ const SIDEBAR_PAGE_SHEET = "chrome://browser/skin/vimma/firefox-sidebar-page.css
 /** Firefox's toolbar, URL field, suggestions and the panels hanging from the bar in the tokens
  * (spec toolbar-toggle decision 21). */
 const TOOLBAR_SHEET = "chrome://browser/skin/vimma/firefox-toolbar.css";
+/** The find bar, the menu bar and the menus; Firefox's own pages and dialogs (spec
+ * firefox-surfaces-theme). */
+const CHROME_SHEET = "chrome://browser/skin/vimma/firefox-chrome.css";
+const PAGES_SHEET = "chrome://browser/skin/vimma/firefox-pages.css";
+/**
+ * Firefox's pages that load in the parent process with the system principal, by about: name
+ * (nsAboutRedirector.cpp, AboutRedirector.cpp: IS_SECURE_CHROME_UI without
+ * URI_MUST_LOAD_IN_CHILD). A content-process page is out of this module's reach.
+ */
+const THEMED_PAGES = new Set([
+  "preferences",
+  "settings",
+  "addons",
+  "downloads",
+  "support",
+  "config",
+  "profiles",
+  "processes",
+]);
+/** A prompt's document: alert, confirm, prompt, over a tab or in a window of its own. */
+const COMMON_DIALOG = "chrome://global/content/commonDialog.xhtml";
 const SOURCE_PREF = "vimma.theme.source";
 const PATH_PREF = "vimma.theme.omarchyPath";
 const POLL_PREF = "vimma.theme.pollMs";
@@ -381,6 +402,48 @@ scrollbar { scrollbar-color: var(--vimma-muted) var(--vimma-bg-dark) !important;
   color: var(--vimma-fg-bright) !important;
 }`;
 
+/**
+ * A prompt in a window of its own draws its buttons natively in the <dialog>'s shadow root
+ * (dialog.js, button.css), where no document sheet reaches and ::part() cannot tell the default
+ * button from the others. One sheet adopted into that shadow root gives them the look of the
+ * in-content buttons firefox-pages.css themes: the default one the accent, the others tinted.
+ * Over a tab (a subdialog) the dialog already draws in-content buttons from the tokens.
+ */
+const DIALOG_BUTTON_RULES = `
+@media not ((prefers-contrast) or (forced-colors)) {
+  button[dlgtype] {
+    appearance: none;
+    padding: 4px 16px;
+    border: 1px solid var(--vimma-muted);
+    border-radius: 4px;
+    background-color: color-mix(in srgb, currentColor 12%, transparent);
+    color: var(--vimma-fg);
+  }
+  button[dlgtype]:hover {
+    background-color: color-mix(in srgb, currentColor 20%, transparent);
+  }
+  button[dlgtype][default] {
+    border-color: transparent;
+    background-color: var(--vimma-mode-normal);
+    color: var(--vimma-mode-normal-fg);
+  }
+  button[dlgtype][default]:hover {
+    background-color: color-mix(in srgb, var(--vimma-mode-normal) 85%, var(--vimma-mode-normal-fg));
+  }
+}`;
+
+/** @param {Document} doc  a prompt in a window of its own, once parsed */
+function colourDialogButtons(doc) {
+  const win = /** @type {any} */ (doc.defaultView);
+  const root = doc.querySelector("dialog")?.shadowRoot;
+  // Over a tab the frame marks the document [subdialog] only after it loads (SubDialog.sys.mjs),
+  // so a window of its own is told apart by having no embedder.
+  if (!win || !root || win.browsingContext?.embedderElement) return;
+  const sheet = new win.CSSStyleSheet();
+  sheet.replaceSync(DIALOG_BUTTON_RULES);
+  root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
+}
+
 /** @param {Document} doc  a sidebar document, once parsed */
 function colourTrees(doc) {
   const win = /** @type {any} */ (doc.defaultView);
@@ -395,26 +458,64 @@ function colourTrees(doc) {
 }
 
 /**
- * A document in Firefox's sidebar (history, bookmarks, ...): a separate chrome document the
- * window's sheets do not reach, and whose CSP refuses a data: <style>. It gets the tokens,
- * focus.css and firefox-sidebar-page.css as author sheets, which its CSP does not apply to, and
- * its trees' scrollbars and rename fields their colours once it is parsed.
+ * A chrome document the window's sheets do not reach, and whose CSP refuses a data: <style>: it
+ * gets the tokens, focus.css and `sheet` as author sheets, which its CSP does not apply to, is
+ * kept in `pages` to follow theme changes, and is handed to `parsed` once it is parsed.
  * @param {Document | null | undefined} doc
+ * @param {string} sheet
+ * @param {(doc: Document) => void} parsed
  */
-function attachSidebarPage(doc) {
+function attachPage(doc, sheet, parsed) {
   const win = doc?.defaultView;
   if (!doc || !win || pages.has(doc) || doc.documentURI === "about:blank") return;
   const uri = sheetUri(css);
   win.windowUtils.loadSheetUsingURIString(uri, win.windowUtils.AUTHOR_SHEET);
   win.windowUtils.loadSheetUsingURIString(FOCUS_SHEET, win.windowUtils.AUTHOR_SHEET);
-  win.windowUtils.loadSheetUsingURIString(SIDEBAR_PAGE_SHEET, win.windowUtils.AUTHOR_SHEET);
+  win.windowUtils.loadSheetUsingURIString(sheet, win.windowUtils.AUTHOR_SHEET);
   pages.set(doc, uri);
   win.addEventListener("unload", () => pages.delete(doc), { once: true });
   if (doc.readyState === "loading") {
-    doc.addEventListener("DOMContentLoaded", () => colourTrees(doc), { once: true });
+    doc.addEventListener("DOMContentLoaded", () => parsed(doc), { once: true });
   } else {
-    colourTrees(doc);
+    parsed(doc);
   }
+}
+
+/**
+ * A document in Firefox's sidebar (history, bookmarks, ...), with firefox-sidebar-page.css; its
+ * trees' scrollbars and rename fields get their colours once it is parsed.
+ * @param {Document | null | undefined} doc
+ */
+function attachSidebarPage(doc) {
+  attachPage(doc, SIDEBAR_PAGE_SHEET, colourTrees);
+}
+
+/**
+ * Whether `doc` is one of Firefox's own pages or dialogs shown by a themed window (spec
+ * firefox-surfaces-theme): a privileged page in a tab (THEMED_PAGES), a dialog in a SubDialog
+ * frame of a themed window or page (a prompt over a tab, the print settings, Settings' dialogs),
+ * or a prompt in a window of its own while a window is themed. Only system-principal documents,
+ * so no web page is ever touched.
+ * @param {Document} doc
+ */
+function isFirefoxPage(doc) {
+  if (!(/** @type {any} */ (doc).nodePrincipal?.isSystemPrincipal)) return false;
+  const frame = /** @type {any} */ (doc.defaultView?.browsingContext?.embedderElement);
+  if (!frame) return doc.documentURI === COMMON_DIALOG && windows.size > 0;
+  const owner = frame.ownerDocument;
+  if (!windows.has(owner.defaultView) && !pages.has(owner)) return false;
+  if (frame.classList?.contains("dialogFrame")) return true;
+  const name = /^about:([a-z-]+)/i.exec(doc.documentURI ?? "")?.[1]?.toLowerCase();
+  return frame.localName === "browser" && name !== undefined && THEMED_PAGES.has(name);
+}
+
+/**
+ * One of Firefox's pages or dialogs, with firefox-pages.css; a prompt in a window of its own
+ * gets its buttons coloured once it is parsed.
+ * @param {Document} doc
+ */
+function attachFirefoxPage(doc) {
+  attachPage(doc, PAGES_SHEET, colourDialogButtons);
 }
 
 /**
@@ -427,18 +528,23 @@ function attachSidebarPage(doc) {
 function onDocumentInserted(subject) {
   const doc = /** @type {Document} */ (subject);
   const frame = doc.defaultView?.browsingContext?.embedderElement;
-  if (frame?.id !== "sidebar") return;
-  const owner = frame.ownerDocument.defaultView;
-  if (owner && windows.has(owner)) attachSidebarPage(doc);
+  if (frame?.id === "sidebar") {
+    const owner = frame.ownerDocument.defaultView;
+    if (owner && windows.has(owner)) attachSidebarPage(doc);
+    return;
+  }
+  if (isFirefoxPage(doc)) attachFirefoxPage(doc);
 }
 
 export const ThemeHost = {
   /**
    * Once per browser window (vimma.js), before its UI is built: the current tokens as an author
    * sheet, swapped in place on every theme change; focus.css, which gives Firefox's focus colour
-   * the tokens' --vimma-focus; firefox-sidebar.css, which gives Firefox's sidebar the tokens; and
-   * firefox-toolbar.css, which gives them to its toolbar and the panels hanging from it.
-   * Every document the sidebar's browser loads gets the tokens too (spec firefox-sidebar-theme).
+   * the tokens' --vimma-focus; firefox-sidebar.css, which gives Firefox's sidebar the tokens;
+   * firefox-toolbar.css, which gives them to its toolbar and the panels hanging from it; and
+   * firefox-chrome.css, to its find bar, menu bar and menus. Every document the sidebar's browser
+   * loads gets the tokens too (spec firefox-sidebar-theme), and so do Firefox's own pages and
+   * dialogs (spec firefox-surfaces-theme).
    * @param {Window} win
    */
   init(win) {
@@ -448,6 +554,7 @@ export const ThemeHost = {
     win.windowUtils.loadSheetUsingURIString(FOCUS_SHEET, win.windowUtils.AUTHOR_SHEET);
     win.windowUtils.loadSheetUsingURIString(SIDEBAR_SHEET, win.windowUtils.AUTHOR_SHEET);
     win.windowUtils.loadSheetUsingURIString(TOOLBAR_SHEET, win.windowUtils.AUTHOR_SHEET);
+    win.windowUtils.loadSheetUsingURIString(CHROME_SHEET, win.windowUtils.AUTHOR_SHEET);
     windows.set(win, uri);
     win.addEventListener(
       "unload",

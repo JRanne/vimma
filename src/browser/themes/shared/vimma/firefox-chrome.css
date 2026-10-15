@@ -1,0 +1,78 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* The rest of Firefox's window chrome in the theme's colours (docs/specs/firefox-surfaces-theme.md):
+ * the find bar, the menu bar and every menu (context menus, the menu bar's menus, the toolbar's
+ * drop-downs). Loaded by ui/theme-host.mjs into every window next to the token sheet and
+ * firefox-toolbar.css, which already covers the toolbar and the arrow panels. Like that sheet it
+ * points Firefox's own tokens at Vimma's, and under prefers-contrast and forced colours Firefox's
+ * high-contrast colours stay.
+ * !important: Firefox sets several of these for a Firefox theme (the built-in dark one too)
+ * inline on the root (LightweightThemeConsumer) and on more specific selectors. */
+
+@media not ((prefers-contrast) or (forced-colors)) {
+  /* The find bar is a toolbar under the page (findbar.css): the status bar's surface, its field
+   * the URL field's (firefox-toolbar.css). Without Nova it paints -moz-dialog and its text is
+   * -moz-dialogtext, so the surface and the text are set as well as the tokens. */
+  findbar {
+    --toolbar-background-color: var(--vimma-bg-dark) !important;
+    --toolbar-text-color: var(--vimma-fg) !important;
+    --toolbarbutton-icon-fill: var(--vimma-fg) !important;
+    --toolbar-field-background-color: var(--vimma-bg) !important;
+    --toolbar-field-background-color-focus: var(--vimma-bg) !important;
+    --toolbar-field-text-color: var(--vimma-fg) !important;
+    --toolbar-field-text-color-focus: var(--vimma-fg) !important;
+    --toolbar-field-border-color: var(--vimma-muted) !important;
+    --border-color-interactive: var(--vimma-muted) !important;
+    --input-border-color: var(--vimma-muted) !important;
+    --chrome-content-separator-color: var(--vimma-muted) !important;
+    background-color: var(--vimma-bg-dark) !important;
+    border-top-color: var(--vimma-muted) !important;
+    color: var(--vimma-fg) !important;
+    color-scheme: var(--vimma-color-scheme) !important;
+    accent-color: var(--vimma-mode-normal) !important;
+  }
+
+  .findbar-textbox {
+    background-color: var(--vimma-bg) !important;
+    color: var(--vimma-fg) !important;
+  }
+
+  /* The menu bar (F10, Alt): one surface with the toolbar under it. On Linux the open menu is
+   * underlined in the system accent (menu.css); here it is the theme's. */
+  #toolbar-menubar {
+    background-color: var(--vimma-bg-dark) !important;
+    background-image: none !important;
+    color: var(--vimma-fg) !important;
+    color-scheme: var(--vimma-color-scheme) !important;
+  }
+
+  #main-menubar > menu[open] {
+    border-bottom-color: var(--vimma-focus) !important;
+  }
+
+  /* Every menu: a picker's surface (picker.css), the active item a selected row (side-panel.css).
+   * Firefox fills them with the system's Menu and MenuText and its active item with
+   * -moz-menuhover (popup.css, menu.css). A <select>'s drop-down is the page's and keeps the
+   * page's colours. */
+  menupopup:not(#ContentSelectDropdown > menupopup) {
+    --panel-background-color: var(--vimma-bg-dark) !important;
+    --panel-text-color: var(--vimma-fg) !important;
+    --panel-border-color: var(--vimma-muted) !important;
+    --panel-separator-color: var(--vimma-muted) !important;
+    --panel-icon-fill: var(--vimma-fg) !important;
+    --menuitem-icon-fill: var(--vimma-fg) !important;
+    --text-color-disabled: var(--vimma-fg-dim) !important;
+    color-scheme: var(--vimma-color-scheme) !important;
+
+    > :is(menuitem, menu)[_moz-menuactive]:not([disabled]) {
+      background-color: var(--vimma-selection) !important;
+      color: var(--vimma-fg-bright) !important;
+    }
+
+    > :is(menuitem, menu)[disabled] {
+      color: var(--vimma-fg-dim) !important;
+    }
+  }
+}
