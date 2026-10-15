@@ -14,16 +14,16 @@ Background: [ADR-002](adr/002-upstream-release-channel.md),
 
 ## At a glance
 
-| #   | Step                                      | Where                                         | Time                    |
-| --- | ----------------------------------------- | --------------------------------------------- | ----------------------- |
-| 1   | Autopilot: issue, patch check, suites, PR | `upstream.yml`, hosted runners                | ≤ 6 h after the release |
-| 2   | Download the new source                   | your machine                                  | 12.5 min                |
-| 3   | Import; fix any patch that fails          | your machine                                  | 1 min, plus fixes       |
-| 4   | Full build + full mochitest suite         | your machine (the hosted nightly, after #224) | 39 min cold + suite     |
-| 5   | Artifact build + suite (preflight first)  | autopilot, `e2e.yml` on the PR                | 5 min                   |
-| 6   | Version files, branding prefs, cfr, SB    | autopilot (checks prefs), your machine        | 5 min                   |
-| 7   | Split-view contract (M4 canary)           | both builds                                   | part of the suite       |
-| 8   | Mark ready, CI, merge                     | GitHub                                        | CI ≈ 8 min              |
+| #   | Step                                      | Where                                            | Time                                     |
+| --- | ----------------------------------------- | ------------------------------------------------ | ---------------------------------------- |
+| 1   | Autopilot: issue, patch check, suites, PR | `upstream.yml`, hosted runners                   | ≤ 6 h after the release                  |
+| 2   | Download the new source                   | your machine                                     | 12.5 min                                 |
+| 3   | Import; fix any patch that fails          | your machine                                     | 1 min, plus fixes                        |
+| 4   | Full build + full mochitest suite         | your machine, and the hosted nightly after merge | 39 min cold + suite (nightly: about 2 h) |
+| 5   | Artifact build + suite (preflight first)  | autopilot, `e2e.yml` on the PR                   | 5 min                                    |
+| 6   | Version files, branding prefs, cfr, SB    | autopilot (checks prefs), your machine           | 5 min                                    |
+| 7   | Split-view contract (M4 canary)           | both builds                                      | part of the suite                        |
+| 8   | Mark ready, CI, merge                     | GitHub                                           | CI ≈ 8 min                               |
 
 **When the autopilot's PR is green (the common case) you do only step 8**, until auto-merge of
 a green bump is built ([#259](https://github.com/vimma-browser/vimma/issues/259)), which removes that
@@ -163,7 +163,6 @@ On your machine, in the repo:
 ```sh
 gh pr checkout <PR number>                  # branch upstream/firefox-X.Y
 npx surfer download --force                 # deletes engine/ (and its 20 GB objdir), fetches X.Y
-echo X.Y > engine/.vimma-firefox-version    # what nightly.yml compares against surfer.json
 ```
 
 `surfer download` reads the version from `surfer.json` and caches the tarball in `.surfer/engine/`.
@@ -420,7 +419,8 @@ is deliberately not built; a person merges.
   release is a decision to write down in the drift issue.
 - **After merge, before a release:** revert on `main` through a PR (`git revert <merge commit>`,
   `revert:` with a body saying why). That restores `surfer.json` and any re-exported patches. The
-  nightly re-downloads the old version by itself (`engine/.vimma-firefox-version` differs).
+  nightly builds the old version by itself: every build downloads and verifies the version
+  `surfer.json` names (`tools/upstream/firefox-source.sh`).
   Locally: `npx surfer download --force && npm run import && npx surfer build`. The release's
   branch still exists, so the autopilot does not reopen it; delete the branch (or run with
   `-f rebuild=true`) once the cause is fixed.

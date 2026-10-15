@@ -91,12 +91,15 @@ describe("upstream autopilot workflow", () => {
   });
 
   it("nothing is built from a tarball whose SHA-512 Mozilla did not publish", () => {
-    const download = e2e.indexOf("npx --no -- surfer download");
-    const verify = e2e.indexOf("python3 tools/upstream/verify-sha512.py");
+    // e2e.yml gets its source through firefox-source.sh, which verifies before Surfer unpacks.
+    const fetch = e2e.indexOf("tools/upstream/firefox-source.sh");
     const imp = e2e.indexOf("run: npm run import");
-    expect(download).toBeGreaterThan(0);
-    expect(verify).toBeGreaterThan(download);
-    expect(imp).toBeGreaterThan(verify);
+    expect(fetch).toBeGreaterThan(0);
+    expect(imp).toBeGreaterThan(fetch);
+    const script = readFileSync(new URL("../upstream/firefox-source.sh", import.meta.url), "utf8");
+    const verify = script.indexOf('python3 "$here/verify-sha512.py"');
+    expect(verify).toBeGreaterThan(0);
+    expect(script.indexOf("npx --no -- surfer download")).toBeGreaterThan(verify);
     expect(source).toContain('python3 "$here/verify-sha512.py"');
     expect(job(upstream, "patch-check")).toContain("tools/upstream/source-check.sh");
   });
