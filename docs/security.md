@@ -852,6 +852,21 @@ in a `build` environment, and a watch on Mozilla's release key,
   [`a failure is reported by its own job, from the redacted log artifact`](../tools/test/nightly-workflow.test.mjs),
   [`the report job names the repository, since it checks nothing out`](../tools/test/nightly-workflow.test.mjs),
   [`only the nightly's failure-issue step gets GH_TOKEN`](../tools/test/full-build-workflows.test.mjs)
+- B9. Every file `release.yml` uploads to a release, the Arch Linux `PKGBUILD` and `SRCINFO`
+  included, **must** be listed in that release's `SHA256SUMS` and get a cosign bundle from the
+  `sign` job, so a user can verify any asset, and the `PKGBUILD`, which pacman runs as root, is
+  checked the same way as the binaries. The `PKGBUILD` pins the SHA-256 of the tarball it
+  installs, and its generator accepts only `owner/name` for the repository and
+  `[A-Za-z0-9._-]` for the desktop file ID, the two values it places in shell words. It is built
+  and installed with `makepkg -si` on Arch Linux before anything is signed. **⚠ setting:**
+  signatures exist only while the repository variable `SIGNING_ENABLED` is `true`; without it
+  `publish` uploads the assets and `SHA256SUMS` unsigned.
+  [`writes SHA256SUMS that sha256sum -c accepts, for every release file`](../tools/package/test/package.test.mjs),
+  [`signs and uploads the PKGBUILD and SRCINFO with the other assets`](../tools/package/test/release-workflow.test.mjs),
+  [`builds and installs the release PKGBUILD on Arch Linux before anything is signed`](../tools/package/test/release-workflow.test.mjs),
+  [`needs nothing but itself: the tarball is its only source`](../tools/package/test/package.test.mjs),
+  [`refuses repo %j`](../tools/package/test/package.test.mjs),
+  [`refuses desktop id %j`](../tools/package/test/package.test.mjs)
 
 ## 15. Update check (`updates/VimmaUpdates.sys.mjs`)
 

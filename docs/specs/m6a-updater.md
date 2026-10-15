@@ -68,9 +68,12 @@ restarts on its own.
 3. **AppImage** (decision 19). Vimma downloads the new AppImage next to the running one,
    checks it against the signed manifest and renames it over the old file; the next start runs
    the new version under the same path.
-4. **`.deb` and AUR.** Vimma never touches the installed files. The status bar shows
-   `⇡ <version> available`, and `:update` shows how to update: download the new `.deb` from the
-   release page, or update `vimma-bin` with an AUR helper.
+4. **`.deb`, the release PKGBUILD and AUR.** Vimma never touches the installed files. The
+   status bar shows `⇡ <version> available`, and `:update` shows how to update: download the new
+   `.deb` from the release page, run `curl -fLO
+https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si` again
+   for a `vimma-bin` built from the release's PKGBUILD (decision 24), or update `vimma-bin` with
+   an AUR helper.
 5. **Notices.** The status bar's right side shows the states in Design §5: `⇡ 0.3.1 on restart`
    once an update is staged, `⇡ 0.3.1 security: :restart` in `--vimma-text-error` for an urgent
    one, `updates: check failed` after three failed checks, `updates: no news for N days` for a
@@ -380,6 +383,7 @@ nightly --prerelease`), and its schedule does nothing until the repository varia
 | Tarball, read-only dir | Firefox's checks, cannot apply | (same tarball)                                                                                                              | hint: "Vimma can't write `/opt/vimma`; update it as its owner or reinstall"    |
 | AppImage               | off                            | `usr/lib/vimma/is-packaged-app` in the AppDir, content `vimma-package=appimage`                                             | fetches the manifest, replaces `$APPIMAGE` itself (below)                      |
 | `.deb`                 | off                            | `usr/lib/vimma/is-packaged-app`, content `vimma-package=deb`                                                                | fetches the manifest, hint: "download vimma_0.3.1_amd64.deb"                   |
+| Release `PKGBUILD`     | off                            | `PKGBUILD` `package()` writes `/opt/vimma/is-packaged-app`, content `vimma-package=pkgbuild-release`                        | fetches the manifest, hint: the exact `curl … && makepkg -si` command          |
 | AUR `vimma-bin`        | off                            | `PKGBUILD` `package()` writes `/opt/vimma/is-packaged-app`, content `vimma-package=aur`                                     | fetches the manifest, hint: "update vimma-bin with your AUR helper"            |
 | Source / dev build     | not built                      | `configs/common/mozconfig`: `--enable-updater` only when `VIMMA_UPDATES=1` (release and nightly jobs set it); else as today | nothing; about:vimma says "updates: not built in (source build)"               |
 | Artifact build (CI)    | Mozilla's prebuilt             | ADR-010 gap, unchanged                                                                                                      | the verifier hook is Vimma's, so it refuses aus5's unsigned XML; never shipped |
@@ -725,32 +729,41 @@ mar` needs the host `mar` tool from the same objdir. Nothing here can ship befor
     nightly builds are private workflow artifacts until the gate lifts, so they have no public
     MAR to offer); keeping M6a open until the gate lifts, because the work that can be verified
     would wait on a decision unrelated to it.
+24. **A `vimma-bin` built from the release's PKGBUILD gets the exact command as its hint**:
+    `:update` shows `curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si`,
+    the command that installed it (`PKGBUILD_INSTALL_COMMAND` in `tools/package/package.mjs`),
+    because rerunning it is the whole update and the user may not remember where it came from;
+    the `vimma-package=pkgbuild-release` line that package writes (spec m6-packaging, "Arch
+    Linux without the AUR", decision 4) tells it apart from an AUR install, whose users update
+    with their AUR helper instead. Rejected: one hint for both, because "update with your AUR
+    helper" does nothing for a package no AUR helper knows, and the curl command would replace an
+    AUR install with a copy its helper no longer tracks.
 
-24. **The manifest's channel, target and serial are attributes of `<updates>`, not of
+25. **The manifest's channel, target and serial are attributes of `<updates>`, not of
     `<update>`**, because a manifest that offers nothing (decision 22's pull of a bad update)
     still needs a serial for the replay rule and a channel and target for rule 2; Firefox's
     parser reads only the `<update>` children and ignores attributes on the root.
-25. **Delivery starts with "check and tell"**: Vimma's own signed-manifest check for every
+26. **Delivery starts with "check and tell"**: Vimma's own signed-manifest check for every
     packaged install, before Firefox's updater is built in, because telling an install that a
     newer (often security) release exists, with the exact steps for its install type, needs no
     build change, no MAR pipeline and no key inside a binary, so it can ship while the updater
     sub-PRs wait for the full builds (decision 4). The manifest key is pinned in
     `update-keys.mjs`, an ordinary file, so it can change in any release (decision 12).
-26. **A host that does not answer is not shown in the status bar**, only in about:vimma and the
+27. **A host that does not answer is not shown in the status bar**, only in about:vimma and the
     browser console, because updates.vimma.dev serves nothing until the release gate lifts
     (decision 23) and a laptop offline for a day would otherwise warn every user; a manifest that
     arrives and fails verification still counts toward `updates: check failed`, because that is
     what a tampered host or a broken pipeline produces. A failed check keeps an offer already
     verified.
-27. **A build run from its objdir never checks**, detected by the missing `omni.ja` (every
+28. **A build run from its objdir never checks**, detected by the missing `omni.ja` (every
     package has one), because its build ID is newer than every release's and its requests would
     only add traffic from development and test runs; about:vimma says "not checked (source
     build)". A test may set the install type through a pref honoured only when
     `Cu.isInAutomation`.
-28. **`:update` opens about:vimma's Updates section when an update exists**, because the exact
+29. **`:update` opens about:vimma's Updates section when an update exists**, because the exact
     commands (the PKGBUILD URL, a quoted install path) are longer than the command line and need
     to be selectable to copy; "up to date", "off" and failures stay one-line notices.
-29. **The manifest URL is the pref `vimma.update.url`, and it may use only `%BUILD_TARGET%` and
+30. **The manifest URL is the pref `vimma.update.url`, and it may use only `%BUILD_TARGET%` and
     `%CHANNEL%` and only `https`**, because then a check sends nothing but the platform and the
     channel even when the pref is changed, and a changed URL still has to serve a manifest signed
     by a pinned key. Plain `http` is allowed only in automation, for a local test host.

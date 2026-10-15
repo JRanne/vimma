@@ -1,6 +1,6 @@
 # Spec: m6-packaging
 
-Status: implemented (tooling); gated off until the build job runs on a hosted runner ([#224](https://github.com/vimma-browser/vimma/issues/224)) and the secrets and variables are set · Milestone: M6 · Area:
+Status: implemented (tooling); gated off until the secrets and variables are set · Milestone: M6 · Area:
 `tools/package/`, `.github/workflows/release.yml`
 Prerequisite: release-please (`release-please.yml`) and the self-hosted `vimma-build` runner
 (`nightly.yml`), both merged. The updater spec (m0-updater, PR #15) compiles the app updater
@@ -10,7 +10,12 @@ Since changed: this spec assumed the `build` job runs on a self-hosted `vimma-bu
 and that the repository is private. The repository is public, no self-hosted runner is used or
 planned, and the `build` job moves to a GitHub-hosted runner with [#224](https://github.com/vimma-browser/vimma/issues/224) (spec
 [build-supply-chain](build-supply-chain.md), decisions 6 and 7). Until then the release stays
-off; the runner rows below describe the workflow as written, not the target.
+off; the runner rows below describe the workflow as written, not the target. #224 has since
+merged, and the `build` job runs on `ubuntu-24.04`.
+
+Since changed: the `vimma-bin` PKGBUILD is also a release asset that installs Vimma on Arch
+Linux without the AUR, writes the desktop file and `vimma-open` inline, and records its install
+source; see [Arch Linux without the AUR](#arch-linux-without-the-aur).
 
 ## User story
 
@@ -39,7 +44,8 @@ packages, signs and publishes all of it without me, once I have enabled it.
 Out of scope: macOS and Windows (M7); the update manifest, MAR files and update server (separate
 spec, with the in-app updater); Flatpak (plan §9 open question); AppStream metainfo; a smoke
 test of the AUR package on Arch (the `.SRCINFO` is checked against `makepkg --printsrcinfo`
-where makepkg exists).
+where makepkg exists). (Since changed: the PKGBUILD is built and installed on Arch Linux in CI;
+[Arch Linux without the AUR](#arch-linux-without-the-aur), decision 6.)
 
 ## Artifacts and names
 
@@ -61,7 +67,9 @@ appears in no file name; it is in `vimma --version`'s About dialog line and the 
 A SemVer pre-release (`0.2.0-rc.1`, nightlies) becomes `0.2.0~rc.1` in the `.deb` (sorts before
 `0.2.0`). The AUR gets releases only: `pkgbuild()` refuses a pre-release (its `pkgver` could not
 hold the hyphen its download URL needs), `package.mjs` writes no AUR files for one, and
-`release.yml` accepts `vX.Y.Z` tags only.
+`release.yml` accepts `vX.Y.Z` tags only. (Since changed: `PKGBUILD` and `SRCINFO` are release
+assets in `SHA256SUMS`, and the AUR gets `PKGBUILD` and `.SRCINFO` only; [Arch Linux without the
+AUR](#arch-linux-without-the-aur).)
 
 `package.mjs` reads `RemotingName` from the tarball's `application.ini` for `StartupWMClass`
 (today `vimma-vimma`, see Findings) and refuses a tarball without `vimma/vimma` or with an
@@ -221,6 +229,75 @@ manifest and changelog past that version, so deleting the tag would not bring th
 back; it only hides a release that does have notes. Instead the `failure` job opens an issue and
 the fix is a re-run: `gh workflow run release.yml -f tag=vX.Y.Z`. `--clobber` makes re-runs
 idempotent.
+
+## Arch Linux without the AUR
+
+(Since changed: added after the tooling above was implemented, because the `aur` job cannot run
+until an AUR account exists, and without it Arch users had no package at all.) Each release
+carries the `vimma-bin` `PKGBUILD` as an asset, and one command installs or updates Vimma:
+
+```sh
+curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si
+```
+
+Engine paths were checked against Firefox 158.0 (`config/milestone.txt`).
+
+1. **The PKGBUILD is a release asset.** Arch users get a pacman-managed install from the
+   release itself, so that installing Vimma on Arch does not depend on an AUR account, which the
+   `aur` job needs and the project does not have. `releases/latest/download/PKGBUILD` always
+   names the newest release, so the same command installs and updates. `curl -f` makes a missing
+   asset an error (exit 22) instead of a `PKGBUILD` that holds GitHub's "Not Found" page, so that
+   the hours between publishing a release and its upload, or a failed release build, leave the
+   user's previous `PKGBUILD` in place and stop before `makepkg` runs. Rejected: a pacman
+   repository, because it needs hosting and a repository signing key of its own; telling Arch
+   users to unpack the tarball, because pacman would then not own, upgrade or remove the files.
+2. **The PKGBUILD needs no other file.** Its only `source` is the release tarball, by URL with
+   its SHA-256 pinned; the desktop file and `vimma-open` are written in `package()` as quoted
+   here-documents (`cat > … <<'VIMMA_OPEN_EOF'`, nothing expanded), so that a PKGBUILD
+   downloaded on its own builds, since makepkg looks for a bare file name in `source=()` next to
+   the PKGBUILD. `pkgbuild()` refuses inline content without a final newline or with a line equal
+   to its delimiter, which would end the here-document early, and accepts only `owner/name`
+   (`[A-Za-z0-9-]` and `[A-Za-z0-9._-]`) for the repository and `[A-Za-z0-9._-]` for the desktop
+   file ID, because both are placed in double-quoted shell words that makepkg runs. The inline
+   text is covered by the PKGBUILD's own line in `SHA256SUMS` and its cosign bundle. Rejected: publishing the desktop
+   file and `vimma-open` as assets of their own, because that is two more downloads to name
+   and keep in step for no gain; `raw.githubusercontent.com` URLs at the tag, because the package
+   would then depend on the repository layout at that tag.
+3. **One PKGBUILD, two variants.** `dist/PKGBUILD` (the asset) and `dist/aur/PKGBUILD` (what
+   the `aur` job pushes) differ only in the install source of decision 4, so that the AUR gets
+   the same tested file once it is published there. Both share one `.SRCINFO`, which must equal
+   `makepkg --printsrcinfo`. The `aur` job pushes only `PKGBUILD` and `.SRCINFO` and removes the
+   `vimma-vimma.desktop`, `vimma-open` and `vimma.desktop` files earlier versions pushed.
+4. **The install source is recorded in `/opt/vimma/is-packaged-app`**, as
+   `vimma-package=pkgbuild-release` or `vimma-package=aur`, so that the updater can tell installs
+   apart and show the right command (spec [m6a-updater](m6a-updater.md), section 3 and decision
+   24). Firefox treats this file as "installed by a package manager": it only tests that the
+   file exists (`widget/gtk/WidgetUtilsGtk.cpp:253`, `IsPackagedAppFileExists`, read by
+   `xpcom/base/nsSystemInfo.cpp:1759` as `isPackagedApp`), Mozilla's own `.deb` writes it
+   (`python/mozbuild/mozbuild/repackaging/deb.py:126`), and with the updater built in it turns
+   Firefox's updater off (`toolkit/mozapps/update/UpdateServiceStub.sys.mjs:214`), which is
+   right for a pacman install. While the updater is compiled out its only other effect on Linux
+   is to skip the unprivileged-user-namespaces warning
+   (`security/sandbox/common/SandboxUtils.sys.mjs:25`), as Firefox does for its own packages.
+   Rejected: a file in `/opt/vimma/distribution/`, because Firefox reads that directory
+   (`toolkit/xre/nsXREDirProvider.cpp:480`): `distribution.ini` sets preferences
+   (`browser/components/distribution.sys.mjs:45`), `policies.json` sets enterprise policies and
+   `extensions/` are installed as add-ons (`toolkit/mozapps/extensions/internal/XPIInstall.sys.mjs:4328`),
+   so a marker there would sit in a directory whose contents change Vimma's behaviour.
+5. **The `.SRCINFO` asset is named `SRCINFO`**, because GitHub renames an asset whose name has
+   a leading period (docs.github.com, REST API "Upload a release asset", read 2026-10-15), and
+   `SHA256SUMS` and the cosign bundle names must match the names users download.
+6. **`makepkg -si` runs on Arch Linux before anything is signed.** `tools/package/arch-smoke.sh`
+   starts `archlinux:base-devel` (pinned by digest, updated with pacman first), serves the
+   output directory on `127.0.0.1` with `python3 -m http.server`, replaces only the URL prefix
+   in a copy of the PKGBUILD (the SHA-256 stays, so makepkg still checks the bytes), compares
+   `makepkg --printsrcinfo` with `SRCINFO`, runs `makepkg -si` as an unprivileged user, and
+   checks `vimma --version`, the `is-packaged-app` line, `vimma-open` byte for byte, and the
+   desktop file with `desktop-file-validate`. The release is not on GitHub yet when the package
+   job runs, which is why the tarball is served locally. `release.yml`'s `package` job runs it
+   on the release build, so a PKGBUILD that does not install is never signed or published, and
+   `pkgbuild.yml` runs it on a stub tarball (`--stub`) on every change to `tools/package/`, so
+   that a broken PKGBUILD fails in the pull request that breaks it.
 
 ## What each step needs from you
 

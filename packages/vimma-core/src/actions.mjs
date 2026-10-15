@@ -138,7 +138,8 @@ group("Workspaces", [
 ]);
 
 group("Navigation", [
-  ["goto_picker", "goto.picker", "Goto picker: every tab in every workspace"],
+  // docs/specs/tab-search.md: the goto picker is tab search.
+  ["goto_picker", "goto.picker", "Tab search: every tab, every window, recently closed"],
   ["toggle_sidebar", "sidebar.toggle", "Open / close the side panel"],
   // docs/specs/toolbar-toggle.md: Firefox's navigation toolbar, in every window.
   ["toggle_toolbar", "toolbar.toggle", "Show / hide the toolbar (URL bar and add-on buttons)"],

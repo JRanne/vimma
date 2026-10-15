@@ -391,6 +391,7 @@ Limits:
 | `claude.yml`               | `@claude`, `spec`+`claude:go`      | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
 | `release-please.yml`       | push to `main`, manual             | `ubuntu-latest`           | Actions may open PRs; optional token       |
 | `release.yml`              | release published, manual          | `ubuntu-24.04`            | see "Release packages" (gated off)         |
+| `pkgbuild.yml`             | `tools/package/` on PRs and `main` | `ubuntu-24.04`            | nothing (Arch Linux in docker)             |
 | `mutation.yml`             | Sundays 04:23 UTC, manual          | `ubuntu-latest`           | nothing (creates its `mutation` label)     |
 | `semgrep.yml`              | push to `main`, PRs, Mon, manual   | `ubuntu-latest`           | nothing                                    |
 | `codeql.yml`               | push to `main`, PRs, Mon, manual   | `ubuntu-latest`           | nothing; skipped while the repo is private |
@@ -1184,11 +1185,14 @@ builds on `ubuntu-24.04` from freshly verified source in about 2 hours ("Full bu
 | `vimma-X.Y.Z-x86_64.AppImage`     | AppImage (appimagetool 1.9.1, runtime 20251108, both pinned)    |
 | `vimma_X.Y.Z_amd64.deb`           | `/usr/lib/vimma`, `/usr/bin/vimma`, desktop file, icons         |
 | `vimma-X.Y.Z.cdx.json`            | CycloneDX 1.6 SBOM (`tools/package/sbom.mjs`)                   |
-| `SHA256SUMS`                      | checksums of the four files above                               |
+| `PKGBUILD`                        | `vimma-bin` for Arch Linux; its only source is the tarball      |
+| `SRCINFO`                         | its `.SRCINFO` (GitHub renames an asset with a leading period)  |
+| `SHA256SUMS`                      | checksums of the six files above                                |
 | `*.sigstore.json`                 | cosign keyless bundles, one per file above (when signing is on) |
 
-Jobs: `build` (read-only token, no secrets) → `package` (AppImage, `.deb`, AUR
-files, checksums; installs the `.deb` and starts it headless) → `sign` (only job with
+Jobs: `build` (read-only token, no secrets) → `package` (AppImage, `.deb`, `PKGBUILD`, the
+AUR variant, checksums; installs the `.deb` and starts it headless, and runs `makepkg -si` on
+the `PKGBUILD` in an Arch Linux container with `tools/package/arch-smoke.sh`) → `sign` (only job with
 `id-token: write`) → `publish` (only job with `contents: write`) → `aur` (no GitHub token; the
 SSH key only) → `failure` (opens a `release-failure` issue). Locally, from a mach tarball:
 
@@ -1198,12 +1202,23 @@ node tools/package/package.mjs --tarball engine/obj-x86_64-pc-linux-gnu/dist/vim
   --out dist --maintainer 'Name <email>' --appimagetool /tmp/ait/appimagetool \
   --runtime /tmp/ait/runtime-x86_64 --no-deb   # dpkg-deb only exists on Debian/Ubuntu
 node tools/package/sbom.mjs --engine engine --out dist/vimma-$(node -p 'require("./surfer.json").brands.vimma.release.displayVersion').cdx.json
+tools/package/arch-smoke.sh dist "$(node tools/release/version-line.mjs)"   # needs docker
 ```
+
+`tools/package/arch-smoke.sh --stub` runs the same Arch Linux check on a stub tarball in about
+half a minute; the `pkgbuild.yml` workflow runs it on every change to `tools/package/`.
+
+**The two `PKGBUILD`s.** `package.mjs` writes one `vimma-bin` PKGBUILD in two variants that
+differ in one line, the install source it records in `/opt/vimma/is-packaged-app`:
+`dist/PKGBUILD` (`vimma-package=pkgbuild-release`) is the release asset that Arch users
+download with `curl -fLO …/releases/latest/download/PKGBUILD && makepkg -si` (guide,
+"Arch Linux"), and `dist/aur/PKGBUILD` (`vimma-package=aur`) is what the `aur` job pushes. The
+desktop file and `vimma-open` are written inline in `package()`, so neither needs another file.
 
 **Enable it (one time):**
 
-1. Hosted build: [#224](https://github.com/vimma-browser/vimma/issues/224) merged ("Full builds"
-   above). Until then the `build` job has no runner and the release stays off.
+1. Hosted build: done ([#224](https://github.com/vimma-browser/vimma/issues/224), "Full builds"
+   above); the `build` job runs on `ubuntu-24.04`.
 2. Trigger: `gh secret set RELEASE_PLEASE_TOKEN` (fine-grained, this repo only: Contents, Pull
    requests and Issues read/write), so the release release-please creates starts `release.yml`.
    Without it, run it by hand after each release: `gh workflow run release.yml -f tag=vX.Y.Z`.
@@ -1215,7 +1230,9 @@ node tools/package/sbom.mjs --engine engine --out dist/vimma-$(node -p 'require(
 5. Signing (recommended: keyless, no key to keep): `gh variable set SIGNING_ENABLED --body true`.
    Each signature records `vimma-browser/vimma`'s `release.yml` and the tag in the public Rekor log.
    Without the variable, `sign` is skipped and the assets go up unsigned.
-6. AUR (optional; skipped with a notice until the secret exists):
+6. AUR (optional; skipped with a notice until the secret exists). Arch users do not need it:
+   the release's `PKGBUILD` installs Vimma without the AUR, and the `aur` job stays dormant
+   until an AUR account and its key exist:
    - Check the name is free: `curl -s 'https://aur.archlinux.org/rpc/v5/info?arg[]=vimma-bin'`
      must say `"resultcount":0` (and look at `vimma` too, which `vimma-bin` provides).
    - Create an account at <https://aur.archlinux.org/register>.

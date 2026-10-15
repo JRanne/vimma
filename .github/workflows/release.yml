@@ -1,4 +1,5 @@
-# Spec m6-packaging: build, package, sign and publish a release, then push AUR vimma-bin.
+# Spec m6-packaging: build, package, sign and publish a release (the vimma-bin PKGBUILD among its
+# assets), then push AUR vimma-bin.
 # release-please creates the tag vX.Y.Z and the GitHub Release; this workflow adds the assets.
 # Nothing runs until the repository variable RELEASE_ENABLED is `true`, manual runs included.
 # Setup and verification: docs/runbook.md, "Releases".
@@ -187,7 +188,8 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  # AppImage, .deb, AUR files, SHA256SUMS; then install and start what was built.
+  # AppImage, .deb, PKGBUILD and SRCINFO, the AUR variant, SHA256SUMS; then install and start
+  # what was built.
   package:
     needs: build
     if: >-
@@ -231,7 +233,6 @@ jobs:
             --maintainer "$MAINTAINER" --repo "$GITHUB_REPOSITORY" --sbom "build/vimma-$v.cdx.json" \
             --appimagetool "$RUNNER_TEMP/appimagetool/appimagetool" \
             --runtime "$RUNNER_TEMP/appimagetool/runtime-x86_64"
-          desktop-file-validate dist/aur/*.desktop
           (cd dist && sha256sum -c SHA256SUMS)
 
       - name: Smoke test the .deb and the AppImage
@@ -240,7 +241,7 @@ jobs:
           line=$(node tools/release/version-line.mjs)
           sudo apt-get install -y -q "./dist/vimma_${v}_amd64.deb"
           [ "$(vimma --version)" = "$line" ] || { echo "::error::.deb: $(vimma --version)"; exit 1; }
-          test -f /usr/share/applications/vimma-vimma.desktop
+          desktop-file-validate /usr/share/applications/vimma-vimma.desktop
           test -x /usr/bin/vimma-open
           p=$(mktemp -d)
           # First run creates the profile; --screenshot on a fresh profile races the bookmarks
@@ -250,6 +251,11 @@ jobs:
           test -s "$RUNNER_TEMP/shot.png"
           out=$(APPIMAGE_EXTRACT_AND_RUN=1 "./dist/vimma-$v-x86_64.AppImage" --version)
           [ "$out" = "$line" ] || { echo "::error::AppImage: $out"; exit 1; }
+
+      # makepkg -si in an Arch Linux container, with the tarball served from dist/ on localhost
+      # (the release has no assets yet); the PKGBUILD's pinned SHA-256 still checks the bytes.
+      - name: Smoke test the PKGBUILD on Arch Linux
+        run: tools/package/arch-smoke.sh dist "$(node tools/release/version-line.mjs)"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -281,7 +287,7 @@ jobs:
 
       - name: Sign every asset
         run: |
-          for f in dist/vimma* dist/SHA256SUMS; do
+          for f in dist/vimma* dist/PKGBUILD dist/SRCINFO dist/SHA256SUMS; do
             cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
           done
 
@@ -323,7 +329,7 @@ jobs:
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null \
             || { echo "::error::no GitHub Release for $TAG (release-please creates it)"; exit 1; }
           # --clobber: a re-run replaces the assets of a failed one.
-          gh release upload "$TAG" dist/vimma* dist/SHA256SUMS* --clobber --repo "$GITHUB_REPOSITORY"
+          gh release upload "$TAG" dist/vimma* dist/PKGBUILD* dist/SRCINFO* dist/SHA256SUMS* --clobber --repo "$GITHUB_REPOSITORY"
 
       - name: Append the third-party notice to the release notes
         run: |
@@ -334,9 +340,9 @@ jobs:
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
           fi
 
-  # Pushes PKGBUILD, .SRCINFO, vimma-vimma.desktop and vimma-open to
-  # aur.archlinux.org/vimma-bin.git. No GitHub token at all; skipped (green, with a notice)
-  # until the AUR_SSH_KEY secret exists.
+  # Pushes PKGBUILD and .SRCINFO (the variant whose install source is `aur`; it needs no other
+  # file) to aur.archlinux.org/vimma-bin.git. No GitHub token at all; skipped (green, with a
+  # notice) until the AUR_SSH_KEY secret exists.
   aur:
     needs: publish
     if: >-
@@ -371,12 +377,13 @@ jobs:
           printf '%s\n' "$AUR_HOST_KEY" > ~/.ssh/known_hosts
           export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
           git clone ssh://aur@aur.archlinux.org/vimma-bin.git aur
-          cp dist/aur/PKGBUILD dist/aur/.SRCINFO dist/aur/vimma-vimma.desktop dist/aur/vimma-open aur/
+          cp dist/aur/PKGBUILD dist/aur/.SRCINFO aur/
           cd aur
           name=$(printf '%s' "$MAINTAINER" | sed -E 's/ *<.*//')
           email=$(printf '%s' "$MAINTAINER" | sed -E 's/.*<(.*)>.*/\1/')
-          git rm -q --ignore-unmatch vimma.desktop
-          git add PKGBUILD .SRCINFO vimma-vimma.desktop vimma-open
+          # Earlier PKGBUILDs listed these as sources; the current one writes them inline.
+          git rm -q --ignore-unmatch vimma.desktop vimma-vimma.desktop vimma-open
+          git add PKGBUILD .SRCINFO
           if git diff --cached --quiet; then
             echo "::notice::vimma-bin already at ${TAG#v}"
           else

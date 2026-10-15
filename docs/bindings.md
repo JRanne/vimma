@@ -90,7 +90,7 @@ shows as `space n` ([guide](guide.md#configtoml)).
 
 | Action                                                | Config name        | Bindings                                          |
 | ----------------------------------------------------- | ------------------ | ------------------------------------------------- |
-| Goto picker: every tab in every workspace             | `goto_picker`      | `ctrl+b g`, `b`                                   |
+| Tab search: every tab, every window, recently closed  | `goto_picker`      | `ctrl+b g`, `b`                                   |
 | Open / close the side panel                           | `toggle_sidebar`   | `ctrl+b b`                                        |
 | Show / hide the toolbar (URL bar and add-on buttons)  | `toggle_toolbar`   | `ctrl+b u`                                        |
 | Show the toolbar                                      | `show_toolbar`     | —                                                 |
