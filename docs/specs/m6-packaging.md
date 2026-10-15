@@ -234,21 +234,31 @@ idempotent.
 
 ## README badges
 
-The README opens with a centred row of shields.io badges in one muted grey style (`labelColor=333333`,
-`color=666666`): licence (MPL-2.0), GitHub stars, CI status and the Firefox version Vimma is built on.
-These work before any release.
+The README opens with a centred row of shields.io badges in one muted grey style
+(`labelColor=333333`, `color=666666`): licence (MPL-2.0), GitHub stars, CI status on `main` and
+the Firefox version Vimma is built on (read from `surfer.json`). These work before any release
+(`README.md`).
 
 The first release that publishes assets adds two more, in the same style:
 
-- total downloads, `https://img.shields.io/github/downloads/JRanne/vimma/total`, linking to the
-  Releases page;
-- the latest release, `https://img.shields.io/github/v/release/JRanne/vimma?label=release`,
+- total downloads,
+  `https://img.shields.io/github/downloads/vimma-browser/vimma/total?labelColor=333333&color=666666`,
+  linking to the Releases page;
+- the latest release,
+  `https://img.shields.io/github/v/release/vimma-browser/vimma?label=release&labelColor=333333&color=666666`,
   linking to `releases/latest`.
 
-Before a release both would read "0" or "no releases", which says nothing useful, so they are not
-shown until then. An AUR version badge (`https://img.shields.io/aur/version/vimma-bin`) follows
-once the `aur` job has pushed `vimma-bin`. The badges are a README edit made when the first release
-is published, not part of `release.yml`: shields.io reads the counts from the GitHub and AUR APIs.
+An AUR version badge (`https://img.shields.io/aur/version/vimma-bin`, same style) follows once the
+`aur` job has pushed `vimma-bin`.
+
+1. **The release badges wait for the first release.** Before a release both would read "0" or
+   "no releases", which tells a reader nothing, so they are added with the first published
+   release and not earlier.
+2. **A README edit, not a `release.yml` step.** The badges are added by hand when the first
+   release is published, because shields.io reads the counts from the GitHub and AUR APIs on
+   each view: once the badge is in the README it stays current without the workflow touching
+   the README again. Rejected: having `release.yml` commit the badges, because `main` takes
+   changes only through pull requests.
 
 ## Tests (write first)
 
