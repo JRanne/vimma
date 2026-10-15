@@ -844,8 +844,24 @@ gh variable set RELEASE_ENABLED --body true           # releases: only at the re
 ```
 
 What the nightly does once it runs: a full build of `main`, the full mochitest suite on it, the
-rolling `nightly` pre-release, and on failure the log as an artifact and an issue labelled
-`nightly-failure` (comment `@claude` on it to hand it to Claude Code).
+package as the run's `vimma-nightly` artifact (kept 7 days), and on failure the log as the
+`nightly-log` artifact and an issue labelled `nightly-failure` (comment `@claude` on it to hand
+it to Claude Code). It creates, replaces and deletes no release: nightlies stay off the release
+page until the release gate (spec [build-supply-chain](specs/build-supply-chain.md), decision
+23). The artifact is not private: the repository is public, so anyone signed in to GitHub can
+download it from the run page or the API for the 7 days it is kept, and its name and size are
+listed without signing in. To get the latest one:
+
+```sh
+run=$(gh run list -w nightly.yml -s success -L 1 --json databaseId --jq '.[0].databaseId')
+gh run download "$run" -n vimma-nightly -D ~/Downloads/vimma-nightly
+```
+
+The `build` job holds a read-only token. Only the `report` job (`issues: write`) can write, and
+it checks out and runs nothing from the repository: it opens the failure issue from the
+redacted log. No job can write contents. Publishing nightlies as a release again is a workflow
+change, reviewed in its own PR, when the release gate lifts. A `nightly` release published
+before this change stays until `gh release delete nightly --cleanup-tag --yes` removes it.
 
 ### Mozilla's release key (ADR-021)
 

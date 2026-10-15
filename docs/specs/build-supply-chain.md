@@ -640,10 +640,11 @@ download --force` gave `--force` to npm, and `npx --no commitlint --from A --to 
     secret is deleted. Reason: today a branch's edited `nightly.yml` can drop the `if:` that keeps
     the key on `main`; an environment policy is enforced by GitHub, outside any workflow file. This
     holds on hosted runners as much as on any other: the question is which workflow runs may read
-    the secret, not which machine runs them. The nightly keeps the key because it publishes
-    binaries people run and its mochitests assert the key is compiled in
-    (`VIMMA_EXPECT_SAFEBROWSING_KEY`). The key ships inside every keyed binary (spec
-    m0-safebrowsing-key), so this limits who can use it from CI, not who can read it.
+    the secret, not which machine runs them. The nightly keeps the key because its binaries are
+    what people run (as a workflow artifact until the release gate, decision 23) and its
+    mochitests assert the key is compiled in (`VIMMA_EXPECT_SAFEBROWSING_KEY`). The key ships
+    inside every keyed binary (spec m0-safebrowsing-key), so this limits who can use it from CI,
+    not who can read it.
 19. **Action SHA pinning becomes a repository setting too.** Every workflow already pins actions
     by commit SHA and tests enforce it for several workflows; setting `sha_pinning_required` makes
     GitHub refuse an unpinned action in any workflow, a fork's included. A runbook step.
@@ -684,6 +685,27 @@ download --force` gave `--force` to npm, and `npx --no commitlint --from A --to 
     rules protect PR CI and the autopilot at once, and the build workflows are correct before they
     first run. The measurement build in sub-PR 4 publishes nothing and reads no secret. Its
     result selects the runner under decision 6, and that runner is in place before the gate.
+    Decision 23 lets `NIGHTLY_ENABLED` be set before the gate, because a nightly no longer
+    publishes a release.
+23. **A nightly is a workflow artifact, not a release, until the release gate.** The `build` job
+    of `nightly.yml` uploads its package as the run's `vimma-nightly` artifact, kept 7 days, and
+    holds only `contents: read`. No job creates, replaces or deletes a release, and none can
+    write contents; the failure issue is a separate `report` job with `issues: write`, which
+    checks out and runs nothing from the repository and reads no secret. Reasons: a release on
+    the repository's release page is a public download that people find, install and keep, which
+    the release gate rules out for unreviewed daily builds, while the maintainer still needs the
+    full-build check and a binary to try. A workflow artifact gives both without a release page
+    or a stable link, and expires on its own. Publishing is removed rather than kept behind a
+    repository variable: flipping a variable would publish keyed binaries with no review of the
+    workflow that does it, and the release gate is a decision for a reviewed change, which also
+    drops every `contents: write` token from the workflow until then. Splitting off the failure
+    issue keeps the remaining write token away from the job that runs npm, Surfer, `mach` and
+    the mochitests. Limit: the artifact is not private. On a public repository GitHub lets
+    anyone signed in download a run's artifacts for as long as they are kept (checked
+    2026-10-15: the run page's download link answers 404 without a session, the REST download
+    endpoint 401 without a token, and the artifact list, with names and sizes, is public), so a
+    nightly is unpublished and short-lived, not secret. The Safe Browsing key it contains ships
+    in every keyed binary anyway (decision 18).
 
 ## Security and privacy
 
@@ -699,6 +721,10 @@ New surface:
 - `mozilla-key-check.py` parses a file downloaded from archive.mozilla.org with
   `gpg --show-keys --with-colons` in a temporary `GNUPGHOME`; it imports nothing into a
   persistent keyring, and its only effect is an issue, written by the existing `publish` job.
+- The nightly's `report` job holds `issues: write`; it downloads the redacted log artifact and
+  calls `gh`, and checks out nothing (decision 23). The `build` job, which runs all third-party
+  code, holds `contents: read` only, and no job can write contents. Its package is a workflow
+  artifact that anyone signed in to GitHub can download for 7 days.
 - Building on GitHub-hosted runners puts the Safe Browsing key on GitHub's virtual machines for
   the length of a job, as `e2e.yml` and every other hosted job already handle repository data.
   The key is written to a mode-600 file in `RUNNER_TEMP` and deleted after the last `mach` call,
@@ -844,8 +870,16 @@ the cryptography is tested by `test_verify_sha512.py` alone.
 - `<workflow> drops engine/'s empty repository between import and build`
 - `<workflow> adds a 16 GB swap file before building`
 - `<workflow> stops itself before GitHub's 6-hour job limit`
-- `only the nightly's publish and failure-issue steps get GH_TOKEN` (the token that can write
-  releases and issues never reaches npm, Surfer, mach or the mochitests)
+- `only the nightly's failure-issue step gets GH_TOKEN` (the token that can write issues never
+  reaches npm, Surfer, mach or the mochitests)
+
+**vitest, `tools/test/nightly-workflow.test.mjs`** (decision 23):
+
+- `the workflow and its build job can only read the repository`
+- `the build job keeps the package as a workflow artifact for 7 days`
+- `no job creates, edits or deletes a release, and none can write contents`
+- `a failure is reported by its own job, from the redacted log artifact`
+- `the report job names the repository, since it checks nothing out`
 
 **vitest, `tools/test/self-hosted-runner.test.mjs`:**
 
@@ -884,6 +918,9 @@ No mochitest or e2e scenario: nothing in the browser changes.
 - `CONTRIBUTING.md`, "Dependency updates": release-path packages, why they are never
   auto-merged, how to read the `release-path-diff` summary, and that install scripts are off.
 - `docs/review-checklist.md`: the pinned-key line (Security and privacy).
+- Decision 23: `docs/security.md` B8; `docs/runbook.md`, "Full builds" (the artifact, how to
+  download it, who can); `docs/limits.md`, "Build and CI"; a "Since changed"
+  note in spec m0-pipeline.
 - ADR-021 (new) and the ADR-001 paragraph (sub-PR 2 and sub-PR 1).
 - No `docs/guide.md` or README change: nothing a user does or sees changes.
 - `CHANGELOG.md`: one line, added at merge time: "Release and nightly builds verify Mozilla's
