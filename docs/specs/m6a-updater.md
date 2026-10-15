@@ -4,7 +4,7 @@ Status: draft · Area: `configs/common/mozconfig`, `src/browser/branding/vimma/p
 `src/browser/base/content/vimma/updates/` (new), `packages/vimma-core/src/updates.mjs` (new),
 `config.mjs`, `actions.mjs`, `cmdline.mjs`, `statusbar.mjs`, `tools/package/`, `tools/update/`
 (new), `.github/workflows/{release,nightly,upstream}.yml`, `update-publish.yml` (new),
-`tests/browser/`, `tests/e2e/`, and the `JRanne/vimma-site` repository (`static/updates/`) ·
+`tests/browser/`, `tests/e2e/`, and the `vimma-browser/vimma-site` repository (`static/updates/`) ·
 Upstream patches: `src/browser/moz-configure.patch` (existing, grows: "1 hunk, 6 lines:
 `MOZ_APPUPDATE_HOST` is `vimma.dev` (m6a-updater)"), `src/toolkit/mozapps/update/updater/moz-build.patch`
 (new: "1 hunk, 6 lines: channel `vimma` embeds Vimma's update certificates (m6a-updater)"),
@@ -13,7 +13,7 @@ the update manifest before Firefox parses it (m6a-updater)") · ADR: ADR-016 (ne
 update channel"; the number is free on `main` and reserved for this spec), ADR-003 (three register
 lines), ADR-010 (the artifact-build gap, unchanged)
 
-Issue: [#217](https://github.com/JRanne/vimma/issues/217)
+Issue: [#217](https://github.com/vimma-browser/vimma/issues/217)
 
 Prerequisites: m0-updater (whose `--disable-updater` this reverses for release and nightly
 builds), m6-packaging (the artifacts), m7-upstream-autopilot (the security bump PRs) and
@@ -315,13 +315,13 @@ appVersion="1.23.2b" buildID=…>` with one complete MAR from the GitHub Release
 <?xml version="1.0"?>
 <updates>
   <update type="minor" appVersion="158.0.1" platformVersion="158.0.1" buildID="20261028031500"
-          displayVersion="0.3.1" detailsURL="https://github.com/JRanne/vimma/releases/tag/v0.3.1"
+          displayVersion="0.3.1" detailsURL="https://github.com/vimma-browser/vimma/releases/tag/v0.3.1"
           vimmaChannel="vimma" vimmaTarget="Linux_x86_64-gcc3" vimmaSerial="20261028041207"
           vimmaUrgency="security" vimmaAdvisories="MFSA 2026-110">
     <patch type="complete" size="98113536" hashFunction="sha512" hashValue="…"
-           URL="https://github.com/JRanne/vimma/releases/download/v0.3.1/vimma-0.3.1-linux-x86_64.complete.mar"/>
+           URL="https://github.com/vimma-browser/vimma/releases/download/v0.3.1/vimma-0.3.1-linux-x86_64.complete.mar"/>
     <vimmaAppImage size="…" hashFunction="sha512" hashValue="…"
-           URL="https://github.com/JRanne/vimma/releases/download/v0.3.1/vimma-0.3.1-x86_64.AppImage"/>
+           URL="https://github.com/vimma-browser/vimma/releases/download/v0.3.1/vimma-0.3.1-x86_64.AppImage"/>
   </update>
 </updates>
 <!-- vimma-signature v1 key=3f2a91c0 sig=BASE64 -->
@@ -477,12 +477,12 @@ the built updater from an installed tarball; if it does, that hunk joins the sam
 
 **Where the primary key lives** is open question 1. The options:
 
-| Option                                                                  | Automation | If CI or a workflow is compromised                                                                                                                     | If the key leaks                                     | Cost / setup                                                                                                                                |
-| ----------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A. GitHub Actions secret** (Zen's way)                                | full       | anything that runs in the signing job's environment can copy the key out, silently, once                                                               | it signs MARs until rotation, from anywhere, no log  | none; an environment `update-signing` limited to `main` and `v*` tags                                                                       |
-| **C. Cloud KMS via GitHub OIDC** (GCP Cloud KMS or AWS KMS, HSM-backed) | full       | can ask KMS to sign while the job runs, cannot copy the key; every signature is in the cloud audit log; IAM bound to `repo:JRanne/vimma` + environment | cannot leak (non-exportable); revoke the IAM binding | a cloud account; about 1–3 USD a month; NSS signs through the provider's PKCS#11 library or a digest-signing step (new tool: licence check) |
-| B. On a self-hosted build machine (file, or a hardware token)           | —          | —                                                                                                                                                      | —                                                    | **not viable**: Vimma has no self-hosted build machine and none is planned (below)                                                          |
-| D. Offline key + online subkey                                          | —          | —                                                                                                                                                      | —                                                    | **not possible for MARs**: the updater has no chain or expiry, only the two embedded keys; D becomes the cold secondary above               |
+| Option                                                                  | Automation | If CI or a workflow is compromised                                                                                                                            | If the key leaks                                     | Cost / setup                                                                                                                                |
+| ----------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. GitHub Actions secret** (Zen's way)                                | full       | anything that runs in the signing job's environment can copy the key out, silently, once                                                                      | it signs MARs until rotation, from anywhere, no log  | none; an environment `update-signing` limited to `main` and `v*` tags                                                                       |
+| **C. Cloud KMS via GitHub OIDC** (GCP Cloud KMS or AWS KMS, HSM-backed) | full       | can ask KMS to sign while the job runs, cannot copy the key; every signature is in the cloud audit log; IAM bound to `repo:vimma-browser/vimma` + environment | cannot leak (non-exportable); revoke the IAM binding | a cloud account; about 1–3 USD a month; NSS signs through the provider's PKCS#11 library or a digest-signing step (new tool: licence check) |
+| B. On a self-hosted build machine (file, or a hardware token)           | —          | —                                                                                                                                                             | —                                                    | **not viable**: Vimma has no self-hosted build machine and none is planned (below)                                                          |
+| D. Offline key + online subkey                                          | —          | —                                                                                                                                                             | —                                                    | **not possible for MARs**: the updater has no chain or expiry, only the two embedded keys; D becomes the cold secondary above               |
 
 Option B, a key file or a hardware token (for example a YubiKey via PKCS#11) on the
 `vimma-build` runner, assumed a self-hosted build machine. None is registered, none is planned,

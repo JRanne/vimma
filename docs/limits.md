@@ -303,7 +303,7 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
   ([m0-mozilla-services](specs/m0-mozilla-services.md), Settled).
 - The ASRouter `cfr` provider pref is a copy of upstream's value. The bump PR's suites fail when
   it is stale, but the refreshed line is pasted by hand ([runbook](runbook.md), Upstream bumps;
-  [#259](https://github.com/JRanne/vimma/issues/259)).
+  [#259](https://github.com/vimma-browser/vimma/issues/259)).
 
 ## Compatibility and versions
 
@@ -357,7 +357,7 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
   ([ADR-010](adr/010-pr-artifact-builds.md), Known gaps).
 - The nightly full build is not live: `nightly.yml` and `release.yml` still name a self-hosted
   runner label that no runner serves, and stay switched off until they move to GitHub-hosted
-  runners ([#224](https://github.com/JRanne/vimma/issues/224); [runbook](runbook.md), "Full
+  runners ([#224](https://github.com/vimma-browser/vimma/issues/224); [runbook](runbook.md), "Full
   builds"). Until then `skip-if = ["artifact"]` tests run only on local full builds. PRs that touch patches, `configs/`,
   `moz.configure` or branding must report a full-build run
   ([ADR-010](adr/010-pr-artifact-builds.md), [runbook](runbook.md)).
@@ -370,8 +370,8 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
   ([rebase playbook](rebase.md), [m7-upstream-autopilot](specs/m7-upstream-autopilot.md)). Gaps
   that still need a person: merging a green bump PR, pasting a refreshed pref copy that
   `upstream-prefs.mjs` reports, and re-exporting a patch that no longer applies
-  ([#259](https://github.com/JRanne/vimma/issues/259)); releasing the merged bump
-  ([#220](https://github.com/JRanne/vimma/issues/220), [#224](https://github.com/JRanne/vimma/issues/224)).
+  ([#259](https://github.com/vimma-browser/vimma/issues/259)); releasing the merged bump
+  ([#220](https://github.com/vimma-browser/vimma/issues/220), [#224](https://github.com/vimma-browser/vimma/issues/224)).
 - `surfer import` stops at the first patch that fails, and `git apply` has no fuzz: a hunk whose
   context drifted fails like one whose code is gone. `tools/upstream/patch-check.py` reports
   every patch and hunk, and tells the two apart ([m0-rebase-playbook](specs/m0-rebase-playbook.md)).

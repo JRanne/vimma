@@ -26,7 +26,7 @@ Background: [ADR-002](adr/002-upstream-release-channel.md),
 | 8   | Mark ready, CI, merge                     | GitHub                                        | CI ≈ 8 min              |
 
 **When the autopilot's PR is green (the common case) you do only step 8**, until auto-merge of
-a green bump is built ([#259](https://github.com/JRanne/vimma/issues/259)), which removes that
+a green bump is built ([#259](https://github.com/vimma-browser/vimma/issues/259)), which removes that
 step too. Steps 2–7 are for a
 draft: a patch that does not apply, a failing suite, or a release without Mozilla artifacts.
 Decision points are marked **Decide**.

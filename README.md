@@ -4,9 +4,9 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MPL--2.0-666666?labelColor=333333" alt="MPL-2.0 licence" /></a>
-  <a href="https://github.com/JRanne/vimma/stargazers"><img src="https://img.shields.io/github/stars/JRanne/vimma?labelColor=333333&color=666666&logo=github" alt="GitHub stars" /></a>
-  <a href="https://github.com/JRanne/vimma/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/JRanne/vimma/ci.yml?branch=main&label=ci&labelColor=333333&color=666666" alt="CI status on main" /></a>
-  <a href="surfer.json"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FJRanne%2Fvimma%2Fmain%2Fsurfer.json&query=%24.version.version&label=firefox&labelColor=333333&color=666666&logo=firefoxbrowser" alt="Firefox version Vimma is built on" /></a>
+  <a href="https://github.com/vimma-browser/vimma/stargazers"><img src="https://img.shields.io/github/stars/vimma-browser/vimma?labelColor=333333&color=666666&logo=github" alt="GitHub stars" /></a>
+  <a href="https://github.com/vimma-browser/vimma/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/vimma-browser/vimma/ci.yml?branch=main&label=ci&labelColor=333333&color=666666" alt="CI status on main" /></a>
+  <a href="surfer.json"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fvimma-browser%2Fvimma%2Fmain%2Fsurfer.json&query=%24.version.version&label=firefox&labelColor=333333&color=666666&logo=firefoxbrowser" alt="Firefox version Vimma is built on" /></a>
 </p>
 
 # Vimma

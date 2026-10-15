@@ -76,7 +76,7 @@ function run(args, { ppid = 0, env = {}, launcher = LAUNCHER } = {}) {
   return { args: lines, from, status: r.status };
 }
 
-const LINK = "https://github.com/JRanne/vimma";
+const LINK = "https://github.com/vimma-browser/vimma";
 
 describe("vimma-open", () => {
   it("names the app behind xdg-open", () => {

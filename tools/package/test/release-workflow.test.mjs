@@ -37,7 +37,7 @@ describe("release.yml", () => {
     (id) => {
       const cond = condition(all.get(id) ?? "");
       expect(cond).toContain("vars.RELEASE_ENABLED == 'true'");
-      expect(cond).toContain("github.repository == 'JRanne/vimma'");
+      expect(cond).toContain("github.repository == 'vimma-browser/vimma'");
       expect(cond).toContain("(github.event_name == 'release' || github.ref == 'refs/heads/main')");
     },
   );

@@ -11,11 +11,11 @@ Status: accepted · Area: `package.json`, `package-lock.json`, `.npmrc` (new),
 none · ADR: ADR-021 (new, "Mozilla's release key is the trust anchor for the Firefox source");
 [ADR-001](../adr/001-engine-firefox-surfer.md) gains one paragraph on how Surfer is pinned
 
-Issues: [#221](https://github.com/JRanne/vimma/issues/221),
-[#222](https://github.com/JRanne/vimma/issues/222),
-[#223](https://github.com/JRanne/vimma/issues/223),
-[#224](https://github.com/JRanne/vimma/issues/224),
-[#225](https://github.com/JRanne/vimma/issues/225)
+Issues: [#221](https://github.com/vimma-browser/vimma/issues/221),
+[#222](https://github.com/vimma-browser/vimma/issues/222),
+[#223](https://github.com/vimma-browser/vimma/issues/223),
+[#224](https://github.com/vimma-browser/vimma/issues/224),
+[#225](https://github.com/vimma-browser/vimma/issues/225)
 
 ## Summary
 
@@ -226,10 +226,10 @@ diff of the published package is small and is exactly the code that runs.
 **R7. GitHub settings.** Read through the REST API on 2026-10-14 and GitHub's documentation:
 
 - Fork pull request workflow approval is `all_external_contributors`
-  (`GET /repos/JRanne/vimma/actions/permissions/fork-pr-contributor-approval`): a workflow run
+  (`GET /repos/vimma-browser/vimma/actions/permissions/fork-pr-contributor-approval`): a workflow run
   for a pull request from any outside contributor's fork waits until a person with write access
   approves it. This is the current setting; it is not something this spec has to change.
-- No self-hosted runner is registered (`GET /repos/JRanne/vimma/actions/runners`:
+- No self-hosted runner is registered (`GET /repos/vimma-browser/vimma/actions/runners`:
   `total_count` 0), and no repository variables are set, so `RELEASE_ENABLED` and
   `NIGHTLY_ENABLED` are unset and neither build runs.
 - The repository owner is a user account, so runner groups and larger runners (R11) are not
@@ -616,7 +616,7 @@ repository, and GitHub's hosted runners. Each rule links its tests (Tests, below
   `node_modules`.
 - B5. A job of a workflow that a pull request, a comment, an issue or another workflow run can
   trigger **never** runs on a self-hosted runner. **⚠ setting:** fork pull request approval is
-  `all_external_contributors` (`gh api repos/JRanne/vimma/actions/permissions/fork-pr-contributor-approval`).
+  `all_external_contributors` (`gh api repos/vimma-browser/vimma/actions/permissions/fork-pr-contributor-approval`).
 - B6. The Safe Browsing key **must** be available only to jobs in the `build` environment,
   deployable only from `main` and `v*` tags, and only the two build jobs use it.
 - B7. A change to Mozilla's release key **must** open a `security` issue within 4 hours of

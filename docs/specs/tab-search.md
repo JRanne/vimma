@@ -6,7 +6,7 @@ Status: draft · Area: `packages/vimma-core/src/` (`picker.mjs`,
 `host/VimmaHost.sys.mjs`, `ui/picker.mjs`); `src/browser/themes/shared/vimma/picker.css` ·
 Upstream patches: none · ADR: none. No new dependency.
 
-Issue: [#215](https://github.com/JRanne/vimma/issues/215)
+Issue: [#215](https://github.com/vimma-browser/vimma/issues/215)
 
 Builds on [m2-picker-rename](m2-picker-rename.md) (the goto picker),
 [m3-workspaces](m3-workspaces.md) (sub-spec 5, the workspace picker and its `m`),

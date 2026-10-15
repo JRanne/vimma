@@ -594,7 +594,7 @@ describe("built-in palettes", () => {
     }
   });
 
-  // vimma.dev's assets/css/site.css (JRanne/vimma-site): the colours the site has.
+  // vimma.dev's assets/css/site.css (vimma-browser/vimma-site): the colours the site has.
   test.each([
     [
       "dark",

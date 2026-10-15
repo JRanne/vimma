@@ -1,6 +1,6 @@
 # Spec: m3-workspaces
 
-Status: implemented, except the leftovers in [#260](https://github.com/JRanne/vimma/issues/260)
+Status: implemented, except the leftovers in [#260](https://github.com/vimma-browser/vimma/issues/260)
 (the pinned-tab notice of decision 11, `lostContainers` in the status bar, a key to move a
 background tab); split into sub-specs (see Breakdown). Sub-specs 1 (store), 2a (routing), 2b
 (switching), 3 (persistence), 4a (lifecycle), 4b (move), 5 (picker), 6 (side panel), 7 (e2e

@@ -5,7 +5,7 @@ user-visible change) · Area: `tools/sites/` (new), `tools/e2e/launcher.mjs` (on
 `.github/workflows/sites.yml` (new), `package.json` (one script). No upstream patch, no product
 code, no new dependency.
 
-Issue: [#262](https://github.com/JRanne/vimma/issues/262)
+Issue: [#262](https://github.com/vimma-browser/vimma/issues/262)
 
 Engine paths are relative to `engine/` (Firefox 157.0.1). Timings were measured with
 `gh run list` / `gh run view` on 2026-10-12. GitHub's billing and runner facts were checked
@@ -61,7 +61,7 @@ runner is not used (decision 10).
   Safe Browsing secret (`.github/workflows/nightly.yml:1-30`). The site suite must not go
   there: it would need that self-hosted runner and sit next to a secret, and it needs neither.
   It reuses e2e.yml's artifact build in a workflow of its own. (Since changed: no self-hosted
-  runner is used or planned; the nightly moves to a hosted runner with [#224](https://github.com/JRanne/vimma/issues/224), spec
+  runner is used or planned; the nightly moves to a hosted runner with [#224](https://github.com/vimma-browser/vimma/issues/224), spec
   build-supply-chain, decision 6. The site suite still stays out of it, because it needs
   neither the full build nor the secret.)
 - Step times of a recent successful e2e run (run 38229657690): checkout, Node, `npm ci` 12 s;

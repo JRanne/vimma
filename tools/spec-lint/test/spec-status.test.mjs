@@ -66,16 +66,18 @@ describe("driftFindings", () => {
 describe("renderReport", () => {
   test("lists each finding with a link to its spec, and says how to clear it", () => {
     const md = renderReport([{ file: "a.md", message: "accepted, but #1 is closed" }], {
-      repo: "JRanne/vimma",
+      repo: "vimma-browser/vimma",
       sha: "abc123",
     });
     expect(md).toContain(
-      "- [`docs/specs/a.md`](https://github.com/JRanne/vimma/blob/abc123/docs/specs/a.md): accepted, but #1 is closed",
+      "- [`docs/specs/a.md`](https://github.com/vimma-browser/vimma/blob/abc123/docs/specs/a.md): accepted, but #1 is closed",
     );
     expect(md).toMatch(/docs\/specs\/README\.md/);
   });
 
   test("an empty report says so", () => {
-    expect(renderReport([], { repo: "JRanne/vimma", sha: "abc" })).toMatch(/match their issues/);
+    expect(renderReport([], { repo: "vimma-browser/vimma", sha: "abc" })).toMatch(
+      /match their issues/,
+    );
   });
 });

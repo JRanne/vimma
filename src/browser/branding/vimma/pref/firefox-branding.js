@@ -21,8 +21,8 @@ pref("vimma.startpage.newtab", true);
 pref("app.update.interval", 86400); // 24 hours
 // Give the user x seconds to react before showing the big UI. default=24 hours
 pref("app.update.promptWaitTime", 86400);
-pref("app.update.url.manual", "https://github.com/JRanne/vimma");
-pref("app.update.url.details", "https://github.com/JRanne/vimma");
+pref("app.update.url.manual", "https://github.com/vimma-browser/vimma");
+pref("app.update.url.details", "https://github.com/vimma-browser/vimma");
 pref("app.releaseNotesURL", "");
 pref("app.releaseNotesURL.aboutDialog", "");
 pref("app.releaseNotesURL.prompt", "");

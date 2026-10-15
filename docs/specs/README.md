@@ -124,7 +124,7 @@ upstream patch.").
 Status: draft | accepted | implemented · Area: <files and modules touched> · Upstream patches:
 <none, or each new patch with its ADR-003 register line> · ADR: <links, or none>
 
-Issue: [#<n>](https://github.com/JRanne/vimma/issues/<n>)
+Issue: [#<n>](https://github.com/vimma-browser/vimma/issues/<n>)
 
 ## Summary
 

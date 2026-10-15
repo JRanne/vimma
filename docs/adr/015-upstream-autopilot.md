@@ -40,7 +40,7 @@ red run. Reusing `e2e.yml` keeps one definition of "the suites pass".
   before Vimma has been daily-driven; revisit with M6.
 - **Full builds in CI**: do not fit a hosted runner; the nightly runner does them after merge.
   (Since changed: no self-hosted runner is used; the nightly moves to a hosted runner with
-  [#224](https://github.com/JRanne/vimma/issues/224).)
+  [#224](https://github.com/vimma-browser/vimma/issues/224).)
 - **A drift check in `ci.yml`**: would turn every unrelated PR red and need the network in CI.
 
 ## Consequences
