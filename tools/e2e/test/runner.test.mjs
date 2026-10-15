@@ -137,7 +137,7 @@ describe("runScenarios", () => {
     expect(results[0]).toMatchObject({ status: "timeout" });
   });
 
-  // Review of PR #35: timeouts must be hard; a hanging launch or vimma-ctl must not overrun.
+  // Timeouts must be hard: a hanging launch or vimma-ctl must not overrun.
   it("aborts a hanging launch at the timeout and returns on time", async () => {
     /** @type {AbortSignal[]} */
     const signals = [];

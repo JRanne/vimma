@@ -95,7 +95,7 @@ describe("the dialect probe (decision 3)", () => {
       version: "0.56.2",
     });
   });
-  test("a probe reply that is neither dialect's is no Hyprland (review, PR #151)", () => {
+  test("a probe reply that is neither dialect's is no Hyprland", () => {
     expect(detectDialect(version, "error: nope")).toEqual({ error: "neither dialect" });
     expect(detectDialect(version, "")).toEqual({ error: "neither dialect" });
     expect(detectDialect(version, 'Invalid dispatcher, requested "hl.dsp.no_op()"')).toEqual({
@@ -314,7 +314,7 @@ describe("parseActiveWorkspace", () => {
   });
 });
 
-// Review of PR #151, major A: the normal window must never stay in special:vimma.
+// The normal window must never stay in special:vimma.
 describe("planRescue: whatever is stuck in special:vimma comes out", () => {
   const normal = client({ workspace: { id: -98, name: PARK } });
   test("to the other window's workspace", () => {

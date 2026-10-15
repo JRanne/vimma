@@ -131,7 +131,7 @@ describe("XWD (Xvfb -fbdir)", () => {
     expect(() => decodeXwd(Buffer.alloc(200))).toThrow(/not an XWD/);
   });
 
-  // Review of PR #35: a hostile or corrupt header must fail fast, never hang or misread.
+  // A hostile or corrupt header must fail fast, never hang or misread.
   const black = () => xvfbXwd(3, 2, [[0, 0, 0]], false);
   /** @param {number} field @param {number} value */
   const patched = (field, value) => {

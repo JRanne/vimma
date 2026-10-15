@@ -28,7 +28,9 @@ const CODE_PATTERNS = [
   ...PATTERNS,
   // a review as the source of a reason: "Security review of #182", "security review, finding 2"
   // (process-wording: quotes what the pattern matches)
-  /\b(?:security\s+)?review(?:\s+of\s+#\d+|,\s+finding\s+\d+)/gi,
+  /\b(?:security\s+)?review(?:\s+of\s+(?:PR\s+)?#\d+|,\s+(?:finding\s+\d+|PR\s+#\d+))/gi,
+  // a dated answer: "The user (2026-10-12): ..." (process-wording: quotes the match)
+  /\buser\s+\(20\d\d-/gi,
   // a quoted answer: user: "agent should be able to …" (process-wording: quotes the match)
   /\buser:\s*["'“‘]/gi,
   // the contributor instructions for coding agents, not a reason a reader can check
