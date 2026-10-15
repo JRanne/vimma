@@ -2,13 +2,16 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// The `prefix+g` goto picker (spec: docs/specs/m2-picker-rename.md) and the `prefix+w`
+// The `prefix+g` goto picker, which is tab search (specs: docs/specs/m2-picker-rename.md,
+// docs/specs/tab-search.md), and the `prefix+w`
 // workspace picker (docs/specs/m3-workspaces.md, sub-spec 5). A modal <dialog> in the chrome
 // document, as the help overlay. Keys reach it only through VimmaHost (`key`), which consumes
 // every one while it is open; the logic is core picker.mjs, this only renders it.
 
 import { addonRowText } from "../core/addons.mjs";
-import { itemId, openPicker, pickerKey, setPickerItems } from "../core/picker.mjs";
+import { AGENT_GLYPH } from "../core/agent.mjs";
+import { itemId, openPicker, pickerKey, sectionOf, setPickerItems } from "../core/picker.mjs";
+import { accessibleName, countText, rowRange, sectionHeading } from "../core/tabsearch.mjs";
 
 /** @import { AnyItem, AddonOp, PickerItem, PickerState, WorkspaceItem } from "../core/picker.mjs" */
 /** @import { AddonItem } from "../core/addons.mjs" */
@@ -26,6 +29,7 @@ const styled = new WeakSet();
  * @property {() => AnyItem[]} items  what to list, in order
  * @property {() => string | null} activeId  selected when the picker opens
  * @property {(id: string) => void} select  Enter on a row; the picker has closed already
+ * @property {(id: string) => void} [reopen]  Enter on a recently closed row; closed already
  * @property {(id: string) => void} [move]  `m` on a workspace row; the picker has closed already
  * @property {(op: AddonOp, id: string) => void} [addon]  an add-on key; the picker stays open
  */
@@ -39,16 +43,51 @@ const styled = new WeakSet();
  * @property {string} hint
  * @property {(item: any) => [index: string, right: string]} cells
  * @property {string} [empty]  the list's one row when there are no items
+ * @property {boolean} [tabs]  tab search (docs/specs/tab-search.md): typing from the first
+ *   key, section headings, a muted cell for workspace, window and markers, host highlights,
+ *   accessible names and a live count
  */
 
 /** @type {PickerLook} */
 const GOTO = {
   id: PICKER_ID,
-  title: "Go to tab",
+  title: "Tabs",
   listLabel: "Tabs",
-  hint: "j/k move · / search · Enter go · Esc close",
-  cells: (/** @type {PickerItem} */ item) => [String(item.tabIndex), hostOf(item.url)],
+  hint: "type to search · ctrl+n/p move · Tab section · Enter go · Esc close",
+  cells: (/** @type {PickerItem} */ item) => [
+    item.closed ? "" : String(item.tabIndex),
+    item.closedWindow ? closedWindowText(item.tabCount ?? 0) : hostOf(item.url),
+  ],
+  tabs: true,
 };
+
+/** @param {number} n */
+function closedWindowText(n) {
+  return `${n} ${n === 1 ? "tab" : "tabs"}`;
+}
+
+/**
+ * Tab search's muted cell: workspace (`◇` for the agent's), window, markers (decision 4).
+ * @param {PickerItem} item
+ * @returns {{ text: string, className: string }[]}
+ */
+function metaParts(item) {
+  /** @type {{ text: string, className: string }[]} */
+  const parts = [];
+  if (item.agent) parts.push({ text: AGENT_GLYPH, className: "vimma-picker-agent" });
+  if (item.workspaceName) parts.push({ text: item.workspaceName, className: "" });
+  if (item.window) parts.push({ text: `w${item.window}`, className: "" });
+  if (item.playing) parts.push({ text: "♪", className: "vimma-picker-playing" });
+  if (item.muted) parts.push({ text: "muted", className: "" });
+  if (item.pinned) parts.push({ text: "pinned", className: "" });
+  if (item.closed) {
+    parts.push({
+      text: item.closedWindow ? "closed window" : "closed",
+      className: "vimma-picker-closed",
+    });
+  }
+  return parts;
+}
 
 /** @type {PickerLook} */
 const WORKSPACES = {
@@ -109,17 +148,28 @@ export class GotoPicker {
     this.state = null;
     /** @type {Element | null} focused before open; close() falls back if it is gone */
     this.opener = null;
+    /** @type {HTMLElement | null} tab search's live count */
+    this.count = null;
+    /** @type {string | null} the query the live count was last said for */
+    this.counted = null;
   }
 
   get isOpen() {
     return !!this.dialog?.open;
   }
 
-  open() {
+  /**
+   * @param {{ query?: string }} [options]  tab search's query already typed (`:tabsearch text`)
+   */
+  open({ query = "" } = {}) {
     if (this.isOpen) return;
     this.opener = Services.focus.focusedElement;
     const dialog = this.dialog ?? this.build();
-    this.state = openPicker(this.host.items(), { activeId: this.host.activeId() });
+    this.counted = null;
+    this.state = openPicker(this.host.items(), {
+      activeId: this.host.activeId(),
+      ...(this.look.tabs ? { typeFirst: true, query } : {}),
+    });
     this.render();
     dialog.showModal();
     // The list, not the dialog: aria-activedescendant names the active row only while the
@@ -142,6 +192,10 @@ export class GotoPicker {
     if (effect?.type === "select") {
       this.close();
       this.host.select(effect.id);
+    }
+    if (effect?.type === "reopen") {
+      this.close();
+      this.host.reopen?.(effect.id);
     }
     if (effect?.type === "move") {
       this.close();
@@ -182,7 +236,7 @@ export class GotoPicker {
   destroy() {
     this.close();
     this.dialog?.remove();
-    this.dialog = this.query = this.list = null;
+    this.dialog = this.query = this.list = this.count = null;
   }
 
   /** @private */
@@ -193,7 +247,8 @@ export class GotoPicker {
     const searching = state.mode === "search" || state.query !== "";
     query.textContent = searching ? `/${state.query}` : "";
     query.hidden = !searching;
-    /** @type {HTMLElement} */ (query.nextElementSibling).hidden = searching;
+    // Tab search is always typing: its hint stays (it names the keys that move).
+    /** @type {HTMLElement} */ (query.nextElementSibling).hidden = searching && !this.look.tabs;
 
     /**
      * @param {string} tag
@@ -206,34 +261,102 @@ export class GotoPicker {
       node.textContent = text;
       return node;
     };
+    /**
+     * `text` with `ranges` marked, into `node`.
+     * @param {HTMLElement} node
+     * @param {string} text
+     * @param {[number, number][]} ranges
+     */
+    const marked = (node, text, ranges) => {
+      let at = 0;
+      for (const [start, end] of ranges) {
+        node.append(text.slice(at, start));
+        node.append(el("mark", "", text.slice(start, end)));
+        at = end;
+      }
+      node.append(text.slice(at));
+      return node;
+    };
     const list = /** @type {HTMLElement} */ (this.list);
-    list.replaceChildren(
-      ...state.matches.map((m, i) => {
-        const row = el("li", "vimma-picker-row");
-        row.id = `${this.look.id}-${i}`;
-        row.setAttribute("role", "option");
-        row.setAttribute("aria-selected", String(i === state.selected));
-        row.dataset.id = itemId(m.item);
-        if ("tabId" in m.item) row.dataset.tabId = m.item.tabId;
-        if (m.item.active) row.classList.add("vimma-picker-active");
-        if ("enabled" in m.item && !m.item.enabled) row.classList.add("vimma-picker-disabled");
-        const title = el("span", "vimma-picker-title");
-        let at = 0;
-        for (const [start, end] of m.highlights.display ?? []) {
-          title.append(m.item.display.slice(at, start));
-          title.append(el("mark", "", m.item.display.slice(start, end)));
-          at = end;
-        }
-        title.append(m.item.display.slice(at));
-        const [index, right] = this.look.cells(m.item);
-        row.append(
-          el("span", "vimma-picker-index", index),
-          title,
-          el("span", "vimma-picker-host", right),
+    const tabs = !!this.look.tabs;
+    const { start, end } = tabs
+      ? rowRange(state.matches.length, state.selected)
+      : { start: 0, end: state.matches.length };
+    // Section headings in the grouped view (blank query): not options, so j/k and screen readers
+    // skip them; each option's name carries its section instead (tab-search decision 11).
+    const grouped = tabs && !state.query.trim();
+    /** @type {Map<string, number>} */
+    const sizes = new Map();
+    if (grouped) {
+      for (const m of state.matches) {
+        const key = sectionOf(m.item);
+        sizes.set(key, (sizes.get(key) ?? 0) + 1);
+      }
+    }
+    /** @type {HTMLElement[]} */
+    const nodes = [];
+    /** @param {string} text */
+    const more = (text) => {
+      const li = el("li", "vimma-picker-more", text);
+      li.setAttribute("role", "none");
+      nodes.push(li);
+    };
+    if (start > 0) more(`… ${start} more above`);
+    let section = start > 0 ? sectionOf(/** @type {any} */ (state.matches[start - 1]).item) : null;
+    for (let i = start; i < end; i++) {
+      const m = /** @type {import("../core/picker.mjs").Match} */ (state.matches[i]);
+      if (grouped && sectionOf(m.item) !== section) {
+        section = sectionOf(m.item);
+        const heading = el(
+          "li",
+          "vimma-picker-heading",
+          sectionHeading(/** @type {PickerItem} */ (m.item), sizes.get(section) ?? 0),
         );
-        return row;
-      }),
-    );
+        heading.setAttribute("role", "presentation");
+        nodes.push(heading);
+      }
+      const row = el("li", "vimma-picker-row");
+      row.id = `${this.look.id}-${i}`;
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", String(i === state.selected));
+      row.dataset.id = itemId(m.item);
+      if ("tabId" in m.item) row.dataset.tabId = m.item.tabId;
+      if (m.item.active) row.classList.add("vimma-picker-active");
+      if ("enabled" in m.item && !m.item.enabled) row.classList.add("vimma-picker-disabled");
+      const title = marked(
+        el("span", "vimma-picker-title"),
+        m.item.display,
+        m.highlights.display ?? [],
+      );
+      const [index, right] = this.look.cells(m.item);
+      row.append(el("span", "vimma-picker-index", index), title);
+      if (tabs) {
+        const item = /** @type {PickerItem} */ (m.item);
+        row.setAttribute("aria-label", accessibleName(item));
+        const meta = el("span", "vimma-picker-meta");
+        for (const part of metaParts(item)) {
+          if (meta.childNodes.length) meta.append(" ");
+          meta.append(el("span", part.className, part.text));
+        }
+        // The host cell shows the URL match's highlights where they fall in the host.
+        const host = el("span", "vimma-picker-host");
+        const at = item.url.indexOf(right);
+        const ranges = (m.highlights.url ?? [])
+          .map(([a, b]) => /** @type {[number, number]} */ ([a - at, b - at]))
+          .filter(([a, b]) => at >= 0 && a >= 0 && b <= right.length);
+        row.append(meta, marked(host, right, ranges));
+      } else {
+        row.append(el("span", "vimma-picker-host", right));
+      }
+      nodes.push(row);
+    }
+    if (end < state.matches.length) more(`… ${state.matches.length - end} more, type to narrow`);
+    list.replaceChildren(...nodes);
+    if (tabs && this.count && this.counted !== state.query) {
+      // Said when the query changes, not on every move (tab-search decision 11).
+      this.counted = state.query;
+      this.count.textContent = countText(state.matches.length);
+    }
     if (!state.items.length && this.look.empty) {
       // Not an option: the listbox is empty, and describes itself with this line.
       const empty = el("li", "vimma-picker-empty", this.look.empty);
@@ -244,7 +367,9 @@ export class GotoPicker {
     } else {
       list.removeAttribute("aria-describedby");
     }
-    const current = state.matches.length ? list.children[state.selected] : undefined;
+    const current = state.matches.length
+      ? list.querySelector(`#${this.look.id}-${state.selected}`)
+      : undefined;
     if (current) {
       list.setAttribute("aria-activedescendant", current.id);
       current.scrollIntoView({ block: "nearest" });
@@ -281,6 +406,15 @@ export class GotoPicker {
     hint.className = "vimma-picker-hint";
     hint.textContent = this.look.hint;
     header.append(h1, query, hint);
+    if (this.look.tabs) {
+      dialog.classList.add("vimma-picker-tabs");
+      const count = el("span");
+      count.className = "vimma-picker-count";
+      count.setAttribute("role", "status");
+      count.setAttribute("aria-live", "polite");
+      header.append(count);
+      this.count = count;
+    }
     const list = el("ul");
     list.setAttribute("role", "listbox");
     list.setAttribute("aria-label", this.look.listLabel);

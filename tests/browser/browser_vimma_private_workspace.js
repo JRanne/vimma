@@ -383,6 +383,54 @@ add_task(async function a_normal_window_never_shows_a_private_title_or_url() {
   await until(() => isActive(priv), "Enter on the private row goes to the private workspace");
 });
 
+// docs/specs/tab-search.md decision 5: tab search lists other windows and recently closed tabs,
+// but never across the private line, in either direction.
+add_task(async function tab_search_keeps_private_and_normal_apart_both_ways() {
+  const [priv] = privateWindows();
+  const titled = async (gB, url, title) => {
+    const tab = BrowserTestUtils.addTab(gB, url);
+    await BrowserTestUtils.browserLoaded(tab.linkedBrowser);
+    await SpecialPowers.spawn(tab.linkedBrowser, [title], (t) => {
+      content.document.title = t;
+    });
+    await until(() => tab.label === title, `titled ${title}`);
+    return tab;
+  };
+  // A private tab closed in the private window; a normal tab open and one closed.
+  BrowserTestUtils.removeTab(await titled(priv.gBrowser, `${FORM}?closed`, `${MARK}-closed`));
+  const normal = await titled(gBrowser, `${PAGE}-ts-open`, "tsnormal-open");
+  BrowserTestUtils.removeTab(await titled(gBrowser, `${PAGE}-ts-closed`, "tsnormal-closed"));
+
+  const listed = (win) => {
+    const dialog = win.document.getElementById(GOTO_ID);
+    const names = [...dialog.querySelectorAll("[role=option]")].map((o) =>
+      o.getAttribute("aria-label"),
+    );
+    return `${dialog.textContent}\n${names.join("\n")}`;
+  };
+
+  await SimpleTest.promiseFocus(window);
+  await focusPage(window);
+  prefix("g");
+  await until(() => window.document.getElementById(GOTO_ID)?.open, "tab search in normal");
+  const fromNormal = listed(window);
+  Assert.stringContains(fromNormal, "tsnormal-open", "sanity: it lists this window's tabs");
+  Assert.stringContains(fromNormal, "tsnormal-closed", "and normal closed tabs");
+  Assert.ok(!fromNormal.includes(MARK), "no private tab, open or closed");
+  Assert.ok(!fromNormal.includes("vimma private page"), "no private title");
+  EventUtils.synthesizeKey("KEY_Escape");
+
+  await SimpleTest.promiseFocus(priv);
+  await focusPage(priv);
+  prefix("g", {}, priv);
+  await until(() => priv.document.getElementById(GOTO_ID)?.open, "tab search in private");
+  const fromPrivate = listed(priv);
+  Assert.stringContains(fromPrivate, `${MARK}-closed`, "the private window lists its closed tab");
+  Assert.ok(!fromPrivate.includes("tsnormal"), "and no normal tab, open or closed");
+  EventUtils.synthesizeKey("KEY_Escape", {}, priv);
+  BrowserTestUtils.removeTab(normal);
+});
+
 add_task(async function a_tab_moves_in_after_y_and_never_out() {
   const [priv] = privateWindows();
   await runCommand("wsmove 1", priv);

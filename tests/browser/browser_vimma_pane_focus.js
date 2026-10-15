@@ -136,7 +136,7 @@ add_task(async function the_picker_selecting_pane_2s_tab_focuses_pane_2() {
   const selects = countSelects();
   prefix("g");
   await until(() => document.getElementById("vimma-picker")?.open, "the picker opens");
-  for (const ch of "/bravo") EventUtils.synthesizeKey(ch);
+  for (const ch of "bravo") EventUtils.synthesizeKey(ch); // typing at once (tab-search)
   EventUtils.synthesizeKey("KEY_Enter");
   await until(() => gBrowser.selectedTab === b, "Enter selects Bravo's tab");
   await settle();

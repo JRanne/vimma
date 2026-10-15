@@ -10,6 +10,7 @@ import {
   pickerSelection,
   scoreField,
   setPickerItems,
+  unitsBuilt,
   workspaceItems,
 } from "../src/picker.mjs";
 
@@ -426,5 +427,167 @@ describe("workspace picker (m3-workspaces 5)", () => {
     const [a, b, c] = model.workspaces;
     const reordered = workspaceItems({ ...model, workspaces: [c, a, b].map((w) => ({ ...w })) });
     expect(selectedWs(setPickerItems(s, reordered))).toBe("w3");
+  });
+});
+
+describe("tab search (docs/specs/tab-search.md)", () => {
+  const model = {
+    active: "w2",
+    workspaces: [
+      { id: "w1", name: "work", tabs: ["t1", "t2"], activeTab: "t2" },
+      { id: "wa", name: "agent", tabs: ["a1"], activeTab: "a1" },
+      { id: "w2", name: "personal", tabs: ["t3", "t4"], activeTab: "t3" },
+    ],
+  };
+  /** @type {Record<string, { title: string, url: string, playing?: boolean,
+   *   muted?: boolean, pinned?: boolean }>} */
+  const tabInfo = {
+    t1: { title: "Jira 412", url: "https://jira.example.com/412", playing: true },
+    t2: { title: "Docs", url: "https://docs.example.com/" },
+    a1: { title: "Docs", url: "https://docs.example.com/agent" },
+    t3: { title: "Radio", url: "https://radio.fi/", muted: true },
+    t4: { title: "Pinned mail", url: "https://mail.fi/", pinned: true },
+  };
+  const tabs = pickerItems(model, (id) => tabInfo[id], {}, { agentId: "wa" });
+  const closed = /** @type {PickerItem} */ (
+    /** @type {unknown} */ ({
+      ...tabs[0],
+      tabId: "closed:7",
+      title: "Old docs",
+      url: "https://docs.example.com/old",
+      display: "Old docs",
+      closed: true,
+      tabIndex: 0,
+      active: false,
+      markers: "closed",
+      playing: undefined,
+    })
+  );
+  const list = [...tabs, closed];
+
+  test("the current workspace comes first, the agent workspace last, rows marked", () => {
+    expect(tabs.map((i) => [i.tabId, i.workspaceName, i.tabIndex])).toEqual([
+      ["t3", "personal", 1],
+      ["t4", "personal", 2],
+      ["t1", "work", 1],
+      ["t2", "work", 2],
+      ["a1", "agent", 1],
+    ]);
+    expect(tabs.filter((i) => i.agent).map((i) => i.tabId)).toEqual(["a1"]);
+    expect(tabs.find((i) => i.tabId === "t1")).toMatchObject({ playing: true, markers: "playing" });
+    expect(tabs.find((i) => i.tabId === "t3")).toMatchObject({ muted: true, markers: "muted" });
+    expect(tabs.find((i) => i.tabId === "t4")).toMatchObject({ pinned: true, markers: "pinned" });
+    expect(tabs.find((i) => i.tabId === "a1")?.markers).toBe("agent");
+    // Another window keeps its own order (only the agent moves last) and carries its number.
+    const other = pickerItems(model, (id) => tabInfo[id], {}, { agentId: "wa", window: 2 });
+    expect(other.map((i) => i.tabId)).toEqual(["t1", "t2", "t3", "t4", "a1"]);
+    expect(other.every((i) => i.window === 2)).toBe(true);
+    expect(tabs.some((i) => "window" in i)).toBe(false);
+  });
+
+  test("marker words are a searchable field; a tie never ranks an agent row first", () => {
+    expect(filterItems(list, "playing").map((m) => m.item.tabId)).toEqual(["t1"]);
+    expect(filterItems(list, "muted").map((m) => m.item.tabId)).toEqual(["t3"]);
+    expect(filterItems(list, "closed").map((m) => m.item.tabId)).toEqual(["closed:7"]);
+    expect(filterItems(list, "old").map((m) => m.item.tabId)).toEqual(["closed:7"]);
+    expect(filterItems(list, "docs.example.com/old")[0]?.highlights.url).toEqual([[8, 28]]);
+    const agentFirst = [/** @type {PickerItem} */ (tabs[4]), /** @type {PickerItem} */ (tabs[3])];
+    const docs = filterItems(agentFirst, "docs").map((m) => m.item.tabId);
+    expect(docs).toEqual(["t2", "a1"]);
+  });
+
+  test("Enter on a closed row reopens it; no key manages tabs from the list", () => {
+    const s = openPicker(list, { activeId: "closed:7" });
+    expect(press(s, ["enter"]).effect).toEqual({ type: "reopen", id: "closed:7" });
+    expect(press(openPicker(list, { activeId: "t1" }), ["enter"]).effect).toEqual({
+      type: "select",
+      id: "t1",
+    });
+    // The side panel manages tabs; the list only finds them (docs/specs/tab-search.md, 7).
+    for (const key of ["x", "u", "m", "d"]) {
+      expect(pickerKey(s, key), key).toEqual({ state: s, effect: null });
+    }
+  });
+
+  test("type-first: every letter types, Esc closes, ctrl+n/p and arrows move", () => {
+    const s = openPicker(list, { activeId: "t3", typeFirst: true });
+    expect(s.mode).toBe("search");
+    expect(selectedTab(s)).toBe("t3");
+    const typed = press(s, ["j", "k", "x", "u", "m", "q", "/"]);
+    expect(typed.effect).toBeNull();
+    expect(typed.state.query).toBe("jkxumq/");
+    expect(press(s, ["esc"]).effect).toEqual({ type: "close" });
+    expect(press(s, ["r", "esc"]).effect).toEqual({ type: "close" });
+    expect(selectedTab(press(s, ["ctrl+n"]).state)).toBe("t4");
+    expect(selectedTab(press(s, ["down", "up", "ctrl+p"]).state)).toBe("t3");
+    expect(press(s, ["d", "o", "c", "s", "backspace"]).state.query).toBe("doc");
+  });
+
+  test("tab and shift+tab jump sections, with a query and in search mode too", () => {
+    const s = openPicker(list, { activeId: "t3" });
+    const ids = (/** @type {PickerState} */ x) => selectedTab(x);
+    expect(ids(press(s, ["tab"]).state)).toBe("t1");
+    expect(ids(press(s, ["tab", "tab"]).state)).toBe("a1");
+    expect(ids(press(s, ["tab", "tab", "tab"]).state)).toBe("closed:7");
+    expect(ids(press(s, ["tab", "tab", "tab", "tab"]).state)).toBe("closed:7");
+    expect(ids(press(s, ["tab", "tab", "shift+tab"]).state)).toBe("t1");
+    expect(ids(press(s, ["j", "shift+tab"]).state)).toBe("t3");
+    // With a query, the next section's best match; search mode stays.
+    const q = press(s, ["/", "d", "o", "c", "s"]).state;
+    expect(q.matches.map((m) => m.item.tabId)).toEqual(["t2", "a1", "closed:7"]);
+    const next = press(q, ["tab"]).state;
+    expect(ids(next)).toBe("a1");
+    expect(next.mode).toBe("search");
+    expect(next.query).toBe("docs");
+    expect(ids(press(next, ["tab"]).state)).toBe("closed:7");
+    expect(ids(press(next, ["shift+tab"]).state)).toBe("t2");
+    // The add-on and workspace pickers have one section: nothing to jump to.
+    const one = openPicker(tabs.slice(0, 2), {});
+    expect(pickerKey(one, "tab").state).toBe(one);
+  });
+
+  test("openPicker can start type-first with a query already typed (:tabsearch text)", () => {
+    const s = openPicker(list, { activeId: "t1", typeFirst: true, query: "radio" });
+    expect(s.mode).toBe("search");
+    expect(s.query).toBe("radio");
+    expect(s.matches.map((m) => m.item.tabId)).toEqual(["t3"]);
+    expect(openPicker(list, { typeFirst: true }).query).toBe("");
+    expect(openPicker(list, {}).mode).toBe("browse");
+  });
+
+  test("500 open and 25 closed items: each key well under 8 ms; units are built once", () => {
+    const words = ["jira", "docs", "mail", "calendar", "bank", "news", "radio", "wiki", "git"];
+    const big = Array.from({ length: 525 }, (_, n) => ({
+      .../** @type {PickerItem} */ (tabs[0]),
+      tabId: `b${n}`,
+      title: `${words[n % words.length]} ${n} – ${words[(n * 7) % words.length]} board`,
+      display: `${words[n % words.length]} ${n} – ${words[(n * 7) % words.length]} board`,
+      url: `https://${words[(n * 3) % words.length]}.example.com/item/${n}`,
+      workspaceName: `ws${n % 5}`,
+      ...(n >= 500 ? { closed: /** @type {const} */ (true), markers: "closed" } : {}),
+    }));
+    const start = press(openPicker(big, {}), ["/"]).state;
+    const keys = [..."abc", "space", ..."def", "ctrl+w", ..."jira", "ctrl+u", ..."docs"];
+    keys.push("space", ..."wiki", "backspace", "backspace");
+    /** One pass over `keys`: each key's time in ms. */
+    const pass = () => {
+      let s = start;
+      return keys.map((key) => {
+        const t0 = performance.now();
+        s = pickerKey(s, key).state;
+        return performance.now() - t0;
+      });
+    };
+    // Warm-up passes let the JIT optimise the matcher, as it is after the first few keys in a
+    // browser; each key's time is then its fastest of five passes, so a GC pause or a busy
+    // neighbour in one pass is not counted as its cost.
+    for (let i = 0; i < 3; i++) pass();
+    const before = unitsBuilt();
+    const runs = Array.from({ length: 5 }, pass);
+    const times = keys.map((_, k) => Math.min(...runs.map((r) => /** @type {number} */ (r[k]))));
+    expect(times.length).toBeGreaterThanOrEqual(20);
+    expect(Math.max(...times)).toBeLessThan(8);
+    // Every text was segmented in the warm-up: the measured passes build no units at all.
+    expect(unitsBuilt() - before).toBe(0);
   });
 });
