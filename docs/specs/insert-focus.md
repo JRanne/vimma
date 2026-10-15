@@ -36,9 +36,12 @@ explicit `i` ([m1-actor-insert-scroll](m1-actor-insert-scroll.md), "Per-browser 
 2. **Leaving it.** `Esc` ends explicit insert as it ends any insert (`mode.normal`: the field is
    blurred and the tab is in normal mode). A new top document in the tab (a navigation or a
    reload) ends its hold: the first focus report from the new document decides the mode by the
-   usual rules. A same-document navigation (`history.pushState`) keeps it.
+   usual rules. A same-document navigation (`history.pushState`) keeps it, and so does going
+   back to the same document restored from the back-forward cache, since that keeps its inner
+   window.
 3. **`i` goes back to the last field.** `i` focuses the text field that last took focus in the
-   tab, if its document is still loaded and the field is still connected, visible and editable,
+   tab, if its frame still shows the same document and the field is still connected, visible and
+   editable,
    including a field in a cross-origin frame and a contenteditable editor. Otherwise it focuses
    the page's first visible text field, as before. With neither, it is the pass-through insert of
    [m1-actor-insert-scroll](m1-actor-insert-scroll.md).
@@ -78,13 +81,14 @@ it in one place.
 
 For `i`, the child keeps a `WeakRef` to the editable element that last took focus in its document
 (not one focused by Firefox's find, [m1-find](m1-find.md)). The host keeps, per tab, the
-`BrowsingContext` whose report last named an editable element on `focusin`. `i` asks that frame,
-if it is not discarded and belongs to the tab, to focus its field (`Vimma:FocusLast`, a query
+`BrowsingContext` whose report last named an editable element on `focusin`, with its document's
+`innerWindowId`. `i` asks that frame,
+if it is not discarded, belongs to the tab and still shows that document, to focus its field (`Vimma:FocusLast`, a query
 that answers whether the field took focus); on `false` or an error it sends `Vimma:FocusInput`
 to the top frame, as before.
 
 1. **Explicit insert ends only on `Esc` or a new document.** Keys typed after `i` stay the page's,
-   because the user said they were about to type into the page, and a page moving focus is the
+   because pressing `i` means the next keys are meant for the page, and a page moving focus is the
    page's business, not a request to leave. Rejected: following the focus as Vimium's `i` does
    (exit when an element takes focus, then let the focus-tracking mode decide), because that is
    the behaviour that sent GitHub keystrokes to Vimma; it works in Vimium only because Vimium
@@ -116,10 +120,12 @@ A page cannot enter explicit insert: only the parent's key handling runs `mode.i
 `page.focus_input`. A page cannot end it either, which is the point: before this change a page
 could turn the user's next keys into Vimma commands by moving focus at the right moment. The new
 `Vimma:FocusLast` message carries no data and goes only to a frame of the same tab that has
-reported focus; the worst a compromised frame can do is focus an element of its own. The frame
+reported focus, and only while that frame still shows the document that reported it (the
+host keeps the frame's inner window ID with it), so a frame that has since loaded another site's
+page is not asked; the worst a compromised frame can do is focus an element of its own. The frame
 check of [m1-actor-insert-scroll](m1-actor-insert-scroll.md) ("only the focused frame may
-report") still guards which frame is remembered. Rule P2 in [security.md](../security.md) holds
-this with tests.
+report") still guards which frame is remembered. Rules K2 and K3 in [security.md](../security.md)
+hold this with tests.
 
 ## Tests
 
@@ -136,7 +142,8 @@ login form with `autofocus` that moves to the password on `Enter`) and `file_vim
 - Behaviour 2: `explicit_insert_ends_with_the_page`.
 - Behaviour 3: `i_focuses_the_field_last_used`, `i_focuses_the_editor_last_used`,
   `i_focuses_the_field_last_used_in_a_cross_origin_frame`,
-  `i_falls_back_to_the_first_field_when_the_last_is_gone`; the first-field case stays in
+  `i_falls_back_to_the_first_field_when_the_last_is_gone`,
+  `i_falls_back_to_the_first_field_when_the_last_frame_navigated`; the first-field case stays in
   `browser_vimma_insert_scroll.js` (`i_focuses_the_first_input_and_enters_insert`).
 - Behaviour 4: `an_autofocused_login_form_opens_in_insert_and_enter_keeps_it`,
   `a_page_moving_focus_from_a_field_to_a_button_leaves_insert`, and the focus cases of
@@ -149,7 +156,7 @@ The behaviour 1 and 3 tests failed before the change (the page lost `t` and `j`,
 
 - `docs/guide.md`, "Normal and insert mode" and the key table's `i` row: `i` returns to the last
   field; insert from `i` or `gi` lasts until `Esc`.
-- `docs/security.md`: a section for page modes, rules P1 and P2.
+- `docs/security.md`: a section for page modes, rules K1 to K3.
 - `CHANGELOG.md`: a Fixed line, added by the maintainer at merge time.
 
 ## Delivery

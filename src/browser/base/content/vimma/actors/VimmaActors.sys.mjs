@@ -330,14 +330,23 @@ export const VimmaActors = {
   },
 
   /**
-   * `i`: focuses the text field the user was last in, if `frame` (the frame it was in) still
-   * has it, else the first visible text field in the top frame.
+   * `i`: focuses the text field the user was last in, if its frame still shows the same
+   * document and still has it, else the first visible text field in the top frame. Only a frame
+   * of this tab is asked, and only the document that reported the field (a frame that has since
+   * loaded another page, perhaps from another site, is not).
    * @param {any} browser XULBrowserElement
-   * @param {any} [frame] BrowsingContext
+   * @param {{ frame: any, windowId: number }} [last] the frame (BrowsingContext) and its
+   *   document's inner window ID
    */
-  async focusInput(browser, frame) {
+  async focusInput(browser, last) {
     const top = browser.browsingContext;
-    if (frame && !frame.isDiscarded && frame.top === top) {
+    const frame = last?.frame;
+    if (
+      frame &&
+      !frame.isDiscarded &&
+      frame.top === top &&
+      frame.currentWindowGlobal?.innerWindowId === last.windowId
+    ) {
       try {
         if (await actorFor(frame)?.sendQuery("Vimma:FocusLast")) return;
       } catch {

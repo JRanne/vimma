@@ -198,6 +198,28 @@ add_task(async function i_focuses_the_field_last_used_in_a_cross_origin_frame() 
   });
 });
 
+add_task(async function i_falls_back_to_the_first_field_when_the_last_frame_navigated() {
+  await withPage(async (browser) => {
+    const frame = browser.browsingContext.children[0];
+    await pageFocuses(frame, "framed");
+    await waitForMode(browser, "insert");
+    await leaveInsert(browser);
+    const before = frame.currentWindowGlobal.innerWindowId;
+    // The page loads a new document into its frame; the field the user typed in is gone.
+    await SpecialPowers.spawn(browser, [], () => {
+      const el = content.document.getElementById("frame");
+      el.src = el.src + "?again";
+    });
+    await TestUtils.waitForCondition(
+      () => frame.currentWindowGlobal && frame.currentWindowGlobal.innerWindowId !== before,
+      "the frame has a new document",
+    );
+    EventUtils.synthesizeKey("i");
+    await waitForMode(browser, "insert");
+    await waitForActive(browser, "first");
+  });
+});
+
 add_task(async function i_falls_back_to_the_first_field_when_the_last_is_gone() {
   await withPage(async (browser) => {
     await pageFocuses(browser, "second");

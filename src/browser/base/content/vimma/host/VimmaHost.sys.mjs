@@ -781,8 +781,9 @@ function enterExplicitInsert(browser) {
 }
 
 /**
- * The frame of each tab whose text field last took focus, so `i` can go back to it.
- * @type {WeakMap<object, any>}  browser → BrowsingContext
+ * The frame of each tab whose text field last took focus, and its document's inner window ID,
+ * so `i` can go back to that field.
+ * @type {WeakMap<object, { frame: any, windowId: number }>}  browser → BrowsingContext and ID
  */
 const lastFieldFrame = new WeakMap();
 
@@ -1393,7 +1394,10 @@ export const VimmaHost = {
     const mode = browserModes.get(browser) ?? "normal";
     const site = siteInsert(browser);
     if (frame && trigger === "focusin" && isEditable(descriptor, { site }).editable) {
-      lastFieldFrame.set(browser, frame);
+      lastFieldFrame.set(browser, {
+        frame,
+        windowId: frame.currentWindowGlobal?.innerWindowId ?? 0,
+      });
     }
     // A page moving focus about (a file finder focusing its result list) does not end the
     // explicit insert of `i` or `gi`; a report from a newer top document than its own does.
