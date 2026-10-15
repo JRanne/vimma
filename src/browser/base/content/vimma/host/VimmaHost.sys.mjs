@@ -780,6 +780,7 @@ const browserModes = new WeakMap();
  */
 function setBrowserMode(browser, mode) {
   if (mode !== "insert") explicitInsert.delete(browser);
+  else escapeHold.delete(browser);
   if ((browserModes.get(browser) ?? "normal") === mode) return;
   browserModes.set(browser, mode);
   VimmaHost.onModeChange(browser, mode);
@@ -792,6 +793,23 @@ function setBrowserMode(browser, mode) {
  * @type {WeakMap<object, number>}
  */
 const explicitInsert = new WeakMap();
+
+/**
+ * Tabs whose user pressed Esc (docs/specs/insert-focus.md, behaviour 6): the inner window ID of
+ * the top document it was pressed on. While it is shown, a focus the page's script makes on its
+ * own does not enter insert. Entering insert, a focus report the user's input caused, a key the
+ * page gets and a new top document end the hold.
+ * @type {WeakMap<object, number>}
+ */
+const escapeHold = new WeakMap();
+
+/**
+ * The document of each tab that Esc's blur last went to, and that blur's generation
+ * (behaviour 7): a report from that document with an older generation was sent before the
+ * blur and is dropped.
+ * @type {WeakMap<object, { windowId: number, gen: number }>}
+ */
+const lastBlur = new WeakMap();
 
 /** @param {any} browser */
 function topWindowId(browser) {
@@ -850,7 +868,10 @@ export const CONTENT_RUNNERS = Object.freeze({
     // Esc in copy mode: the frame drops its selection and caret first.
     if (browserModes.get(b) === "visual") VimmaActors.caret(b, "exit");
     setBrowserMode(b, "normal");
-    VimmaActors.blur(b);
+    escapeHold.set(b, topWindowId(b));
+    const blur = VimmaActors.blur(b);
+    if (blur) lastBlur.set(b, blur);
+    else lastBlur.delete(b);
   },
   "hint.follow": (b, a) => VimmaHost._startHints(b, a),
   "hint.follow_new_tab": (b, a) => VimmaHost._startHints(b, a),
@@ -1451,10 +1472,13 @@ export const VimmaHost = {
   /**
    * A focus report from the content actor (VimmaParent) for a tab's <browser>.
    * @param {any} browser
-   * @param {{ descriptor: EditableDescriptor, trigger: InsertTrigger, frame?: any }} report
-   *   `frame`: the BrowsingContext that reported
+   * @param {{ descriptor: EditableDescriptor, trigger: InsertTrigger, frame?: any,
+   *   windowId?: number, user?: boolean, gen?: number }} report
+   *   `frame`: the BrowsingContext that reported; `windowId`: its document's inner window ID;
+   *   `user`: the focus came from the user's input; `gen`: the last blur generation the
+   *   document had
    */
-  onFocusReport(browser, { descriptor, trigger, frame }) {
+  onFocusReport(browser, { descriptor, trigger, frame, windowId, user = false, gen = 0 }) {
     const mode = browserModes.get(browser) ?? "normal";
     const site = siteInsert(browser);
     if (frame && trigger === "focusin" && isEditable(descriptor, { site }).editable) {
@@ -1462,6 +1486,17 @@ export const VimmaHost = {
         frame,
         windowId: frame.currentWindowGlobal?.innerWindowId ?? 0,
       });
+    }
+    // Sent by the document Esc's blur went to before the blur reached it (its focusin for a key
+    // typed just before Esc): the blur's own reports decide.
+    const blur = lastBlur.get(browser);
+    if (blur && windowId === blur.windowId && gen < blur.gen) return;
+    // After Esc, the page's own script focusing a field (a dialog that pulls focus back on
+    // blur) does not undo it; the user's next focus does.
+    const hold = escapeHold.get(browser);
+    if (hold !== undefined) {
+      if (user || hold !== topWindowId(browser)) escapeHold.delete(browser);
+      else if (trigger === "focusin") return;
     }
     // A page moving focus about (a file finder focusing its result list) does not end the
     // explicit insert of `i` or `gi`; a report from a newer top document than its own does.
@@ -1471,6 +1506,15 @@ export const VimmaHost = {
     const next = insertModeAfterFocus({ mode: copy ? "normal" : mode, trigger, descriptor, site });
     if (copy && next !== "insert") return;
     setBrowserMode(browser, next === "insert" ? "insert" : "normal");
+  },
+
+  /**
+   * The user clicked in the focused frame of `browser` (VimmaParent) where no focus report
+   * says so: it ends the hold of Esc (insert-focus behaviour 6).
+   * @param {any} browser
+   */
+  onUserClick(browser) {
+    escapeHold.delete(browser);
   },
 
   /**
@@ -1638,6 +1682,13 @@ export const VimmaHost = {
     const filtering = state.help.filterFocused || state.bookmarks.filterFocused;
     if (typing && filtering && state.dispatcher.pending().length === 0) return;
     this._dispatch(win, state, e, mode, chord);
+    // A key the page gets after Esc is the user acting on the page again: what the page
+    // focuses in answer (Tab into a frame, a shortcut that opens its search box) is the user's
+    // focus, though it may reach a frame whose process handles no input (insert-focus 6).
+    if (!e.defaultPrevented) {
+      const browser = this._focusedBrowser(win);
+      if (browser) escapeHold.delete(browser);
+    }
     this._emit(state);
   },
 

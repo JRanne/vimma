@@ -1,0 +1,30 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- Fixture for browser_vimma_insert_focus.js: a modal dialog that traps focus the way some
+   - sites do. Its name field takes focus on load, and whenever focus leaves the dialog the page
+   - puts it back in that field a task later. Esc closes the dialog (the native cancel). -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vimma focus trap</title>
+  </head>
+  <body>
+    <dialog id="dialog">
+      <input id="name" autofocus />
+      <input id="email" />
+    </dialog>
+    <script>
+      const dialog = document.getElementById("dialog");
+      const name = document.getElementById("name");
+      dialog.addEventListener("focusout", (e) => {
+        if (dialog.contains(e.relatedTarget)) return;
+        setTimeout(() => {
+          if (dialog.open) name.focus();
+        }, 0);
+      });
+      dialog.showModal();
+    </script>
+  </body>
+</html>

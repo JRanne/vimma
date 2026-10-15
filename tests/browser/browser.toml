@@ -25,6 +25,8 @@ support-files = [
 support-files = [
   "file_vimma_insert_focus.html",
   "file_vimma_insert_autofocus.html",
+  "file_vimma_insert_tab_frame.html",
+  "file_vimma_insert_trap.html",
   "file_vimma_frame.html",
 ]
 

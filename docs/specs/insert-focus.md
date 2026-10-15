@@ -4,7 +4,8 @@ Status: implemented · Area: `host/VimmaHost.sys.mjs`, `host/page-ops.mjs`,
 `actors/VimmaActors.sys.mjs`, `actors/VimmaParent.sys.mjs`, `actors/VimmaChild.sys.mjs` · Upstream
 patches: none · ADR: none
 
-Issue: [#165](https://github.com/vimma-browser/vimma/issues/165)
+Issues: [#165](https://github.com/vimma-browser/vimma/issues/165),
+[#298](https://github.com/vimma-browser/vimma/issues/298) (the follow-up below)
 
 ## Summary
 
@@ -47,7 +48,9 @@ explicit `i` ([m1-actor-insert-scroll](m1-actor-insert-scroll.md), "Per-browser 
    [m1-actor-insert-scroll](m1-actor-insert-scroll.md).
 4. **Focus insert is unchanged.** Insert entered by focusing a field (a click, `Tab`, a page's
    `autofocus`) follows the focus: a page moving focus from one field to another keeps insert,
-   and focus moving to a button, a link or the body returns to normal.
+   and focus moving to a button, a link or the body returns to normal. (Since changed: after
+   `Esc`, a focus the page's script makes on its own no longer enters insert; see "Follow-up:
+   Esc holds against the page".)
 5. `gi` keeps its count: `gi` focuses the first field, `3gi` the third
    ([m1-actor-insert-scroll](m1-actor-insert-scroll.md), "Follow-up: normal-mode extras").
 
@@ -162,6 +165,148 @@ The behaviour 1 and 3 tests failed before the change (the page lost `t` and `j`,
 ## Delivery
 
 One pull request, closing #165.
+
+## Follow-up: Esc holds against the page
+
+Two cases let `Esc` fail to leave insert ([#298](https://github.com/vimma-browser/vimma/issues/298)),
+both against the principle that `Esc` always gets the user out
+([m1-core-logic](m1-core-logic.md), "As a user, `Esc` always does the one obvious thing").
+
+### Problem
+
+- **A page that puts focus back.** A modal dialog that traps focus refocuses its field when
+  focus leaves the dialog, a task after the blur. `Esc` set normal mode and blurred the field;
+  the page focused it again, and that focus report entered focus insert (behaviour 4). Every
+  `Esc` repeated this, so the user could not reach normal mode, and because `Esc` in insert is
+  Vimma's, the page never saw an `Esc` and its dialog never closed.
+- **A late report from a frame.** `Tab` from a field into a cross-origin frame's field, then
+  `Esc` at once: the frame's focus report for the `Tab` reached the parent after the `Esc`, and
+  entered insert again. Until the blur's own report followed, the next key went to the page; when
+  the blur had gone to the other document, nothing followed and the tab stayed in insert.
+
+### Behaviour
+
+6. **After `Esc`, the page cannot put the tab back in insert by itself.** While the top document
+   on which `Esc` left insert is shown, a focus the page's script makes on its own (a focus trap,
+   a timer, a field focused after a network reply) leaves the tab in normal mode, even when it
+   lands in a text field. The user's next action on the page ends this: a click anywhere in it
+   (also into the field the page already focused, or on an element that takes no focus), `Tab`
+   or any other key the page gets, `i`, `gi`, a hint on a field. A new top document ends it too. A second `Esc`, in normal mode, reaches the page first
+   ([firefox-keys](firefox-keys.md) decision 6), so a dialog that closes on `Esc` closes.
+7. **A report sent before `Esc` does not undo it.** A focus report that a document sent before
+   the `Esc`'s blur reached it, or that a frame sent for focus the user moved before the `Esc`
+   (a `Tab` into a cross-origin frame), does not enter insert after that `Esc`.
+
+### Research
+
+- **Firefox.** `nsIDOMWindowUtils.isHandlingUserInput` "Returns true if a user input is being
+  handled" (`dom/interfaces/base/nsIDOMWindowUtils.idl:1766-1770`, Firefox 158.0); the child
+  already uses it to tell the finder's focus from the user's ([m1-find](m1-find.md), #164). A
+  page's script that focuses from a timer or from its `focusout` handler runs outside any input
+  event, and so does the focus that Vimma's `Vimma:Blur` causes, since it arrives as an IPC
+  message.
+- **Firefox.** `Tab` into an out-of-process frame does not run in the frame's process as input:
+  the embedding document's process asks the parent (`PBrowserBridge` `NavigateByKey`,
+  `dom/ipc/PBrowserBridge.ipdl:107`), which sends the frame's process `NavigateByKey`
+  (`dom/ipc/BrowserParent.cpp:3802-3803`), and the frame focuses its first field from that
+  message. In a mochitest on Firefox 158.0 the frame's focus report for that `Tab` had
+  `isHandlingUserInput` false, and it reached the parent after an `Esc` sent right after the
+  `Tab` (`esc_right_after_tab_into_a_cross_origin_frame_stays_in_normal`, which failed 8 of 8
+  runs before this change).
+- **Firefox.** Messages from one content process to the parent arrive in the order sent, and a
+  `JSWindowActor` message to a frame arrives after the input events the parent forwarded to that
+  process before it. So a report that a document sent before it handled `Vimma:Blur` reaches the
+  parent before that blur's own reports, and possibly after the `Esc`.
+- **Firefox.** `Node.flattenedTreeParentNode` is chrome-only (`dom/webidl/Node.webidl:111-112`)
+  and walks the flattened tree, so it reaches a text field from the anonymous editor a click
+  inside the field lands on, which `Node.contains` does not.
+
+### Design
+
+- **The hold.** `mode.normal` (Esc) records, per tab `<browser>`, the top document's
+  `innerWindowId` (`escapeHold`). While it matches, `onFocusReport` drops a `focusin` report
+  that is not the user's. A report is the user's when the child sends it while
+  `isHandlingUserInput` is true or while it is focusing for a Vimma key (`i`, `gi`, a hint), and
+  says so in its `user` field. Such a report ends the hold, as does any keydown the host lets
+  through to the page in that tab (not consumed), entering insert (`setBrowserMode`), and a new
+  top document. `recheck` reports are not dropped; they can only give normal after `Esc`.
+- **A click on the focused field.** The child's `mousedown` handler reports `focusin` for the
+  focused element when it is editable and the click is inside it (in the flattened tree), since
+  a click on a field that already has focus fires no focus event and would otherwise leave the
+  user in normal mode with no way to start typing by clicking.
+- **Any other click.** For every other trusted `mousedown`, the child sends `Vimma:Click`, which
+  carries no data and is taken only from the focused frame (as `Vimma:Focus` is); the host ends
+  the hold. A click on an element that takes no focus (a toolbar item that prevents its
+  `mousedown`, a `div` with a click handler) sends no focus report of its own, and a field the
+  page focuses after it, from a timer or a network reply, is the user's doing.
+- **Blur generations.** Each `Esc` blur carries a generation (`Vimma:Blur { gen }`, counted per
+  tab, so that a content process cannot count the `Esc` presses of other tabs). The child keeps the last one it handled and sends it in every report. The host
+  keeps, per tab, the document the blur went to (its `innerWindowId`) and the generation, and
+  drops a report from that document with an older one.
+
+### Decisions
+
+7. **After `Esc`, only the user's focus enters insert,** because a page that answers a blur by
+   focusing again is not the user asking to type, and following it made `Esc` useless there. A
+   page that focuses a field because the user acted (a click, a key it handles, `Tab`) still
+   enters insert, so ordinary sites behave as before. Rejected: ignoring every focus after `Esc`
+   until `i`, because a user who clicks a field or tabs into one expects to type there, and
+   because a page's own search shortcut (a key Vimma has no binding for) would no longer type.
+   Rejected: limiting the hold to a time window after `Esc`, because a focus trap refocuses
+   whenever focus leaves, at any time, and a window would only move the failure.
+8. **A key the page gets ends the hold, in the parent,** because a frame in another process
+   handles `Tab` from an IPC message, not as input, so its report cannot say it was the user's;
+   the host sees every key before the page and knows that the user acted. Keys Vimma consumes
+   (`j`, a count, `Esc` in insert) do not end it on their keydown. Their `keyup` still reaches the
+   page as user input (Firefox treats a `keyup` other than `Esc` as such), so a page that focuses
+   a field on `keyup` ends the hold: that focus answers the user's key, which is the rule.
+9. **A click on the field the page focused enters insert,** because after behaviour 6 that field
+   can hold focus in normal mode, and clicking a field is the plainest way to say "type here".
+10. **Reports carry the blur generation they have seen,** because the parent cannot otherwise
+    tell a report sent before the blur from one sent after it: both come from the same frame
+    and the same document. The document's `innerWindowId` scopes the generation, so a frame
+    that loads a new document (whose actor starts at 0) is not taken as stale. Rejected:
+    ignoring every report until the blur's answer comes back, because a blur sent to a document
+    that no longer has focus has no report to wait for, and a timeout would drop the user's
+    real next focus.
+11. **The second `Esc` is the page's,** because in normal mode `Esc` reaches the page first
+    (firefox-keys decision 6): with the hold, a focus-trapping dialog behaves like any other, and
+    the user closes it with `Esc` `Esc`. Rejected: passing the first `Esc` in insert to the page
+    as well, because a page that handles `Esc` in its field (an autocomplete list) would then
+    see it and Vimma would also leave insert, doing two things for one key.
+
+### Security and privacy
+
+The new report fields (`user`, `gen`) come from a content process, which may be compromised. A
+forged `user: true` or a high `gen` lets a report do what any report could before this change
+(enter insert in its own tab, K1); they can only narrow what a report does after `Esc`. `Vimma:Click`
+carries no data and only ends the hold, which a forged `user: true` could do as well. A page
+cannot set the hold, and ends it only by focusing while it handles the user's input. Rule K4 in
+[security.md](../security.md) holds behaviour 6 with tests.
+
+### Tests
+
+`tests/browser/browser_vimma_insert_focus.js`, fixtures `file_vimma_insert_trap.html` (a modal
+`<dialog>` whose script refocuses its field when focus leaves the dialog; `Esc` closes it) and
+`file_vimma_insert_tab_frame.html` (a field, then a cross-origin frame with a field):
+
+- Behaviour 6: `after_esc_a_page_refocusing_its_field_stays_in_normal` (`j` is Vimma's, the second
+  `Esc` closes the dialog), `after_esc_on_a_trapping_page_i_click_and_tab_enter_insert`,
+  `after_esc_tab_into_a_cross_origin_frame_enters_insert` (a scripted focus stays normal, `Tab`
+  into the frame enters insert), `a_page_focusing_a_field_after_a_click_on_no_control_enters_insert`,
+  and `a_page_focusing_a_field_after_a_click_enters_insert` (guards what held).
+- Behaviour 7: `esc_right_after_tab_into_a_cross_origin_frame_stays_in_normal` (the tab's mode
+  changes only once after `Esc`).
+
+All but the guard failed before the change; under CPU load (two CPUs, four busy loops) the tests
+failed 8 of 8 runs before and passed 12 of 12 after.
+
+### Docs and changelog
+
+- `docs/guide.md`, "Normal and insert mode": a page cannot pull the tab back into insert after
+  `Esc`; a dialog that keeps focus closes with a second `Esc`.
+- `docs/security.md`: rule K4.
+- `CHANGELOG.md`: a Fixed line, added by the maintainer at merge time.
 
 ## Open questions
 

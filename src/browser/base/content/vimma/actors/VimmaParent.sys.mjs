@@ -10,11 +10,12 @@ import { parseDescriptor } from "../core/editable.mjs";
 import { VimmaHost } from "../host/VimmaHost.sys.mjs";
 
 const TRIGGERS = new Set(["focusin", "recheck"]);
+const MESSAGES = new Set(["Vimma:Focus", "Vimma:MouseSelection", "Vimma:Click"]);
 
 export class VimmaParent extends JSWindowActorParent {
   /** @param {{ name: string, data: any }} msg */
   receiveMessage(msg) {
-    if (msg.name !== "Vimma:Focus" && msg.name !== "Vimma:MouseSelection") return;
+    if (!MESSAGES.has(msg.name)) return;
     // From a content process, which may be compromised: only the frame that has focus speaks
     // for the tab (a hidden cross-origin frame must not flip its mode), and only a well-formed
     // report is taken. The focus manager learns of a focus change before the child's report,
@@ -29,9 +30,24 @@ export class VimmaParent extends JSWindowActorParent {
       if (browser) VimmaHost.onMouseSelection(browser);
       return;
     }
+    if (msg.name === "Vimma:Click") {
+      // The user clicked in the focused frame: a page focus after Esc may enter insert again.
+      if (browser) VimmaHost.onUserClick(browser);
+      return;
+    }
     const trigger = msg.data?.trigger;
     const descriptor = parseDescriptor(msg.data?.descriptor);
     if (!browser || !TRIGGERS.has(trigger) || !descriptor) return;
-    VimmaHost.onFocusReport(browser, { descriptor, trigger, frame: this.browsingContext });
+    // `user` and `gen` only narrow what a report may do after Esc (docs/specs/insert-focus.md):
+    // a forged one can do no more than any report could before them.
+    const gen = Number.isSafeInteger(msg.data?.gen) ? msg.data.gen : 0;
+    VimmaHost.onFocusReport(browser, {
+      descriptor,
+      trigger,
+      frame: this.browsingContext,
+      windowId: this.manager.innerWindowId,
+      user: msg.data?.user === true,
+      gen,
+    });
   }
 }

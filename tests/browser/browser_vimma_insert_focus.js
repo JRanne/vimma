@@ -18,6 +18,8 @@ const ROOT = getRootDirectory(gTestPath).replace(
 );
 const PAGE = ROOT + "file_vimma_insert_focus.html";
 const LOGIN = ROOT + "file_vimma_insert_autofocus.html";
+const TRAP = ROOT + "file_vimma_insert_trap.html";
+const TAB_FRAME = ROOT + "file_vimma_insert_tab_frame.html";
 
 /** Vimma's j step, in CSS pixels. */
 const STEP = 60;
@@ -276,4 +278,220 @@ add_task(async function explicit_insert_ends_with_the_page() {
     await pageFocuses(browser, "submit");
     await waitForMode(browser, "normal");
   });
+});
+
+/**
+ * Counts the focusin events `#id` gets from now on, in the page.
+ * @param {XULBrowserElement} browser
+ * @param {string} id
+ */
+function countFocusins(browser, id) {
+  return SpecialPowers.spawn(browser, [id], (i) => {
+    const win = content.wrappedJSObject;
+    win.vimmaFocusins = 0;
+    content.document.getElementById(i).addEventListener("focusin", () => win.vimmaFocusins++);
+  });
+}
+
+/**
+ * Resolves once `#id` has had a focusin since countFocusins and has focus, and the parent has
+ * handled the page's focus report for it: a report is sent in the focusin, and a task answers
+ * after the messages the page process sent before it.
+ * @param {XULBrowserElement} browser
+ * @param {string} id
+ */
+async function waitForPageRefocus(browser, id) {
+  await TestUtils.waitForCondition(
+    () =>
+      SpecialPowers.spawn(
+        browser,
+        [id],
+        (i) =>
+          content.wrappedJSObject.vimmaFocusins > 0 && content.document.activeElement?.id === i,
+      ),
+    `the page focused #${id} again`,
+  );
+  await SpecialPowers.spawn(browser, [], () => {});
+}
+
+/**
+ * The value of the field `#id`.
+ * @param {XULBrowserElement | BrowsingContext} target
+ * @param {string} id
+ */
+function fieldValue(target, id) {
+  return SpecialPowers.spawn(target, [id], (i) => content.document.getElementById(i).value);
+}
+
+// Behaviour 6: after Esc, the page focusing a field from its own script does not enter insert.
+add_task(async function after_esc_a_page_refocusing_its_field_stays_in_normal() {
+  await withPage(
+    async (browser) => {
+      await waitForActive(browser, "name");
+      await countFocusins(browser, "name");
+      await leaveInsert(browser);
+      // The dialog's script puts the focus back into its field after the blur.
+      await waitForPageRefocus(browser, "name");
+      Assert.equal(VimmaHost._browserMode(browser), "normal", "the tab stays in normal");
+
+      EventUtils.synthesizeKey("j");
+      await SpecialPowers.spawn(browser, [], () => {});
+      Assert.equal(await fieldValue(browser, "name"), "", "j is not typed into the field");
+      Assert.ok(!(await pageKeys(browser)).includes("j"), "j is Vimma's");
+
+      // The second Esc is normal mode's: the page has it first, and the dialog closes.
+      EventUtils.synthesizeKey("KEY_Escape");
+      await TestUtils.waitForCondition(
+        () =>
+          SpecialPowers.spawn(browser, [], () => !content.document.getElementById("dialog").open),
+        "the page's Esc closes its dialog",
+      );
+      Assert.equal(VimmaHost._browserMode(browser), "normal", "the tab is in normal");
+    },
+    TRAP,
+    "insert",
+  );
+});
+
+add_task(async function after_esc_on_a_trapping_page_i_click_and_tab_enter_insert() {
+  await withPage(
+    async (browser) => {
+      await waitForActive(browser, "name");
+      await countFocusins(browser, "name");
+      await leaveInsert(browser);
+      await waitForPageRefocus(browser, "name");
+
+      EventUtils.synthesizeKey("i");
+      await waitForMode(browser, "insert");
+      EventUtils.synthesizeKey("a");
+      await TestUtils.waitForCondition(
+        async () => (await fieldValue(browser, "name")) === "a",
+        "after i, a is typed",
+      );
+
+      await countFocusins(browser, "name");
+      await leaveInsert(browser);
+      await waitForPageRefocus(browser, "name");
+      // A click on the field the page focused: it already has focus, so only the click tells.
+      await BrowserTestUtils.synthesizeMouseAtCenter("#name", {}, browser);
+      await waitForMode(browser, "insert");
+      EventUtils.synthesizeKey("b");
+      await TestUtils.waitForCondition(
+        async () => (await fieldValue(browser, "name")) === "ab",
+        "after a click, b is typed",
+      );
+
+      await countFocusins(browser, "name");
+      await leaveInsert(browser);
+      await waitForPageRefocus(browser, "name");
+      EventUtils.synthesizeKey("KEY_Tab");
+      await waitForActive(browser, "email");
+      await waitForMode(browser, "insert");
+      EventUtils.synthesizeKey("c");
+      await TestUtils.waitForCondition(
+        async () => (await fieldValue(browser, "email")) === "c",
+        "after Tab, c is typed",
+      );
+    },
+    TRAP,
+    "insert",
+  );
+});
+
+add_task(async function a_page_focusing_a_field_after_a_click_enters_insert() {
+  await withPage(async (browser) => {
+    await pageFocuses(browser, "first");
+    await waitForMode(browser, "insert");
+    await leaveInsert(browser);
+    // A click on the page, then its script focuses a field: the user acted after the Esc.
+    await SpecialPowers.spawn(browser, [], () => {
+      const doc = content.document;
+      doc.getElementById("button").addEventListener("click", () => {
+        content.setTimeout(() => doc.getElementById("second").focus(), 0);
+      });
+    });
+    await BrowserTestUtils.synthesizeMouseAtCenter("#button", {}, browser);
+    await waitForActive(browser, "second");
+    await waitForMode(browser, "insert");
+  });
+});
+
+add_task(async function a_page_focusing_a_field_after_a_click_on_no_control_enters_insert() {
+  await withPage(async (browser) => {
+    await pageFocuses(browser, "first");
+    await waitForMode(browser, "insert");
+    await leaveInsert(browser);
+    // A click on something that takes no focus (a toolbar item that prevents its mousedown),
+    // then the page focuses a field a task later: the click is the user's.
+    await SpecialPowers.spawn(browser, [], () => {
+      const doc = content.document;
+      const item = doc.createElement("div");
+      item.id = "item";
+      item.textContent = "item";
+      item.addEventListener("mousedown", (e) => e.preventDefault());
+      item.addEventListener("click", () => {
+        content.setTimeout(() => doc.getElementById("second").focus(), 0);
+      });
+      doc.body.prepend(item);
+    });
+    await BrowserTestUtils.synthesizeMouseAtCenter("#item", {}, browser);
+    await waitForActive(browser, "second");
+    await waitForMode(browser, "insert");
+  });
+});
+
+// Behaviour 7: a focus report the frame sent before Esc reached it does not undo the Esc.
+add_task(async function esc_right_after_tab_into_a_cross_origin_frame_stays_in_normal() {
+  await withPage(async (browser) => {
+    const frame = browser.browsingContext.children[0];
+    await pageFocuses(browser, "first");
+    await waitForMode(browser, "insert");
+    EventUtils.synthesizeKey("KEY_Tab");
+    // Esc before the frame's process has reported the focus Tab gave it.
+    const seen = [];
+    const original = VimmaHost.onModeChange;
+    VimmaHost.onModeChange = (b, mode) => {
+      if (b === browser) seen.push(mode);
+      original.call(VimmaHost, b, mode);
+    };
+    try {
+      EventUtils.synthesizeKey("KEY_Escape");
+      EventUtils.synthesizeKey("j");
+      await TestUtils.waitForCondition(
+        () => Services.focus.focusedContentBrowsingContext === frame,
+        "Tab has moved focus into the frame",
+      );
+      // Every report either document sent before these round trips has been handled.
+      await SpecialPowers.spawn(frame, [], () => {});
+      await SpecialPowers.spawn(browser, [], () => {});
+      await SpecialPowers.spawn(frame, [], () => {});
+      Assert.deepEqual(seen, ["normal"], "after Esc the tab never went back to insert");
+      Assert.equal(await fieldValue(frame, "framed"), "", "j is not typed into the frame");
+      Assert.equal(await fieldValue(browser, "first"), "", "nor into the page");
+    } finally {
+      VimmaHost.onModeChange = original;
+    }
+  }, TAB_FRAME);
+});
+
+// After Esc, Tab into a cross-origin frame's field enters insert: its process handles no input,
+// but the parent passed the page a key.
+add_task(async function after_esc_tab_into_a_cross_origin_frame_enters_insert() {
+  await withPage(async (browser) => {
+    const frame = browser.browsingContext.children[0];
+    await pageFocuses(browser, "first");
+    await waitForMode(browser, "insert");
+    await leaveInsert(browser);
+    await pageFocuses(browser, "first");
+    await SpecialPowers.spawn(browser, [], () => {});
+    Assert.equal(VimmaHost._browserMode(browser), "normal", "a scripted focus stays in normal");
+    EventUtils.synthesizeKey("KEY_Tab");
+    await waitForActive(frame, "framed");
+    await waitForMode(browser, "insert");
+    EventUtils.synthesizeKey("j");
+    await TestUtils.waitForCondition(
+      async () => (await fieldValue(frame, "framed")) === "j",
+      "j is typed into the frame",
+    );
+  }, TAB_FRAME);
 });
