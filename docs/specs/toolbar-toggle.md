@@ -884,7 +884,7 @@ Write first; paste red, then green (CONTRIBUTING.md, "TDD").
   permission prompt's panel, border, colour scheme, main button and focus ring have the theme's
   colours.
 - **e2e:**
-  - The baselines that show the toolbar (`m0-happy-path-help.png`, `m0-mcp-stdio-question.png`,
+  - The baselines that show the toolbar (`m0-happy-path-help.png`, `m0-mcp-stdio-question.png`, `m0-mcp-stdio-grant.png`,
     `m3-private-workspace.png`, `m4-split-panes.png`) change once, because the toolbar takes the
     theme's colours (decision 21); the status bar in them is unchanged (decision 12).
   - Add a scenario `tests/e2e/scenarios/toolbar-hidden.json`:
@@ -923,6 +923,7 @@ Write first; paste red, then green (CONTRIBUTING.md, "TDD").
     buttons."
   - "Changed: Firefox's toolbar, URL field, suggestions and the panels hanging from the bar
     follow Vimma's theme; e2e baselines `m0-happy-path-help.png`, `m0-mcp-stdio-question.png`,
+    `m0-mcp-stdio-grant.png`,
     `m3-private-workspace.png`, `m4-split-panes.png` and `toolbar-minimal.png` show the themed
     toolbar."
   - "Added: e2e baselines `toolbar-hidden.png` and `toolbar-minimal.png` for the hidden toolbar
