@@ -637,3 +637,30 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   [`the_token_never_leaves_the_handshake`](../tools/vimma-ctl/tests/mcp.rs),
   [`bad_arguments_never_reach_vimma`](../tools/vimma-ctl/tests/mcp.rs),
   [`bad_arguments_are_tool_errors_and_never_reach_vimma`](../tools/vimma-ctl/src/mcp.rs)
+
+## 13. Page modes (`actors/VimmaParent.sys.mjs`, `host/VimmaHost.sys.mjs`)
+
+Whether a key is Vimma's or the page's depends on the tab's mode, which the content actor's focus
+reports move. Specs: [m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md),
+[insert-focus](specs/insert-focus.md).
+
+**Reach:** pages, through focus changes in their own frames.
+
+- K1. Only the frame that has focus **may** report focus for a tab, and a report that is not a
+  well-formed descriptor **must** be dropped; a report changes only its own tab's mode.
+  [`only_the_focused_frame_may_report`](../tests/browser/browser_vimma_insert_scroll.js),
+  [`malformed_descriptors_are_dropped`](../tests/browser/browser_vimma_insert_scroll.js)
+- K2. After `i` or `gi`, a page **must not** turn the user's keys into Vimma commands by moving
+  focus: only `Esc` or another top document ends that insert (a page restored from the
+  back-forward cache is the same document).
+  [`after_i_the_page_moving_focus_off_the_field_keeps_insert`](../tests/browser/browser_vimma_insert_focus.js),
+  [`after_i_the_page_blurring_the_field_keeps_insert`](../tests/browser/browser_vimma_insert_focus.js),
+  [`after_gi_the_page_moving_focus_off_the_field_keeps_insert`](../tests/browser/browser_vimma_insert_focus.js),
+  [`explicit_insert_ends_with_the_page`](../tests/browser/browser_vimma_insert_focus.js)
+- K3. `i` **must** focus only a field of its own tab: the field the user last used, asked of the
+  frame and document that reported it (still in the tab, not discarded, same inner window), which
+  focuses only a connected, visible, editable element of that document; otherwise the top frame's
+  first field.
+  [`i_focuses_the_field_last_used_in_a_cross_origin_frame`](../tests/browser/browser_vimma_insert_focus.js),
+  [`i_falls_back_to_the_first_field_when_the_last_frame_navigated`](../tests/browser/browser_vimma_insert_focus.js),
+  [`i_falls_back_to_the_first_field_when_the_last_is_gone`](../tests/browser/browser_vimma_insert_focus.js)
