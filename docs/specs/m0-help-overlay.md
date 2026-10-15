@@ -61,7 +61,7 @@ vimma/help-overlay.css`); the overlay loads it with `windowUtils.loadSheetUsingU
   (author sheet) on first open.
 - **PDF test fixture:** `tests/browser/file_vimma_test.pdf` is a hand-written one-page PDF (no
   third-party licence); pdf.js tests' own fixtures are not installed when only our manifest runs.
-- **Review round 1 (2026-10-09):**
+- **Hardening:**
   - A bare prefix no longer times out: the timer is armed only when `dispatcher.ambiguous()`
     (new core API, ADR-009). `ctrl+b`, a pause, `?` still opens help.
   - Help mode is modal for keys too: every key that reaches the dispatcher while the overlay is

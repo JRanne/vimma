@@ -1,6 +1,6 @@
 # Spec: firefox-sidebar-theme
 
-Status: implemented, follow-up from review screenshots (PR #148) · Milestone: after M5 (builds on [m5-omarchy-theme](m5-omarchy-theme.md) and
+Status: implemented, with a follow-up from screenshots (PR #148) · Milestone: after M5 (builds on [m5-omarchy-theme](m5-omarchy-theme.md) and
 the focus colour of [m7-a11y](m7-a11y.md)) · Area: `ui/theme-host.mjs`,
 `browser/themes/shared/vimma/firefox-sidebar.css` (new),
 `browser/themes/shared/vimma/firefox-sidebar-page.css` (new),
@@ -152,7 +152,7 @@ and the e2e. No screenshot baseline shows Firefox's sidebar, so none should chan
 
 ## Results
 
-### Follow-up: what the first fix missed (PR #148 review, screenshots)
+### Follow-up: what the first fix missed (screenshots)
 
 Screenshots under two Omarchy themes (Ristretto, dark; Catppuccin Latte, light) found three places
 still in Firefox's colours, which the first test did not see because it checked variables, not the

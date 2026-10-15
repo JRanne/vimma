@@ -41,6 +41,7 @@ Pre-release, Linux x86_64 (macOS next), no published release yet: [build it from
 
 AI coding agents working on this repository follow [CLAUDE.md](CLAUDE.md); contributors read
 [CONTRIBUTING.md](CONTRIBUTING.md) before opening issues or pull requests.
+<!-- process-wording: points coding agents at their rules file -->
 
 ## Licence
 

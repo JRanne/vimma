@@ -33,7 +33,7 @@ from forks once the repo is public.
   40-hex revision and throws on empty, missing or short; `uaName` from `moz.configure`;
   `appIniForArtifact` adds/replaces `UAName` in `[App]`, no-op for null, throws without `[App]`.
 - `tools/test/mochitest.test.mjs`: default suite headless; path mapping; `--headed`; `--artifact`.
-- Review additions: `candidateTree` (release for 0.x and `-nightly.*`; b/a/esr elsewhere),
+- Further tests: `candidateTree` (release for 0.x and `-nightly.*`; b/a/esr elsewhere),
   `indexNamespace`, `indexTask` on fixture responses (found, 404, expired, HTTP 500, malformed),
   `refreshAppIni` rewriting the copy after a rebuild (temp dir).
 - The mochitest suite itself, on both builds (below).
@@ -119,7 +119,7 @@ downloads are already seconds, the build is CPU.
   reporter) run only on local full builds.** Rule: a PR touching `*.patch`, `configs/`,
   `moz.configure` or branding reports `npm run mochitest -- tests/browser/` on the full build
   (`.github/pull_request_template.md`).
-- **Preflight** (review): the tool queries the Taskcluster index before building and fails with
+- **Preflight**: the tool queries the Taskcluster index before building and fails with
   the revision, expiry and a remedy; it refuses a display version that would make mach search
   beta, central or ESR (`select_candidate_trees`). **Disk guards** in e2e.yml: ≥ 8 GB before the
   download (job uses ~6 GB), ≥ 3 GB before the build (uses 1.2 GB). The XUL_APP_FILE copy is

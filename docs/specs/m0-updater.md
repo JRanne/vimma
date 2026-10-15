@@ -12,7 +12,7 @@ manifest yet; the About dialog and Settings show no update button and no update 
 add-ons still update from addons.mozilla.org, and video calls and DRM video still get their
 codecs.
 
-## Problem (found in review of m0-mozilla-services)
+## Problem (found while checking m0-mozilla-services)
 
 The built `application.ini` has
 `[AppUpdate] URL=https://aus5.mozilla.org/updates/browser/%BUILD_TARGET%/%CHANNEL%/update.xml`

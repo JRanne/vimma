@@ -42,7 +42,7 @@ explicitly.
 - Unbound bare keys in normal mode reach the page.
 - The actor reaches Settings (search box focused: insert, `Esc`: normal) and the PDF viewer; a
   `data:` page has none and stays in insert.
-- Review round 1: clicking into a `designMode` page, or a cross-origin `designMode` iframe, enters
+- Hardening: clicking into a `designMode` page, or a cross-origin `designMode` iframe, enters
   insert (`j` is typed, nothing scrolls) and `Esc` leaves it. An unfocused frame's report is
   ignored. Malformed descriptors are dropped. A page locked with `overflow: hidden` does not scroll:
   its modal's list does, or nothing does. `i` on a page with no text field lets `j` through.
@@ -53,7 +53,7 @@ explicitly.
 
 Mutation check: dropping `isContentEditable` from the child's descriptor fails the
 contenteditable case only (reverted). Stress: `--repeat=9` on two busy CPUs, 0 unexpected;
-after review round 1, `--repeat=19`, 0 unexpected.
+after the hardening, `--repeat=19`, 0 unexpected.
 
 Existing tests: `pageKeysThenJ` in the help overlay test and the key-capture test used `j` as
 "a key that is never ours"; `j` is ours in normal mode now, so they use `z`, which is unbound.
@@ -132,7 +132,7 @@ actions that are not implemented yet (parallel spec).
   content browser has focus; elsewhere (URL bar) they count as not runnable, so `Esc` still
   reverts the URL bar.
 
-- **Review round 1 (2026-10-09, PR #32).**
+- **Hardening (PR #32).**
   - **designMode and editable roots.** Clicking into a `designMode` document (or one whose
     `<body>`/`<html>` is contenteditable) fires no focusin, only a window `focus`, and a
     recheck cannot enter insert. A window `focus` now reports the document's focused element

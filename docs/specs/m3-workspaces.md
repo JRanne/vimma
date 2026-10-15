@@ -571,8 +571,8 @@ allowed).
 | ------------------------------------------------------------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/browser/components/tabbrowser/Tabbrowser-sys-mjs.patch` | 2     | `addTab`, after `openerTab` (3767-3772), unless `pinned`: `userContextId ??= openerTab?.userContextId ?? <our default>`. `#setupInitialBrowserAndTab`, after the `openWindowInfo` override (698-700): `userContextId ??= <our default>`. Decision 3. |
 | `src/browser/modules/BrowserDOMWindow-sys-mjs.patch`         | 1     | `#getContentWindowOrOpenURI` (256-259): no container guess for an external link → `null`, not 0, so `addTab` routes it. Decision 3, found in 2a.                                                                                                     |
-| `src/browser/modules/URILoadingHelper-sys-mjs.patch`         | 1     | `openLinkIn`, before `updatePrincipals`: a new window with no container takes the opening page's, else the workspace's. Found in 2a's review.                                                                                                        |
-| `src/browser/base/content/browser-init-js.patch`             | 1     | `_handleURIToLoad`: no `arguments[5]` → the first tab's container, not 0. Found in 2a's review.                                                                                                                                                      |
+| `src/browser/modules/URILoadingHelper-sys-mjs.patch`         | 1     | `openLinkIn`, before `updatePrincipals`: a new window with no container takes the opening page's, else the workspace's. Found in 2a.                                                                                                                 |
+| `src/browser/base/content/browser-init-js.patch`             | 1     | `_handleURIToLoad`: no `arguments[5]` → the first tab's container, not 0. Found in 2a.                                                                                                                                                               |
 
 ADR-003 register line, added by sub-spec 2a with the patch: "`Tabbrowser-sys-mjs.patch`: tabs
 and a window's first tab opened with no container take the active workspace's container
@@ -750,7 +750,7 @@ dependency for 4b, 5 and parts of 4a.
   green after; the whole `tests/browser/` suite passes. Mutation check: dropping
   `openerTab?.userContextId ??` from hunk 1 fails the `relatedToCurrent` assertion (a link click
   passes its container explicitly, so it alone did not catch it).
-- **Privacy review (round 2):** two more paths opened in container 0, so two more one-hunk
+- **Privacy hardening:** two more paths opened in container 0, so two more one-hunk
   patches. `URILoadingHelper-sys-mjs.patch`: `openLinkIn(url, "window")` (context-menu "Open Link
   in New Window", bookmark and URL-bar new windows) packed an undefined container into
   `window.arguments[5]` as an explicit 0; the hunk, before `updatePrincipals`, fills it with the
@@ -906,7 +906,7 @@ dependency for 4b, 5 and parts of 4a.
   included. `browser_vimma_help_overlay.js`: new/rename/close workspace rows are runnable now
   (the not-yet examples are the picker and the side panel). Mutation check: not copying the label
   fails "the label is kept".
-- **Review round 1 (PR #64):** the `y` stands for the workspace as asked about: its `source`,
+- **Hardening (PR #64):** the `y` stands for the workspace as asked about: its `source`,
   name and container go to `closeWorkspace` (`asked`) and are checked again at the answer, so
   a `config.toml` reload that made a config workspace runtime meanwhile refuses with `changed`
   instead of deleting its data. `deleteWorkspace` returns `{ cleared }`; a container no longer

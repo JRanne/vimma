@@ -148,7 +148,7 @@ caller reaches the running Vimma.
      bar, `:open`, `:tabnew`, bookmarks, history, and `p`/`P` once they exist), any `where`. An
      explicit container ("Open in New Container Tab", an extension) is the user's choice and
      stays.
-   - **Never an open a page triggers** (review of PR #88; this replaces an earlier option "(b)",
+   - **Never an open a page triggers** (this replaces an earlier option "(b)",
      which routed a page's links opened in a new tab or window in the page's own container). The
      threat: `ClickHandlerChild` accepts synthetic ctrl- and middle-clicks from the page's own
      script once the page has a user gesture, and `ClickHandlerParent` opens them in a
@@ -315,7 +315,7 @@ WindowWorkspaces: TabOpen/TabSelect (switch or notice), location changes (hint)
   Mutation check: hiding a foreground-opened tab anyway (dropping `tab.selected` from the
   microtask's guard) fails "a foreground open does not say 'opened in'"; reverted.
 
-## Review round 1 (PR #88)
+## Hardening (PR #88)
 
 - **Decision 3b dropped**: a page's opens are never routed, because of the cookie threat
   described in decision 3. The router routes `openLinkIn` only for the system principal
