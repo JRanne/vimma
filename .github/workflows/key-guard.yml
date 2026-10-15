@@ -1,6 +1,6 @@
 # ADR-021, docs/security.md B1: a pull request that changes Mozilla's pinned release key
-# (tools/upstream/mozilla-release-key.asc) or the fingerprint pinned in verify-sha512.py fails
-# this check until a maintainer adds the `key-rotation-approved` label (docs/runbook.md,
+# (tools/upstream/mozilla-release-key.asc), the fingerprint pinned in verify-sha512.py, or this
+# guard's own files (tools/ci/key-guard.mjs GUARD_PATHS) fails this check until a maintainer adds the `key-rotation-approved` label (docs/runbook.md,
 # "Mozilla's release key"). The ruleset on main requires the job below by its name.
 #
 # pull_request, never pull_request_target: nothing here needs a token that can write, and the

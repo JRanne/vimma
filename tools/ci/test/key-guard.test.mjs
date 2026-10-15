@@ -14,6 +14,8 @@ import { fileURLToPath } from "node:url";
 import { tempDir } from "../../test/temp-dir.mjs";
 import {
   APPROVAL_LABEL,
+  GUARD_PATHS,
+  GUARD_SCRIPT,
   KEY_PATH,
   VERIFIER_PATH,
   keyChanges,
@@ -51,6 +53,33 @@ describe("the guarded paths", () => {
     expect(pinnedLines(verifier)?.some((l) => l.startsWith("PINNED_FINGERPRINT ="))).toBe(true);
     expect(readFileSync(join(ROOT, KEY_PATH), "utf8")).toContain("BEGIN PGP PUBLIC KEY BLOCK");
     expect(APPROVAL_LABEL).toBe("key-rotation-approved");
+  });
+});
+
+describe("the guard's own files", () => {
+  it("are the workflow, the script and its tests, and all exist", () => {
+    expect(GUARD_PATHS).toEqual([
+      ".github/workflows/key-guard.yml",
+      "tools/ci/key-guard.mjs",
+      "tools/ci/test/key-guard.test.mjs",
+    ]);
+    expect(GUARD_SCRIPT).toBe("tools/ci/key-guard.mjs");
+    for (const path of GUARD_PATHS) expect(readFileSync(join(ROOT, path), "utf8")).not.toBe("");
+  });
+
+  it.each([
+    ["changed", { [GUARD_SCRIPT]: "100644 blob aaa" }, { [GUARD_SCRIPT]: "100644 blob bbb" }],
+    ["deleted", { [GUARD_SCRIPT]: "100644 blob aaa" }, { [GUARD_SCRIPT]: null }],
+    ["added", { [GUARD_SCRIPT]: null }, { [GUARD_SCRIPT]: "100644 blob aaa" }],
+  ])("are reported when one is %s", (how, before, after) => {
+    const changes = keyChanges(side({ guard: before }), side({ guard: after }));
+    expect(changes).toEqual([`${GUARD_SCRIPT} ${how} (the key guard itself)`]);
+  });
+
+  it("are not reported while the base has no guard yet (the pull request that adds it)", () => {
+    const before = side({ guard: { [GUARD_SCRIPT]: null } });
+    const after = side({ guard: { [GUARD_SCRIPT]: "100644 blob aaa" } });
+    expect(keyChanges(before, after, { guardOnBase: false })).toEqual([]);
   });
 });
 
@@ -177,13 +206,17 @@ describe("the command line", () => {
     return git(dir, "rev-parse", "HEAD").trim();
   };
 
-  /** A repo with the two files on main, and `change` on a branch made from it. */
-  function repo(/** @type {(dir: string) => void} */ change) {
+  /**
+   * A repo with the key material (and, unless `guard` is false, the guard's own files) on main,
+   * and `change` on a branch made from it.
+   */
+  function repo(/** @type {(dir: string) => void} */ change, { guard = true } = {}) {
     const dir = tempDir("vimma-key-guard-");
     git(dir, "init", "-q", "-b", "main");
     mkdirSync(join(dir, "tools", "upstream"), { recursive: true });
     writeFileSync(join(dir, KEY_PATH), KEY);
     writeFileSync(join(dir, VERIFIER_PATH), VERIFIER);
+    if (guard) writeGuard(dir);
     const base = commit(dir, "base");
     git(dir, "checkout", "-q", "-b", "pr");
     change(dir);
@@ -206,6 +239,34 @@ describe("the command line", () => {
     });
     return { status: res.status, out: res.stdout + res.stderr };
   }
+
+  /** @param {string} dir */
+  function writeGuard(dir, text = "guard\n") {
+    for (const path of GUARD_PATHS) {
+      mkdirSync(join(dir, path, ".."), { recursive: true });
+      writeFileSync(join(dir, path), text);
+    }
+  }
+
+  it("fails a change to any of the guard's own files without the label, and passes it with", () => {
+    for (const path of GUARD_PATHS) {
+      const r = repo((dir) => writeFileSync(join(dir, path), "weakened\n"));
+      const res = run(r);
+      expect(res.status, path).toBe(1);
+      expect(res.out).toContain(path);
+      expect(run(r, JSON.stringify([APPROVAL_LABEL])).status, path).toBe(0);
+    }
+  });
+
+  it("fails a deleted guard file without the label", () => {
+    const r = repo((dir) => rmSync(join(dir, GUARD_PATHS[0])));
+    expect(run(r).status).toBe(1);
+  });
+
+  it("passes the pull request that first adds the guard to a base without one", () => {
+    const r = repo((dir) => writeGuard(dir), { guard: false });
+    expect(run(r).status).toBe(0);
+  });
 
   it("passes a pull request that leaves the key alone", () => {
     const r = repo((dir) => writeFileSync(join(dir, "README.md"), "hi\n"));

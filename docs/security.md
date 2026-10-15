@@ -710,9 +710,14 @@ in a `build` environment, and a watch on Mozilla's release key,
   or agent adds that label; a maintainer adds it only after the checks in `docs/runbook.md`,
   "Mozilla's release key", and removes it if a later push changes the key again, since the label
   stays on the pull request across pushes. The check runs the base branch's copy of the script.
-  Its scope is the key and the fingerprint: it does not see a change that weakens
-  `verify-sha512.py` elsewhere (its call sites or its status checks), nor a pull request that
-  also rewrites the workflow; review of `tools/upstream/` and `.github/` covers those.
+  A pull request that changes the guard itself (`.github/workflows/key-guard.yml`,
+  `tools/ci/key-guard.mjs` or its tests) needs the same label, because under `pull_request` such
+  a pull request still runs its own copy of the workflow and could rewrite it to pass; the
+  label requirement on the guard's files is what makes that change visible, and the `main`
+  ruleset, which requires the check by its name, is what makes it binding. The one exception is
+  the pull request that first adds the guard to a base branch without one. Its scope is the
+  key, the fingerprint and the guard: it does not see a change that weakens `verify-sha512.py`
+  elsewhere (its call sites or its status checks); review of `tools/upstream/` covers that.
   [`test_good_signature_from_mozillas_current_subkey_passes`](../tools/upstream/test_verify_sha512.py),
   [`test_signature_by_the_revoked_compromised_subkey_fails`](../tools/upstream/test_verify_sha512.py),
   [`test_signature_by_another_key_fails`](../tools/upstream/test_verify_sha512.py),
@@ -730,6 +735,8 @@ in a `build` environment, and a watch on Mozilla's release key,
   [`every verify-sha512.py call passes a signature`](../tools/test/upstream-workflow.test.mjs),
   [`refuses a surfer.json with a version.candidate, before anything is fetched`](../tools/upstream/test/firefox-source.test.mjs),
   [`fails a changed key file without the label`](../tools/ci/test/key-guard.test.mjs),
+  [`fails a change to any of the guard's own files without the label, and passes it with`](../tools/ci/test/key-guard.test.mjs),
+  [`passes the pull request that first adds the guard to a base without one`](../tools/ci/test/key-guard.test.mjs),
   [`fails a changed fingerprint without the label, and passes it with`](../tools/ci/test/key-guard.test.mjs),
   [`passes event values to run: through env only`](../tools/ci/test/key-guard.test.mjs),
   [`still judges when started through a symlinked path`](../tools/ci/test/key-guard.test.mjs)
