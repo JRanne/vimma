@@ -214,7 +214,7 @@ describe("browser command line and environment", () => {
     expect(env.WAYLAND_DISPLAY).toBe("w");
   });
 
-  // Review of PR #35: GDK_SCALE=2 on the dev box gave a 2× crop. Local runs must render as CI.
+  // GDK_SCALE=2 on a developer's desktop gave a 2× crop. Local runs must render as CI.
   const desktop = {
     PATH: "/usr/bin",
     HOME: "/home/dev",
@@ -544,7 +544,7 @@ describe("launch and teardown (fake browser)", () => {
   });
 });
 
-// Review of PR #35: Ctrl+C while Xvfb was still starting left a live Xvfb or its fbdir.
+// Ctrl+C while Xvfb was still starting must leave no live Xvfb and no fbdir.
 describe("cancelling while Xvfb starts (fake Xvfb)", () => {
   /** @param {string} record */
   const readRecord = (record) =>

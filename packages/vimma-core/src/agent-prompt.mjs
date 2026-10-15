@@ -18,7 +18,7 @@ import { displayUrl, truncate } from "./statusbar.mjs";
 export const QUIET_MS = 1500;
 /** The question a new full-control connection asks while MCP is on (decision 29 C). */
 export const FULL_CONTROL = "full_control";
-/** A full-control client's code: 4 of 2-9 and A-Z without I and O (review of #177, M2). */
+/** A full-control client's code: 4 of 2-9 and A-Z without I and O (security.md S13). */
 export const FULL_CODE = /^[2-9A-HJ-NP-Z]{4}$/;
 /** Titles in the question are cut at this many columns (decision 13). */
 export const TITLE_COLUMNS = 60;
@@ -38,7 +38,7 @@ const MAX_COUNT_DIGITS = 4;
  * @typedef {{ client?: string, version?: string, via?: string } | null | undefined} Label
  * @typedef {{ tool: string, label: Label, what: Record<string, any> }} Asked
  * @typedef {{ text: string, strong?: boolean, isolate?: "auto" | "ltr" }} Part  `isolate`: text an
- *   agent or a page chose, drawn as its own bidi run (review of #177, L6): `auto` for names and
+ *   agent or a page chose, drawn as its own bidi run (security.md M4): `auto` for names and
  *   titles (<bdi>), `ltr` for URLs
  * @typedef {{ kind: "once" } | { kind: "deny" } | { kind: "mute" }
  *   | { kind: "grant", minutes: number | null }} PromptAnswer
@@ -144,7 +144,7 @@ export function questionLine(q, { grantMinutes }) {
   let hint = `y once · ${grantMinutes}a for ${grantMinutes} min · n deny · x mute`;
   const w = q.what ?? {};
   if (q.tool === FULL_CONTROL) {
-    // The code the client printed on its own terminal (review of #177, M2): the user answers
+    // The code the client printed on its own terminal (security.md S13): the user answers
     // the question of the vimma-ctl they ran, not one a racing client slipped in.
     const code = typeof w.code === "string" && FULL_CODE.test(w.code) ? w.code : null;
     if (code) {
@@ -174,7 +174,7 @@ export function questionLine(q, { grantMinutes }) {
     } else if (q.tool === DOWNLOAD_TOOL) {
       parts = [...head, ...downloadParts(w)];
       if (w.unscanned) {
-        // Security review of #182 (finding 7): ClamAV could not scan it; keep it unscanned?
+        // ClamAV could not scan it: keeping it unscanned is asked, default no (security.md M13).
         parts.push({ text: ` — ⚠ not scanned: ${clean(w.unscanned)}; keep it?` });
         hint = "y keep it unscanned · n delete";
       } else if (w.danger) {
@@ -355,7 +355,7 @@ export function controlStatus({ enabled, until, now }) {
 }
 
 /**
- * `:control on`'s end time, read back (review of #177, L4): the pref holds ms since the epoch as
+ * `:control on`'s end time, read back (security.md S13): the pref holds ms since the epoch as
  * a string of digits. Anything else, a time that has passed, or one further ahead than the
  * longest `:control on` (a clock moved back, a hand edit) turns control off: it fails closed.
  * No pref at all is control set without an end (about:config).

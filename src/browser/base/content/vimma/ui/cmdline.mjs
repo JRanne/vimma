@@ -65,8 +65,8 @@ function isPrivate(win) {
  * @typedef {object} Callbacks
  * @property {(result: Extract<CommandResult, { kind: "run" }>) => void} run
  * @property {() => void} [changed]  after it opens or closes (the status bar's mode)
- * @property {() => Readonly<Record<string, readonly string[]>>} [args]  what commands' arguments
- *   complete to (`{ addon: names }`)
+ * @property {() => import("../core/cmdline.mjs").CompletionArgs} [args]  what commands'
+ *   arguments complete to (`{ addon: names }`)
  */
 
 export class CommandLine {
@@ -392,7 +392,7 @@ export class CommandLine {
 
     panel.append(list, row, error);
     container.append(panel);
-    // In the body's flex column: before #34's status bar if there is one, else right after
+    // In the body's flex column: before the status bar if there is one, else right after
     // #browser, so the line sits at the window's foot either way.
     const statusBar = doc.getElementById(STATUSBAR_ID);
     const browser = doc.getElementById("browser");

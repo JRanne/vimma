@@ -193,9 +193,18 @@ link targets for hints, which chrome must treat as untrusted.
   [`a javascript: bookmark is listed but refuses to open`](../packages/vimma-core/test/bookmarks.test.mjs)
 - U4. `:open` and `:tabnew` **never** open `javascript:` or `data:` URLs, however disguised (case,
   tabs, newlines, leading controls, `view-source:`)
-  ([#98](https://github.com/JRanne/vimma/issues/98)). No length cap applies to text typed there.
+  ([#98](https://github.com/vimma-browser/vimma/issues/98)). No length cap applies to text typed there.
+  A search alias or bookmark keyword at the start resolves as the URL bar resolves it
+  (`UrlbarUtils.getShortcutOrURIAndPostData`), and the URL it resolves to is checked again, so a
+  keyword bookmarklet is refused; the bookmark's principal is never inherited. Other schemes a
+  keyword resolves to (`file:`, `about:`) load as they would if typed: there is no allowlist like
+  the bookmarks panel's. The query goes to the tab it was typed in (or a new tab in its
+  container), even when the workspace changes while the keyword is looked up.
   [`javascript_urls_are_blocked_with_a_notice`](../tests/browser/browser_vimma_cmdline.js),
-  [`data_urls_are_blocked_with_a_notice`](../tests/browser/browser_vimma_cmdline.js)
+  [`data_urls_are_blocked_with_a_notice`](../tests/browser/browser_vimma_cmdline.js),
+  [`bookmark_keywords_work_and_refused_ones_never_run`](../tests/browser/browser_vimma_search.js),
+  [`a_keyword_page_never_inherits_the_current_page`](../tests/browser/browser_vimma_search.js),
+  [`a_workspace_switch_during_the_lookup_keeps_the_query_where_it_was_typed`](../tests/browser/browser_vimma_search.js)
 - U5. Every Vimma open of text with the system principal (`p`, `P`, `:open`, `:tabnew`) **must**
   refuse those schemes through one shared check (`refusedScheme`, `core/pageurl.mjs`); bookmarks
   and the socket's `open` go further and allow only http, https, file and about.
@@ -247,7 +256,7 @@ text that pages, add-ons and bookmarks choose.
   `/usr/local/bin/clamscan`, never a `PATH` search, and only a regular file another user (root)
   owns that the user cannot write, in a folder the user cannot write), in one call with fixed
   arguments, the path after `--` and no shell, on an agent download in the quarantine folder
-  (M13; [vimma-mcp](specs/vimma-mcp.md) decision 31 g; the security review of #182). [`never builds code from text: no eval, Function or sandbox evaluation`](../tools/security/test/chrome-source.test.mjs),
+  (M13; [vimma-mcp](specs/vimma-mcp.md) decision 31 g). [`never builds code from text: no eval, Function or sandbox evaluation`](../tools/security/test/chrome-source.test.mjs),
   [`never starts a process, but clamscan on an agent download`](../tools/security/test/chrome-source.test.mjs)
 
 ## 7. Omarchy hook and the `vimma-open` launcher
@@ -340,7 +349,7 @@ Spec: [m0-mozilla-services](specs/m0-mozilla-services.md),
   [`test_keyed_build_fetches_google_lists`](../tests/browser/browser_vimma_safebrowsing.js),
   [`test_keyless_build_is_honestly_off`](../tests/browser/browser_vimma_safebrowsing.js)
 - P7. Site permissions (camera, location, notifications …) **must** be kept per container, so
-  per workspace (`permissions.isolateBy.userContext`; user decision "Per workspace",
+  per workspace (`permissions.isolateBy.userContext`;
   [vimma-mcp](specs/vimma-mcp.md) decision 30): one given in one workspace never applies to the
   same site in another, the agent workspace included.
   [`test_site_permissions_are_per_workspace`](../tests/browser/browser_vimma_mcp_agent_pages.js)
@@ -378,9 +387,14 @@ Taskcluster index) and this repository. Nothing here runs code from a pull reque
   [`unknown security status (advisories unreadable) uses the security limit`](../tools/upstream/test/releases.test.mjs),
   [`an unreachable advisories page: security unknown, labelled security, a warning`](../tools/upstream/test/autopilot.test.mjs)
 - G4. Nothing is **ever** reported on or built from a Firefox source tarball whose SHA-512
-  differs from Mozilla's `SHA512SUMS`.
+  differs from a signed `SHA512SUMS` (B1), a run artifact included: the patch-check report is
+  uploaded only after the source check verified the tarball.
   [`nothing is built from a tarball whose SHA-512 Mozilla did not publish`](../tools/test/upstream-workflow.test.mjs),
-  [`test_mismatch_exits_one_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py)
+  [`test_good_signature_but_a_different_hash_fails_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py),
+  [`the source check fails on a SHA512SUMS whose signature is not good`](../tools/upstream/test/source-check.test.mjs),
+  [`a report on a tarball that failed verification is never uploaded`](../tools/test/upstream-workflow.test.mjs),
+  [`a tampered tarball already on disk fails like a downloaded one`](../tools/upstream/test/firefox-source.test.mjs),
+  [`no workflow runs surfer download itself`](../tools/test/full-build-workflows.test.mjs)
 - G5. A bump PR is **never** opened ready for review unless every patch applies and the suites
   passed on the new release; otherwise it is a draft that names the conflicting files and hunks.
   [`a ready PR only when patches apply, suites pass and a token starts CI`](../tools/upstream/test/autopilot.test.mjs),
@@ -420,16 +434,17 @@ Taskcluster index) and this repository. Nothing here runs code from a pull reque
   [`the report job runs only on main`](../tools/test/upstream-beta-workflow.test.mjs),
   [`no job pushes, commits or opens a pull request`](../tools/test/upstream-beta-workflow.test.mjs),
   [`no secret reaches any job, and the e2e call passes none`](../tools/test/upstream-beta-workflow.test.mjs),
-  [`every job is skipped outside JRanne/vimma`](../tools/test/upstream-beta-workflow.test.mjs),
+  [`every job is skipped outside vimma-browser/vimma`](../tools/test/upstream-beta-workflow.test.mjs),
   [`every action is pinned by a full commit SHA`](../tools/test/upstream-beta-workflow.test.mjs),
   [`mentions the owner only when it opens an issue`](../tools/upstream/test/canary.test.mjs),
   [`fences test output and cuts the body to 60,000 characters`](../tools/upstream/test/canary.test.mjs),
   [`surfer.json on main pins a Firefox release, never a beta`](../tools/test/surfer-pin.test.mjs)
 - G10. The Beta canary **must never** build from or report on a Beta source tarball whose SHA-512
-  differs from that Beta's `SHA512SUMS`: the source check fails the run before the suites or the
-  issue (G4 for Betas).
+  differs from that Beta's signed `SHA512SUMS` (B1): the source check fails the run before the
+  suites or the issue (G4 for Betas).
   [`nothing is built from a tarball whose SHA-512 Mozilla did not publish`](../tools/test/upstream-beta-workflow.test.mjs),
-  [`test_mismatch_exits_one_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py)
+  [`test_good_signature_but_a_different_hash_fails_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py),
+  [`a report on a tarball that failed verification is never uploaded`](../tools/test/upstream-workflow.test.mjs)
 
 ## 11. Out of scope and trust boundaries
 
@@ -532,9 +547,9 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   [`test_the_read_checks_last`](../tests/browser/browser_vimma_mcp_agent.js),
   [`test_confinement_edges`](../tests/browser/browser_vimma_mcp_agent.js)
 - M10. Pages in the agent container **must** get no permission prompt and no permission given
-  elsewhere: site permissions are kept per container (`permissions.isolateBy.userContext`, user
-  decision "Per workspace"), every `nsIContentPermissionPrompt` request from the agent
-  container is cancelled, and camera, microphone and screen are denied per agent tab (a
+  elsewhere: site permissions are kept per container (`permissions.isolateBy.userContext`,
+  [vimma-mcp](specs/vimma-mcp.md) decision 30), every `nsIContentPermissionPrompt` request from
+  the agent container is cancelled, and camera, microphone and screen are denied per agent tab (a
   browser-scoped DENY, set on each HTTP response and when each document's window global is
   created, so a page a service worker serves is covered). They **must** open no new window or
   tab (`SANDBOXED_AUXILIARY_NAVIGATION` on every agent tab, which is reloaded if it had loaded
@@ -548,16 +563,15 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   [`test_a_page_from_a_service_worker_is_denied_too`](../tests/browser/browser_vimma_mcp_agent_pages.js),
   [`test_a_sweep_reloads_agent_tabs_that_loaded_unsandboxed`](../tests/browser/browser_vimma_mcp_agent_pages.js),
   [`test_agent_pages_launch_no_app`](../tests/browser/browser_vimma_mcp_agent_pages.js)
-- M11. A download from the agent workspace (by its container, its tab's container, or being
-  written to the quarantine folder) **must** ask in the question line first (its name, size,
-  type and host, **never** the URL). It is the `vimma_download` of an agent connection only when
-  it is the very load that connection's `agent-open` started (its URL before redirects, within a
-  minute, once, and never after the tab showed a page); anything else, a page's own download
-  under a grant included, asks as "a page in the agent workspace" (no grant, `x` a plain no).
-  Only `https:` is downloaded, nothing over
-  `[mcp] download_max_mb` (refused when the size is known, stopped and deleted once it grows past
-  it), and a refused download leaves no file. The user's own Save Page, Save Link As and Save
-  Image As are the user's (an agent cannot press them) and ask nothing. Another workspace's
+- M11. A download from the agent workspace (by its container, its tab's container, or being written
+  to the quarantine folder) **must** ask in the question line first (its name, size, type and host,
+  **never** the URL). It is the `vimma_download` of an agent connection only when it is the very
+  load that connection's `agent-open` started (its URL before redirects, within a minute, once, and
+  never after the tab showed a page); anything else, a page's own download under a grant included,
+  asks as "a page in the agent workspace" (no grant, `x` a plain no). Only `https:` is downloaded,
+  nothing over `[mcp] download_max_mb` (refused when the size is known, stopped and deleted once it
+  grows past it), and a refused download leaves no file. The user's own Save Page, Save Link As and
+  Save Image As are the user's (an agent cannot press them) and ask nothing. Another workspace's
   downloads are untouched.
   [`test_the_question_then_yes_saves_to_the_quarantine_0600_unopened`](../tests/browser/browser_vimma_mcp_downloads.js),
   [`test_no_saves_nothing`](../tests/browser/browser_vimma_mcp_downloads.js),
@@ -594,9 +608,9 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   (`--alert-encrypted=yes --alert-exceeds-max=yes`), and deleted when ClamAV flags it; when
   ClamAV fails, takes over five minutes, or could not look inside (encrypted, over its limits),
   keeping the file unscanned is asked (y/N, no grant), and a no deletes it. The notice says
-  scanned, not fully scanned or not scanned. Vimma has no download reputation service of its own: Firefox's Safe Browsing
-  checks downloads only in a build with a Google key (P6), so in a keyless build these checks
-  and ClamAV are all there is.
+  scanned, not fully scanned or not scanned. Vimma has no download reputation service of its
+  own: Firefox's Safe Browsing checks downloads only in a build with a Google key (P6), so in a
+  keyless build these checks and ClamAV are all there is.
   [`test_a_dangerous_file_needs_bang_for_that_one_file`](../tests/browser/browser_vimma_mcp_downloads.js),
   [`test_dangerous_content_asks_again_and_no_deletes_it`](../tests/browser/browser_vimma_mcp_downloads.js),
   [`test_a_different_danger_in_the_bytes_asks_again`](../tests/browser/browser_vimma_mcp_downloads.js),
@@ -629,3 +643,125 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   [`the_token_never_leaves_the_handshake`](../tools/vimma-ctl/tests/mcp.rs),
   [`bad_arguments_never_reach_vimma`](../tools/vimma-ctl/tests/mcp.rs),
   [`bad_arguments_are_tool_errors_and_never_reach_vimma`](../tools/vimma-ctl/src/mcp.rs)
+
+## 13. Page modes (`actors/VimmaParent.sys.mjs`, `host/VimmaHost.sys.mjs`)
+
+Whether a key is Vimma's or the page's depends on the tab's mode, which the content actor's focus
+reports move. Specs: [m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md),
+[insert-focus](specs/insert-focus.md).
+
+**Reach:** pages, through focus changes in their own frames.
+
+- K1. Only the frame that has focus **may** report focus for a tab, and a report that is not a
+  well-formed descriptor **must** be dropped; a report changes only its own tab's mode.
+  [`only_the_focused_frame_may_report`](../tests/browser/browser_vimma_insert_scroll.js),
+  [`malformed_descriptors_are_dropped`](../tests/browser/browser_vimma_insert_scroll.js)
+- K2. After `i` or `gi`, a page **must not** turn the user's keys into Vimma commands by moving
+  focus: only `Esc` or another top document ends that insert (a page restored from the
+  back-forward cache is the same document).
+  [`after_i_the_page_moving_focus_off_the_field_keeps_insert`](../tests/browser/browser_vimma_insert_focus.js),
+  [`after_i_the_page_blurring_the_field_keeps_insert`](../tests/browser/browser_vimma_insert_focus.js),
+  [`after_gi_the_page_moving_focus_off_the_field_keeps_insert`](../tests/browser/browser_vimma_insert_focus.js),
+  [`explicit_insert_ends_with_the_page`](../tests/browser/browser_vimma_insert_focus.js)
+- K3. `i` **must** focus only a field of its own tab: the field the user last used, asked of the
+  frame and document that reported it (still in the tab, not discarded, same inner window), which
+  focuses only a connected, visible, editable element of that document; otherwise the top frame's
+  first field.
+  [`i_focuses_the_field_last_used_in_a_cross_origin_frame`](../tests/browser/browser_vimma_insert_focus.js),
+  [`i_falls_back_to_the_first_field_when_the_last_frame_navigated`](../tests/browser/browser_vimma_insert_focus.js),
+  [`i_falls_back_to_the_first_field_when_the_last_is_gone`](../tests/browser/browser_vimma_insert_focus.js)
+
+## 14. Build and release supply chain (`release.yml`, `nightly.yml`)
+
+Vimma's binaries are built from Mozilla's Firefox source, this repository, and the npm packages
+that drive the build, chiefly Surfer. These rules keep what reaches a build pinned and reviewed.
+Spec: [build-supply-chain](specs/build-supply-chain.md), [ADR-001](adr/001-engine-firefox-surfer.md).
+
+**Reach:** Mozilla's archive and Taskcluster, the npm registry, this repository, and GitHub's
+hosted runners. Dependabot pull requests run and auto-merge today, whether or not a build runs.
+
+**Planned:** the spec's later deliveries add the rest of B3 (every package in the
+release path held for review, with its published diff,
+[#223](https://github.com/vimma-browser/vimma/issues/223)), and B6 and B7 (the Safe Browsing key
+in a `build` environment, and a watch on Mozilla's release key,
+[#225](https://github.com/vimma-browser/vimma/issues/225)).
+
+- B1. Nothing is **ever** built from, or reported on, a Firefox source tarball unless its SHA-512
+  is listed in a `SHA512SUMS` carrying exactly one good signature by a valid signing subkey of
+  Mozilla's release key `14F26682D0916CDD81E37B6D61B7B526D98F0353`, pinned in
+  `tools/upstream/mozilla-release-key.asc` ([ADR-021](adr/021-mozilla-release-key.md)); a
+  revoked or expired subkey, another key, a second signature, a signed message in place of a
+  detached signature, or a missing signature fails. The verdict comes from `gpgv`'s status lines,
+  never its exit status, which is 0 for the revoked, compromised subkey. Every verification goes
+  through `tools/upstream/verify-sha512.py`, called by `firefox-source.sh` (every build, PR CI
+  included) and `source-check.sh` (the autopilot and the Beta canary); a tarball already on disk
+  is verified like a downloaded one. On a contributor's machine, `npx surfer download` checks
+  nothing, so `npm run import`, the first step of every local build and lane, refuses an
+  `engine/` until `npm run verify-source` has verified the tarball it came from for
+  `surfer.json`'s version (a record in `engine/.git`, which `firefox-source.sh` writes too). That
+  record guards against building an unverified download, not against someone who can already
+  write to `engine/`.
+  `firefox-source.sh` also refuses a `surfer.json` with a `version.candidate`, which Surfer would
+  fetch from `candidates/` unverified.
+  [`test_good_signature_from_mozillas_current_subkey_passes`](../tools/upstream/test_verify_sha512.py),
+  [`test_signature_by_the_revoked_compromised_subkey_fails`](../tools/upstream/test_verify_sha512.py),
+  [`test_signature_by_another_key_fails`](../tools/upstream/test_verify_sha512.py),
+  [`test_a_second_signature_beside_mozillas_fails`](../tools/upstream/test_verify_sha512.py),
+  [`test_signature_by_an_expired_subkey_fails`](../tools/upstream/test_verify_sha512.py),
+  [`test_one_changed_byte_in_sha512sums_fails_the_signature`](../tools/upstream/test_verify_sha512.py),
+  [`test_missing_signature_or_gpgv_cannot_check_and_exits_two`](../tools/upstream/test_verify_sha512.py),
+  [`test_pinned_key_is_mozillas_primary_with_the_compromised_subkey_revoked`](../tools/upstream/test_verify_sha512.py),
+  [`a SHA512SUMS without a good signature fails before engine/ is touched`](../tools/upstream/test/firefox-source.test.mjs),
+  [`the source check fails on a SHA512SUMS whose signature is not good`](../tools/upstream/test/source-check.test.mjs),
+  [`test_a_signed_message_in_place_of_a_detached_signature_fails`](../tools/upstream/test_verify_sha512.py),
+  [`fails a tampered tarball`](../tools/upstream/test/verify-source.test.mjs),
+  [`--require refuses an engine/ never verified, or verified for another version`](../tools/upstream/test/verify-source.test.mjs),
+  [`npm run import refuses an engine/ whose source was never verified`](../tools/test/upstream-workflow.test.mjs),
+  [`every verify-sha512.py call passes a signature`](../tools/test/upstream-workflow.test.mjs),
+  [`refuses a surfer.json with a version.candidate, before anything is fetched`](../tools/upstream/test/firefox-source.test.mjs)
+- B2. A nightly or release build **never** builds from an `engine/` it did not extract in the
+  same job from the tarball it verified, and **never** restores a tree, an objdir or a compiler
+  cache from the Actions cache; a release **must** build in a fresh objdir with an empty
+  compiler cache.
+  [`a tarball already on disk is verified again and engine/ is extracted from it afresh`](../tools/upstream/test/firefox-source.test.mjs),
+  [`no workflow reads or writes engine/.vimma-firefox-version`](../tools/test/full-build-workflows.test.mjs),
+  [`the build jobs check out clean and restore nothing from the Actions cache`](../tools/test/full-build-workflows.test.mjs),
+  [`a release builds in a fresh objdir with an empty compiler cache`](../tools/test/full-build-workflows.test.mjs)
+- B3. Surfer **must** be pinned to one exact version, locked by its integrity hash, and a
+  Dependabot update of Surfer **never** merges without a person, security updates and grouped
+  updates included, whatever the format of Dependabot's metadata; an update whose dependency
+  names are missing waits for a person too. **⚠ gap:** `ajv` itself still auto-merges its
+  patch, minor and security updates, and so do the packages Surfer and `ajv` depend on, until
+  [#223](https://github.com/vimma-browser/vimma/issues/223) holds the whole release path.
+  [`package.json pins Surfer to an exact version, locked by integrity`](../tools/test/build-supply-chain.test.mjs),
+  [`a Surfer update is never auto-merged, security updates included`](../tools/test/build-supply-chain.test.mjs),
+  [`Surfer is held whatever the separator, quoting or case, or when only the title names it`](../tools/test/build-supply-chain.test.mjs),
+  [`an update whose dependency list is empty waits for a person`](../tools/test/build-supply-chain.test.mjs),
+  [`the release-path group comes before the minor and patch group`](../tools/test/build-supply-chain.test.mjs)
+- B4. An npm install **never** runs install scripts, and the build **must** run Surfer only from
+  `node_modules`, never a package `npx` fetches, and **never** lets Surfer fetch an add-on.
+  [`.npmrc turns install scripts off for every install`](../tools/test/build-supply-chain.test.mjs),
+  [`release and nightly install with npm ci --ignore-scripts and run Surfer with npx --no`](../tools/test/build-supply-chain.test.mjs),
+  [`no workflow lets npx fetch a package`](../tools/test/build-supply-chain.test.mjs),
+  [`surfer.json lists no add-ons`](../tools/test/build-supply-chain.test.mjs)
+- B5. A workflow **never** targets a self-hosted runner: every job runs on a standard
+  GitHub-hosted image or calls a workflow file of this repository, and a `runs-on` expression
+  that cannot be resolved to a hosted image fails. The test parses each workflow as YAML and
+  fails on any shape it does not recognise. A job of a workflow that a pull request, a comment,
+  an issue or another workflow run can trigger is held to this as the permanent guard; the build
+  jobs run only from `main` or for a release, and only once `NIGHTLY_ENABLED` or
+  `RELEASE_ENABLED` is set. **⚠ setting:** fork pull request approval is
+  `all_external_contributors`
+  (`gh api repos/vimma-browser/vimma/actions/permissions/fork-pr-contributor-approval`), so a
+  fork's own workflow files run only once a person approves the run; and the organization has
+  no self-hosted runner (`gh api orgs/vimma-browser/actions/runners`, organization owners only),
+  since an organization runner shared with this repository is invisible to every
+  repository-level check.
+  [`no workflow an outsider can trigger runs a job on a self-hosted runner`](../tools/test/self-hosted-runner.test.mjs),
+  [`a runs-on expression in such a workflow fails unless it resolves to a hosted image`](../tools/test/self-hosted-runner.test.mjs),
+  [`a quoted job id is a job of its own`](../tools/test/self-hosted-runner.test.mjs),
+  [`a job written as a flow mapping is checked`](../tools/test/self-hosted-runner.test.mjs),
+  [`a matrix key is read only from the job's own strategy.matrix`](../tools/test/self-hosted-runner.test.mjs),
+  [`triggers are read in every spelling YAML allows`](../tools/test/self-hosted-runner.test.mjs),
+  [`no workflow names a self-hosted runner, and both build jobs run on ubuntu-24.04`](../tools/test/self-hosted-runner.test.mjs),
+  [`each build job runs only from main or for a release`](../tools/test/self-hosted-runner.test.mjs)

@@ -134,7 +134,7 @@ add_task(async function d_and_u_scroll_half_a_page() {
   });
 });
 
-// Vim's scroll keys (user decision 2026-10-10) next to Vimium's d / u.
+// Vim's scroll keys (docs/specs/key-handling-batch.md) next to Vimium's d / u.
 add_task(async function ctrl_d_ctrl_u_ctrl_e_and_ctrl_y_scroll_as_in_vim() {
   await withPage(async (browser) => {
     const half = await SpecialPowers.spawn(

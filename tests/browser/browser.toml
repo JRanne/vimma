@@ -21,6 +21,13 @@ support-files = [
   "file_vimma_test.pdf",
 ]
 
+["browser_vimma_insert_focus.js"]
+support-files = [
+  "file_vimma_insert_focus.html",
+  "file_vimma_insert_autofocus.html",
+  "file_vimma_frame.html",
+]
+
 ["browser_vimma_hints.js"]
 support-files = [
   "file_vimma_hints.html",
@@ -102,6 +109,9 @@ support-files = [
 
 ["browser_vimma_statusbar.js"]
 support-files = ["file_vimma_title.html"]
+
+["browser_vimma_search.js"]
+support-files = ["file_vimma_search_post.sjs"]
 
 ["browser_vimma_cmdline.js"]
 

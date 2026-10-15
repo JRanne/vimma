@@ -204,7 +204,7 @@ pub fn auth(token: &str) -> Value {
 }
 
 /// The `auth` line with the code this vimma-ctl printed, while MCP is on: Vimma's full-control
-/// question shows it (docs/specs/vimma-mcp.md decision 29 C, review of #177 M2).
+/// question shows it (docs/specs/vimma-mcp.md decision 29 C; docs/security.md S13).
 #[must_use]
 pub fn auth_with_code(token: &str, code: &str) -> Value {
     object([
@@ -1060,7 +1060,7 @@ mod tests {
         assert!(seen >= 8, "only {seen} v2 server-direction fixtures");
     }
 
-    // Review of #177 (M2): the full client's code, sent in its auth while MCP is on.
+    // The full client's code (docs/security.md S13), sent in its auth while MCP is on.
     #[test]
     fn encodes_v2_auth_with_a_code_exactly() {
         let (_, fixture) = v2_fixtures()

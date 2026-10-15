@@ -34,8 +34,8 @@ sniff for `Firefox/` work, and nothing in the UA reveals or depends on the Vimma
   places that read it (see Open issues).
 - Update URLs and the update server (M6).
 - `navigator.userAgentData`/Client Hints (not shipped by Firefox 157 on desktop).
-- Per-site UA overrides. The bundled webcompat interventions are version-gated and currently
-  misfire (see Open issues).
+- Per-site UA overrides. The bundled webcompat interventions are version-gated and misfired
+  until m0-app-version (see Open issues).
 
 ## Settled (2026-10-09, from the Firefox 157.0.1 tree, Surfer 1.14.9 and Zen's `dev` branch)
 

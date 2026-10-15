@@ -101,7 +101,7 @@ export function removeAddonQuestion(item) {
 }
 
 /**
- * Whether the add-on is no longer the one the user said yes to: gone, renamed, or another
+ * Whether the add-on is no longer the one the user answered yes for: gone, renamed, or another
  * version (an update landed). Enabling it or its private access do not count.
  * @param {AddonItem} asked
  * @param {AddonItem | null | undefined} now

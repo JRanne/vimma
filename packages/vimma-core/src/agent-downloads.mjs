@@ -371,8 +371,8 @@ const leaves = (/** @type {string} */ name) =>
   /^[/\\]/.test(name) || /^[A-Za-z]:/.test(name) || name.split(/[/\\]/).some((seg) => seg === "..");
 
 /**
- * Whether a zip is dangerous by what it holds (decision 31 d; security review of #182, finding
- * 1): any dangerous name inside, a nested zip (it cannot be listed without extracting), an entry
+ * Whether a zip is dangerous by what it holds (decision 31 d; security.md
+ * M13): any dangerous name inside, a nested zip (it cannot be listed without extracting), an entry
  * that unpacks with an exec bit or as a symbolic link, or a path that leaves its folder.
  * @param {(string | ZipEntry)[]} entries
  * @param {{ isExecutable?: (name: string) => boolean }} [options]
@@ -472,8 +472,8 @@ export function resolveDownloadDir(raw, home) {
 const SHARED_DIRS = ["/tmp", "/var/tmp", "/dev/shm"];
 
 /**
- * Why a resolved folder is not a quarantine (decision 31 b; security review of #182, finding
- * 3), or null: never `/`, home, the Downloads folder itself, a hidden folder of home (where
+ * Why a resolved folder is not a quarantine (decision 31 b; security.md
+ * M12), or null: never `/`, home, the Downloads folder itself, a hidden folder of home (where
  * autostart, shell and app configs live) or a folder anyone can write to.
  * @param {string} dir  absolute, resolved
  * @param {string} home

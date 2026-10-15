@@ -1,21 +1,18 @@
 # Spec: firefox-sidebar-theme
 
-Status: implemented, follow-up from review screenshots (PR #148) · Milestone: after M5 (builds on [m5-omarchy-theme](m5-omarchy-theme.md) and
+Status: implemented, with a follow-up from screenshots (PR #148) · Milestone: after M5 (builds on [m5-omarchy-theme](m5-omarchy-theme.md) and
 the focus colour of [m7-a11y](m7-a11y.md)) · Area: `ui/theme-host.mjs`,
 `browser/themes/shared/vimma/firefox-sidebar.css` (new),
 `browser/themes/shared/vimma/firefox-sidebar-page.css` (new),
 `tests/browser/browser_vimma_sidebar_theme.js` (new). No upstream patch.
 
-## The user's words
+## Goal
 
-2026-10-12: the side panel should follow the theme colour, and "we can consider both should
-follow theme".
-
-"Both" means Vimma's own side panel (`ctrl+b b`, fixed by PR #146: its scrollbar was the last
-part not on the theme) and Firefox's own sidebar: the panel behind the toolbar's sidebar button
-(history, bookmarks, synced tabs), the new sidebar's launcher strip, and `#sidebar-box` with its
-splitter. Today that sidebar is Firefox grey (`#2b2a33`) with a blue system focus ring, whatever
-the Vimma theme.
+Both side panels follow the theme colour. "Both" means Vimma's own side panel (`ctrl+b b`, fixed by
+PR #146: its scrollbar was the last part not on the theme) and Firefox's own sidebar: the panel
+behind the toolbar's sidebar button (history, bookmarks, synced tabs), the new sidebar's launcher
+strip, and `#sidebar-box` with its splitter. Today that sidebar is Firefox grey (`#2b2a33`) with a
+blue system focus ring, whatever the Vimma theme.
 
 ## User stories
 
@@ -155,11 +152,11 @@ and the e2e. No screenshot baseline shows Firefox's sidebar, so none should chan
 
 ## Results
 
-### Follow-up: what the first fix missed (PR #148 review, screenshots)
+### Follow-up: what the first fix missed (screenshots)
 
-Screenshots under the user's Omarchy themes (Ristretto, dark; Catppuccin Latte, light) found
-three places still in Firefox's colours, which the first test did not see because it checked
-variables, not the elements that paint:
+Screenshots under two Omarchy themes (Ristretto, dark; Catppuccin Latte, light) found three places
+still in Firefox's colours, which the first test did not see because it checked variables, not the
+elements that paint:
 
 1. **The search box** (`moz-input-search`, its `<input>` in a shadow root): filled with `Field`
    (`#2b2a33` dark, white light), text `FieldText`, and focused with the UA's `outline: auto`,
@@ -229,11 +226,11 @@ checks its painted colours under the dark, light and built-in light themes (12 f
 before the fix, green after).
 
 Screenshots (a temporary mochitest, not committed; the bookmarks sidebar renaming a bookmark in
-place, a notice showing) under Ristretto, Tokyo Night and Catppuccin Latte: the field is the
-theme's background with its text and selection, ringed in the focus colour, and the toast sits on
-the status bar's surface with the theme's text and muted edge; no `Field` grey or white is left.
-`event-horizon` (the user's current theme, an Aether-made `colors.toml`) is rejected by the
-validator (no `selection`, `muted`, `dark_background`, ... keys), so it shows the built-in palette.
+place, a notice showing) under Ristretto, Tokyo Night and Catppuccin Latte: the field is the theme's
+background with its text and selection, ringed in the focus colour, and the toast sits on the status
+bar's surface with the theme's text and muted edge; no `Field` grey or white is left.
+`event-horizon` (an Aether-made `colors.toml`) is rejected by the validator (no `selection`,
+`muted`, `dark_background`, ... keys), so it shows the built-in palette.
 
 Not covered: nothing known in the sidebar.
 

@@ -1,21 +1,23 @@
 # Spec: site-compat
 
-Status: sub-PR 1 implemented (in review); sub-PRs 2 and 3 open · Milestone: after private-swap (testing infrastructure, no
+Status: draft (sub-PR 1 implemented, #157; open questions 1-4 below) · Milestone: after private-swap (testing infrastructure, no
 user-visible change) · Area: `tools/sites/` (new), `tools/e2e/launcher.mjs` (one option),
 `.github/workflows/sites.yml` (new), `package.json` (one script). No upstream patch, no product
 code, no new dependency.
+
+Issue: [#262](https://github.com/vimma-browser/vimma/issues/262)
 
 Engine paths are relative to `engine/` (Firefox 157.0.1). Timings were measured with
 `gh run list` / `gh run view` on 2026-10-12. GitHub's billing and runner facts were checked
 against docs.github.com the same day (links in Research).
 
-## The user's words
+## Goal
 
-2026-10-12: "could we run automated test on sites that most developers use? to see how well
-Vimma works on them?" Then: "start with sites without login, however i wonder how heavy workflow
-that would be on github side? or if i should have my own dedicated runner doing it?"
+Run automated tests on the sites most developers use, to see how well Vimma works on them, starting
+with sites that need no login. The suite must be cheap enough to run on GitHub's hosted runners, or
+else justify a dedicated runner.
 
-## Short answer to the cost question
+## Cost in short
 
 Free, and light. The repo is public, and GitHub's billing docs say "GitHub Actions usage is free
 for self-hosted runners and for public repositories that use standard GitHub-hosted runners".
@@ -23,8 +25,8 @@ A nightly run is one job of about 20 minutes on one standard runner (estimate be
 600 runner-minutes a month at no charge, 1 of the 20 hosted jobs the free plan runs at once, at
 an hour when no PR is waiting. A dedicated runner is not needed for cost. It could matter for
 **IP reputation**: some sites show bot checks more often to datacenter IPs. The plan is to run
-on GitHub's runners every night, run `npm run sites` from home when wanted, and revisit a
-self-hosted runner only if bot checks make the nightly results useless (open question 1).
+on GitHub's runners every night and run `npm run sites` from home when wanted; a self-hosted
+runner is not used (decision 10).
 
 ## User stories
 
@@ -58,7 +60,10 @@ self-hosted runner only if bot checks make the nightly results useless (open que
   does not fit a hosted runner: 22 GB, 39 min). It is gated by `NIGHTLY_ENABLED` and holds the
   Safe Browsing secret (`.github/workflows/nightly.yml:1-30`). The site suite must not go
   there: it would need that self-hosted runner and sit next to a secret, and it needs neither.
-  It reuses e2e.yml's artifact build in a workflow of its own.
+  It reuses e2e.yml's artifact build in a workflow of its own. (Since changed: no self-hosted
+  runner is used or planned; the nightly moves to a hosted runner with [#224](https://github.com/vimma-browser/vimma/issues/224), spec
+  build-supply-chain, decision 6. The site suite still stays out of it, because it needs
+  neither the full build nor the secret.)
 - Step times of a recent successful e2e run (run 38229657690): checkout, Node, `npm ci` 12 s;
   `vimma-ctl` 9 s; harness tests 9 s; Firefox source tarball 58 s; import 1 s; artifact build
   127 s; mochitests 258 s; e2e scenarios 39 s. The last 20 successful runs took 6.4 to 8.9 min
@@ -152,10 +157,9 @@ needs no dependency.
   `consent.youtube.com` ("Before you continue"), and common consent-manager containers
   (OneTrust, Sourcepoint, Quantcast, Didomi, Funding Choices).
 - **IP reputation.** GitHub-hosted runners are Azure datacenter IPs. Reddit, Google search and
-  Cloudflare-fronted sites (Stack Overflow) challenge datacenter ranges far more often than a
-  home connection. Expect some of those to show as blocked on some nights. That is why bot
-  checks are their own status, and why `npm run sites` from the user's own network is the
-  second half of the plan.
+  Cloudflare-fronted sites (Stack Overflow) challenge datacenter ranges far more often than a home
+  connection. Expect some of those to show as blocked on some nights. That is why bot checks are
+  their own status, and why `npm run sites` from a home network is the second half of the plan.
 - **Consent.** The runner is in the US, so Google and YouTube usually show no consent wall
   there. From Finland they do. A "Reject all" click is safe (it only refuses), so the suite
   tries it. It never clicks "Accept".
@@ -190,14 +194,14 @@ needs no dependency.
   failed check: roughly 40-60 PNGs of 100-400 kB, so about 10-20 MB a night. Kept 14 days.
 - Network: each site is loaded once, plus the one link a hint follows. No crawling. That is a
   few MB per site, one visit a day from one IP. Well under anything a site would notice.
-- **Self-hosted alternative.** Free too, but on a public repo it is only acceptable if: the
-  workflow that uses it is triggered **only** by `schedule` and `workflow_dispatch` (never
-  `pull_request`, `pull_request_target`, `issue_comment` or `push` from forks), the runner is
-  registered to this repo with a dedicated label, it runs in a dedicated VM or container that is
-  reset after each job (ephemeral runner), it holds no secret beyond its registration, and it is
-  **not the user's daily machine**. `nightly.yml` already uses that pattern for the full build
-  (`if:` on the event and ref). The gain would be a residential IP, which matters only if
-  bot checks swamp the hosted results.
+- **Self-hosted alternative.** Free too, but on a public repo it is only acceptable if: the workflow
+  that uses it is triggered **only** by `schedule` and `workflow_dispatch` (never `pull_request`,
+  `pull_request_target`, `issue_comment` or `push` from forks), the runner is registered to this
+  repo with a dedicated label, it runs in a dedicated VM or container that is reset after each job
+  (ephemeral runner), it holds no secret beyond its registration, and it is **not a developer's
+  daily machine**. `nightly.yml` already uses that pattern for the full build (`if:` on the event
+  and ref). The gain would be a residential IP, which matters only if bot checks swamp the hosted
+  results.
 
 ## Decisions
 
@@ -251,13 +255,19 @@ needs no dependency.
    summary), `report.html` (self-contained, screenshots linked), `screenshots/<site>-<n>.png`.
 9. **The list is data**, `tools/sites/sites.json`: `id`, `name`, `url`, and optional `search`
    (CSS selector), `find` (a word on the page), `notes`. A unit test checks its shape.
+10. **GitHub-hosted runners only, plus local runs.** If bot checks swamp the nightly results,
+    the response is a shorter site list or a local run from a residential network, not a
+    self-hosted runner, because on a public repository a self-hosted runner is a machine that
+    needs a security design of its own, and Vimma runs none for any workflow (spec
+    [build-supply-chain](build-supply-chain.md), decisions 6 and 7). Rejected: the self-hosted
+    alternative in Research, for that reason.
 
 ## Sub-PRs
 
 1. **This one.** `tools/sites/` (RDP client, probes, checks, bot-check classification, results,
    report, CLI), `sites.json` with the 22 entries, `npm run sites`, `sites.yml`, unit tests for
    the pure parts and the workflow's shape, one local live run whose table goes into the PR.
-2. **Night-to-night diff** (if wanted, open question 3): fetch the previous night's
+2. **Night-to-night diff** (if wanted, open question 2): fetch the previous night's
    `results.json` artifact and report what changed; optionally open or update one issue when a
    site goes from `ok` to `fail`.
 3. **Snapshot layer**, the per-PR gate (design below). Not small, so not in sub-PR 1.
@@ -316,7 +326,7 @@ selected pages, and fail the PR when a check that passed on the recording fails.
   - `tools/e2e/test/launcher.test.mjs`: `browserArgs` puts extra switches before the URL.
 - Live: one local run over the full list under Xvfb from the maintainer's network; the summary
   table goes into the PR. Then one `workflow_dispatch` run after merge to compare the hosted
-  runner's bot-check rate (open question 1).
+  runner's bot-check rate (decision 10).
 
 ## Docs to update
 
@@ -336,19 +346,16 @@ selected pages, and fail the PR when a check that passed on the recording fails.
 
 ## Open questions
 
-1. **Runner.** GitHub-hosted nightly plus local runs (recommended), or a self-hosted runner on
-   a dedicated VM with a home IP if bot checks make the nightly results useless? Decide after
-   a week of nightly results.
-2. **Bot-check handling.** Report only (as now), or also retry a blocked site once at the end of
+1. **Bot-check handling.** Report only (as now), or also retry a blocked site once at the end of
    the run?
-3. **Alerts.** Should a site going from `ok` to `fail` open or update a GitHub issue (sub-PR 2),
+2. **Alerts.** Should a site going from `ok` to `fail` open or update a GitHub issue (sub-PR 2),
    or is the artifact and job summary enough?
-4. **Shortcut conflicts.** Report only (as now), or also suggest a per-site pass-through list
+3. **Shortcut conflicts.** Report only (as now), or also suggest a per-site pass-through list
    for the config (a feature of its own)?
-5. **The site list.** Add the user's daily sites beyond the 19 in the request (Hacker News
-   comments page, a GitLab project, crates.io)?
+4. **The site list.** Add more sites developers use daily beyond the first 19 (Hacker News comments
+   page, a GitLab project, crates.io)?
 
-## Implementation log (2026-10-12, sub-PR 1)
+## Implementation log (sub-PR 1)
 
 What changed from the plan above, and why:
 
@@ -390,7 +397,9 @@ Problems found (each one becomes its own issue or spec; none is fixed here):
    `click()` of a hint. The follow still navigates. To check: whether a user's click does the
    same, and whether the actor should skip the synthetic mouse events on `<video>` overlays.
 3. **`i` focuses the first text field** (above). That is intended, but it means Vimma has no
-   pure pass-through mode for sites with their own single-key shortcuts. The shortcut report
+   pure pass-through mode for sites with their own single-key shortcuts. (Since changed: a page
+   moving focus no longer ends insert entered with `i`, and `i` returns to the field last used;
+   [insert-focus](insert-focus.md).) The shortcut report
    lists 15 of 22 sites where that matters, mostly `/` (13 sites) and `?` (7).
 4. **Insert check skips.** GitHub PR pages, MDN, doc.rust-lang.org and Vercel docs show search
    as a button that opens a dialog, so the suite finds no field to focus, and Excalidraw has no

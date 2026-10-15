@@ -1,12 +1,13 @@
 # Spec: bookmarks
 
 Status: implemented · Area: core (`packages/vimma-core/src/bookmarks.mjs`), UI
-(`ui/bookmarks-panel.mjs`, `side-panel.css`), host (`host/bookmark-ops.mjs`, `VimmaHost`)
+(`ui/bookmarks-panel.mjs`, `side-panel.css`), host (`host/bookmark-ops.mjs`,
+`host/bookmark-actions.mjs`, `VimmaHost`)
 
 ## User story
 
 As a Vimma user I open my bookmarks the way I open the side panel, with a keybind variation
-(`ctrl+b shift+b`, `<leader>b`), and work them like neo-tree in my Neovim (`<space>n`): `j`/`k`,
+(`ctrl+b shift+b`), and work them like neo-tree in my Neovim (`<space>n`): `j`/`k`,
 `h`/`l` to fold, `a` to add with `/` for folders. From any page `ctrl+b a` bookmarks it: I type
 `work/docs/My page` and it is filed under `work/docs`, the folders made as needed.
 
@@ -15,8 +16,8 @@ As a Vimma user I open my bookmarks the way I open the side panel, with a keybin
 1. **Storage: Firefox's Places** (`PlacesUtils.bookmarks`, `PlacesUtils.promiseBookmarksTree`,
    `PlacesUtils.observers`; grepped in `toolkit/components/places/`). Existing bookmarks,
    import/export, the Library and Sync keep working; Vimma keeps no bookmark store of its own.
-2. **One tree, rooted at the Bookmarks Toolbar** (`[bookmarks] root = "toolbar"`; the default until decision 11;
-   user decision, 2026-10-10). Its top level is the toolbar folder's own children, at depth 0
+2. **One tree, rooted at the Bookmarks Toolbar** (`[bookmarks] root = "toolbar"`; the default
+   until decision 11). Its top level is the toolbar folder's own children, at depth 0
    (`aria-level` 1); no row stands for the toolbar itself, and the header says "Bookmarks
    Toolbar". Paths (quick add, `a`, `A`, `m`, Tab completion) are relative to the toolbar. The
    Menu, Other Bookmarks and mobile are not listed; a bookmark there that quick add finds is
@@ -74,8 +75,8 @@ As a Vimma user I open my bookmarks the way I open the side panel, with a keybin
     keys to the list; `Esc` clears it. With a filter in force, `Esc` in the list clears it
     first, and a second `Esc` closes.
 
-11. **A folder per workspace** (`[bookmarks] root = "workspace"`, the default; user decision,
-    2026-10-10). Each workspace owns a folder at the top of the Bookmarks Toolbar, named after
+11. **A folder per workspace** (`[bookmarks] root = "workspace"`, the default). Each workspace
+    owns a folder at the top of the Bookmarks Toolbar, named after
     it. The panel's tree is the current workspace's folder: its children at depth 0
     (`aria-level` 1), no row for the folder or the toolbar, the workspace's name in the header;
     a workspace switch while open re-reads it afresh. Quick add, `a`, `A`, `m` and Tab
@@ -100,24 +101,24 @@ As a Vimma user I open my bookmarks the way I open the side panel, with a keybin
 
 ## Keys
 
-| Key                           | Action                                                       |
-| ----------------------------- | ------------------------------------------------------------ |
-| `ctrl+b shift+b`, `<leader>b` | open / close the bookmarks panel (`:bookmarks`)              |
-| `ctrl+b a`                    | bookmark this page (`:bookmark [path]`)                      |
-| `j` / `k`                     | move                                                         |
-| `h`                           | close the folder, or go to the parent folder and close it    |
-| `l`                           | open the folder (again: to its first item); a bookmark opens |
-| `Enter`                       | open in this tab; on a folder, open / close it               |
-| `t`                           | open in a new background tab, panel stays                    |
-| `s` / `S`                     | open in a split right / below                                |
-| `a`                           | add the current page here, as a path (neo-tree `a`)          |
-| `A`                           | add a folder here                                            |
-| `r`                           | rename                                                       |
-| `m`                           | move to a folder (prompt with completion)                    |
-| `d`                           | delete after `y/N` (a folder says how many items go)         |
-| `y`                           | copy the URL                                                 |
-| `/`                           | filter                                                       |
-| `Esc`, the toggle keys        | close (`Esc` clears a filter first)                          |
+| Key                    | Action                                                       |
+| ---------------------- | ------------------------------------------------------------ |
+| `ctrl+b shift+b`       | open / close the bookmarks panel (`:bookmarks`)              |
+| `ctrl+b a`             | bookmark this page (`:bookmark [path]`)                      |
+| `j` / `k`              | move                                                         |
+| `h`                    | close the folder, or go to the parent folder and close it    |
+| `l`                    | open the folder (again: to its first item); a bookmark opens |
+| `Enter`                | open in this tab; on a folder, open / close it               |
+| `t`                    | open in a new background tab, panel stays                    |
+| `s` / `S`              | open in a split right / below                                |
+| `a`                    | add the current page here, as a path (neo-tree `a`)          |
+| `A`                    | add a folder here                                            |
+| `r`                    | rename                                                       |
+| `m`                    | move to a folder (prompt with completion)                    |
+| `d`                    | delete after `y/N` (a folder says how many items go)         |
+| `y`                    | copy the URL                                                 |
+| `/`                    | filter                                                       |
+| `Esc`, the toggle keys | close (`Esc` clears a filter first)                          |
 
 "Here" is the highlighted folder, or the highlighted bookmark's folder; at the top level, the
 workspace's folder (the toolbar with `root = "toolbar"`, the Menu with `root = "all"`). Digits (`panel.select`) do nothing in the bookmarks panel.
@@ -163,12 +164,12 @@ tries` and `ctrl+b a opens the prompt - timed out`.
   (`KEY_Enter refuses - timed out`); reverted.
 - The `help.test.mjs` and `defaults.toml` snapshots gain the Bookmarks rows only; the action
   names stay within the old column width so no other row moved.
-- **Leader default removed** (2026-10-10): by maintainer decision the leader has no default bindings,
-  so `toggle_bookmarks` is `ctrl+b shift+b` only and `space b` does nothing by default. The leader
+- **Leader default removed** (2026-10-10): the leader has no default bindings, so
+  `toggle_bookmarks` is `ctrl+b shift+b` only and `space b` does nothing by default. The leader
   option and `<leader>` bindings in `[keys]` stay for users to add. The bookmarks tests press
   `ctrl+b shift+b` where they pressed `space b`; the assertions are unchanged.
-- **Toolbar root** (user decision, 2026-10-10): "bookmarks button should show only contents of
-  bookmarks toolbar". The panel, quick add and paths are rooted at the Bookmarks Toolbar folder
+- **Toolbar root** (2026-10-10): the bookmarks panel shows only the contents of the Bookmarks
+  Toolbar. The panel, quick add and paths are rooted at the Bookmarks Toolbar folder
   (decision 2), with no wrapper row; `[bookmarks] root = "all"` keeps the Menu tree. Red: Vitest
   12 failures (`rootLabel is not a function`, `expected 'menu________' to be 'toolbar_____'`,
   `[bookmarks] root` unknown key); the mochitest 21 (`only the Bookmarks Toolbar's contents, at
@@ -180,7 +181,7 @@ the top - ["toolbar","other","In the menu"]`, `Tab completes the folder name - "
   `root = "all"`. `browser_vimma_a11y.js` gives the empty test toolbar a folder to show.
   Mutation check: with core `fromPlaces` ignoring `"toolbar"`, 5 Vitest tests fail; reverted.
   The `defaults.toml` snapshot gains the `[bookmarks]` section only.
-- **A folder per workspace** (user decision, 2026-10-10): decisions 11 and 12, on top of the
+- **A folder per workspace** (2026-10-10): decisions 11 and 12, on top of the
   toolbar root, which stays as `root = "toolbar"`; the default is now `"workspace"`. Red: Vitest
   11 failures (`withBookmarksFolder is not a function`, `workspaceFolderGuid is not a function`,
   …) and the config tests' new default; the new mochitest `browser_vimma_bookmarks_workspaces.js`

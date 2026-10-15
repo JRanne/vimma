@@ -1,7 +1,7 @@
 # Developing Vimma
 
-How to build, run and test Vimma, and how changes get in. For what Vimma is and does, see the
-[README](README.md); for using it, the [user guide](docs/guide.md).
+How to build, run and test Vimma, and how changes get in. For why Vimma exists, see the
+[README](README.md); for what it does and how to use it, the [user guide](docs/guide.md).
 
 ## Requirements
 
@@ -18,12 +18,20 @@ How to build, run and test Vimma, and how changes get in. For what Vimma is and 
 ```sh
 npm ci                  # dev tools, including Surfer
 npx surfer download     # Firefox source for the version in surfer.json, into engine/
+npm run verify-source   # that tarball against Mozilla's signed SHA512SUMS (needs gpgv);
+                        # npm run import refuses an engine/ it has not verified
 npx surfer bootstrap    # Mozilla's toolchains into ~/.mozbuild (once)
 npm run import          # apply Vimma's files and patches, select the vimma brand
 npx surfer build        # full build
 ```
 
-Run it:
+Google Safe Browsing (phishing and malware protection) needs an API key, which is not in this
+repository. A build without one works but shows the protection as off. To turn it on, get a free
+key from Google and save it as `~/.config/vimma/keys/safebrowsing` before building
+([runbook](docs/runbook.md#google-safe-browsing-key-spec-m0-safebrowsing-key)). Release packages
+are built with a key.
+
+Run it, then press `ctrl+b ?` to see every binding:
 
 ```sh
 npm start               # full build if present, else the artifact build; ~/.cache/vimma-dev-profile
@@ -57,7 +65,7 @@ reset. After moving the checkout to another path, run
 ```sh
 npm test                 # Vitest: vimma-core and tools (fast, no browser)
 npm run typecheck        # tsc --checkJs
-npm run lint             # eslint + prettier --check
+npm run lint             # eslint + prettier --check + no process wording in Markdown
 npm run mochitest -- tests/browser/                       # browser tests on your full build
 npm run mochitest -- tests/browser/browser_vimma_tabstrip.js
 npm run sites -- --filter github                          # live sites, a report (docs/runbook.md)
@@ -94,6 +102,13 @@ mochitest run on a full build.
 | `tools/`                          | Build, upstream-bump, licence and commitlint helpers.                                                                                            |
 | `docs/`                           | [User guide](docs/guide.md), [bindings](docs/bindings.md), [limits](docs/limits.md), specs, ADRs, [runbook](docs/runbook.md).                    |
 
+## How Vimma is built
+
+Vimma is built with AI coding agents. Features start as written specs, are built test-first by
+the agents, reviewed, and checked by CI and by the security model in
+[docs/security.md](docs/security.md). The author tries each change in daily use before it goes
+into a release.
+
 ## Workflow
 
 Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
@@ -106,18 +121,48 @@ Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
   [docs/specs/README.md](docs/specs/README.md). A spec merges to `main` at once as a draft with
   its open questions; the maintainer answers them in the feature's issue, each answer is a small
   edit merged at once, and the spec is accepted when nothing is open (the "Lifecycle" section of
-  that page). Boundary changes and new upstream patches need an ADR in `docs/adr/`.
+  that page). Boundary changes and new upstream patches need an ADR in `docs/adr/`. Every
+  Markdown file states decisions with their reasons, never who asked for them or when;
+  `npm run lint` (`tools/md-wording`) fails on that kind of wording.
+- **Comments.** A comment says why: a constraint, a Firefox quirk with its source path, a
+  decision with its spec or `docs/security.md` rule. It does not restate the code or record who
+  asked or which review found it; `npm run lint` (`npm run comment-wording`) checks the wording.
 - **Pull requests.** A pull request is only for work that is ready to merge. Work that waits on a
   decision is a question in its issue, not an open pull request.
+- **Unfinished features.** `main` is always releasable, because a merged Firefox security bump
+  can release it with no person in the loop
+  ([docs/specs/firefox-versions.md](docs/specs/firefox-versions.md), decision 16). A feature that
+  lands over several pull requests therefore goes behind a pref that defaults off:
+  - Add `pref("vimma.feature.<name>", false);` to
+    `src/browser/branding/vimma/pref/firefox-branding.js`, with a comment naming the spec.
+  - Read it with `Services.prefs.getBoolPref("vimma.feature.<name>", false)`. While it is off,
+    nothing of the feature shows: no key, command, panel or status bar segment.
+  - Tests turn it on: `SpecialPowers.pushPrefEnv({ set: [["vimma.feature.<name>", true]] })` in a
+    mochitest, the `prefs` of an e2e scenario.
+  - The pull request that finishes the feature removes the pref, every read of it and the test
+    setup that turns it on, and adds the docs and changelog line a user-visible change needs.
+  - Try an unfinished feature by setting the pref to `true` in `about:config`.
+
+  `tools/test/feature-prefs.test.mjs` fails when a `vimma.feature.*` default is not `false`, or
+  when code reads one with a `true` fallback. A feature that fits in one pull request needs no
+  pref.
+
 - **TDD.** Write the failing test and run it, then implement until it passes. Never loosen a test.
 - **Commits.** Use Conventional Commits with a body: the subject is the changelog line; the body
   explains why.
-  `npx commitlint --from origin/main` checks this, and CI rejects `feat` and `fix` commits
-  without a body.
-- **Docs.** A user-visible change updates [docs/guide.md](docs/guide.md), and the README's
-  status if it changes what works. See [docs/review-checklist.md](docs/review-checklist.md).
+  `npx commitlint --from origin/main` checks this, and CI rejects `feat`, `fix` and `revert`
+  commits without a body.
+- **Changelog.** A user-visible change gets a line in `CHANGELOG.md` `[Unreleased]`. The
+  maintainer adds it at merge time, so parallel pull requests do not conflict; a pull request that
+  changes a baseline or snapshot adds its own line (next item).
+- **Screenshot baselines and snapshots.** Never change one without a changelog line that says
+  why it changed: an updated baseline is a visible change, and the line is how a reviewer knows it
+  was meant. `npm run e2e -- --update-baselines` writes new baselines and reminds you of this.
+- **Docs.** A user-visible change updates [docs/guide.md](docs/guide.md) (its "Features at a
+  glance" too when it changes what works), and the README's status line if it changes that. See
+  [docs/review-checklist.md](docs/review-checklist.md).
 - **Agents.** [CLAUDE.md](CLAUDE.md) sets the rules for AI coding agents. They apply to human
-  contributors too.
+  contributors too. <!-- process-wording: points at the coding agents' rules file -->
 
 Before pushing, run `npm test`, `npm run typecheck`, `npm run lint`, `npm run test:py`,
 `npm run license-check` and `npx surfer license-check`.
@@ -156,9 +201,16 @@ its Rust toolchain and the GitHub Actions current:
   turns on auto-merge for security, patch and minor updates. They merge only once every
   required check above passes, licences included: a new licence or a new version of a package
   with a licence exception fails `npm run license-check` until a person reviews it.
-- **Majors need review.** Major updates, every GitHub Actions update (workflows hold write
-  tokens) and `@zen-browser/surfer` version updates get a comment and wait for a person to read
-  the changelog, fix what breaks and merge.
+- **Majors need review.** Major updates and every GitHub Actions update (workflows hold write
+  tokens) get a comment and wait for a person to read the changelog, fix what breaks and merge.
+- **Surfer is always reviewed.** `@zen-browser/surfer` drives the Firefox build, so it is pinned
+  to an exact version and no update of it auto-merges, security updates included. It comes in
+  its own `release-path` group with `ajv`; review it with
+  `npm diff --diff=@zen-browser/surfer@<old> --diff=@zen-browser/surfer@<new>`, which shows the
+  published code that will run.
+- **No install scripts.** `.npmrc` sets `ignore-scripts=true`, so `npm ci` and `npm install` run
+  no package's install scripts (`npm run` still runs ours). A new dependency that needs one is a
+  security decision for its PR, not a reason to drop the setting.
 - **By hand.** Node in `.nvmrc` (see the bench baseline in [docs/runbook.md](docs/runbook.md))
   and the Semgrep image digest in `semgrep.yml` are not covered; bump them in their own PR.
 

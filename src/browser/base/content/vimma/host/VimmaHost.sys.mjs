@@ -11,7 +11,12 @@
 
 import { VimmaActors } from "../actors/VimmaActors.sys.mjs";
 import { createDispatcher } from "../core/dispatcher.mjs";
-import { insertEditCommand, insertModeAfterFocus, matchSiteRule } from "../core/editable.mjs";
+import {
+  insertEditCommand,
+  insertModeAfterFocus,
+  isEditable,
+  matchSiteRule,
+} from "../core/editable.mjs";
 import { HintError, hintKey, startHints } from "../core/hints.mjs";
 import { chordFromEvent, formatKey } from "../core/keys.mjs";
 import { compileKeymap } from "../core/keymap.mjs";
@@ -35,12 +40,14 @@ import { quickAdd, runBookmarkEffect } from "./bookmark-actions.mjs";
 import { bookmarksRoot, loadTree, observeBookmarks, setBookmarksRoot } from "./bookmark-ops.mjs";
 import { gotoItems, pickerWorkspaces, tabById } from "./goto.mjs";
 import { getTabLabel, setTabLabel } from "./tab-labels.mjs";
+import { SearchHost } from "../search/SearchHost.sys.mjs";
+import { refusedScheme } from "../core/pageurl.mjs";
 import {
   BLOCKED_URL_TEXT,
   closeTab,
   closeTabById,
   newTab,
-  openUrl,
+  openTyped,
   restoreTab,
   selectTab,
 } from "./tab-ops.mjs";
@@ -228,7 +235,17 @@ function renameTab(s, text) {
  * @param {"current" | "tab"} where
  */
 function openOrSay(s, text, where) {
-  if (!openUrl(s.win, text, where)) s.notice.show(BLOCKED_URL_TEXT, { error: true });
+  const refused = () => s.notice.show(BLOCKED_URL_TEXT, { error: true });
+  // Said at once for the text as typed; a keyword resolving to one is known after the lookup.
+  if (refusedScheme(text)) {
+    refused();
+    return;
+  }
+  openTyped(s.win, text, where)
+    .then((opened) => {
+      if (!opened) refused();
+    })
+    .catch((e) => console.error("vimma: cannot open", e));
 }
 
 /**
@@ -475,8 +492,8 @@ const MULTI_PANE = new Set([
 
 /**
  * What the host can execute so far, with CONTENT_RUNNERS. An action without an entry is left to
- * Firefox when it is a single key outside help; inside a sequence (or after a count) it is consumed and shows "<action>: not
- * implemented yet", so `ctrl+b <key>` never leaks the second key to the page and is never silent
+ * Firefox when it is a single key outside help; inside a sequence (or after a count) it is
+ * consumed and shows "<action>: not implemented yet", so `ctrl+b <key>` never leaks the second key to the page and is never silent
  * (m2-tab-keys). Unbound keys always pass (m1-actor-insert-scroll, Settled). `text` is a
  * command's free-text argument (`:open example.com`, m1-cmdline); keys never carry one.
  * @type {Record<string, (state: WindowState, action: Action, text?: string) => void>}
@@ -735,10 +752,40 @@ const browserModes = new WeakMap();
  * @param {PageMode} mode
  */
 function setBrowserMode(browser, mode) {
+  if (mode !== "insert") explicitInsert.delete(browser);
   if ((browserModes.get(browser) ?? "normal") === mode) return;
   browserModes.set(browser, mode);
   VimmaHost.onModeChange(browser, mode);
 }
+
+/**
+ * Tabs in explicit insert (`i`, `gi`; docs/specs/insert-focus.md): the inner window ID of the
+ * top document it was entered on. Focus reports from that document do not end it; Esc does, as
+ * does any other change to normal mode (setBrowserMode). A new top document starts over.
+ * @type {WeakMap<object, number>}
+ */
+const explicitInsert = new WeakMap();
+
+/** @param {any} browser */
+function topWindowId(browser) {
+  return browser.browsingContext?.currentWindowGlobal?.innerWindowId ?? 0;
+}
+
+/**
+ * Enters explicit insert in `browser`'s tab.
+ * @param {any} browser
+ */
+function enterExplicitInsert(browser) {
+  setBrowserMode(browser, "insert");
+  explicitInsert.set(browser, topWindowId(browser));
+}
+
+/**
+ * The frame of each tab whose text field last took focus, and its document's inner window ID,
+ * so `i` can go back to that field.
+ * @type {WeakMap<object, { frame: any, windowId: number }>}  browser → BrowsingContext and ID
+ */
+const lastFieldFrame = new WeakMap();
 
 /**
  * Shows `text` as the notice of the window that owns `browser`.
@@ -781,9 +828,10 @@ export const CONTENT_RUNNERS = Object.freeze({
   "hint.follow": (b, a) => VimmaHost._startHints(b, a),
   "hint.follow_new_tab": (b, a) => VimmaHost._startHints(b, a),
   // Explicit insert, even with no text field to focus (pass-through for pages that take keys).
+  // The field the user was last in comes first, then the page's first one (insert-focus).
   "mode.insert": (b) => {
-    setBrowserMode(b, "insert");
-    VimmaActors.focusInput(b);
+    enterExplicitInsert(b);
+    VimmaActors.focusInput(b, lastFieldFrame.get(b));
   },
   // Find in page over Firefox's find bar (m1-find).
   "find.forward": (b) => findOf(b)?.start(b, false),
@@ -793,7 +841,7 @@ export const CONTENT_RUNNERS = Object.freeze({
   // Copy mode: caret, selection and yank in the focused frame (m1-copy-mode).
   ...copyModeRunners(setBrowserMode, noticeFor),
   // yy, p / P, gi, gu / gU, gf (m1-actor-insert-scroll, follow-up: normal-mode extras).
-  ...pageRunners(setBrowserMode, noticeFor),
+  ...pageRunners(enterExplicitInsert, noticeFor),
 });
 
 /**
@@ -982,7 +1030,11 @@ export const VimmaHost = {
       cmdline: new CommandLine(win, {
         run: (result) => this._runCommand(state, result),
         changed: () => this._emit(state),
-        args: () => ({ addon: addonNames(), workspace: workspaceNames(win) }),
+        args: () => ({
+          addon: addonNames(),
+          workspace: workspaceNames(win),
+          search: SearchHost.completions,
+        }),
       }),
       tabStrip: null,
       timer: null,
@@ -1335,13 +1387,23 @@ export const VimmaHost = {
   /**
    * A focus report from the content actor (VimmaParent) for a tab's <browser>.
    * @param {any} browser
-   * @param {{ descriptor: EditableDescriptor, trigger: InsertTrigger }} report
+   * @param {{ descriptor: EditableDescriptor, trigger: InsertTrigger, frame?: any }} report
+   *   `frame`: the BrowsingContext that reported
    */
-  onFocusReport(browser, { descriptor, trigger }) {
+  onFocusReport(browser, { descriptor, trigger, frame }) {
     const mode = browserModes.get(browser) ?? "normal";
+    const site = siteInsert(browser);
+    if (frame && trigger === "focusin" && isEditable(descriptor, { site }).editable) {
+      lastFieldFrame.set(browser, {
+        frame,
+        windowId: frame.currentWindowGlobal?.innerWindowId ?? 0,
+      });
+    }
+    // A page moving focus about (a file finder focusing its result list) does not end the
+    // explicit insert of `i` or `gi`; a report from a newer top document than its own does.
+    if (mode === "insert" && explicitInsert.get(browser) === topWindowId(browser)) return;
     // Copy mode lasts until a text field takes focus (m1-copy-mode).
     const copy = mode === "visual";
-    const site = siteInsert(browser);
     const next = insertModeAfterFocus({ mode: copy ? "normal" : mode, trigger, descriptor, site });
     if (copy && next !== "insert") return;
     setBrowserMode(browser, next === "insert" ? "insert" : "normal");

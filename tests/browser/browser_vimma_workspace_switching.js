@@ -175,7 +175,7 @@ add_task(async function prefix_parens_show_one_workspace_and_restore_its_tab() {
   );
 });
 
-// User decision 2026-10-10: ctrl+u / ctrl+i are vim's half page up and jump forward in normal
+// ctrl+u / ctrl+i are vim's half page up and jump forward in normal
 // mode, so they no longer switch workspace; prefix+( and prefix+) do (tmux's session keys).
 add_task(async function ctrl_i_and_ctrl_u_no_longer_switch_workspace() {
   Assert.equal(active(), main().id, "the window is in main");
@@ -194,8 +194,7 @@ add_task(async function ctrl_i_and_ctrl_u_no_longer_switch_workspace() {
 });
 
 // A switch that worked says nothing: switchTo/next/previous return null on success, and
-// `null ?? NO_WORKSPACES` showed "no workspaces in this window" after every one (found by the
-// website's screenshots).
+// `null ?? NO_WORKSPACES` showed "no workspaces in this window" after every one.
 add_task(async function a_switch_that_worked_shows_no_notice() {
   const notice = () => document.getElementById(NOTICE_ID);
   const noticeShown = () => !!notice()?.matches(":popover-open");

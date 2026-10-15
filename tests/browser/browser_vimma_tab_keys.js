@@ -213,7 +213,7 @@ add_task(async function tab_keys_work_from_about_preferences() {
 add_task(async function unimplemented_prefix_action_shows_a_notice_that_hides() {
   const tabs = await openTabs(1);
   const count = gBrowser.tabs.length;
-  prefix("o"); // history_back: withheld (head.js; toggle_sidebar was the example until M3 6)
+  prefix("o"); // history_back: withheld (head.js)
   Assert.ok(noticeShown(), "ctrl+b o shows a notice");
   Assert.equal(notice().textContent, UNBUILT, "naming the action");
   // Through the notice's polite live region; the toast itself is aria-hidden (spec m7-a11y).

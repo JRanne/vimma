@@ -376,7 +376,7 @@ describe("[modal] insert_editing", () => {
   });
 });
 
-// docs/specs/bookmarks.md, decision 2 (user decision, 2026-10-10).
+// docs/specs/bookmarks.md, decision 2.
 describe("[bookmarks] root", () => {
   test('defaults to "workspace"', () => {
     expect(ok(v2()).bookmarks).toEqual({ root: "workspace" });
@@ -505,7 +505,7 @@ describe("[theme] appearance", () => {
   });
 });
 
-// docs/specs/private-swap.md, decision 1 (user decision, 2026-10-12).
+// docs/specs/private-swap.md, decision 1.
 describe("[private] placement", () => {
   test('defaults to "swap"', () => {
     expect(ok(v2()).private).toEqual({ placement: "swap" });
@@ -674,7 +674,7 @@ describe("[mcp]", () => {
     expect(at("download_dir = 3")?.message).toBe("expected a string, got an integer");
   });
 
-  // Security review of #182 (finding 3): no hidden folder of home, nothing anyone can write.
+  // No hidden folder of home, nothing anyone can write (security.md M12).
   test("download_dir is never in a hidden folder of home or in /tmp, /var/tmp, /dev/shm", () => {
     const at = (/** @type {string} */ line) => errors(v2("[mcp]", line))[0]?.message;
     expect(at('download_dir = "~/.local/bin"')).toBe("must not be in a hidden folder (.local)");

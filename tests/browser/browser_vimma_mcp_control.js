@@ -71,11 +71,11 @@ async function setSwitches({ control = false, mcp = false }) {
 }
 
 /** An agent connection, after its agent-hello. */
-async function agentClient(name = "claude-code") {
+async function agentClient(name = "example-agent") {
   const c = new Client(/** @type {number} */ (VimmaControl.port));
   const welcome = await c.handshake({ protocol: 2, role: "agent" });
   Assert.equal(welcome.role, "agent", "an agent connection");
-  await c.call("agent-hello", { client: { name }, via: "claude" });
+  await c.call("agent-hello", { client: { name }, via: "example" });
   return c;
 }
 
@@ -126,7 +126,7 @@ add_task(async function test_a_window_not_in_front_gets_attention_and_a_notifica
     Assert.equal(attention, 1, "and the window is marked urgent once");
     const [title, text, actions] = alerts[0].split("\n");
     Assert.equal(title, "Vimma", "from Vimma");
-    Assert.equal(text, "claude-code asks to use Vimma's agent workspace (read a page)", "what");
+    Assert.equal(text, "example-agent asks to use Vimma's agent workspace (read a page)", "what");
     Assert.ok(!/example\.com|https?:/.test(alerts[0]), "never a URL");
     Assert.equal(actions, "0", "and no buttons");
     Assert.ok(!lineOpen(), "the line does not open in a window that is not in front");
@@ -164,7 +164,7 @@ add_task(async function test_full_control_asks_only_while_mcp_is_on() {
   Assert.ok(!quiet.c.closed, "a full connection open before MCP was on stays open");
   quiet.c.close();
   await calmPage();
-  // Review of #177 (M2): the question shows the code the client printed.
+  // The question shows the code the client printed, so a racing client is told apart.
   const asked = await fullHandshake({ code: "7F3K" });
   await armed();
   Assert.equal(
@@ -244,7 +244,7 @@ add_task(async function test_control_on_minutes_turns_itself_off() {
   ControlHost.init();
   Assert.ok(!Services.prefs.getBoolPref(CONTROL, true), "an end time in the past turns it off");
 
-  // Review of #177 (L4): an end time that is not one fails closed.
+  // An end time that is not one fails closed.
   for (const bad of ["", "0", "-5", "soon", String(Date.now() + 2 * 24 * 3600_000)]) {
     Services.prefs.setBoolPref(CONTROL, true);
     Services.prefs.setStringPref(CONTROL_UNTIL_PREF, bad);

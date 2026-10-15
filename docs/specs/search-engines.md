@@ -1,17 +1,15 @@
 # Spec: search-engines
 
-Status: ready (not started) · Milestone: after M6a or alongside it, independent of it; no keymap
+Status: implemented · Milestone: after M6a or alongside it, independent of it; no keymap
 change · Area: `packages/vimma-core/src/search.mjs` (new), `config.mjs`, `defaults.mjs`,
 `cmdline.mjs`; `search/SearchHost.sys.mjs` (new), `config/ConfigHost.sys.mjs`,
 `host/tab-ops.mjs`, `host/VimmaHost.sys.mjs`, `about/AboutVimma.sys.mjs`, `jar.mn`. No upstream
 patch.
 
-## The user's words
+## Goal
 
-"should we have capability to set default search engine and then writing @google for example,
-that allows using different engine? similarly to Zen."
-
-The coordinator proposed, and the user approved ("do so"): a `[search]` section in
+Set the default search engine, and use another engine for one search by typing an alias such as
+`@google`, as Zen allows. Vimma does this with a `[search]` section in
 `config.toml` with `default = "DuckDuckGo"` and `[search.aliases]` mapping short aliases to
 installed engine names or to custom URL templates with `%s`
 (`gh = "https://github.com/search?q=%s"`); `@alias query` works in Firefox's URL bar and in
@@ -89,7 +87,7 @@ running it, not recalled.
   welcome flow (`ZenWelcome.mjs`, `ZenSearchEngineStore.setDefaultEngine` →
   `SearchService.setDefault(engine, CHANGE_REASON.USER)`), hides the one-off buttons
   (`zen.urlbar.hide-one-offs`), and has no config file for engines: aliases and custom engines
-  are about:preferences#search. What the user saw in Zen is therefore Firefox's feature; Vimma
+  are about:preferences#search. What Zen offers is therefore Firefox's feature; Vimma
   has it already in the URL bar, and this spec adds the config file and `:open`.
 - **Vimma today:**
   - `:open` / `:tabnew` (`page.open` / `tab.new` with text) go through `openOrSay` →
@@ -159,11 +157,13 @@ running it, not recalled.
    Aliases are stored with the `@`, so a bare word (`gh foo`) is never taken from the default
    engine: Firefox treats a non-`@` alias as a bare keyword too (`UrlbarProviderAliasEngines`).
 5. **`:open` / `:tabnew` resolve aliases and bookmark keywords as the URL bar does.**
-   `openUrl` becomes async: after the `refusedScheme` check it calls
-   `UrlbarUtils.getShortcutOrURIAndPostData(text)`. When that returns a different URL (an engine
-   alias, Vimma's or Firefox's own `@google`, or a Places bookmark keyword), Vimma checks the
-   result with `refusedScheme` again (a keyword bookmarklet is a `javascript:` URL; refused
-   with "blocked: javascript: and data: URLs can't be opened from the command line"), then
+   A new async `openTyped` (`tab-ops.mjs`), used by `:open` and `:tabnew` only, calls
+   `UrlbarUtils.getShortcutOrURIAndPostData(text)` after the `refusedScheme` check; `openUrl`
+   stays synchronous for the opens that must not expand aliases (`p` / `P`, Vimma's own
+   pages). When that returns a different URL (an engine alias, Vimma's or Firefox's own
+   `@google`, or a Places bookmark keyword), Vimma checks the result with `refusedScheme`
+   again (a keyword bookmarklet is a `javascript:` URL; refused with "blocked: javascript:
+   and data: URLs can't be opened from the command line"), then
    `openTrustedLinkIn(url, where, { postData, inBackground: false })` without fixup. Otherwise
    it is today's path unchanged. Using Firefox's own function keeps one rule for both places
    and needs no alias table at run time. `mayInheritPrincipal` is ignored (we load with the
@@ -272,8 +272,8 @@ running it, not recalled.
   - `[search.aliases]` creates the engine with alias `@t`, no suggest URL; it is gone after the
     line is removed; an installed engine gets `@w` and gets its old alias back.
   - `:open @t cats` and `:tabnew @t cats` load the template with `cats`; `:open @google cats`
-    (a built-in alias) starts loading Google's URL, caught and stopped before any request
-    leaves (`BrowserTestUtils.waitForDocLoadAndStopIt`); a POST test engine receives the body;
+    (a built-in alias) is covered by an add-on test engine with the defined alias `@vext`,
+    since a mochitest may not connect to google.com; a POST test engine receives the body;
     `:open ? @t cats` searches the default engine for "@t cats".
   - A bookmark keyword `k` with `%s` works from `:open k x`; a keyword bookmarklet
     `javascript:` is refused with the notice.
@@ -293,9 +293,9 @@ Per-workspace defaults (decision 13); a separate private default key; a table fo
 Firefox's existing engines into `config.toml`; hiding or removing app-provided engines from the
 file (the policy's `Remove`).
 
-## Answered by the user (2026-10-11)
+## Decided questions
 
-1. **The file wins at every start** (decision 7): "config always wins".
-2. **Private browsing's default** is not a separate `[search] private` key. The user wants a
-   private workspace in place of private windows (spec in progress, private-workspace); its
-   search default is decided there. Until then decision 12 stands.
+1. **The file wins at every start** (decision 7), because `config.toml` is the source of truth.
+2. **Private browsing's default** is not a separate `[search] private` key. Vimma's private
+   workspace ([private-workspace](private-workspace.md)) lives in a private window, so decision
+   12 covers it.

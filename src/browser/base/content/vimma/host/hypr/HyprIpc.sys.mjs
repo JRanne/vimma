@@ -170,7 +170,7 @@ export const HyprIpc = {
         if (done) return;
         const bytes = readAvailable(input, binary);
         if (!bytes) {
-          // Closed with nothing said: refused or reset, not slow (no retry, review of #151).
+          // Closed with nothing said: refused or reset, not slow, so a retry would not help.
           finish(size ? null : new Error("refused"));
           return;
         }

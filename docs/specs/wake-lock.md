@@ -1,12 +1,12 @@
 # Spec: wake-lock
 
-Status: done · Milestone: fix (after M5) · Area: `services/WakeLock.sys.mjs` (new), `vimma.js`,
+Status: implemented · Milestone: fix (after M5) · Area: `services/WakeLock.sys.mjs` (new), `vimma.js`,
 `jar.mn`. No upstream patch.
 
-## The user's words
+## Problem
 
-"it seems that my computer starts screensaver when video is playing in Vimma, troubleshoot this
-and prepare fix for it."
+On Omarchy, the screensaver starts while a video is playing in Vimma. A playing video must keep
+the screen awake.
 
 ## Diagnosis (Omarchy 4 on Hyprland, 2026-10-11)
 

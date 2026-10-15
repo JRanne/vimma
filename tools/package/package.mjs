@@ -5,7 +5,7 @@
  *
  * Usage:
  *   node tools/package/package.mjs --tarball <vimma-*.linux-x86_64.tar.xz> --out <dir>
- *     --maintainer "Name <email>" [--tag vX.Y.Z] [--repo JRanne/vimma] [--sbom <file>]
+ *     --maintainer "Name <email>" [--tag vX.Y.Z] [--repo vimma-browser/vimma] [--sbom <file>]
  *     [--appimagetool <path> --runtime <path>] [--no-deb]
  * Without --appimagetool no AppImage is built (its AppDir still is, in the work dir).
  * The version is surfer.json brands.vimma.release.displayVersion; --tag must be exactly v<that>.
@@ -29,6 +29,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { REPO } from "../repo.mjs";
 
 /** SemVer with an optional pre-release, as version-files.mjs accepts (plan §7). */
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/;
@@ -158,7 +159,7 @@ function aurVersion(version) {
  * vX.Y.Z tag (a published release) or from main (a manual re-run). docs/runbook.md uses it.
  */
 export const IDENTITY_REGEXP =
-  "^https://github\\.com/JRanne/vimma/\\.github/workflows/release\\.yml@refs/(heads/main|tags/v[0-9]+\\.[0-9]+\\.[0-9]+)$";
+  "^https://github\\.com/vimma-browser/vimma/\\.github/workflows/release\\.yml@refs/(heads/main|tags/v[0-9]+\\.[0-9]+\\.[0-9]+)$";
 
 /** The AppImage runtime release fetch-appimagetool.sh pins (its single source). */
 export const RUNTIME_RELEASE = (() => {
@@ -374,7 +375,7 @@ export function debControl({ version, maintainer, installedKiB }) {
     "Provides: gnome-www-browser, www-browser",
     "Section: web",
     "Priority: optional",
-    "Homepage: https://github.com/JRanne/vimma",
+    "Homepage: https://github.com/vimma-browser/vimma",
     `Description: ${DESCRIPTION}`,
     " Vimma is a Firefox fork driven from the keyboard: a modal page layer, a",
     " prefix keymap, workspaces as containers and an always-visible status bar.",
@@ -401,7 +402,7 @@ fi
 
 const COPYRIGHT = `Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: Vimma
-Source: https://github.com/JRanne/vimma
+Source: https://github.com/vimma-browser/vimma
 
 Files: *
 Copyright: Vimma contributors; Mozilla Foundation and contributors (Firefox)
@@ -767,7 +768,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       out: { type: "string" },
       maintainer: { type: "string" },
       tag: { type: "string" },
-      repo: { type: "string", default: "JRanne/vimma" },
+      repo: { type: "string", default: REPO },
       sbom: { type: "string" },
       appimagetool: { type: "string" },
       runtime: { type: "string" },
@@ -784,7 +785,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     outDir: values.out,
     maintainer: values.maintainer,
     tag: values.tag,
-    repo: values.repo ?? "JRanne/vimma",
+    repo: values.repo ?? REPO,
     sbom: values.sbom,
     appimagetool: values.appimagetool,
     runtime: values.runtime,

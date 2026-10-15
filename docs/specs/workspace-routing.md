@@ -5,10 +5,10 @@ routing rules" as out of scope) · Area: `packages/vimma-core/src/routes.mjs` (n
 `toml.mjs`, `cmdline.mjs`, `actions.mjs`; `src/browser/base/content/vimma/workspaces/`
 (`WorkspaceRouter.sys.mjs` new, `WorkspaceStore`, `WindowWorkspaces`), `host/route-ops.mjs`
 (new), `about/`, `config/ConfigHost.sys.mjs`; `tools/package/vimma-open.sh` (new) and the
-packages; two existing patch hunks changed, no new hunk.
+packages; three existing patch hunks changed, no new hunk.
 
-User request: "make sure that there is capability to do workspace profile routing based on which
-application opened the page, or by domain name (similar feature to zen)". Engine paths are
+Goal: route a page to a workspace by the application that opened it or by its domain name, as
+Zen's space routing does. Engine paths are
 relative to `engine/` (Firefox 157.0.1). Zen paths are inside Zen's `browser/omni.ja` (the build
 installed here, `modules/zen/spacerouting/ZenSpaceRoutingManager.sys.mjs` and
 `modules/zen/ui/ZenSpaceRoutingNavigation.sys.mjs`).
@@ -148,7 +148,7 @@ caller reaches the running Vimma.
      bar, `:open`, `:tabnew`, bookmarks, history, and `p`/`P` once they exist), any `where`. An
      explicit container ("Open in New Container Tab", an extension) is the user's choice and
      stays.
-   - **Never an open a page triggers** (review of PR #88; this replaces the first draft's "(b)",
+   - **Never an open a page triggers** (this replaces an earlier option "(b)",
      which routed a page's links opened in a new tab or window in the page's own container). The
      threat: `ClickHandlerChild` accepts synthetic ctrl- and middle-clicks from the page's own
      script once the page has a user gesture, and `ClickHandlerParent` opens them in a
@@ -252,8 +252,8 @@ WindowWorkspaces: TabOpen/TabSelect (switch or notice), location changes (hint)
 ```
 
 - **Core `routes.mjs`:** `validateRoutes` (config problems), `resolveRoutes`, `matchRoute(routes,
-{ url, app }, { workspaces })`, `describeRoute`, `isAppToken`, `routeDomainFor(url)`,
-  `appendRoute(text, rule)` (the text to append, checked with `parseConfig`).
+{ url, app }, { workspaces })`, `describeRoute`, `isAppToken`, `routeDomainFor(url)`; in
+  `config.mjs`, `appendRouteText(text, rule)` (the text to append, checked with `parseConfig`).
 - **Host `WorkspaceRouter.sys.mjs`:** rules, the app hint, the routing points (`routeLinkIn`,
   `externalUserContextId`, `firstTabUserContextId`), the command-line handler, the cache pref.
 - **Host `route-ops.mjs`:** `:route`, `:route add`, `:route move`.
@@ -263,7 +263,7 @@ WindowWorkspaces: TabOpen/TabSelect (switch or notice), location changes (hint)
 - Vitest (`routes.test.mjs`, `config.test.mjs`, `toml.test.mjs`): parsing and errors with lines
   (`[[routes]]` located), subdomains and label boundaries, `*.` globs, IDN both ways, ports, IP
   literals, `about:`/`file:` only by `url`, app tokens, precedence by file order, skipped unknown
-  workspaces, `appendRoute`'s refusals.
+  workspaces, `appendRouteText`'s refusals.
 - Mochitests (`browser_vimma_workspace_routes.js`): the URL bar and `:open` route to another
   workspace (foreground: switch, no "opened in"; the blank tab closed); a background open says
   where and does not switch; `:open` in the target workspace stays in the tab (no loop, no new
@@ -297,9 +297,8 @@ WindowWorkspaces: TabOpen/TabSelect (switch or notice), location changes (hint)
     only if it was not selected meanwhile (decision 4). Before, a foreground open into another
     workspace was hidden, said `opened in`, then shown again by its selection.
   - `:route` with no argument opens about:vimma's new Routing section (`?tab=<uuid>#routes`)
-    rather than drawing a list over the page: a list needs a modal overlay with its own keys
-    (the help overlay is being changed by another branch), and about:vimma already lists config
-    state. It shows the tab's host, never its URL; the `:bug` report has only the rule count.
+    rather than drawing a list over the page: a list needs a modal overlay with its own keys,
+    and about:vimma already lists config state. It shows the tab's host, never its URL; the `:bug` report has only the rule count.
   - core `locateKeys` now indexes `[[array]]` tables, so `routes[2].url` errors carry their own
     line; `toml.test.mjs`'s array-table path gains the index the parsed value always had.
   - Packaging: `vimma-open` lives in `tools/package/vimma-open.sh`; `package.mjs` installs it
@@ -316,10 +315,10 @@ WindowWorkspaces: TabOpen/TabSelect (switch or notice), location changes (hint)
   Mutation check: hiding a foreground-opened tab anyway (dropping `tab.selected` from the
   microtask's guard) fails "a foreground open does not say 'opened in'"; reverted.
 
-## Review round 1 (PR #88)
+## Hardening (PR #88)
 
-- **Decision 3b dropped** (the maintainer's decision): a page's opens are never routed; the
-  cookie threat is in decision 3. The router routes `openLinkIn` only for the system principal
+- **Decision 3b dropped**: a page's opens are never routed, because of the cookie threat
+  described in decision 3. The router routes `openLinkIn` only for the system principal
   with no container given; the referrer stripping that (b) needed went with it. The hint now also
   fires when a tab is selected, so a link a page opened in the background is hinted when looked
   at. Tests: a scripted ctrl-click and middle-click through ClickHandler, `openLinkIn` with a

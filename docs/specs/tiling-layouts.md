@@ -1,11 +1,11 @@
 # Spec: tiling-layouts
 
-Status: done · Milestone: after M4 (m4-split-panes listed "layout presets" as out of
+Status: implemented · Milestone: after M4 (m4-split-panes listed "layout presets" as out of
 scope) · Area: `packages/vimma-core/src/layouts.mjs` (new), `panes.mjs`, `snapshot.mjs`,
 `config.mjs`, `defaults.mjs`, `actions.mjs`, `cmdline.mjs`; `split/PaneView.mjs`,
 `host/pane-ops.mjs`, `host/VimmaHost.sys.mjs`, `config/ConfigHost.sys.mjs`. No upstream patch.
 
-User decision: tiling layouts with **both** tmux-style presets and Hyprland-style dwindle. Builds
+Tiling layouts offer **both** tmux-style presets and Hyprland-style dwindle. The spec builds
 on [m4-split-panes](m4-split-panes.md) (the pane tree, `[panes] max`, `PaneView.reconcile`,
 ADR-013's split view with our CSS positioning, ADR-014's resize mode) and its per-workspace
 trees (sub-spec 6).
@@ -45,8 +45,8 @@ trees (sub-spec 6).
 
 ## Decisions
 
-1. **Core module `layouts.mjs`, pure.** `LAYOUTS` (the cycle order above, as the user listed
-   it), `nextLayout(current)`, `dwindleDirection(panes, area)`, `layoutRefusal(panes, name)` and
+1. **Core module `layouts.mjs`, pure.** `LAYOUTS` (the cycle order above),
+   `nextLayout(current)`, `dwindleDirection(panes, area)`, `layoutRefusal(panes, name)` and
    `arrange(panes, name, { area, mainSize })`. Builders take the panes' leaves (pane ids and tabs
    kept, so the host's tabs and browsers stay) and return a new canonical tree through
    `panes.mjs`'s `makeSplit`, now exported.

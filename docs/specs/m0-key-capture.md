@@ -17,7 +17,7 @@ be wired in next.
   `src/browser/base/content/vimma/core/` by `npm run sync-core`) and logs
   `{ key: formatKey(chord), mods, mode: "normal" }` via `console.debug` when pref `vimma.debug.keys` is true.
   It never calls `preventDefault` in this spec.
-- `src/browser/base/content/browser.xhtml.patch`: one hunk that loads the host script
+- `src/browser/base/content/browser-xhtml.patch`: one hunk that loads the host script
   and calls `VimmaHost.init(window)`. Record the patch in ADR-003's patch register.
 - `npm run sync-core` script: copies `packages/vimma-core/src/*.mjs` into `src/.../vimma/core/`.
   Check how Surfer/`jar.mn` registers new chrome files before choosing paths; do not guess from

@@ -86,7 +86,7 @@ off instead of showing it ticked.
 | Option                                                                       | Settings                                                                                 | Network | Verdict                                                                                       |
 | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------- |
 | Leave Firefox's defaults                                                     | "Block dangerous and deceptive content" ticked, protects nothing                         | none    | rejected: the checkbox lies                                                                   |
-| Prefs file defaults false                                                    | honest keyless, but **keyed builds too** ship it off                                     | none    | rejected: the user chose on by default; the branding prefs file is not preprocessed, no `#if` |
+| Prefs file defaults false                                                    | honest keyless, but **keyed builds too** ship it off                                     | none    | rejected: keyed builds must keep it on; the branding prefs file is not preprocessed, no `#if` |
 | **Runtime default-branch false when `AppConstants` has no key** (our module) | unticked, the "Safe Browsing is off" security warning shows, download sub-options greyed | none    | **chosen**: keyed builds keep Firefox's defaults; no user value is written                    |
 | Same, on the user branch                                                     | same                                                                                     | none    | rejected: would survive into a later keyed build and look like the user's choice              |
 
@@ -169,7 +169,7 @@ before a release; not in CI (PR CI is keyless and the nightly is not live).
   compares with an expectation passed in, rather than branching on AppConstants alone.
 - **Build cost**: after rebasing onto PR #15 (`--disable-updater`), `npm run import` then
   `./mach build` took 101 s: the objdir had already been fully rebuilt with `--disable-updater`
-  for PR #15's own review, so this measures only the key (reconfigure, `AppConstants` and
+  for PR #15's own testing, so this measures only the key (reconfigure, `AppConstants` and
   dependants). The artifact build took 21 s. The list prefs need no build (`dist/bin` symlinks
   the branding file).
 - **Red/green.** Vitest: 4 failing (`expectSafeBrowsingKey is not a function`), then 8/8.

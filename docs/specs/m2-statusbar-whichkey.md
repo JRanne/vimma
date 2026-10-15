@@ -72,7 +72,7 @@ screenshot baselines (the e2e harness).
 
 ## Settled (2026-10-09, from the engine tree)
 
-- **Which-key strip dropped (maintainer decision, 2026-10-09: "which-key is not needed").** Only
+- **Which-key strip dropped (2026-10-09).** The help overlay already lists every binding, so only
   `prefix+?` shows the bindings; `ctrl+b` alone shows just the pending keys in the bar. The strip,
   its CSS, `vimma-whichkey-open`, `VimmaHost.runnable()` and core's `whichkey.mjs` are removed;
   the notice hides when the overlay opens. The strip notes below are history.
@@ -125,7 +125,7 @@ screenshot baselines (the e2e harness).
 - **Typecheck.** `tools/sync-core.mjs` now also copies the vendored `smol-toml.d.mts` into the
   chrome copy of core (jar.mn packs only `*.mjs`), since `ui/statusbar.mjs` is the first chrome
   module to import `theme.mjs`, which reaches the vendored TOML parser.
-- **Review round 1 (after #32 and #28 merged):** red for the new tests: 7 unexpected (no emit on
+- **Hardening (after #32 and #28 merged):** red for the new tests: 7 unexpected (no emit on
   a focus report, no re-measure on a font change, notice over the bar and the strip, no clipped
   hint). Green: both files 80/0.
 - **Verified (artifact lane, first round):** red: 16 unexpected (no `#vimma-statusbar`, no

@@ -159,7 +159,7 @@ describe("status bar segments", () => {
     });
     expect(at({ waiting: 2, minutes: 14, ran: false })?.text).toBe("◇ agent 2?");
     expect(at({ waiting: 0, minutes: 14, ran: false })?.text).toBe("◇ agent 14m");
-    // A question waiting says so even just after a request ran (review of #177).
+    // A question waiting says so even just after a request ran: the question comes first.
     expect(at({ waiting: 1, minutes: null, ran: true })?.text).toBe("◇ agent 1?");
     expect(at({ waiting: 0, minutes: 14, ran: true })).toMatchObject({
       text: "◇ agent ·",

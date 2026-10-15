@@ -2,9 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* The prefix+g goto, prefix+w workspace and prefix+e add-on pickers (ui/picker.mjs): the help overlay's look
-   (help-overlay.css), theme tokens when the status bar has loaded them, legible system colours
-   otherwise. */
+/* The prefix+g goto, prefix+w workspace and prefix+e add-on pickers (ui/picker.mjs): the help
+   overlay's look (help-overlay.css), theme tokens when the status bar has loaded them, legible
+   system colours otherwise. */
 
 .vimma-picker {
   box-sizing: border-box;

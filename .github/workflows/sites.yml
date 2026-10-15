@@ -58,19 +58,10 @@ jobs:
             exit 1
           fi
 
-      - name: Firefox source tarball (surfer.json), unpacked without history
-        env:
-          CI_SKIP_INIT: "1"
+      # Verified against Mozilla's SHA512SUMS and unpacked into a fresh engine/ (as e2e.yml).
+      - name: Firefox source tarball (surfer.json), verified and unpacked without history
         run: |
-          npx surfer download
-          version=$(node -p 'require("./surfer.json").version.version')
-          base="https://archive.mozilla.org/pub/firefox/releases/$version"
-          name="source/firefox-$version.source.tar.xz"
-          sha512sum ".surfer/engine/firefox-$version.source.tar.xz" > "$RUNNER_TEMP/tarball.sha512"
-          curl -fsSL --retry 3 "$base/SHA512SUMS" -o "$RUNNER_TEMP/SHA512SUMS"
-          python3 tools/upstream/verify-sha512.py --sums "$RUNNER_TEMP/SHA512SUMS" --name "$name" \
-            --actual "$RUNNER_TEMP/tarball.sha512"
-          git init -q engine
+          tools/upstream/firefox-source.sh
           rm -f .surfer/engine/firefox-*.source.tar.xz
 
       - name: Import our patches and sources

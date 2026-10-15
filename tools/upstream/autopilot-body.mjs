@@ -191,7 +191,7 @@ export function prBody(c) {
     "",
     "| Check | Result |",
     "| --- | --- |",
-    "| Source tarball | SHA-512 matches Mozilla's `SHA512SUMS` |",
+    "| Source tarball | SHA-512 matches a `SHA512SUMS` signed by Mozilla's release key |",
     `| Patches (\`surfer import\`) | ${patchLine(c.patchReport, c.patchResult)} |`,
     `| Patch register (ADR-003) | ${c.audit || "not run"} |`,
     `| Artifact build | ${artifactsLine(c)} |`,

@@ -14,7 +14,8 @@ About dialog, about:support, Settings), I still see Vimma's own version, `0.1.0`
 ## Scope
 
 - **Two versions, two files.** `MOZ_APP_VERSION` (`appinfo.version`, `application.ini`
-  `Version`) becomes the Firefox version from `surfer.json` `version.version` (`157.0.1`);
+  `Version`) becomes the Firefox version from `surfer.json` `version.version` (`157.0.1` when
+  this was built, `158.0` now);
   `MOZ_APP_VERSION_DISPLAY` stays `brands.vimma.release.displayVersion` (`0.1.0`).
   `configs/common/mozconfig` adds `ac_add_options --with-version-file-path=browser/config/vimma`,
   a configure option Firefox already has (`build/moz.configure/init.configure`, `milestone()`).
@@ -34,8 +35,9 @@ About dialog, about:support, Settings), I still see Vimma's own version, `0.1.0`
     `TargetingEnvironment.version` (Nimbus and ASRouter targeting `version`, which overrides
     any custom context).
 - ADR-003 patch register: both patches. `docs/runbook.md`: the smoke check shows both versions.
-- **Nightly**: the `--version` check is unchanged (it still prints `Vimma Vimma 0.1.0`); a second
-  check reads `application.ini` and requires `Version=` to be `surfer.json` `version.version`.
+- **Nightly**: the `--version` check is unchanged by this spec (it printed `Vimma Vimma 0.1.0`;
+  spec firefox-versions later made it `Vimma 0.1.0 · Firefox <version>`); a second check reads
+  `application.ini` and requires `Version=` to be `surfer.json` `version.version`.
 - `browser_vimma_branding.js`: its "appinfo.version is 0.x" assertion moves to
   `AppConstants.MOZ_APP_VERSION_DISPLAY` (see Tests).
 
