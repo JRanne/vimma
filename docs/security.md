@@ -256,7 +256,7 @@ text that pages, add-ons and bookmarks choose.
   `/usr/local/bin/clamscan`, never a `PATH` search, and only a regular file another user (root)
   owns that the user cannot write, in a folder the user cannot write), in one call with fixed
   arguments, the path after `--` and no shell, on an agent download in the quarantine folder
-  (M13; [vimma-mcp](specs/vimma-mcp.md) decision 31 g; the security review of #182). [`never builds code from text: no eval, Function or sandbox evaluation`](../tools/security/test/chrome-source.test.mjs),
+  (M13; [vimma-mcp](specs/vimma-mcp.md) decision 31 g). [`never builds code from text: no eval, Function or sandbox evaluation`](../tools/security/test/chrome-source.test.mjs),
   [`never starts a process, but clamscan on an agent download`](../tools/security/test/chrome-source.test.mjs)
 
 ## 7. Omarchy hook and the `vimma-open` launcher

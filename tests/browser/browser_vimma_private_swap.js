@@ -743,8 +743,7 @@ add_task(async function placement_window_sends_nothing() {
   Assert.ok(!parked(window));
 });
 
-// Review of PR #151. The user (2026-10-12): "it should be possible to get back to [the normal
-// window] instantly": it is never left in special:vimma.
+// Getting back to the normal window must be instant: it is never left in special:vimma.
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 

@@ -543,8 +543,8 @@ add_task(async function test_limits() {
   await TestUtils.waitForCondition(() => VimmaControl.connections === 0, "all closed");
 
   // Connections that never say hello cannot crowd out a client with the token: at most two wait
-  // for a hello, and a new one evicts the oldest (review of #38: a reconnect loop made every
-  // vimma-ctl call busy).
+  // for a hello, and a new one evicts the oldest (security.md S5; a reconnect loop would otherwise
+  // make every vimma-ctl call busy).
   const flood = [];
   for (let i = 0; i < 40; i++) flood.push(new Client(port));
   // All but the 2 newest are evicted: up to 16 linger 1 s to deliver their "busy", the rest
@@ -789,7 +789,7 @@ add_task(async function test_reload_theme() {
 });
 
 add_task(async function test_server_checks_the_scheme_itself() {
-  // Not only the shared validator: the command re-parses the URL (review of #38).
+  // Not only the shared validator: the command re-parses the URL (security.md S10).
   for (const url of ["javascript:alert(1)", "data:text/html,x", "chrome://browser/content/"]) {
     let code = null;
     try {

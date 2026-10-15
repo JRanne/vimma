@@ -674,7 +674,7 @@ describe("[mcp]", () => {
     expect(at("download_dir = 3")?.message).toBe("expected a string, got an integer");
   });
 
-  // Security review of #182 (finding 3): no hidden folder of home, nothing anyone can write.
+  // No hidden folder of home, nothing anyone can write (security.md M12).
   test("download_dir is never in a hidden folder of home or in /tmp, /var/tmp, /dev/shm", () => {
     const at = (/** @type {string} */ line) => errors(v2("[mcp]", line))[0]?.message;
     expect(at('download_dir = "~/.local/bin"')).toBe("must not be in a hidden folder (.local)");

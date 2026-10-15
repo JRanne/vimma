@@ -728,7 +728,7 @@ fn waits_for_the_users_answer_while_mcp_is_on() {
     drop(server.lines());
 }
 
-// Review of #177 (M2): while MCP is on, vimma-ctl prints a code and sends it in its auth, and
+// docs/security.md S13: while MCP is on, vimma-ctl prints a code and sends it in its auth, and
 // Vimma's question shows it, so the user answers for the vimma-ctl they ran.
 #[test]
 fn prints_and_sends_a_code_while_mcp_is_on() {

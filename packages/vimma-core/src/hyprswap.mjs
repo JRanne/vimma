@@ -419,7 +419,7 @@ export function parseActiveWorkspace(json) {
 }
 
 /**
- * After a swap could not be done (review of PR #151): whichever window is in PARK comes out, to
+ * After a swap could not be done: whichever window is in PARK comes out, to
  * the other window's workspace, else the active one, else workspace 1, and the window to show
  * is focused. A window is never left in special:vimma.
  * @param {Client | undefined} show

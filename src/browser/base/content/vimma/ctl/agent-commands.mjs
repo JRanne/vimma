@@ -279,7 +279,7 @@ function cut(text, max) {
 
 /**
  * `s` as well-formed Unicode: a lone surrogate (a page's title or text can hold one) becomes
- * U+FFFD, so the JSON line is one vimma-ctl's strict parser accepts (review of #176).
+ * U+FFFD, so the JSON line is one vimma-ctl's strict parser accepts (security.md M7).
  * @param {unknown} s
  */
 const wf = (s) => /** @type {string} */ (/** @type {any} */ (String(s)).toWellFormed());
@@ -381,7 +381,7 @@ const COMMANDS = {
     }
     const title = wf(tab.label ?? "");
     const background = !(tab.selected && /** @type {any} */ (Services.focus).activeWindow === win);
-    // Last, once everything is collected (review of #176): the page may have navigated or the
+    // Last, once everything is collected (security.md M8): the page may have navigated or the
     // tab moved while it was read, and then nothing of it is sent.
     stillAsAsked(agent, id, what.url);
     // Page JS can set the selection, so it is as untrusted as the text.

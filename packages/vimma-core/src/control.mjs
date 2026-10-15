@@ -160,7 +160,7 @@ function checkAuth(m, errors) {
   }
 }
 
-/** auth's optional code (docs/specs/vimma-mcp.md, review of #177 M2). */
+/** auth's optional code (docs/specs/vimma-mcp.md decision 29 C; security.md S13). */
 export const AUTH_CODE = /^[2-9A-HJ-NP-Z]{4}$/;
 
 /** @param {Obj} m @param {string[]} errors */

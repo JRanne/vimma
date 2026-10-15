@@ -88,7 +88,7 @@ const isFullscreen = (win) => win.document.documentElement.hasAttribute("inDOMFu
 const grantMinutes = () => McpHost.config?.grantMinutes ?? 10;
 const armMs = () => Services.prefs.getIntPref(ARMING_PREF, 1000);
 
-/** Window events after which the line must arm again (review of #177, H1). */
+/** Window events after which the line must arm again (security.md M4). */
 const REARM_EVENTS = ["activate", "deactivate", "focus", "blur"];
 /** @type {WeakMap<Window, (e: Event) => void>} */
 const rearmers = new WeakMap();
@@ -269,7 +269,7 @@ export const AgentUi = {
     const chord = chordFromEvent(e);
     if (!chord) return false; // a bare modifier: shift for `Y`
     if (chord.ctrl || chord.alt || chord.meta) return false;
-    // The rest of a sequence (the g of ctrl+b g) is the bindings' (review of #177, L5).
+    // The rest of a sequence (the g of ctrl+b g) is the bindings' (security.md M4).
     if (w.pending()) return false;
     // Another prompt, picker or the command line opened over the line takes the keys; the line
     // goes back to waiting and comes back when it closes.
