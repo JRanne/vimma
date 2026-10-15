@@ -285,7 +285,14 @@ async function main() {
           throw new Error("vimma-ctl mcp wrote something other than MCP messages on stdout");
         }
       };
-      return { ctl: stepCtl, screenshot, restart, control, teardown: teardownAll };
+      return {
+        ctl: stepCtl,
+        screenshot,
+        restart,
+        control,
+        profile: session.profile,
+        teardown: teardownAll,
+      };
     };
 
     const results = await runScenarios(scenarios, {

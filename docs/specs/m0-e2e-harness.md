@@ -132,7 +132,11 @@ One JSON file per scenario in `tests/e2e/scenarios/`, file name = `name`:
   of its process group left after 5 s too), then the same start; the stale discovery file is
   skipped by its `pid` (`m3-crash-restore`). Later specs added the `hold`, `sleep`, `agent`,
   `agent-result`, `ctl`, `ctl-result`, `mcp` and `mcp-result` steps (`STEP_KINDS` in
-  `scenario.mjs`).
+  `scenario.mjs`). (Since changed: `wait-for-profile-file` polls until a file the browser
+  writes into its profile exists, with `timeoutSeconds` like `wait-for-state`. It waits for a
+  browser service that `state` does not report: `m3-private-workspace` waits for
+  `search.json.mozlz4`, which Firefox's SearchSettings writes once SearchService has
+  initialized, so the private window's URL bar names the default engine (#236).)
 - **Prefs**: an optional `"prefs": { "name": value }` overrides the profile's `user.js`;
   `null` leaves the pref out so the build's default applies (`m3-restart-restore` drops
   `browser.startup.page = 0` to run on Vimma's 3, resume the session).
