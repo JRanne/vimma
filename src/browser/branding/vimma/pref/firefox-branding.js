@@ -106,6 +106,10 @@ pref("extensions.systemAddon.update.url", "");
 // tab UI; false shows it again, live.
 pref("vimma.ui.tabstrip.hidden", true);
 
+// Firefox's navigation toolbar (spec toolbar-toggle): shown by default. ctrl+b u, :toolbar and
+// config.toml's [ui] toolbar set it for every window, live.
+pref("vimma.ui.toolbar.hidden", false);
+
 // Control socket (spec m0-control-server, ADR-007): off in every build. When on, Vimma listens on
 // 127.0.0.1 and writes <profile>/vimma-control.json (0600) for vimma-ctl; live on change.
 pref("vimma.control.enabled", false);

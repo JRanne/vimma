@@ -21,7 +21,7 @@ import { HintError, hintKey, startHints } from "../core/hints.mjs";
 import { chordFromEvent, formatKey } from "../core/keys.mjs";
 import { compileKeymap } from "../core/keymap.mjs";
 import { describeAction, notImplementedText } from "../core/actions.mjs";
-import { PENDING_ACTIONS } from "../core/cmdline.mjs";
+import { PENDING_ACTIONS, parseToolbarCommand } from "../core/cmdline.mjs";
 import { CommandLine } from "../ui/cmdline.mjs";
 import { HelpOverlay } from "../ui/help-overlay.mjs";
 import { HintOverlay } from "../ui/hint-overlay.mjs";
@@ -31,6 +31,7 @@ import { copyModeRunners } from "./copy-mode.mjs";
 import { pageRunners } from "./page-ops.mjs";
 import { Notice } from "../ui/notice.mjs";
 import { TabStrip } from "../ui/tabstrip.mjs";
+import { Toolbar } from "../ui/toolbar.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
 import { AddonPicker, GotoPicker, WorkspacePicker } from "../ui/picker.mjs";
 import { RenamePrompt } from "../ui/rename-prompt.mjs";
@@ -104,6 +105,7 @@ import {
 import { McpHost } from "./mcp-ops.mjs";
 import { ControlHost } from "./control-ops.mjs";
 import { AgentUi } from "./agent-ui.mjs";
+import { PromptKeys } from "./prompt-keys.mjs";
 import { AgentPrompt } from "../ui/agent-prompt.mjs";
 import { parsePrivateCommand } from "../core/privatews.mjs";
 import { findWorkspace } from "../core/workspaces.mjs";
@@ -192,6 +194,8 @@ const PAGE_FIRST_MAX = 16;
  * @property {Notice} notice  "<action>: not implemented yet" (m2-tab-keys)
  * @property {CommandLine} cmdline  the `:` line (m1-cmdline)
  * @property {TabStrip | null} tabStrip  hides Firefox's tab strip (m0-tabstrip-hidden)
+ * @property {Toolbar | null} toolbar  hides Firefox's toolbar (docs/specs/toolbar-toggle.md)
+ * @property {PromptKeys | null} promptKeys  y and n for Firefox's permission prompts
  * @property {number | null} timer   pending-sequence timeout (dispatcher.flush)
  * @property {() => void} onCancelHints  resize, a mouse click in chrome
  * @property {HintSession | null} hint
@@ -398,6 +402,23 @@ function focusUrlbar(s) {
     setBrowserMode(browser, "normal");
   }
   /** @type {any} */ (s.win.document.getElementById("Browser:OpenLocation"))?.doCommand();
+}
+
+/**
+ * `ctrl+b u`, `:toolbar [show|hide]` (docs/specs/toolbar-toggle.md decisions 1, 2): one state
+ * for every window (the pref); the notice says which, through the polite live region.
+ * @param {WindowState} s
+ * @param {ReturnType<typeof parseToolbarCommand>} command
+ */
+function setToolbar(s, command) {
+  s.notice.hide();
+  if (command.kind === "refuse") {
+    s.notice.show(command.text, { error: true });
+    return;
+  }
+  const hidden = command.kind === "toggle" ? !Toolbar.hidden : command.kind === "hide";
+  Toolbar.setHidden(hidden);
+  s.notice.show(hidden ? "toolbar hidden" : "toolbar shown");
 }
 
 /**
@@ -641,6 +662,10 @@ export const RUNNERS = Object.freeze({
       if (!s.panel.open()) s.notice.show(NO_WORKSPACES);
     }
   },
+  "toolbar.toggle": (/** @type {WindowState} */ s, _a, /** @type {string | undefined} */ text) =>
+    setToolbar(s, parseToolbarCommand(text)),
+  "toolbar.show": (/** @type {WindowState} */ s) => setToolbar(s, { kind: "show" }),
+  "toolbar.hide": (/** @type {WindowState} */ s) => setToolbar(s, { kind: "hide" }),
   "panel.down": panelAction,
   "panel.up": panelAction,
   "panel.open": panelAction,
@@ -1037,6 +1062,8 @@ export const VimmaHost = {
         }),
       }),
       tabStrip: null,
+      toolbar: null,
+      promptKeys: null,
       timer: null,
       onCancelHints: () => this._cancelHints(state),
       hint: null,
@@ -1203,6 +1230,38 @@ export const VimmaHost = {
       console.error("vimma: tab strip not hidden", e);
     }
     try {
+      const toolbar = new Toolbar(win, {
+        say: (text) => state.notice.show(text),
+        log: (text) => KeyLog.note(text),
+        changed: () => this._emit(state),
+      });
+      toolbar.init();
+      state.toolbar = toolbar;
+    } catch (e) {
+      console.error("vimma: toolbar toggle unavailable", e);
+    }
+    // Firefox's permission prompts from the keyboard (toolbar-toggle decision 11a).
+    try {
+      const promptKeys = new PromptKeys(win, {
+        inField: () => this._mode(state) === "insert",
+        otherOpen: () =>
+          state.help.isOpen ||
+          state.picker.isOpen ||
+          state.wsPicker.isOpen ||
+          state.addonPicker.isOpen ||
+          state.cmdline.isOpen ||
+          state.rename.isOpen ||
+          state.panel.isOpen ||
+          state.bookmarks.isOpen ||
+          state.agentPrompt.isOpen,
+        pending: () => state.dispatcher.pending().length > 0,
+      });
+      promptKeys.init();
+      state.promptKeys = promptKeys;
+    } catch (e) {
+      console.error("vimma: permission prompt keys unavailable", e);
+    }
+    try {
       const statusBar = new StatusBar(win, {
         status: () => this.status(win),
         subscribe: (fn) => this.onStateChange(win, fn),
@@ -1264,6 +1323,8 @@ export const VimmaHost = {
     state.panel.destroy();
     state.bookmarks.destroy();
     state.tabStrip?.uninit();
+    state.toolbar?.uninit();
+    state.promptKeys?.uninit();
     WindowWorkspaces.uninit(win);
     state.statusBar?.uninit();
     state.find.destroy();
@@ -1535,6 +1596,8 @@ export const VimmaHost = {
       this._emit(state);
       return;
     }
+    // Then an open permission prompt's y, n and Tab (toolbar-toggle decision 11a).
+    if (state.promptKeys?.onKey(e)) return;
     const chord = chordFromEvent(e);
     if (!chord) return; // a bare modifier
     const key = formatKey(chord);

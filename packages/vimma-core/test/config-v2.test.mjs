@@ -556,6 +556,46 @@ describe("[private] placement", () => {
   });
 });
 
+// docs/specs/toolbar-toggle.md, decision 3: [ui] toolbar, a schema-2 table.
+describe("[ui] toolbar", () => {
+  test('defaults to "shown"', () => {
+    expect(ok(v2()).ui).toEqual({ toolbar: "shown" });
+    expect(DEFAULT_CONFIG.ui).toEqual({ toolbar: "shown" });
+    expect(formatDefaultsToml()).toMatch(/^\[ui\]\n(#.*\n)*toolbar = "shown"$/m);
+  });
+
+  test.each([["shown"], ["hidden"]])('toolbar = "%s" is accepted', (toolbar) => {
+    expect(ok(v2("[ui]", `toolbar = "${toolbar}"`)).ui.toolbar).toBe(toolbar);
+  });
+
+  test("any other value is an error, with the nearest one when it is close", () => {
+    expect(errors(v2("[ui]", 'toolbar = "off"'))).toEqual([
+      { line: 3, path: "ui.toolbar", message: 'must be "shown" or "hidden"' },
+    ]);
+    expect(errors(v2("[ui]", 'toolbar = "hiden"'))).toEqual([
+      { line: 3, path: "ui.toolbar", message: 'must be "shown" or "hidden"', suggestion: "hidden" },
+    ]);
+    expect(errors(v2("[ui]", "toolbar = false"))).toEqual([
+      { line: 3, path: "ui.toolbar", message: "expected a string, got a boolean" },
+    ]);
+  });
+
+  test("an unknown key is an error; [ui] is a table, new in schema 2", () => {
+    expect(errors(v2("[ui]", 'tolbar = "hidden"'))).toEqual([
+      { line: 3, path: "ui.tolbar", message: 'unknown key "tolbar"', suggestion: "toolbar" },
+    ]);
+    expect(errors(v2("[ui]", "tabstrip = true"))).toMatchObject([
+      { line: 3, path: "ui.tabstrip", message: 'unknown key "tabstrip"' },
+    ]);
+    expect(errors(v2("ui = 1"))).toEqual([
+      { line: 2, path: "ui", message: "expected a table, got an integer" },
+    ]);
+    expect(errors(toml("schema = 1", "[ui]", 'toolbar = "hidden"'))).toEqual([
+      { line: 2, path: "ui", message: "is new in schema 2: put schema = 2 at the top of the file" },
+    ]);
+  });
+});
+
 // docs/specs/vimma-mcp.md, decision 26: [mcp], a schema-2 table; config wins over :mcp on|off.
 describe("[mcp]", () => {
   test("defaults: workspace agent, 50 s, 10 of at most 480 min, 200,000 characters, notify", () => {
