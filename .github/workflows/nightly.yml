@@ -51,7 +51,7 @@ jobs:
           want=$(node -p 'require("./surfer.json").version.version')
           have=$(cat engine/.vimma-firefox-version 2>/dev/null || true)
           if [ "$want" != "$have" ]; then
-            npx --no surfer download --force 2>&1 | tee -a "$LOG"
+            npx --no -- surfer download --force 2>&1 | tee -a "$LOG"
             echo "$want" > engine/.vimma-firefox-version
           fi
 
@@ -80,7 +80,7 @@ jobs:
       - name: Build
         run: |
           set -o pipefail
-          npx --no surfer build 2>&1 | tee -a "$LOG"
+          npx --no -- surfer build 2>&1 | tee -a "$LOG"
 
       - name: Smoke check
         run: |

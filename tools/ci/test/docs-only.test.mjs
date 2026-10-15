@@ -270,18 +270,18 @@ describe("workflow wiring", () => {
     };
     // Every change: these read Markdown, or are cheap and format-only.
     for (const re of [
-      /npx --no prettier --check \./,
+      /npx --no -- prettier --check \./,
       /npm run security-links/,
       /npm run test:py/,
       /npm run gen-docs/,
-      /npx --no commitlint --from "\$FROM"/,
+      /npx --no -- commitlint --from "\$FROM"/,
     ])
       expect(step(re).cond).not.toContain("docs-only");
     // Docs-only: the Vitest files that read Markdown, instead of the whole suite.
     expect(step(/--markdown-tests/).cond).toBe("steps.classify.outputs.docs-only == 'true'");
     // Everything else skips on a docs-only change.
     for (const re of [
-      /npx --no eslint \./,
+      /npx --no -- eslint \./,
       /npm run typecheck/,
       /npm run coverage/,
       /npm run bench/,
@@ -290,7 +290,7 @@ describe("workflow wiring", () => {
       /cargo clippy --locked/,
       /cargo test --locked/,
       /npm run license-check:crates/,
-      /npx --no surfer license-check/,
+      /npx --no -- surfer license-check/,
     ])
       expect(step(re).cond).toBe(SKIP);
   });

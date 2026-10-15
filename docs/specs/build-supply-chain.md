@@ -357,7 +357,7 @@ checked. On a fresh hosted runner every build downloads the toolchains anew.
      reads the version from `surfer.json`, downloads
      `.surfer/engine/firefox-<version>.source.tar.xz` with `curl` when absent, downloads
      `SHA512SUMS` and `SHA512SUMS.asc`, runs `verify-sha512.py` on the tarball, deletes `engine/`
-     and only then runs `CI_SKIP_INIT=1 npx --no surfer download` (which finds the verified file
+     and only then runs `CI_SKIP_INIT=1 npx --no -- surfer download` (which finds the verified file
      and only extracts it, R3) and `git init -q engine`. `e2e.yml`, `sites.yml`, `nightly.yml` and
      `release.yml` call it. A test fails if any workflow calls `surfer download` itself.
 
@@ -541,7 +541,11 @@ checked. On a fresh hosted runner every build downloads the toolchains anew.
 17. **No install scripts anywhere; Surfer only from `node_modules`.** A new `.npmrc` sets
     `ignore-scripts=true`, which covers every workflow, lane and developer machine. `release.yml`
     and `nightly.yml` also run `npm ci --ignore-scripts`, so the build does not depend on a file
-    a future change could drop, and every Surfer call in them is `npx --no surfer …` (R4).
+    a future change could drop, and every Surfer call in them is `npx --no -- surfer …` (R4).
+    Every other `npx` in the workflows also runs with `--no --`. The `--` is needed because,
+    once `--no` comes first, npm 10.9.4 reads every later flag as its own: `npx --no surfer
+download --force` gave `--force` to npm, and `npx --no commitlint --from A --to B --verbose`
+    ran commitlint without its arguments (checked locally and in CI).
     Reason: R5 shows nothing needs a script, and an install script is the usual way a
     compromised package runs code. Rejected: `npm audit signatures` in the build (the lockfile's
     `integrity` hashes already pin the exact bytes, so a registry signature adds no check the

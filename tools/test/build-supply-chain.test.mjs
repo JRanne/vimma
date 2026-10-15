@@ -95,7 +95,7 @@ describe("build supply chain: npm", () => {
       for (const line of installs) expect(line, name).toMatch(/^npm ci --ignore-scripts\b/);
       const npx = [...block.matchAll(/\bnpx\b[^\n]*/g)].map((m) => m[0]);
       expect(npx, name).not.toEqual([]);
-      for (const line of npx) expect(line, name).toMatch(/^npx --no surfer /);
+      for (const line of npx) expect(line, name).toMatch(/^npx --no -- surfer /);
     }
   });
 
@@ -106,9 +106,23 @@ describe("build supply chain: npm", () => {
         .split("\n")
         .filter((l) => !/^\s*#/.test(l));
       for (const line of lines.filter((l) => /\bnpx\b/.test(l))) {
-        expect(line, name).toMatch(/\bnpx --no [a-z]/);
+        expect(line, name).toMatch(/\bnpx --no -- [a-z]/);
       }
     }
+  });
+
+  it("only npx --no -- passes the command's own flags through", () => {
+    // After `--no`, npm reads every later flag as its own (`--verbose`, `--force`) unless `--`
+    // ends its options first.
+    /** @param {string[]} args */
+    const npx = (args) =>
+      execFileSync("npx", args, {
+        cwd: root,
+        encoding: "utf8",
+        env: { PATH: process.env.PATH, HOME: process.env.HOME, CI: "true" },
+      });
+    expect(npx(["--no", "--", "tsc", "--version"])).toMatch(/^Version \d/);
+    expect(npx(["--no", "tsc", "--version"])).not.toMatch(/^Version \d/);
   });
 
   it("surfer.json lists no add-ons", () => {

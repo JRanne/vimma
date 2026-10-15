@@ -56,10 +56,10 @@ jobs:
 
       - name: eslint
         if: steps.classify.outputs.docs-only != 'true'
-        run: npx --no eslint .
+        run: npx --no -- eslint .
 
       - name: prettier --check (Markdown too)
-        run: npx --no prettier --check .
+        run: npx --no -- prettier --check .
 
       # Markdown is documentation for outside readers: no record of who asked or when (#226).
       - name: No process wording in Markdown (npm run md-wording)
@@ -100,7 +100,7 @@ jobs:
       # Docs-only: instead of the whole suite, the Vitest files that read the repo's Markdown.
       - name: Vitest, the files that read Markdown (docs-only pull request)
         if: steps.classify.outputs.docs-only == 'true'
-        run: npx --no vitest run $(node tools/ci/docs-only.mjs --markdown-tests)
+        run: npx --no -- vitest run $(node tools/ci/docs-only.mjs --markdown-tests)
 
       - name: Key-to-action bench against the baseline
         if: steps.classify.outputs.docs-only != 'true'
@@ -145,18 +145,18 @@ jobs:
 
       - name: MPL headers in src/
         if: steps.classify.outputs.docs-only != 'true'
-        run: npx --no surfer license-check
+        run: npx --no -- surfer license-check
 
       - name: commitlint (PR range)
         if: github.event_name == 'pull_request'
         env:
           FROM: ${{ github.event.pull_request.base.sha }}
           TO: ${{ github.event.pull_request.head.sha }}
-        run: npx --no commitlint --from "$FROM" --to "$TO" --verbose
+        run: npx --no -- commitlint --from "$FROM" --to "$TO" --verbose
 
       - name: commitlint (manual run, branch vs main)
         if: github.event_name == 'workflow_dispatch'
-        run: npx --no commitlint --from origin/main --to HEAD --verbose
+        run: npx --no -- commitlint --from origin/main --to HEAD --verbose
 
       - name: commitlint (pushed range)
         if: github.event_name == 'push'
@@ -165,7 +165,7 @@ jobs:
           TO: ${{ github.sha }}
         run: |
           if [ "$FROM" = "0000000000000000000000000000000000000000" ]; then
-            npx --no commitlint --last --verbose
+            npx --no -- commitlint --last --verbose
           else
-            npx --no commitlint --from "$FROM" --to "$TO" --verbose
+            npx --no -- commitlint --from "$FROM" --to "$TO" --verbose
           fi

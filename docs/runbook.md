@@ -801,7 +801,7 @@ it would hold the Safe Browsing key between runs (spec
 The build jobs of both workflows run on `ubuntu-24.04`, and a test fails if any workflow names a
 self-hosted runner or a label that is not a standard GitHub-hosted image
 (`tools/test/self-hosted-runner.test.mjs`, docs/security.md B5). Both install with
-`npm ci --ignore-scripts` and run Surfer with `npx --no surfer`, so a missing
+`npm ci --ignore-scripts` and run Surfer with `npx --no -- surfer`, so a missing
 `node_modules/.bin/surfer` fails the job instead of fetching whatever npm package is called
 `surfer`.
 
