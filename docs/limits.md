@@ -372,6 +372,11 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
   `upstream-prefs.mjs` reports, and re-exporting a patch that no longer applies
   ([#259](https://github.com/vimma-browser/vimma/issues/259)); releasing the merged bump
   ([#220](https://github.com/vimma-browser/vimma/issues/220), [#224](https://github.com/vimma-browser/vimma/issues/224)).
+- Mozilla's signature on `SHA512SUMS` proves Mozilla built and signed the tarball, not that it is
+  the release: a superseded build candidate (`candidates/X-candidates/buildN/`) lists the same
+  file name in a `SHA512SUMS` signed by the same key, so someone who controls the connection to
+  archive.mozilla.org could serve an abandoned respin of the version `surfer.json` names
+  ([ADR-021](adr/021-mozilla-release-key.md)).
 - `surfer import` stops at the first patch that fails, and `git apply` has no fuzz: a hunk whose
   context drifted fails like one whose code is gone. `tools/upstream/patch-check.py` reports
   every patch and hunk, and tells the two apart ([m0-rebase-playbook](specs/m0-rebase-playbook.md)).

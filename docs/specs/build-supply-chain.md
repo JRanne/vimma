@@ -1,18 +1,19 @@
 # Spec: build-supply-chain
 
-Status: accepted (sub-PR 1 implemented, #280; sub-PRs 2 to 5: [#222](https://github.com/vimma-browser/vimma/issues/222), [#223](https://github.com/vimma-browser/vimma/issues/223), [#224](https://github.com/vimma-browser/vimma/issues/224), [#225](https://github.com/vimma-browser/vimma/issues/225)) · Area: `package.json`, `package-lock.json`, `.npmrc` (new),
+Status: accepted (sub-PRs 1 and 2 implemented, #280 and #289; sub-PRs 3 to 5: [#223](https://github.com/vimma-browser/vimma/issues/223), [#224](https://github.com/vimma-browser/vimma/issues/224), [#225](https://github.com/vimma-browser/vimma/issues/225)) · Area: `package.json`, `package-lock.json`, `.npmrc` (new),
 `.github/dependabot.yml`, `.github/workflows/dependabot-automerge.yml`,
 `.github/workflows/release.yml`, `.github/workflows/nightly.yml`, `.github/workflows/e2e.yml`,
 `.github/workflows/sites.yml`, `.github/workflows/upstream.yml`,
 `tools/upstream/verify-sha512.py`, `tools/upstream/source-check.sh`,
-`tools/upstream/firefox-source.sh` (new), `tools/upstream/mozilla-release-key.asc` (new),
+`tools/upstream/firefox-source.sh` (new), `tools/upstream/verify-source.sh` (new),
+`tools/upstream/mozilla-release-key.asc` (new),
 `tools/upstream/mozilla-key-check.py` (new), `tools/deps/release-path.mjs` (new),
-`docs/security.md`, `docs/runbook.md`, `docs/rebase.md`, `CONTRIBUTING.md` · Upstream patches:
+`docs/security.md`, `docs/runbook.md`, `docs/rebase.md`, `docs/review-checklist.md`,
+`CONTRIBUTING.md` · Upstream patches:
 none · ADR: ADR-021 (new, "Mozilla's release key is the trust anchor for the Firefox source");
 [ADR-001](../adr/001-engine-firefox-surfer.md) gains one paragraph on how Surfer is pinned
 
-Issues: [#222](https://github.com/vimma-browser/vimma/issues/222),
-[#223](https://github.com/vimma-browser/vimma/issues/223),
+Issues: [#223](https://github.com/vimma-browser/vimma/issues/223),
 [#224](https://github.com/vimma-browser/vimma/issues/224),
 [#225](https://github.com/vimma-browser/vimma/issues/225)
 
@@ -420,6 +421,21 @@ import` needs the empty repository to apply patches inside `engine/`, and `mach`
    `MOZILLA_RELEASES` overrides the archive URL in both scripts so tests can use a `file://`
    directory.
 
+   A contributor's machine keeps `npx surfer download`, and `tools/upstream/verify-source.sh`
+   (`npm run verify-source`, sub-PR 2) checks the tarball it left in `.surfer/engine/` with the
+   same `verify-sha512.py`. Reason: a local `engine/` needs Surfer's commit of the pristine tree,
+   which `surfer export` diffs against and `tools/lanes/lanes.mjs` resets lanes to, and
+   `firefox-source.sh` makes an empty repository instead. The check runs after Surfer extracts,
+   so it protects the build, not the extraction. It records the verified version and hash in
+   `engine/.git/vimma-source-verified` (as `firefox-source.sh` does), and `npm run import` starts
+   with `verify-source.sh --require`, which refuses an `engine/` without that record for
+   `surfer.json`'s version. Reason: import is the first step of every local build and every
+   lane, and the check is offline and instant, so B1 holds on a contributor's machine without
+   relying on a setup step being remembered. The record lives in `engine/.git` because Surfer's
+   `--force` deletes it with `engine/`, a lane's `git clean` keeps it, and a lane's copy of
+   `engine/` carries it. It is a guard against building an unverified download, not against
+   someone who can write to `engine/`.
+
 4. **The tarball Vimma verifies is the one Surfer extracts.** Vimma downloads the tarball itself
    and verifies the file at the path Surfer reads (R3), in the same job, immediately before
    Surfer runs. Rejected: letting Surfer download and verifying afterwards (verification would
@@ -727,13 +743,18 @@ Written first and seen to fail.
 
 **Python, `tools/upstream/test_verify_sha512.py`** (real fixtures in
 `tools/upstream/fixtures/sums/`: `SHA512SUMS` and `SHA512SUMS.asc` of 157.0.1 and 153.0, about
-630 KB each; throwaway keys made with `gpg --quick-gen-key` in a temporary `GNUPGHOME` for the
-synthetic cases):
+860 KB each; for the synthetic cases, signatures by throwaway keys made with
+`gpg --quick-gen-key` in a temporary `GNUPGHOME` by `fixtures/sums/make-synthetic.sh`, which
+keeps only public keys and signatures, so no test run starts a `gpg-agent`):
 
 - `test_good_signature_from_mozillas_current_subkey_passes` (157.0.1)
 - `test_signature_by_the_revoked_compromised_subkey_fails` (153.0, `REVKEYSIG` with exit 0, R2)
 - `test_signature_by_another_key_fails`
+- `test_a_second_signature_beside_mozillas_fails`
 - `test_signature_by_an_expired_subkey_fails`
+- `test_the_status_must_name_the_pinned_primary_key`
+- `test_a_detached_signature_by_the_given_key_passes`
+- `test_a_signed_message_in_place_of_a_detached_signature_fails`
 - `test_one_changed_byte_in_sha512sums_fails_the_signature`
 - `test_good_signature_but_a_different_hash_fails_naming_expected_and_actual`
 - `test_missing_signature_or_gpgv_cannot_check_and_exits_two`
@@ -754,6 +775,7 @@ checkout's `node_modules/.bin`, where `npx --no` finds it):
 
 - `a tampered tarball fails before engine/ is touched`
 - `a SHA512SUMS without a good signature fails before engine/ is touched` (sub-PR 2)
+- `a SHA512SUMS with no signature beside it fails before engine/ is touched` (sub-PR 2)
 - `a tarball already on disk is verified again and engine/ is extracted from it afresh`
 - `a tampered tarball already on disk fails like a downloaded one`
 - `a missing tarball is downloaded by the script, never by Surfer`
@@ -766,6 +788,32 @@ checkout's `node_modules/.bin`, where `npx --no` finds it):
 **vitest, `tools/upstream/test/source-check.test.mjs`** (extends the existing file):
 
 - `the source check fails on a SHA512SUMS whose signature is not good`
+- `the source check fails when SHA512SUMS has no signature beside it`
+
+The script tests (`firefox-source`, `source-check`, `verify-source`) cannot carry Mozilla's real
+signature, because their tarballs are made by the test. They put a `gpgv` stub
+(`tools/upstream/test/fake-gpgv.mjs`) first on `PATH`, which answers like `gpgv` for a good
+signature by Mozilla's current subkey only when the `.asc` names the signed file's hash, and
+`BADSIG` otherwise. The scripts therefore keep no test override of the key or the fingerprint;
+the cryptography is tested by `test_verify_sha512.py` alone.
+
+**vitest, `tools/upstream/test/verify-source.test.mjs`** (sub-PR 2):
+
+- `passes the tarball surfer download left when Mozilla's signed SHA512SUMS lists it`
+- `fails a tampered tarball`
+- `fails when SHA512SUMS is not signed by Mozilla's release key`
+- `fails when there is no tarball to check`
+- `records the verified version in engine/'s repository, where a lane copy keeps it`
+- `records nothing when the check fails`
+- `--require passes an engine/ verified for surfer.json's version, offline`
+- `--require refuses an engine/ never verified, or verified for another version`
+- `--require refuses when there is no engine/`
+
+**vitest, `tools/test/upstream-workflow.test.mjs`** (sub-PR 2, extends the existing file):
+
+- `every verify-sha512.py call passes a signature`
+- `a report on a tarball that failed verification is never uploaded`
+- `npm run import refuses an engine/ whose source was never verified`
 
 **vitest, `tools/deps/test/release-path.test.mjs`** (fixture lockfiles):
 
@@ -781,7 +829,6 @@ checkout's `node_modules/.bin`, where `npx --no` finds it):
 - `.npmrc turns install scripts off for every install`
 - `package.json pins Surfer to an exact version`
 - `surfer.json lists no add-ons`
-- `every verify-sha512.py call passes a signature`
 - `the Safe Browsing key comes only from the build environment, in the two build jobs`
 - `dependabot-automerge classifies on base-branch code with a read-only token`
 - `the release-path group comes before the minor and patch group`
@@ -866,7 +913,9 @@ protects something that runs today.
 2. **`ci(upstream): verify mozilla's signature on SHA512SUMS`.** Pinned key,
    `verify-sha512.py --signature`, `source-check.sh` and `firefox-source.sh` use it (and through
    the latter `e2e.yml`, `sites.yml` and both builds, if sub-PR 4 lands first; otherwise the
-   inline checks in `e2e.yml` and `sites.yml`); ADR-021; G4 amended; `docs/rebase.md`. Because `upstream.yml` and the Beta canary both
+   inline checks in `e2e.yml` and `sites.yml`); `npm run verify-source` for a contributor's
+   `npx surfer download`; ADR-021; G4 amended; `docs/rebase.md`; the runbook's "Mozilla's
+   release key" section and the review-checklist line. Because `upstream.yml` and the Beta canary both
    run `source-check.sh`, one change covers both. B1 for PR CI, the autopilot and the canary,
    which run today, and the autopilot opens pull requests that may merge without a person
    (ADR-020).

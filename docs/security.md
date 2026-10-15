@@ -387,9 +387,12 @@ Taskcluster index) and this repository. Nothing here runs code from a pull reque
   [`unknown security status (advisories unreadable) uses the security limit`](../tools/upstream/test/releases.test.mjs),
   [`an unreachable advisories page: security unknown, labelled security, a warning`](../tools/upstream/test/autopilot.test.mjs)
 - G4. Nothing is **ever** reported on or built from a Firefox source tarball whose SHA-512
-  differs from Mozilla's `SHA512SUMS`.
+  differs from a signed `SHA512SUMS` (B1), a run artifact included: the patch-check report is
+  uploaded only after the source check verified the tarball.
   [`nothing is built from a tarball whose SHA-512 Mozilla did not publish`](../tools/test/upstream-workflow.test.mjs),
-  [`test_mismatch_exits_one_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py),
+  [`test_good_signature_but_a_different_hash_fails_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py),
+  [`the source check fails on a SHA512SUMS whose signature is not good`](../tools/upstream/test/source-check.test.mjs),
+  [`a report on a tarball that failed verification is never uploaded`](../tools/test/upstream-workflow.test.mjs),
   [`a tampered tarball already on disk fails like a downloaded one`](../tools/upstream/test/firefox-source.test.mjs),
   [`no workflow runs surfer download itself`](../tools/test/full-build-workflows.test.mjs)
 - G5. A bump PR is **never** opened ready for review unless every patch applies and the suites
@@ -437,10 +440,11 @@ Taskcluster index) and this repository. Nothing here runs code from a pull reque
   [`fences test output and cuts the body to 60,000 characters`](../tools/upstream/test/canary.test.mjs),
   [`surfer.json on main pins a Firefox release, never a beta`](../tools/test/surfer-pin.test.mjs)
 - G10. The Beta canary **must never** build from or report on a Beta source tarball whose SHA-512
-  differs from that Beta's `SHA512SUMS`: the source check fails the run before the suites or the
-  issue (G4 for Betas).
+  differs from that Beta's signed `SHA512SUMS` (B1): the source check fails the run before the
+  suites or the issue (G4 for Betas).
   [`nothing is built from a tarball whose SHA-512 Mozilla did not publish`](../tools/test/upstream-beta-workflow.test.mjs),
-  [`test_mismatch_exits_one_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py)
+  [`test_good_signature_but_a_different_hash_fails_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py),
+  [`a report on a tarball that failed verification is never uploaded`](../tools/test/upstream-workflow.test.mjs)
 
 ## 11. Out of scope and trust boundaries
 
@@ -676,21 +680,45 @@ Spec: [build-supply-chain](specs/build-supply-chain.md), [ADR-001](adr/001-engin
 **Reach:** Mozilla's archive and Taskcluster, the npm registry, this repository, and GitHub's
 hosted runners. Dependabot pull requests run and auto-merge today, whether or not a build runs.
 
-**Planned:** the spec's later deliveries add B1 (Mozilla's signature on the Firefox source,
-[#222](https://github.com/vimma-browser/vimma/issues/222)), the rest of B3 (every package in the
+**Planned:** the spec's later deliveries add the rest of B3 (every package in the
 release path held for review, with its published diff,
 [#223](https://github.com/vimma-browser/vimma/issues/223)), and B6 and B7 (the Safe Browsing key
 in a `build` environment, and a watch on Mozilla's release key,
-[#225](https://github.com/vimma-browser/vimma/issues/225)). Until B1 lands, G4 holds for builds:
-every build gets its source through `tools/upstream/firefox-source.sh`, which checks the
-tarball's SHA-512. **⚠ gap:** that `SHA512SUMS` comes over HTTPS from the same
-archive.mozilla.org as the tarball, so the check catches corruption, truncation and a stale
-cached tarball, but not anyone who can serve both files (a compromised archive, mirror or CDN);
-Mozilla's signature on `SHA512SUMS` closes that with
-[#222](https://github.com/vimma-browser/vimma/issues/222). It also refuses a `surfer.json` with a
-`version.candidate`, which Surfer would fetch from `candidates/` unverified.
-[`refuses a surfer.json with a version.candidate, before anything is fetched`](../tools/upstream/test/firefox-source.test.mjs)
+[#225](https://github.com/vimma-browser/vimma/issues/225)).
 
+- B1. Nothing is **ever** built from, or reported on, a Firefox source tarball unless its SHA-512
+  is listed in a `SHA512SUMS` carrying exactly one good signature by a valid signing subkey of
+  Mozilla's release key `14F26682D0916CDD81E37B6D61B7B526D98F0353`, pinned in
+  `tools/upstream/mozilla-release-key.asc` ([ADR-021](adr/021-mozilla-release-key.md)); a
+  revoked or expired subkey, another key, a second signature, a signed message in place of a
+  detached signature, or a missing signature fails. The verdict comes from `gpgv`'s status lines,
+  never its exit status, which is 0 for the revoked, compromised subkey. Every verification goes
+  through `tools/upstream/verify-sha512.py`, called by `firefox-source.sh` (every build, PR CI
+  included) and `source-check.sh` (the autopilot and the Beta canary); a tarball already on disk
+  is verified like a downloaded one. On a contributor's machine, `npx surfer download` checks
+  nothing, so `npm run import`, the first step of every local build and lane, refuses an
+  `engine/` until `npm run verify-source` has verified the tarball it came from for
+  `surfer.json`'s version (a record in `engine/.git`, which `firefox-source.sh` writes too). That
+  record guards against building an unverified download, not against someone who can already
+  write to `engine/`.
+  `firefox-source.sh` also refuses a `surfer.json` with a `version.candidate`, which Surfer would
+  fetch from `candidates/` unverified.
+  [`test_good_signature_from_mozillas_current_subkey_passes`](../tools/upstream/test_verify_sha512.py),
+  [`test_signature_by_the_revoked_compromised_subkey_fails`](../tools/upstream/test_verify_sha512.py),
+  [`test_signature_by_another_key_fails`](../tools/upstream/test_verify_sha512.py),
+  [`test_a_second_signature_beside_mozillas_fails`](../tools/upstream/test_verify_sha512.py),
+  [`test_signature_by_an_expired_subkey_fails`](../tools/upstream/test_verify_sha512.py),
+  [`test_one_changed_byte_in_sha512sums_fails_the_signature`](../tools/upstream/test_verify_sha512.py),
+  [`test_missing_signature_or_gpgv_cannot_check_and_exits_two`](../tools/upstream/test_verify_sha512.py),
+  [`test_pinned_key_is_mozillas_primary_with_the_compromised_subkey_revoked`](../tools/upstream/test_verify_sha512.py),
+  [`a SHA512SUMS without a good signature fails before engine/ is touched`](../tools/upstream/test/firefox-source.test.mjs),
+  [`the source check fails on a SHA512SUMS whose signature is not good`](../tools/upstream/test/source-check.test.mjs),
+  [`test_a_signed_message_in_place_of_a_detached_signature_fails`](../tools/upstream/test_verify_sha512.py),
+  [`fails a tampered tarball`](../tools/upstream/test/verify-source.test.mjs),
+  [`--require refuses an engine/ never verified, or verified for another version`](../tools/upstream/test/verify-source.test.mjs),
+  [`npm run import refuses an engine/ whose source was never verified`](../tools/test/upstream-workflow.test.mjs),
+  [`every verify-sha512.py call passes a signature`](../tools/test/upstream-workflow.test.mjs),
+  [`refuses a surfer.json with a version.candidate, before anything is fetched`](../tools/upstream/test/firefox-source.test.mjs)
 - B2. A nightly or release build **never** builds from an `engine/` it did not extract in the
   same job from the tarball it verified, and **never** restores a tree, an objdir or a compiler
   cache from the Actions cache; a release **must** build in a fresh objdir with an empty
