@@ -11,6 +11,7 @@ import { runSteps } from "./scenario.mjs";
  *   screenshot: (name: string) => Promise<void>,
  *   restart?: (how: "quit" | "kill") => Promise<void>,
  *   control?: import("./scenario.mjs").Control,
+ *   profile?: string,
  *   teardown: () => Promise<void>,
  * }} Session
  */
@@ -78,7 +79,7 @@ export async function runScenarios(
 }
 
 /**
- * One scenario with a hard timeout (review of PR #35): at the deadline its AbortSignal fires,
+ * One scenario with a hard timeout: at the deadline its AbortSignal fires,
  * which cancels the launch (Xvfb, browser) and kills a running vimma-ctl; the runner then waits
  * at most `settleMs` for the scenario to notice before it moves on, and a session that only
  * arrives after that is torn down when it does.
@@ -122,6 +123,7 @@ async function runOne(scenario, { startSession, timeoutMs, pollMs, settleMs }) {
       screenshot: s.screenshot,
       restart: s.restart,
       control: s.control,
+      profile: s.profile,
       pollMs,
       signal: controller.signal,
     });

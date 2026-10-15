@@ -16,7 +16,7 @@ const MAX_DIMENSION = 16384;
 /**
  * Shift and maximum of a colour mask, to scale its channel to 8 bits. The mask must be one run
  * of 1 to 16 set bits inside `bpp` bits. The loops are bounded by 32 iterations, so a hostile
- * mask (0xFFFFFFFF: `>>> 32` is `>>> 0`) cannot spin forever (review of PR #35).
+ * mask (0xFFFFFFFF: `>>> 32` is `>>> 0`) cannot spin forever.
  * @param {number} mask
  * @param {number} bpp
  */

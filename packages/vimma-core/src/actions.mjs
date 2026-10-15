@@ -232,7 +232,7 @@ group("Find", [
 
 group("Modes", [
   ["normal_mode", "mode.normal", "Back to normal mode"],
-  ["insert_mode", "mode.insert", "Insert mode: focus the first input"],
+  ["insert_mode", "mode.insert", "Insert mode: focus the last-used input"],
   ["copy_mode", "mode.visual", "Copy mode (caret browsing + selection)"],
   ["command_line", "command.open", "Command line"],
   ["command_cancel", "command.cancel", "Close the command line"],

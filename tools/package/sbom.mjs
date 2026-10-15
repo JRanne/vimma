@@ -6,13 +6,14 @@
  * the tree vendors, a superset of what the binary links. No dependency: scanners such as syft
  * read installed package metadata, which a Firefox build does not have.
  *
- * Usage: node tools/package/sbom.mjs [--engine engine] [--repo JRanne/vimma] --out <file>
+ * Usage: node tools/package/sbom.mjs [--engine engine] [--repo vimma-browser/vimma] --out <file>
  */
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { REPO } from "../repo.mjs";
 
 /** @typedef {{ name: string, version: string, source?: string, checksum?: string }} CargoPackage */
 /** @typedef {{ name: string, url?: string, release?: string, revision?: string, licenses: string[] }} MozYaml */
@@ -310,7 +311,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { values } = parseArgs({
     options: {
       engine: { type: "string", default: "engine" },
-      repo: { type: "string", default: "JRanne/vimma" },
+      repo: { type: "string", default: REPO },
       out: { type: "string" },
     },
   });
@@ -321,7 +322,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const root = new URL("../../", import.meta.url);
   const bom = buildSbom({
     engineDir: values.engine ?? "engine",
-    repo: values.repo ?? "JRanne/vimma",
+    repo: values.repo ?? REPO,
     vimmaRoot: fileURLToPath(root),
     config: JSON.parse(readFileSync(new URL("surfer.json", root), "utf8")),
   });

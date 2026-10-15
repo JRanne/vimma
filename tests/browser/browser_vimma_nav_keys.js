@@ -141,7 +141,7 @@ add_task(async function h_and_l_walk_history_with_counts() {
   BrowserTestUtils.removeTab(tab);
 });
 
-// Vim's jump list keys (user decision 2026-10-10): ctrl+o back, ctrl+i forward, in normal mode.
+// Vim's jump list keys (docs/specs/key-handling-batch.md): ctrl+o back, ctrl+i forward, in normal mode.
 // ctrl+o is Firefox's Open File; in normal mode it is ours, so no file picker opens.
 add_task(async function ctrl_o_and_ctrl_i_walk_history_as_in_vim() {
   const MockFilePicker = SpecialPowers.MockFilePicker;

@@ -1,6 +1,6 @@
 # Spec: search-engines
 
-Status: ready (not started) · Milestone: after M6a or alongside it, independent of it; no keymap
+Status: implemented · Milestone: after M6a or alongside it, independent of it; no keymap
 change · Area: `packages/vimma-core/src/search.mjs` (new), `config.mjs`, `defaults.mjs`,
 `cmdline.mjs`; `search/SearchHost.sys.mjs` (new), `config/ConfigHost.sys.mjs`,
 `host/tab-ops.mjs`, `host/VimmaHost.sys.mjs`, `about/AboutVimma.sys.mjs`, `jar.mn`. No upstream
@@ -157,11 +157,13 @@ running it, not recalled.
    Aliases are stored with the `@`, so a bare word (`gh foo`) is never taken from the default
    engine: Firefox treats a non-`@` alias as a bare keyword too (`UrlbarProviderAliasEngines`).
 5. **`:open` / `:tabnew` resolve aliases and bookmark keywords as the URL bar does.**
-   `openUrl` becomes async: after the `refusedScheme` check it calls
-   `UrlbarUtils.getShortcutOrURIAndPostData(text)`. When that returns a different URL (an engine
-   alias, Vimma's or Firefox's own `@google`, or a Places bookmark keyword), Vimma checks the
-   result with `refusedScheme` again (a keyword bookmarklet is a `javascript:` URL; refused
-   with "blocked: javascript: and data: URLs can't be opened from the command line"), then
+   A new async `openTyped` (`tab-ops.mjs`), used by `:open` and `:tabnew` only, calls
+   `UrlbarUtils.getShortcutOrURIAndPostData(text)` after the `refusedScheme` check; `openUrl`
+   stays synchronous for the opens that must not expand aliases (`p` / `P`, Vimma's own
+   pages). When that returns a different URL (an engine alias, Vimma's or Firefox's own
+   `@google`, or a Places bookmark keyword), Vimma checks the result with `refusedScheme`
+   again (a keyword bookmarklet is a `javascript:` URL; refused with "blocked: javascript:
+   and data: URLs can't be opened from the command line"), then
    `openTrustedLinkIn(url, where, { postData, inBackground: false })` without fixup. Otherwise
    it is today's path unchanged. Using Firefox's own function keeps one rule for both places
    and needs no alias table at run time. `mayInheritPrincipal` is ignored (we load with the
@@ -270,8 +272,8 @@ running it, not recalled.
   - `[search.aliases]` creates the engine with alias `@t`, no suggest URL; it is gone after the
     line is removed; an installed engine gets `@w` and gets its old alias back.
   - `:open @t cats` and `:tabnew @t cats` load the template with `cats`; `:open @google cats`
-    (a built-in alias) starts loading Google's URL, caught and stopped before any request
-    leaves (`BrowserTestUtils.waitForDocLoadAndStopIt`); a POST test engine receives the body;
+    (a built-in alias) is covered by an add-on test engine with the defined alias `@vext`,
+    since a mochitest may not connect to google.com; a POST test engine receives the body;
     `:open ? @t cats` searches the default engine for "@t cats".
   - A bookmark keyword `k` with `%s` works from `:open k x`; a keyword bookmarklet
     `javascript:` is refused with the notice.
@@ -294,6 +296,6 @@ file (the policy's `Remove`).
 ## Decided questions
 
 1. **The file wins at every start** (decision 7), because `config.toml` is the source of truth.
-2. **Private browsing's default** is not a separate `[search] private` key. Vimma replaces
-   private windows with a private workspace (spec in progress, private-workspace); its search
-   default is decided there. Until then decision 12 stands.
+2. **Private browsing's default** is not a separate `[search] private` key. Vimma's private
+   workspace ([private-workspace](private-workspace.md)) lives in a private window, so decision
+   12 covers it.

@@ -253,7 +253,7 @@ describe("agent commands: results and errors", () => {
   });
 });
 
-// Review of #177 (M2): the full-control question shows a code the client printed.
+// The full-control question shows a code the client printed (security.md S13).
 describe("auth's code", () => {
   const auth = (extra = {}) => ({ type: "auth", token: TOKEN, ...extra });
   test("optional; 4 characters of 2-9 and A-Z without I and O", () => {

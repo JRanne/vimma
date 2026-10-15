@@ -1,6 +1,6 @@
 # Spec: m4-split-panes
 
-Status: done (sub-specs 1 to 7; key-to-paint timing: `browser_vimma_perf.js`, runbook
+Status: implemented (sub-specs 1 to 7; key-to-paint timing: `browser_vimma_perf.js`, runbook
 "Key-to-paint timings") ·
 Milestone: M4 · Area: host
 (`src/browser/base/content/vimma/split/`, `host/`), CSS (`browser/themes/shared/vimma/`)
@@ -98,9 +98,9 @@ layout(state, rect) ──rects──▶      1 membership → wrapper          
     one task, so no paint shows the intermediate state. `unsplitTabs` does not deactivate the
     dropped tab's docshell, and its `TabSplitViewDeactivate` arrives from a later microtask
     (the wrapper's `MutationObserver`). The host therefore sets `docShellIsActive = false` on
-    the dropped tab itself, and tolerates that late event: `reconcile` ignores it.
-    A rebuild is needed because the wrapper's private `#tabs` is not updated when one tab leaves a wrapper of three or more:
-    `#observeTabChanges` handles only the two-tab case. The contingency patch
+    the dropped tab itself, and tolerates that late event: `reconcile` ignores it. A rebuild is
+    needed because the wrapper's private `#tabs` is not updated when one tab leaves a wrapper of
+    three or more: `#observeTabChanges` handles only the two-tab case. The contingency patch
     (`tabsplitview-mjs.patch`, which rebuilds `#tabs` from `this.tabs` in the observer) replaces
     rebuilds if sub-spec 1 shows flicker, lost scroll position, or a docshell going inactive.
   - **Closing a member tab** of a split of three or more (`gBrowser.removeTab`) leaves the
@@ -572,10 +572,10 @@ step, protocol field or product code was needed.
   `taskset -c 0,1`), about 3.5 s. Mutation check: expecting `zoomed: false` after the restart
   fails at that step.
 - **Screenshot:** the status bar shows the fixture server's URL, whose port changes between
-  runs (in the URL bar and the status bar); about ten digits, far inside the 0.5 % tolerance. The baseline came from a throwaway branch
-  with a placeholder baseline run through `workflow_dispatch`, since `scenario.test.mjs` requires
-  every screenshot step to have a committed baseline and fails the e2e job before it would
-  write CI's actual image.
+  runs (in the URL bar and the status bar); about ten digits, far inside the 0.5 % tolerance. The
+  baseline came from a throwaway branch with a placeholder baseline run through
+  `workflow_dispatch`, since `scenario.test.mjs` requires every screenshot step to have a
+  committed baseline and fails the e2e job before it would write CI's actual image.
 - **Not covered here:** click focus (the harness only sends keys; `browser_vimma_pane_focus.js`
   covers it); key-to-paint timing for `prefix+l` (and m3's 200-tab `prefix+)` measurement) need a
   paint timestamp the control socket does not report; it belongs with the perf gate.

@@ -540,7 +540,7 @@ fn a_fresh_nonce_per_connection() {
     assert_ne!(first.lines()[0], second.lines()[0], "nonces differ");
 }
 
-/// The security review's `PoC` squatter: it bound a stale discovery file's port and answers the
+/// A squatter that bound a stale discovery file's port: it answers the
 /// challenge with an HMAC keyed by whatever token it has seen so far (none: the hello has no
 /// token), then accepts anything. vimma-ctl must send it nothing after the hello.
 #[test]
@@ -728,7 +728,7 @@ fn waits_for_the_users_answer_while_mcp_is_on() {
     drop(server.lines());
 }
 
-// Review of #177 (M2): while MCP is on, vimma-ctl prints a code and sends it in its auth, and
+// docs/security.md S13: while MCP is on, vimma-ctl prints a code and sends it in its auth, and
 // Vimma's question shows it, so the user answers for the vimma-ctl they ran.
 #[test]
 fn prints_and_sends_a_code_while_mcp_is_on() {

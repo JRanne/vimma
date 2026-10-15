@@ -8,7 +8,7 @@ Status: implemented (core); host wiring in [m5-config-load](m5-config-load.md) �
   `config.toml:12: keys.new_tabb: unknown action "new_tabb" (did you mean "new_tab"?)` and my
   previous config keeps working.
 - As a user on Omarchy, vimma's chrome follows my Omarchy theme, dark or light; off Omarchy it is
-  Tokyo Night; I can override single colours in `[theme.colors]`.
+  the built-in `[theme] name` palette; I can override single colours in `[theme.colors]`.
 - As the host (M5 host spec), I hand `vimma-core` file contents as strings and get back a validated
   config, a compiled keymap, CSS tokens, and errors that carry file and line. Core does no I/O.
 
@@ -112,6 +112,10 @@ bright_red bright_yellow bright_green bright_cyan bright_blue bright_magenta`. O
 (default `"dark"`; or `"light"` when the host reports a `light.mode` file), `orange` (else
 `yellow`), `brown` (else `dark_foreground`). Other keys in an Omarchy file (`hyprland_*`,
 `active_border_color`, …) are ignored; in `[theme.colors]` they are errors.
+(Since changed: an Omarchy file now needs only the base set, `accent background foreground red
+yellow green cyan blue magenta` or their ANSI stand-ins, and every other key is derived; the
+rules are in [m5-omarchy-theme](m5-omarchy-theme.md), "Base-only colors.toml". `[theme.colors]`
+keeps this list.)
 
 | Token                                                  | From                                                                                                                                                                                                                     |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -189,15 +193,16 @@ warnings }`: what the host injects; an adaptive built-in adds its light tokens u
   a light fixture → `--vimma-color-scheme = light` and badge text dark; missing `orange` falls back
   to `yellow`; `#xyz`, `#12345`, `rgba(…)` are not hex; `#FFF` normalises to `#ffffff`;
   `contrastRatio("#000", "#fff") = 21`, `("#777", "#fff") < 4.5` gives a warning naming both tokens;
-  an Omarchy file with an invalid colour gives an error at its line and Tokyo Night tokens;
-  `source = "omarchy"` with no file warns and uses Tokyo Night; `[theme.colors]` overlays Omarchy;
+  an Omarchy file with an invalid colour gives an error at its line and the built-in palette's
+  tokens; `source = "omarchy"` with no file uses the built-in palette without a warning;
+  `[theme.colors]` overlays Omarchy;
   `omarchyLightMode` makes a palette without `mode` light; `tokensToCss` emits every token once.
 - `toml-conformance.test.mjs`: valid and invalid TOML documents per feature (strings, numbers,
   dates, arrays, tables, inline tables, arrays of tables, comments, line endings, nesting limit),
   each invalid one failing on the expected line. We own the vendored copy, so we test it.
-- Injection: `resolveTheme` with `accent = "red; } * { … } :root {"` gives an error and Tokyo
-  Night's accent; a hostile font stays inside one CSS string; `tokensToCss` rejects hostile
-  names, values and selectors (called directly).
+- Injection: `resolveTheme` with `accent = "red; } * { … } :root {"` gives an error and the
+  built-in palette's accent; a hostile font stays inside one CSS string; `tokensToCss` rejects
+  hostile names, values and selectors (called directly).
 - Coverage ≥ 90 % lines/branches/functions on our `packages/vimma-core` modules. `vendor/` is
   excluded from the gate (third-party; an upstream update must not move our gate) and covered
   by the conformance tests instead.

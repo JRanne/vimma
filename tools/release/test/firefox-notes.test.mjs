@@ -9,11 +9,12 @@ import { advisoryUrl, firefoxNotes } from "../firefox-notes.mjs";
 // Spec firefox-versions, decisions 6 to 10: the newest changelog entry names the Firefox it is
 // built on, and each Firefox bump links its Mozilla advisories.
 
-const compare = "https://github.com/JRanne/vimma/compare/v0.5.1...v0.5.2";
-const older = "https://github.com/JRanne/vimma/compare/v0.5.0...v0.5.1";
+const compare = "https://github.com/vimma-browser/vimma/compare/v0.5.1...v0.5.2";
+const older = "https://github.com/vimma-browser/vimma/compare/v0.5.0...v0.5.1";
 const commit = (/** @type {string} */ sha) =>
-  `([${sha}](https://github.com/JRanne/vimma/commit/${sha}${"0".repeat(33)}))`;
-const issue = (/** @type {number} */ n) => `([#${n}](https://github.com/JRanne/vimma/issues/${n}))`;
+  `([${sha}](https://github.com/vimma-browser/vimma/commit/${sha}${"0".repeat(33)}))`;
+const issue = (/** @type {number} */ n) =>
+  `([#${n}](https://github.com/vimma-browser/vimma/issues/${n}))`;
 const mfsa = (/** @type {string} */ id) =>
   `[MFSA ${id}](https://www.mozilla.org/en-US/security/advisories/mfsa${id}/)`;
 

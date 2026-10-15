@@ -1,6 +1,6 @@
 # Spec: side-panel-unsplit
 
-Status: done (revised after testing: hidden views, option B) · Milestone: after M4 (builds on
+Status: implemented (revised after testing: hidden views, option B) · Milestone: after M4 (builds on
 [m4-side-panel-multiselect](m4-side-panel-multiselect.md), [m4-split-panes](m4-split-panes.md) and
 [tiling-layouts](tiling-layouts.md)) · Area: `packages/vimma-core/src/sidepanel.mjs`,
 `layouts.mjs`, `panes.mjs`, `snapshot.mjs`, `statusbar.mjs`, `actions.mjs`; `ui/side-panel.mjs`,
@@ -314,7 +314,7 @@ Sub-PR 2 depends on 1. If the answers leave the change small, the two can land a
 
 ## Test plan
 
-TDD as CLAUDE.md: each test is written first, run red, and its red output pasted in the PR.
+TDD as in [CONTRIBUTING.md](../../CONTRIBUTING.md): each test is written first, run red, and its red output pasted in the PR.
 
 ### Vitest (`packages/vimma-core/test/`)
 
@@ -389,7 +389,7 @@ TDD as CLAUDE.md: each test is written first, run red, and its red output pasted
 - The panel's footer hint (`ui/side-panel.mjs:263`) if keys or wording change.
 - `actions.mjs` help text for `panel_open` / `panel_close`; regenerate `docs/bindings.md`
   (`npm run gen-docs`).
-- `CHANGELOG.md` `[Unreleased]`: added by the maintainer at merge time (CLAUDE.md), not in the PR.
+- `CHANGELOG.md` `[Unreleased]`: added by the maintainer at merge time ([CONTRIBUTING.md](../../CONTRIBUTING.md)), not in the PR.
 - This spec's Results section when done.
 
 ## Out of scope

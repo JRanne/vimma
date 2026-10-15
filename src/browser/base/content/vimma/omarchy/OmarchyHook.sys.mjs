@@ -36,7 +36,7 @@ const handler = {
   handle(/** @type {CommandLine} */ cmdLine) {
     if (!cmdLine.handleFlag(FLAG, false)) return;
     // Only a line from another process: at first launch there is no theme to refresh yet, and
-    // the window the launch opens is what the user asked for.
+    // the window the launch opens is what the launch is for.
     if (cmdLine.state === Ci.nsICommandLine.STATE_INITIAL_LAUNCH) return;
     cmdLine.preventDefault = true;
     lazy.ThemeHost.reload().catch((/** @type {unknown} */ e) =>

@@ -1,15 +1,16 @@
 // Declarative e2e scenarios (spec m0-e2e-harness, "Scenario format"): one JSON file per
 // scenario in tests/e2e/scenarios/, steps open / keys / wait-for-state / assert-state /
-// screenshot / restart, and optional `prefs` overriding the harness profile's. For the agent
+// screenshot / restart / wait-for-profile-file, and optional `prefs` overriding the harness profile's. For the agent
 // question line (docs/specs/vimma-mcp.md, sub-PR 2b): `hold` keeps one full connection for the
 // rest of the scenario (opened while MCP is off, so later keys never ask), `agent` sends an
 // agent request without waiting and `agent-result` checks its answer, `ctl` runs vimma-ctl
 // without waiting (a new full connection, which asks while MCP is on) and `ctl-result` checks
-// how it ended, and `sleep` waits for a time-based rule (the 1.5 s quiet, the 1 s arming). For
+// how it ended, `wait-for-profile-file` waits for a file the browser writes into its profile
+// (an internal service's own signal that it is ready, which state does not show), and `sleep` waits for a time-based rule (the 1.5 s quiet, the 1 s arming). For
 // `vimma-ctl mcp` (sub-PR 3): `mcp` sends one JSON-RPC message to it over stdio (a request when
 // it names its answer with `as`, else a notification) and `mcp-result` checks the response.
 // Names carry the milestone (m<N>-…) or, for regression tests, the issue (issue-<N>-…).
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
@@ -20,7 +21,7 @@ import { setTimeout as sleep } from "node:timers/promises";
  *   timeoutSeconds?: number, hold?: true, sleep?: number, agent?: AgentSend,
  *   "agent-result"?: { of: string, expect: unknown }, ctl?: { run: string[], as: string },
  *   "ctl-result"?: { of: string, expect: unknown }, mcp?: McpSend,
- *   "mcp-result"?: { of: string, expect: unknown },
+ *   "mcp-result"?: { of: string, expect: unknown }, "wait-for-profile-file"?: string,
  * }} Step
  * @typedef {{ method: string, params?: Record<string, unknown>, as?: string }} McpSend
  * @typedef {{ send: string, args?: Record<string, unknown>, as: string, client?: string }}
@@ -47,6 +48,7 @@ import { setTimeout as sleep } from "node:timers/promises";
  *   screenshot: (name: string) => Promise<void>,
  *   restart?: (how: "quit" | "kill") => Promise<void>,
  *   control?: Control,
+ *   profile?: string,
  *   pollMs?: number,
  *   signal?: AbortSignal,
  * }} StepContext
@@ -67,7 +69,12 @@ export const STEP_KINDS = Object.freeze([
   "ctl-result",
   "mcp",
   "mcp-result",
+  "wait-for-profile-file",
 ]);
+/** Steps that wait for something and so take `timeoutSeconds`. */
+const WAITS = ["wait-for-state", "wait-for-profile-file"];
+/** A file directly in the profile directory: no path, no `.` or `..`. */
+const PROFILE_FILE = /^(?!\.\.?$)[\w.-]+$/;
 /** The agent commands an `agent` step may send (control protocol 2). */
 const AGENT_SENDS = ["agent-tabs", "agent-read", "agent-open", "agent-close", "agent-ping"];
 const AGENT_FIELDS = new Set(["send", "args", "as", "client"]);
@@ -94,7 +101,7 @@ const RESTARTS = ["quit", "kill"];
 const MILESTONE_NAME = /^m\d+-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const ISSUE_NAME = /^issue-(\d+)-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SHOT_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-/** Default wait for `wait-for-state`, seconds. */
+/** Default wait for `wait-for-state` and `wait-for-profile-file`, seconds. */
 export const DEFAULT_WAIT_SECONDS = 10;
 
 /** @param {unknown} v @returns {v is Record<string, unknown>} */
@@ -181,6 +188,12 @@ export function validateScenario(s, fileName) {
     if ((kind === "wait-for-state" || kind === "assert-state") && !isObject(value)) {
       errors.push(`${at}: ${kind} needs an object to match against state`);
     }
+    if (
+      kind === "wait-for-profile-file" &&
+      (typeof value !== "string" || !PROFILE_FILE.test(value))
+    ) {
+      errors.push(`${at}: wait-for-profile-file needs a file name in the profile, without a path`);
+    }
     if (kind === "screenshot" && (typeof value !== "string" || !SHOT_NAME.test(value))) {
       errors.push(`${at}: screenshot needs a baseline name of [a-z0-9-]`);
     }
@@ -266,8 +279,8 @@ export function validateScenario(s, fileName) {
         errors.push(`${at}: ${k}: no ${what} step before it is named "${value.of}"`);
       }
     }
-    if ("timeoutSeconds" in step && (kind !== "wait-for-state" || !positive(step.timeoutSeconds))) {
-      errors.push(`${at}: timeoutSeconds is a positive number, on wait-for-state only`);
+    if ("timeoutSeconds" in step && (!WAITS.includes(kind) || !positive(step.timeoutSeconds))) {
+      errors.push(`${at}: timeoutSeconds is a positive number, on ${WAITS.join(" and ")} only`);
     }
   });
   return errors;
@@ -341,7 +354,7 @@ function checkAborted(signal) {
  */
 export async function runSteps(
   scenario,
-  { ctl: own, screenshot, restart, control, pollMs = 100, signal },
+  { ctl: own, screenshot, restart, control, profile, pollMs = 100, signal },
 ) {
   /** Agent answers so far, for `$name.path` in later args. @type {Record<string, unknown>} */
   const answers = {};
@@ -396,6 +409,18 @@ export async function runSteps(
       } else if (step["assert-state"] !== undefined) {
         const mismatches = matchState(step["assert-state"], await ctl.state());
         if (mismatches.length) throw new Error(mismatches.join("; "));
+      } else if (step["wait-for-profile-file"] !== undefined) {
+        if (profile === undefined) throw new Error("this session has no profile");
+        const name = step["wait-for-profile-file"];
+        const seconds = step.timeoutSeconds ?? DEFAULT_WAIT_SECONDS;
+        const deadline = Date.now() + seconds * 1000;
+        while (!existsSync(join(profile, name))) {
+          if (Date.now() >= deadline) {
+            throw new Error(`${name} not in the profile after ${seconds} s`);
+          }
+          await sleep(pollMs);
+          checkAborted(signal);
+        }
       } else if (step["wait-for-state"] !== undefined) {
         const seconds = step.timeoutSeconds ?? DEFAULT_WAIT_SECONDS;
         const deadline = Date.now() + seconds * 1000;

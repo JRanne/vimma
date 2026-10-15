@@ -118,7 +118,7 @@ export const AGENT_TOOLS = Object.freeze({
 /** Questions that may wait: per connection and in all (decision 17). */
 export const QUEUE_LIMITS = Object.freeze({ perConnection: 4, total: 16 });
 /**
- * `agent-open`s per connection in any window of `ms` (review of #176): a `vimma_open` grant
+ * `agent-open`s per connection in any window of `ms` (security.md M3): a `vimma_open` grant
  * runs unasked, and must not open thousands of tabs.
  */
 export const OPEN_RATE = Object.freeze({ max: 10, ms: 60_000 });
@@ -387,7 +387,7 @@ const LOOK_ALIKE = /<(?=\s*\/?\s*untrusted[^>]{0,40}content[^>]*>)/gi;
  * `text` between the delimiters. The text is NFKC-normalised first (so full-width and other
  * compatibility look-alikes become plain letters), then every tag that looks like a delimiter,
  * however spaced or spelt (`</ untrusted_web_content >`), is broken with a zero-width space
- * after its `<`, so the output has exactly one of each (review of #176).
+ * after its `<`, so the output has exactly one of each (security.md M7).
  * @param {string} text
  */
 export function wrapUntrusted(text) {

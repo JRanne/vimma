@@ -17,8 +17,9 @@ from forks once the repo is public.
   `firefox` launcher, writes `dist/bin/browser/application.ini` (ours plus `UAName`).
 - `tools/mochitest.mjs --artifact`: `MOZCONFIG=engine/mozconfig.artifact` and
   `--setenv=XUL_APP_FILE=…/obj-artifact/dist/bin/browser/application.ini`.
-- `e2e.yml`: one job on `ubuntu-24.04`, `pull_request` (+ `ready_for_review`, manual), paths
-  filter, read-only token, no secrets, actions pinned to SHAs, cancel superseded runs.
+- `e2e.yml`: one job on `ubuntu-24.04`, `pull_request` (+ `ready_for_review`, manual), no paths
+  filter (a `changes` job skips docs-only PRs with `if:`), read-only token, no secrets, actions
+  pinned to SHAs, cancel superseded runs.
 - `nightly.yml`: runs the suite on the full build. It would cover the `skip-if = ["artifact"]`
   tests, but no runner is registered yet: until then they run only locally (see Settled).
 - `browser_vimma_crash_reporter.js`: the `MOZ_CRASHREPORTER` assertion moved out of
@@ -32,7 +33,7 @@ from forks once the repo is public.
   40-hex revision and throws on empty, missing or short; `uaName` from `moz.configure`;
   `appIniForArtifact` adds/replaces `UAName` in `[App]`, no-op for null, throws without `[App]`.
 - `tools/test/mochitest.test.mjs`: default suite headless; path mapping; `--headed`; `--artifact`.
-- Review additions: `candidateTree` (release for 0.x and `-nightly.*`; b/a/esr elsewhere),
+- Further tests: `candidateTree` (release for 0.x and `-nightly.*`; b/a/esr elsewhere),
   `indexNamespace`, `indexTask` on fixture responses (found, 404, expired, HTTP 500, malformed),
   `refreshAppIni` rewriting the copy after a rebuild (temp dir).
 - The mochitest suite itself, on both builds (below).
@@ -105,30 +106,32 @@ downloads are already seconds, the build is CPU.
 
 - **Artifact build on a hosted runner** (ADR-010), not a cached engine, a self-hosted runner or a
   nightly package overlay; reasons in the ADR's "Alternatives rejected".
-- **Nothing needs the user** for PR tests: no runner, no secret, no variable.
+- **Nothing needs the maintainer** for PR tests: no runner, no secret, no variable.
 - **No cache** for the Firefox tarball or `~/.mozbuild`: both download in seconds on a hosted
   runner (4 s and ~3 s above) and a cache would cost ~1 GB of the 10 GB limit and a restore step.
-- **Paths filter** while the repo is private: docs-only and CI-tooling-only PRs skip e2e. No
-  branch protection exists to require the check (m0-pipeline), so a skipped run blocks nothing.
+- **Paths filter** while the repo was private: docs-only and CI-tooling-only PRs skipped e2e.
+  Since `mochitest (artifact build)` became a required check on `main`, the paths filter is gone;
+  a `changes` job (`tools/ci/docs-only.mjs`) skips docs-only PRs with `if:`, which GitHub reports
+  as success.
 - **`skip-if = ["artifact"]`** is for assertions about compiled-in build config only, each with a
   reason comment. **Until the nightly runner is live, they and every compiled-in difference
   (ADR-010 "Known gaps": `--version`/`MOZ_APP_VERSION_DISPLAY` in C++, `MOZ_APP_NAME`, the crash
   reporter) run only on local full builds.** Rule: a PR touching `*.patch`, `configs/`,
   `moz.configure` or branding reports `npm run mochitest -- tests/browser/` on the full build
   (`.github/pull_request_template.md`).
-- **Preflight** (review): the tool queries the Taskcluster index before building and fails with
+- **Preflight**: the tool queries the Taskcluster index before building and fails with
   the revision, expiry and a remedy; it refuses a display version that would make mach search
   beta, central or ESR (`select_candidate_trees`). **Disk guards** in e2e.yml: ≥ 8 GB before the
   download (job uses ~6 GB), ≥ 3 GB before the build (uses 1.2 GB). The XUL_APP_FILE copy is
   rewritten on every `--artifact` run, so a bare `./mach build` cannot leave it stale.
 - **`MOZ_USER_DIR` is not a gap**: `"mozilla"` in both builds; our mozconfig export of it has no
   effect (full build's `mozilla-config.h`).
-- **Required checks:** the job is path-filtered; making it required needs handling for skipped
-  runs, or docs-only PRs hang.
-- **Fork PRs once public:** same job, read-only `GITHUB_TOKEN`, no secrets; GitHub's default asks
-  the owner to approve runs from first-time contributors. Nothing here runs on `vimma-build`.
+- **Required checks:** a path-filtered job cannot be required, or docs-only PRs hang; hence the
+  `changes` job above.
+- **Fork PRs:** same job, read-only `GITHUB_TOKEN`, no secrets; the repository requires approval
+  for workflow runs from all outside contributors. Nothing here runs on `vimma-build`.
 
 ## Out of scope
 
 Socket-driven e2e and screenshot diffs (they join this job when `tools/e2e` exists), the
-self-hosted runner itself (nightly.yml, docs/runbook.md), aarch64/macOS.
+self-hosted runner itself (nightly.yml, docs/runbook.md), aarch64/macOS. (Since changed: no self-hosted runner is used or planned; full builds move to GitHub-hosted runners with [#224](https://github.com/vimma-browser/vimma/issues/224), spec build-supply-chain decision 6.)

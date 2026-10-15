@@ -181,7 +181,7 @@ ships.
 - **Red/green**: before, the mochitest failed 22 of 35 checks (every default above still
   Firefox's, `MOZ_CRASHREPORTER` true, a default `services.settings.server` check written wrong
   and fixed to `prefHasDefaultValue`); with the Suggest task added, 37/37 pass. All five Vimma
-  mochitests pass (99 checks). Review round: the new promo prefs and the migration test failed
+  mochitests pass (99 checks). Hardening: the new promo prefs and the migration test failed
   5 of 47 (`Vimma's value is set again - false == true`); after the fix 47/47, all 109 checks
   pass. No C++ rebuild (prefs and our module are symlinked into `dist/bin`).
 - **Zen and LibreWolf.** Zen: generated `zen.js` included from `firefox.js`; Normandy off with
@@ -203,9 +203,9 @@ ships.
   (`browser/components/preferences/config/privacy.mjs` has no visibility gate for it); the only
   pref route is turning `browser.safebrowsing.{phishing,malware}.enabled` off, which would make
   the UI truthful but must then be undone when the key lands, so it is left on. Follow-up spec
-  `m0-safebrowsing-key`: the key (`--with-google-safebrowsing-api-keyfile`, a CI secret), which
-  the user is obtaining.
-- **Version-gated Remote Settings filters** see `0.1.0` (m0-user-agent Open issues); CRLite and
-  the blocklist are not version-gated, so they are unaffected.
+  `m0-safebrowsing-key`: the key (`--with-google-safebrowsing-api-keyfile`, a CI secret).
+- **Version-gated Remote Settings filters** saw `0.1.0` (m0-user-agent Open issues); since
+  m0-app-version they see the Firefox version. CRLite and the blocklist are not version-gated, so
+  they were unaffected.
 - **M6:** opt-in crash reporting (re-enable the reporter with `--with-crashreporter-url` pointing
   at our server, `browser.tabs.crashReporting.sendReport` stays false), and the update manifest.

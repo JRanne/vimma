@@ -1,6 +1,6 @@
 # Spec: wake-lock
 
-Status: done · Milestone: fix (after M5) · Area: `services/WakeLock.sys.mjs` (new), `vimma.js`,
+Status: implemented · Milestone: fix (after M5) · Area: `services/WakeLock.sys.mjs` (new), `vimma.js`,
 `jar.mn`. No upstream patch.
 
 ## Problem

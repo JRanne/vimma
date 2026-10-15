@@ -1,6 +1,6 @@
 # ADR-017: Vimma talks to the window manager (Hyprland only, over its socket)
 
-- Status: Proposed
+- Status: Accepted (built by spec [private-swap](../specs/private-swap.md))
 - Date: 2026-10-12
 
 ## Context
@@ -10,9 +10,9 @@ showed up as a second tile. It should replace the Vimma window in place instead
 ([private-swap](../specs/private-swap.md)), so that entering and leaving the private workspace
 feels like switching workspaces. A Wayland client cannot place its own windows, so only the
 compositor can do that. Until now Vimma ran no window-manager commands (private-workspace.md,
-decided question 1); "swap in place" reverses that. With a Lua config, Hyprland 0.56's `dispatch` runs
-its argument as Lua in the compositor, and `hl.exec_cmd` starts any shell command. So
-whatever Vimma sends is code.
+decided question 1); "swap in place" reverses that. With a Lua config, Hyprland 0.56's
+`dispatch` runs its argument as Lua in the compositor, and `hl.exec_cmd` starts any shell
+command. So whatever Vimma sends is code.
 
 ## Decision
 

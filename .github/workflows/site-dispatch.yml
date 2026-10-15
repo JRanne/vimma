@@ -1,6 +1,6 @@
-# Spec site-keys-mirror. When the default bindings change on main, tell JRanne/vimma-site, whose
+# Spec site-keys-mirror. When the default bindings change on main, tell vimma-browser/vimma-site, whose
 # own workflow fetches docs/bindings.json at this commit and opens a pull request with it.
-# Needs the secret SITE_DISPATCH_TOKEN: a fine-grained token for JRanne/vimma-site only, with
+# Needs the secret SITE_DISPATCH_TOKEN: a fine-grained token for vimma-browser/vimma-site only, with
 # "Contents: read and write" (what the repository_dispatch endpoint requires). Without it the job
 # logs a notice and succeeds, so main stays green until the secret is set.
 # No checkout and no third-party action: one API call with the runner's gh.
@@ -21,11 +21,11 @@ concurrency:
 jobs:
   dispatch:
     name: tell vimma.dev the bindings changed
-    if: github.repository == 'JRanne/vimma'
+    if: github.repository == 'vimma-browser/vimma'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: repository_dispatch to JRanne/vimma-site
+      - name: repository_dispatch to vimma-browser/vimma-site
         env:
           GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
           SHA: ${{ github.sha }}
@@ -34,6 +34,6 @@ jobs:
             echo "::notice::SITE_DISPATCH_TOKEN is not set; vimma.dev was not told about $SHA"
             exit 0
           fi
-          gh api --method POST repos/JRanne/vimma-site/dispatches \
+          gh api --method POST repos/vimma-browser/vimma-site/dispatches \
             -f event_type=vimma-bindings -f "client_payload[sha]=$SHA"
           echo "dispatched vimma-bindings for $SHA"

@@ -31,6 +31,7 @@ const ACCEPT_WAIT_MS = 1000;
  *   finder: Finder,
  *   currentURI: { spec: string },
  *   documentContentType: string,
+ *   browsingContext: object,
  *   focus(): void,
  * }} Browser
  * @typedef {Element & {
@@ -284,6 +285,8 @@ export class Find {
       const frame = finder._lastFoundBrowsingContext;
       s.findbar.close();
       if (frame && !finder._lastFoundBrowsingContext) finder._lastFoundBrowsingContext = frame;
+      // close() sent Finder:FocusContent to this frame (FinderParent.sendMessageToContext).
+      VimmaActors.findClosed(frame ?? s.browser.browsingContext);
       // close() focuses the page only while focus is in the find bar (shouldFocusContent); an
       // Enter typed before it took focus, or pdf.js's own close, can leave it in chrome.
       if (this.win.document.activeElement !== s.browser) s.browser.focus();

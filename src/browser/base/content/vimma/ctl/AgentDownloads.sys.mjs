@@ -3,8 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Downloads from the agent workspace, asked and quarantined (docs/specs/vimma-mcp.md decision
-// 31, sub-PR 2c; user: "agent should be able to download etc. As long as we can have way to
-// ensure it downloads safe things"). All through Firefox's own hooks, no upstream patch:
+// 31; docs/security.md M11-M13): an agent may download, and only what it downloads safely. All
+// through Firefox's own hooks, no upstream patch:
 // - Where the bytes go: every agent tab's top browsing context has `downloadFolderOverride` set
 //   to the quarantine folder (AgentPages), which nsExternalAppHandler reads for its `.part` file
 //   (uriloader/exthandler/nsExternalHelperAppService.cpp, GetInitialDownloadDirectory), and the
@@ -69,11 +69,11 @@ const CLAM_TIMEOUT_MS = 5 * 60 * 1000;
 /** Test-only: ClamAV's time limit in ms. */
 const CLAM_TIMEOUT_PREF = "vimma.mcp.clamTimeoutMs";
 /**
- * The only clamscan Vimma runs (security.md C2's one exception; security review of #182): the
+ * The only clamscan Vimma runs (security.md C2's one exception, M13): the
  * system's, never one found on PATH, and only when the user cannot write it or its folder.
  */
 const CLAM_PATHS = Object.freeze(["/usr/bin/clamscan", "/usr/local/bin/clamscan"]);
-/** How long after agent-open a download counts as that open's (security review, finding 2). */
+/** How long after agent-open a download counts as that open's (security.md M11). */
 const OPENER_MS = 60_000;
 
 /**
@@ -82,12 +82,13 @@ const OPENER_MS = 60_000;
  *   refused: boolean }} Tracked
  */
 
-/** The agent downloads let through the question, until they are done. @type {WeakMap<any, Tracked>} */
+/** The agent downloads let through the question, until they are done. */
+/** @type {WeakMap<any, Tracked>} */
 const tracked = new WeakMap();
 /**
  * The load an agent connection started in a tab (agent-open): a download is that connection's
  * only when it is that load (its URL, before redirects), soon after; once, and never after the
- * tab showed a page (security review of #182, finding 2).
+ * tab showed a page (security.md M11).
  * @type {WeakMap<Element, { conn: string | number, url: string, at: number }>}
  */
 const openers = new WeakMap();
@@ -96,7 +97,7 @@ const openers = new WeakMap();
 const lengths = new Map();
 let initialised = false;
 /**
- * The quarantine folder's check (decision 31 b; security review of #182, finding 3): made,
+ * The quarantine folder's check (decision 31 b; security.md M12): made,
  * mode 0700 after a chmod (which fails on a folder that is not the user's), or why not.
  * @type {{ dir: string, problem: string | null } | null}
  */
@@ -203,7 +204,7 @@ const inOurFolders = (path) =>
   !!path && [quarantineDir(), refusedDir()].includes(PathUtils.parent(path) ?? "");
 
 /**
- * Whether a download is an agent download (security review of #182, finding 4): its container,
+ * Whether a download is an agent download (security.md M11): its container,
  * its tab's container, or being written to the quarantine (or refusal) folder.
  * @param {any} download
  */
@@ -459,7 +460,10 @@ async function contentDanger(path) {
   return zipVerdict(entries, { isExecutable });
 }
 
-/** Whether a file is owned by someone else: a no-op chmod fails on another's. @param {string} path */
+/**
+ * Whether a file is owned by someone else: a no-op chmod fails on another's.
+ * @param {string} path
+ */
 async function ownedByAnother(path) {
   try {
     const { permissions } = await IOUtils.stat(path);
@@ -570,7 +574,10 @@ async function check(download, base) {
     console.error("vimma: agent download check failed", e);
     return { kind: /** @type {const} */ ("archive"), text: "a file Vimma could not read" };
   });
-  /** Ask again, as the same agent (or the page), always: no grant covers it. @param {object} more */
+  /**
+   * Ask again, as the same agent (or the page), always: no grant covers it.
+   * @param {object} more
+   */
   const askAgain = (more) => {
     const what = { ...t.what, size, ...more };
     const options = { always: true };
@@ -578,7 +585,7 @@ async function check(download, base) {
       ? AgentGate.request(/** @type {string | number} */ (t.conn), DOWNLOAD_TOOL, what, options)
       : AgentGate.askPage(DOWNLOAD_TOOL, what, options);
   };
-  // A `!` for one kind of danger is not one for another (security review, finding 5).
+  // A `!` for one kind of danger is not one for another (security.md M13).
   if (danger && danger.kind !== t.allowedKind) {
     const outcome = await askAgain({ danger: danger.text });
     if (!outcome.allow) return block(download, { kind: "danger", text: danger.text });
@@ -590,7 +597,7 @@ async function check(download, base) {
       return block(download, { kind: "infected", signature: verdict.signature });
     }
     if (verdict.kind === "partial" || verdict.kind === "error") {
-      // What ClamAV could not do is the user's call, default no (security review, finding 7).
+      // What ClamAV could not do is the user's call, default no (security.md M13).
       const unscanned =
         verdict.kind === "partial" ? `not fully scanned (${verdict.reason})` : verdict.why;
       const outcome = await askAgain({ unscanned });
@@ -778,8 +785,7 @@ export const AgentDownloads = {
   },
 
   /**
-   * The tab showed a page: what it downloads from now on is the page's (security review,
-   * finding 2).
+   * The tab showed a page: what it downloads from now on is the page's (security.md M11).
    * @param {Element} browser
    */
   committed(browser) {

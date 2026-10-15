@@ -188,7 +188,7 @@ shows as `space n` ([guide](guide.md#configtoml)).
 | Action                                 | Config name      | Bindings                       |
 | -------------------------------------- | ---------------- | ------------------------------ |
 | Back to normal mode                    | `normal_mode`    | `esc [insert]`, `esc [visual]` |
-| Insert mode: focus the first input     | `insert_mode`    | `i`                            |
+| Insert mode: focus the last-used input | `insert_mode`    | `i`                            |
 | Copy mode (caret browsing + selection) | `copy_mode`      | `ctrl+b [`, `v`                |
 | Command line                           | `command_line`   | `:`                            |
 | Close the command line                 | `command_cancel` | `esc [command]`                |

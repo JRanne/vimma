@@ -8,6 +8,8 @@ Status: draft · Area: `packages/vimma-core/src/hints.mjs`, `blocks.mjs` (new), 
 [m1-hints](m1-hints.md) (collection, labels, overlay, hint mode) and
 [m1-copy-mode](m1-copy-mode.md) (caret, selection, yank).
 
+Issue: [#213](https://github.com/vimma-browser/vimma/issues/213)
+
 The key that starts element focus is not fixed by this spec (decision 2; open question 1). Until
 it is, the spec writes it as `<element-hint key>`.
 
@@ -405,7 +407,7 @@ solve "point at something on screen in two keys" for links; text blocks have no 
 
 ## Tests
 
-Written first; red pasted, then green (CLAUDE.md).
+Written first; red pasted, then green (CONTRIBUTING.md).
 
 - **Vitest (core)**:
   - `blocks.test.mjs`: `classifyBlock` for each tag and role in decision 3, generic leaf `div`s

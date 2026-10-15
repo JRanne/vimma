@@ -89,11 +89,11 @@ describe("ControlSessions", () => {
     );
     const sessions = new ControlSessions({ profile, bin: "/nonexistent" });
     cleanups.push(() => sessions.close());
-    sessions.agentSend({ send: "agent-tabs", args: {}, as: "t1", client: "claude-code" });
+    sessions.agentSend({ send: "agent-tabs", args: {}, as: "t1", client: "example-agent" });
     expect(await sessions.agentResult("t1")).toMatchObject({ ok: true, result: { tabs: [] } });
     const requests = seen.filter((m) => m.type === "request");
     expect(requests.map((m) => m.command)).toEqual(["agent-hello", "agent-tabs"]);
-    expect(requests[0].args).toEqual({ client: { name: "claude-code" } });
+    expect(requests[0].args).toEqual({ client: { name: "example-agent" } });
   });
 });
 

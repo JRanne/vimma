@@ -2,9 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// The agent workspace's pages on a short leash (docs/specs/vimma-mcp.md decision 30, user
-// 2026-10-13): what an agent opens there runs with no one watching, so its pages get no
-// permission and open no pop-up. Three hooks, all Firefox's own, no upstream patch:
+// The agent workspace's pages on a short leash (docs/specs/vimma-mcp.md decision 30): what an
+// agent opens there runs with no one watching, so its pages get no permission and open no
+// pop-up. Three hooks, all Firefox's own, no upstream patch:
 // - Integration.contentPermission: every nsIContentPermissionPrompt request (geolocation,
 //   notifications, XR, MIDI, persistent storage, storage access, local network, and any later
 //   type) from the agent container is cancelled without a prompt
@@ -17,8 +17,8 @@
 //   SANDBOXED_AUXILIARY_NAVIGATION, as Firefox's own hidden page reader does
 //   (toolkit/components/pageextractor/PageExtractorParent.sys.mjs); window.open and
 //   target=_blank open nothing. CanonicalBrowsingContext::ReplacedBy copies the flags.
-// - Downloads (decision 31, sub-PR 2c): every agent tab's top browsing context downloads into
-//   the quarantine folder (`downloadFolderOverride`), and AgentDownloads asks and checks each.
+// - Downloads (decision 31): every agent tab's top browsing context downloads into the
+//   quarantine folder (`downloadFolderOverride`), and AgentDownloads asks and checks each.
 // The agent container is WorkspaceStore.agent's, read at each check.
 
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
@@ -33,8 +33,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
 /** nsSandboxFlags.h: no new browsing contexts (window.open, target=_blank). */
 export const SANDBOXED_AUXILIARY_NAVIGATION = 0x2;
 /**
- * What every agent tab's browsing context is sandboxed against. Not SANDBOXED_DOWNLOADS: since
- * sub-PR 2c downloads are allowed, asked and quarantined (decision 31; 2b had it as a stopgap).
+ * What every agent tab's browsing context is sandboxed against. Not SANDBOXED_DOWNLOADS:
+ * downloads are allowed, asked and quarantined (decision 31).
  */
 export const AGENT_SANDBOX = SANDBOXED_AUXILIARY_NAVIGATION;
 
@@ -43,9 +43,9 @@ export const AGENT_SANDBOX = SANDBOXED_AUXILIARY_NAVIGATION;
  * per agent tab. A browser-scoped DENY (Services.perms.addFromPrincipalForBrowser) is what
  * SitePermissions.getForPrincipal(principal, id, browser) reads as a temporary BLOCK, and
  * WebRTCParent then denies without a prompt. Browser-scoped, not the origin's permission: Vimma
- * isolates permissions by container (permissions.isolateBy.userContext, user decision "Per
- * workspace"), but that pref can be turned off in about:config, and an origin-wide DENY would
- * then reach the same site in `work`.
+ * isolates permissions by container (permissions.isolateBy.userContext, docs/specs/vimma-mcp.md:
+ * site permissions per workspace), but that pref can be turned off in about:config, and an
+ * origin-wide DENY would then reach the same site in `work`.
  */
 export const AGENT_DENIED_PERMISSIONS = Object.freeze([
   "camera",
@@ -171,7 +171,7 @@ function denyFor(uri, originAttributes, browserId) {
 }
 
 /**
- * A document's window global was created (review of #177, L1): whatever served it (the network,
+ * A document's window global was created (security.md M10): whatever served it (the network,
  * a service worker, the cache, bfcache), a top-level agent document gets its WebRTC deny before
  * it can ask. Frames ask with the top-level principal (permission delegation).
  * @param {any} wgp  a WindowGlobalParent
@@ -195,7 +195,7 @@ function sweep() {
       if (!isAgentContainer(tab.userContextId)) continue;
       const browser = tab.linkedBrowser;
       const bc = browser?.browsingContext;
-      // A document keeps the flags it loaded with (review of #177, L2): a page already loaded
+      // A document keeps the flags it loaded with (security.md M10): a page already loaded
       // without the flag is reloaded, so the flag applies to it now, not at its next navigation.
       const loaded = !tab.hasAttribute("pending") && browser?.currentURI?.spec !== "about:blank";
       if (bc && sandbox(bc) && loaded) browser.reload();
@@ -226,7 +226,7 @@ const CHOOSER_CONTRACT = "@mozilla.org/content-dispatch-chooser;1";
 const CHOOSER_CID = Components.ID("{a69ebe05-6906-408c-b7ed-a626713b04f3}");
 
 /**
- * External protocols (review of #177, L3): an agent page that sets `location = "zoommtg:…"`
+ * External protocols (security.md M10): an agent page that sets `location = "zoommtg:…"`
  * would launch another app, and Firefox's "always open" choice for a site is not per
  * container. The chooser is wrapped, so a load in the agent container launches nothing; every
  * other load goes to Firefox's own chooser unchanged.

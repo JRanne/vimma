@@ -29,7 +29,7 @@ pub enum Error {
     Busy(ErrorBody),
     /// The server's welcome did not prove it knows the token: not Vimma (exit 4).
     Impostor(String),
-    /// The user said no to full control while MCP is on, or did not answer (exit 4;
+    /// The user answered no to full control while MCP is on, or did not answer (exit 4;
     /// docs/specs/vimma-mcp.md decision 29 C).
     Denied(ErrorBody),
     /// The role asked for is off in Vimma (exit 3, like a socket that is off).
@@ -414,8 +414,8 @@ fn check_role(discovery: &Discovery, role: Role) -> Result<(), Error> {
 }
 
 /// Send the auth that carries the full-control code, and only then show the user the code
-/// (review of #177): a process reading the terminal learns it too late to race its own auth with
-/// it in. A failed send shows nothing.
+/// (docs/security.md S13): a process reading the terminal learns it too late to race its own
+/// auth with it in. A failed send shows nothing.
 fn auth_then_code(
     send: impl FnOnce() -> Result<(), Error>,
     say: impl FnOnce(),
@@ -462,7 +462,7 @@ mod tests {
         }
     }
 
-    // Review of #177 (follow-up): the code reaches the terminal only after the auth carrying it
+    // The code reaches the terminal only after the auth carrying it
     // was sent, so a process reading the user's terminal has no window to race its own auth
     // with the same code in; and a failed send prints no code.
     #[test]

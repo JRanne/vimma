@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // The always-visible status bar (spec: docs/specs/m2-statusbar-whichkey.md; the which-key strip
-// was dropped by the user's decision of 2026-10-09: only prefix+? lists the bindings).
+// was dropped: only prefix+? lists the bindings).
 // vimma-core decides what it says (statusbar.mjs); this module gathers the inputs from the
 // window and the host, renders at most once per frame, and never reads layout on the render
 // path: the bar's width comes from a ResizeObserver.
@@ -172,7 +172,7 @@ export class StatusBar {
     this.bar = bar;
 
     // Layout is fresh inside a ResizeObserver callback: measuring here forces no extra reflow.
-    // The probe is observed too, so a font change (M5's [theme] font, a zoom) re-measures the
+    // The probe is observed too, so a font change (`[theme] font`, a zoom) re-measures the
     // column even when the bar keeps its width.
     this.resize = new win.ResizeObserver((entries) => {
       let refit = false;

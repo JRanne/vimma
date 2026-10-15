@@ -1,6 +1,7 @@
 # Spec: private-swap
 
-Status: implemented (hand checks on Hyprland pending) · Milestone: after
+Status: implemented (Results records the hand checks run so far; the rest of the Test plan's
+hand-check list is not recorded) · Milestone: after
 [private-workspace](private-workspace.md) (merged, #142) · Area: `packages/vimma-core/src/`
 (`hyprswap.mjs` new, `config.mjs`, `defaults.mjs`); `host/hypr/HyprIpc.sys.mjs` (new),
 `host/private-swap.mjs` (new), `host/private-ops.mjs`, `about/AboutVimma.sys.mjs`,
@@ -49,8 +50,8 @@ the private workspace stays a private window. This spec changes where that windo
 
 - **Two Unix sockets** live in `$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/`:
   `.socket.sock` takes one request per connection and replies, and `.socket2.sock` streams events
-  as `name>>data` lines. On this machine the directory is `drwx------ juuso`, so only the user's
-  own processes can reach it. The path is 95 bytes long, under the 107-byte `sun_path` limit
+  as `name>>data` lines. On this machine the directory is `drwx------` and owned by the user, so
+  only the user's own processes can reach it. The path is 95 bytes long, under the 107-byte `sun_path` limit
   that `nsSocketTransport::InitWithName` checks (`netwerk/base/nsSocketTransport2.cpp:846-849`).
 - **Request format** (checked with a Python client on `.socket.sock`): `j/<cmd>` returns JSON
   (`j/version`, `j/clients`, `j/getoption misc:focus_on_activate`). `[[BATCH]]a;b` runs several

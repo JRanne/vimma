@@ -19,14 +19,14 @@ export const LATEST_PROTOCOL = 2;
 export const PROTOCOLS = Object.freeze([1, 2]);
 /** `agent`: only the agent commands, confined and confirmed. `full`: v1's commands. */
 export const ROLES = Object.freeze(["agent", "full"]);
-/** Longest accepted line in UTF-16 code units, excluding the newline. */
+/** Longest accepted line in bytes (UTF-8), excluding the newline (spec m0-control-server). */
 export const MAX_LINE_LENGTH = 1024 * 1024;
 export const CONTROL_COMMANDS = Object.freeze(["send-keys", "state", "open", "reload-theme"]);
 export const RESERVED_COMMANDS = Object.freeze(["list-tabs", "screenshot", "reload-config"]);
 /**
  * The agent role's commands (protocol 2; vimma-mcp decision 4). No other role runs them.
  * `agent-cancel` withdraws one of the connection's waiting questions (decision 17, MCP's
- * `notifications/cancelled`; sub-PR 3).
+ * `notifications/cancelled`).
  */
 export const AGENT_COMMANDS = Object.freeze([
   "agent-hello",
@@ -160,7 +160,7 @@ function checkAuth(m, errors) {
   }
 }
 
-/** auth's optional code (docs/specs/vimma-mcp.md, review of #177 M2). */
+/** auth's optional code (docs/specs/vimma-mcp.md decision 29 C; security.md S13). */
 export const AUTH_CODE = /^[2-9A-HJ-NP-Z]{4}$/;
 
 /** @param {Obj} m @param {string[]} errors */

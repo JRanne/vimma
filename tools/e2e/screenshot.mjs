@@ -84,7 +84,9 @@ export function checkBaseline({ name, image, baselineDir, outDir, update = false
     writeFileSync(path, encodePng(image));
     return {
       status: "updated",
-      message: `wrote ${path}: commit it with a changelog line saying why it changed (CLAUDE.md)`,
+      message:
+        `wrote ${path}: commit it with a changelog line saying why it changed ` +
+        "(CONTRIBUTING.md)",
     };
   }
   if (!existsSync(path)) {
@@ -98,7 +100,7 @@ export function checkBaseline({ name, image, baselineDir, outDir, update = false
       message:
         `no baseline ${path}; this run's image is ${actualPath}. Create it with ` +
         "--update-baselines (or take CI's), check it by eye, and commit it with a changelog " +
-        "line (CLAUDE.md: never change a baseline without one)",
+        "line (CONTRIBUTING.md: never change a baseline without one)",
     };
   }
   const result = diffImages(decodePng(readFileSync(path)), image);

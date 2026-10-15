@@ -1,6 +1,6 @@
 # Spec: tiling-layouts
 
-Status: done · Milestone: after M4 (m4-split-panes listed "layout presets" as out of
+Status: implemented · Milestone: after M4 (m4-split-panes listed "layout presets" as out of
 scope) · Area: `packages/vimma-core/src/layouts.mjs` (new), `panes.mjs`, `snapshot.mjs`,
 `config.mjs`, `defaults.mjs`, `actions.mjs`, `cmdline.mjs`; `split/PaneView.mjs`,
 `host/pane-ops.mjs`, `host/VimmaHost.sys.mjs`, `config/ConfigHost.sys.mjs`. No upstream patch.

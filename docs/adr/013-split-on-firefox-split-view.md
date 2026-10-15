@@ -86,8 +86,8 @@ flickers or breaks. It then gets its line in ADR-003's register.
 
 - **Patches.** Vendoring Zen brings split-related hunks from 20 of its upstream patch files,
   most of them churny front-end files. Disentangling them from Zen's folders, glance and
-  workspaces is our own work, and it is not tested anywhere. Building on Firefox needs public `gBrowser` APIs and CSS in our
-  own sheet. ADR-003 prefers the smaller patch set.
+  workspaces is our own work, and it is not tested anywhere. Building on Firefox needs public
+  `gBrowser` APIs and CSS in our own sheet. ADR-003 prefers the smaller patch set.
 - **Rebase risk.** Firefox's split view is maintained and tested by Mozilla in the same tree we
   rebase onto. Zen's patches are rebased by Zen on Zen's schedule. We would rebase a third-party
   patch onto a Firefox whose own split view keeps moving underneath it.
@@ -168,7 +168,7 @@ Decision: all four criteria hold with our own files only. The contingency patch
 
 ## Verification
 
-Claims confirmed by an independent review of PR #25 against the engine tree (Firefox 157.0.1):
+Claims checked against the engine tree (Firefox 157.0.1):
 
 - `browser/app/profile/firefox.js:2842`: `browser.tabs.splitView.enabled` defaults to `true`,
   with no `#ifdef`.
@@ -213,5 +213,5 @@ Claims confirmed by an independent review of PR #25 against the engine tree (Fir
   changes one fails CI instead of breaking panes silently.
 - Code that assumes two tabs per split stays upstream; the table above says how we handle each
   case, and the ones we accept are recorded in `docs/limits.md`.
-- plan.md §1, §3 and §6 still say "vendor Zen". When this ADR is accepted, the same PR updates
-  them to point here. ADR-006 stays as written, with this ADR superseding it.
+- plan.md's decision table points here instead of "vendor Zen". ADR-006 stays as written, with
+  this ADR superseding it.

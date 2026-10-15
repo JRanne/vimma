@@ -1,0 +1,101 @@
+# Spec statuses against their GitHub issues (docs/specs/README.md, "Keeping statuses current").
+# tools/spec-lint/spec-status.mjs reads each spec's `Status:` and `Issue:` lines and the issues'
+# states and labels. Findings go into one issue labelled `spec-status`, updated on each run and
+# closed when nothing is left. A status drifts when an issue closes, which no pull request sees,
+# so this runs on a schedule and on issue events rather than in CI.
+#
+# Two jobs, so the step that runs repository code never holds a token that can write issues.
+# No secret: the job token only. Nothing to install: the script is Node standard library on the
+# runner's node.
+name: spec-status
+
+on:
+  schedule:
+    - cron: "41 6 * * *" # 06:41 UTC daily
+  issues:
+    types: [closed, reopened]
+  push:
+    branches: [main]
+    paths: ["docs/specs/**"]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: spec-status
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Compare spec statuses with their issues
+    if: github.repository == 'vimma-browser/vimma'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      status: ${{ steps.check.outputs.status }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Exit 1 (findings) still hands the report to the issue job; exit 2 (could not check)
+      # fails here.
+      - name: Check
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p out
+          status=0
+          node tools/spec-lint/spec-status.mjs --markdown out/report.md || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          cat out/report.md >> "$GITHUB_STEP_SUMMARY"
+          [ "$status" -le 1 ]
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: spec-status
+          path: out/
+          retention-days: 7
+
+  report:
+    name: Update the spec status issue
+    needs: check
+    if: ${{ !cancelled() && needs.check.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write # open, update or close the one spec-status issue, and its label
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: spec-status
+          path: out
+
+      - name: Issue
+        env:
+          STATUS: ${{ needs.check.outputs.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create spec-status --force --color C5DEF5 \
+            --description "A spec's status does not match its issues (spec-status.yml)"
+          issue=$(gh issue list --label spec-status --state open --limit 1 \
+            --json number --jq '.[0].number // empty')
+          { cat out/report.md; echo; echo "Run: ${RUN_URL}"; } > body.md
+          if [ "$STATUS" = "0" ]; then
+            if [ -n "$issue" ]; then
+              gh issue comment "$issue" --body-file body.md
+              gh issue close "$issue" --reason completed
+            fi
+          elif [ -n "$issue" ]; then
+            gh issue edit "$issue" --body-file body.md
+          else
+            gh issue create --title "Spec statuses out of date" --label spec-status \
+              --body-file body.md
+          fi

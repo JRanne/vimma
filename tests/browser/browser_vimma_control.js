@@ -163,7 +163,6 @@ class Client {
     return this.read();
   }
 
-  /** Sends a request and returns its response. */
   async request(id, command, args = {}) {
     await this.send({ type: "request", id, command, args });
     const response = await this.read();
@@ -543,8 +542,8 @@ add_task(async function test_limits() {
   await TestUtils.waitForCondition(() => VimmaControl.connections === 0, "all closed");
 
   // Connections that never say hello cannot crowd out a client with the token: at most two wait
-  // for a hello, and a new one evicts the oldest (review of #38: a reconnect loop made every
-  // vimma-ctl call busy).
+  // for a hello, and a new one evicts the oldest (security.md S5; a reconnect loop would otherwise
+  // make every vimma-ctl call busy).
   const flood = [];
   for (let i = 0; i < 40; i++) flood.push(new Client(port));
   // All but the 2 newest are evicted: up to 16 linger 1 s to deliver their "busy", the rest
@@ -624,7 +623,8 @@ add_task(async function test_vimma_ctl_end_to_end() {
   const state = JSON.parse(out);
   Assert.equal(state.mode, "normal", "vimma-ctl reads the live state");
   Assert.equal(state.tabs.length, gBrowser.visibleTabs.length, "with every tab");
-  // The Omarchy hook's fallback (omarchy/vimma-theme-reload.sh); browser.toml pins the built-in theme here.
+  // The Omarchy hook's fallback (omarchy/vimma-theme-reload.sh); browser.toml pins the built-in
+  // theme here.
   const reload = await runVimmaCtl(bin, ["reload-theme"]);
   Assert.deepEqual(reload, { exitCode: 0, out: "unchanged\n" }, "vimma-ctl reload-theme");
 
@@ -789,7 +789,7 @@ add_task(async function test_reload_theme() {
 });
 
 add_task(async function test_server_checks_the_scheme_itself() {
-  // Not only the shared validator: the command re-parses the URL (review of #38).
+  // Not only the shared validator: the command re-parses the URL (security.md S10).
   for (const url of ["javascript:alert(1)", "data:text/html,x", "chrome://browser/content/"]) {
     let code = null;
     try {

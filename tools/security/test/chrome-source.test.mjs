@@ -58,8 +58,8 @@ describe("chrome code", () => {
     expect(hits(/\beval\(|new Function\b|\bFunction\(|evalInSandbox|loadSubScript/)).toEqual([]);
   });
 
-  // C2's one exception (docs/specs/vimma-mcp.md decision 31 g, user-approved; security review
-  // of #182: "accept with changes"): an agent download is scanned with the system's clamscan.
+  // C2's one exception (docs/specs/vimma-mcp.md decision 31 g; security.md
+  // M13): an agent download is scanned with the system's clamscan.
   // One file, one call, a fixed program list, fixed arguments with the path after `--`, no
   // shell, no PATH search, and no other way to reach Subprocess.
   test("never starts a process, but clamscan on an agent download", () => {

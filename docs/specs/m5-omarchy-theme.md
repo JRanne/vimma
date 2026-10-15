@@ -11,7 +11,8 @@ As an Omarchy user, Vimma's chrome UI (status bar, command line, pickers, hints,
 borders, start page) has my current Omarchy theme's colours, and when I switch theme with
 `omarchy-theme-set` every open window and start page follows within 2 seconds, with no restart
 (at once through the theme-set hook Vimma installs, "Instant reload by default" below).
-Without Omarchy I get the built-in Tokyo Night, and I can force it.
+Without Omarchy I get the built-in palette (`[theme] name`, Vimma's own by default), and I can
+force it.
 
 ## Scope
 
@@ -29,8 +30,8 @@ Without Omarchy I get the built-in Tokyo Night, and I can force it.
   `light.mode` exists; then core's `resolveTheme({ theme: { source: "omarchy", font: "monospace",
 colors: {} }, omarchy, omarchyLightMode })` and `tokensToCss` (strict validation; nothing else
   reaches the sheet).
-- **Startup never waits:** the module starts with Tokyo Night's CSS (computed synchronously from
-  core, no I/O); the first check runs async and swaps when it completes.
+- **Startup never waits:** the module starts with the built-in palette's CSS (computed
+  synchronously from core, no I/O); the first check runs async and swaps when it completes.
 - **Poll:** every `vimma.theme.pollMs` (default 2000, a test knob) an async `IOUtils.stat` of
   `colors.toml` plus `IOUtils.exists(light.mode)`. The signature is the path, `lastModified`,
   `creationTime`, `size` and the light flag; the file is read only when it changes. The stat
@@ -41,15 +42,17 @@ colors: {} }, omarchy, omarchyLightMode })` and `tokensToCss` (strict validation
 - **Errors:** a file `resolveTheme` rejects keeps the last good theme; one `console.warn` listing
   each error with its line, and `vimma-theme-error` is notified. The signature is kept, so the
   same broken file is not re-read or re-logged. Contrast warnings go to `console.info`.
-- **Missing theme:** no `colors.toml` means Tokyo Night, unless an Omarchy theme was applied since
-  startup or the last `vimma.theme.*` change: then the theme stays (omarchy-theme-set's `rm -rf`
-  before its `mv` would otherwise flash Tokyo Night for one poll).
+- **Missing theme:** no `colors.toml` means the built-in palette, unless an Omarchy theme was
+  applied since startup or the last `vimma.theme.*` change: then the theme stays
+  (omarchy-theme-set's `rm -rf` before its `mv` would otherwise flash the built-in palette for one
+  poll).
 - **Prefs:** `vimma.theme.source` = `omarchy` (default) or `builtin`; `vimma.theme.omarchyPath`.
   A change to either re-checks at once. `vimma-theme-changed` is notified after new tokens apply.
 - **Hermetic tests:** `tests/browser/browser.toml` sets `vimma.theme.source=builtin` for the
   directory, so a developer's own Omarchy theme never reaches other tests' colour assertions;
-  `browser_vimma_theme.js` turns it back on. The e2e harness already gives the browser a `HOME`
-  inside its temp profile, so its baselines stay Tokyo Night.
+  `browser_vimma_theme.js` turns it back on. The e2e harness gives the browser a `HOME` inside
+  its temp profile and sets `vimma.theme.source=builtin` (`tools/e2e/launcher.mjs`), so its
+  baselines use the built-in palette.
 
 ## Tests (written first)
 
@@ -64,7 +67,8 @@ colors: {} }, omarchy, omarchyLightMode })` and `tokensToCss` (strict validation
   polls;
 - `ln -sfn` of `current/theme` to another theme dir updates;
 - a theme without a `mode` key and with `light.mode` gives `--vimma-color-scheme: light`;
-- a path with no Omarchy theme gives Tokyo Night (`#13141c`), and back; `builtin` forces it.
+- a path with no Omarchy theme gives the built-in palette (now Vimma's, `#070b0d`; Tokyo Night's
+  `#13141c` when this was written), and back; `builtin` forces it.
 
 Red (before the host existed): 4 of 5 tasks failed (`timed out` waiting for the fixture's
 colours). Green: 11/11. Mutation check: dropping the `return` after a rejected file made
@@ -194,6 +198,69 @@ Vitest 6/6 and 22/22, the mochitest 30/30. Mutation: without `preventDefault` th
 (`~/.local/share/omarchy` or `~/.local/state/omarchy`, or a user-set `vimma.theme.omarchyPath`).
 Without it there is no poll timer, no `stat` and no hook check; the timer also stops while the
 source is forced built in. `~` in the path resolves against the HOME the detection used.
+
+## Base-only colors.toml (2026-10-14)
+
+Issue #266. Themes made before Omarchy's named palette, and generators that still write the
+terminal's colours, ship a `colors.toml` with only `accent`, `foreground`, `background`,
+`cursor`, `selection_foreground`, `selection_background`, `color0` to `color15` and border or tab
+colours. Event Horizon (`oldjobobo/omarchy-event-horizon-theme`) is one. Vimma used to reject such a
+file for its 17 missing keys and fall back to the built-in palette, so it stopped following the
+desktop theme while every other Omarchy app followed it.
+
+**Verified (Omarchy 4.0.0.alpha, `bin/omarchy-theme-color`, `resolve_theme_colors`).** Omarchy
+itself accepts these files: it reads Omarchy's short names (`bg`, `fg`, `dark_bg`, …), then fills
+each missing named key from an ANSI colour or derives it, and renders its templates from the
+result. All 22 stock themes in that version ship the full named palette (`mode`, `accent`,
+`selection`, `muted`, the background and foreground shades, the 8 colours and 6 bright ones);
+`white`, `solitude` and `last-horizon` leave out `orange` and `brown`.
+
+**Decision: derive what Omarchy derives, the same way.** The base set is `accent`, `background`,
+`foreground`, `red`, `yellow`, `green`, `cyan`, `blue` and `magenta`, each by its name or by its
+stand-in below. A file without one of them is rejected with
+`missing key "red" (or its ANSI name "color1")`; an invalid value is rejected at its line under
+the key the file used (`color2`, say). Omarchy derives no accent, so neither does Vimma. A named
+key always wins over its stand-in. The reason for following Omarchy rule for rule: Vimma's chrome
+then has the colours the terminal, the bar and the launcher already show.
+
+| Key                                         | When the file leaves it out                                                                                    |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `background`, `foreground`                  | `bg` / `fg`, else `color0` / `color7`                                                                          |
+| `red green yellow blue magenta cyan`        | `color1` to `color6` (`magenta` also `purple`)                                                                 |
+| `bright_red green yellow blue magenta cyan` | `color9` to `color14` (`bright_magenta` also `bright_purple`), else the colour 20% toward white                |
+| `light_foreground`                          | `light_fg`, else `foreground` (Omarchy sets `color7` to `foreground` first)                                    |
+| `bright_foreground`                         | `bright_fg`, else `color15`, else `foreground`                                                                 |
+| `dark_foreground`                           | `dark_fg`, else `color8`, else `foreground`                                                                    |
+| `muted`                                     | `color8`, else `dark_foreground`                                                                               |
+| `lighter_background`                        | `lighter_bg`, else `background` (Omarchy sets `color0` to `background` first)                                  |
+| `dark_background`, `darker_background`      | `dark_bg` / `darker_bg`, else `background` 25% / 50% toward black                                              |
+| `orange`                                    | `yellow`                                                                                                       |
+| `brown`                                     | `dark_foreground`                                                                                              |
+| `selection`                                 | `selection_background`, else `color8`, else `background`; then toward `background` (below)                     |
+| `mode`                                      | `light` with a `light.mode` file, else `light` when `background`'s red + green + blue is over 382, else `dark` |
+
+Two rules differ from Omarchy, each for a reason:
+
+- **`selection`.** Omarchy takes `selection_background` as is: terminals draw
+  `selection_foreground` on it. Vimma draws `foreground` (and `bright_foreground`) on a selected
+  row, so the derived colour moves toward `background` in 5% steps until both reach 4.5:1
+  (`MIN_CONTRAST`, [m7-a11y](m7-a11y.md)). Event Horizon's `#26bbd9` gives `#216577`: the same
+  teal, at 5.02:1 under `#fadad1`. A `selection` the file names is kept as given, and the existing
+  contrast warning still covers it.
+- **`brown`** stays `dark_foreground`, Vimma's fallback before this change. Omarchy's
+  (`orange` at 50% toward black) would recolour the resize badge of the three stock themes that
+  leave `brown` out.
+
+`mode` from the background's channel sum is Omarchy's own test for a theme that names no mode; a
+light base-only theme without `light.mode` was otherwise drawn as dark.
+
+Tests: `packages/vimma-core/test/theme.test.mjs`, "a colors.toml with only the base keys", with
+`tests/contract/theme/event-horizon.colors.toml` (the file as Event Horizon ships it, comments
+dropped): every derived key, no errors and no contrast warnings; a missing base key named with its
+ANSI name; an invalid ANSI value at its line; named keys over stand-ins; short names and
+`purple`; mode from the background. `a11y.test.mjs` runs every text token on every surface, the
+badges and the focus colour for Event Horizon too. All 22 stock themes resolve to the same tokens
+as before the change (compared one by one against the previous `theme.mjs`).
 
 ## Limits
 

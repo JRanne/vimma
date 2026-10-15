@@ -60,7 +60,6 @@ async function openPage(url) {
   return tab;
 }
 
-/** Presses each key in turn. */
 function press(/** @type {string[]} */ keys) {
   for (const key of keys) EventUtils.synthesizeKey(key);
 }
