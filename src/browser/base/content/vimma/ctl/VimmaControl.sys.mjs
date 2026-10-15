@@ -56,7 +56,7 @@ const IDLE_TIMEOUT_MS = 60000;
 /** Authenticated connections; the next hello is told busy. */
 const MAX_CONNECTIONS = 8;
 /**
- * Of those, agent connections (review of #176): agents never take every slot, so vimma-ctl
+ * Of those, agent connections (security.md S5): agents never take every slot, so vimma-ctl
  * still gets in.
  */
 const MAX_AGENT_CONNECTIONS = 4;
@@ -65,7 +65,7 @@ const MAX_AGENT_INFLIGHT = 4;
 /**
  * Connections still waiting for their hello. Anyone local can open those, so they are capped
  * apart from the authenticated ones and a new one evicts the oldest: a flood of idle
- * connections cannot lock out a client with the token (review of #38).
+ * connections cannot lock out a client with the token (security.md S5).
  */
 const MAX_WAITING = 2;
 /** Unsent output beyond this means the client is not reading: close it. */
@@ -400,7 +400,10 @@ class Connection {
     this.agentState = {};
     /** Agent requests waiting for an answer or running: they do not wait for each other. */
     this.inflight = 0;
-    /** Withdraws a full-control question still waiting (decision 29 C). @type {(() => void) | null} */
+    /**
+     * Withdraws a full-control question still waiting (decision 29 C).
+     * @type {(() => void) | null}
+     */
     this.cancelAsk = null;
   }
 
@@ -566,7 +569,7 @@ class Connection {
     if (this.role === "full" && McpHost.state.enabled) {
       if (this.timer !== null) lazy.clearTimeout(this.timer);
       this.timer = null;
-      // The code the client printed, shown in the question (review of #177, M2).
+      // The code the client printed, shown in the question (security.md S13).
       const code = typeof m.code === "string" ? m.code : null;
       const outcome = await AgentGate.askFull(code, (cancel) => (this.cancelAsk = cancel));
       this.cancelAsk = null;
@@ -894,7 +897,7 @@ const discoveryPath = () => PathUtils.join(PathUtils.profileDir, DISCOVERY_FILE)
 
 /**
  * Remove whatever a previous run left at the discovery path, so no client ever dials a port
- * from a dead run (another local user could have bound it; review of #38). A symlink is
+ * from a dead run (another local user could have bound it; security.md S6). A symlink is
  * removed, not followed. A real directory is left alone and reported: false means "do not
  * write the file" (a rename would move it into the directory).
  */

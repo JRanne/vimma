@@ -34,12 +34,13 @@ env:
 jobs:
   # Full build on the self-hosted machine (22 GB engine/; as nightly.yml). Read-only token, and
   # one secret, the Google Safe Browsing key, which ships inside the binaries anyway (spec
-  # m0-safebrowsing-key): what it produces is checked, signed and uploaded by hosted jobs below. It builds in
-  # a fresh objdir with an empty compiler cache of its own, so nothing a nightly (or anything
-  # else that ran on the runner) left behind reaches signed binaries; a cold build costs ~40 min.
+  # m0-safebrowsing-key): what it produces is checked, signed and uploaded by hosted jobs below.
+  # It builds in a fresh objdir with an empty compiler cache of its own, so nothing a nightly (or
+  # anything else that ran on the runner) left behind reaches signed binaries; a cold build costs
+  # ~40 min.
   build:
     if: >-
-      vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&
+      vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' &&
       (github.event_name == 'release' || github.ref == 'refs/heads/main')
     runs-on: [self-hosted, linux, x64, vimma-build]
     timeout-minutes: 240
@@ -163,7 +164,7 @@ jobs:
   package:
     needs: build
     if: >-
-      vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&
+      vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' &&
       (github.event_name == 'release' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -236,7 +237,7 @@ jobs:
   sign:
     needs: package
     if: >-
-      vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&
+      vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' &&
       (github.event_name == 'release' || github.ref == 'refs/heads/main') &&
       vars.SIGNING_ENABLED == 'true'
     runs-on: ubuntu-24.04
@@ -268,7 +269,7 @@ jobs:
     needs: [package, sign]
     # sign is skipped while SIGNING_ENABLED is unset; publish then uploads unsigned assets.
     if: >-
-      always() && vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&
+      always() && vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' &&
       (github.event_name == 'release' || github.ref == 'refs/heads/main') &&
       needs.package.result == 'success' &&
       (needs.sign.result == 'success' || needs.sign.result == 'skipped')
@@ -312,7 +313,7 @@ jobs:
   aur:
     needs: publish
     if: >-
-      vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&
+      vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' &&
       (github.event_name == 'release' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -359,7 +360,7 @@ jobs:
   failure:
     needs: [build, package, sign, publish, aur]
     if: >-
-      failure() && vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&
+      failure() && vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' &&
       (github.event_name == 'release' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 5

@@ -352,7 +352,7 @@ const ARGUMENT_KINDS = Object.freeze({
   tabnew: { names: "search", kind: "search engine" },
   layout: { names: "layout", kind: "layout", fixed: LAYOUTS },
   private: { names: "private", kind: "private workspace", fixed: ["close"] },
-  // The two a first-time user wants first, then back to following the system.
+  // The two a first-time user reaches for, then back to following the system.
   theme: { names: "theme", kind: "appearance", fixed: ["dark", "light", "system"] },
   toolbar: { names: "toolbar", kind: "toolbar", fixed: TOOLBAR_WORDS },
   workspace: { names: "workspace", kind: "workspace" },

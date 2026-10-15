@@ -7,7 +7,7 @@
     "command": "agent-hello",
     "args": {
       "client": {
-        "name": "claude\u001b[2Jcode"
+        "name": "example\u001b[2Jagent"
       }
     }
   }

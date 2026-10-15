@@ -1,6 +1,6 @@
 # Spec: firefox-keys
 
-Status: accepted (sub-PR 1 implemented; sub-PRs 2 and 3: [#234](https://github.com/JRanne/vimma/issues/234), [#235](https://github.com/JRanne/vimma/issues/235)) · Milestone: after M5 (builds on
+Status: accepted (sub-PR 1 implemented; sub-PRs 2 and 3: [#234](https://github.com/vimma-browser/vimma/issues/234), [#235](https://github.com/vimma-browser/vimma/issues/235)) · Milestone: after M5 (builds on
 [key-handling-batch](key-handling-batch.md) § 1, [m0-help-overlay](m0-help-overlay.md),
 [m5-config-load](m5-config-load.md) and [m1-cmdline](m1-cmdline.md)) · Area:
 `packages/vimma-core/src/firefox-keys.mjs`, `actions.mjs`, `defaults.mjs`, `keymap.mjs`,
@@ -8,8 +8,8 @@ Status: accepted (sub-PR 1 implemented; sub-PRs 2 and 3: [#234](https://github.c
 `host/VimmaHost.sys.mjs`, `ui/help-overlay.mjs`, `about/AboutVimma.sys.mjs`,
 `branding/vimma/pref/firefox-branding.js`. No upstream patch.
 
-Issues: [#234](https://github.com/JRanne/vimma/issues/234),
-[#235](https://github.com/JRanne/vimma/issues/235)
+Issues: [#234](https://github.com/vimma-browser/vimma/issues/234),
+[#235](https://github.com/vimma-browser/vimma/issues/235)
 
 Checked against main on 2026-10-13 (after the private workspace #142, the private swap
 #151/#160, unsplit #150, bindings.json #154, find #167 and the restore focus fix #168). File:line
@@ -616,7 +616,7 @@ Each is its own keymap PR, in this order, one open at a time:
 - **defaults.toml** via `npm run gen-docs`.
 - **toolbar-toggle.md**: "`alt` still shows it" becomes "`alt` does not (firefox-keys Q3); `F10`
   does" (sub-PR 1).
-- **CHANGELOG.md** is the maintainer's at merge time (CLAUDE.md), not these PRs'.
+- **CHANGELOG.md** is the maintainer's at merge time (CONTRIBUTING.md), not these PRs'.
 
 ## Out of scope
 

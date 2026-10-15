@@ -10,7 +10,8 @@
 // the I/O and hands each part to the module that uses it. `:source <path>` puts another file in
 // force the same way, until config.toml changes or a plain `:source`. Writes: the first run and
 // `:config` create a missing config.toml from the commented template, never touching an existing
-// one; `:route add` appends one `[[routes]]` table (spec workspace-routing), checked to parse first.
+// one; `:route add` appends one `[[routes]]` table (spec workspace-routing), checked to parse
+// first.
 
 import {
   appendRouteText,

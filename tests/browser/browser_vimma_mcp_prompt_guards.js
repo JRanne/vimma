@@ -2,9 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Spec: docs/specs/vimma-mcp.md, sub-PR 2b, and the security review of #177: the question line
-// arms again whenever its window comes or goes, or a key arrives before it is armed (H1), and
-// gives the keys up to a prompt, picker or the command line opened over it (L5).
+// Spec: docs/specs/vimma-mcp.md, sub-PR 2b: the question line arms again whenever its window
+// comes or goes, or a key arrives before it is armed, and gives the keys up to a prompt, picker or
+// the command line opened over it.
 
 "use strict";
 
@@ -61,11 +61,11 @@ async function setSwitches({ control = false, mcp = false }) {
 }
 
 /** An agent connection, after its agent-hello. */
-async function agentClient(name = "claude-code") {
+async function agentClient(name = "example-agent") {
   const c = new Client(/** @type {number} */ (VimmaControl.port));
   const welcome = await c.handshake({ protocol: 2, role: "agent" });
   Assert.equal(welcome.role, "agent", "an agent connection");
-  await c.call("agent-hello", { client: { name }, via: "claude" });
+  await c.call("agent-hello", { client: { name }, via: "example" });
   return c;
 }
 
@@ -86,7 +86,7 @@ add_task(async function setup() {
   await BrowserTestUtils.browserLoaded(gBrowser.selectedBrowser, false, PAGE);
 });
 
-// Review of #177 (H1): a window that comes to the front, by the user or by a process that can
+// A window that comes to the front, by the user or by a process that can
 // focus windows (hyprctl dispatch focuswindow), re-arms the line, so a `y` typed for another
 // app never answers it; a key pressed while the line is not armed yet restarts the delay.
 add_task(async function test_focus_changes_and_early_keys_rearm_the_line() {
@@ -124,7 +124,7 @@ add_task(async function test_focus_changes_and_early_keys_rearm_the_line() {
   await setSwitches({});
 });
 
-// Review of #177 (L5): another prompt, picker or the command line opened while the line shows
+// Another prompt, picker or the command line opened while the line shows
 // (by a chord, which the line lets through) takes the keys; the line goes back to waiting.
 add_task(async function test_other_ui_opened_over_the_line_gets_the_keys() {
   await setSwitches({ mcp: true });
@@ -151,7 +151,7 @@ add_task(async function test_other_ui_opened_over_the_line_gets_the_keys() {
   await setSwitches({});
 });
 
-// Review of #177 (L6): a right-to-left title or client name cannot reorder the question: names
+// A right-to-left title or client name cannot reorder the question: names
 // and titles are <bdi>, URLs a left-to-right isolate.
 add_task(async function test_names_titles_and_urls_are_bidi_isolates() {
   await setSwitches({ mcp: true });

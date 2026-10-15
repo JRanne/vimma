@@ -4,7 +4,8 @@
 
 // Split layout and reconcile (docs/specs/m4-split-panes.md, sub-spec 2): the host API
 // (PaneViews.get(window).split / close / zoom) mirrors the window's pane tree onto one Firefox
-// split view and puts every panel at core layout()'s rectangle. No keys yet (sub-spec 3).
+// split view and puts every panel at core layout()'s rectangle. The keys (sub-spec 3) are in
+// browser_vimma_pane_keys.js.
 
 "use strict";
 

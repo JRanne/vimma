@@ -62,7 +62,7 @@ One workflow, six jobs; the heavy ones run once per release (`upstream.yml` has 
      `npm run mochitest -- tests/browser/` (docs/rebase.md, step 4), and after merge the nightly.
      A hosted runner cannot do a full build (22 GB, 39 min on 16 threads; ADR-010). (Since
      changed: the full-build path is a developer's machine, and the nightly moves to a
-     GitHub-hosted runner with [#224](https://github.com/JRanne/vimma/issues/224); spec build-supply-chain, decision 6, and its
+     GitHub-hosted runner with [#224](https://github.com/vimma-browser/vimma/issues/224); spec build-supply-chain, decision 6, and its
      research R9-R10 show the build fits one.)
    - `publish` (`contents`/`pull-requests`/`issues: write`): bump `surfer.json`, commit
      `upstream: firefox X.Y.Z`, push the branch, open the PR with `autopilot-body.mjs`'s body:

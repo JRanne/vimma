@@ -9,7 +9,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    # ready_for_review: PRs opened with GITHUB_TOKEN (claude.yml, upstream.yml) do not trigger
+    # ready_for_review: PRs opened by bot workflows with GITHUB_TOKEN do not trigger
     # workflows; marking them ready (or a manual run below) starts CI as the owner.
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
@@ -32,7 +32,7 @@ jobs:
           fetch-depth: 0 # commitlint and the classifier read the whole PR range
 
       # The classifier as the base branch has it, so the pull request cannot change the answer;
-      # without one on the base (before #245 merged) the output stays empty and everything runs.
+      # without one on the base the output stays empty and everything runs.
       - name: Docs-only pull request? (tools/ci/docs-only.mjs, from the base)
         id: classify
         if: github.event_name == 'pull_request'
@@ -64,6 +64,11 @@ jobs:
       # Markdown is documentation for outside readers: no record of who asked or when (#226).
       - name: No process wording in Markdown (npm run md-wording)
         run: npm run md-wording
+
+      # Code comments say why, not who asked or which review found it (#275).
+      - name: No process wording in code comments (npm run comment-wording)
+        if: steps.classify.outputs.docs-only != 'true'
+        run: npm run comment-wording
 
       # Spec and ADR statuses, a live spec's issue line, and a reason for every new decision
       # (docs/specs/README.md).

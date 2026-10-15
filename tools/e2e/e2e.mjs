@@ -285,7 +285,14 @@ async function main() {
           throw new Error("vimma-ctl mcp wrote something other than MCP messages on stdout");
         }
       };
-      return { ctl: stepCtl, screenshot, restart, control, teardown: teardownAll };
+      return {
+        ctl: stepCtl,
+        screenshot,
+        restart,
+        control,
+        profile: session.profile,
+        teardown: teardownAll,
+      };
     };
 
     const results = await runScenarios(scenarios, {
@@ -311,7 +318,7 @@ async function main() {
     if (rewritten.length) {
       console.log(
         `\nBaselines rewritten: ${rewritten.join(", ")}. Check them by eye and commit with a ` +
-          "changelog line saying why (CLAUDE.md: never change a baseline without one).",
+          "changelog line saying why (CONTRIBUTING.md: never change a baseline without one).",
       );
     }
     return exitCode(results);

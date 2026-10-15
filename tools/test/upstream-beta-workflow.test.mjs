@@ -97,10 +97,10 @@ describe("upstream-beta.yml (the Beta canary)", () => {
     expect(job("test")).toContain("uses: ./.github/workflows/e2e.yml");
   });
 
-  it("every job is skipped outside JRanne/vimma", () => {
+  it("every job is skipped outside vimma-browser/vimma", () => {
     for (const id of JOBS) {
       expect(job(id), id).toMatch(
-        /^ {4}if: (?:>-\n\s+)?[^\n]*github\.repository == 'JRanne\/vimma'/m,
+        /^ {4}if: (?:>-\n\s+)?[^\n]*github\.repository == 'vimma-browser\/vimma'/m,
       );
     }
   });
@@ -163,7 +163,7 @@ for ((i = 0; i < \${#args[@]}; i++)); do
 done
 case "$1 $2" in
   "issue list") if [[ "$*" == *"--label upstream "* ]]; then cat "${tmp}/tracking.json"; else cat "${tmp}/open.json"; fi ;;
-  "issue create") echo "https://github.com/JRanne/vimma/issues/300" ;;
+  "issue create") echo "https://github.com/vimma-browser/vimma/issues/300" ;;
 esac
 `,
       { mode: 0o755 },
@@ -173,7 +173,7 @@ esac
       RUNNER_TEMP: tmp,
       RELEASED: released,
       GH_TOKEN: "t",
-      GH_REPO: "JRanne/vimma",
+      GH_REPO: "vimma-browser/vimma",
     };
     const block = job("report");
     let status = 0;

@@ -19,7 +19,7 @@ const spec = (status, rest = "") =>
     "",
     `Status: ${status} · Area: \`x.mjs\` · ADR: none`,
     "",
-    "Issue: [#241](https://github.com/JRanne/vimma/issues/241)",
+    "Issue: [#241](https://github.com/vimma-browser/vimma/issues/241)",
     "",
     "## Summary",
     "",
@@ -30,8 +30,8 @@ const spec = (status, rest = "") =>
 describe("parseSpec", () => {
   test("reads the status word, its note and the issues of the header", () => {
     const md = spec("accepted (sub-PR 1 implemented; sub-PR 2: #9)").replace(
-      "Issue: [#241](https://github.com/JRanne/vimma/issues/241)",
-      "Issues: [#241](https://github.com/JRanne/vimma/issues/241), #242 and #243",
+      "Issue: [#241](https://github.com/vimma-browser/vimma/issues/241)",
+      "Issues: [#241](https://github.com/vimma-browser/vimma/issues/241), #242 and #243",
     );
     expect(parseSpec(md)).toEqual({ status: "accepted", issues: [241, 242, 243] });
   });
@@ -89,7 +89,10 @@ describe("specErrors", () => {
 
   test("a draft or accepted spec must name its issue; an implemented one need not", () => {
     const noIssue = (status) =>
-      spec(status).replace("Issue: [#241](https://github.com/JRanne/vimma/issues/241)\n", "");
+      spec(status).replace(
+        "Issue: [#241](https://github.com/vimma-browser/vimma/issues/241)\n",
+        "",
+      );
     expect(specErrors(noIssue("draft"))).toEqual([expect.stringMatching(/^issue: /)]);
     expect(specErrors(noIssue("accepted"))).toEqual([expect.stringMatching(/^issue: /)]);
     expect(specErrors(noIssue("implemented"))).toEqual([]);

@@ -119,7 +119,7 @@ const READ_KEYS = Object.freeze([
 ]);
 
 /**
- * Vimma's own palette, dark: vimma.dev's colours (assets/css/site.css in JRanne/vimma-site).
+ * Vimma's own palette, dark: vimma.dev's colours (assets/css/site.css in vimma-browser/vimma-site).
  * Mint is the accent (the normal-mode badge, focus) and the link hints; body text stays the
  * site's grey-green. Keys marked "derived" have no colour on the site: each is picked to sit with
  * the site's yellow, red and greens at about their lightness and saturation.
@@ -188,7 +188,7 @@ export const VIMMA_LIGHT = Object.freeze({
   bright_magenta: "#9150b3", // derived: magenta, brighter
 });
 
-/** Omarchy's stock tokyo-night colors.toml: the built-in palette until vimma had its own. */
+/** Omarchy's stock tokyo-night colors.toml, built in as `[theme] name = "tokyo-night"` (dark). */
 /** @type {Readonly<Palette>} */
 export const TOKYO_NIGHT = Object.freeze({
   mode: "dark",

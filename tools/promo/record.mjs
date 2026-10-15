@@ -20,7 +20,8 @@
  *
  * Writes DIR/<shot>.mkv (lossless H.264) and DIR/manifest.json: per shot its file, duration,
  * the keys sent with their times from the clip's first frame (the key-overlay track) and named
- * marks, and screen points of interest (`points`, device pixels). Exit 0 on success, 1 on a failure, 2 on usage errors.
+ * marks, and screen points of interest (`points`, device pixels). Exit 0 on success, 1 on a
+ * failure, 2 on usage errors.
  */
 import { spawn } from "node:child_process";
 import {

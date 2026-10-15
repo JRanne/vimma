@@ -10,10 +10,10 @@ Status: accepted · Area: `tools/vimma-ctl` (`src/mcp.rs`, `src/mcp_serve.rs`, `
 `config/ConfigHost.sys.mjs`, `about/AboutVimma.sys.mjs`; `tools/e2e` · Upstream patches: none ·
 ADR: [ADR-019](../adr/019-agents-over-mcp.md)
 
-Issues: [#229](https://github.com/JRanne/vimma/issues/229),
-[#230](https://github.com/JRanne/vimma/issues/230),
-[#231](https://github.com/JRanne/vimma/issues/231),
-[#232](https://github.com/JRanne/vimma/issues/232)
+Issues: [#229](https://github.com/vimma-browser/vimma/issues/229),
+[#230](https://github.com/vimma-browser/vimma/issues/230),
+[#231](https://github.com/vimma-browser/vimma/issues/231),
+[#232](https://github.com/vimma-browser/vimma/issues/232)
 
 Builds on [m0-control-protocol-and-vimma-ctl](m0-control-protocol-and-vimma-ctl.md),
 [m0-control-server](m0-control-server.md), [m3-workspaces](m3-workspaces.md),
@@ -54,7 +54,7 @@ answer for the user, and that never disturbs what the user is doing.
    is not typing.
 4. The user asks Claude Code to "read the PR I opened in Vimma's agent workspace and summarise
    it". The status bar shows `◇ agent 1?` and the question line opens at the foot of the window:
-   `claude-code wants vimma_read_page: 2 "Pull requests · JRanne/vimma" github.com/JRanne/vimma/pulls  y once · 15a for 15 min · n deny`.
+   `claude-code wants vimma_read_page: 2 "Pull requests · vimma-browser/vimma" github.com/vimma-browser/vimma/pulls  y once · 15a for 15 min · n deny`.
    The user presses `y`. The agent gets the page text, marked as untrusted web content.
 5. The user types `30a` at that question. For 30 minutes this connection's `vimma_read_page`
    calls run without asking. The status bar shows `◇ agent 30m` and counts down. `:mcp revoke`
@@ -427,7 +427,7 @@ other lines are from each tool's documentation; sub-PR 4 runs them against real 
     its own key handling, as an `alertdialog`:
 
     ```
-    ◇ claude-code wants vimma_read_page: 2 "Pull requests · JRanne/vimma" github.com/JRanne/vimma/pulls   y once · 15a for 15 min · n deny
+    ◇ claude-code wants vimma_read_page: 2 "Pull requests · vimma-browser/vimma" github.com/vimma-browser/vimma/pulls   y once · 15a for 15 min · n deny
     ```
 
     - It shows the client label (`clientInfo.name`, else the parent process name, else
@@ -516,7 +516,7 @@ grant_max_minutes` (default 480, at most 1440) caps both the count and the confi
 23. **Visible while it runs.** The status bar's agent segment shows the shortest remaining grant
     (`◇ agent 14m`); waiting questions win over a grant's minutes in the segment. `:mcp` lists
     all grants, and a call made under a grant shows a notice
-    (`claude-code read "Pull requests · JRanne/vimma" (grant, 14m left)`). Nothing an agent does
+    (`claude-code read "Pull requests · vimma-browser/vimma" (grant, 14m left)`). Nothing an agent does
     in the agent workspace goes unseen.
 
 ### E. Status bar, commands, config

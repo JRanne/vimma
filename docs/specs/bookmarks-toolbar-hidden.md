@@ -10,7 +10,7 @@ register line: budget 1 hunk, 4 lines, "`maybeToggleBookmarkToolbarVisibility` r
 folder does not show the toolbar Vimma hides by default (bookmarks-toolbar-hidden)" · ADR:
 [ADR-003](../adr/003-own-files-minimal-patches.md) (register line only)
 
-Issue: [#214](https://github.com/JRanne/vimma/issues/214)
+Issue: [#214](https://github.com/vimma-browser/vimma/issues/214)
 
 Builds on [bookmarks](bookmarks.md), [m5-config-load](m5-config-load.md) and
 [start-page](start-page.md); coordinates with [toolbar-toggle](toolbar-toggle.md) and
@@ -284,7 +284,7 @@ cannot change the browser-wide pref.
 
 ## Tests
 
-Written first and seen to fail (red, then green, per CLAUDE.md).
+Written first and seen to fail (red, then green, per CONTRIBUTING.md).
 
 - **Vitest**
   - `tools/branding/test/branding-prefs.test.mjs`: given the branding pref file, then

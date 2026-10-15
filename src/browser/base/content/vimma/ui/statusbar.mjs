@@ -192,7 +192,7 @@ export class StatusBar {
     this.bar = bar;
 
     // Layout is fresh inside a ResizeObserver callback: measuring here forces no extra reflow.
-    // The probe is observed too, so a font change (M5's [theme] font, a zoom) re-measures the
+    // The probe is observed too, so a font change (`[theme] font`, a zoom) re-measures the
     // column even when the bar keeps its width.
     this.resize = new win.ResizeObserver((entries) => {
       let refit = false;

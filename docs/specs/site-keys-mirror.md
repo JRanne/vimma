@@ -2,7 +2,7 @@
 
 Status: implemented · Area: `packages/vimma-core/src/help.mjs`, `tools/gen-docs.mjs`,
 `docs/bindings.json` (new, generated), `.github/workflows/site-dispatch.yml` (new). No upstream
-patch. The website half lives in JRanne/vimma-site.
+patch. The website half lives in vimma-browser/vimma-site.
 
 ## Goal
 
@@ -60,12 +60,12 @@ cannot fall behind the browser.
    `bindingsJson(compileKeymap())`. Comparing parsed values lets prettier format the file.
 4. **Telling the site.** `.github/workflows/site-dispatch.yml` runs on a push to `main` that
    changes `docs/bindings.json` (and by hand), and sends a `repository_dispatch`
-   (`event_type: vimma-bindings`, `client_payload.sha`) to JRanne/vimma-site with `gh api`. It
-   needs a fine-grained token in the secret `SITE_DISPATCH_TOKEN`: repository JRanne/vimma-site
+   (`event_type: vimma-bindings`, `client_payload.sha`) to vimma-browser/vimma-site with `gh api`. It
+   needs a fine-grained token in the secret `SITE_DISPATCH_TOKEN`: repository vimma-browser/vimma-site
    only, permission "Contents: read and write" (the dispatch endpoint requires it). Without the
    secret the job logs a notice and succeeds, so main does not go red before it is set. No
    third-party action; `actions/checkout` is not needed.
-5. **The site** (JRanne/vimma-site) fetches `docs/bindings.json` at a fixed commit from
+5. **The site** (vimma-browser/vimma-site) fetches `docs/bindings.json` at a fixed commit from
    `raw.githubusercontent.com`, commits it with the commit it came from, and builds both its
    keys page and its `?` overlay from it. Its own workflow answers the dispatch with a pull
    request.

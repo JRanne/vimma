@@ -61,6 +61,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Changed
 
+- Repository links, update URLs and the release signing identity point at vimma-browser/vimma (#278).
 - Firefox 158.0 ([MFSA 2026-106](https://www.mozilla.org/en-US/security/advisories/mfsa2026-106/)).
 - The e2e baseline `m0-happy-path-help` was re-recorded on Firefox 158.0, which antialiases the bindings overlay's text slightly differently (1.26 % of pixels, every row in place) and draws its scrollbar thumb 3 px shorter; nothing else in the screenshot changed.
 - `vimma --version` prints Vimma's version and the Firefox release it is built on (`Vimma 0.1.0 · Firefox 158.0`) instead of `Vimma Vimma 0.1.0`.
@@ -79,6 +80,9 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Fixed
 
+- Omarchy themes whose `colors.toml` has only the terminal colours (accent, foreground, background, color0–color15, such as Event Horizon) are no longer rejected: Vimma derives the rest as Omarchy does (#266).
+- A find whose match is in a text field (`/` then Enter) keeps the match highlighted the way Firefox's find bar does, instead of showing it greyed out (#270).
+- The e2e baseline `m3-private-workspace` was re-recorded: it predated the start page's version footer (#159) and `:theme` hint (#173), and the scenario now opens the private window only once the search service is ready, so its URL bar always names the default engine ("Search with Google or enter address" and its icon) instead of sometimes showing the engine-less placeholder and magnifier (#236).
 - Opening external-protocol links and download prompts no longer fails on Firefox 158.
 - Split panes keep pages exactly at their pane edges on Firefox 158.
 - The side panel no longer names the agent workspace as the `ctrl+b (` / `ctrl+b )` target, in a normal or a private window.

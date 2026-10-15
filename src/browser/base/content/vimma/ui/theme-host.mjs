@@ -227,8 +227,8 @@ async function check() {
   const now = await stat(dir);
   if (started !== generation) return;
   if (now === null) {
-    // Omarchy absent: the built-in palette. Once a theme is showing, a missing file is far more likely
-    // omarchy-theme-set between its rm and mv: keep the theme until the next one appears.
+    // No colors.toml: the built-in palette. Once a theme is showing, a missing file is most likely
+    // omarchy-theme-set between its rm and its mv: keep the theme until the next one appears.
     signature = "missing";
     if (!loaded) apply(builtinCss());
     return;
@@ -595,7 +595,7 @@ export const ThemeHost = {
     return { text: said };
   },
 
-  /** The token stylesheet in force (tests, about:vimma later). */
+  /** The token stylesheet in force (tests). */
   get css() {
     return css;
   },

@@ -506,8 +506,8 @@ const MULTI_PANE = new Set([
 
 /**
  * What the host can execute so far, with CONTENT_RUNNERS. An action without an entry is left to
- * Firefox when it is a single key outside help; inside a sequence (or after a count) it is consumed and shows "<action>: not
- * implemented yet", so `ctrl+b <key>` never leaks the second key to the page and is never silent
+ * Firefox when it is a single key outside help; inside a sequence (or after a count) it is
+ * consumed and shows "<action>: not implemented yet", so `ctrl+b <key>` never leaks the second key to the page and is never silent
  * (m2-tab-keys). Unbound keys always pass (m1-actor-insert-scroll, Settled). `text` is a
  * command's free-text argument (`:open example.com`, m1-cmdline); keys never carry one.
  * @type {Record<string, (state: WindowState, action: Action, text?: string) => void>}

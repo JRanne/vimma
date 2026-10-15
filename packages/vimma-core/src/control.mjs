@@ -26,7 +26,7 @@ export const RESERVED_COMMANDS = Object.freeze(["list-tabs", "screenshot", "relo
 /**
  * The agent role's commands (protocol 2; vimma-mcp decision 4). No other role runs them.
  * `agent-cancel` withdraws one of the connection's waiting questions (decision 17, MCP's
- * `notifications/cancelled`; sub-PR 3).
+ * `notifications/cancelled`).
  */
 export const AGENT_COMMANDS = Object.freeze([
   "agent-hello",
@@ -160,7 +160,7 @@ function checkAuth(m, errors) {
   }
 }
 
-/** auth's optional code (docs/specs/vimma-mcp.md, review of #177 M2). */
+/** auth's optional code (docs/specs/vimma-mcp.md decision 29 C; security.md S13). */
 export const AUTH_CODE = /^[2-9A-HJ-NP-Z]{4}$/;
 
 /** @param {Obj} m @param {string[]} errors */

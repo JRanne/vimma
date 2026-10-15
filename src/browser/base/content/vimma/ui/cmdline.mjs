@@ -392,7 +392,7 @@ export class CommandLine {
 
     panel.append(list, row, error);
     container.append(panel);
-    // In the body's flex column: before #34's status bar if there is one, else right after
+    // In the body's flex column: before the status bar if there is one, else right after
     // #browser, so the line sits at the window's foot either way.
     const statusBar = doc.getElementById(STATUSBAR_ID);
     const browser = doc.getElementById("browser");

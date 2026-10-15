@@ -14,7 +14,7 @@
 | `surfer bootstrap`     | 2026-10-09 | toolchains into `~/.mozbuild` (clang, cbindgen, …); no errors                                                                                                                                                  |
 | `surfer build`         | 2026-10-09 | 2321 s (38.7 min) wall, CPU 75 %, on Ryzen AI 7 PRO 350 (16 threads), 58 GB RAM. `engine/` 22 GB after build.                                                                                                  |
 
-Repository: <https://github.com/JRanne/vimma>; `MOZ_SOURCE_REPO` in `configs/common/mozconfig` points at it.
+Repository: <https://github.com/vimma-browser/vimma>; `MOZ_SOURCE_REPO` in `configs/common/mozconfig` points at it.
 
 ```sh
 npx surfer setup-project   # interactive: name vimma, Firefox release
@@ -114,8 +114,7 @@ npm run import && npx surfer build     # mach reconfigures; the 2026-10-10 full 
 
 Upstream sources and anything outside `engine/` are never written; a second run changes
 nothing. Things outside the repo that name the old path (a launcher such as
-`~/.local/bin/vimma-dev`, a `.desktop` file, `~/.claude/projects/<path>` memory) are yours to
-update. A lane (below) does not need this: `npm run lane:setup -- --force` rebuilds it.
+`~/.local/bin/vimma-dev` or a `.desktop` file) are yours to update. A lane (below) does not need this: `npm run lane:setup -- --force` rebuilds it.
 
 ## Testing
 
@@ -258,7 +257,7 @@ npm run e2e -- --xvfb --update-baselines --filter <scenario>   # refused when CI
 ```
 
 look at the new PNG, and commit it with a changelog line saying which baseline changed and why
-(CLAUDE.md: never edit a baseline without one). A missing baseline fails; nothing creates one
+(CONTRIBUTING.md: never edit a baseline without one). A missing baseline fails; nothing creates one
 silently. Fonts differ between machines: if CI's diff exceeds 0.5 % on a baseline made locally,
 take CI's actual image from the `e2e-output` artifact of the failed run (kept 7 days) instead.
 A missing baseline also leaves `<name>.actual.png` there, so a new scenario's first baseline
@@ -403,9 +402,23 @@ Locally, before pushing: `npm test`, `npm run typecheck`, `npm run lint`, `npm r
 Workflow YAML: `go run github.com/rhysd/actionlint/cmd/actionlint@latest` (reads
 `.github/actionlint.yaml`; not a repo dependency).
 
+### The GitHub organization
+
+The repositories live in the `vimma-browser` organization: `vimma-browser/vimma` (public, the
+browser) and `vimma-browser/vimma-site` (private, vimma.dev). Its owner is the maintainer,
+`JRanne`. Sponsorship stays on the maintainer's personal GitHub Sponsors account
+(`.github/FUNDING.yml`), and the roadmap board is a project of that personal account.
+
+`tools/repo.mjs` names the canonical repository, the site's repository and the maintainer's
+login; `tools/test/repo.test.mjs` checks that every `github.repository == '…'` guard, the site
+dispatch, the signing identity and the published URLs agree with it. Forks skip every guarded
+job. An organization cannot be @-mentioned or add a label as a person, so the `claude:go` gate
+and the upstream workflows' mentions name the maintainer's login, not
+`github.repository_owner`.
+
 ### Merging and branch protection
 
-`main` is protected by the repository ruleset "main" (`gh api repos/JRanne/vimma/rulesets`):
+`main` is protected by the repository ruleset "main" (`gh api repos/vimma-browser/vimma/rulesets`):
 changes land through a squash-merged pull request only, with no force-push or deletion, and
 these status checks must pass:
 
@@ -421,10 +434,10 @@ these workflows has a `paths` filter; a job or step skipped by `if:` reports suc
 
 **Residual risk:** any job token with `contents: write` (`spec-pr` in claude.yml, upstream.yml,
 nightly.yml, release-please.yml) can push branches and tags; the ruleset has no bypass actors, so
-none of them can push to `main` itself. Mitigations: those jobs run no
-Claude-written code with that token (claude.yml's Claude job is read-only), Claude runs only for
-the owner (`claude:go` added by the owner; `@claude` from owner/member/collaborator), and GitHub
-Actions minutes and logs show every push. Check `git log origin/main` if anything looks off.
+none of them can push to `main` itself. Mitigations: those jobs never run code the agent wrote
+with that token (claude.yml's agent job is read-only), the agent runs only for the owner
+(`claude:go` added by the owner; `@claude` from owner/member/collaborator), and GitHub Actions
+minutes and logs show every push. Check `git log origin/main` if anything looks off.
 
 ### Docs-only pull requests (issue #245)
 
@@ -449,7 +462,7 @@ Still runs on a docs-only pull request: prettier, commitlint, `npm run md-wordin
 `npm run test:py` (it reads ADR-003), the gen-docs freshness step, the Vitest files listed in
 `MARKDOWN_TESTS`, Semgrep and CodeQL.
 
-Skipped: eslint, typecheck, the full Vitest suite with coverage, the bench, the licence checks,
+Skipped: eslint, `npm run comment-wording`, typecheck, the full Vitest suite with coverage, the bench, the licence checks,
 cargo, the MPL header check, and `mochitest (artifact build)` with the e2e scenarios (the job
 `changes` gates the job).
 
@@ -513,7 +526,7 @@ e2e.yml has no paths filter: "mochitest (artifact build)" is a required check, s
 starts on every PR, and on a docs-only one the job skips by `if:` in seconds (above). The upstream autopilot runs 6 × 1 min a day, plus ≈ 16 min (issue, patch check, the
 e2e suites, PR) when a release is found (spec m7-upstream-autopilot); claude.yml only when
 triggered. `nightly.yml` and `release.yml` run their full builds on GitHub-hosted runners too
-once [#224](https://github.com/JRanne/vimma/issues/224) lands (until then both are off; "Full
+once [#224](https://github.com/vimma-browser/vimma/issues/224) lands (until then both are off; "Full
 builds" below). Usage is listed in Settings → Billing → Usage.
 
 The bench step adds about half a minute to each CI run. `mutation.yml` is the largest scheduled
@@ -772,7 +785,7 @@ it would hold the Safe Browsing key between runs (spec
 `[self-hosted, linux, x64, vimma-build]`, a label no runner serves, and keep `engine/` between
 runs (`clean: false`, `engine/.vimma-firefox-version`). Both workflows stay switched off
 (`NIGHTLY_ENABLED` and `RELEASE_ENABLED` unset) until build-supply-chain sub-PR 4,
-[#224](https://github.com/JRanne/vimma/issues/224), moves them to `ubuntu-24.04` with a fresh,
+[#224](https://github.com/vimma-browser/vimma/issues/224), moves them to `ubuntu-24.04` with a fresh,
 verified extraction of the Firefox source, measures a cold build there, and records the time,
 disk and the steps to switch them on in this section. Until then a full build runs only on a
 developer's machine ("First Firefox build" above).
@@ -917,7 +930,7 @@ all work with a notice.
 3. Use `@claude` in an issue, comment or review (only from the owner, members or collaborators).
    Claude answers, reviews and comments; it cannot push in this mode.
 4. For code: add `claude:go` to a `spec` issue yourself (the job checks that the label was added
-   by the repository owner, so a bot or a `@claude` request cannot chain into it). Claude
+   by the maintainer, `MAINTAINER` in `tools/repo.mjs`, so a bot or a `@claude` request cannot chain into it). Claude
    implements and commits on a runner with a read-only token; a separate job without Claude
    applies the patch, pushes `claude/spec-<issue>` and opens a draft PR labelled `bot`.
 5. CI does not start on that PR by itself (GITHUB_TOKEN PRs trigger no workflows): mark it ready
@@ -939,7 +952,7 @@ Actions, Mondays 06:00 Helsinki, releases at least 3 days old, minor and patch g
 PR per ecosystem, majors one PR each. Actions stay pinned to commit SHAs. Security updates
 (Dependabot alerts) open at once. `dependabot-automerge.yml` enables GitHub auto-merge (squash)
 for security, patch and minor updates, so GitHub merges them once every required check is
-green; majors, every GitHub Actions update (workflows hold write tokens and the Claude secret)
+green; majors, every GitHub Actions update (workflows hold write tokens and the model API secret)
 and `@zen-browser/surfer` version updates get a comment and stay open for review. Policy in
 CONTRIBUTING.md, "Dependency updates". Needs: Dependabot alerts and security updates on
 (Settings → Code security), and "Allow auto-merge" on (it is).
@@ -993,7 +1006,7 @@ while the release gate is closed (below). Nothing is built or uploaded by releas
   `force-tag-creation`; it is harmless for a published release), and drop that test line in
   `release-workflow.test.mjs`. Publish any drafts still waiting, oldest first. Then turn on
   packaging (below, "Release packages", step 7).
-- **The changelog line is the commit subject; the body explains why** (CLAUDE.md). release-please
+- **The changelog line is the commit subject; the body explains why** (CONTRIBUTING.md). release-please
   writes subjects only. Firefox bumps are `upstream: firefox X.Y.Z (MFSA YYYY-N)` (upstream.yml),
   so a security dot release alone still produces a release PR (ADR-015: merged within 3 days).
 - **The Firefox version in titles and headings** (spec firefox-versions). release-please can only
@@ -1052,7 +1065,7 @@ on `main`), never code from the release branch, and keep no token in their check
 When a GitHub Release is published (release-please, above), `release.yml` builds Vimma, packages
 it on a hosted runner, signs, uploads to that release and pushes AUR `vimma-bin`. Its `build` job
 still names the self-hosted label that no runner serves; it moves to a hosted runner with
-[#224](https://github.com/JRanne/vimma/issues/224) ("Full builds" above). **Every job is off until `RELEASE_ENABLED` is `true`**, manual runs included.
+[#224](https://github.com/vimma-browser/vimma/issues/224) ("Full builds" above). **Every job is off until `RELEASE_ENABLED` is `true`**, manual runs included.
 
 | Asset                             | What                                                            |
 | --------------------------------- | --------------------------------------------------------------- |
@@ -1078,7 +1091,7 @@ node tools/package/sbom.mjs --engine engine --out dist/vimma-$(node -p 'require(
 
 **Enable it (one time):**
 
-1. Hosted build: [#224](https://github.com/JRanne/vimma/issues/224) merged ("Full builds"
+1. Hosted build: [#224](https://github.com/vimma-browser/vimma/issues/224) merged ("Full builds"
    above). Until then the `build` job has no runner and the release stays off.
 2. Trigger: `gh secret set RELEASE_PLEASE_TOKEN` (fine-grained, this repo only: Contents, Pull
    requests and Issues read/write), so the release release-please creates starts `release.yml`.
@@ -1089,7 +1102,7 @@ node tools/package/sbom.mjs --engine engine --out dist/vimma-$(node -p 'require(
    `gh variable set PACKAGE_MAINTAINER --body 'Your Name <you@example.org>'` (public in every
    package; the `package` job fails without it).
 5. Signing (recommended: keyless, no key to keep): `gh variable set SIGNING_ENABLED --body true`.
-   Each signature records `JRanne/vimma`'s `release.yml` and the tag in the public Rekor log.
+   Each signature records `vimma-browser/vimma`'s `release.yml` and the tag in the public Rekor log.
    Without the variable, `sign` is skipped and the assets go up unsigned.
 6. AUR (optional; skipped with a notice until the secret exists):
    - Check the name is free: `curl -s 'https://aur.archlinux.org/rpc/v5/info?arg[]=vimma-bin'`
@@ -1111,10 +1124,10 @@ directory, so nothing left by a nightly or another job reaches signed binaries.
 
 ```sh
 v=0.1.0
-gh release download "v$v" -R JRanne/vimma
+gh release download "v$v" -R vimma-browser/vimma
 sha256sum -c SHA256SUMS              # every file OK
 cosign verify-blob --bundle SHA256SUMS.sigstore.json \
-  --certificate-identity-regexp '^https://github\.com/JRanne/vimma/\.github/workflows/release\.yml@refs/(heads/main|tags/v[0-9]+\.[0-9]+\.[0-9]+)$' \
+  --certificate-identity-regexp '^https://github\.com/vimma-browser/vimma/\.github/workflows/release\.yml@refs/(heads/main|tags/v[0-9]+\.[0-9]+\.[0-9]+)$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   SHA256SUMS                         # "Verified OK"
 ```
@@ -1136,9 +1149,9 @@ release instead.
 
 `npm run gen-docs` writes `docs/bindings.json`, which vimma.dev mirrors on its keys page and in
 its `?` overlay. A push to `main` that changes it sends a `repository_dispatch`
-(`vimma-bindings`) to JRanne/vimma-site, whose workflow fetches the file at that commit and opens
+(`vimma-bindings`) to vimma-browser/vimma-site, whose workflow fetches the file at that commit and opens
 a pull request. Until the secret exists the job skips with a notice. To set it up: create a
-fine-grained token with access to JRanne/vimma-site only and "Contents: read and write", then
+fine-grained token with access to vimma-browser/vimma-site only and "Contents: read and write", then
 `gh secret set SITE_DISPATCH_TOKEN`. Re-send by hand with `gh workflow run site-dispatch.yml`.
 
 ### Security scanning (`semgrep.yml`, `codeql.yml`)

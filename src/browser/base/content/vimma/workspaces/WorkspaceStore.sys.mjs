@@ -103,8 +103,8 @@ export class WorkspaceStoreImpl {
    * @param {{ path?: string, config?: readonly Workspace[],
    *   enabled?: () => boolean, saveDelayMs?: number, cachePref?: string | null,
    *   watch?: boolean, agent?: string | null, agentPref?: string | null }} [options]
-   *   `config` is the resolved `[workspaces]` (core `mergeWithDefaults(...).workspaces`); the M5
-   *   host passes it once it reads `config.toml`. `enabled` reads the containers pref.
+   *   `config` is the resolved `[workspaces]` (core `mergeWithDefaults(...).workspaces`);
+   *   ConfigHost passes it once it reads `config.toml`. `enabled` reads the containers pref.
    *   `cachePref` (the app's store only) caches `lastActive`'s container for the next start.
    *   `watch` (the app's store only) replaces a workspace's container deleted outside Vimma.
    *   `agent` is the agent workspace's name (`[mcp] workspace`), ensured at every reconcile
@@ -329,7 +329,7 @@ export class WorkspaceStoreImpl {
   /**
    * Deletes a runtime workspace and its container, which deletes the container's cookies and
    * site data (decision 7). Only with `confirmed: true`, which the caller passes after the user
-   * said yes (the prompt is sub-spec 4a). Closes the container's tabs first. A container whose
+   * answered yes (the prompt is sub-spec 4a). Closes the container's tabs first. A container whose
    * name is no longer the workspace's (reused after a reset) is not ours and is left alone.
    * @param {string} id
    * @param {{ confirmed?: boolean }} [options]
@@ -407,7 +407,7 @@ export class WorkspaceStoreImpl {
   }
 
   /**
-   * Closes a workspace after the user said yes (decision 7): a runtime one is deleted with its
+   * Closes a workspace after the user answered yes (decision 7): a runtime one is deleted with its
    * container and site data (deleteWorkspace); a config one only loses its tabs, in every
    * window, and stays with its container. The last workspace stays (`last-workspace`).
    * `asked` is the workspace as the question described it: the answer stands only for that,
@@ -451,7 +451,7 @@ export class WorkspaceStoreImpl {
   }
 
   /**
-   * `:mcp forget` after the user said yes (docs/specs/vimma-mcp.md, decision 8): deletes the
+   * `:mcp forget` after the user answered yes (docs/specs/vimma-mcp.md, decision 8): deletes the
    * agent workspace's cookies and site data, as deleting a runtime workspace's container does
    * (ContextualIdentityService.remove), and keeps the workspace and its container. The yes
    * stands for the workspace and container asked about (`asked`), else `changed`.

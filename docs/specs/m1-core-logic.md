@@ -450,10 +450,10 @@ Sources read at these commits:
   closes the tab page; plan §2 lists `:q` for both rows.
 - Commands return `text` beside `Action` rather than changing `Action` (dispatcher contract,
   plan §2) in a core-only spec.
-- Config shape (review of PR #21): per-site overrides are `[sites."<host>"] insert = …` and the
+- Config shape: per-site overrides are `[sites."<host>"] insert = …` and the
   hint charset is `[modal] hint_chars`, both in schema 2 with an identity migration, done by the
   M1 host spec. A `[sites]` table keyed by host leaves room for other per-site settings.
-- Free text, not tokens (review of PR #21): quoting everywhere broke apostrophes in tab names
+- Free text, not tokens: quoting everywhere broke apostrophes in tab names
   and URLs, and no command has two arguments.
-- Insert is entered only on `focusin` (review of PR #21): with `site = "always"` or
+- Insert is entered only on `focusin`: with `site = "always"` or
   `designMode`, the `<body>` that Esc's blur leaves focused would otherwise re-enter insert.

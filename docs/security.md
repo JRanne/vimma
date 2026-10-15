@@ -193,7 +193,7 @@ link targets for hints, which chrome must treat as untrusted.
   [`a javascript: bookmark is listed but refuses to open`](../packages/vimma-core/test/bookmarks.test.mjs)
 - U4. `:open` and `:tabnew` **never** open `javascript:` or `data:` URLs, however disguised (case,
   tabs, newlines, leading controls, `view-source:`)
-  ([#98](https://github.com/JRanne/vimma/issues/98)). No length cap applies to text typed there.
+  ([#98](https://github.com/vimma-browser/vimma/issues/98)). No length cap applies to text typed there.
   A search alias or bookmark keyword at the start resolves as the URL bar resolves it
   (`UrlbarUtils.getShortcutOrURIAndPostData`), and the URL it resolves to is checked again, so a
   keyword bookmarklet is refused; the bookmark's principal is never inherited. Other schemes a
@@ -256,7 +256,7 @@ text that pages, add-ons and bookmarks choose.
   `/usr/local/bin/clamscan`, never a `PATH` search, and only a regular file another user (root)
   owns that the user cannot write, in a folder the user cannot write), in one call with fixed
   arguments, the path after `--` and no shell, on an agent download in the quarantine folder
-  (M13; [vimma-mcp](specs/vimma-mcp.md) decision 31 g; the security review of #182). [`never builds code from text: no eval, Function or sandbox evaluation`](../tools/security/test/chrome-source.test.mjs),
+  (M13; [vimma-mcp](specs/vimma-mcp.md) decision 31 g). [`never builds code from text: no eval, Function or sandbox evaluation`](../tools/security/test/chrome-source.test.mjs),
   [`never starts a process, but clamscan on an agent download`](../tools/security/test/chrome-source.test.mjs)
 - C3. With Firefox's toolbar hidden ([toolbar-toggle](specs/toolbar-toggle.md)), the status bar
   is the only origin indicator: the page reaches the window's top, so there is no line of death.
@@ -470,7 +470,7 @@ Taskcluster index) and this repository. Nothing here runs code from a pull reque
   [`the report job runs only on main`](../tools/test/upstream-beta-workflow.test.mjs),
   [`no job pushes, commits or opens a pull request`](../tools/test/upstream-beta-workflow.test.mjs),
   [`no secret reaches any job, and the e2e call passes none`](../tools/test/upstream-beta-workflow.test.mjs),
-  [`every job is skipped outside JRanne/vimma`](../tools/test/upstream-beta-workflow.test.mjs),
+  [`every job is skipped outside vimma-browser/vimma`](../tools/test/upstream-beta-workflow.test.mjs),
   [`every action is pinned by a full commit SHA`](../tools/test/upstream-beta-workflow.test.mjs),
   [`mentions the owner only when it opens an issue`](../tools/upstream/test/canary.test.mjs),
   [`fences test output and cuts the body to 60,000 characters`](../tools/upstream/test/canary.test.mjs),

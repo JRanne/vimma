@@ -89,7 +89,6 @@ function attr(acc, name) {
   }
 }
 
-/** Asserts `acc`'s role and name. */
 function expectRole(acc, role, name, what) {
   Assert.equal(acc.role, role, `${what}: role`);
   if (name !== undefined) Assert.equal(acc.name, name, `${what}: name`);
@@ -489,7 +488,7 @@ add_task(async function agent_question_is_a_named_alertdialog_that_takes_no_focu
   await new Promise((r) => setTimeout(r, 1600)); // no key for 1,500 ms: it may open by itself
   // The gate directly, as an agent connection's request would (browser_vimma_mcp_prompt.js
   // drives it over the socket).
-  AgentGate.connect("a11y", { client: "claude-code" });
+  AgentGate.connect("a11y", { client: "example-agent" });
   const asked = AgentGate.request("a11y", "vimma_tabs", { count: 2 });
   const line = () => document.getElementById("vimma-agent-prompt");
   await until(() => line()?.hidden === false, "the agent question opens");
@@ -497,7 +496,7 @@ add_task(async function agent_question_is_a_named_alertdialog_that_takes_no_focu
   expectRole(
     acc,
     Role.ROLE_DIALOG,
-    "◇ claude-code wants vimma_tabs: the list of agent tabs (2)",
+    "◇ example-agent wants vimma_tabs: the list of agent tabs (2)",
     "agent question",
   );
   Assert.equal(attr(acc, "xml-roles"), "alertdialog", "an alertdialog");

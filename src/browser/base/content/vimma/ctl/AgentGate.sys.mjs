@@ -232,11 +232,11 @@ export const AgentGate = {
   },
 
   /**
-   * A new full-control connection while MCP is on (decision 29 C): resolves once the user said
+   * A new full-control connection while MCP is on (decision 29 C): resolves once the user answered
    * yes, or with the denial (no, `x`, timeout, a full queue). Nothing is remembered: the next
    * connection asks again.
    * @param {string | null} code  the code the client printed on its terminal, shown in the
-   *   question so the user answers for the client they ran (review of #177, M2)
+   *   question so the user answers for the client they ran (security.md S13)
    * @param {(cancel: () => void) => void} [onCancel]  given a way to withdraw the question
    *   (the connection closed while it waited)
    * @returns {Promise<Outcome>}
@@ -255,7 +255,7 @@ export const AgentGate = {
   },
 
   /**
-   * The user's answer to question `id` (the prompt line, sub-PR 2b): `once`, `deny`, `mute`
+   * The user's answer to question `id` (the prompt line): `once`, `deny`, `mute`
    * (`x`), or `grant` for `minutes` (capped at `[mcp] grant_max_minutes`).
    * @param {number} id
    * @param {Answer | { kind: "grant", minutes: number | null }} answer

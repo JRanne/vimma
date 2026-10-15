@@ -60,7 +60,7 @@ Mutation check: with the occlusion check off in `hint-collect.mjs`, the first ta
 (`11 == 10`, `covered has no label - "s" == "undefined"`) and so does `F` (`7 == 6`);
 reverted.
 
-Review round (2026-10-09). Red: the busy frame held the labels for 2,942 ms and they
+Hardening. Red: the busy frame held the labels for 2,942 ms and they
 included its link (`10 == 9`); two windows collecting at once voided the first
 (`the first window got its targets - 0 == 10`); `parseHintReply` accepted duplicate frame ids
 and a negative `ms`. The zoom task passed at once, so it was mutation-checked: without

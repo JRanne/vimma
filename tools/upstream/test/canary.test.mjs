@@ -41,12 +41,12 @@ const artifact = (name, o = {}) => ({
 /** @param {Record<string, object[]>} byName artifacts the API returns for each exact name */
 const listing = (byName) => async (/** @type {string} */ name) => byName[name] ?? [];
 
-const RUN = "https://github.com/JRanne/vimma/actions/runs/1";
+const RUN = "https://github.com/vimma-browser/vimma/actions/runs/1";
 /** @param {Partial<Parameters<typeof render>[0]>} over */
 const renderWith = (over = {}) =>
   render({
     version: "159.0b1",
-    repo: "JRanne/vimma",
+    repo: "vimma-browser/vimma",
     sha: "a".repeat(40),
     runUrl: RUN,
     owner: "JRanne",
@@ -214,7 +214,7 @@ describe("canary render (B5–B7)", () => {
     expect(issue.body).toContain(`[run](${RUN})`);
     expect(issue.body).toContain("`releases/mozilla-beta` revision `c0c03f3f8990`");
     expect(issue.body).toContain(
-      `[\`aaaaaaaaaaaa\`](https://github.com/JRanne/vimma/commit/${"a".repeat(40)})`,
+      `[\`aaaaaaaaaaaa\`](https://github.com/vimma-browser/vimma/commit/${"a".repeat(40)})`,
     );
     expect(state).toMatchObject({ version: "159.0b1", major: 159, sha: "a".repeat(40) });
     expect(state.items.map((/** @type {{ key: string }} */ i) => i.key)).toEqual([
@@ -411,7 +411,7 @@ describe("canary CLI", () => {
         "--version",
         "159.0b1",
         "--repo",
-        "JRanne/vimma",
+        "vimma-browser/vimma",
         "--sha",
         "a".repeat(40),
         "--run-url",

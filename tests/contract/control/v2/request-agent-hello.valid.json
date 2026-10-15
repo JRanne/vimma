@@ -7,10 +7,10 @@
     "command": "agent-hello",
     "args": {
       "client": {
-        "name": "claude-code",
+        "name": "example-agent",
         "version": "2.1.0"
       },
-      "via": "claude"
+      "via": "example"
     }
   }
 }

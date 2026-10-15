@@ -300,8 +300,8 @@ text. These belong to the host specs (see below).
 
 - **N-ary splits in canonical form**, not a binary tree: three side-by-side panes are one split
   with three ratios, as in tmux; this makes "resize" act on the visible divider. The one exception
-  keeps `MIN_RATIO` absolute (review of #10).
-- **`MIN_RATIO` is a floor everywhere** (review of #10): splits refuse rather than go below it,
+  keeps `MIN_RATIO` absolute.
+- **`MIN_RATIO` is a floor everywhere**: splits refuse rather than go below it,
   and growing borrows from further siblings, so no pane gets stuck.
 - **Focus picks the most recently used neighbour** (tmux), so left/right is a round trip.
 - **`layout` rounds edges to integers**, not widths.
