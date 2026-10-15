@@ -765,20 +765,18 @@ in a `build` environment, and a watch on Mozilla's release key,
   [`triggers are read in every spelling YAML allows`](../tools/test/self-hosted-runner.test.mjs),
   [`no workflow names a self-hosted runner, and both build jobs run on ubuntu-24.04`](../tools/test/self-hosted-runner.test.mjs),
   [`each build job runs only from main or for a release`](../tools/test/self-hosted-runner.test.mjs)
-- B8. The nightly's `build` job, which runs npm, Surfer, `mach` and the mochitests, **never**
-  holds a token that can write: it has `contents: read` and keeps its package as a workflow
-  artifact for 7 days. Only the `publish` job may write contents, and it publishes the rolling
-  `nightly` pre-release **only** when the repository variable `PUBLISH_NIGHTLY_RELEASE` is
-  `true` (unset until the release gate); the failure issue comes from a `report` job with
-  `issues: write`. Neither of those checks out or runs repository code or reads a secret, and
-  the issue quotes only the log the build job redacted before uploading it, with backticks
-  escaped so no log line can end its code fence. **⚠ limit:** the
-  repository is public, so anyone signed in to GitHub can download the artifact from the run;
-  it is unpublished, not secret.
+- B8. The nightly **never** creates, replaces or deletes a release, and no job of it can write
+  contents. Its `build` job, which runs npm, Surfer, `mach` and the mochitests, holds
+  `contents: read` only and keeps its package as a workflow artifact for 7 days. The failure
+  issue comes from a `report` job with `issues: write`, which checks out and runs no repository
+  code, reads no secret, and quotes only the log the build job redacted before uploading it,
+  with backticks escaped so no log line can end its code fence. **⚠ limit:** the artifact is
+  not private. The repository is public, so anyone signed in to GitHub can download it for the
+  7 days it is kept, and its name and size are listed without signing in. It holds the same
+  package, and the same compiled-in Safe Browsing key, as a keyed release build.
   [`the workflow and its build job can only read the repository`](../tools/test/nightly-workflow.test.mjs),
   [`the build job keeps the package as a workflow artifact for 7 days`](../tools/test/nightly-workflow.test.mjs),
-  [`publishing the rolling release is a separate job, off unless PUBLISH_NIGHTLY_RELEASE`](../tools/test/nightly-workflow.test.mjs),
-  [`only the publish job may write contents, and only it releases`](../tools/test/nightly-workflow.test.mjs),
+  [`no job creates, edits or deletes a release, and none can write contents`](../tools/test/nightly-workflow.test.mjs),
   [`a failure is reported by its own job, from the redacted log artifact`](../tools/test/nightly-workflow.test.mjs),
-  [`the jobs that call gh name the repository, since they check nothing out`](../tools/test/nightly-workflow.test.mjs),
-  [`only the nightly's publish and failure-issue steps get GH_TOKEN`](../tools/test/full-build-workflows.test.mjs)
+  [`the report job names the repository, since it checks nothing out`](../tools/test/nightly-workflow.test.mjs),
+  [`only the nightly's failure-issue step gets GH_TOKEN`](../tools/test/full-build-workflows.test.mjs)

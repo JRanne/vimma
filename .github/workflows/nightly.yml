@@ -1,7 +1,7 @@
 # Spec m0-pipeline: full Linux x86_64 build, issue on failure. Spec build-supply-chain,
-# decision 23: until the release gate lifts the package stays a workflow artifact
-# (`vimma-nightly`, 7 days); the rolling `nightly` pre-release is published only when the
-# repository variable PUBLISH_NIGHTLY_RELEASE is `true` (default off), by the `publish` job.
+# decision 23: the nightly publishes no release; its package is the run's workflow artifact
+# `vimma-nightly`, kept 7 days. The repository is public, so any signed-in GitHub user can
+# download it from the run while it is kept.
 # Spec build-supply-chain: it runs on the standard GitHub-hosted runner, never a self-hosted one
 # (docs/security.md, B5), from Firefox source that tools/upstream/firefox-source.sh verifies and
 # extracts in this job, and restores nothing from the Actions cache (B1, B2). Nothing runs,
@@ -34,8 +34,8 @@ jobs:
     # About 1.5 times the measured job, 124 min (docs/runbook.md, "Full builds"), well under
     # GitHub's 6 hours, so a hung build fails here with its own log and failure handling.
     timeout-minutes: 190
-    # No write token here: npm, Surfer, mach and the mochitests run in this job. Publishing
-    # (`publish`) and the failure issue (`report`) are jobs of their own.
+    # No write token here: npm, Surfer, mach and the mochitests run in this job. The failure
+    # issue is a job of its own (`report`).
     permissions:
       contents: read
     env:
@@ -180,35 +180,9 @@ jobs:
           path: nightly.log
           retention-days: 14
 
-  # Off by default (decision 23 of spec build-supply-chain): set the repository variable
-  # PUBLISH_NIGHTLY_RELEASE to `true` to publish the rolling `nightly` pre-release again. Only this
-  # job holds a token that can write contents, and it runs nothing from the repository.
-  publish:
-    needs: build
-    if: vars.PUBLISH_NIGHTLY_RELEASE == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: write # replace the rolling `nightly` release and its tag
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: vimma-nightly
-          path: dist
-
-      - name: Publish rolling nightly release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        run: |
-          gh release delete nightly --cleanup-tag --yes || true
-          gh release create nightly dist/* --prerelease --target "$SHA" --title "Vimma nightly" \
-            --notes "Rolling nightly build of ${SHA}, $(date -u +%Y-%m-%d). Not signed (M6)."
-
   # Reads only the log the build job uploaded after scrubbing the key from it; it has no secret.
   report:
-    needs: [build, publish]
+    needs: build
     if: failure()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -219,7 +193,7 @@ jobs:
         with:
           name: nightly-log
           path: nightly-log
-        continue-on-error: true # a failed publish job leaves no log
+        continue-on-error: true # a build that stopped before its log upload leaves none
 
       - name: Open or update the failure issue
         env:

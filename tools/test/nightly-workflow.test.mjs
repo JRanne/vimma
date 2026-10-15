@@ -2,10 +2,9 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { jobs, parseWorkflow } from "./workflow-runners.mjs";
 
-// Spec build-supply-chain, decision 23: the nightly stays off the public release page until the
-// release gate lifts. Its build job keeps the package as a short-lived workflow artifact and holds
-// no write token; publishing the rolling `nightly` pre-release is a separate job behind the
-// repository variable PUBLISH_NIGHTLY_RELEASE (default off), and reporting a failure is another.
+// Spec build-supply-chain, decision 23: the nightly publishes no release until the release gate
+// lifts. Its build job keeps the package as a short-lived workflow artifact and holds no write
+// token; reporting a failure is a job of its own, the only one that can write (issues).
 // Parsed as YAML (js-yaml), like self-hosted-runner.test.mjs.
 const TEXT = readFileSync(new URL("../../.github/workflows/nightly.yml", import.meta.url), "utf8");
 const JOBS = jobs(TEXT);
@@ -40,7 +39,7 @@ function uses(id, action) {
   return step;
 }
 
-describe("nightly.yml: a private artifact by default", () => {
+describe("nightly.yml: a workflow artifact, never a release", () => {
   it("the workflow and its build job can only read the repository", () => {
     expect(parseWorkflow(TEXT).permissions).toEqual({ contents: "read" });
     expect(job("build").permissions).toEqual({ contents: "read" });
@@ -65,33 +64,18 @@ describe("nightly.yml: a private artifact by default", () => {
     expect(names.indexOf(upload?.name)).toBeGreaterThan(names.indexOf("Package"));
   });
 
-  it("publishing the rolling release is a separate job, off unless PUBLISH_NIGHTLY_RELEASE", () => {
-    const publish = job("publish");
-    expect(publish.needs).toBe("build");
-    expect(publish.if).toBe("vars.PUBLISH_NIGHTLY_RELEASE == 'true'");
-    expect(publish.permissions).toEqual({ contents: "write" });
-    const download = uses("publish", "actions/download-artifact");
-    expect(download.with).toMatchObject({ name: "vimma-nightly", path: "dist" });
-    const text = JSON.stringify(publish);
-    expect(text).toContain("gh release create nightly dist/*");
-    expect(text).not.toContain("secrets.");
-    // It runs nothing from the repository: no checkout, no npm.
-    expect(text).not.toContain("actions/checkout");
-    expect(text).not.toMatch(/\bnpm\b|\bnpx\b/);
-  });
-
-  it("only the publish job may write contents, and only it releases", () => {
+  it("no job creates, edits or deletes a release, and none can write contents", () => {
     for (const [id, j] of JOBS) {
       const perms = /** @type {Record<string, string>} */ (j.permissions ?? {});
-      if (id !== "publish") expect(perms.contents, id).not.toBe("write");
-      if (id !== "publish") expect(JSON.stringify(j), id).not.toContain("gh release");
-      if (id !== "publish") expect(JSON.stringify(j), id).not.toContain("PUBLISH_NIGHTLY_RELEASE");
+      expect(perms.contents ?? "read", id).toBe("read");
+      expect(JSON.stringify(j), id).not.toMatch(/gh release|releases/);
     }
+    expect(TEXT).not.toMatch(/gh release|PUBLISH_NIGHTLY_RELEASE|contents: write/);
   });
 
   it("a failure is reported by its own job, from the redacted log artifact", () => {
     const report = job("report");
-    expect(report.needs).toEqual(["build", "publish"]);
+    expect(report.needs).toBe("build");
     expect(report.if).toBe("failure()");
     expect(report.permissions).toEqual({ issues: "write" });
     const download = uses("report", "actions/download-artifact");
@@ -114,16 +98,12 @@ describe("nightly.yml: a private artifact by default", () => {
     expect(issue?.run).toContain(`sed 's/${tick}/\\\\${tick}/g'`);
   });
 
-  it("the jobs that call gh name the repository, since they check nothing out", () => {
-    for (const [id, name] of [
-      ["publish", "Publish rolling nightly release"],
-      ["report", "Open or update the failure issue"],
-    ]) {
-      const step = steps(id).find((s) => s.name === name);
-      expect(step?.env, id).toMatchObject({
-        GH_TOKEN: "${{ github.token }}",
-        GH_REPO: "${{ github.repository }}",
-      });
-    }
+  it("the report job names the repository, since it checks nothing out", () => {
+    const step = steps("report").find((s) => s.name === "Open or update the failure issue");
+    expect(step?.env).toMatchObject({
+      GH_TOKEN: "${{ github.token }}",
+      GH_REPO: "${{ github.repository }}",
+    });
+    expect([...JOBS.keys()]).toEqual(["build", "report"]);
   });
 });

@@ -113,13 +113,13 @@ describe("full builds (nightly.yml, release.yml)", () => {
     expect(at(block, "npx --no -- surfer build")).toBeGreaterThan(swap);
   });
 
-  // A token that can write releases or issues never reaches npm, Surfer, mach or the mochitests:
-  // the nightly's build job holds none, and only the publish and failure-issue steps, in jobs of
-  // their own that run nothing from the repository, get GH_TOKEN.
-  it("only the nightly's publish and failure-issue steps get GH_TOKEN", () => {
+  // A token that can write issues never reaches npm, Surfer, mach or the mochitests: the nightly's
+  // build job holds none, and only the failure-issue step, in a job of its own that runs nothing
+  // from the repository, gets GH_TOKEN. The nightly publishes no release (decision 23).
+  it("only the nightly's failure-issue step gets GH_TOKEN", () => {
     const text = workflow("nightly.yml");
     const holders = [];
-    for (const id of ["build", "publish", "report"]) {
+    for (const id of ["build", "report"]) {
       const steps = job(text, id)
         .split(/\n(?= {6}- )/)
         .slice(1);
@@ -129,10 +129,7 @@ describe("full builds (nightly.yml, release.yml)", () => {
       const head = job(text, id).slice(0, job(text, id).indexOf("\n    steps:\n"));
       expect(head, id).not.toMatch(/^ +GH_TOKEN:/m);
     }
-    expect(holders).toEqual([
-      "publish: Publish rolling nightly release",
-      "report: Open or update the failure issue",
-    ]);
+    expect(holders).toEqual(["report: Open or update the failure issue"]);
     expect(job(text, "build")).not.toContain("github.token");
   });
 
