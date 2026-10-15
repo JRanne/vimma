@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tempDir } from "../../test/temp-dir.mjs";
 import { exitCode, formatReport, githubAnnotations, runScenarios } from "../runner.mjs";
 
 /** @param {string} name @param {object} [over] */
@@ -49,6 +52,17 @@ describe("runScenarios", () => {
       "teardown m0-bad",
     ]);
     expect(exitCode(results)).toBe(1);
+  });
+
+  it("hands the session's profile to the steps (wait-for-profile-file)", async () => {
+    const profile = tempDir("vimma-e2e-runner-");
+    writeFileSync(join(profile, "search.json.mozlz4"), "");
+    const { startSession } = sessions();
+    const [r] = await runScenarios(
+      [scn("m0-file", { steps: [{ "wait-for-profile-file": "search.json.mozlz4" }] })],
+      { startSession: async (s, o) => ({ ...(await startSession(s, o)), profile }) },
+    );
+    expect(r).toMatchObject({ status: "pass" });
   });
 
   it("reports a launch failure as a failure of that scenario", async () => {

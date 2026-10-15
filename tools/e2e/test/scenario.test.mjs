@@ -23,7 +23,11 @@ describe("validateScenario", () => {
       validateScenario(
         scenario({
           prefs: { "browser.startup.page": null, "a.b": true, c: 3, d: "x" },
-          steps: [{ restart: "quit" }, { restart: "kill" }],
+          steps: [
+            { restart: "quit" },
+            { restart: "kill" },
+            { "wait-for-profile-file": "search.json.mozlz4", timeoutSeconds: 30 },
+          ],
         }),
         undefined,
       ),
@@ -51,6 +55,11 @@ describe("validateScenario", () => {
     [{ extra: 1 }, /unknown field "extra"/],
     [{ steps: [{ restart: "crash" }] }, /step 1: restart/],
     [{ steps: [{ restart: true }] }, /step 1: restart/],
+    [{ steps: [{ "wait-for-profile-file": "" }] }, /step 1: wait-for-profile-file/],
+    [{ steps: [{ "wait-for-profile-file": "../x" }] }, /step 1: wait-for-profile-file/],
+    [{ steps: [{ "wait-for-profile-file": "a/b" }] }, /step 1: wait-for-profile-file/],
+    [{ steps: [{ "wait-for-profile-file": ".." }] }, /step 1: wait-for-profile-file/],
+    [{ steps: [{ "wait-for-profile-file": 3 }] }, /step 1: wait-for-profile-file/],
     [{ prefs: [] }, /prefs must be an object/],
     [{ prefs: { "a b": 1 } }, /prefs: "a b"/],
     [{ prefs: { a: [1] } }, /prefs: "a"/],
@@ -192,6 +201,19 @@ describe("the m3-restart-restore scenario (m3-workspaces sub-spec 7)", () => {
     expect(steps.lastIndexOf('"axis":"x"')).toBeGreaterThan(at);
     expect(steps.lastIndexOf("cookie ws=work")).toBeGreaterThan(at);
     expect(steps.lastIndexOf("cookie ws=personal")).toBeGreaterThan(at);
+  });
+});
+
+describe("the m3-private-workspace scenario (#236)", () => {
+  const priv = loadScenarios(SCENARIOS, { filter: "m3-private-workspace" })[0];
+  const steps = priv?.steps ?? [];
+  it("opens the private window only once the search service has initialized", () => {
+    // SearchSettings writes search.json.mozlz4 once SearchService has initialized; a private
+    // window opened before that keeps the URL bar's engine-less placeholder and icon.
+    const ready = steps.findIndex((s) => s["wait-for-profile-file"] === "search.json.mozlz4");
+    const open = steps.findIndex((s) => s.keys === "ctrl+b shift+p");
+    expect(ready).toBeGreaterThan(-1);
+    expect(ready).toBeLessThan(open);
   });
 });
 
@@ -378,6 +400,43 @@ describe("runSteps", () => {
     const started = Date.now();
     await runSteps(scenario({ steps: [{ sleep: 0.05 }] }), { ctl, screenshot: async () => {} });
     expect(Date.now() - started).toBeGreaterThanOrEqual(45);
+  });
+
+  it("wait-for-profile-file waits until the file exists in the session's profile", async () => {
+    const { ctl } = fakeCtl([{ mode: "normal" }]);
+    const profile = tempDir("vimma-e2e-step-");
+    setTimeout(() => writeFileSync(join(profile, "search.json.mozlz4"), ""), 60);
+    const started = Date.now();
+    await runSteps(scenario({ steps: [{ "wait-for-profile-file": "search.json.mozlz4" }] }), {
+      ctl,
+      screenshot: async () => {},
+      profile,
+      pollMs: 10,
+    });
+    expect(Date.now() - started).toBeGreaterThanOrEqual(50);
+  });
+
+  it("wait-for-profile-file times out naming the file", async () => {
+    const { ctl } = fakeCtl([{ mode: "normal" }]);
+    const profile = tempDir("vimma-e2e-step-");
+    await expect(
+      runSteps(
+        scenario({ steps: [{ "wait-for-profile-file": "nope.json", timeoutSeconds: 0.1 }] }),
+        { ctl, screenshot: async () => {}, profile, pollMs: 10 },
+      ),
+    ).rejects.toThrow(
+      /step 1 \(wait-for-profile-file\): nope\.json not in the profile after 0\.1 s/,
+    );
+  });
+
+  it("wait-for-profile-file fails when the session has no profile", async () => {
+    const { ctl } = fakeCtl([{ mode: "normal" }]);
+    await expect(
+      runSteps(scenario({ steps: [{ "wait-for-profile-file": "a.json" }] }), {
+        ctl,
+        screenshot: async () => {},
+      }),
+    ).rejects.toThrow(/step 1 \(wait-for-profile-file\): this session has no profile/);
   });
 
   it("runs each step in order", async () => {
