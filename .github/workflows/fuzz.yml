@@ -79,7 +79,7 @@ jobs:
           VIMMA_FUZZ_SEED: ${{ steps.seed.outputs.seed }}
           VIMMA_FUZZ_RUNS: ${{ steps.seed.outputs.runs }}
           VIMMA_FUZZ_TIME_MS: "15000" # per property; the runs above are a ceiling
-        run: timeout 600 npx vitest run packages/vimma-core/test/fuzz
+        run: timeout 600 npx --no -- vitest run packages/vimma-core/test/fuzz
 
       # Runs even when the JavaScript step failed, so one night reports both.
       - name: Rust toolchain (tools/vimma-ctl/rust-toolchain.toml)
@@ -139,7 +139,7 @@ jobs:
             echo "JavaScript property:"
             echo
             echo '```sh'
-            echo "VIMMA_FUZZ_SEED=${SEED} VIMMA_FUZZ_RUNS=1000000 npx vitest run packages/vimma-core/test/fuzz"
+            echo "VIMMA_FUZZ_SEED=${SEED} VIMMA_FUZZ_RUNS=1000000 npx --no -- vitest run packages/vimma-core/test/fuzz"
             echo '```'
             echo
             echo "and for vimma-ctl:"

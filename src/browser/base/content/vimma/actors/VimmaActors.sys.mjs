@@ -393,6 +393,15 @@ export const VimmaActors = {
   },
 
   /**
+   * Tells the frame a find bar closed on that the close is through (VimmaChild #findClosed).
+   * Sent after the find bar's close(), so the frame gets it after the finder's own messages.
+   * @param {any} bc BrowsingContext the finder sent its close to
+   */
+  findClosed(bc) {
+    actorFor(bc)?.sendAsyncMessage("Vimma:FindClosed");
+  },
+
+  /**
    * Scrolls the top frame back to a position from `scrollPosition` (Esc in a find).
    * @param {any} browser XULBrowserElement
    * @param {{ x: number, y: number }} at

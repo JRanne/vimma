@@ -385,11 +385,11 @@ Limits:
 | -------------------------- | ---------------------------------- | ------------------------- | ------------------------------------------ |
 | `ci.yml`                   | push to `main`, PRs, manual        | `ubuntu-latest`           | nothing                                    |
 | `e2e.yml`                  | PRs, manual, upstream.yml          | `ubuntu-24.04`            | nothing (ADR-010)                          |
-| `nightly.yml`              | 03:00 UTC, manual                  | hosted (after #224)       | off until #224; then `NIGHTLY_ENABLED`     |
+| `nightly.yml`              | 03:00 UTC, manual                  | `ubuntu-24.04`            | off until #224; then `NIGHTLY_ENABLED`     |
 | `upstream.yml`             | every 4 h (`:17`), manual          | `ubuntu-latest` + e2e.yml | allow Actions to open PRs; optional token  |
 | `claude.yml`               | `@claude`, `spec`+`claude:go`      | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
 | `release-please.yml`       | push to `main`, manual             | `ubuntu-latest`           | Actions may open PRs; optional token       |
-| `release.yml`              | release published, manual          | hosted (after #224)       | see "Release packages" (gated off)         |
+| `release.yml`              | release published, manual          | `ubuntu-24.04`            | see "Release packages" (gated off)         |
 | `mutation.yml`             | Sundays 04:23 UTC, manual          | `ubuntu-latest`           | nothing (creates its `mutation` label)     |
 | `semgrep.yml`              | push to `main`, PRs, Mon, manual   | `ubuntu-latest`           | nothing                                    |
 | `codeql.yml`               | push to `main`, PRs, Mon, manual   | `ubuntu-latest`           | nothing; skipped while the repo is private |
@@ -431,6 +431,23 @@ The ruleset also requires CodeQL code scanning results without errors or high-se
 A required check whose workflow never starts stays pending and blocks the merge, so none of
 these workflows has a `paths` filter; a job or step skipped by `if:` reports success instead
 (next section).
+
+**Actions settings.** Two repository settings back the workflow tests, which cannot read them
+with a workflow token (docs/security.md, B5; spec build-supply-chain, decisions 7 and 19):
+
+- Fork pull request approval stays `all_external_contributors`, so a fork's own workflow files run
+  only once a person approves the run. Check:
+  `gh api repos/vimma-browser/vimma/actions/permissions/fork-pr-contributor-approval`.
+- `sha_pinning_required` makes GitHub refuse any action not pinned to a full commit SHA, in every
+  workflow, a fork's included. Every workflow already pins by SHA. An administrator turns it on
+  once:
+  `gh api -X PUT repos/vimma-browser/vimma/actions/permissions -F enabled=true -f allowed_actions=all -F sha_pinning_required=true`,
+  and checks it with `gh api repos/vimma-browser/vimma/actions/permissions`.
+
+An organization owner also confirms that the organization has no self-hosted runner:
+`gh api orgs/vimma-browser/actions/runners` must report `total_count` 0. A runner registered at
+the organization and shared with this repository through a runner group would not show in the
+repository's own runner list, and the workflow test only proves no workflow asks for one.
 
 **Residual risk:** any job token with `contents: write` (`spec-pr` in claude.yml, upstream.yml,
 nightly.yml, release-please.yml) can push branches and tags; the ruleset has no bypass actors, so
@@ -781,6 +798,13 @@ forks, a self-hosted runner is a machine anyone who opens a pull request could r
 it would hold the Safe Browsing key between runs (spec
 [build-supply-chain](specs/build-supply-chain.md), decisions 6 and 7). Do not register one.
 
+The build jobs of both workflows run on `ubuntu-24.04`, and a test fails if any workflow names a
+self-hosted runner or a label that is not a standard GitHub-hosted image
+(`tools/test/self-hosted-runner.test.mjs`, docs/security.md B5). Both install with
+`npm ci --ignore-scripts` and run Surfer with `npx --no -- surfer`, so a missing
+`node_modules/.bin/surfer` fails the job instead of fetching whatever npm package is called
+`surfer`.
+
 Both build jobs run on `ubuntu-24.04` and start from nothing: a clean checkout, Node from
 `.nvmrc` with no npm cache, no Actions cache and no compiler cache (rule B2). The Firefox source
 comes only from `tools/upstream/firefox-source.sh`, which downloads the tarball `surfer.json`
@@ -981,7 +1005,10 @@ PR per ecosystem, majors one PR each. Actions stay pinned to commit SHAs. Securi
 (Dependabot alerts) open at once. `dependabot-automerge.yml` enables GitHub auto-merge (squash)
 for security, patch and minor updates, so GitHub merges them once every required check is
 green; majors, every GitHub Actions update (workflows hold write tokens and the model API secret)
-and `@zen-browser/surfer` version updates get a comment and stay open for review. Policy in
+and every `@zen-browser/surfer` update, security updates included, get a comment and stay open
+for review. Surfer and `ajv`, the packages the release build runs, have their own `release-path`
+group, so a held Surfer update does not hold the other minor and patch updates.
+`.npmrc` sets `ignore-scripts=true`: no install runs a package's install scripts. Policy in
 CONTRIBUTING.md, "Dependency updates". Needs: Dependabot alerts and security updates on
 (Settings → Code security), and "Allow auto-merge" on (it is).
 

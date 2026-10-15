@@ -32,12 +32,13 @@ env:
   TAG: ${{ github.event.release.tag_name || inputs.tag }}
 
 jobs:
-  # Full build on the standard GitHub-hosted runner, from Firefox source firefox-source.sh
-  # verifies and extracts in this job, restoring nothing from the Actions cache (spec
-  # build-supply-chain, B1 and B2). Read-only token, and one secret, the Google Safe Browsing key,
-  # which ships inside the binaries anyway (spec m0-safebrowsing-key): what it produces is
-  # checked, signed and uploaded by the jobs below. It builds in a fresh objdir with an empty
-  # compiler cache of its own, so the rule holds on any runner (docs/runbook.md, "Full builds").
+  # Full build on the standard GitHub-hosted runner, never a self-hosted one (docs/security.md,
+  # B5), from Firefox source firefox-source.sh verifies and extracts in this job, restoring nothing
+  # from the Actions cache (spec build-supply-chain, B1 and B2). Read-only token, and one secret,
+  # the Google Safe Browsing key, which ships inside the binaries anyway (spec
+  # m0-safebrowsing-key): what it produces is checked, signed and uploaded by the jobs below. It
+  # builds in a fresh objdir with an empty compiler cache of its own, so the rule holds on any
+  # runner (docs/runbook.md, "Full builds").
   build:
     if: >-
       vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' &&
@@ -65,7 +66,7 @@ jobs:
           node-version-file: .nvmrc
 
       - name: npm ci
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Fresh objdir and compiler cache for this release
         run: |
@@ -134,7 +135,7 @@ jobs:
       - name: Build
         run: |
           rm -rf engine/.git
-          npx surfer build
+          npx --no -- surfer build
 
       - name: Smoke check
         run: |

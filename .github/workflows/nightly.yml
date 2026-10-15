@@ -1,9 +1,10 @@
 # Spec m0-pipeline: full Linux x86_64 build, rolling `nightly` release, issue on failure.
-# Spec build-supply-chain: it runs on the standard GitHub-hosted runner, from Firefox source that
-# tools/upstream/firefox-source.sh verifies and extracts in this job, and restores nothing from the
-# Actions cache (rules B1, B2). The schedule does nothing until the repository variable
-# NIGHTLY_ENABLED is `true`; a manual run (workflow_dispatch) from main is allowed before that.
-# Measured time and disk, and how to switch it on: docs/runbook.md, "Full builds".
+# Spec build-supply-chain: it runs on the standard GitHub-hosted runner, never a self-hosted one
+# (docs/security.md, B5), from Firefox source that tools/upstream/firefox-source.sh verifies and
+# extracts in this job, and restores nothing from the Actions cache (B1, B2). Nothing runs,
+# scheduled or manual, until the repository variable NIGHTLY_ENABLED is `true`; a manual run
+# (workflow_dispatch) must also start from main. Measured time and disk, and how to switch it
+# on: docs/runbook.md, "Full builds".
 name: nightly
 
 on:
@@ -20,10 +21,13 @@ concurrency:
 
 jobs:
   build:
-    # Manual runs only from main: a branch's edited nightly.yml must not get the secret.
+    # Manual runs only from main: a branch's edited nightly.yml must not get the secret. Manual
+    # runs need NIGHTLY_ENABLED too: a run publishes the rolling release, and Firefox source is
+    # not yet signature-checked here (spec build-supply-chain, #222 and #224).
     if: >-
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'schedule' && vars.NIGHTLY_ENABLED == 'true')
+      vars.NIGHTLY_ENABLED == 'true' &&
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'schedule')
     runs-on: ubuntu-24.04
     # About 1.5 times the measured job, 124 min (docs/runbook.md, "Full builds"), well under
     # GitHub's 6 hours, so a hung build fails here with its own log and failure handling.
@@ -45,7 +49,7 @@ jobs:
           node-version-file: .nvmrc
 
       - name: npm ci
-        run: npm ci 2>&1 | tee -a "$LOG"
+        run: npm ci --ignore-scripts 2>&1 | tee -a "$LOG"
 
       # Before the download, so a runner image that shrank fails in seconds, not after an hour of
       # compiling. The build needs about 26 GB, the swap file 16 GB (runbook, "Full builds").
@@ -103,7 +107,7 @@ jobs:
         run: |
           set -o pipefail
           rm -rf engine/.git
-          npx surfer build 2>&1 | tee -a "$LOG"
+          npx --no -- surfer build 2>&1 | tee -a "$LOG"
 
       - name: Smoke check
         run: |

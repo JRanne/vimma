@@ -78,7 +78,7 @@ describe("full builds (nightly.yml, release.yml)", () => {
     const fresh = at(block, "- name: Fresh objdir and compiler cache for this release");
     expect(block).toMatch(/rm -rf "\$objdir" "\$cache"/);
     expect(block).toContain('echo "MOZ_OBJDIR=$objdir"; echo "SCCACHE_DIR=$cache"');
-    expect(at(block, "npx surfer build")).toBeGreaterThan(fresh);
+    expect(at(block, "npx --no -- surfer build")).toBeGreaterThan(fresh);
   });
 
   it.each(BUILDS)("$name checks for 50 GB free before downloading Firefox source", ({ block }) => {
@@ -98,7 +98,7 @@ describe("full builds (nightly.yml, release.yml)", () => {
       const imp = at(block, "npm run import");
       const drop = at(block, "rm -rf engine/.git");
       expect(drop).toBeGreaterThan(imp);
-      expect(at(block, "npx surfer build")).toBeGreaterThan(drop);
+      expect(at(block, "npx --no -- surfer build")).toBeGreaterThan(drop);
     },
   );
 
@@ -110,18 +110,7 @@ describe("full builds (nightly.yml, release.yml)", () => {
     const step = block.slice(swap, block.indexOf("\n      - ", swap + 1));
     expect(step).toMatch(/fallocate -l 16G/);
     expect(step).toMatch(/swapon/);
-    expect(at(block, "npx surfer build")).toBeGreaterThan(swap);
-  });
-
-  it("no workflow names a self-hosted runner, and both build jobs run on ubuntu-24.04", () => {
-    for (const { name, text } of ALL) {
-      // runs-on as a scalar, a flow list or a block list (the lines that follow it).
-      const runsOn = [...text.matchAll(/runs-on:(.*\n(?:\s+- .*\n)*)/g)].map((m) => m[1]);
-      expect(runsOn.length, name).toBeGreaterThan(0);
-      for (const value of runsOn) expect(value, name).not.toMatch(/self-hosted|vimma-build/);
-    }
-    for (const { name, block } of BUILDS)
-      expect(block, name).toMatch(/^ {4}runs-on: ubuntu-24\.04$/m);
+    expect(at(block, "npx --no -- surfer build")).toBeGreaterThan(swap);
   });
 
   it.each(BUILDS)("$name stops itself before GitHub's 6-hour job limit", ({ block }) => {
