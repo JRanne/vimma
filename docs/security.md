@@ -765,3 +765,18 @@ in a `build` environment, and a watch on Mozilla's release key,
   [`triggers are read in every spelling YAML allows`](../tools/test/self-hosted-runner.test.mjs),
   [`no workflow names a self-hosted runner, and both build jobs run on ubuntu-24.04`](../tools/test/self-hosted-runner.test.mjs),
   [`each build job runs only from main or for a release`](../tools/test/self-hosted-runner.test.mjs)
+- B8. The nightly's `build` job, which runs npm, Surfer, `mach` and the mochitests, **never**
+  holds a token that can write: it has `contents: read` and keeps its package as a workflow
+  artifact for 7 days. Only the `publish` job may write contents, and it publishes the rolling
+  `nightly` pre-release **only** when the repository variable `PUBLISH_NIGHTLY_RELEASE` is
+  `true` (unset until the release gate); the failure issue comes from a `report` job with
+  `issues: write`. Neither of those checks out or runs repository code or reads a secret, and
+  the issue quotes only the log the build job redacted before uploading it. **⚠ limit:** the
+  repository is public, so anyone signed in to GitHub can download the artifact from the run;
+  it is unpublished, not secret.
+  [`the workflow and its build job can only read the repository`](../tools/test/nightly-workflow.test.mjs),
+  [`the build job keeps the package as a workflow artifact for 7 days`](../tools/test/nightly-workflow.test.mjs),
+  [`publishing the rolling release is a separate job, off unless PUBLISH_NIGHTLY_RELEASE`](../tools/test/nightly-workflow.test.mjs),
+  [`only the publish job may write contents, and only it releases`](../tools/test/nightly-workflow.test.mjs),
+  [`a failure is reported by its own job, from the redacted log artifact`](../tools/test/nightly-workflow.test.mjs),
+  [`only the nightly's publish and failure-issue steps get GH_TOKEN`](../tools/test/full-build-workflows.test.mjs)

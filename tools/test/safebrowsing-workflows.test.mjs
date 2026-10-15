@@ -61,10 +61,12 @@ describe("Safe Browsing key in CI", () => {
     const redact = block.indexOf("- name: Redact the Safe Browsing key from the log");
     expect(redact, "redaction step").toBeGreaterThan(-1);
     expect(block.indexOf("- name: Upload log"), "upload after redaction").toBeGreaterThan(redact);
-    expect(
-      block.indexOf("- name: Open or update the failure issue"),
-      "issue after redaction",
-    ).toBeGreaterThan(redact);
+    // The failure issue is written by the `report` job, which has no secret and reads only the
+    // log the build job uploaded after redacting it.
+    const report = job(workflow("nightly.yml"), "report");
+    expect(report).toContain("- name: Open or update the failure issue");
+    expect(report).toContain("name: nightly-log");
+    expect(report).not.toContain("secrets.");
     expect(block).toContain('sed -i "s|${SB_KEY}|[redacted]|g" "$LOG"');
   });
 

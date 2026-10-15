@@ -361,6 +361,12 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
   `skip-if = ["artifact"]` tests run only on local full builds. PRs that touch patches, `configs/`,
   `moz.configure` or branding must report a full-build run
   ([ADR-010](adr/010-pr-artifact-builds.md), [runbook](runbook.md)).
+- Nightly builds are not published as a release before the release gate: each one is a workflow
+  artifact of its run, kept 7 days, and there is no download page or stable link. The repository
+  is public, so the artifact is not secret: anyone signed in to GitHub can download it from the
+  run. The rolling `nightly` pre-release returns when `PUBLISH_NIGHTLY_RELEASE` is set
+  ([runbook](runbook.md), "Full builds";
+  [build-supply-chain](specs/build-supply-chain.md), decision 23).
 - Artifact builds depend on Mozilla's Taskcluster index for the pinned release, which expires
   after a year ([ADR-010](adr/010-pr-artifact-builds.md)).
 - PRs opened by `GITHUB_TOKEN` (upstream bumps, Claude, release-please) do not trigger CI by
