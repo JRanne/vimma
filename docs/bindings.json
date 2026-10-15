@@ -1554,7 +1554,7 @@
         },
         {
           "name": "insert_mode",
-          "description": "Insert mode: focus the first input",
+          "description": "Insert mode: focus the last-used input",
           "keys": [
             {
               "keys": "i",

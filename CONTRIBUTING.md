@@ -127,6 +127,24 @@ Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
   asked or which review found it; `npm run lint` (`npm run comment-wording`) checks the wording.
 - **Pull requests.** A pull request is only for work that is ready to merge. Work that waits on a
   decision is a question in its issue, not an open pull request.
+- **Unfinished features.** `main` is always releasable, because a merged Firefox security bump
+  can release it with no person in the loop
+  ([docs/specs/firefox-versions.md](docs/specs/firefox-versions.md), decision 16). A feature that
+  lands over several pull requests therefore goes behind a pref that defaults off:
+  - Add `pref("vimma.feature.<name>", false);` to
+    `src/browser/branding/vimma/pref/firefox-branding.js`, with a comment naming the spec.
+  - Read it with `Services.prefs.getBoolPref("vimma.feature.<name>", false)`. While it is off,
+    nothing of the feature shows: no key, command, panel or status bar segment.
+  - Tests turn it on: `SpecialPowers.pushPrefEnv({ set: [["vimma.feature.<name>", true]] })` in a
+    mochitest, the `prefs` of an e2e scenario.
+  - The pull request that finishes the feature removes the pref, every read of it and the test
+    setup that turns it on, and adds the docs and changelog line a user-visible change needs.
+  - Try an unfinished feature by setting the pref to `true` in `about:config`.
+
+  `tools/test/feature-prefs.test.mjs` fails when a `vimma.feature.*` default is not `false`, or
+  when code reads one with a `true` fallback. A feature that fits in one pull request needs no
+  pref.
+
 - **TDD.** Write the failing test and run it, then implement until it passes. Never loosen a test.
 - **Commits.** Use Conventional Commits with a body: the subject is the changelog line; the body
   explains why.

@@ -21,6 +21,13 @@ support-files = [
   "file_vimma_test.pdf",
 ]
 
+["browser_vimma_insert_focus.js"]
+support-files = [
+  "file_vimma_insert_focus.html",
+  "file_vimma_insert_autofocus.html",
+  "file_vimma_frame.html",
+]
+
 ["browser_vimma_hints.js"]
 support-files = [
   "file_vimma_hints.html",
