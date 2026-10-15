@@ -155,6 +155,11 @@ export class VimmaChild extends JSWindowActorChild {
   #lastField = null;
   /** This actor is focusing an element (`i`, a hint): the focus is the user's, not the find's. */
   #focusing = false;
+  /**
+   * The generation of the last Vimma:Blur (Esc) this document had, echoed in its focus reports
+   * so that the parent can tell a report sent before that blur (docs/specs/insert-focus.md).
+   */
+  #blurGen = 0;
   /** @type {WeakRef<HTMLInputElement> | null} the text field a find focused and we blurred */
   #findMatchField = null;
   /** Tells the parent about a selection the user made with the mouse (spec m1-copy-mode). */
@@ -249,9 +254,13 @@ export class VimmaChild extends JSWindowActorChild {
       case "mousedown": {
         this.#dragging = false;
         this.#watchSelection();
-        // A click into an editable root whose window already has focus fires no focus event.
-        const root = this.#editableRoot();
-        if (root) this.#report(root, "focusin");
+        // A click into an editable root whose window already has focus, or into a field that
+        // already has focus (the page put it back after Esc), fires no focus event.
+        const el = this.#editableRoot() ?? this.#focusedFieldUnder(event.originalTarget);
+        if (el) this.#report(el, "focusin");
+        // Any other click is the user's too, though it may move no focus (a toolbar item that
+        // prevents its mousedown): what the page focuses after it is not the page's own doing.
+        else if (event.isTrusted) this.sendAsyncMessage("Vimma:Click");
         return;
       }
       case "dragstart":
@@ -356,6 +365,22 @@ export class VimmaChild extends JSWindowActorChild {
     return editable ? el : null;
   }
 
+  /**
+   * The focused element, if it is editable and `target` is in it.
+   * @param {EventTarget | null} target
+   * @returns {Element | null}
+   */
+  #focusedFieldUnder(target) {
+    const el = deepActiveElement(this.document);
+    if (!el || el === this.document.body || !isEditable(describe(el)).editable) return null;
+    // The flattened tree: a click in a text field lands in its anonymous editor, which
+    // contains() does not see, and in a shadow root, which it does not cross.
+    for (let n = /** @type {any} */ (target); n; n = n.flattenedTreeParentNode) {
+      if (n === el) return el;
+    }
+    return null;
+  }
+
   #recheck() {
     // A document that lost focus does not speak for the tab: the one that gained it does.
     if (!this.document.hasFocus()) return;
@@ -368,7 +393,16 @@ export class VimmaChild extends JSWindowActorChild {
    */
   #report(el, trigger) {
     if (!el || FRAMES.has(el.localName)) return;
-    this.sendAsyncMessage("Vimma:Focus", { descriptor: describe(el), trigger });
+    // `user`: the focus came from the user's input in this page (a click, Tab, a key the page
+    // answered) or from this actor for a Vimma key (`i`, a hint), not from the page's script on
+    // its own; after Esc only such a focus enters insert (docs/specs/insert-focus.md).
+    const user = this.#focusing || !!this.contentWindow?.windowUtils.isHandlingUserInput;
+    this.sendAsyncMessage("Vimma:Focus", {
+      descriptor: describe(el),
+      trigger,
+      user,
+      gen: this.#blurGen,
+    });
   }
 
   /** @param {{ name: string, data: any }} msg */
@@ -377,6 +411,7 @@ export class VimmaChild extends JSWindowActorChild {
       case "Vimma:Scroll":
         return this.#scroll(msg.data.kind, msg.data.count);
       case "Vimma:Blur": {
+        if (isIndex(msg.data?.gen)) this.#blurGen = msg.data.gen;
         const el = deepActiveElement(this.document);
         if (el && el !== this.document.body) /** @type {HTMLElement} */ (el).blur();
         return undefined;

@@ -230,7 +230,9 @@ a page without one (a game), lets every key through. Insert entered with `i` or 
 `Esc`, even if the page moves focus itself (a file finder jumping to its result list, a dialog
 taking focus), so the keys you type keep going to the page. Insert entered by clicking or
 tabbing into a field follows the focus: when focus leaves the text fields, the tab is back in
-normal.
+normal. After `Esc`, a page cannot put you back in insert on its own: a dialog that pulls focus
+back into its field leaves the tab in normal, and you return to typing with `i`, a click into
+the field or `Tab`.
 
 Clicking into a page that is editable as a whole (a `designMode` document, such as some rich
 text editors' frames) also enters insert.
@@ -263,7 +265,8 @@ fields, so Vimma adds nothing there.
 **`Esc` in a text field is Vimma's.** It leaves insert, so the page does not see that `Esc`: a
 site's own `Esc` (closing an autocomplete list or a dialog) does not fire from the field. Press
 `Esc` again: in normal mode `Esc` has no binding, so it reaches the page (the field no longer
-has focus, so the page's document gets it, not the field).
+has focus, so the page's document gets it, not the field; a dialog that put focus back into its
+field gets it there, and closes).
 
 **A key that starts a sequence passes when nothing in that sequence works yet.** `ctrl+w`
 starts the `ctrl+w h/j/k/l`, `H/J/K/L`, `o` and `< > + -` pane keys, which do something only with two panes or
