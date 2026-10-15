@@ -308,6 +308,13 @@ describe("parseManifest", () => {
     );
   });
 
+  test("comments are skipped in linear time; one that never closes is refused", () => {
+    const many = manifest().replace("<updates ", `${"<!-- a -->".repeat(5000)}\n<updates `);
+    expect(parseManifest(many).ok).toBe(true);
+    const open = manifest().replace("</updates>", `${"<!--".repeat(5000)}</updates>`);
+    expect(parseManifest(open)).toEqual({ ok: false, reason: "manifest: a comment is not closed" });
+  });
+
   test.each([
     ["not XML", "hello\n"],
     ["two updates", manifest().replace("</updates>", '<update appVersion="1"></update></updates>')],

@@ -201,7 +201,8 @@ const ENTITIES = /** @type {Record<string, string>} */ ({
  */
 function attributes(text) {
   const map = new Map();
-  const rest = text.replace(/\s*\/?$/, "");
+  let rest = text.trimEnd();
+  if (rest.endsWith("/")) rest = rest.slice(0, -1).trimEnd();
   const re = /\s+([A-Za-z][A-Za-z0-9]*)="([^"<]*)"/gy;
   let end = 0;
   for (let m = re.exec(rest); m; m = re.exec(rest)) {
@@ -216,6 +217,23 @@ function attributes(text) {
     end = re.lastIndex;
   }
   return end === rest.length ? map : null;
+}
+
+/**
+ * `text` without its XML comments, scanned once (no backtracking regular expression), or null
+ * when one is not closed.
+ * @param {string} text
+ */
+function withoutComments(text) {
+  let out = "";
+  let at = 0;
+  for (let open = text.indexOf("<!--"); open >= 0; open = text.indexOf("<!--", at)) {
+    const close = text.indexOf("-->", open + 4);
+    if (close < 0) return null;
+    out += text.slice(at, open);
+    at = close + 3;
+  }
+  return out + text.slice(at);
 }
 
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?$/;
@@ -236,7 +254,8 @@ export function parseManifest(body) {
   const bad = (why) =>
     /** @type {{ ok: false, reason: string }} */ ({ ok: false, reason: `manifest: ${why}` });
   if (/<!DOCTYPE|<!ENTITY|<!\[CDATA\[/i.test(body)) return bad("declarations are not allowed");
-  const text = body.replace(/^<\?xml[^>]*\?>/, "").replace(/<!--[\s\S]*?-->/g, "");
+  const text = withoutComments(body.replace(/^<\?xml[^>]*\?>/, ""));
+  if (text === null) return bad("a comment is not closed");
   const root = /^\s*<updates(\s[^>]*?)?(\/?)>([\s\S]*)$/.exec(text);
   if (!root) return bad("no <updates> element");
   const rootAttrs = attributes(root[1] ?? "");
