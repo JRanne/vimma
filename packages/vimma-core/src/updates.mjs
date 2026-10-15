@@ -220,6 +220,27 @@ function attributes(text) {
 }
 
 /**
+ * The attribute text of each `<name …>` start tag in `text`, found by one scan (no backtracking
+ * regular expression), or null when a tag is not closed before the next `<`.
+ * @param {string} text
+ * @param {string} name
+ * @returns {string[] | null}
+ */
+function startTags(text, name) {
+  /** @type {string[]} */
+  const out = [];
+  const open = `<${name}`;
+  for (let at = text.indexOf(open); at >= 0; at = text.indexOf(open, at + 1)) {
+    const next = text[at + open.length] ?? "";
+    if (!/[\s/>]/.test(next)) continue; // <updates>, <updateX>
+    const end = text.indexOf(">", at);
+    if (end < 0 || text.slice(at + 1, end).includes("<")) return null;
+    out.push(text.slice(at + open.length, end));
+  }
+  return out;
+}
+
+/**
  * `text` without its XML comments, scanned once (no backtracking regular expression), or null
  * when one is not closed.
  * @param {string} text
@@ -266,15 +287,17 @@ export function parseManifest(body) {
   if (!channel || !target) return bad("no vimmaChannel or vimmaTarget");
   if (!serial || !SERIAL.test(serial)) return bad("vimmaSerial is not a UTC time (YYYYMMDDhhmmss)");
   const inner = root[2] === "/" ? "" : (root[3] ?? "");
-  if (root[2] !== "/" && !/<\/updates>\s*$/.test(inner)) return bad("<updates> is not closed");
-  const content = inner.replace(/<\/updates>\s*$/, "");
-  const updates = [...content.matchAll(/<update(\s[^>]*?)?>/g)];
+  const closed = inner.trimEnd();
+  if (root[2] !== "/" && !closed.endsWith("</updates>")) return bad("<updates> is not closed");
+  const content = closed.slice(0, -"</updates>".length);
+  const updates = startTags(content, "update");
+  if (!updates) return bad("<update> is not closed");
   if (root[2] === "/" || updates.length === 0) {
     if (content.trim()) return bad("unexpected content in <updates>");
     return { ok: true, manifest: { channel, target, serial, update: null } };
   }
   if (updates.length > 1) return bad("more than one <update>");
-  const attrs = attributes(/** @type {RegExpMatchArray} */ (updates[0])[1] ?? "");
+  const attrs = attributes(/** @type {string} */ (updates[0]));
   if (!attrs) return bad("<update> has malformed attributes");
   const appVersion = attrs.get("appVersion") ?? "";
   const buildId = attrs.get("buildID") ?? "";
