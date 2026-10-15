@@ -32,6 +32,16 @@ export class VimmaParent extends JSWindowActorParent {
     const trigger = msg.data?.trigger;
     const descriptor = parseDescriptor(msg.data?.descriptor);
     if (!browser || !TRIGGERS.has(trigger) || !descriptor) return;
-    VimmaHost.onFocusReport(browser, { descriptor, trigger, frame: this.browsingContext });
+    // `user` and `gen` only narrow what a report may do after Esc (docs/specs/insert-focus.md):
+    // a forged one can do no more than any report could before them.
+    const gen = Number.isSafeInteger(msg.data?.gen) ? msg.data.gen : 0;
+    VimmaHost.onFocusReport(browser, {
+      descriptor,
+      trigger,
+      frame: this.browsingContext,
+      windowId: this.manager.innerWindowId,
+      user: msg.data?.user === true,
+      gen,
+    });
   }
 }

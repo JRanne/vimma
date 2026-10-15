@@ -36,6 +36,8 @@ let registered = false;
 
 /** Hint collections so far; a reply or an activation from an older one is ignored. */
 let hintGen = 0;
+/** The generation of the last blur (Esc), across tabs. */
+let blurGen = 0;
 /** The live collection of each window; another window's `f` must not void it. */
 /** @type {WeakMap<object, number>} */
 const liveGen = new WeakMap();
@@ -183,11 +185,19 @@ export const VimmaActors = {
   },
 
   /**
-   * Blurs the focused element of the focused frame (Esc in insert).
+   * Blurs the focused element of the focused frame (Esc in insert). Each blur has a new
+   * generation, which the frame's later focus reports carry.
    * @param {any} browser XULBrowserElement
+   * @returns {{ windowId: number, gen: number } | null} the document the blur went to and its
+   *   generation
    */
   blur(browser) {
-    actorFor(framesFor(browser)[0])?.sendAsyncMessage("Vimma:Blur");
+    const bc = framesFor(browser)[0];
+    const actor = actorFor(bc);
+    if (!actor) return null;
+    const gen = ++blurGen;
+    actor.sendAsyncMessage("Vimma:Blur", { gen });
+    return { windowId: bc.currentWindowGlobal?.innerWindowId ?? 0, gen };
   },
 
   /**

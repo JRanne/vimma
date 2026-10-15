@@ -174,7 +174,7 @@ interface Window {
 declare class JSWindowActorParent {
   readonly browsingContext: any;
   /** engine/dom/chrome-webidl/WindowGlobalActors.webidl (WindowGlobalParent) */
-  readonly manager: { readonly isInProcess: boolean };
+  readonly manager: { readonly isInProcess: boolean; readonly innerWindowId: number };
   sendAsyncMessage(name: string, data?: unknown): void;
   sendQuery(name: string, data?: unknown): Promise<any>;
 }
