@@ -780,7 +780,7 @@
       "actions": [
         {
           "name": "goto_picker",
-          "description": "Goto picker: every tab in every workspace",
+          "description": "Tab search: every tab, every window, recently closed",
           "keys": [
             {
               "keys": "ctrl+b g",
@@ -801,6 +801,26 @@
               "chords": ["ctrl+b", "b"]
             }
           ]
+        },
+        {
+          "name": "toggle_toolbar",
+          "description": "Show / hide the toolbar (URL bar and add-on buttons)",
+          "keys": [
+            {
+              "keys": "ctrl+b u",
+              "chords": ["ctrl+b", "u"]
+            }
+          ]
+        },
+        {
+          "name": "show_toolbar",
+          "description": "Show the toolbar",
+          "keys": []
+        },
+        {
+          "name": "hide_toolbar",
+          "description": "Hide the toolbar (the address bar shows when focused)",
+          "keys": []
         },
         {
           "name": "scroll_down",

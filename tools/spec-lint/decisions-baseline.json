@@ -9,8 +9,7 @@
     "The tarball Vimma verifies is the one Surfer extracts.",
     "Firefox's toolchains are part of the trusted base, as Mozilla ships them.",
     "Action SHA pinning becomes a repository setting too.",
-    "The trust boundary.",
-    "Nothing here publishes anything."
+    "The trust boundary."
   ],
   "element-focus.md": [
     "The start key is chosen when implementation starts, not in this spec.",
@@ -61,22 +60,6 @@
     "Statuses per site",
     "Output",
     "The list is data"
-  ],
-  "tab-search.md": [
-    "Extend the goto picker; no second picker.",
-    "Private stays private.",
-    "`Enter` on another window's tab",
-    "Lazy tabs stay lazy.",
-    "Out of scope."
-  ],
-  "toolbar-toggle.md": [
-    "Key: `ctrl+b u`",
-    "One state for all windows, held in a pref.",
-    "What hides:",
-    "Permission prompts and security.",
-    "Hiding with focus inside the bar.",
-    "The find bar",
-    "No upstream patch."
   ],
   "upstream-beta-canary.md": [
     "test",

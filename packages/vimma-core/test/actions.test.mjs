@@ -183,3 +183,47 @@ describe("closest", () => {
     expect(performance.now() - start).toBeLessThan(50);
   });
 });
+
+// docs/specs/toolbar-toggle.md, decision 1.
+describe("toolbar toggle", () => {
+  test("ctrl+b u runs toggle_toolbar (toolbar.toggle) through the dispatcher", async () => {
+    const { createDispatcher } = await import("../src/dispatcher.mjs");
+    const { parseKey } = await import("../src/keys.mjs");
+    expect(getAction("toggle_toolbar")).toMatchObject({
+      id: "toolbar.toggle",
+      group: "Navigation",
+    });
+    const d = createDispatcher(compileKeymap());
+    for (const mode of ["normal", "insert"]) {
+      expect(d.dispatch(mode, parseKey("ctrl+b"))).toEqual({ kind: "pending" });
+      expect(d.dispatch(mode, parseKey("u"))).toEqual({
+        kind: "action",
+        action: { id: "toolbar.toggle" },
+      });
+    }
+  });
+
+  test("show_toolbar and hide_toolbar exist, unbound by default", () => {
+    expect(getAction("show_toolbar")?.id).toBe("toolbar.show");
+    expect(getAction("hide_toolbar")?.id).toBe("toolbar.hide");
+    const km = compileKeymap();
+    expect(km.bindingsFor("show_toolbar")).toEqual([]);
+    expect(km.bindingsFor("hide_toolbar")).toEqual([]);
+  });
+
+  test("prefix+u is the only default binding of toggle_toolbar, and no other action has it", () => {
+    // compileKeymap throws on a conflict between default bindings.
+    const km = compileKeymap();
+    expect(km.bindingsFor("toggle_toolbar")).toEqual(["prefix+u"]);
+    const others = ACTIONS.filter((a) => a.name !== "toggle_toolbar").flatMap((a) =>
+      km.bindingsFor(a.name),
+    );
+    expect(others).not.toContain("prefix+u");
+    const bound = ACTIONS.filter((a) => a.id.startsWith("toolbar."));
+    expect(bound.map((a) => a.name).sort()).toEqual([
+      "hide_toolbar",
+      "show_toolbar",
+      "toggle_toolbar",
+    ]);
+  });
+});

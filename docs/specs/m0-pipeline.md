@@ -17,7 +17,9 @@ new Firefox releases arrive as PRs.
   UI-only vs artifact build; until then it is a no-op with a TODO naming the ADR. (ADR-010 and
   m0-build-strategy have since made it the artifact-build mochitest job.)
 - `nightly.yml` (03:00 UTC): full Linux x86_64 build via Surfer on a large or self-hosted runner,
-  publish rolling `nightly` release; on failure open an issue with logs.
+  publish rolling `nightly` release; on failure open an issue with logs. (Since changed: the
+  nightly keeps its package as a 7-day workflow artifact and publishes no release until the
+  release gate; spec build-supply-chain, decision 23.)
 - `upstream.yml` (every 6 h): `tools/upstream/check-release.py` polls
   `https://product-details.mozilla.org/1.0/firefox_versions.json` (`LATEST_FIREFOX_VERSION`);
   on change, `bump-surfer-json.py` + PR `chore(upstream): Firefox X.Y`. (Since replaced by the

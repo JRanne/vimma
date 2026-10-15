@@ -30,6 +30,8 @@ import { DEFAULT_THEME_NAME } from "./theme.mjs";
  *   (docs/specs/bookmarks.md)
  * @property {{ placement?: "swap" | "window" }} [private]  where the private workspace is shown
  *   (docs/specs/private-swap.md)
+ * @property {{ toolbar?: "shown" | "hidden" }} [ui]  Firefox's toolbar at startup
+ *   (docs/specs/toolbar-toggle.md)
  * @property {{ enabled?: boolean, workspace?: string, ask_timeout?: number,
  *   grant_minutes?: number, grant_max_minutes?: number, max_read_chars?: number,
  *   notify?: boolean, download_dir?: string, download_max_mb?: number }} [mcp]  local AI agents and the agent workspace (docs/specs/vimma-mcp.md)
@@ -109,6 +111,8 @@ const keys = {
   // docs/specs/live-grep.md decision 2: prefix+f is the find group, Telescope's <leader>fg.
   live_grep: ["prefix+f g"],
   toggle_sidebar: ["prefix+b"],
+  // docs/specs/toolbar-toggle.md: u for URL bar; tmux leaves it free.
+  toggle_toolbar: ["prefix+u"],
   history_back: ["alt+left"],
   history_forward: ["alt+right"],
   reload: ["f5", "ctrl+r"],
@@ -345,6 +349,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   firefox: { disable: OVERLAP_CHORDS, enable: [] },
   bookmarks: { root: /** @type {const} */ ("workspace") },
   private: { placement: /** @type {const} */ ("swap") },
+  ui: { toolbar: /** @type {const} */ ("shown") },
   // docs/specs/vimma-mcp.md, decision 26. No `enabled`: left out, `:mcp on|off` decides.
   mcp: {
     workspace: "agent",
@@ -449,6 +454,11 @@ export function formatDefaultsToml() {
     "# of its own beside it, as on every other window manager.",
     "[private]",
     `placement = ${tomlString(DEFAULT_CONFIG.private?.placement ?? "swap")}`,
+    "",
+    '# Firefox\'s toolbar (the URL bar and add-on buttons) in every window: "shown" or "hidden".',
+    "# Hidden, focusing the address bar shows it; ctrl+b u and :toolbar toggle it until restart.",
+    "[ui]",
+    `toolbar = ${tomlString(DEFAULT_CONFIG.ui?.toolbar ?? "shown")}`,
     "",
     ...mcpLines(),
     "",

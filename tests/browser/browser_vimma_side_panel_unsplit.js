@@ -439,7 +439,7 @@ add_task(async function every_route_to_an_outside_tab_shows_it_alone() {
   await focusContent(gBrowser.selectedBrowser);
   prefix("g");
   await until(() => document.getElementById("vimma-picker")?.open, "the picker opens");
-  for (const ch of "/e") EventUtils.synthesizeKey(ch);
+  EventUtils.synthesizeKey("e"); // it opens typing (docs/specs/tab-search.md)
   EventUtils.synthesizeKey("KEY_Enter");
   await until(() => gBrowser.selectedTab === tab("e"), "the picker selects e");
   Assert.ok(hiddenView(), "e alone, the view hidden");

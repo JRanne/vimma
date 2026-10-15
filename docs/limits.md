@@ -346,6 +346,14 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
   ([plan.md](../plan.md) §6, [macos-build](specs/macos-build.md)); Windows is not planned.
 - No binaries, packages or releases: build from source. Tarball, AppImage, `.deb` and AUR are M6
   ([plan.md](../plan.md) §6).
+- The Arch Linux package (the release's `PKGBUILD`) writes `/opt/vimma/is-packaged-app`, the
+  file Firefox reads as "installed by a package manager". With it, Firefox skips the warning bar
+  it otherwise shows in the first window when the kernel does not allow unprivileged user
+  namespaces (`security/sandbox/common/SandboxUtils.sys.mjs:25`, pref
+  `security.sandbox.warn_unprivileged_namespaces`), and about:support does not flag them as
+  missing (`toolkit/content/aboutSupport.js:1551`; Firefox 158.0). The content sandbox is then
+  weaker without saying so. The tarball, the AppImage and the `.deb` do not write the file and still warn
+  ([m6-packaging](specs/m6-packaging.md), "Arch Linux without the AUR", decision 4).
 - `vimma-ctl` checks the discovery file's permissions on Unix only; on Windows `check_mode`
   does nothing (ACLs, not mode bits)
   ([m0-control-protocol-and-vimma-ctl](specs/m0-control-protocol-and-vimma-ctl.md)).
@@ -361,6 +369,11 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
   `skip-if = ["artifact"]` tests run only on local full builds. PRs that touch patches, `configs/`,
   `moz.configure` or branding must report a full-build run
   ([ADR-010](adr/010-pr-artifact-builds.md), [runbook](runbook.md)).
+- Nightly builds are not published as a release before the release gate: each one is a workflow
+  artifact of its run, kept 7 days, with no release page or stable link. It is not private: the
+  repository is public, so anyone signed in to GitHub can download it for those 7 days
+  ([runbook](runbook.md), "Full builds";
+  [build-supply-chain](specs/build-supply-chain.md), decision 23).
 - Artifact builds depend on Mozilla's Taskcluster index for the pinned release, which expires
   after a year ([ADR-010](adr/010-pr-artifact-builds.md)).
 - PRs opened by `GITHUB_TOKEN` (upstream bumps, Claude, release-please) do not trigger CI by

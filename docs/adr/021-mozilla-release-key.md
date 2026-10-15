@@ -52,6 +52,12 @@ Mozilla's announcement, with every revocation kept (`docs/runbook.md`, "Mozilla'
 releases signed by the new subkey. A change of the primary fingerprint means Mozilla replaced its
 root of trust: it is a review of this ADR, never a routine update. Spec build-supply-chain's
 sub-PR 5 adds a watch that opens a `security` issue when Mozilla's published key changes.
+(Since changed: a pull request that changes `mozilla-release-key.asc`, or a line of
+`verify-sha512.py` that names `PINNED_FINGERPRINT` or `KEY_FILE`, fails the required check
+"Mozilla release key unchanged or approved" (`.github/workflows/key-guard.yml`) until a
+maintainer adds the `key-rotation-approved` label, because review alone can miss a key change
+inside a large or unrelated pull request, and a label needs triage access, which an outside
+contributor does not have.)
 
 ## Reasoning
 

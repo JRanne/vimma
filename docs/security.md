@@ -258,6 +258,57 @@ text that pages, add-ons and bookmarks choose.
   arguments, the path after `--` and no shell, on an agent download in the quarantine folder
   (M13; [vimma-mcp](specs/vimma-mcp.md) decision 31 g). [`never builds code from text: no eval, Function or sandbox evaluation`](../tools/security/test/chrome-source.test.mjs),
   [`never starts a process, but clamscan on an agent download`](../tools/security/test/chrome-source.test.mjs)
+- C3. With Firefox's toolbar hidden ([toolbar-toggle](specs/toolbar-toggle.md)), the status bar
+  is the only origin indicator: the page reaches the window's top, so there is no line of death.
+  - The status bar **must** always show the selected page's real address with its registrable
+    domain whole: truncation **never** cuts inside it (the path, then the leftmost labels go
+    first), also for a `blob:` or `view-source:` address (the origin it carries), and **never**
+    in the middle of an address without a host. A page title **never** takes the address's
+    place. The bar's order is: the mode's one-column short form, then the error, `not secure`,
+    `private` and in-use cues, then the address, then the rest (the mode's full word, the title,
+    the tab position, the workspace). The address takes room only from what comes after it: it
+    is cut to `…<domain>…` while the rest gives way, and cut further, its domain's end as the
+    last resort, rather than push a cue or the mode's short form off the bar. An about:blank a page opened or controls **must** read
+    `about:blank from <the origin that wrote it>`, never nothing.
+    [`the URL keeps its registrable domain while the toolbar is hidden`](../packages/vimma-core/test/statusbar.test.mjs),
+    [`the_status_bar_keeps_the_registrable_domain`](../tests/browser/browser_vimma_toolbar.js),
+    [`an_about_blank_a_page_wrote_says_so`](../tests/browser/browser_vimma_toolbar.js),
+    [`a_blob_page_shows_its_origin`](../tests/browser/browser_vimma_toolbar.js),
+    [`an_about_blank_names_its_writer_after_the_opener_leaves`](../tests/browser/browser_vimma_toolbar.js),
+    [`the security cues outrank the kept URL`](../packages/vimma-core/test/statusbar.test.mjs)
+  - It **must** say `not secure` wherever Firefox's address bar would warn (plain http, a
+    certificate error page or exception, mixed content), read from the browser's security state,
+    never from the hidden address bar, and `private` in a private window.
+    [`securityFromState`](../packages/vimma-core/test/statusbar.test.mjs),
+    [`not_secure_comes_from_the_browser_state`](../tests/browser/browser_vimma_toolbar.js),
+    [`the_status_bar_says_not_secure_and_private`](../tests/browser/browser_vimma_toolbar.js)
+  - It **must** say which devices the selected page uses (camera, microphone, screen, location,
+    XR, serial; `paused` where Firefox says so), the cues the hidden address bar and tab strip
+    carried. It does not cover background tabs or the other pane of a split (only the selected
+    tab is read, and the tab strip is hidden), nor Firefox's camera and microphone grace period
+    after a stream ends; on Linux the desktop's global WebRTC indicator still shows background
+    capture.
+    [`sharing: devices in use while the toolbar is hidden`](../packages/vimma-core/test/statusbar.test.mjs),
+    [`the_status_bar_shows_camera_and_mic_in_use`](../tests/browser/browser_vimma_toolbar.js)
+  - A permission prompt **must** hang from its own icon in the address bar, next to the site's
+    identity and address, as with the toolbar shown (the prompt bar), and **never** open
+    unanchored: if its icon cannot be revealed, the toolbar comes back first. The minimal bar for
+    typing an address shows no identity; the status bar above is the origin indicator then. Pop-up
+    windows **must** keep their read-only address bar.
+    [`a_permission_prompt_hangs_from_its_icon`](../tests/browser/browser_vimma_toolbar.js),
+    [`the_identity_panel_shows_the_site_identity`](../tests/browser/browser_vimma_toolbar.js),
+    [`a_failed_reveal_for_a_prompt_shows_the_toolbar`](../tests/browser/browser_vimma_toolbar.js),
+    [`exclusions`](../tests/browser/browser_vimma_toolbar.js)
+  - Vimma's keys for a permission prompt (`y`, `n`, `Tab`; toolbar shown or hidden) **must
+    not** answer it before it has shown for `security.notification_enable_delay` with no key in
+    between (any key restarts the wait), **never** from a text field, and go through Firefox's
+    own buttons, so Firefox's click delay still applies. The prompt **never** takes focus by
+    itself; `Tab` focuses the secondary (Block) button first.
+    [`doorhangerKey`](../packages/vimma-core/test/prompt-keys.test.mjs),
+    [`permission_prompts_answer_y_and_n`](../tests/browser/browser_vimma_toolbar.js)
+  - Accepted, low: a page can time a reveal under the pointer (a permission request shows the
+    prompt bar, a download the full toolbar); there is no hover reveal. See the spec's Security
+    section.
 
 ## 7. Omarchy hook and the `vimma-open` launcher
 
@@ -703,6 +754,21 @@ in a `build` environment, and a watch on Mozilla's release key,
   write to `engine/`.
   `firefox-source.sh` also refuses a `surfer.json` with a `version.candidate`, which Surfer would
   fetch from `candidates/` unverified.
+  A pull request that changes the pinned key file, or a line of `verify-sha512.py` that names
+  `PINNED_FINGERPRINT` or `KEY_FILE`, fails the required check "Mozilla release key unchanged or
+  approved" (`.github/workflows/key-guard.yml`, `tools/ci/key-guard.mjs`) until a maintainer adds
+  the `key-rotation-approved` label, which needs triage access to the repository. No automation
+  or agent adds that label; a maintainer adds it only after the checks in `docs/runbook.md`,
+  "Mozilla's release key", and removes it if a later push changes the key again, since the label
+  stays on the pull request across pushes. The check runs the base branch's copy of the script.
+  A pull request that changes the guard itself (`.github/workflows/key-guard.yml`,
+  `tools/ci/key-guard.mjs` or its tests) needs the same label, because under `pull_request` such
+  a pull request still runs its own copy of the workflow and could rewrite it to pass; the
+  label requirement on the guard's files is what makes that change visible, and the `main`
+  ruleset, which requires the check by its name, is what makes it binding. The one exception is
+  the pull request that first adds the guard to a base branch without one. Its scope is the
+  key, the fingerprint and the guard: it does not see a change that weakens `verify-sha512.py`
+  elsewhere (its call sites or its status checks); review of `tools/upstream/` covers that.
   [`test_good_signature_from_mozillas_current_subkey_passes`](../tools/upstream/test_verify_sha512.py),
   [`test_signature_by_the_revoked_compromised_subkey_fails`](../tools/upstream/test_verify_sha512.py),
   [`test_signature_by_another_key_fails`](../tools/upstream/test_verify_sha512.py),
@@ -718,7 +784,13 @@ in a `build` environment, and a watch on Mozilla's release key,
   [`--require refuses an engine/ never verified, or verified for another version`](../tools/upstream/test/verify-source.test.mjs),
   [`npm run import refuses an engine/ whose source was never verified`](../tools/test/upstream-workflow.test.mjs),
   [`every verify-sha512.py call passes a signature`](../tools/test/upstream-workflow.test.mjs),
-  [`refuses a surfer.json with a version.candidate, before anything is fetched`](../tools/upstream/test/firefox-source.test.mjs)
+  [`refuses a surfer.json with a version.candidate, before anything is fetched`](../tools/upstream/test/firefox-source.test.mjs),
+  [`fails a changed key file without the label`](../tools/ci/test/key-guard.test.mjs),
+  [`fails a change to any of the guard's own files without the label, and passes it with`](../tools/ci/test/key-guard.test.mjs),
+  [`passes the pull request that first adds the guard to a base without one`](../tools/ci/test/key-guard.test.mjs),
+  [`fails a changed fingerprint without the label, and passes it with`](../tools/ci/test/key-guard.test.mjs),
+  [`passes event values to run: through env only`](../tools/ci/test/key-guard.test.mjs),
+  [`still judges when started through a symlinked path`](../tools/ci/test/key-guard.test.mjs)
 - B2. A nightly or release build **never** builds from an `engine/` it did not extract in the
   same job from the tarball it verified, and **never** restores a tree, an objdir or a compiler
   cache from the Actions cache; a release **must** build in a fresh objdir with an empty
@@ -765,6 +837,36 @@ in a `build` environment, and a watch on Mozilla's release key,
   [`triggers are read in every spelling YAML allows`](../tools/test/self-hosted-runner.test.mjs),
   [`no workflow names a self-hosted runner, and both build jobs run on ubuntu-24.04`](../tools/test/self-hosted-runner.test.mjs),
   [`each build job runs only from main or for a release`](../tools/test/self-hosted-runner.test.mjs)
+- B8. The nightly **never** creates, replaces or deletes a release, and no job of it can write
+  contents. Its `build` job, which runs npm, Surfer, `mach` and the mochitests, holds
+  `contents: read` only and keeps its package as a workflow artifact for 7 days. The failure
+  issue comes from a `report` job with `issues: write`, which checks out and runs no repository
+  code, reads no secret, and quotes only the log the build job redacted before uploading it,
+  with backticks escaped so no log line can end its code fence. **⚠ limit:** the artifact is
+  not private. The repository is public, so anyone signed in to GitHub can download it for the
+  7 days it is kept, and its name and size are listed without signing in. It holds the same
+  package, and the same compiled-in Safe Browsing key, as a keyed release build.
+  [`the workflow and its build job can only read the repository`](../tools/test/nightly-workflow.test.mjs),
+  [`the build job keeps the package as a workflow artifact for 7 days`](../tools/test/nightly-workflow.test.mjs),
+  [`no job creates, edits or deletes a release, and none can write contents`](../tools/test/nightly-workflow.test.mjs),
+  [`a failure is reported by its own job, from the redacted log artifact`](../tools/test/nightly-workflow.test.mjs),
+  [`the report job names the repository, since it checks nothing out`](../tools/test/nightly-workflow.test.mjs),
+  [`only the nightly's failure-issue step gets GH_TOKEN`](../tools/test/full-build-workflows.test.mjs)
+- B9. Every file `release.yml` uploads to a release, the Arch Linux `PKGBUILD` and `SRCINFO`
+  included, **must** be listed in that release's `SHA256SUMS` and get a cosign bundle from the
+  `sign` job, so a user can verify any asset, and the `PKGBUILD`, which pacman runs as root, is
+  checked the same way as the binaries. The `PKGBUILD` pins the SHA-256 of the tarball it
+  installs, and its generator accepts only `owner/name` for the repository and
+  `[A-Za-z0-9._-]` for the desktop file ID, the two values it places in shell words. It is built
+  and installed with `makepkg -si` on Arch Linux before anything is signed. **⚠ setting:**
+  signatures exist only while the repository variable `SIGNING_ENABLED` is `true`; without it
+  `publish` uploads the assets and `SHA256SUMS` unsigned.
+  [`writes SHA256SUMS that sha256sum -c accepts, for every release file`](../tools/package/test/package.test.mjs),
+  [`signs and uploads the PKGBUILD and SRCINFO with the other assets`](../tools/package/test/release-workflow.test.mjs),
+  [`builds and installs the release PKGBUILD on Arch Linux before anything is signed`](../tools/package/test/release-workflow.test.mjs),
+  [`needs nothing but itself: the tarball is its only source`](../tools/package/test/package.test.mjs),
+  [`refuses repo %j`](../tools/package/test/package.test.mjs),
+  [`refuses desktop id %j`](../tools/package/test/package.test.mjs)
 
 ## 15. Live grep (`host/grep.mjs`, `actors/VimmaChild.sys.mjs`, `actors/grep-matcher.mjs`)
 

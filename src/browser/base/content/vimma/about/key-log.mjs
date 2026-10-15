@@ -37,6 +37,16 @@ export const KeyLog = {
     if (events.length > KEY_LOG_SIZE) events.shift();
   },
 
+  /**
+   * Something the host did on its own that explains what keys did next (the toolbar shown
+   * again because the address bar could not be revealed, docs/specs/toolbar-toggle.md 13).
+   * @param {string} text
+   */
+  note(text) {
+    events.push({ key: "—", mode: "host", outcome: text });
+    if (events.length > KEY_LOG_SIZE) events.shift();
+  },
+
   /** @returns {KeyEvent[]} the last KEY_LOG_SIZE events, oldest first */
   entries() {
     return events.map((e) => ({ ...e }));

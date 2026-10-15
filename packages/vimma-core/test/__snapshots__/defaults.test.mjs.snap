@@ -53,6 +53,7 @@ private_workspace = ["prefix+shift+p", "ctrl+shift+p"]
 goto_picker = ["prefix+g"]
 live_grep = ["prefix+f g"]
 toggle_sidebar = ["prefix+b"]
+toggle_toolbar = ["prefix+u"]
 history_back = ["alt+left"]
 history_forward = ["alt+right"]
 reload = ["f5", "ctrl+r"]
@@ -315,6 +316,11 @@ root = "workspace"
 # of its own beside it, as on every other window manager.
 [private]
 placement = "swap"
+
+# Firefox's toolbar (the URL bar and add-on buttons) in every window: "shown" or "hidden".
+# Hidden, focusing the address bar shows it; ctrl+b u and :toolbar toggle it until restart.
+[ui]
+toolbar = "shown"
 
 # Local AI agents (Claude Code, Codex, opencode, Copilot) reach only the agent workspace, and
 # every request asks you first. Left out, :mcp on|off sets enabled and remembers it; set

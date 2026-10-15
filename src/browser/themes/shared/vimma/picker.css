@@ -2,9 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* The prefix+g goto, prefix+w workspace and prefix+e add-on pickers (ui/picker.mjs): the help
-   overlay's look (help-overlay.css), theme tokens when the status bar has loaded them, legible
-   system colours otherwise. */
+/* The prefix+g goto picker (tab search), prefix+w workspace and prefix+e add-on pickers
+   (ui/picker.mjs): the help overlay's look (help-overlay.css), theme tokens when the status bar
+   has loaded them, legible system colours otherwise. */
 
 .vimma-picker {
   box-sizing: border-box;
@@ -118,5 +118,49 @@
     background: none;
     color: var(--vimma-text-accent, AccentColor);
     font-weight: bold;
+  }
+
+  /* Tab search (docs/specs/tab-search.md, decision 12): a muted cell for workspace, window and
+     markers, section headings, and existing theme tokens only. */
+  &.vimma-picker-tabs .vimma-picker-row {
+    grid-template-columns: 2.5ch minmax(0, 1fr) minmax(0, max-content) minmax(0, 12rem);
+  }
+
+  & .vimma-picker-meta {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--vimma-fg-dim, GrayText);
+  }
+
+  & .vimma-picker-agent {
+    color: var(--vimma-text-cyan, var(--vimma-text-accent, AccentColor));
+  }
+
+  & .vimma-picker-closed {
+    font-style: italic;
+  }
+
+  & .vimma-picker-heading {
+    padding: 0.5rem 1.25rem 0.1rem;
+    font-size: 0.85em;
+    font-weight: bold;
+    color: var(--vimma-text-accent, AccentColor);
+  }
+
+  & .vimma-picker-more {
+    padding: 0.15rem 1.25rem;
+    color: var(--vimma-fg-dim, GrayText);
+    font-style: italic;
+  }
+
+  /* The live count: read by screen readers, not shown. */
+  & .vimma-picker-count {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }

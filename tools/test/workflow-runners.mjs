@@ -2,8 +2,10 @@
 // self-hosted-runner.test.mjs (docs/specs/build-supply-chain.md, decision 7). The workflows are
 // parsed as YAML (js-yaml), not matched as text, so quoted keys, flow mappings, anchors and
 // duplicate keys mean what they mean to GitHub; js-yaml rejects a duplicate key, which fails the
-// test. Every shape this does not recognise is reported as a problem: the check fails closed.
-import yaml from "js-yaml";
+// test. The YAML 1.2 core schema, without the `!!merge` tag: GitHub does not apply `<<:` merge
+// keys, so neither does this, and a runs-on that only a merge key supplies is missing. Every shape
+// this does not recognise is reported as a problem: the check fails closed.
+import { CORE_SCHEMA, load } from "js-yaml";
 
 /**
  * Triggers that let someone without write access start a run, or that run on behalf of such a
@@ -46,7 +48,7 @@ const isMap = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
  * @returns {Record<string, unknown>}
  */
 export function parseWorkflow(text) {
-  const doc = yaml.load(text);
+  const doc = load(text, { schema: CORE_SCHEMA });
   if (!isMap(doc)) throw new Error("a workflow is a mapping");
   return doc;
 }
