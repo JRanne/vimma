@@ -188,7 +188,7 @@ export const VIMMA_LIGHT = Object.freeze({
   bright_magenta: "#9150b3", // derived: magenta, brighter
 });
 
-/** Omarchy's stock tokyo-night colors.toml: the built-in palette until vimma had its own. */
+/** Omarchy's stock tokyo-night colors.toml, built in as `[theme] name = "tokyo-night"` (dark). */
 /** @type {Readonly<Palette>} */
 export const TOKYO_NIGHT = Object.freeze({
   mode: "dark",

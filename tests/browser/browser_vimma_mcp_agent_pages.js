@@ -332,7 +332,7 @@ add_task(async function test_a_sweep_reloads_agent_tabs_that_loaded_unsandboxed(
 
 // security.md M10: an agent page cannot launch another app through an external protocol
 // (zoommtg:, mailto: …; Firefox's "always open" choice is shared across containers). Its
-// downloads are asked and quarantined: browser_vimma_mcp_downloads.js (sub-PR 2c).
+// downloads are asked and quarantined: browser_vimma_mcp_downloads.js.
 add_task(async function test_agent_pages_launch_no_app() {
   const { AgentPages } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/ctl/AgentPages.sys.mjs",

@@ -400,7 +400,10 @@ class Connection {
     this.agentState = {};
     /** Agent requests waiting for an answer or running: they do not wait for each other. */
     this.inflight = 0;
-    /** Withdraws a full-control question still waiting (decision 29 C). @type {(() => void) | null} */
+    /**
+     * Withdraws a full-control question still waiting (decision 29 C).
+     * @type {(() => void) | null}
+     */
     this.cancelAsk = null;
   }
 

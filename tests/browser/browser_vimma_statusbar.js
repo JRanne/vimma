@@ -110,7 +110,7 @@ add_task(async function mode_follows_the_host_and_help() {
   await BrowserTestUtils.withNewTab(TITLE_PAGE, async () => {
     const mode = VimmaHost.status(window).mode;
     await until(() => segText("mode") === mode.toUpperCase(), `mode badge reads ${mode}`);
-    // Until the insert-detection work lands, the host's base mode is insert (m0-help-overlay).
+    // The page's mode (normal, insert in a field) or insert while chrome has focus.
     Assert.ok(["normal", "insert"].includes(mode), `base mode is normal or insert (${mode})`);
     const badgeBg = getComputedStyle(seg("mode")).backgroundColor;
     const token = getComputedStyle(document.documentElement)
@@ -223,7 +223,8 @@ add_task(async function notice_sits_above_the_bar() {
   });
 });
 
-// Only prefix+? lists the bindings; there is no which-key strip (docs/specs/m2-statusbar-whichkey.md).
+// Only prefix+? lists the bindings; there is no which-key strip
+// (docs/specs/m2-statusbar-whichkey.md).
 add_task(async function prefix_alone_shows_no_list() {
   await BrowserTestUtils.withNewTab(TITLE_PAGE, async (browser) => {
     await focusContent(browser);

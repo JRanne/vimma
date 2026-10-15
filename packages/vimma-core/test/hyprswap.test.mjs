@@ -314,7 +314,7 @@ describe("parseActiveWorkspace", () => {
   });
 });
 
-// Review of PR #151, major A: the normal window must never stay in special:vimma.
+// The normal window must never stay in special:vimma.
 describe("planRescue: whatever is stuck in special:vimma comes out", () => {
   const normal = client({ workspace: { id: -98, name: PARK } });
   test("to the other window's workspace", () => {

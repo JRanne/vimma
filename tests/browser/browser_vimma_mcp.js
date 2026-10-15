@@ -6,7 +6,7 @@
 // made at the startup reconcile, empty, in its own cyan container; it is in the picker but not
 // in ctrl+b ( ) or ctrl+^ (decision 9); closing it empties it, renaming it is refused, and
 // `:mcp forget` clears its site data; `:mcp on|off` with its y/N (decisions 3 and 26); moving a
-// tab into it warns (decision 11). The agent role of the socket is sub-PR 2.
+// tab into it warns (decision 11). The socket's agent role: browser_vimma_mcp_agent.js.
 
 "use strict";
 

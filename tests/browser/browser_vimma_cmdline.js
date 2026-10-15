@@ -443,8 +443,7 @@ add_task(async function a_notice_does_not_cover_the_line() {
     document.getElementById(NOTICE_ID).getBoundingClientRect().bottom -
     container().firstElementChild.getBoundingClientRect().top;
   // --vimma-cmdline-height comes from a ResizeObserver: the completion list just grew, so the
-  // notice moves on the observer's next callback, not in this tick. The deleted which-key test
-  // before this one left the variable at the same list's height, which hid the wait.
+  // notice moves on the observer's next callback, not in this tick.
   await TestUtils.waitForCondition(() => gap() <= 1, "the notice moves above the line");
   Assert.lessOrEqual(gap(), 1, "the notice sits above the line");
   document.getElementById(NOTICE_ID).hidePopover();

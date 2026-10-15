@@ -194,8 +194,7 @@ add_task(async function ctrl_i_and_ctrl_u_no_longer_switch_workspace() {
 });
 
 // A switch that worked says nothing: switchTo/next/previous return null on success, and
-// `null ?? NO_WORKSPACES` showed "no workspaces in this window" after every one (found by the
-// website's screenshots).
+// `null ?? NO_WORKSPACES` showed "no workspaces in this window" after every one.
 add_task(async function a_switch_that_worked_shows_no_notice() {
   const notice = () => document.getElementById(NOTICE_ID);
   const noticeShown = () => !!notice()?.matches(":popover-open");

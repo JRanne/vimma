@@ -308,8 +308,8 @@ const COMMANDS = {
   },
 
   /**
-   * Withdraw the question of this connection's request `id`, if it still waits (decision 17,
-   * sub-PR 3). Another connection's requests are not in `state`, so out of reach.
+   * Withdraw the question of this connection's request `id`, if it still waits (decision 17).
+   * Another connection's requests are not in `state`, so out of reach.
    * @param {ConnId} _conn @param {AgentConn} state @param {{ id: number }} args
    */
   "agent-cancel"(_conn, state, { id }) {

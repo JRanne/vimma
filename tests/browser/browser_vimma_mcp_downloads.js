@@ -286,7 +286,8 @@ async function clean() {
 }
 
 add_task(async function test_agent_tabs_may_download_again() {
-  // No SANDBOXED_DOWNLOADS on agent tabs (sub-PR 2b's stopgap), and the download folder of an agent tab's browsing context is the quarantine folder.
+  // Agent tabs have no SANDBOXED_DOWNLOADS flag; their browsing context's download folder is the
+  // quarantine folder instead.
   const tab = await agentTab();
   const bc = tab.linkedBrowser.browsingContext;
   Assert.equal(bc.sandboxFlags & SANDBOXED_DOWNLOADS, 0, "agent tabs may start downloads");

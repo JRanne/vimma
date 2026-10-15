@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* The `:` command line (ui/cmdline.mjs, spec m1-cmdline). M5's theme tokens when the token
+/* The `:` command line (ui/cmdline.mjs, spec m1-cmdline). The theme tokens when the token
    sheet is loaded (the status bar loads it), legible system colours otherwise. */
 
 /* A zero-height row in the chrome body's flex column, after #browser (before the status bar):

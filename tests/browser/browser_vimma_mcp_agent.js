@@ -9,8 +9,8 @@
 // (12), denied on timeout (16), capped (17), muted after three noes (18); the yes stands for the
 // tab and URL asked about (19); grants per connection and tool, ended by `:mcp revoke` and by
 // the connection closing (20-22); opens are background and never switch (10, B2); page text
-// comes back between the untrusted-content delimiters. The question's UI is sub-PR 2b: here
-// the tests answer through AgentGate, as the prompt line will.
+// comes back between the untrusted-content delimiters. The question line has its own tests
+// (browser_vimma_mcp_prompt.js): here the tests answer through AgentGate, as the line does.
 
 "use strict";
 
@@ -171,7 +171,7 @@ add_task(async function test_each_role_runs_only_its_commands() {
   c.close();
 
   const full = new Client(/** @type {number} */ (VimmaControl.port));
-  // While MCP is on, a full connection asks first (sub-PR 2b, decision 29 C): say yes.
+  // While MCP is on, a full connection asks first (decision 29 C): say yes.
   const welcomed = full.handshake({ protocol: 2, role: "full" });
   await answer({ kind: "once" });
   await welcomed;
@@ -352,7 +352,7 @@ add_task(async function test_denials_timeouts_queue_and_mute() {
   await setSwitches({});
 });
 
-// Decision 17, sub-PR 3: MCP's notifications/cancelled withdraws the call's question. Only the
+// Decision 17: MCP's notifications/cancelled withdraws the call's question. Only the
 // connection's own requests, and only while they wait; a cancel is never refused as busy.
 add_task(async function test_agent_cancel_withdraws_one_waiting_question() {
   await setSwitches({ mcp: true });
@@ -651,7 +651,7 @@ add_task(async function test_agents_cannot_take_every_connection() {
   const refused = await fifth.handshake({ protocol: 2, role: "agent" });
   Assert.equal(refused.error?.code, "busy", "a 5th agent connection is busy");
   const full = new Client(/** @type {number} */ (VimmaControl.port));
-  // While MCP is on, a full connection asks first (sub-PR 2b, decision 29 C): say yes.
+  // While MCP is on, a full connection asks first (decision 29 C): say yes.
   const welcomed = full.handshake({ protocol: 2, role: "full" });
   await answer({ kind: "once" });
   Assert.equal((await welcomed).type, "welcome", "while vimma-ctl still gets in");

@@ -287,7 +287,10 @@ export class ControlSessions {
     p.child.stdin.write(`${JSON.stringify(message)}\n`);
   }
 
-  /** The response to the request named `name`, once it comes (a call waits for the user). @param {string} name */
+  /**
+   * The response to the request named `name`, once it comes (a call waits for the user).
+   * @param {string} name
+   */
   async mcpResult(name) {
     const p = this.mcp;
     const id = p?.ids.get(name);

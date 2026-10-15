@@ -17,7 +17,7 @@ const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
 /**
  * A server still starting up: it listens before its first browser window exists and answers
- * `failed: no browser window` until then (review of PR #35). ready() retries only this one.
+ * `failed: no browser window` until then. ready() retries only this one.
  */
 const STARTING_UP = /^vimma-ctl: failed: no browser window\b/m;
 

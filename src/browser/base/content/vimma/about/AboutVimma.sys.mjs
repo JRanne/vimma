@@ -85,7 +85,7 @@ const CONTRACT = "@mozilla.org/network/protocol/about;1?what=vimma";
 
 /**
  * The agents section (docs/specs/vimma-mcp.md, decision 27): on or off and why, and the agent
- * workspace with its tab count. Connections and grants come with the agent role (sub-PR 2).
+ * workspace with its tab count.
  * @returns {AboutData["mcp"]}
  */
 function mcpOf() {
