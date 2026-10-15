@@ -32,6 +32,26 @@ const buildJob = (name) => {
 const SURFER = "@zen-browser/surfer";
 
 /**
+ * Every package runner in a workflow that could fetch a package it does not find locally. npx
+ * and npm exec are allowed only as `--no --`; pnpm dlx, yarn dlx and bunx always fetch.
+ * @param {string} text a workflow, or a line of one
+ * @returns {string[]} each offending call, from its runner to the end of its line
+ */
+function fetchingRunners(text) {
+  /** @type {string[]} */
+  const out = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.replace(/(^|\s)#.*$/, "");
+    const starts = /\b(?:npx|npm\s+(?:exec|x)|pnpm\s+dlx|yarn\s+dlx|bunx)\b/g;
+    for (const m of line.matchAll(starts)) {
+      const call = line.slice(m.index);
+      if (!/^(?:npx|npm\s+(?:exec|x))\s+--no\s+--\s/.test(call)) out.push(call);
+    }
+  }
+  return out;
+}
+
+/**
  * Runs dependabot-automerge.yml's "Decide" step as GitHub would, with the given metadata.
  * @param {{ title: string, update: string, ecosystem?: string, deps: string }} pr
  * @returns {string} the decision it writes to GITHUB_OUTPUT
@@ -102,13 +122,22 @@ describe("build supply chain: npm", () => {
   it("no workflow lets npx fetch a package", () => {
     const dir = new URL(".github/workflows/", root);
     for (const name of readdirSync(dir)) {
-      const lines = readFileSync(new URL(name, dir), "utf8")
-        .split("\n")
-        .filter((l) => !/^\s*#/.test(l));
-      for (const line of lines.filter((l) => /\bnpx\b/.test(l))) {
-        expect(line, name).toMatch(/\bnpx --no -- [a-z]/);
-      }
+      expect(fetchingRunners(readFileSync(new URL(name, dir), "utf8")), name).toEqual([]);
     }
+    for (const line of [
+      "npx --no -- a && npx b",
+      "npx b",
+      "npx --yes b",
+      "npm exec b",
+      "npm x b",
+      "pnpm dlx b",
+      "yarn dlx b",
+      "bunx b",
+      "run: npx --no -- a; npm exec -- b",
+    ]) {
+      expect(fetchingRunners(line), line).not.toEqual([]);
+    }
+    expect(fetchingRunners("npx --no -- a && npm exec --no -- b # npx b")).toEqual([]);
   });
 
   it("only npx --no -- passes the command's own flags through", () => {

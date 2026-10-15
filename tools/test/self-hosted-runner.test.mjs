@@ -8,6 +8,8 @@ import {
   workflowRunnerProblems,
 } from "./workflow-runners.mjs";
 
+// js-yaml applies `<<:` merge keys and GitHub does not: a runs-on that only a merge key supplies
+// passes here, but GitHub rejects that workflow, so it fails closed there instead.
 // docs/specs/build-supply-chain.md, decision 7; docs/security.md, B5. On a public repository a
 // self-hosted runner that pull request code can reach is a machine anyone can run code on, and
 // Vimma registers no self-hosted runner at all, so no workflow may target one.
@@ -82,6 +84,19 @@ describe("self-hosted runners: shapes that must fail closed", () => {
     expect(workflowRunnerProblems(remote)).toHaveLength(1);
     const local = onPullRequest("  a:\n    uses: ./.github/workflows/e2e.yml\n");
     expect(workflowRunnerProblems(local)).toEqual([]);
+    for (const uses of [
+      "./.github/workflows/../../x.yml",
+      "./.github/workflows/sub/x.yml",
+      "./.github/workflows/..yml",
+      "./.github/workflows/x.yml@main",
+      "./.github/workflows/x.json",
+      "./other/x.yml",
+    ]) {
+      const text = onPullRequest(`  a:\n    uses: ${uses}\n`);
+      expect(workflowRunnerProblems(text), uses).toHaveLength(1);
+    }
+    const yamlExt = onPullRequest("  a:\n    uses: ./.github/workflows/build.release.yaml\n");
+    expect(workflowRunnerProblems(yamlExt)).toEqual([]);
   });
 
   it("triggers are read in every spelling YAML allows", () => {

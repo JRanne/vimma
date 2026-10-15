@@ -29,6 +29,9 @@ export const OUTSIDER_TRIGGERS = new Set([
 const HOSTED_IMAGE =
   /^(?:ubuntu-(?:latest|\d\d\.\d\d)(?:-arm)?|windows-(?:latest|\d{4}|11-arm)|macos-(?:latest|\d+)(?:-intel)?)$/;
 
+/** A workflow file of this repository: one name in .github/workflows, no other path segment. */
+const LOCAL_WORKFLOW = /^\.\/\.github\/workflows\/[\w-]+(?:\.[\w-]+)*\.ya?ml$/;
+
 /** @param {unknown} label */
 export const isHostedImage = (label) => typeof label === "string" && HOSTED_IMAGE.test(label);
 
@@ -132,9 +135,7 @@ export function runnerProblem(job) {
   const r = runsOn(job);
   if (r.kind === "reusable") {
     // A local workflow is a file in .github/workflows and is checked as such; any other is not.
-    return r.uses.startsWith("./.github/workflows/")
-      ? null
-      : `a reusable workflow elsewhere: ${r.uses}`;
+    return LOCAL_WORKFLOW.test(r.uses) ? null : `a reusable workflow elsewhere: ${r.uses}`;
   }
   if (r.kind === "missing") return "no runs-on";
   if (r.kind === "object") return "a runner group";
