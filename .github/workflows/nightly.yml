@@ -1,9 +1,9 @@
 # Spec m0-pipeline: full Linux x86_64 build, rolling `nightly` release, issue on failure.
 # Runs on a GitHub-hosted runner, never a self-hosted one (docs/security.md, B5; spec
 # build-supply-chain, decisions 6 and 7). The time and disk a cold build needs there are measured
-# before the schedule is switched on (build-supply-chain sub-PR 4, #224). The schedule does
-# nothing until the repository variable NIGHTLY_ENABLED is `true`; a manual run
-# (workflow_dispatch) from main is allowed before that. Setup: docs/runbook.md, "Full builds".
+# before it is switched on (build-supply-chain sub-PR 4, #224). Nothing runs, scheduled or
+# manual, until the repository variable NIGHTLY_ENABLED is `true`; a manual run
+# (workflow_dispatch) must also start from main. Setup: docs/runbook.md, "Full builds".
 name: nightly
 
 on:
@@ -20,10 +20,13 @@ concurrency:
 
 jobs:
   build:
-    # Manual runs only from main: a branch's edited nightly.yml must not get the secret.
+    # Manual runs only from main: a branch's edited nightly.yml must not get the secret. Manual
+    # runs need NIGHTLY_ENABLED too: a run publishes the rolling release, and Firefox source is
+    # not yet signature-checked here (spec build-supply-chain, #222 and #224).
     if: >-
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'schedule' && vars.NIGHTLY_ENABLED == 'true')
+      vars.NIGHTLY_ENABLED == 'true' &&
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'schedule')
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     permissions:

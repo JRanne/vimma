@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { jobs } from "./workflow-runners.mjs";
@@ -15,13 +15,19 @@ const read = (path) => readFileSync(new URL(path, root), "utf8");
 const workflow = (name) => read(`.github/workflows/${name}`);
 /**
  * @param {string} name
- * @returns {string} the build job without its step names and comments: only what it runs
+ * @returns {string} the build job's commands: every step's `run:`, one after another
  */
-const buildJob = (name) =>
-  (jobs(workflow(name)).get("build") ?? "")
+const buildJob = (name) => {
+  const steps = jobs(workflow(name)).get("build")?.steps;
+  if (!Array.isArray(steps)) throw new Error(`${name}: the build job has no steps`);
+  return steps
+    .map((step) => (typeof step.run === "string" ? step.run : ""))
+    .join("\n")
     .split("\n")
-    .filter((l) => !/^\s*(?:- name:|#)/.test(l))
+    .filter((l) => !/^\s*#/.test(l))
+    .map((l) => l.trim())
     .join("\n");
+};
 
 const SURFER = "@zen-browser/surfer";
 
@@ -93,6 +99,18 @@ describe("build supply chain: npm", () => {
     }
   });
 
+  it("no workflow lets npx fetch a package", () => {
+    const dir = new URL(".github/workflows/", root);
+    for (const name of readdirSync(dir)) {
+      const lines = readFileSync(new URL(name, dir), "utf8")
+        .split("\n")
+        .filter((l) => !/^\s*#/.test(l));
+      for (const line of lines.filter((l) => /\bnpx\b/.test(l))) {
+        expect(line, name).toMatch(/\bnpx --no [a-z]/);
+      }
+    }
+  });
+
   it("surfer.json lists no add-ons", () => {
     // Surfer downloads add-ons from addons.mozilla.org or GitHub with no hash check (spec, R3).
     expect(JSON.parse(read("surfer.json")).addons).toEqual({});
@@ -124,6 +142,30 @@ describe("build supply chain: Dependabot", () => {
         expect(decide({ title, update, deps: SURFER }), `${title} ${update}`).toBe("review");
         expect(decide({ title, update, deps: `ajv, ${SURFER}` }), title).toBe("review");
       }
+    }
+  });
+
+  it("Surfer is held whatever the separator, quoting or case, or when only the title names it", () => {
+    const update = "version-update:semver-patch";
+    for (const deps of [
+      `ajv\n${SURFER}`,
+      `ajv\t${SURFER}`,
+      `ajv;${SURFER}`,
+      `"${SURFER}"`,
+      "@zen-browser/Surfer",
+      "@Zen-Browser/SURFER",
+    ]) {
+      expect(decide({ title: "bump", update, deps }), JSON.stringify(deps)).toBe("review");
+    }
+    expect(
+      decide({ title: `build(deps-dev): bump ${SURFER} [security]`, update, deps: "ajv" }),
+    ).toBe("review");
+  });
+
+  it("an update whose dependency list is empty waits for a person", () => {
+    for (const update of ["version-update:semver-patch", ""]) {
+      expect(decide({ title: "bump [security]", update, deps: "" })).toBe("review");
+      expect(decide({ title: "bump", update, deps: " " })).toBe("review");
     }
   });
 

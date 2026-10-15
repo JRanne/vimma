@@ -428,11 +428,17 @@ checked. On a fresh hosted runner every build downloads the toolchains anew.
    `self-hosted`, names a label other than a standard GitHub-hosted image, or is an expression
    the test cannot resolve. `workflow_call` is in the list because a called workflow runs with
    its caller's trigger (`e2e.yml` is called by `upstream.yml` and the Beta canary). An
-   expression resolves only when it is `${{ matrix.<key> }}` over a literal list in the job's
-   own matrix with no `include:`; any other expression fails, because its value is not known
-   from the file. A second test holds decision 6: no workflow job, whatever its triggers,
-   targets anything but a standard GitHub-hosted image, actionlint's configuration declares no
-   self-hosted label, and both build jobs run on `ubuntu-24.04`. Reason: on a public repository
+   expression resolves only when it is `${{ matrix.<key> }}` over a literal list of strings in
+   the job's own `strategy.matrix`, which is not itself an expression and has no `include:`; any
+   other expression fails, because its value is not known from the file. A job that calls a
+   reusable workflow passes only when the workflow is a file of this repository, which the test
+   checks as its own file. The test parses the workflows with a YAML parser (`js-yaml`, already
+   in the lockfile through commitlint and Surfer, MIT) rather than matching text, because a
+   text match missed quoted job ids, jobs written as flow mappings and matrix keys nested in
+   other entries; a duplicate key is a parse error and fails the test. A second test holds
+   decision 6: no workflow job, whatever its triggers, targets anything but a standard
+   GitHub-hosted image, and both build jobs run on `ubuntu-24.04`. actionlint does not run in
+   CI, so its configuration declaring no self-hosted label only keeps a local run consistent. Reason: on a public repository
    a self-hosted runner that pull request code can reach is a machine anyone can run code on
    (R7). The first test is the permanent guard; the second changes only with a spec that adds a
    machine.
@@ -441,8 +447,11 @@ checked. On a fresh hosted runner every build downloads the toolchains anew.
    the measurement in sub-PR 4, because no self-hosted runner exists or is planned (R7, decision
    6): the self-hosted label was configuration for a machine nobody runs, and removing it at
    once lets the test forbid self-hosted runners in every workflow from the first delivery
-   rather than only in those an outsider can trigger. The build jobs stay switched off, so the
-   move changes nothing that runs; on a fresh hosted runner their `clean: false` and
+   rather than only in those an outsider can trigger. The build jobs stay switched off: the
+   nightly's manual dispatch, which `NIGHTLY_ENABLED` did not gate while its job waited for a
+   runner that did not exist, now needs `NIGHTLY_ENABLED` as well, because on a hosted runner a
+   dispatched nightly would build and publish the rolling release from Firefox source that is
+   not yet signature-checked (#222). The move therefore changes nothing that runs; on a fresh hosted runner their `clean: false` and
    `.vimma-firefox-version` shortcut have nothing to reuse, and sub-PR 4 removes them with the
    rest of decision 5. The test covers the workflow files
    on `main`; a fork's pull request runs its own head's workflow files, which is why the
@@ -761,9 +770,12 @@ protects something that runs today.
    Surfer's security updates (the name check it has today, extended);
    `self-hosted-runner.test.mjs` with all four tests and both build jobs on `ubuntu-24.04`
    (decision 7); the `surfer.json` add-on test; the ADR-001 paragraph; the runbook's
-   `sha_pinning_required` step. Rules B4, B5 and the Surfer half of B3. The Surfer check also
-   reads a grouped update's `dependency-names`, which `dependabot/fetch-metadata` joins with
-   `", "`: the check it replaces matched only `","` and let a grouped Surfer update through. Smallest change with the
+   `sha_pinning_required` step. Rules B4, B5 and the Surfer half of B3. The Surfer check
+   matches `@zen-browser/surfer` as a substring of the dependency names and the title, in any
+   case, and an update without dependency names waits for a person: the check it replaces
+   matched names joined by `","` only, while `dependabot/fetch-metadata` joins them with
+   `", "`, and so let a grouped Surfer update through. A substring match does not depend on
+   that format, and matching too much only holds a pull request for review. Smallest change with the
    largest effect: it closes Problem 3, which is live today because Dependabot runs and
    auto-merges now, and Problems 4 and 5's runner half.
 2. **`ci(upstream): verify mozilla's signature on SHA512SUMS`.** Pinned key,

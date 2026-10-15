@@ -28,6 +28,78 @@ const synthetic = (on, runner, extra = "") =>
   `name: t\non:\n${on}\npermissions: {}\njobs:\n  a:\n    runs-on: ${runner}\n${extra}` +
   "    steps:\n      - run: true\n";
 
+/** @param {string} jobsBlock the lines under `jobs:` */
+const onPullRequest = (jobsBlock) =>
+  `name: t\non:\n  pull_request:\npermissions: {}\njobs:\n${jobsBlock}`;
+const good = "  a:\n    runs-on: ubuntu-24.04\n    steps:\n      - run: true\n";
+
+describe("self-hosted runners: shapes that must fail closed", () => {
+  it("a quoted job id is a job of its own", () => {
+    const text = onPullRequest(
+      good + '  "evil":\n    runs-on: vimma-build\n    steps:\n      - run: true\n',
+    );
+    expect(workflowRunnerProblems(text)).toHaveLength(1);
+    const list = onPullRequest(
+      good + '  "evil":\n    runs-on:\n      - self-hosted\n    steps:\n      - run: true\n',
+    );
+    expect(workflowRunnerProblems(list)).toHaveLength(1);
+  });
+
+  it("a job written as a flow mapping is checked", () => {
+    const text = onPullRequest(good + "  evil: {runs-on: vimma-build, steps: [{run: x}]}\n");
+    expect(workflowRunnerProblems(text)).toHaveLength(1);
+  });
+
+  it("a job with two runs-on keys fails", () => {
+    const text = onPullRequest(
+      "  a:\n    runs-on: ubuntu-24.04\n    runs-on: vimma-build\n    steps:\n      - run: true\n",
+    );
+    expect(() => workflowRunnerProblems(text)).toThrow();
+  });
+
+  it("a matrix key is read only from the job's own strategy.matrix", () => {
+    const nested = onPullRequest(
+      "  a:\n    runs-on: ${{ matrix.os }}\n    strategy:\n      matrix:\n" +
+        "        cfg:\n          - name: x\n            os: [ubuntu-24.04]\n" +
+        "        os: [vimma-build]\n    steps:\n      - run: true\n",
+    );
+    expect(workflowRunnerProblems(nested)).toHaveLength(1);
+    const fromJson = onPullRequest(
+      "  a:\n    runs-on: ${{ matrix.os }}\n    strategy:\n" +
+        "      matrix: ${{ fromJSON(vars.M) }}\n    steps:\n      - run: |\n" +
+        "          os: [ubuntu-24.04]\n",
+    );
+    expect(workflowRunnerProblems(fromJson)).toHaveLength(1);
+    const entries = onPullRequest(
+      "  a:\n    runs-on: ${{ matrix.os }}\n    strategy:\n      matrix:\n" +
+        "        os: [{name: ubuntu-24.04}]\n    steps:\n      - run: true\n",
+    );
+    expect(workflowRunnerProblems(entries)).toHaveLength(1);
+  });
+
+  it("a reusable workflow from another repository fails, a local one is checked as its own file", () => {
+    const remote = onPullRequest("  a:\n    uses: someone/repo/.github/workflows/x.yml@main\n");
+    expect(workflowRunnerProblems(remote)).toHaveLength(1);
+    const local = onPullRequest("  a:\n    uses: ./.github/workflows/e2e.yml\n");
+    expect(workflowRunnerProblems(local)).toEqual([]);
+  });
+
+  it("triggers are read in every spelling YAML allows", () => {
+    const body = "permissions: {}\njobs:\n" + good;
+    for (const on of [
+      'on:\n  "pull_request":\n',
+      "on:\n  pull_request :\n",
+      "on: {pull_request: {}, push: {}}\n",
+      "on: [push, pull_request]\n",
+      "on: pull_request\n",
+      "x: &t\n  pull_request:\non: *t\n",
+      '"on":\n  pull_request:\n',
+    ]) {
+      expect(triggers(on + body), on).toContain("pull_request");
+    }
+  });
+});
+
 describe("self-hosted runners", () => {
   it("the parser sees every workflow's triggers and jobs", () => {
     expect(workflows.length).toBeGreaterThan(10);
@@ -37,11 +109,15 @@ describe("self-hosted runners", () => {
     }
     expect(triggers(workflow("ci.yml"))).toContain("pull_request");
     expect(triggers(workflow("e2e.yml"))).toContain("workflow_call");
-    expect(runsOn(jobs(workflow("upstream.yml")).get("test") ?? "")).toEqual({ kind: "reusable" });
-    // Every runs-on in a file belongs to a parsed job, so no job escapes the checks below.
+    expect(runsOn(jobs(workflow("upstream.yml")).get("test") ?? {})).toEqual({
+      kind: "reusable",
+      uses: "./.github/workflows/e2e.yml",
+    });
+    // Every job has a runs-on or calls a workflow of this repository: none escapes the checks.
     for (const { name, text } of workflows) {
-      const inJobs = [...jobs(text).values()].join("\n").match(/^ {4}runs-on:/gm)?.length ?? 0;
-      expect(inJobs, name).toBe(text.match(/^\s+runs-on:/gm)?.length ?? 0);
+      for (const [id, job] of jobs(text)) {
+        expect(["labels", "expression", "reusable"], `${name} ${id}`).toContain(runsOn(job).kind);
+      }
     }
     // A comment in column 0 between jobs does not end the jobs map.
     const commented = synthetic("  pull_request:", "ubuntu-24.04").concat(
@@ -114,12 +190,12 @@ describe("self-hosted runners", () => {
       expect(text, name).not.toMatch(/runs-on:.*self-hosted/);
     }
     for (const name of ["nightly.yml", "release.yml"]) {
-      expect(runsOn(jobs(workflow(name)).get("build") ?? ""), name).toEqual({
+      expect(runsOn(jobs(workflow(name)).get("build") ?? {}), name).toEqual({
         kind: "labels",
         labels: ["ubuntu-24.04"],
       });
     }
-    // A label declared to actionlint would let a workflow name it without a lint error.
+    // actionlint does not run in CI; the empty list keeps a local run from accepting a label.
     const actionlint = readFileSync(
       new URL("../../.github/actionlint.yaml", import.meta.url),
       "utf8",
@@ -128,14 +204,16 @@ describe("self-hosted runners", () => {
   });
 
   it("each build job runs only from main or for a release", () => {
-    const nightly = jobs(workflow("nightly.yml")).get("build") ?? "";
-    expect(nightly).toMatch(
-      /if: >-\n\s+\(github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'\) \|\|\n\s+\(github\.event_name == 'schedule' && vars\.NIGHTLY_ENABLED == 'true'\)\n/,
+    const nightly = jobs(workflow("nightly.yml")).get("build") ?? {};
+    expect(nightly.if).toBe(
+      "vars.NIGHTLY_ENABLED == 'true' && ((github.event_name == 'workflow_dispatch' && " +
+        "github.ref == 'refs/heads/main') || github.event_name == 'schedule')",
     );
     expect(triggers(workflow("nightly.yml")).sort()).toEqual(["schedule", "workflow_dispatch"]);
-    const release = jobs(workflow("release.yml")).get("build") ?? "";
-    expect(release).toMatch(
-      /if: >-\n\s+vars\.RELEASE_ENABLED == 'true' && github\.repository == 'vimma-browser\/vimma' &&\n\s+\(github\.event_name == 'release' \|\| github\.ref == 'refs\/heads\/main'\)\n/,
+    const release = jobs(workflow("release.yml")).get("build") ?? {};
+    expect(release.if).toBe(
+      "vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' && " +
+        "(github.event_name == 'release' || github.ref == 'refs/heads/main')",
     );
     expect(triggers(workflow("release.yml")).sort()).toEqual(["release", "workflow_dispatch"]);
   });

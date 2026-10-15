@@ -385,11 +385,11 @@ Limits:
 | -------------------------- | ---------------------------------- | ------------------------- | ------------------------------------------ |
 | `ci.yml`                   | push to `main`, PRs, manual        | `ubuntu-latest`           | nothing                                    |
 | `e2e.yml`                  | PRs, manual, upstream.yml          | `ubuntu-24.04`            | nothing (ADR-010)                          |
-| `nightly.yml`              | 03:00 UTC, manual                  | hosted (after #224)       | off until #224; then `NIGHTLY_ENABLED`     |
+| `nightly.yml`              | 03:00 UTC, manual                  | `ubuntu-24.04`            | off until #224; then `NIGHTLY_ENABLED`     |
 | `upstream.yml`             | every 4 h (`:17`), manual          | `ubuntu-latest` + e2e.yml | allow Actions to open PRs; optional token  |
 | `claude.yml`               | `@claude`, `spec`+`claude:go`      | `ubuntu-latest`           | a secret, two labels, Actions may open PRs |
 | `release-please.yml`       | push to `main`, manual             | `ubuntu-latest`           | Actions may open PRs; optional token       |
-| `release.yml`              | release published, manual          | hosted (after #224)       | see "Release packages" (gated off)         |
+| `release.yml`              | release published, manual          | `ubuntu-24.04`            | see "Release packages" (gated off)         |
 | `mutation.yml`             | Sundays 04:23 UTC, manual          | `ubuntu-latest`           | nothing (creates its `mutation` label)     |
 | `semgrep.yml`              | push to `main`, PRs, Mon, manual   | `ubuntu-latest`           | nothing                                    |
 | `codeql.yml`               | push to `main`, PRs, Mon, manual   | `ubuntu-latest`           | nothing; skipped while the repo is private |
@@ -443,6 +443,11 @@ with a workflow token (docs/security.md, B5; spec build-supply-chain, decisions 
   once:
   `gh api -X PUT repos/vimma-browser/vimma/actions/permissions -F enabled=true -f allowed_actions=all -F sha_pinning_required=true`,
   and checks it with `gh api repos/vimma-browser/vimma/actions/permissions`.
+
+An organization owner also confirms that the organization has no self-hosted runner:
+`gh api orgs/vimma-browser/actions/runners` must report `total_count` 0. A runner registered at
+the organization and shared with this repository through a runner group would not show in the
+repository's own runner list, and the workflow test only proves no workflow asks for one.
 
 **Residual risk:** any job token with `contents: write` (`spec-pr` in claude.yml, upstream.yml,
 nightly.yml, release-please.yml) can push branches and tags; the ruleset has no bypass actors, so
@@ -802,8 +807,8 @@ self-hosted runner or a label that is not a standard GitHub-hosted image
 
 **Known gap.** The build jobs still carry the shortcuts of a persistent machine (`clean: false`,
 `engine/.vimma-firefox-version`), harmless on a fresh hosted runner but not yet removed, and a
-cold build on the standard runner is not measured. Both workflows stay switched off
-(`NIGHTLY_ENABLED` and `RELEASE_ENABLED` unset) until build-supply-chain sub-PR 4,
+cold build on the standard runner is not measured. Both workflows stay switched off, scheduled
+and manual runs alike (`NIGHTLY_ENABLED` and `RELEASE_ENABLED` unset) until build-supply-chain sub-PR 4,
 [#224](https://github.com/vimma-browser/vimma/issues/224), gives them a fresh, verified extraction
 of the Firefox source, measures a cold build, and records the time, disk and the steps to switch
 them on in this section. Until then a full build runs only on a

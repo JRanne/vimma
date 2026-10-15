@@ -91,7 +91,7 @@ describe("upstream autopilot workflow", () => {
   });
 
   it("nothing is built from a tarball whose SHA-512 Mozilla did not publish", () => {
-    const download = e2e.indexOf("npx surfer download");
+    const download = e2e.indexOf("npx --no surfer download");
     const verify = e2e.indexOf("python3 tools/upstream/verify-sha512.py");
     const imp = e2e.indexOf("run: npm run import");
     expect(download).toBeGreaterThan(0);

@@ -46,11 +46,17 @@ jobs:
           # Dependabot puts "[security]" in the title of a security update.
           security=false
           case "$TITLE" in *"[security]"* | *"[Security]"*) security=true ;; esac
-          # fetch-metadata joins a grouped update's names with ", ".
+          # A substring match in any case, in the names or the title: it does not depend on how
+          # fetch-metadata joins a grouped update's names, and matching too much only holds a PR.
           surfer=false
-          case ",${DEPENDENCIES// /}," in *,@zen-browser/surfer,*) surfer=true ;; esac
+          case "$(printf '%s %s' "$DEPENDENCIES" "$TITLE" | tr '[:upper:]' '[:lower:]')" in
+            *@zen-browser/surfer*) surfer=true ;;
+          esac
+          # No names means the metadata could not be read as expected: a person decides.
+          named=true
+          [ -n "${DEPENDENCIES//[[:space:]]/}" ] || named=false
           decision=review
-          if [ "$ECOSYSTEM" = github_actions ] || [ "$surfer" = true ]; then
+          if [ "$ECOSYSTEM" = github_actions ] || [ "$surfer" = true ] || [ "$named" = false ]; then
             decision=review
           elif [ "$security" = true ]; then
             decision=merge
@@ -58,7 +64,7 @@ jobs:
             || [ "$UPDATE_TYPE" = version-update:semver-minor ]; then
             decision=merge
           fi
-          echo "security=$security surfer=$surfer ecosystem=$ECOSYSTEM update=$UPDATE_TYPE -> $decision"
+          echo "security=$security surfer=$surfer named=$named ecosystem=$ECOSYSTEM update=$UPDATE_TYPE -> $decision"
           echo "decision=$decision" >> "$GITHUB_OUTPUT"
 
       - name: Enable auto-merge (squash, after the required checks)

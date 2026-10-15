@@ -25,9 +25,11 @@ updates:
       prefix-development: build
       include: scope
     groups:
-      # The packages the release build runs (docs/specs/build-supply-chain.md, decision 16). A
-      # person reviews every change to them, so they get their own pull request and do not hold
-      # back the other minor and patch updates. Groups match in order: this one comes first.
+      # The packages the release build runs (docs/specs/build-supply-chain.md, decision 16), in a
+      # pull request of their own so a held update does not hold back the other minor and patch
+      # updates. Every Surfer update waits for a person; `ajv` itself still auto-merges like any
+      # other package until #223 holds the whole release path. Groups match in order: this one
+      # comes first.
       release-path:
         patterns:
           - "@zen-browser/surfer"

@@ -658,24 +658,39 @@ in a `build` environment, and a watch on Mozilla's release key,
 
 - B3. Surfer **must** be pinned to one exact version, locked by its integrity hash, and a
   Dependabot update of Surfer **never** merges without a person, security updates and grouped
-  updates included. **⚠ gap:** the packages Surfer and `ajv` depend on are not held yet
-  ([#223](https://github.com/vimma-browser/vimma/issues/223)).
+  updates included, whatever the format of Dependabot's metadata; an update whose dependency
+  names are missing waits for a person too. **⚠ gap:** `ajv` itself still auto-merges its
+  patch, minor and security updates, and so do the packages Surfer and `ajv` depend on, until
+  [#223](https://github.com/vimma-browser/vimma/issues/223) holds the whole release path.
   [`package.json pins Surfer to an exact version, locked by integrity`](../tools/test/build-supply-chain.test.mjs),
   [`a Surfer update is never auto-merged, security updates included`](../tools/test/build-supply-chain.test.mjs),
+  [`Surfer is held whatever the separator, quoting or case, or when only the title names it`](../tools/test/build-supply-chain.test.mjs),
+  [`an update whose dependency list is empty waits for a person`](../tools/test/build-supply-chain.test.mjs),
   [`the release-path group comes before the minor and patch group`](../tools/test/build-supply-chain.test.mjs)
 - B4. An npm install **never** runs install scripts, and the build **must** run Surfer only from
   `node_modules`, never a package `npx` fetches, and **never** lets Surfer fetch an add-on.
   [`.npmrc turns install scripts off for every install`](../tools/test/build-supply-chain.test.mjs),
   [`release and nightly install with npm ci --ignore-scripts and run Surfer with npx --no`](../tools/test/build-supply-chain.test.mjs),
+  [`no workflow lets npx fetch a package`](../tools/test/build-supply-chain.test.mjs),
   [`surfer.json lists no add-ons`](../tools/test/build-supply-chain.test.mjs)
 - B5. A workflow **never** targets a self-hosted runner: every job runs on a standard
-  GitHub-hosted image, and a `runs-on` expression that cannot be resolved to one fails. A job of
-  a workflow that a pull request, a comment, an issue or another workflow run can trigger is
-  held to this as the permanent guard; the build jobs run only from `main` or for a release.
-  **⚠ setting:** fork pull request approval is `all_external_contributors`
+  GitHub-hosted image or calls a workflow file of this repository, and a `runs-on` expression
+  that cannot be resolved to a hosted image fails. The test parses each workflow as YAML and
+  fails on any shape it does not recognise. A job of a workflow that a pull request, a comment,
+  an issue or another workflow run can trigger is held to this as the permanent guard; the build
+  jobs run only from `main` or for a release, and only once `NIGHTLY_ENABLED` or
+  `RELEASE_ENABLED` is set. **⚠ setting:** fork pull request approval is
+  `all_external_contributors`
   (`gh api repos/vimma-browser/vimma/actions/permissions/fork-pr-contributor-approval`), so a
-  fork's own workflow files run only once a person approves the run.
+  fork's own workflow files run only once a person approves the run; and the organization has
+  no self-hosted runner (`gh api orgs/vimma-browser/actions/runners`, organization owners only),
+  since an organization runner shared with this repository is invisible to every
+  repository-level check.
   [`no workflow an outsider can trigger runs a job on a self-hosted runner`](../tools/test/self-hosted-runner.test.mjs),
   [`a runs-on expression in such a workflow fails unless it resolves to a hosted image`](../tools/test/self-hosted-runner.test.mjs),
+  [`a quoted job id is a job of its own`](../tools/test/self-hosted-runner.test.mjs),
+  [`a job written as a flow mapping is checked`](../tools/test/self-hosted-runner.test.mjs),
+  [`a matrix key is read only from the job's own strategy.matrix`](../tools/test/self-hosted-runner.test.mjs),
+  [`triggers are read in every spelling YAML allows`](../tools/test/self-hosted-runner.test.mjs),
   [`no workflow names a self-hosted runner, and both build jobs run on ubuntu-24.04`](../tools/test/self-hosted-runner.test.mjs),
   [`each build job runs only from main or for a release`](../tools/test/self-hosted-runner.test.mjs)

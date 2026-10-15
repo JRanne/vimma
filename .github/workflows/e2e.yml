@@ -141,7 +141,7 @@ jobs:
         env:
           E2E_REQUIRE_CTL: "1"
           E2E_REQUIRE_XVFB: "1"
-        run: npx vitest run tools/e2e/
+        run: npx --no vitest run tools/e2e/
 
       # Disk guards. Measured (PR #8): ~13 GB free before the download; the tarball (0.8 GB) and
       # tree (4.7 GB) leave ~8.3 GB once the tarball is deleted; build and tests then use 1.2 GB,
@@ -159,7 +159,7 @@ jobs:
         env:
           CI_SKIP_INIT: "1" # Surfer's own switch: skips `git init` + commit of 4.7 GB
         run: |
-          npx surfer download
+          npx --no surfer download
           # Surfer does not check the tarball: compare it with Mozilla's SHA512SUMS (as upstream.yml
           # does) before anything is built from it. A mismatch fails here.
           version=$(node -p 'require("./surfer.json").version.version')
@@ -184,7 +184,7 @@ jobs:
       - name: Branding prefs keep upstream's (tools/branding/test)
         id: branding
         continue-on-error: ${{ steps.mode.outputs.beta == 'true' }}
-        run: npx vitest run tools/branding/
+        run: npx --no vitest run tools/branding/
 
       # The cfr provider and Safe Browsing lists we copy from upstream (docs/rebase.md, step 6):
       # a stale copy shadows upstream's. Fails with the line to paste.
