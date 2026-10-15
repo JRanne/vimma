@@ -38,6 +38,26 @@ describe("chrome CSS", () => {
     }
   });
 
+  it("points Firefox's text colour tokens only at tokens whose contrast is checked", () => {
+    // firefox-*.css theme Firefox's surfaces through its own tokens (--text-color,
+    // --panel-text-color, --link-color, ...): what they draw in is text too.
+    const allowed = new Set(TEXT_TOKENS);
+    const textToken = /^--[a-z-]*(text-color|link-color|icon-color|icon-fill)[a-z-]*$/;
+    let checked = 0;
+    for (const { name, text } of sheets) {
+      for (const { property, value } of declarations(text)) {
+        if (!textToken.test(property)) continue;
+        const token = /^var\((--vimma-[a-z0-9-]+)\)/.exec(value)?.[1];
+        if (!token) continue;
+        checked++;
+        expect(allowed.has(token) || TEXT_ON.test(token), `${name}: ${property}: ${value}`).toBe(
+          true,
+        );
+      }
+    }
+    expect(checked).toBeGreaterThan(10);
+  });
+
   it("never dims text with opacity", () => {
     for (const { name, text } of sheets) {
       for (const { property, value } of declarations(text)) {

@@ -1,0 +1,239 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* Live grep (ui/grep.mjs, docs/specs/live-grep.md decision 5): Telescope's horizontal layout,
+   80 % of the window's width over the page area's full height (ui/grep.mjs sets
+   --vimma-grep-top and --vimma-grep-height from it, so the dialog follows the toolbar), the scope
+   and the results above the prompt with the best result at the bottom, the preview on the
+   right, hidden below 900 pixels. Theme tokens when the status bar has loaded them, legible
+   system colours otherwise. */
+
+.vimma-grep {
+  box-sizing: border-box;
+  width: 80vw;
+  height: var(--vimma-grep-height, 90vh);
+  max-width: none;
+  max-height: none;
+  margin-block: var(--vimma-grep-top, auto) auto;
+  padding: 1rem 0.75rem 0.75rem;
+  border: 1px solid var(--vimma-muted, color-mix(in srgb, CanvasText 25%, transparent));
+  border-radius: 8px;
+  background: var(--vimma-bg-dark, Canvas);
+  color: var(--vimma-fg, CanvasText);
+  font-family: var(--vimma-font, monospace);
+  font-size: 13px;
+  outline: none;
+  color-scheme: var(--vimma-color-scheme, light dark);
+  container-type: inline-size;
+  overflow: hidden;
+
+  &::backdrop {
+    background: rgb(0 0 0 / 0.45);
+  }
+
+  & [hidden] {
+    display: none !important;
+  }
+
+  /* Vimma's focus ring (docs/specs/m7-a11y.md): the dialog's, inset; the focused list's is its
+     box's border, as Telescope marks its active window. */
+  &:focus-visible {
+    outline: 2px solid var(--vimma-focus, AccentColor);
+    outline-offset: -2px;
+  }
+
+  & ul:focus-visible {
+    outline: none;
+  }
+
+  & .vimma-grep-results:has(ul:focus-visible) {
+    border-color: var(--vimma-focus, AccentColor);
+  }
+
+  & .vimma-grep-body {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 0.75rem;
+    height: 100%;
+  }
+
+  & .vimma-grep-left {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-height: 0;
+  }
+
+  /* A box with its title on its top border, as Telescope draws its windows. */
+  & .vimma-grep-box {
+    position: relative;
+    box-sizing: border-box;
+    min-height: 0;
+    padding: 0.75rem 0.5rem 0.35rem;
+    border: 1px solid var(--vimma-muted, color-mix(in srgb, CanvasText 25%, transparent));
+    border-radius: 4px;
+  }
+
+  & .vimma-grep-title {
+    position: absolute;
+    top: -0.7em;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    padding: 0 0.5em;
+    font: inherit;
+    font-weight: bold;
+    white-space: nowrap;
+    color: var(--vimma-text-accent, AccentColor);
+    background: var(--vimma-bg-dark, Canvas);
+  }
+
+  & .vimma-grep-scope {
+    flex: none;
+  }
+
+  & .vimma-grep-scope-line {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--vimma-fg-dim, GrayText);
+  }
+
+  & .vimma-grep-results {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+
+  /* Best first in the DOM (and for a screen reader), bottom up on screen. */
+  & .vimma-grep-list {
+    display: flex;
+    flex-direction: column-reverse;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+  }
+
+  & .vimma-grep-row {
+    display: grid;
+    grid-template-columns: 2ch 3ch minmax(0, 26ch) minmax(0, 14ch) auto minmax(0, 1fr);
+    gap: 0.5ch;
+    padding: 0.05rem 0.25rem;
+    white-space: nowrap;
+  }
+
+  & .vimma-grep-selected {
+    background: var(--vimma-selection, SelectedItem);
+    color: var(--vimma-fg-bright, SelectedItemText);
+  }
+
+  & .vimma-grep-marker,
+  & .vimma-grep-prompt-marker {
+    color: var(--vimma-text-accent, AccentColor);
+    font-weight: bold;
+  }
+
+  & .vimma-grep-tab,
+  & .vimma-grep-host,
+  & .vimma-grep-where {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  & .vimma-grep-win,
+  & .vimma-grep-tab,
+  & .vimma-grep-host,
+  & .vimma-grep-url,
+  & .vimma-grep-line,
+  & .vimma-grep-frame,
+  & .vimma-grep-unloaded,
+  & .vimma-grep-flags,
+  & .vimma-grep-count {
+    color: var(--vimma-fg-dim, GrayText);
+  }
+
+  & .vimma-grep-frame {
+    margin-inline-end: 1ch;
+  }
+
+  & .vimma-grep-agent {
+    color: var(--vimma-text-cyan, LinkText);
+  }
+
+  /* A closed row's label is a word, not a colour alone (decision 15). */
+  & .vimma-grep-closed {
+    font-style: italic;
+  }
+
+  & mark {
+    background: none;
+    color: var(--vimma-text-accent, AccentColor);
+    font-weight: bold;
+  }
+
+  & .vimma-grep-input {
+    display: flex;
+    align-items: baseline;
+    gap: 1ch;
+    white-space: pre;
+  }
+
+  & .vimma-grep-query {
+    overflow: hidden;
+  }
+
+  & .vimma-grep-cursor {
+    display: inline-block;
+    width: 1ch;
+    height: 1.1em;
+    margin-inline-start: -1ch;
+    align-self: center;
+    background: var(--vimma-fg, CanvasText);
+  }
+
+  & .vimma-grep-flags {
+    margin-inline-start: auto;
+  }
+
+  & .vimma-grep-preview {
+    display: flex;
+    flex-direction: column;
+  }
+
+  & .vimma-grep-preview-body {
+    flex: 1;
+    overflow: hidden auto;
+    white-space: pre;
+  }
+
+  & .vimma-grep-preview-line {
+    min-height: 1.2em;
+  }
+
+  & .vimma-grep-preview-match {
+    background: var(--vimma-selection, SelectedItem);
+    color: var(--vimma-fg-bright, SelectedItemText);
+  }
+
+  & .vimma-grep-status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+
+/* Telescope's preview_cutoff, in pixels: a narrow dialog lists results across its width. */
+@container (width < 900px) {
+  .vimma-grep .vimma-grep-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vimma-grep .vimma-grep-preview {
+    display: none;
+  }
+}

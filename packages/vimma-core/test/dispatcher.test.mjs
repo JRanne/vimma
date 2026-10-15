@@ -24,6 +24,17 @@ describe("dispatcher (spec acceptance criteria)", () => {
     });
   });
 
+  test("ctrl+b f g opens live grep; ctrl+b f then an unbound key cancels (live-grep)", () => {
+    const r = feed(make(), "normal", "ctrl+b f g");
+    expect(r[0]).toEqual({ kind: "pending" });
+    expect(r[1]).toEqual({ kind: "pending" });
+    expect(r[2]).toEqual({ kind: "action", action: { id: "grep.open" } });
+    const d = make();
+    feed(d, "normal", "ctrl+b f");
+    expect(d.dispatch("normal", parseKey("x")).kind).not.toBe("action");
+    expect(d.pending()).toEqual([]);
+  });
+
   test("j in insert mode passes through", () => {
     expect(feed(make(), "insert", "j")[0]).toEqual({ kind: "pass" });
   });

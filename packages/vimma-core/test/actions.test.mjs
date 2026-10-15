@@ -96,6 +96,23 @@ describe("actions", () => {
     }
   });
 
+  // docs/specs/live-grep.md decision 2: ctrl+b f is the find group; ]q and [q step the results.
+  test("live_grep on prefix+f g, grep_next / grep_previous on ]q / [q (live-grep)", () => {
+    const km = compileKeymap();
+    expect(getAction("live_grep")).toMatchObject({ id: "grep.open", group: "Find" });
+    expect(getAction("grep_next")).toMatchObject({ id: "grep.next", group: "Find" });
+    expect(getAction("grep_previous")).toMatchObject({ id: "grep.previous", group: "Find" });
+    expect(getAction("grep_resume")).toMatchObject({ id: "grep.resume", group: "Find" });
+    expect(km.bindingsFor("grep_resume")).toEqual([]);
+    expect(km.bindingsFor("live_grep")).toEqual(["prefix+f g"]);
+    expect(km.bindingsFor("grep_next")).toEqual(["]q"]);
+    expect(km.bindingsFor("grep_previous")).toEqual(["[q"]);
+    for (const mode of /** @type {const} */ (["normal", "insert", "visual", "panel", "help"])) {
+      const f = km.trie(mode).children.get("ctrl+b")?.children.get("f");
+      expect(f?.children.get("g")?.action?.id, mode).toBe("grep.open");
+    }
+  });
+
   test("private_workspace: prefix+shift+p and ctrl+shift+p, in every mode (private-workspace)", () => {
     const km = compileKeymap();
     expect(getAction("private_workspace")).toMatchObject({

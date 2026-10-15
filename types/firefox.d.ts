@@ -189,6 +189,8 @@ declare class JSWindowActorParent {
   sendAsyncMessage(name: string, data?: unknown): void;
   sendQuery(name: string, data?: unknown): Promise<any>;
 }
+// engine/dom/webidl/Worker.webidl (ChromeWorker): a Worker with chrome privileges (system modules)
+declare class ChromeWorker extends Worker {}
 declare class JSWindowActorChild {
   readonly browsingContext: any;
   readonly document: Document;

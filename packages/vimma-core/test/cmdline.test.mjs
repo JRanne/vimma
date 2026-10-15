@@ -74,6 +74,10 @@ describe("parseCommandLine: plan §2 commands", () => {
     // Vim's :b {name} goes to a buffer by name: here, tab search with the name typed.
     [":b", run("tabsearch", "goto.picker")],
     [":b jira", run("tabsearch", "goto.picker", { text: "jira" })],
+    // docs/specs/live-grep.md decision 2: with text opens with that query; alone resumes.
+    [":grep", run("grep", "grep.resume")],
+    [":grep retry budget", run("grep", "grep.open", { text: "retry budget" })],
+    [":live_grep", run("live_grep", "grep.open")],
     [":sidebar", run("sidebar", "sidebar.toggle")],
     [":map", run("map", "help.show")],
     [":help", run("help", "help.show")],

@@ -230,6 +230,11 @@ group("Find", [
   ["find_backward", "find.backward", "Search backwards in page"],
   ["find_next", "find.next", "Next match"],
   ["find_previous", "find.previous", "Previous match"],
+  // docs/specs/live-grep.md: the text of every tab in the workspace, as Telescope's live_grep.
+  ["live_grep", "grep.open", "Live grep: search the text of the workspace's tabs"],
+  ["grep_next", "grep.next", "Next result of the last live grep"],
+  ["grep_previous", "grep.previous", "Previous result of the last live grep"],
+  ["grep_resume", "grep.resume", "Live grep again with the last query (:grep)"],
 ]);
 
 group("Modes", [

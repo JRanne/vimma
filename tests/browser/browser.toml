@@ -74,6 +74,9 @@ support-files = ["file_vimma_plain.html", "file_vimma_mixed.js"]
 ["browser_vimma_toolbar_theme.js"]
 support-files = ["file_vimma_plain.html"]
 
+["browser_vimma_firefox_surfaces_theme.js"]
+support-files = ["file_vimma_plain.html"]
+
 ["browser_vimma_tab_keys.js"]
 support-files = ["file_vimma_test.pdf"]
 
@@ -134,6 +137,9 @@ support-files = [
 ["browser_vimma_picker.js"]
 
 ["browser_vimma_tab_search.js"]
+
+["browser_vimma_live_grep.js"]
+support-files = ["file_vimma_grep.html"]
 
 ["browser_vimma_rename.js"]
 

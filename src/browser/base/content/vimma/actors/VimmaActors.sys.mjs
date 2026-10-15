@@ -136,8 +136,9 @@ export const VimmaActors = {
       // for normal mode like any page.
       matches: ["http://*/*", "https://*/*", "file:///*", "about:*", START_PAGE_MATCH],
       messageManagerGroups: ["browsers"],
-      // The child only reports focus and scrolls its own page; the parent trusts nothing but
-      // a descriptor, which at worst flips that tab's mode.
+      // The child only reports focus, scrolls its own page and answers about its own text; the
+      // parent trusts nothing but a descriptor, which at worst flips that tab's mode, and
+      // checks every other reply (core parseHintReply, parseGrepReply).
       safeForUntrustedWebProcess: true,
     });
   },
@@ -423,6 +424,61 @@ export const VimmaActors = {
    */
   scrollTo(browser, at) {
     actorFor(browser.browsingContext)?.sendAsyncMessage("Vimma:ScrollTo", at);
+  },
+
+  /**
+   * A browser's frames for live grep (docs/specs/live-grep.md decision 12): its browsing
+   * contexts in tree order, skipping those under a hidden embedder, as
+   * FinderParent.gatherBrowsingContexts does.
+   * At most `max` frames; `cut` says some were left out.
+   * @param {any} browser XULBrowserElement
+   * @param {number} max
+   * @returns {{ frames: any[], cut: boolean }} BrowsingContexts
+   */
+  grepFrames(browser, max) {
+    /** @type {any[]} */
+    const out = [];
+    let cut = false;
+    /** @param {any} bc @param {number} depth */
+    const gather = (bc, depth) => {
+      if (!bc || bc.isUnderHiddenEmbedderElement || depth > MAX_FRAME_DEPTH) return;
+      if (out.length >= max) {
+        cut = true;
+        return;
+      }
+      out.push(bc);
+      for (const child of bc.children) gather(child, depth + 1);
+    };
+    gather(browser.browsingContext, 0);
+    return { frames: out, cut };
+  },
+
+  /**
+   * One live grep message (`Vimma:Grep`, `Vimma:GrepPreview`, `Vimma:GrepJump`,
+   * `Vimma:GrepEnd`) to a frame's current document. The raw reply, unchecked: the caller
+   * parses it (core grep.mjs). Null when the frame has no actor, went away, or did not answer
+   * within `ms`.
+   * @param {any} bc BrowsingContext
+   * @param {string} name
+   * @param {object} data
+   * @param {number} ms
+   * @returns {Promise<unknown>}
+   */
+  async grepAsk(bc, name, data, ms) {
+    /** @type {number | undefined} */
+    let timer;
+    try {
+      const query = actorFor(bc)?.sendQuery(name, data);
+      if (!query) return null;
+      const late = new Promise((resolve) => {
+        timer = setTimeout(resolve, ms, null);
+      });
+      return await Promise.race([query, late]);
+    } catch {
+      return null; // the frame navigated or its process went away
+    } finally {
+      clearTimeout(timer);
+    }
   },
 
   /**
