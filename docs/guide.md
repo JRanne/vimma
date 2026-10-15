@@ -274,12 +274,14 @@ is on screen), as Vim's starts at the cursor.
 `ctrl+b f g` searches the text of every tab in your workspace as you type, as Telescope's
 `live_grep` searches files in Neovim. `/` finds text in one page; live grep finds the page.
 
-- **The picker.** The prompt, titled `Live Grep`, is at the bottom, with `matches listed / found`
-  on its right. Results stack above it, the best one next to the prompt and marked `>`. Each row
-  shows the tab's number (the one `ctrl+b 1..9` uses) and title, `:line:`, and the line with the
-  match highlighted. A line is a paragraph, list item, heading or table cell (text after a `<br>`
+- **The picker** covers the page area, from below the toolbar (or the window's top when the
+  toolbar is hidden) to the status bar. The prompt, titled `Live Grep`, is at the bottom, with
+  `matches listed / found` on its right. Results stack above it, the best one next to the prompt
+  and marked `>`. Each row shows its window (`w1` is this one), the tab's number (the one
+  `ctrl+b 1..9` uses) and title, its host, `:line:`, and the line with the match highlighted. A line is a paragraph, list item, heading or table cell (text after a `<br>`
   or in `pre` text starts a new one), numbered in the page. On the right, `Grep Preview` shows
-  the ten lines before and after the selected match, the matched line highlighted. In a window
+  the ten lines before and after the selected match, the matched line highlighted; its title
+  names the match's window, workspace, tab and host in full. In a window
   narrower than 900 pixels the preview is hidden and the results take the whole width.
 - **The query** is a regular expression in JavaScript's syntax (`err(or)?s?\b`, `\d+ ms`), matched
   line by line. Case follows ripgrep's smart case: all lower case ignores case, a capital letter
@@ -292,29 +294,39 @@ is on screen), as Vim's starts at the cursor.
   `gg` (top) and `G` (the best result), `/` or `i` back to the prompt, and `Esc` or `q` close.
 - **`ctrl+space`** keeps the results and filters them by fuzzy matching, as Telescope's refine:
   the prompt says `fuzzy`, and `Esc` goes back to the search.
-- **`ctrl+s`** widens the search to every workspace of this window, again to the current tab
-  alone, and again back to the workspace; the prompt names the scope while it is not the
-  workspace.
+- **The scope box** above the results says what is being searched, before you type: its title
+  names the scope (`Scope: this workspace · ctrl+s`), and a line per window gives its mark, its
+  workspaces with their tab counts and how many tabs are not loaded, for example
+  `w1 this window: work 12, notes 3 · 15 tabs, 2 not loaded`.
+- **`ctrl+s`** widens the search: this workspace → this window (every workspace in it) → all
+  windows → all windows and recently closed tabs and windows → back to this workspace. The
+  scope starts at this workspace each time live grep opens. `Enter` on a result in another
+  window brings that window to the front and selects the match there.
+- **Recently closed** tabs and windows are searched by their title and URL only, since Firefox
+  keeps no page text for them: at most the 25 tabs and 5 windows Firefox remembers. They are
+  listed after the open tabs' results, labelled `closed` or `closed window`; `Enter` reopens the
+  tab in this window and goes there, or reopens the window.
 - **`Enter`** goes to the result: it selects the tab (and the pane that shows it in a split),
   selects the match with find's highlight and scrolls it to the middle. You are in normal mode;
   `v` starts copy mode with the match selected, so `v` `y` copies it. If the page changed since
   the search, the same match is found again; if it is gone, a notice says
   `match no longer on the page`.
-- **`]q` / `[q`** go to the next / previous result of that search afterwards, across tabs and
-  wrapping, as Vim's quickfix list; a notice says where you are (`grep 3/12`). `:grep` alone
+- **`]q` / `[q`** go to the next / previous result of that search afterwards, across tabs (and
+  windows, in the wider scopes) and wrapping, as Vim's quickfix list; a notice says where you are (`grep 3/12`). `:grep` alone
   opens live grep again with the last query; `:grep text` opens it with that text.
 - **Not searched:** tabs that have not loaded since a restart (they are listed at the far end as
   `not loaded`; `Enter` opens one, so you can search again), form fields, text drawn on a canvas,
   images, closed `<details>`, PDFs, and pages Vimma cannot read (`view-source:`). A page in a
   frame from another site is searched; its rows say `↳ host`.
-- **Limits.** A search stops in a page after a second (`timed out`, so a pattern that would
-  backtrack for ever never freezes the page), covers at most 100 frames a tab and the first
+- **Limits.** A search stops in a page, or in the closed tabs' titles, after a second
+  (`timed out`, so a pattern that would backtrack for ever never freezes the page or Vimma), covers at most 100 frames a tab and the first
   million characters of a page (`cut`), and lists at most 2,000 results; a query over 1,000
   characters is not run (`too long`).
-- **Private and agent tabs.** Live grep searches only its own window: from a normal window it
-  never sees the [private workspace](#private-workspace), and in the private workspace it sees
-  only private tabs. The [agent workspace](#agent-workspace)'s tabs are searched only when the
-  scope includes them, listed last and marked `◇ agent`.
+- **Private and agent tabs.** From a normal window live grep never sees the
+  [private workspace](#private-workspace), open or recently closed, in any scope; in the private
+  workspace it sees only private tabs. The [agent workspace](#agent-workspace)'s tabs are
+  searched only when the scope includes them (from `this window` on), listed last and marked
+  `◇ agent`.
 - Page text stays in the page's own process while the picker is open and is dropped when it
   closes; Vimma keeps only the lines it shows, in memory, and never writes them to disk.
 

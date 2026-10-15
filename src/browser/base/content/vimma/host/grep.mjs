@@ -6,15 +6,21 @@
 // of every loaded tab in scope (`Vimma:Grep`), checks each reply (core parseGrepReply), merges
 // them in tab order (core grepRows) and renders them in the picker (ui/grep.mjs); it asks the
 // selected result's frame for the preview, jumps on Enter, and keeps the grep list for ]q / [q.
-// Only this window's tabs are searched, so the private workspace (its own window) and normal
-// windows never see each other's pages (decision 13).
+// The scope (decision 10) reaches other windows only on the same side of the private line, so
+// the private workspace (its own window) and normal windows never see each other's pages
+// (decision 13). Recently closed tabs and windows have no page text; their titles and URLs are
+// matched in a worker of this process, as a page's text is in its own.
 
 import {
   GREP_CAPS,
+  closedPreview,
+  closedRows,
+  closedSearchText,
   grepCountText,
   grepListText,
   grepPickerKey,
   grepRows,
+  grepScopeText,
   holdReplies,
   openGrepPicker,
   parseGrepReply,
@@ -26,17 +32,23 @@ import {
 } from "../core/grep.mjs";
 import { PRIVATE_NAME } from "../core/privatews.mjs";
 import { VimmaActors } from "../actors/VimmaActors.sys.mjs";
+import { GrepMatcher } from "../actors/grep-matcher.mjs";
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
 import { pickerWorkspaces, tabById } from "./goto.mjs";
-import { isPrivateWorkspace } from "./private-ops.mjs";
+import { isPrivateBrowsing, isPrivateWorkspace } from "./private-ops.mjs";
 import { GrepPicker } from "../ui/grep.mjs";
 
-/** @import { GrepFrame, GrepList, GrepMatchRow, GrepPickerState, GrepRow, GrepTab } from "../core/grep.mjs" */
+/** @import { GrepClosedEntry, GrepClosedRow, GrepFrame, GrepList, GrepMatchRow, GrepPickerState, GrepRow, GrepTab } from "../core/grep.mjs" */
 /** @import { GrepInfo } from "../ui/grep.mjs" */
 
 const { clearTimeout, setTimeout } = ChromeUtils.importESModule(
   "resource://gre/modules/Timer.sys.mjs",
 );
+const lazy = /** @type {any} */ ({});
+ChromeUtils.defineESModuleGetters(lazy, {
+  BrowserWindowTracker: "resource:///modules/BrowserWindowTracker.sys.mjs",
+  SessionStore: "moz-src:///browser/components/sessionstore/SessionStore.sys.mjs",
+});
 
 /** Decision 14: the debounce after a keystroke, tabs asked at a time, a frame's time to answer. */
 const DEBOUNCE_MS = 80;
@@ -68,6 +80,91 @@ function hostOf(url) {
  * @returns {any} gBrowser
  */
 const gBrowserOf = (win) => /** @type {any} */ (win).gBrowser;
+
+/** @param {any} w */
+const isBrowserWindow = (w) => !w.closed && w.toolbar?.visible !== false && !!w.gBrowser;
+
+/**
+ * The windows a scope searches (decision 10): this one, and for `windows` and `closed` every
+ * other browser window on the same side of the private line, most recently used first, as tab
+ * search lists them. A private window never reaches a normal one, nor the other way (L1).
+ * @param {Window} win
+ * @param {GrepPickerState["scope"]} scope
+ * @returns {Window[]}
+ */
+function scopeWindows(win, scope) {
+  if (scope !== "windows" && scope !== "closed") return [win];
+  const priv = isPrivateBrowsing(win);
+  const others = /** @type {Window[]} */ (lazy.BrowserWindowTracker.orderedWindows).filter(
+    (w) => w !== win && isBrowserWindow(w) && isPrivateBrowsing(w) === priv,
+  );
+  return [win, ...others];
+}
+
+/**
+ * The URL of a closed tab's saved state: its current history entry.
+ * @param {any} state
+ */
+function closedUrl(state) {
+  const entries = state?.entries ?? [];
+  const entry = entries[(state?.index ?? entries.length) - 1] ?? entries.at(-1);
+  return { url: String(entry?.url ?? ""), title: String(entry?.title ?? "") };
+}
+
+/**
+ * Recently closed tabs of the scope's windows and, from a normal window, recently closed
+ * windows (Firefox keeps no closed private window, SessionStore.sys.mjs `#maybeSaveClosedWindow`
+ * callers). SessionStore keeps a closed tab's history entries, not its text.
+ * @param {Window} win
+ * @param {Window[]} windows  the scope's, this one first
+ * @returns {GrepClosedEntry[]}
+ */
+function closedEntries(win, windows) {
+  const defs = WorkspaceStore.definitions.workspaces;
+  const agentId = WorkspaceStore.agent?.id ?? null;
+  const priv = isPrivateWorkspace(win);
+  /** @param {number} ucid */
+  const owner = (ucid) => (ucid ? defs.find((d) => d.userContextId === ucid) : undefined);
+  /** @type {GrepClosedEntry[]} */
+  const out = [];
+  windows.forEach((w, i) => {
+    /** @type {any[]} */
+    const data = lazy.SessionStore.getClosedTabDataForWindow(w);
+    for (const c of data) {
+      const ws = owner(c.state?.userContextId ?? 0);
+      const { url, title } = closedUrl(c.state);
+      out.push({
+        closedId: c.closedId,
+        closedWindow: false,
+        title: String(c.title ?? title),
+        url,
+        closedAt: c.closedAt ?? 0,
+        window: i + 1,
+        workspace: priv ? PRIVATE_NAME : (ws?.name ?? ""),
+        agent: !!ws && ws.id === agentId,
+        tabs: [],
+      });
+    }
+  });
+  if (isPrivateBrowsing(win)) return out;
+  /** @type {any[]} */
+  const closedWindows = lazy.SessionStore.getClosedWindowData();
+  for (const w of closedWindows) {
+    const tabs = (w.tabs ?? []).map((/** @type {any} */ t) => closedUrl(t));
+    out.push({
+      closedId: w.closedId,
+      closedWindow: true,
+      title: String(w.title ?? ""),
+      url: "",
+      closedAt: w.closedAt ?? 0,
+      window: 0,
+      workspace: "",
+      agent: false,
+      tabs,
+    });
+  }
+  return out;
+}
 
 /**
  * Resolves once the tab switch in progress is done (Firefox's TabSwitchDone), so the page has
@@ -118,19 +215,85 @@ export class GrepSession {
     this.previewTimer = undefined;
     /** @type {Map<string, { bc: any, wg: any }>} each searched frame, by `${tabId}:${key}` */
     this.frames = new Map();
+    /** @type {Map<string, Window>} the window of each tab in the last scope, by tab id */
+    this.windowOf = new Map();
     /** @type {GrepList | null} the last jump's results (decision 8) */
     this.list = null;
+    /** @type {Map<string, Window>} the windows the grep list's tabs are in, by tab id */
+    this.listWindows = new Map();
+    /** @type {Set<Window>} windows whose TabClose prunes the grep list */
+    this.watched = new Set();
     /** The query `:grep` alone resumes. */
     this.lastQuery = "";
     /** @type {Element | null} focused before open */
     this.opener = null;
-    // A closed tab's lines leave the grep list at once (G5).
+    // A closed tab's lines leave the grep list at once, in any window the list reaches (L5).
+    // Windows are compared by document: a tab's ownerGlobal is not the same object as the
+    // window this session holds.
     this.onTabClose = (/** @type {Event} */ e) => {
-      if (!this.list) return;
       const closed = /** @type {any} */ (e.target);
-      this.list = pruneGrepList(this.list, (id) => tabById(win, id) !== closed);
+      const doc = closed.ownerDocument;
+      this.prune((id) => {
+        const w = this.listWindows.get(id) ?? this.win;
+        return w.document !== doc || tabById(w, id) !== closed;
+      });
     };
-    win.addEventListener("TabClose", this.onTabClose);
+    // A window closing takes its tabs' lines with it; it fires no TabClose for them.
+    this.onUnload = (/** @type {Event} */ e) => {
+      const doc = e.target;
+      this.prune((id) => this.listWindows.get(id)?.document !== doc);
+    };
+    this.watch(win);
+  }
+
+  /** @param {Window} w */
+  watch(w) {
+    if (this.watched.has(w)) return;
+    this.watched.add(w);
+    w.addEventListener("TabClose", this.onTabClose);
+    if (w !== this.win) w.addEventListener("unload", this.onUnload);
+  }
+
+  /** Stops watching every window but this one. */
+  unwatchOthers() {
+    for (const w of this.watched) {
+      if (w === this.win) continue;
+      w.removeEventListener("TabClose", this.onTabClose);
+      w.removeEventListener("unload", this.onUnload);
+      this.watched.delete(w);
+    }
+  }
+
+  /** @param {(tabId: string) => boolean} alive */
+  prune(alive) {
+    if (!this.list) return;
+    this.list = pruneGrepList(this.list, alive);
+    if (!this.list) this.setList(null);
+  }
+
+  /**
+   * The grep list and the windows it reaches.
+   * @param {GrepList | null} list
+   */
+  setList(list) {
+    this.list = list;
+    this.listWindows = new Map();
+    for (const row of list?.rows ?? []) {
+      const w = this.windowOf.get(row.tabId);
+      if (w) this.listWindows.set(row.tabId, w);
+    }
+    this.unwatchOthers();
+    for (const w of new Set(this.listWindows.values())) this.watch(w);
+  }
+
+  /**
+   * The window a row's tab is in: the grep list's, else the last scope's, else this one.
+   * @param {string} tabId
+   * @returns {Window}
+   */
+  windowFor(tabId) {
+    const w = this.listWindows.get(tabId) ?? this.windowOf.get(tabId);
+    return w && !w.closed ? w : this.win;
   }
 
   get isOpen() {
@@ -165,9 +328,33 @@ export class GrepSession {
     this.info = { ...IDLE };
     this.ui.open();
     this.state = { ...this.state, preview: this.ui.previewShown() };
+    this.showScope();
     this.render();
     this.host.emit();
     if (query) this.search();
+  }
+
+  /**
+   * The scope box (decision 10): which windows, workspaces and tabs the search covers, shown
+   * before anything is typed and whenever ctrl+s changes the scope.
+   * @param {ReturnType<GrepSession["scopeTabs"]>} [scoped]
+   */
+  showScope(scoped) {
+    if (!this.state) return;
+    const { scope } = this.state;
+    const { tabs, windows } = scoped ?? this.scopeTabs(scope);
+    const closed = scope === "closed" ? closedSearchText(closedEntries(this.win, windows)) : null;
+    const counts = closed && {
+      tabs: closed.entries.filter((e) => !e.closedWindow).length,
+      windows: closed.entries.filter((e) => e.closedWindow).length,
+    };
+    this.ui.setScope(
+      grepScopeText(
+        scope,
+        tabs.map((t) => t.tab),
+        counts,
+      ),
+    );
   }
 
   /** `:grep` alone: the last query, re-run (Telescope's resume). */
@@ -203,6 +390,7 @@ export class GrepSession {
     }
     if (effect?.type === "scope") {
       clearTimeout(this.timer);
+      this.showScope();
       this.search();
     }
     if (state !== before) this.render();
@@ -213,9 +401,14 @@ export class GrepSession {
     if (!this.state || !this.isOpen) return;
     this.ui.render(this.state, this.info);
     const row = this.state.rows[this.state.selected] ?? null;
-    const id = row?.kind === "match" ? row.id : null;
+    const id = row && row.kind !== "unloaded" ? row.id : null;
     if (id === this.ui.previewOf) return;
     clearTimeout(this.previewTimer);
+    this.ui.setPreviewTitle(row);
+    if (row?.kind === "closed") {
+      this.ui.setPreview(row.id, closedPreview(row));
+      return;
+    }
     if (!row || row.kind !== "match") {
       this.ui.setPreview(null, null);
       return;
@@ -234,43 +427,67 @@ export class GrepSession {
   }
 
   /**
-   * The tabs in the scope, in the order the list shows them (decision 10).
+   * The tabs in the scope, in the order the list shows them (decision 10): window by window,
+   * this one first; in each, the current workspace, or every workspace from `window` on.
    * @param {GrepPickerState["scope"]} scope
-   * @returns {{ tab: GrepTab, browser: any }[]}
+   * @returns {{ tabs: { tab: GrepTab, browser: any }[], windows: Window[] }}
    */
   scopeTabs(scope) {
-    const win = this.win;
-    const model = pickerWorkspaces(win);
     const agentId = WorkspaceStore.agent?.id ?? null;
-    const priv = isPrivateWorkspace(win);
-    const selected = gBrowserOf(win).selectedTab;
+    const windows = scopeWindows(this.win, scope);
     /** @type {{ tab: GrepTab, browser: any }[]} */
     const out = [];
-    for (const w of model.workspaces) {
-      if (scope !== "window" && w.id !== model.active) continue;
-      w.tabs.forEach((id, i) => {
-        const tab = /** @type {any} */ (tabById(win, id));
-        if (!tab || tab.closing) return;
-        if (scope === "tab" && tab !== selected) return;
-        const browser = tab.linkedBrowser;
-        const loaded =
-          !!tab.linkedPanel && !tab.hasAttribute("pending") && !!browser?.browsingContext;
-        const url = browser?.currentURI?.spec ?? "";
-        out.push({
-          browser,
-          tab: {
-            tabId: id,
-            index: i + 1,
-            title: browser?.contentTitle || tab.label || url,
-            host: hostOf(url),
-            workspace: priv ? PRIVATE_NAME : w.name,
-            agent: w.id === agentId,
-            loaded,
-          },
+    this.windowOf = new Map();
+    windows.forEach((win, w) => {
+      const model = pickerWorkspaces(win);
+      const priv = isPrivateWorkspace(win);
+      for (const ws of model.workspaces) {
+        if (scope === "workspace" && ws.id !== model.active) continue;
+        ws.tabs.forEach((id, i) => {
+          const tab = /** @type {any} */ (tabById(win, id));
+          if (!tab || tab.closing) return;
+          const browser = tab.linkedBrowser;
+          const loaded =
+            !!tab.linkedPanel && !tab.hasAttribute("pending") && !!browser?.browsingContext;
+          const url = browser?.currentURI?.spec ?? "";
+          this.windowOf.set(id, win);
+          out.push({
+            browser,
+            tab: {
+              tabId: id,
+              index: i + 1,
+              title: browser?.contentTitle || tab.label || url,
+              host: hostOf(url),
+              workspace: priv ? PRIVATE_NAME : ws.name,
+              agent: ws.id === agentId,
+              loaded,
+              window: w + 1,
+            },
+          });
         });
-      });
+      }
+    });
+    return { tabs: out.slice(0, MAX_TABS), windows };
+  }
+
+  /**
+   * Recently closed tabs and windows whose title or URL matches, matched in a worker of this
+   * process with a time budget, as page text is in its own (L6).
+   * @param {Window[]} windows
+   * @param {string} query
+   * @returns {Promise<{ rows: GrepClosedRow[], timedOut: boolean }>}
+   */
+  async searchClosed(windows, query) {
+    const closed = closedSearchText(closedEntries(this.win, windows));
+    if (!closed.entries.length) return { rows: [], timedOut: false };
+    const key = `closed-${GrepMatcher.newKey()}`;
+    try {
+      const reply = await GrepMatcher.match(key, { text: closed.text }, query, true);
+      if (!reply || typeof reply !== "object") return { rows: [], timedOut: reply === "timeout" };
+      return { rows: closedRows(closed, reply.matches), timedOut: false };
+    } finally {
+      GrepMatcher.drop(key);
     }
-    return out.slice(0, MAX_TABS);
   }
 
   /** Runs the current query in the current scope; replies stream into the list. */
@@ -283,10 +500,13 @@ export class GrepSession {
     if (query) this.lastQuery = query;
     /** @type {Map<string, (GrepFrame | null)[]>} */
     const slots = new Map();
-    // A query no frame would take is not sent (G6); the prompt says why.
+    // A query no frame would take is not sent (L6); the prompt says why.
     const tooLong = query.length > GREP_CAPS.query;
-    const scoped = parsed && !tooLong ? this.scopeTabs(scope) : [];
+    const inScope = this.scopeTabs(scope);
+    const scoped = parsed && !tooLong ? inScope.tabs : [];
     const tabs = scoped.map((s) => s.tab);
+    /** @type {GrepClosedRow[]} */
+    let closed = [];
     this.info = {
       ...IDLE,
       literal: !!parsed?.literal,
@@ -329,12 +549,12 @@ export class GrepSession {
       for (const [id, list] of slots) {
         frames.set(id, /** @type {GrepFrame[]} */ (list.filter(Boolean)));
       }
-      const { rows, count, tabsWithMatches } = grepRows(tabs, frames);
+      const { rows, count, tabsWithMatches } = grepRows(tabs, frames, GREP_CAPS, closed);
       this.info = { ...this.info, count };
       this.state = setGrepRows(this.state, rows);
       this.render();
       if (!this.info.busy) {
-        const listed = rows.filter((r) => r.kind === "match").length;
+        const listed = rows.filter((r) => r.kind !== "unloaded").length;
         this.ui.announce(query ? grepCountText(listed, count, tabsWithMatches) : "");
       }
     };
@@ -363,7 +583,7 @@ export class GrepSession {
             const wg = bc.currentWindowGlobal;
             const key = String(bc.id);
             // Recorded as it is asked, so the frame is told to drop its text at close even
-            // if it never answers in time (G5).
+            // if it never answers in time (L5).
             this.frames.set(`${tab.tabId}:${key}`, { bc, wg });
             const raw = await this.ask(bc, { query, gen });
             if (!live()) return;
@@ -388,7 +608,15 @@ export class GrepSession {
         );
       }
     };
-    await Promise.all(Array.from({ length: CONCURRENT_TABS }, worker));
+    const closedSearch = async () => {
+      if (scope !== "closed" || !parsed || tooLong) return;
+      const found = await this.searchClosed(inScope.windows, query);
+      if (!live()) return;
+      closed = found.rows;
+      if (found.timedOut) this.info = { ...this.info, timedOut: true };
+      if (closed.length) schedule();
+    };
+    await Promise.all([...Array.from({ length: CONCURRENT_TABS }, worker), closedSearch()]);
     if (!live()) return;
     this.info = { ...this.info, busy: false };
     update();
@@ -402,13 +630,20 @@ export class GrepSession {
     const state = this.state;
     this.close({ keepFrames: true });
     if (row.kind === "unloaded") {
-      const tab = tabById(this.win, row.tabId);
-      if (tab) gBrowserOf(this.win).selectedTab = tab;
+      const w = this.windowFor(row.tabId);
+      const tab = tabById(w, row.tabId);
+      if (w !== this.win) w.focus();
+      if (tab) gBrowserOf(w).selectedTab = tab;
       this.endFrames();
       return;
     }
+    if (row.kind === "closed") {
+      this.endFrames();
+      this.reopen(row);
+      return;
+    }
     const rows = (state?.all ?? []).filter((r) => r.kind === "match");
-    this.list = { query: state?.query ?? "", rows, index: Math.max(0, rows.indexOf(row)) };
+    this.setList({ query: state?.query ?? "", rows, index: Math.max(0, rows.indexOf(row)) });
     await this.jump(row, state?.query ?? "");
     this.endFrames();
     // Only the frames the grep list can go back to are kept.
@@ -417,17 +652,33 @@ export class GrepSession {
   }
 
   /**
-   * Selects the row's tab and asks its frame to select the match.
+   * Enter on a closed row: the tab reopens in this window and is selected (SessionStore's
+   * undoCloseTab selects it); a closed window reopens and comes to the front.
+   * @param {GrepClosedRow} row
+   */
+  reopen(row) {
+    const SessionStore = lazy.SessionStore;
+    if (row.closedWindow) {
+      const w = SessionStore.undoCloseById(row.closedId);
+      if (w && typeof w.focus === "function") w.focus();
+    } else {
+      SessionStore.undoCloseById(row.closedId, isPrivateBrowsing(this.win), this.win);
+    }
+  }
+
+  /**
+   * Selects the row's tab, in its own window, and asks its frame to select the match.
    * @param {GrepMatchRow} row
    * @param {string} query
    */
   async jump(row, query) {
-    const win = this.win;
+    const win = this.windowFor(row.tabId);
     const tab = /** @type {any} */ (tabById(win, row.tabId));
     if (!tab) {
       this.host.notice(GONE_TEXT);
       return;
     }
+    if (win !== this.win) win.focus();
     const gBrowser = gBrowserOf(win);
     if (gBrowser.selectedTab !== tab) {
       const shown = switchDone(win);
@@ -459,12 +710,12 @@ export class GrepSession {
       return;
     }
     const alive = (/** @type {string} */ id) => {
-      const tab = /** @type {any} */ (tabById(this.win, id));
+      const tab = /** @type {any} */ (tabById(this.windowFor(id), id));
       return !!tab && !tab.closing;
     };
     const next = stepGrepList(this.list, dir, alive);
     if (!next) {
-      this.list = null;
+      this.setList(null);
       this.host.notice(NO_LIST_TEXT);
       return;
     }
@@ -507,10 +758,11 @@ export class GrepSession {
   /** VimmaHost.uninit */
   destroy() {
     this.close();
+    this.setList(null);
     this.win.removeEventListener("TabClose", this.onTabClose);
+    this.watched.clear();
     this.ui.destroy();
     this.frames.clear();
-    this.list = null;
   }
 }
 

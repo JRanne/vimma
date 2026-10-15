@@ -1,6 +1,6 @@
 # Spec: live-grep
 
-Status: accepted · Area: `packages/vimma-core/src/` (`grep.mjs` new, `actions.mjs`, `defaults.mjs`,
+Status: implemented · Area: `packages/vimma-core/src/` (`grep.mjs` new, `actions.mjs`, `defaults.mjs`,
 `cmdline.mjs`); `src/browser/base/content/vimma/` (`actors/text-model.mjs`,
 `actors/VimmaChild.sys.mjs`, `actors/VimmaActors.sys.mjs`, `actors/grep-worker.mjs` new,
 `host/grep.mjs` new,
@@ -22,7 +22,9 @@ relative to `engine/` and checked against Firefox 158.0 (`engine/config/mileston
 ## Summary
 
 Live grep searches the text of every loaded tab in the current workspace as you type and lists
-each match with its tab and line of context, beside a preview of the surrounding text.
+each match with its window, tab and line of context, beside a preview of the surrounding text.
+`ctrl+s` widens the search to the window, to every window, and to the titles and URLs of
+recently closed tabs and windows, and a scope box always says what is being searched.
 `Enter` goes to the tab, scrolls to the match and selects it. It is modelled on Telescope's
 `live_grep` in Neovim: a prompt, a results list, a preview, smart case and regular expressions,
 and a result list to step through afterwards with `]q` and `[q`. A Vimma user with many tabs
@@ -64,14 +66,24 @@ Firefox has no cross-tab text search either: the find bar works on one tab, and 
    with the last query.
 6. As a Vimma user with tabs that have not loaded since a restart, those tabs are listed at the
    far end of the results as `not loaded`, and `Enter` on one opens it. Live grep never loads a tab by itself.
-7. As a Vimma user, `ctrl+s` in the list widens the search from the workspace to every
-   workspace of this window, or narrows it to the current tab, and the prompt shows the scope.
+7. As a Vimma user, a scope box above the results names the scope and lists what it covers,
+   window by window: `w1 this window: work 12, notes 3 · 15 tabs, 2 not loaded`. `ctrl+s`
+   widens the search from the workspace to every workspace of this window, to every window, and
+   to every window plus recently closed tabs and windows, then back to the workspace.
 8. As a user of the private workspace, live grep in a normal window never searches or shows a
-   private tab, and live grep in the private window searches only the private workspace.
+   private tab, open or recently closed, in any scope, and live grep in a private window
+   searches only private windows.
 9. As a Vimma user running an agent, the agent workspace's tabs are searched only when the
    scope includes them, and their results are marked `◇ agent`.
-10. As a screen-reader user, the list is a listbox whose options name the line, the tab and its
-    workspace, and the number of matches is announced as I type.
+10. As a screen-reader user, the list is a listbox whose options name the line, the tab, its
+    host, its workspace and, for another window, that window, and the number of matches is
+    announced as I type.
+11. As a Vimma user with several windows, each result names its window (`w1`, `w2`), its tab and
+    its host, and `Enter` on a result in another window brings that window to the front and
+    selects the match there.
+12. As a Vimma user who closed a tab a minute ago, the widest scope lists it as `closed` when its
+    title or URL matches, and `Enter` reopens it and goes there; a closed window is listed as
+    `closed window` and `Enter` reopens the window.
 
 Keys and commands added:
 
@@ -85,7 +97,7 @@ Keys and commands added:
 | `Tab` / `shift+tab`            | in the list | the next / previous tab's first result                      |
 | `Enter`                        | in the list | goes to the result                                          |
 | `ctrl+d` / `ctrl+u`            | in the list | scrolls the preview down / up                               |
-| `ctrl+s`                       | in the list | cycles the scope: workspace → window → tab                  |
+| `ctrl+s`                       | in the list | cycles the scope: workspace → window → all windows → closed |
 | `ctrl+space`                   | in the list | keeps these results and filters them fuzzily                |
 | `Esc`                          | in the list | search mode → browse mode (`j`/`k`, `gg`/`G`); again closes |
 
@@ -254,6 +266,30 @@ multi-selection (decision 9).
 - **`about:` pages** that load in the parent process (`about:preferences`, `about:addons`) are
   matched by Vimma's actor (`about:*`) and searchable the same way. `view-source:` and
   `moz-extension:` pages are not matched.
+- **Recently closed tabs and windows** (`browser/components/sessionstore/SessionStore.sys.mjs`).
+  `getClosedTabDataForWindow(win)` (`:4013`) returns a window's closed tabs, each with
+  `closedId`, `title`, `closedAt` and the saved `state`; `getClosedTabData` (`:4036`) gathers
+  them from every window of one privateness. `getClosedWindowData()` (`:4630`) returns closed
+  windows with their tabs' states. A saved history entry holds the URL and title only
+  (`toolkit/modules/sessionstore/SessionHistory.sys.mjs:154`), with form data and scroll
+  positions beside it, and no module in `browser/components/sessionstore/` reads `textContent`
+  or `innerText`: a closed tab's page text is gone. A private tab closed in a normal window is
+  not saved (`:2954-2957`), and a closed window is saved only when it is not private
+  (`:2015`, `:2036`), so Firefox keeps no closed private window.
+  `undoCloseById(id, includePrivate, targetWindow)` (`:4957`) reopens a closed tab into the
+  target window, where `undoCloseTab` selects it (`:4337`), or reopens a closed window. Firefox
+  keeps 25 closed tabs and 5 closed windows by default (`browser.sessionstore.max_tabs_undo`,
+  `max_windows_undo`, `browser/app/profile/firefox.js:1599`, `:1603`).
+- **Other windows.** `BrowserWindowTracker.orderedWindows`
+  (`browser/modules/BrowserWindowTracker.sys.mjs:448`) lists browser windows most recently used
+  first. Tab search uses that order and marks another window's rows `w2`, `w3` (tab-search
+  decision 4). A tab's `linkedPanel` id carries its window's outer window id
+  (`browser/components/tabbrowser/Tabbrowser.sys.mjs:9657-9663`) and Vimma's own tab ids are
+  UUIDs, so a tab id names one tab across windows.
+- **A modal dialog's place.** `dialog:modal` is fixed with `inset-block: 0` and `dialog` has
+  `margin: auto` (`layout/style/res/html.css:895-925`), so a modal dialog of fixed height is
+  centred in the whole window. The page area is `gBrowser.tabbox` (`#tabbrowser-tabbox`); with
+  Firefox's navigation toolbar hidden (toolbar-toggle) it starts at the window's top.
 
 ## Design
 
@@ -317,26 +353,37 @@ match.
    one line. A row shows the line cut to 160 characters around the match (up to 60 before it),
    with an ellipsis where cut. Each match of a line is its own result.
 5. **Layout: Telescope's.** The dialog takes 80 % of the window's width and 90 % of its height,
-   Telescope's `horizontal` layout. On the left, a "Results" box above a "Live Grep" prompt box;
+   Telescope's `horizontal` layout. On the left, a scope box (decision 10), a "Results" box and
+   a "Live Grep" prompt box;
    on the right, when the dialog is at least 900 CSS pixels wide, a "Grep Preview" box taking
    40 % of the width (Telescope's proportion and, in pixels, its narrow-window cutoff). Each box
    has its title on its top border, as Telescope draws them. The prompt line reads `> query`,
-   and on its right the flags that apply (`literal`, `fuzzy`, the scope when it is not
-   `workspace`) and the count `n / m`: `n` results listed out of `m` matches found. The results
+   and on its right the flags that apply (`literal`, `fuzzy`, `timed out`, `cut`, `too long`)
+   and the count `n / m`: `n` results listed out of `m` matches found. The results
    are listed bottom up: the best result sits next to the prompt, marked `>`, and further
    results stack above it, as Telescope's `descending` sorting does. Live grep follows
    Telescope rather than Vimma's other pickers, which keep their prompt at the top, because the
    picker is modelled on it and a Neovim user's eye goes to the bottom for it; one layout for
    every Vimma picker was the alternative, and the keys, which muscle memory relies on, are the
-   same either way. A row reads, in one line:
+   same either way.
+
+   The dialog's height is the page area's, from where the page starts to where it ends above
+   the status bar, so it starts below the toolbar when the toolbar is shown and at the window's
+   top when it is hidden. A dialog centred in the whole window at 90 % of its height, as at
+   first, left a gap above it whenever the toolbar was hidden, because the page then starts at
+   the top and the gap was the toolbar's height. A row reads, in one line:
+   - its window's mark, `w1` for this window and `w2`, `w3` for the others, most recently used
+     first, as tab search marks them, so a row says where it is even in the widest scope;
    - the tab's number in its workspace (the number `ctrl+b 1..9` and the status bar use);
-   - the tab's title cut to 24 characters, then `:line:`, the line number in its frame;
+   - the tab's title cut to 24 characters, then its host, then `:line:`, the line number in its
+     frame;
    - the line, with its match in `<mark>`, starting at most 16 characters before the match so
      that the match stays in view in a narrow list; prefixed `↳ host` when the match is in a
      frame from another site, and `◇ agent` for an agent workspace tab (decision 13).
 
-   "Best" is source order: results in the workspace's tab order (in a window scope, workspace by
-   workspace, the agent workspace last), matches in document order, the top frame before its
+   "Best" is source order: results in the workspace's tab order (in wider scopes, window by
+   window, this one first, and workspace by workspace, the agent workspace last), then recently
+   closed matches, then not-loaded tabs; matches in document order, the top frame before its
    subframes, as ripgrep's rows come by file. The order is stable as replies arrive: a reply
    from a later tab never moves an earlier tab's rows. Until the user moves the selection it is
    the best result, whichever that is once more tabs answer; once moved, it stays on its result
@@ -350,7 +397,11 @@ match.
    pickers. It is text, not a picture of the page: a background tab is not painted (vimma-mcp,
    Research), so a picture would mean switching tabs while browsing results, and text is
    enough to recognise the place. No preview, with the context line alone, was the simpler
-   alternative; Telescope's preview is what makes a result recognisable before the jump.
+   alternative; Telescope's preview is what makes a result recognisable before the jump. The
+   preview box's title names the selected result's place, `w2 · work · 4 Retries · docs.test`,
+   in full where the row has to cut it, so that the place of a result is never in doubt. A
+   closed row's preview is built in chrome from its title and URL, says that only those are
+   searched, and says what `Enter` does.
 7. **Jump.** `Enter` closes the picker, selects the tab (`gBrowser.selectedTab`, which switches
    workspace and focuses the tab's pane, m4-split-panes decision 4), then asks the frame to
    select the match range, set the display to `SELECTION_ATTENTION` and scroll it to the
@@ -391,14 +442,29 @@ match.
    deliberately. These are picker keys, not keymap bindings, as `j` and `/` in the goto picker
    are.
 10. **Scope.** The current workspace by default, because a workspace is a task and the tabs of
-    that task are where the text is expected. `ctrl+s` cycles to `window` (every workspace of
-    this window, the agent workspace last) and `tab` (the current tab, Telescope's
-    `current_buffer_fuzzy_find` with a regular expression), then back. The scope resets to
-    `workspace` each time the picker opens. Searching every workspace by default was rejected
-    because it mixes tasks, and searching only the workspace because widening should be one
-    key away. Other windows are never searched: tab membership is per window (m3-workspaces
-    decision 10), each window has its own grep, and the private workspace is a window of its own
-    (decision 13).
+    that task are where the text is expected. `ctrl+s` cycles to `this window` (every workspace
+    of this window, the agent workspace last), `all windows` (every browser window on the same
+    side of the private line, this one first, then the others most recently used first) and
+    `all windows + closed` (those, and the titles and URLs of recently closed tabs and windows,
+    decision 18), then back. The order goes from narrow to wide so that each press adds to what
+    is searched and the next result list holds the last one. The scope resets to the workspace
+    each time the picker opens, so a search never starts wider than the task. Searching every
+    window by default was rejected because it mixes tasks and windows the user did not mean, and
+    a fixed workspace scope because the text a user remembers is often in another window. The
+    current-tab scope of the first version was dropped, because `/` already searches the
+    current tab and the cycle stays four presses long.
+
+    A scope box above the results always shows what is searched, because a list of matches does
+    not show the tabs that had none, and a user who cannot see the scope cannot tell a missing
+    result from a tab outside it. Its title on its border names the scope and the key,
+    `Scope: all windows · ctrl+s`; a line per window gives its mark, its workspaces with their
+    tab counts and its totals (`w1 this window: work 12, notes 3 · 15 tabs, 2 not loaded`,
+    `w2: personal · 5 tabs`); past five windows the rest are summed in one line, so that the box
+    stays a few lines high. In the widest scope a last line says what recently closed holds and
+    that only titles and URLs are searched there. The box is shown before anything is typed.
+    Showing the scope only as a word in the prompt, as at first, was rejected because the word
+    did not say which windows and tabs it covered.
+
 11. **Not-loaded tabs are listed, not loaded.** A tab with no `linkedPanel` (lazy or discarded)
     or with `pending` has no content to search. Each gets one row at the far end of the
     results, `not loaded` and its title and host; `Enter` on one selects it, which loads it, and
@@ -420,12 +486,15 @@ match.
     `getAllBrowsingContextsInSubtree()`, skipping those under a hidden embedder as
     `FinderParent` does, so cross-site frames in other processes are searched by their own
     child.
-13. **Private and agent workspaces.** Live grep searches only the window it is opened in. In a
-    normal window it never sees the private workspace, which is its own private window
-    (private-workspace); in the private window it searches only private tabs. The agent
-    workspace is searched only when the scope includes it (`window`, or `workspace` when the
-    agent workspace is current); its rows are marked `◇ agent` in the agent's colour and sort
-    last, as in tab search decision 6, so an agent's pages are never taken for the user's own.
+13. **Private and agent workspaces.** Live grep never crosses the private line, because the
+    private workspace's pages must not reach a normal window's list, or the other way. A normal
+    window's widest scopes take only normal windows, and their recently closed tabs and windows;
+    a private window's take only private windows and their closed tabs (Firefox keeps no closed
+    private window, Research), as tab search decision 5 does. The agent workspace is searched
+    only when the scope includes it (from `this window` on, or the workspace scope when the
+    agent workspace is current); its rows, closed ones included, are marked `◇ agent` in the
+    agent's colour and sort last, as in tab search decision 6, so that an agent's pages are
+    never taken for the user's own.
 14. **Performance and bounds.**
     - A query is sent 80 ms after the last keystroke. Each send carries a generation number;
       replies for an older generation are dropped, and a frame drops a query older than one it
@@ -458,7 +527,9 @@ match.
       counts to 1,000; the list holds at most 2,000 rows, and once the parent holds 2,000
       matches for a search it keeps the matches of the replies that rank first in the list
       (tab order, then frame order) and only the counts of the rest, whatever order the
-      replies arrive in. Telescope has no such
+      replies arrive in. The last reply that fits only in part keeps its first matches, so
+      that exactly 2,000 are held; stopping before it would leave the list short of what it
+      can show. Telescope has no such
       caps by default; a page can be far larger than a source file, and a rendered list of
       thousands of rows does not help a keyboard user, who narrows by typing.
     - The frame caches its text model while the picker is open and drops it, its observer and
@@ -466,22 +537,46 @@ match.
       gets `Vimma:GrepEnd`, whether or not it answered in time. A `MutationObserver` on the
       document marks the model stale; it is rebuilt at the next query, not on each mutation. A
       navigation creates a new document and actor, so nothing survives it.
+    - Recently closed titles and URLs are matched in the parent process, in a worker of its own
+      through the same `actors/grep-matcher.mjs`, with the same 1-second budget, because a
+      title is page-controlled text and a backtracking pattern on it would otherwise freeze the
+      browser's own window. At most 25 closed tabs and 5 closed windows (20 tabs each), as
+      Firefox keeps, are matched, each title and URL cut to 1,000 characters.
     - Budget, measured in a test: matching a query against 1,000,000 characters under 50 ms.
     - The parent holds only what it shows: a context line per listed match (at most 160
       characters) and the preview's lines. Page text is not written anywhere.
 15. **Accessibility.** The list is a `role=listbox` with `role=option` rows, each option's
-    accessible name holding the line, the tab's title and its workspace
-    (`retry budget is 3, Retries – docs, work`); a polite live region announces
+    accessible name holding the line, the tab's title, its host and its workspace
+    (`retry budget is 3, Retries – docs, docs.test, work`), and `window 2` for another window,
+    because the window and host are what the row shows; a closed row's name says
+    `recently closed tab` or `recently closed window`; a polite live region announces
     `37 matches in 6 tabs` or `no matches` after results settle; the preview is a
-    `role=region` named "Grep Preview". The `literal` and `fuzzy` flags are words, not colours.
-16. **Theme.** Existing tokens only, as picker.css uses them: box borders `--vimma-muted`, box
-    titles `--vimma-text-accent`, tab titles and line numbers `--vimma-fg-dim`,
+    `role=region` named "Grep Preview" and the scope box one named "Scope". The `literal` and
+    `fuzzy` flags and the `closed` label are words, not colours, so that they read without
+    colour vision.
+16. **Theme.** Existing tokens only, so that live grep follows the Omarchy theme as the other
+    pickers do and adds nothing a theme must define: box borders `--vimma-muted`, box
+    titles `--vimma-text-accent`, window marks, tab titles, hosts, URLs, the scope lines and line
+    numbers `--vimma-fg-dim`,
     `<mark>` as in the goto picker, the `>` marker and the selected row as the goto picker's
     selected row, the agent marker `--vimma-text-cyan`, and in the preview the matched line
     with `--vimma-selection`. No new token.
-17. **Out of scope.** Other windows; closed tabs (SessionStore keeps no text); history and
+17. **Out of scope**, each for the reason given where it is decided or because nothing asks for
+    it yet: the page text of closed tabs (SessionStore keeps none, Research); history and
     bookmarks content; PDFs (decision 12); replacing text; Telescope's split and tab openers
-    (decision 9); an agent or `vimma-ctl` command for grep; search inside form fields.
+    (decision 9); an agent or `vimma-ctl` command for grep, so that an agent never reads pages
+    outside its workspace; search inside form fields.
+18. **Recently closed tabs and windows.** The widest scope adds them because a page closed a
+    minute ago is often the one the user remembers, and tab search already lists them. Firefox
+    keeps no page text for them (Research), so they match on their title and URL only, with the
+    same query rules as page text, and the scope box says so. A closed tab is one row labelled
+    `closed`, its title and URL with the match marked and its window's mark; a closed window is
+    one row labelled `closed window`, showing the first of its tabs that matches. They come
+    after the open tabs' matches, newest first, the agent's last. `Enter` reopens the tab in
+    this window and selects it (`undoCloseById`, as tab search does), or reopens the window and
+    brings it to the front. A key of its own for reopening was rejected because `Enter` already
+    means "go there", and a closed tab has nowhere else to go. They never enter the grep list,
+    because `]q` must not reopen a tab the user did not pick.
 
 ## Security and privacy
 
@@ -490,24 +585,27 @@ control-socket command, so neither `vimma-ctl` nor an agent connection can run i
 results. Container isolation is unchanged: the parent sends the query to each in-scope frame's
 own content process, which answers from its own document; no page receives another page's text.
 Three things are exposed, as Firefox's find bar exposes them: the query reaches every frame in
-scope, third-party iframes and (in window scope) agent tabs included, so a compromised content
-process can read it; a jump selects the match, which the page can read; and building the text
+scope, third-party iframes, agent tabs (from the window scope on) and the user's other windows
+(from the all-windows scope on) included, so a compromised content process can read it; a jump selects the match, which the page can read; and building the text
 model runs on the page's thread, so a page can tell from timing that it was searched.
 
 Page text is untrusted: rows and the preview are built from text nodes and `<mark>` elements
 created in chrome, never from markup, so a page cannot inject content into the picker. Every
 reply is checked and capped in the parent (core `parseGrepReply`, `parsePreviewReply`), at most
 100 frames a tab are searched and at most 2,000 matches are kept, so a page with thousands of
-frames cannot make the parent hold an unbounded search. The private boundary holds by
-construction: grep searches only its own window, and the private workspace is a separate private
-window (decision 13); a test pins both directions. Agent tabs are marked so their content is
+frames cannot make the parent hold an unbounded search. The private boundary holds in every
+scope: other windows are taken only on the same side of the private line, and recently closed
+data only from those windows (decision 13); a test pins both directions in each scope. Agent tabs are marked so their content is
 never taken for the user's own. A jump goes only to the document that was searched (decision 7).
 Nothing is written to disk: the text model lives in the content process while the picker is
 open and is dropped by every frame the query reached, the parent keeps only context lines and
 the grep list in memory, drops a closed tab's lines, and none of it goes into the session store.
-A regular expression runs in a worker that is stopped after 1 second (decision 14), so a
-pathological pattern costs at most that, in one worker thread, and never freezes a page.
-[security.md §13](../security.md) lists the rules and their tests.
+A regular expression runs in a worker that is stopped after 1 second (decision 14), in the
+page's content process for page text and in the parent process for recently closed titles and
+URLs, so a pathological pattern costs at most that, in one worker thread, and never freezes a
+page or the browser's own window. Recently closed tabs and windows come from SessionStore, which
+holds their titles and URLs in memory already; live grep keeps no copy after the search.
+[security.md §15](../security.md) lists the rules (L1 to L8) and their tests.
 
 ## Tests
 
@@ -530,7 +628,8 @@ Written first and seen to fail.
   - `grepRows`: rows in tab order whatever order replies arrive in; frames in their order; the
     agent workspace's rows last; not-loaded rows at the far end; the 2,000-row cap.
   - `holdReplies`: at most 2,000 matches kept, those of the best-ranked replies even when
-    they arrive last; the rest keep only their counts; `stepGrepList`: `[q` from a closed
+    they arrive last, the last reply that fits in part cut to fill the 2,000; the rest keep
+    only their counts; `stepGrepList`: `[q` from a closed
     row goes to the last row;
     `parseGrepReply` keeps `timedOut` and `cut` as booleans; `parsePreviewReply` clips the
     match to its line; `pruneGrepList` drops a closed tab's rows and keeps the place.
@@ -541,6 +640,15 @@ Written first and seen to fail.
     first result; `ctrl+s` cycles the scope; `ctrl+space` enters refine and `Esc` leaves it;
     `ctrl+u` scrolls with a preview and clears without one; `Esc` search → browse → close;
     the best result stays selected as rows arrive until the selection moves.
+  - `grepRows`: rows carry their window mark and host; closed rows come after open matches and
+    before not-loaded tabs.
+  - `grepClosed`, `closedSearchText`, `closedRows`: a title or URL match is a closed row with the
+    match marked; smart case and the literal fallback apply; a closed window matches through its
+    tabs and shows the first that matches; newest first, at most 25 tabs and 5 windows; the
+    agent's last. `closedPreview` names the row and what `Enter` does.
+  - `grepScopeText`: one workspace; windows grouped with their workspaces and counts, the agent
+    marked; the closed line; past five windows one summed line; no tabs.
+  - `ctrl+s` cycles workspace → window → all windows → closed → workspace.
   - bench: `grepText` over 1,000,000 characters under 50 ms.
 - `keymap.test.mjs`: the `prefix+f` node has no action and has the child `g`; `ctrl+b f g`
   dispatches `live_grep` and `ctrl+b f` followed by an unbound key cancels.
@@ -554,8 +662,20 @@ Written first and seen to fail.
 - `browser_vimma_live_grep.js` (new):
   - Three fixture tabs in one workspace and one in another: `ctrl+b f g`, `needle` lists the
     matches of the three in tab order, the first tab's first match next to the prompt; the
-    fourth appears after `ctrl+s` (window scope) and the current tab alone after another
-    `ctrl+s`.
+    fourth appears after `ctrl+s` (window scope); the scope box names each scope as `ctrl+s`
+    cycles through all four and back.
+  - The scope box lists this window, its workspaces and tab counts before anything is typed,
+    and sits above the results.
+  - A row shows its window mark, tab and host; the preview's title names the result's place.
+  - A second normal window: the all-windows scope lists its match after this window's, marked
+    `w2`, and `Enter` brings that window to the front with the match selected.
+  - A closed tab and a closed window match on their titles in the closed scope (never in
+    narrower scopes, and never on the closed page's text), labelled `closed` and
+    `closed window`; `Enter` reopens the tab and selects it, and reopens the window.
+  - A catastrophic pattern against a closed tab's title answers `timed out` within the budget
+    and the next query finds the title.
+  - The dialog starts where the page area starts, and moves up with it when the navigation
+    toolbar is collapsed.
   - `Enter` on the second tab's match selects that tab, the selection is the match text, the
     display is `SELECTION_ATTENTION`, the match is within the viewport's middle third, and the
     mode is normal; `v` then enters copy mode with that selection.
@@ -574,11 +694,13 @@ Written first and seen to fail.
   - The preview shows the lines around the selected match with the matched line marked, and
     is hidden in a dialog narrower than 900 pixels.
   - Stale generations: replies to an older query never appear after a newer query's results.
-  - A private window: grep there lists only its own tabs, and grep in the normal window lists
-    none of them.
-  - An agent workspace tab's results appear only in window scope, marked `◇ agent`, last.
-  - Accessibility: option names hold the line, the tab's title and its workspace; the live
-    region says `N matches in M tabs` or `no matches`.
+  - A private window: grep there lists only its own tabs and its own closed tab in every
+    scope, and grep in the normal window lists none of them, open or closed, in any scope, also
+    after the private window has closed.
+  - An agent workspace tab's results appear only from the window scope on, marked `◇ agent`,
+    last.
+  - Accessibility: option names hold the line, the tab's title, its host and its workspace;
+    the live region says `N matches in M tabs` or `no matches`.
   - Page text and a title with markup show as text; no page element reaches the picker or the
     preview.
   - Closing the picker tells every searched frame to drop its text model, also a frame whose
@@ -611,13 +733,14 @@ Written first and seen to fail.
 - **`docs/guide.md`**: a new section "Live grep" after "Find": opening it, the query syntax
   (JavaScript regular expressions, ripgrep's smart case, the literal fallback, refine), the
   layout and preview, the keys, scope, the jump and copy mode, the grep list and `]q`/`[q`, what
-  is not searched (not-loaded tabs, form fields, canvases, closed `<details>`, PDFs), and the
-  private and agent rules. Rows for `ctrl+b f g`, `]q`, `[q` in the keys table, and `:grep` in
+  is not searched (not-loaded tabs, form fields, canvases, closed `<details>`, PDFs), the scope
+  box and the four scopes, recently closed tabs and windows, and the private and agent rules. Rows for `ctrl+b f g`, `]q`, `[q` in the keys table, and `:grep` in
   "The command line".
 - **README**: a feature line, "live grep: search the text of every tab in your workspace and jump
   to the match, like Telescope's `live_grep`".
-- **`docs/security.md`**: the grep messages between the parent and content processes, what the
-  parent accepts from a reply, and the private and agent boundaries, each with its test.
+- **`docs/security.md`**: §15, rules L1 to L8: the grep messages between the parent and content
+  processes, what the parent accepts from a reply, the private and agent boundaries, and the
+  worker that matches recently closed titles and URLs, each with its test.
 - **`docs/bindings.md`, `bindings.json`, `defaults.toml`**: regenerated with `npm run gen-docs`.
 - **`CHANGELOG.md` [Unreleased]**: "Live grep: `ctrl+b f g` and `:grep` search the text of the
   tabs in your workspace and jump to a match; `]q` and `[q` step through the results", and a
@@ -637,5 +760,5 @@ own. It is checked in e2e screenshots with the Omarchy theme before review.
 
 None. Every question is answered in Design: a picker of its own (decision 1), ripgrep's
 matching (decision 3), Telescope's layout with the prompt at the bottom (decision 5), the
-preview (decision 6), the jump (decision 7), the result list (decision 8) and the scope
-(decision 10).
+preview (decision 6), the jump (decision 7), the result list (decision 8), the scope and the
+scope box (decision 10) and recently closed tabs and windows (decision 18).

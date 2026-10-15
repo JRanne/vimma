@@ -7,6 +7,7 @@
  * per-line matching each frame runs on its text model, the checks the parent applies to a
  * content process's reply, the merged rows, the picker's keys and the grep list for `]q`/`[q`.
  */
+import { AGENT_GLYPH } from "./agent.mjs";
 import { scoreField, typedChar } from "./picker.mjs";
 import { deleteWordBackward } from "./strings.mjs";
 
@@ -404,6 +405,8 @@ export function parsePreviewReply(raw) {
  * @property {string} workspace
  * @property {boolean} agent  in the agent workspace
  * @property {boolean} loaded  has a document to search
+ * @property {number} window  its window's mark: 1 for the window searching, then 2, 3… most
+ *   recently used first (`w2`, as tab search marks windows)
  */
 /**
  * A frame's reply, with the frame's key (stable for the search) and its host when the frame
@@ -417,6 +420,8 @@ export function parsePreviewReply(raw) {
  * @property {string} tabId
  * @property {number} tabIndex
  * @property {string} title
+ * @property {string} host  the tab's host
+ * @property {number} window
  * @property {string} workspace
  * @property {boolean} agent
  * @property {string} frameKey
@@ -436,21 +441,45 @@ export function parsePreviewReply(raw) {
  * @property {number} tabIndex
  * @property {string} title
  * @property {string} host
+ * @property {number} window
  * @property {string} workspace
  * @property {boolean} agent
  */
-/** @typedef {GrepMatchRow | GrepUnloadedRow} GrepRow */
+/**
+ * A recently closed tab or window whose title or URL matches (decision 10): Firefox keeps no
+ * page text for it, so only those are searched.
+ * @typedef {object} GrepClosedRow
+ * @property {"closed"} kind
+ * @property {string} id  `closed:<closedId>` for a tab, `closedwin:<closedId>` for a window
+ * @property {string} tabId  the same as `id`
+ * @property {number} closedId  SessionStore's
+ * @property {boolean} closedWindow
+ * @property {number} tabIndex  0: a closed tab has no number
+ * @property {number} window  the open window it was closed from, 0 for a closed window
+ * @property {string} title  the tab's title (a closed window: the first of its tabs that matches)
+ * @property {[number, number] | null} titleAt  the match in `title`
+ * @property {string} url
+ * @property {[number, number] | null} urlAt  the match in `url`
+ * @property {string} host
+ * @property {string} workspace
+ * @property {boolean} agent
+ * @property {number} tabCount  a closed window's tabs (1 for a tab)
+ * @property {{ title: string, url: string }[]} tabs  a closed window's first tabs, for the preview
+ */
+/** @typedef {GrepMatchRow | GrepUnloadedRow | GrepClosedRow} GrepRow */
 
 /**
  * The rows of the list, best first (decision 5): matches in tab order, the agent workspace's
  * tabs last, each tab's frames in order and their matches in document order; then a row per
- * tab that is not loaded (decision 11). At most `rows` rows.
+ * tab that is not loaded (decision 11). Recently closed matches (core grepClosed) come between
+ * the two: they matched, but on their title and URL only. At most `rows` rows.
  * @param {readonly GrepTab[]} tabs
  * @param {ReadonlyMap<string, readonly GrepFrame[]>} frames  replies so far, by tab id
  * @param {{ rows: number }} [caps]
+ * @param {readonly GrepClosedRow[]} [closed]
  * @returns {{ rows: GrepRow[], count: number, tabsWithMatches: number }}
  */
-export function grepRows(tabs, frames, caps = GREP_CAPS) {
+export function grepRows(tabs, frames, caps = GREP_CAPS, closed = []) {
   const ordered = [...tabs.filter((t) => !t.agent), ...tabs.filter((t) => t.agent)];
   /** @type {GrepRow[]} */
   const rows = [];
@@ -469,6 +498,8 @@ export function grepRows(tabs, frames, caps = GREP_CAPS) {
           tabId: t.tabId,
           tabIndex: t.index,
           title: t.title,
+          host: t.host,
+          window: t.window,
           workspace: t.workspace,
           agent: t.agent,
           frameKey: f.key,
@@ -485,6 +516,12 @@ export function grepRows(tabs, frames, caps = GREP_CAPS) {
     count += tabCount;
     if (tabCount) tabsWithMatches++;
   }
+  for (const c of closed) {
+    if (rows.length >= caps.rows) break;
+    rows.push(c);
+  }
+  count += closed.length;
+  tabsWithMatches += closed.length;
   for (const t of ordered) {
     if (t.loaded || rows.length >= caps.rows) continue;
     rows.push({
@@ -494,6 +531,7 @@ export function grepRows(tabs, frames, caps = GREP_CAPS) {
       tabIndex: t.index,
       title: t.title,
       host: t.host,
+      window: t.window,
       workspace: t.workspace,
       agent: t.agent,
     });
@@ -501,11 +539,275 @@ export function grepRows(tabs, frames, caps = GREP_CAPS) {
   return { rows, count, tabsWithMatches };
 }
 
+/** Recently closed tabs and windows searched, Firefox's `max_tabs_undo` and `max_windows_undo`. */
+export const GREP_CLOSED_CAPS = Object.freeze({
+  tabs: 25,
+  windows: 5,
+  windowTabs: 20,
+  field: 1000,
+});
+
+/**
+ * A recently closed tab or window, as the host reads it from SessionStore: its title and the
+ * URL of its current history entry, which is all Firefox keeps that can be searched.
+ * @typedef {object} GrepClosedEntry
+ * @property {number} closedId
+ * @property {boolean} closedWindow
+ * @property {string} title
+ * @property {string} url
+ * @property {number} closedAt
+ * @property {number} window  the open window it was closed from, 0 for a closed window
+ * @property {string} workspace
+ * @property {boolean} agent
+ * @property {{ title: string, url: string }[]} tabs  a closed window's tabs
+ */
+/**
+ * The text the closed entries are matched in: one line per title and per URL, so that the same
+ * matcher as page text (grepText, in a worker) finds them and a match never spans two fields.
+ * @typedef {object} GrepClosedText
+ * @property {string} text
+ * @property {GrepClosedEntry[]} entries  newest first, capped, the agent's last
+ * @property {{ start: number, entry: number, tab: number, field: "title" | "url" }[]} fields
+ */
+
+/** @param {string} url */
+function hostOf(url) {
+  try {
+    return new URL(url).host || url;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * @param {string} s
+ * @param {number} max
+ */
+const oneLine = (s, max) => s.slice(0, max).replace(/[\n\r\u2029]/g, " ");
+
+/**
+ * The closed entries searched and the text to match them in.
+ * @param {readonly GrepClosedEntry[]} entries
+ * @param {typeof GREP_CLOSED_CAPS} [caps]
+ * @returns {GrepClosedText}
+ */
+export function closedSearchText(entries, caps = GREP_CLOSED_CAPS) {
+  const newest = (/** @type {boolean} */ win, /** @type {number} */ cap) =>
+    entries
+      .filter((e) => e.closedWindow === win)
+      .sort((a, b) => b.closedAt - a.closedAt)
+      .slice(0, cap);
+  const picked = [...newest(false, caps.tabs), ...newest(true, caps.windows)];
+  const ordered = [...picked.filter((e) => !e.agent), ...picked.filter((e) => e.agent)];
+  /** @type {GrepClosedText["fields"]} */
+  const fields = [];
+  let text = "";
+  ordered.forEach((e, entry) => {
+    const tabs = e.closedWindow ? e.tabs.slice(0, caps.windowTabs) : [e];
+    tabs.forEach((t, tab) => {
+      for (const field of /** @type {const} */ (["title", "url"])) {
+        fields.push({ start: text.length, entry, tab, field });
+        text += `${oneLine(t[field] ?? "", caps.field)}\n`;
+      }
+    });
+  });
+  return { text, entries: ordered, fields };
+}
+
+/**
+ * The closed rows from the matches grepText found in closedSearchText's text: one row per entry
+ * with a match, showing the first of its tabs that matches, each field's first match marked.
+ * @param {GrepClosedText} closed
+ * @param {readonly { start: number, end: number }[]} matches  in text order
+ * @returns {GrepClosedRow[]}
+ */
+export function closedRows(closed, matches) {
+  /** @type {Map<number, { tab: number, title: [number, number] | null, url: [number, number] | null }>} */
+  const hits = new Map();
+  let f = 0;
+  for (const m of matches) {
+    while (
+      f + 1 < closed.fields.length &&
+      /** @type {any} */ (closed.fields[f + 1]).start <= m.start
+    )
+      f++;
+    const field = closed.fields[f];
+    if (!field) continue;
+    const hit = hits.get(field.entry) ?? { tab: field.tab, title: null, url: null };
+    if (!hits.has(field.entry)) hits.set(field.entry, hit);
+    if (hit.tab !== field.tab || hit[field.field]) continue;
+    hit[field.field] = [m.start - field.start, m.end - field.start];
+  }
+  /** @type {GrepClosedRow[]} */
+  const rows = [];
+  closed.entries.forEach((e, i) => {
+    const hit = hits.get(i);
+    if (!hit) return;
+    const shown = e.closedWindow ? e.tabs[hit.tab] : e;
+    const cut = (/** @type {string} */ s, /** @type {[number, number] | null} */ at) => {
+      const line = oneLine(s, GREP_CLOSED_CAPS.field);
+      if (!at) return { text: cutAround(line, 0, 0, GREP_CAPS.context, 0).text, at: null };
+      const c = cutAround(line, at[0], at[1], GREP_CAPS.context, GREP_CAPS.before);
+      return { text: c.text, at: c.at };
+    };
+    const title = cut(shown?.title ?? "", hit.title);
+    const url = cut(shown?.url ?? "", hit.url);
+    const id = `${e.closedWindow ? "closedwin" : "closed"}:${e.closedId}`;
+    rows.push({
+      kind: "closed",
+      id,
+      tabId: id,
+      closedId: e.closedId,
+      closedWindow: e.closedWindow,
+      tabIndex: 0,
+      window: e.window,
+      title: title.text,
+      titleAt: title.at,
+      url: url.text,
+      urlAt: url.at,
+      host: hostOf(shown?.url ?? ""),
+      workspace: e.workspace,
+      agent: e.agent,
+      tabCount: e.closedWindow ? e.tabs.length : 1,
+      tabs: e.closedWindow
+        ? e.tabs.slice(0, GREP_CAPS.previewLines).map((t) => ({
+            title: cutAround(
+              oneLine(t.title ?? "", GREP_CLOSED_CAPS.field),
+              0,
+              0,
+              GREP_CAPS.context,
+              0,
+            ).text,
+            url: cutAround(oneLine(t.url ?? "", GREP_CLOSED_CAPS.field), 0, 0, GREP_CAPS.context, 0)
+              .text,
+          }))
+        : [],
+    });
+  });
+  return rows;
+}
+
+/**
+ * Recently closed tabs and windows whose title or URL matches the query (decision 10), newest
+ * first, tabs before windows, the agent workspace's last. The host runs the same steps with the
+ * matching in a worker; this is them in one call.
+ * @param {readonly GrepClosedEntry[]} entries
+ * @param {GrepQuery} query
+ * @returns {GrepClosedRow[]}
+ */
+export function grepClosed(entries, query) {
+  const closed = closedSearchText(entries);
+  const { matches } = grepText(closed.text, query, {
+    ...GREP_CAPS,
+    listed: GREP_CAPS.counted,
+  });
+  return closedRows(closed, matches);
+}
+
+/**
+ * The preview of a closed row: what it is, its title and URL, what Enter does. Built in chrome
+ * from the row, since a closed tab has no page to ask.
+ * @param {GrepClosedRow} row
+ * @returns {GrepPreview}
+ */
+export function closedPreview(row) {
+  const at = row.titleAt ?? [0, 0];
+  if (!row.closedWindow) {
+    return {
+      first: 1,
+      line: 1,
+      at,
+      lines: [
+        "Recently closed tab",
+        row.title,
+        row.url,
+        "Only its title and URL are searched.",
+        "Enter reopens it.",
+      ],
+    };
+  }
+  const n = row.tabCount;
+  return {
+    first: 1,
+    line: 1,
+    at,
+    lines: [
+      `Recently closed window, ${n} ${n === 1 ? "tab" : "tabs"}`,
+      row.title,
+      row.url,
+      ...row.tabs.map((t) => `${t.title}  ${t.url}`),
+      "Only their titles and URLs are searched.",
+      "Enter reopens the window.",
+    ],
+  };
+}
+
+/** Windows the scope box lists one by one; the rest are one line (decision 10). */
+const SCOPE_WINDOWS = 5;
+
+/**
+ * @param {number} n
+ * @param {string} word
+ */
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/**
+ * The scope box (decision 10): its title names the scope, and a line per window says what is
+ * searched there, workspace by workspace, so a search never runs out of sight.
+ * @param {GrepScope} scope
+ * @param {readonly GrepTab[]} tabs  the tabs in scope
+ * @param {{ tabs: number, windows: number } | null} closed  what recently closed holds
+ * @returns {{ title: string, lines: string[] }}
+ */
+export function grepScopeText(scope, tabs, closed) {
+  /** @type {Map<number, GrepTab[]>} */
+  const byWindow = new Map();
+  for (const t of tabs) byWindow.set(t.window, [...(byWindow.get(t.window) ?? []), t]);
+  const totals = (/** @type {readonly GrepTab[]} */ ts) => {
+    const unloaded = ts.filter((t) => !t.loaded).length;
+    return `${plural(ts.length, "tab")}${unloaded ? `, ${unloaded} not loaded` : ""}`;
+  };
+  /** @type {string[]} */
+  const lines = [];
+  const windows = [...byWindow.keys()].sort((a, b) => a - b);
+  for (const w of windows.slice(0, SCOPE_WINDOWS)) {
+    const ts = /** @type {GrepTab[]} */ (byWindow.get(w));
+    /** @type {Map<string, { n: number, agent: boolean }>} */
+    const spaces = new Map();
+    for (const t of ts) {
+      const s = spaces.get(t.workspace) ?? { n: 0, agent: t.agent };
+      s.n++;
+      spaces.set(t.workspace, s);
+    }
+    const name = (/** @type {string} */ ws, /** @type {boolean} */ agent) =>
+      `${agent ? `${AGENT_GLYPH} ` : ""}${ws || "tabs"}`;
+    const names =
+      spaces.size === 1
+        ? [...spaces].map(([ws, s]) => name(ws, s.agent))
+        : [...spaces].map(([ws, s]) => `${name(ws, s.agent)} ${s.n}`);
+    const mark = w === 1 ? "w1 this window" : `w${w}`;
+    lines.push(`${mark}: ${names.join(", ")} · ${totals(ts)}`);
+  }
+  const rest = windows.slice(SCOPE_WINDOWS);
+  if (rest.length) {
+    const n = rest.reduce((sum, w) => sum + (byWindow.get(w)?.length ?? 0), 0);
+    lines.push(`… ${plural(rest.length, "more window")} · ${plural(n, "tab")}`);
+  }
+  if (!lines.length) lines.push("no tabs");
+  if (closed) {
+    lines.push(
+      `recently closed: ${plural(closed.tabs, "tab")}, ${plural(closed.windows, "window")} · titles and URLs only`,
+    );
+  }
+  return { title: `Scope: ${GREP_SCOPE_NAMES[scope]} · ctrl+s`, lines };
+}
+
 /**
  * The replies as the parent keeps them (decision 14): the matches of the best-ranked replies,
  * at most `rows` in all, and only the counts of the rest, since the list shows at most `rows`
  * rows best first. A reply is ranked by its tab's place in the list, then its frame's; among
- * equal ranks the earlier reply is better. The array keeps its order.
+ * equal ranks the earlier reply is better. The reply that fits only in part keeps its first
+ * matches, so exactly `rows` are held. The array keeps its order.
  * @template {{ rank: number, reply: GrepReply }} T
  * @param {readonly T[]} entries
  * @param {{ rows: number }} [caps]
@@ -519,16 +821,19 @@ export function holdReplies(entries, caps = GREP_CAPS) {
     .filter(({ e }) => e.reply.matches.length)
     .sort((a, b) => a.e.rank - b.e.rank || a.i - b.i);
   let room = caps.rows;
-  /** @type {Set<number>} */
-  const keep = new Set();
+  /** @type {Map<number, number>} matches kept, by entry */
+  const keep = new Map();
   for (const { e, i } of order) {
-    if (e.reply.matches.length > room) break;
-    keep.add(i);
-    room -= e.reply.matches.length;
+    const n = Math.min(e.reply.matches.length, room);
+    keep.set(i, n);
+    room -= n;
+    if (!room) break;
   }
-  return entries.map((e, i) =>
-    keep.has(i) || !e.reply.matches.length ? e : { ...e, reply: { ...e.reply, matches: [] } },
-  );
+  return entries.map((e, i) => {
+    const n = keep.get(i) ?? 0;
+    if (n === e.reply.matches.length) return e;
+    return { ...e, reply: { ...e.reply, matches: e.reply.matches.slice(0, n) } };
+  });
 }
 
 /**
@@ -588,9 +893,16 @@ export function grepListText(list) {
   return `grep ${list.index + 1}/${list.rows.length}`;
 }
 
-/** @typedef {"workspace" | "window" | "tab"} GrepScope */
-/** @type {readonly GrepScope[]} */
-const SCOPES = ["workspace", "window", "tab"];
+/** @typedef {"workspace" | "window" | "windows" | "closed"} GrepScope */
+/** @type {readonly GrepScope[]} `ctrl+s` cycles them in this order (decision 10). */
+const SCOPES = ["workspace", "window", "windows", "closed"];
+/** @type {Readonly<Record<GrepScope, string>>} */
+export const GREP_SCOPE_NAMES = Object.freeze({
+  workspace: "this workspace",
+  window: "this window",
+  windows: "all windows",
+  closed: "all windows + closed",
+});
 
 /**
  * @typedef {object} GrepPickerState
@@ -648,7 +960,12 @@ function refineRows(rows, query) {
   /** @type {{ row: GrepRow, score: number }[]} */
   const kept = [];
   for (const row of rows) {
-    const text = row.kind === "match" ? row.context : row.title;
+    const text =
+      row.kind === "match"
+        ? row.context
+        : row.kind === "closed"
+          ? `${row.title} ${row.url}`
+          : row.title;
     let score = 0;
     let ok = true;
     for (const term of terms) {

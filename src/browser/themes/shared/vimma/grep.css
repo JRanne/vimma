@@ -3,16 +3,19 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* Live grep (ui/grep.mjs, docs/specs/live-grep.md decision 5): Telescope's horizontal layout,
-   80 % by 90 % of the window, results above the prompt with the best result at the bottom, the
-   preview on the right, hidden below 900 pixels. Theme tokens when the status bar has loaded
-   them, legible system colours otherwise. */
+   80 % of the window's width over the page area's full height (ui/grep.mjs sets
+   --vimma-grep-top and --vimma-grep-height from it, so the dialog follows the toolbar), the scope
+   and the results above the prompt with the best result at the bottom, the preview on the
+   right, hidden below 900 pixels. Theme tokens when the status bar has loaded them, legible
+   system colours otherwise. */
 
 .vimma-grep {
   box-sizing: border-box;
   width: 80vw;
-  height: 90vh;
+  height: var(--vimma-grep-height, 90vh);
   max-width: none;
   max-height: none;
+  margin-block: var(--vimma-grep-top, auto) auto;
   padding: 1rem 0.75rem 0.75rem;
   border: 1px solid var(--vimma-muted, color-mix(in srgb, CanvasText 25%, transparent));
   border-radius: 8px;
@@ -86,6 +89,17 @@
     background: var(--vimma-bg-dark, Canvas);
   }
 
+  & .vimma-grep-scope {
+    flex: none;
+  }
+
+  & .vimma-grep-scope-line {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--vimma-fg-dim, GrayText);
+  }
+
   & .vimma-grep-results {
     flex: 1;
     display: flex;
@@ -105,7 +119,7 @@
 
   & .vimma-grep-row {
     display: grid;
-    grid-template-columns: 2ch minmax(0, 28ch) auto minmax(0, 1fr);
+    grid-template-columns: 2ch 3ch minmax(0, 26ch) minmax(0, 14ch) auto minmax(0, 1fr);
     gap: 0.5ch;
     padding: 0.05rem 0.25rem;
     white-space: nowrap;
@@ -123,12 +137,16 @@
   }
 
   & .vimma-grep-tab,
+  & .vimma-grep-host,
   & .vimma-grep-where {
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
+  & .vimma-grep-win,
   & .vimma-grep-tab,
+  & .vimma-grep-host,
+  & .vimma-grep-url,
   & .vimma-grep-line,
   & .vimma-grep-frame,
   & .vimma-grep-unloaded,
@@ -143,6 +161,11 @@
 
   & .vimma-grep-agent {
     color: var(--vimma-text-cyan, LinkText);
+  }
+
+  /* A closed row's label is a word, not a colour alone (decision 15). */
+  & .vimma-grep-closed {
+    font-style: italic;
   }
 
   & mark {

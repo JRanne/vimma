@@ -768,9 +768,11 @@ in a `build` environment, and a watch on Mozilla's release key,
 
 ## 15. Live grep (`host/grep.mjs`, `actors/VimmaChild.sys.mjs`, `actors/grep-matcher.mjs`)
 
-`ctrl+b f g` searches the text of the window's tabs: the parent sends the query to each frame's
-own content process, which builds a text model of its own document on the page's thread,
-matches the query in that process's worker thread, and answers with the matching lines.
+`ctrl+b f g` searches the text of the tabs in its scope: the parent sends the query to each
+frame's own content process, which builds a text model of its own document on the page's thread,
+matches the query in that process's worker thread, and answers with the matching lines. The
+widest scope adds recently closed tabs and windows, whose titles and URLs (Firefox keeps no page
+text for them) are matched in a worker thread of the parent process.
 Spec: [live-grep](specs/live-grep.md).
 
 **Reach:** only you, with the key or `:grep`. No control-socket command reaches it, so neither
@@ -779,8 +781,9 @@ its own document only, and no page receives another page's text. Three things ar
 accepted because Firefox's own find bar exposes the same:
 
 - **The query** goes to the content process of every frame in scope, third-party iframes
-  included, and in window scope the agent workspace's tabs. A compromised content process can
-  read it.
+  included, from the `this window` scope on the agent workspace's tabs, and from the
+  `all windows` scope the tabs of your other windows on the same side of the private line. A
+  compromised content process can read it.
 - **A jump** selects the match as find does: the chosen page sees the selection
   (`getSelection()`, `selectionchange`) and the focus it gets.
 - **Building the text model** runs on the page's main thread, so a page can see that it was
@@ -788,10 +791,12 @@ accepted because Firefox's own find bar exposes the same:
 
 Rules:
 
-- G1. Live grep **must** search only the tabs of the window it is opened in: a normal window
-  **never** searches or lists a private tab, and the private window lists only its own tabs.
-  [`private_tabs_never_reach_a_normal_window_and_back`](../tests/browser/browser_vimma_live_grep.js)
-- G2. A frame's reply comes from a content process that may be compromised: the parent **must**
+- L1. Live grep **must** search only windows on its own side of the private line, and other
+  windows only once the scope is widened to them: a normal window **never** searches or lists a
+  private tab, open or recently closed, and a private window lists only private tabs.
+  [`private_tabs_never_reach_a_normal_window_and_back`](../tests/browser/browser_vimma_live_grep.js),
+  [`all_windows_searches_the_other_windows_and_enter_goes_there`](../tests/browser/browser_vimma_live_grep.js)
+- L2. A frame's reply comes from a content process that may be compromised: the parent **must**
   copy it field by field, cut to the limits (100 listed and 1,000 counted matches a frame, lines
   of 162 characters, 21 preview lines of 302 characters, a preview's match within its line),
   and drop a malformed one.
@@ -801,40 +806,47 @@ Rules:
   [`a reply's timedOut and cut flags are kept as booleans`](../packages/vimma-core/test/grep.test.mjs),
   [`parsePreviewReply checks and cuts the preview`](../packages/vimma-core/test/grep.test.mjs),
   [`parsePreviewReply clips the match to its line`](../packages/vimma-core/test/grep.test.mjs)
-- G3. Rows and the preview **must** show page text and titles as text nodes and `<mark>`
+- L3. Rows and the preview **must** show page text and titles as text nodes and `<mark>`
   elements made in chrome, **never** parsed as HTML (C1).
   [`page_text_with_markup_stays_text`](../tests/browser/browser_vimma_live_grep.js),
   [`never parses strings as HTML: page titles, add-on and bookmark names stay text`](../tools/security/test/chrome-source.test.mjs)
-- G4. The agent workspace's tabs **must** be searched only when the scope includes them, and
+- L4. The agent workspace's tabs **must** be searched only when the scope includes them, and
   their results **must** be marked as the agent's, so an agent's page is never taken for yours.
   [`agent_tabs_only_in_window_scope_marked_and_last`](../tests/browser/browser_vimma_live_grep.js)
-- G5. Page text **must not** outlive the picker: when it closes, every frame the query was sent
+- L5. Page text **must not** outlive the picker: when it closes, every frame the query was sent
   to is told to drop its text model, its observer and its worker, whether or not it answered;
   the parent keeps no rows; the grep list holds only the lines it shows, in memory, never on
-  disk or in the session store, and drops a tab's lines when the tab closes.
+  disk or in the session store, and drops a tab's lines when the tab or its window closes.
   [`closing_tells_every_searched_frame_to_drop_its_text`](../tests/browser/browser_vimma_live_grep.js),
   [`a_reply_held_past_close_still_gets_grep_end`](../tests/browser/browser_vimma_live_grep.js),
   [`the_grep_list_steps_with_bracket_q_and_grep_resumes`](../tests/browser/browser_vimma_live_grep.js),
   [`pruneGrepList drops a closed tab's rows and keeps its place`](../packages/vimma-core/test/grep.test.mjs)
-- G6. A regular expression **must** run on page text only in a worker thread of the page's
-  content process (one a process, shared by its frames), line by line, and a query **must** be
-  stopped when it has run for 1 second, the frame answering `timed out`; a frame's newer query
-  replaces its older one, and a frame drops a query older than one it has seen in this picker
-  session. A backtracking pattern therefore costs at most a second of one worker thread a
-  query, and the page itself stays responsive. A query over 1,000 characters is not sent.
+- L6. A regular expression **must** run on page text only in a worker thread of the page's
+  content process (one a process, shared by its frames), and on recently closed titles and URLs
+  only in a worker thread of the parent process, line by line, and a query **must** be stopped
+  when it has run for 1 second, answering `timed out`; a frame's newer query replaces its older
+  one, and a frame drops a query older than one it has seen in this picker session. A
+  backtracking pattern therefore costs at most a second of one worker thread a query, and
+  neither the page nor the browser's own window stops responding. A query over 1,000 characters
+  is not sent.
   [`a_frame_answers_timed_out_within_its_budget`](../tests/browser/browser_vimma_live_grep.js),
   [`a_catastrophic_pattern_never_freezes_the_page`](../tests/browser/browser_vimma_live_grep.js),
   [`a_frame_drops_an_older_query`](../tests/browser/browser_vimma_live_grep.js),
   [`grep_end_resets_the_frames_generation`](../tests/browser/browser_vimma_live_grep.js),
   [`one_worker_a_process_and_none_for_a_blank_frame`](../tests/browser/browser_vimma_live_grep.js),
   [`an_over_long_query_says_so_and_is_not_sent`](../tests/browser/browser_vimma_live_grep.js),
+  [`a_catastrophic_pattern_on_closed_titles_never_freezes_the_browser`](../tests/browser/browser_vimma_live_grep.js),
   [`a match never spans two lines`](../packages/vimma-core/test/grep.test.mjs)
-- G7. A page **must not** be able to make the parent hold an unbounded search: at most 100
+- L7. A page **must not** be able to make the parent hold an unbounded search: at most 100
   frames are searched in a tab, and at most 2,000 matches are held, those of the replies first
-  in the list; the rest keep only their counts.
+  in the list, the last that fits cut to fill the 2,000; the rest keep only their counts. At
+  most 25 recently closed tabs and 5 closed windows, each title and URL cut to 1,000
+  characters, are matched.
   [`frames_past_the_cap_are_not_searched`](../tests/browser/browser_vimma_live_grep.js),
   [`matches are kept until 2,000 are held; past that only counts`](../packages/vimma-core/test/grep.test.mjs),
+  [`the last reply that fits only in part is cut, so exactly 2,000 are held`](../packages/vimma-core/test/grep.test.mjs),
+  [`newest first, at most 25 tabs and 5 windows, as Firefox keeps`](../packages/vimma-core/test/grep.test.mjs),
   [`a better-ranked reply that arrives last still keeps its matches`](../packages/vimma-core/test/grep.test.mjs)
-- G8. A jump, from the picker or `]q` / `[q`, **must** go only to the document that was searched:
+- L8. A jump, from the picker or `]q` / `[q`, **must** go only to the document that was searched:
   a frame that has navigated since gets nothing, and the notice says the match is gone.
   [`a_jump_never_reaches_a_document_the_frame_navigated_to`](../tests/browser/browser_vimma_live_grep.js)

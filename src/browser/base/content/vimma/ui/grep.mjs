@@ -3,14 +3,19 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Live grep's dialog (docs/specs/live-grep.md decision 5): Telescope's horizontal layout. A
-// "Results" box above a "Live Grep" prompt box on the left, the best result at the bottom next
-// to the prompt, and a "Grep Preview" box on the right that CSS hides below 900 pixels. Keys
+// scope box, a "Results" box and a "Live Grep" prompt box on the left, the best result at the
+// bottom next to the prompt, and a "Grep Preview" box on the right that CSS hides below 900
+// pixels. The dialog covers the page area, from wherever the toolbar leaves it to start. Keys
 // reach it only through VimmaHost; the session (host/grep.mjs) owns the state, this renders it.
 // Page text is untrusted: every row and preview line is built from text nodes and <mark>s.
 
 import { AGENT_GLYPH } from "../core/agent.mjs";
 
 /** @import { GrepPickerState, GrepPreview, GrepRow } from "../core/grep.mjs" */
+
+const PREVIEW_TITLE = "Grep Preview";
+/** The preview box's title cuts the selected result's tab title to this many characters. */
+const PREVIEW_TAB_WIDTH = 40;
 
 export const GREP_ID = "vimma-grep";
 const STYLESHEET = "chrome://browser/skin/vimma/grep.css";
@@ -22,7 +27,8 @@ const ROW_BEFORE = 16;
 /**
  * @typedef {{ list: HTMLElement, query: HTMLElement, cursor: HTMLElement, marker: HTMLElement,
  *   flags: HTMLElement, count: HTMLElement, preview: HTMLElement, previewBody: HTMLElement,
- *   status: HTMLElement }} Parts
+ *   previewTitle: HTMLElement, scope: HTMLElement, scopeTitle: HTMLElement,
+ *   scopeBody: HTMLElement, status: HTMLElement }} Parts
  */
 /** @type {WeakSet<Window>} windows our stylesheet is loaded into */
 const styled = new WeakSet();
@@ -44,6 +50,23 @@ const styled = new WeakSet();
  */
 const cut = (s, n) => ([...s].length > n ? `${[...s].slice(0, n - 1).join("")}…` : s);
 
+/**
+ * An option's accessible name (decision 15): the line, its tab, host and workspace, and its
+ * window when it is another; a closed row says it is recently closed.
+ * @param {GrepRow} row
+ */
+function accessibleName(row) {
+  const other = row.window > 1 ? [`window ${row.window}`] : [];
+  if (row.kind === "closed") {
+    const what = row.closedWindow ? "recently closed window" : "recently closed tab";
+    return [row.title, row.url, what, ...(row.workspace ? [row.workspace] : []), ...other].join(
+      ", ",
+    );
+  }
+  const line = row.kind === "match" ? row.context : "not loaded";
+  return [line, row.title, row.host, row.workspace, ...other].join(", ");
+}
+
 export class GrepPicker {
   /** @param {Window} win  a browser window */
   constructor(win) {
@@ -54,6 +77,7 @@ export class GrepPicker {
     this.built = null;
     /** @type {string | null} the row id the preview shows */
     this.previewOf = null;
+    this.onResize = () => this.place();
   }
 
   get isOpen() {
@@ -63,7 +87,9 @@ export class GrepPicker {
   open() {
     if (this.isOpen) return;
     const dialog = this.dialog ?? this.build();
+    this.place();
     dialog.showModal();
+    this.win.addEventListener("resize", this.onResize);
     // The list, not the dialog: aria-activedescendant names the active row only while the
     // element carrying it has focus (m7-a11y).
     this.parts.list.focus();
@@ -73,7 +99,21 @@ export class GrepPicker {
   close() {
     if (!this.isOpen) return;
     /** @type {HTMLDialogElement} */ (this.dialog).close();
+    this.win.removeEventListener("resize", this.onResize);
     this.previewOf = null;
+  }
+
+  /**
+   * Fits the dialog to the page area: it starts where the page starts, below the toolbar or at
+   * the window's top when the toolbar is hidden, and ends where the page ends, above the status
+   * bar. Centring it in the whole window left a gap above it whenever the toolbar was hidden.
+   */
+  place() {
+    const area = /** @type {any} */ (this.win).gBrowser?.tabbox?.getBoundingClientRect();
+    const dialog = this.dialog;
+    if (!dialog || !area?.height) return;
+    dialog.style.setProperty("--vimma-grep-top", `${area.top}px`);
+    dialog.style.setProperty("--vimma-grep-height", `${area.height}px`);
   }
 
   /** Close and remove the dialog (VimmaHost.uninit). */
@@ -133,13 +173,15 @@ export class GrepPicker {
     const flags = [];
     if (info.literal) flags.push("literal");
     if (state.refine) flags.push("fuzzy");
-    if (state.scope !== "workspace") flags.push(state.scope);
     if (info.timedOut) flags.push("timed out");
     if (info.cut) flags.push("cut");
     if (info.tooLong) flags.push("too long");
     p.flags.textContent = flags.join(" · ");
-    const matches = state.rows.filter((r) => r.kind === "match").length;
-    const total = state.refine ? state.all.filter((r) => r.kind === "match").length : info.count;
+    // Closed rows are matches too, on their title or URL; not-loaded tabs are not.
+    const found = (/** @type {readonly GrepRow[]} */ rows) =>
+      rows.filter((r) => r.kind !== "unloaded").length;
+    const matches = found(state.rows);
+    const total = state.refine ? found(state.all) : info.count;
     p.count.textContent = state.query || state.refine ? `${matches} / ${total}` : "";
 
     const list = p.list;
@@ -154,6 +196,8 @@ export class GrepPicker {
   }
 
   /**
+   * A row: its window (`w2`), its tab (number and title, or `closed`), its host, the line
+   * number and the line with the match marked; a closed row's title and URL instead of a line.
    * @param {GrepRow} row
    * @param {number} i
    * @param {boolean} selected
@@ -165,13 +209,23 @@ export class GrepPicker {
     li.setAttribute("aria-selected", String(selected));
     if (selected) li.classList.add("vimma-grep-selected");
     li.dataset.tabId = row.tabId;
-    const line = row.kind === "match" ? row.context : "not loaded";
-    li.setAttribute("aria-label", `${line}, ${row.title}, ${row.workspace}`);
+    li.dataset.kind = row.kind;
+    li.setAttribute("aria-label", accessibleName(row));
+    const win = this.el("span", "vimma-grep-win", row.window ? `w${row.window}` : "");
     const tab = this.el("span", "vimma-grep-tab");
     if (row.agent) tab.append(this.el("span", "vimma-grep-agent", `${AGENT_GLYPH} agent`), " ");
-    tab.append(`${row.tabIndex} ${cut(row.title, TITLE_WIDTH)}`);
     const text = this.el("span", "vimma-grep-text");
     const where = this.el("span", "vimma-grep-where");
+    if (row.kind === "closed") {
+      tab.append(row.closedWindow ? "closed window" : "closed");
+      tab.classList.add("vimma-grep-closed");
+      this.marked(text, row.title, row.titleAt ?? [0, 0]);
+      const url = this.el("span", "vimma-grep-url");
+      this.marked(url, row.url, row.urlAt ?? [0, 0]);
+      text.append(" ", url);
+    } else {
+      tab.append(`${row.tabIndex} ${cut(row.title, TITLE_WIDTH)}`);
+    }
     if (row.kind === "match") {
       if (row.frameHost) where.append(this.el("span", "vimma-grep-frame", `↳ ${row.frameHost}`));
       const [start, end] = row.at;
@@ -181,18 +235,52 @@ export class GrepPicker {
       const shown = from > 0 ? `…${row.context.slice(from)}` : row.context;
       const shift = from > 0 ? from - 1 : 0;
       this.marked(text, shown, [start - shift, end - shift]);
-    } else {
-      text.textContent = `not loaded · ${row.host}`;
+    } else if (row.kind === "unloaded") {
+      text.textContent = "not loaded";
       text.classList.add("vimma-grep-unloaded");
     }
     where.append(text);
     li.append(
       this.el("span", "vimma-grep-marker", selected ? ">" : ""),
+      win,
       tab,
+      this.el("span", "vimma-grep-host", row.host),
       this.el("span", "vimma-grep-line", row.kind === "match" ? `:${row.line}:` : ""),
       where,
     );
     return li;
+  }
+
+  /**
+   * The scope box: which windows, workspaces and tabs are searched (core grepScopeText).
+   * @param {{ title: string, lines: string[] }} scope
+   */
+  setScope({ title, lines }) {
+    const p = this.parts;
+    p.scopeTitle.textContent = title;
+    p.scopeBody.replaceChildren(
+      ...lines.map((line) => this.el("div", "vimma-grep-scope-line", line)),
+    );
+  }
+
+  /**
+   * The preview box's title names where the selected result is: its window, workspace, tab and
+   * host, so a result is never shown without its place.
+   * @param {GrepRow | null} row
+   */
+  setPreviewTitle(row) {
+    const p = this.parts;
+    if (!row) {
+      p.previewTitle.textContent = PREVIEW_TITLE;
+      return;
+    }
+    const parts = [];
+    if (row.window) parts.push(`w${row.window}`);
+    if (row.workspace) parts.push(row.agent ? `${AGENT_GLYPH} ${row.workspace}` : row.workspace);
+    if (row.kind === "closed") parts.push(row.closedWindow ? "closed window" : "closed");
+    else parts.push(`${row.tabIndex} ${cut(row.title, PREVIEW_TAB_WIDTH)}`);
+    if (row.host) parts.push(row.host);
+    p.previewTitle.textContent = parts.join(" · ");
   }
 
   /**
@@ -265,6 +353,13 @@ export class GrepPicker {
       section.append(this.el("h2", "vimma-grep-title", title));
       return section;
     };
+    const scope = box("vimma-grep-scope", "Scope");
+    scope.setAttribute("role", "region");
+    scope.setAttribute("aria-label", "Scope");
+    const scopeTitle = /** @type {HTMLElement} */ (scope.firstChild);
+    const scopeBody = this.el("div", "vimma-grep-scope-body");
+    scope.append(scopeBody);
+
     const results = box("vimma-grep-results", "Results");
     const list = this.el("ul", "vimma-grep-list");
     list.setAttribute("role", "listbox");
@@ -284,11 +379,12 @@ export class GrepPicker {
     prompt.append(input);
 
     const left = this.el("div", "vimma-grep-left");
-    left.append(results, prompt);
+    left.append(scope, results, prompt);
 
-    const preview = box("vimma-grep-preview", "Grep Preview");
+    const preview = box("vimma-grep-preview", PREVIEW_TITLE);
     preview.setAttribute("role", "region");
-    preview.setAttribute("aria-label", "Grep Preview");
+    preview.setAttribute("aria-label", PREVIEW_TITLE);
+    const previewTitle = /** @type {HTMLElement} */ (preview.firstChild);
     const previewBody = this.el("div", "vimma-grep-preview-body");
     preview.append(previewBody);
 
@@ -301,7 +397,21 @@ export class GrepPicker {
     dialog.append(body, status);
     doc.body.append(dialog);
     this.dialog = dialog;
-    this.built = { list, query, cursor, marker, flags, count, preview, previewBody, status };
+    this.built = {
+      list,
+      query,
+      cursor,
+      marker,
+      flags,
+      count,
+      preview,
+      previewBody,
+      previewTitle,
+      scope,
+      scopeTitle,
+      scopeBody,
+      status,
+    };
     return dialog;
   }
 }

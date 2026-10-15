@@ -1,10 +1,14 @@
 import { describe, test, expect } from "vitest";
 import {
   GREP_CAPS,
+  GREP_SCOPE_NAMES,
+  closedPreview,
+  grepClosed,
   grepCountText,
   grepListText,
   grepPickerKey,
   grepRows,
+  grepScopeText,
   grepText,
   holdReplies,
   openGrepPicker,
@@ -253,6 +257,7 @@ const tab = (tabId, index, extra = {}) => ({
   workspace: "work",
   agent: false,
   loaded: true,
+  window: 1,
   ...extra,
 });
 
@@ -319,6 +324,33 @@ describe("grepRows", () => {
     ]);
   });
 
+  test("rows carry their tab's window mark and host", () => {
+    const two = [tab("a", 1), tab("w", 1, { window: 2, workspace: "home" })];
+    const frames = new Map([
+      ["a", [{ key: "0", host: null, reply: reply(1) }]],
+      ["w", [{ key: "0", host: null, reply: reply(1) }]],
+    ]);
+    const { rows } = grepRows(two, frames);
+    expect(rows.map((r) => [r.window, r.host, r.workspace])).toEqual([
+      [1, "a.test", "work"],
+      [2, "w.test", "home"],
+    ]);
+  });
+
+  test("closed rows come after the open tabs' matches and before not-loaded tabs", () => {
+    const all = [tab("a", 1), tab("lazy", 2, { loaded: false })];
+    const frames = new Map([["a", [{ key: "0", host: null, reply: reply(1) }]]]);
+    const closed = grepClosed([closedTab(1, "Needle notes", "https://n.test/a")], must("needle"));
+    const { rows, count, tabsWithMatches } = grepRows(all, frames, GREP_CAPS, closed);
+    expect(rows.map((r) => `${r.kind}:${r.tabId}`)).toEqual([
+      "match:a",
+      "closed:closed:1",
+      "unloaded:lazy",
+    ]);
+    expect(count).toBe(2);
+    expect(tabsWithMatches).toBe(2);
+  });
+
   test("at most 2,000 rows", () => {
     const many = Array.from({ length: 30 }, (_, i) => tab(`t${i}`, i + 1));
     const frames = new Map(
@@ -374,6 +406,17 @@ describe("holdReplies: the parent keeps at most the rows it can list, best first
     expect(kept(held)).toBe(GREP_CAPS.rows);
     expect(held.at(-1)?.reply.matches).toHaveLength(100);
     expect(held.filter((e) => e.rank === 9 && e.reply.matches.length === 0)).toHaveLength(1);
+  });
+
+  test("the last reply that fits only in part is cut, so exactly 2,000 are held", () => {
+    const held = holdReplies([entry(0, 1500), entry(1, 1000), entry(2, 10)]);
+    expect(kept(held)).toBe(GREP_CAPS.rows);
+    expect(held[1]?.reply.matches).toHaveLength(500);
+    expect(held[1]?.reply.matches.map((m) => m.ordinal)).toEqual(
+      Array.from({ length: 500 }, (_, i) => i),
+    );
+    expect(held[1]?.reply.count).toBe(1000);
+    expect(held[2]?.reply.matches).toEqual([]);
   });
 
   test("under the cap nothing changes", () => {
@@ -479,8 +522,16 @@ describe("grepPickerKey", () => {
     const one = press(open(), ["ctrl+s"]);
     expect(one.state.scope).toBe("window");
     expect(one.effect).toEqual({ type: "scope", scope: "window" });
-    expect(press(open(), ["ctrl+s", "ctrl+s"]).state.scope).toBe("tab");
-    expect(press(open(), ["ctrl+s", "ctrl+s", "ctrl+s"]).state.scope).toBe("workspace");
+    const keys = (/** @type {number} */ n) => Array.from({ length: n }, () => "ctrl+s");
+    expect(press(open(), keys(2)).state.scope).toBe("windows");
+    expect(press(open(), keys(3)).state.scope).toBe("closed");
+    expect(press(open(), keys(4)).state.scope).toBe("workspace");
+    expect(GREP_SCOPE_NAMES).toEqual({
+      workspace: "this workspace",
+      window: "this window",
+      windows: "all windows",
+      closed: "all windows + closed",
+    });
   });
 
   test("ctrl+space refines the results fuzzily; Esc goes back to the grep query", () => {
@@ -542,5 +593,193 @@ describe("grepPickerKey", () => {
   test("a new query selects the best result again", () => {
     const s = press(open(), ["up", "up", "z"]).state;
     expect(s.selected).toBe(0);
+  });
+});
+
+/**
+ * @param {number} closedId
+ * @param {string} title
+ * @param {string} url
+ * @param {Partial<import("../src/grep.mjs").GrepClosedEntry>} [extra]
+ * @returns {import("../src/grep.mjs").GrepClosedEntry}
+ */
+const closedTab = (closedId, title, url, extra = {}) => ({
+  closedId,
+  closedWindow: false,
+  title,
+  url,
+  closedAt: 1000 - closedId,
+  window: 1,
+  workspace: "work",
+  agent: false,
+  tabs: [],
+  ...extra,
+});
+
+describe("grepClosed: recently closed tabs and windows match on title and URL", () => {
+  test("a title or URL match is a closed row with the match marked", () => {
+    const rows = grepClosed(
+      [
+        closedTab(1, "Retry budget", "https://docs.test/retry"),
+        closedTab(2, "Billing", "https://pay.test/budget-plan"),
+        closedTab(3, "Other", "https://x.test/"),
+      ],
+      must("budget"),
+    );
+    expect(rows.map((r) => [r.id, r.titleAt, r.urlAt])).toEqual([
+      ["closed:1", [6, 12], null],
+      ["closed:2", null, [17, 23]],
+    ]);
+    expect(rows[0]).toMatchObject({
+      kind: "closed",
+      tabId: "closed:1",
+      closedId: 1,
+      closedWindow: false,
+      host: "docs.test",
+      window: 1,
+      workspace: "work",
+    });
+  });
+
+  test("smart case and the literal fallback apply as for page text", () => {
+    const entries = [
+      closedTab(1, "needle", "https://a.test/"),
+      closedTab(2, "Needle", "https://b.test/"),
+    ];
+    expect(grepClosed(entries, must("Needle")).map((r) => r.closedId)).toEqual([2]);
+    expect(grepClosed(entries, must("needle")).map((r) => r.closedId)).toEqual([1, 2]);
+    expect(grepClosed([closedTab(1, "c++( guide", "https://c.test/")], must("c++(")).length).toBe(
+      1,
+    );
+  });
+
+  test("a closed window matches through its tabs and shows the first that matches", () => {
+    const win = closedTab(7, "Work window", "", {
+      closedWindow: true,
+      window: 0,
+      tabs: [
+        { title: "Inbox", url: "https://mail.test/" },
+        { title: "Retry budget", url: "https://docs.test/retry" },
+      ],
+    });
+    const [row] = grepClosed([win], must("budget"));
+    expect(row).toMatchObject({
+      id: "closedwin:7",
+      closedWindow: true,
+      title: "Retry budget",
+      host: "docs.test",
+      tabCount: 2,
+      titleAt: [6, 12],
+    });
+    expect(grepClosed([win], must("inbox|budget"))[0]?.title).toBe("Inbox");
+  });
+
+  test("newest first, at most 25 tabs and 5 windows, as Firefox keeps", () => {
+    const tabs = Array.from({ length: 40 }, (_, i) =>
+      closedTab(i, `needle ${i}`, "https://t.test/", { closedAt: i }),
+    );
+    const wins = Array.from({ length: 8 }, (_, i) =>
+      closedTab(100 + i, "w", "", {
+        closedWindow: true,
+        closedAt: i,
+        tabs: [{ title: "needle", url: "https://w.test/" }],
+      }),
+    );
+    const rows = grepClosed([...tabs, ...wins], must("needle"));
+    expect(rows.filter((r) => !r.closedWindow)).toHaveLength(25);
+    expect(rows.filter((r) => r.closedWindow)).toHaveLength(5);
+    expect(rows[0]?.closedId).toBe(39);
+    expect(rows.findIndex((r) => r.closedWindow)).toBe(25);
+  });
+
+  test("agent workspace rows are marked and come last", () => {
+    const rows = grepClosed(
+      [
+        closedTab(1, "needle a", "https://a.test/", { agent: true }),
+        closedTab(2, "needle b", "https://b.test/"),
+      ],
+      must("needle"),
+    );
+    expect(rows.map((r) => [r.closedId, r.agent])).toEqual([
+      [2, false],
+      [1, true],
+    ]);
+  });
+
+  test("a closed row's preview names it and what Enter does", () => {
+    const [tabRow] = grepClosed(
+      [closedTab(1, "Retry budget", "https://docs.test/retry")],
+      must("budget"),
+    );
+    const p = closedPreview(/** @type {any} */ (tabRow));
+    expect(p.lines).toEqual([
+      "Recently closed tab",
+      "Retry budget",
+      "https://docs.test/retry",
+      "Only its title and URL are searched.",
+      "Enter reopens it.",
+    ]);
+    expect(p.line).toBe(1);
+    expect(p.at).toEqual([6, 12]);
+    const win = closedTab(7, "W", "", {
+      closedWindow: true,
+      tabs: [
+        { title: "Inbox", url: "https://mail.test/" },
+        { title: "Retry budget", url: "https://docs.test/retry" },
+      ],
+    });
+    const [winRow] = grepClosed([win], must("budget"));
+    const wp = closedPreview(/** @type {any} */ (winRow));
+    expect(wp.lines[0]).toBe("Recently closed window, 2 tabs");
+    expect(wp.lines).toContain("Inbox  https://mail.test/");
+    expect(wp.lines.slice(-2)).toEqual([
+      "Only their titles and URLs are searched.",
+      "Enter reopens the window.",
+    ]);
+  });
+});
+
+describe("grepScopeText: what is being searched", () => {
+  const tabs = [
+    tab("a", 1),
+    tab("b", 2, { loaded: false }),
+    tab("n", 1, { workspace: "notes" }),
+    tab("g", 1, { workspace: "agent", agent: true }),
+    tab("x", 1, { window: 2, workspace: "home" }),
+    tab("y", 2, { window: 2, workspace: "home" }),
+  ];
+
+  test("one workspace: its window, name and tab count", () => {
+    const text = grepScopeText("workspace", tabs.slice(0, 2), null);
+    expect(text.title).toBe("Scope: this workspace · ctrl+s");
+    expect(text.lines).toEqual(["w1 this window: work · 2 tabs, 1 not loaded"]);
+  });
+
+  test("windows grouped, each with its workspaces and counts; the agent marked", () => {
+    const text = grepScopeText("windows", tabs, null);
+    expect(text.title).toBe("Scope: all windows · ctrl+s");
+    expect(text.lines).toEqual([
+      "w1 this window: work 2, notes 1, ◇ agent 1 · 4 tabs, 1 not loaded",
+      "w2: home · 2 tabs",
+    ]);
+  });
+
+  test("the closed scope adds what recently closed holds", () => {
+    const text = grepScopeText("closed", tabs.slice(4), { tabs: 3, windows: 1 });
+    expect(text.lines).toEqual([
+      "w2: home · 2 tabs",
+      "recently closed: 3 tabs, 1 window · titles and URLs only",
+    ]);
+  });
+
+  test("past five windows the rest are summed in one line", () => {
+    const many = Array.from({ length: 8 }, (_, i) => tab(`t${i}`, 1, { window: i + 1 }));
+    const { lines } = grepScopeText("windows", many, null);
+    expect(lines).toHaveLength(6);
+    expect(lines.at(-1)).toBe("… 3 more windows · 3 tabs");
+  });
+
+  test("no tabs in scope says so", () => {
+    expect(grepScopeText("workspace", [], null).lines).toEqual(["no tabs"]);
   });
 });
