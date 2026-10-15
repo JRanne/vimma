@@ -220,6 +220,12 @@ describe("the manifest signature (spec §2, §4 rule 1)", () => {
     expect(r).toEqual({ ok: false, reason: "manifest: larger than 64 KiB" });
   });
 
+  test("a pinned key that is not a valid SPKI refuses, never throws", async () => {
+    const broken = [{ id: primary.id, slot: "primary", spki: "AAAA" }];
+    const r = await verifyManifest(await signed(manifest(), primary), broken, subtle);
+    expect(r).toEqual({ ok: false, reason: "signature: does not verify" });
+  });
+
   test("splitManifest returns the body and the pairs", async () => {
     const body = manifest();
     const text = await signed(body, primary, secondary);

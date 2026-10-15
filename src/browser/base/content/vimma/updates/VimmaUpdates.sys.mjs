@@ -72,6 +72,9 @@ const MARKER = "is-packaged-app";
  * @property {number} refusals           refused manifests in a row
  */
 
+/** @type {readonly Outcome[]} */
+const OUTCOMES = ["never", "current", "offer", "unreachable", "refused", "off", "source"];
+
 /** @returns {UpdateState} */
 const fresh = () => ({
   checkedAt: null,
@@ -202,15 +205,38 @@ function alreadyHave(/** @type {Offer} */ offer) {
   return order < 0 || (order === 0 && BigInt(offer.buildId) <= BigInt(Services.appinfo.appBuildID));
 }
 
+/**
+ * The saved result, if it still holds: a pref anyone can edit, so anything malformed is dropped
+ * rather than trusted, and an offer the running build already has is dropped too.
+ */
 function load() {
+  state = fresh();
   try {
     const saved = JSON.parse(Services.prefs.getStringPref(LAST_PREF, "null"));
-    if (saved && typeof saved === "object") state = { ...fresh(), ...saved };
+    if (!saved || typeof saved !== "object" || Array.isArray(saved)) return;
+    const offer = saved.offer;
+    const valid =
+      offer &&
+      /^\d+\.\d+(?:\.\d+)?(?:[ab]\d+)?$/.test(offer.appVersion) &&
+      /^\d{1,16}$/.test(offer.buildId) &&
+      /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/.test(offer.displayVersion) &&
+      typeof offer.detailsUrl === "string" &&
+      offer.detailsUrl.startsWith("https://") &&
+      typeof offer.urgent === "boolean" &&
+      Array.isArray(offer.advisories);
+    state = {
+      ...fresh(),
+      checkedAt: Number.isFinite(saved.checkedAt) ? saved.checkedAt : null,
+      outcome: OUTCOMES.includes(saved.outcome) ? saved.outcome : "never",
+      reason: typeof saved.reason === "string" ? saved.reason : null,
+      offer: valid && !alreadyHave(offer) ? offer : null,
+      serial: /^\d{14}$/.test(saved.serial) ? saved.serial : null,
+      key: saved.key && typeof saved.key.id === "string" ? saved.key : null,
+      refusals: Number.isInteger(saved.refusals) ? saved.refusals : 0,
+    };
+    if (state.outcome === "offer" && !state.offer) state.outcome = "current";
   } catch {
     state = fresh();
-  }
-  if (state.offer && alreadyHave(state.offer)) {
-    state = { ...state, offer: null, outcome: "current" };
   }
 }
 
@@ -386,6 +412,12 @@ export const VimmaUpdates = {
   addListener(fn) {
     listeners.add(fn);
     return () => listeners.delete(fn);
+  },
+
+  /** Test-only: read the saved result again, as at startup. */
+  _load() {
+    load();
+    notify();
   },
 
   /** Test-only: forget every result and the cached install type. */

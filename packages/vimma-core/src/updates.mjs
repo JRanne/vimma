@@ -164,22 +164,20 @@ export async function verifyManifest(text, keys, subtle) {
     const pin = keys.find((k) => k.id === key);
     if (!pin) continue;
     named = true;
-    /** @type {Uint8Array<ArrayBuffer>} */
-    let signature;
+    // A malformed signature or pinned key is a failed verification, never an exception.
     try {
-      signature = base64Decode(sig);
+      const publicKey = await subtle.importKey(
+        "spki",
+        base64Decode(pin.spki),
+        SIGNATURE_ALGORITHM,
+        false,
+        ["verify"],
+      );
+      if (await subtle.verify(SIGNATURE_ALGORITHM, publicKey, base64Decode(sig), bytes)) {
+        return { ok: true, body: split.body, key: { id: pin.id, slot: pin.slot } };
+      }
     } catch {
       continue;
-    }
-    const publicKey = await subtle.importKey(
-      "spki",
-      base64Decode(pin.spki),
-      SIGNATURE_ALGORITHM,
-      false,
-      ["verify"],
-    );
-    if (await subtle.verify(SIGNATURE_ALGORITHM, publicKey, signature, bytes)) {
-      return { ok: true, body: split.body, key: { id: pin.id, slot: pin.slot } };
     }
   }
   return {

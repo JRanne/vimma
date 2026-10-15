@@ -897,10 +897,13 @@ _Pages_ and _extensions_ cannot reach it.
 - UP5. Manifest text is parsed **only** after its signature verifies, and only in the one format
   the release pipeline writes: at most 64 KiB, no DTD or entity declarations, at most one
   `<update>`. The commands about:vimma shows are built from a SemVer version and shell-quoted
-  paths, never from free text in the manifest.
+  paths, never from free text in the manifest; a saved result (the pref `vimma.update.last`) is
+  checked the same way when read back.
   [`an oversized manifest is refused before any crypto`](../packages/vimma-core/test/updates.test.mjs),
   [`shellQuote leaves plain paths alone and quotes the rest`](../packages/vimma-core/test/updates.test.mjs),
-  [`tarball: quit, then unpack over the install's parent directory, quoted`](../packages/vimma-core/test/updates.test.mjs)
+  [`tarball: quit, then unpack over the install's parent directory, quoted`](../packages/vimma-core/test/updates.test.mjs),
+  [`a pinned key that is not a valid SPKI refuses, never throws`](../packages/vimma-core/test/updates.test.mjs),
+  [`a_damaged_saved_result_is_dropped_not_thrown`](../tests/browser/browser_vimma_update_check.js)
 
 **Key custody** (spec §6, decisions 16 and 17): the primary manifest key is a non-exportable
 Google Cloud KMS key that only the release workflow's `update-signing` environment can ask to

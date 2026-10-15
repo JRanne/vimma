@@ -300,3 +300,20 @@ add_task(async function the_url_may_name_only_platform_and_channel() {
   await SpecialPowers.popPrefEnv();
   Assert.deepEqual(await requests(), [], "no request left");
 });
+
+add_task(async function a_damaged_saved_result_is_dropped_not_thrown() {
+  for (const saved of [
+    "{",
+    '{"offer":{"appVersion":"999.0","buildId":"not digits"}}',
+    '{"offer":{"appVersion":"999.0","buildId":"1"},"refusals":"x"}',
+    "[]",
+    '{"outcome":"offer","offer":{"appVersion":"999.0","buildId":"1","displayVersion":"1.0.0; rm -rf ~","detailsUrl":"https://x/","urgent":false,"advisories":[]}}',
+  ]) {
+    Services.prefs.setStringPref("vimma.update.last", saved);
+    VimmaUpdates._load();
+    const s = VimmaUpdates.status();
+    Assert.equal(s.offer, null, saved);
+    Assert.equal(s.refusals, 0, saved);
+  }
+  VimmaUpdates._reset();
+});
