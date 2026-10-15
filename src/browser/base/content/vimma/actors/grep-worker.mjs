@@ -7,7 +7,7 @@
 // being searched by key. A regular expression that backtracks without end cannot freeze a
 // page: grep-matcher.mjs terminates this worker when a query's time budget runs out.
 
-import { GREP_CAPS, grepText, parseQuery } from "../core/grep.mjs";
+import { CLOSED_MATCH_CAPS, GREP_CAPS, grepText, parseQuery } from "../core/grep.mjs";
 
 const scope = /** @type {any} */ (globalThis);
 /** @type {Map<string, string>} each frame's text, by key */
@@ -27,7 +27,12 @@ scope.onmessage = (event) => {
   }
   if (data.type !== "query" || typeof data.query !== "string") return;
   const query = parseQuery(data.query);
-  const caps = data.all ? { ...GREP_CAPS, listed: GREP_CAPS.counted } : GREP_CAPS;
+  // `firstPerLine`: recently closed titles and URLs, one a line (core closedSearchText).
+  const caps = data.firstPerLine
+    ? CLOSED_MATCH_CAPS
+    : data.all
+      ? { ...GREP_CAPS, listed: GREP_CAPS.counted }
+      : GREP_CAPS;
   const text = texts.get(data.key) ?? "";
   const reply = query ? grepText(text, query, caps) : { count: 0, matches: [] };
   scope.postMessage({ id: data.id, reply });

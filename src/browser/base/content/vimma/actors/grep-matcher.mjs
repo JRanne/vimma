@@ -23,6 +23,7 @@ export const GREP_BUDGET_MS = 1000;
  * @property {{ text: string }} model  the frame's text model
  * @property {string} query
  * @property {boolean} all  every match up to the count cap (the jump)
+ * @property {boolean} firstPerLine  one match a line (recently closed titles and URLs)
  * @property {(reply: any) => void} resolve  grepText's result, null when replaced, "timeout"
  */
 
@@ -78,7 +79,14 @@ function pump() {
     pump();
   }, GREP_BUDGET_MS);
   running = { id, job, timer };
-  worker.postMessage({ type: "query", id, key: job.key, query: job.query, all: job.all });
+  worker.postMessage({
+    type: "query",
+    id,
+    key: job.key,
+    query: job.query,
+    all: job.all,
+    firstPerLine: job.firstPerLine,
+  });
 }
 
 /** Drops a frame's queued queries (they answer null) and stops its running one. */
@@ -103,12 +111,13 @@ export const GrepMatcher = {
    * @param {{ text: string }} model
    * @param {string} query
    * @param {boolean} all
+   * @param {boolean} [firstPerLine]
    * @returns {Promise<any>} grepText's result, null when replaced, or "timeout"
    */
-  match(key, model, query, all) {
+  match(key, model, query, all, firstPerLine = false) {
     cancel(key);
     return new Promise((resolve) => {
-      queue.push({ key, model, query, all, resolve });
+      queue.push({ key, model, query, all, firstPerLine, resolve });
       pump();
     });
   },

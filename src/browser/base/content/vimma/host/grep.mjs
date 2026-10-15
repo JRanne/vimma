@@ -17,6 +17,7 @@ import {
   closedRows,
   closedSearchText,
   grepCountText,
+  grepHost,
   grepListText,
   grepPickerKey,
   grepRows,
@@ -59,21 +60,15 @@ const MAX_TABS = 200;
 
 export const GONE_TEXT = "match no longer on the page";
 export const NO_LIST_TEXT = "grep: no results to step through";
+export const CLOSED_GONE_TEXT = "no longer in recently closed";
+/** A tab's title as rows, the preview title and an option's name take it; pages set any length. */
+const TITLE_MAX = 300;
 
 /**
  * @typedef {object} GrepHost
  * @property {(text: string) => void} notice
  * @property {() => void} emit  the mode may have changed (the picker opened or closed)
  */
-
-/** @param {string} url */
-function hostOf(url) {
-  try {
-    return new URL(url).host || url;
-  } catch {
-    return url;
-  }
-}
 
 /**
  * @param {Window} win
@@ -129,7 +124,14 @@ function closedEntries(win, windows) {
   const out = [];
   windows.forEach((w, i) => {
     /** @type {any[]} */
-    const data = lazy.SessionStore.getClosedTabDataForWindow(w);
+    let data;
+    try {
+      data = lazy.SessionStore.getClosedTabDataForWindow(w);
+    } catch {
+      // SessionStore throws for a window it does not track yet (one that has only just
+      // opened, SessionStore.sys.mjs `#getWindowDataForClosedTabs`); it has nothing closed.
+      return;
+    }
     for (const c of data) {
       const ws = owner(c.state?.userContextId ?? 0);
       const { url, title } = closedUrl(c.state);
@@ -150,7 +152,14 @@ function closedEntries(win, windows) {
   /** @type {any[]} */
   const closedWindows = lazy.SessionStore.getClosedWindowData();
   for (const w of closedWindows) {
-    const tabs = (w.tabs ?? []).map((/** @type {any} */ t) => closedUrl(t));
+    const tabs = (w.tabs ?? []).map((/** @type {any} */ t) => {
+      const ws = owner(t.userContextId ?? 0);
+      return {
+        ...closedUrl(t),
+        workspace: ws?.name ?? "",
+        agent: !!ws && ws.id === agentId,
+      };
+    });
     out.push({
       closedId: w.closedId,
       closedWindow: true,
@@ -223,6 +232,9 @@ export class GrepSession {
     this.listWindows = new Map();
     /** @type {Set<Window>} windows whose TabClose prunes the grep list */
     this.watched = new Set();
+    /** The matcher key of this session's recently closed text: a newer query replaces the
+     * older one, and closing the picker drops it (L5, L6). */
+    this.closedKey = `closed-${GrepMatcher.newKey()}`;
     /** The query `:grep` alone resumes. */
     this.lastQuery = "";
     /** @type {Element | null} focused before open */
@@ -241,7 +253,14 @@ export class GrepSession {
     // A window closing takes its tabs' lines with it; it fires no TabClose for them.
     this.onUnload = (/** @type {Event} */ e) => {
       const doc = e.target;
+      const gone = [...this.watched].find((w) => w !== this.win && w.document === doc);
+      if (gone) {
+        gone.removeEventListener("TabClose", this.onTabClose);
+        gone.removeEventListener("unload", this.onUnload);
+        this.watched.delete(gone);
+      }
       this.prune((id) => this.listWindows.get(id)?.document !== doc);
+      for (const [id, w] of this.listWindows) if (w.document === doc) this.listWindows.delete(id);
     };
     this.watch(win);
   }
@@ -456,8 +475,8 @@ export class GrepSession {
             tab: {
               tabId: id,
               index: i + 1,
-              title: browser?.contentTitle || tab.label || url,
-              host: hostOf(url),
+              title: String(browser?.contentTitle || tab.label || url).slice(0, TITLE_MAX),
+              host: grepHost(url),
               workspace: priv ? PRIVATE_NAME : ws.name,
               agent: ws.id === agentId,
               loaded,
@@ -480,14 +499,10 @@ export class GrepSession {
   async searchClosed(windows, query) {
     const closed = closedSearchText(closedEntries(this.win, windows));
     if (!closed.entries.length) return { rows: [], timedOut: false };
-    const key = `closed-${GrepMatcher.newKey()}`;
-    try {
-      const reply = await GrepMatcher.match(key, { text: closed.text }, query, true);
-      if (!reply || typeof reply !== "object") return { rows: [], timedOut: reply === "timeout" };
-      return { rows: closedRows(closed, reply.matches), timedOut: false };
-    } finally {
-      GrepMatcher.drop(key);
-    }
+    // One key a session: this query replaces the session's older one; close() drops it.
+    const reply = await GrepMatcher.match(this.closedKey, { text: closed.text }, query, true, true);
+    if (!reply || typeof reply !== "object") return { rows: [], timedOut: reply === "timeout" };
+    return { rows: closedRows(closed, reply.matches), timedOut: false };
   }
 
   /** Runs the current query in the current scope; replies stream into the list. */
@@ -513,7 +528,6 @@ export class GrepSession {
       busy: !!parsed && !tooLong,
       tooLong,
     };
-    /** Matches kept for this search: past the row cap, replies keep their counts only. */
     /**
      * The replies holding matches, ranked by the list's order: past the row cap the worst
      * ones keep only their counts (core holdReplies), so the parent never holds more than the
@@ -598,7 +612,7 @@ export class GrepSession {
             const principal = wg?.documentPrincipal;
             const host =
               i > 0 && principal && principal.siteOrigin !== topSite
-                ? hostOf(wg.documentURI?.spec ?? "")
+                ? grepHost(wg.documentURI?.spec ?? "")
                 : null;
             const slot = { key, host, reply: parsedReply };
             list[i] = slot;
@@ -658,11 +672,14 @@ export class GrepSession {
    */
   reopen(row) {
     const SessionStore = lazy.SessionStore;
+    // A stale id (restored or forgotten since the search) reopens nothing.
     if (row.closedWindow) {
       const w = SessionStore.undoCloseById(row.closedId);
       if (w && typeof w.focus === "function") w.focus();
+      else this.host.notice(CLOSED_GONE_TEXT);
     } else {
-      SessionStore.undoCloseById(row.closedId, isPrivateBrowsing(this.win), this.win);
+      const tab = SessionStore.undoCloseById(row.closedId, isPrivateBrowsing(this.win), this.win);
+      if (!tab) this.host.notice(CLOSED_GONE_TEXT);
     }
   }
 
@@ -745,6 +762,7 @@ export class GrepSession {
     this.gen++;
     this.ui.close();
     this.state = null;
+    GrepMatcher.drop(this.closedKey);
     if (!keepFrames) this.endFrames();
     const opener = this.opener;
     this.opener = null;

@@ -31,6 +31,9 @@ const { SessionStore } = ChromeUtils.importESModule(
 const { TabStateFlusher } = ChromeUtils.importESModule(
   "moz-src:///browser/components/sessionstore/TabStateFlusher.sys.mjs",
 );
+const { GrepMatcher } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/actors/grep-matcher.mjs",
+);
 
 const DIR = getRootDirectory(gTestPath).replace("chrome://mochitests/content", "");
 const PAGE = `https://example.com${DIR}file_vimma_grep.html`;
@@ -65,6 +68,42 @@ const scopeTitle = (win = window) =>
 /** @param {Window} [win] */
 const scopeLines = (win = window) =>
   [...(dialog(win)?.querySelectorAll(".vimma-grep-scope-line") ?? [])].map((l) => l.textContent);
+/** A closed row's title: its text before the URL. */
+const closedTitle = (/** @type {Element} */ row) => {
+  const text = row.querySelector(".vimma-grep-text");
+  const all = text?.textContent ?? "";
+  const url = text?.querySelector(".vimma-grep-url")?.textContent;
+  return url === undefined ? all : all.slice(0, all.length - url.length - 1);
+};
+
+/**
+ * Closes a fixture tab of this window with that title, kept by SessionStore.
+ * @param {string} title
+ */
+async function closeTitled(title) {
+  const tab = await openFixture({ title, t: "no match in the text" });
+  await TabStateFlusher.flush(tab.linkedBrowser);
+  BrowserTestUtils.removeTab(tab);
+}
+
+/**
+ * Opens a normal window on a fixture with that title and closes it, kept by SessionStore.
+ * @param {string} title
+ */
+async function closeWindowTitled(title) {
+  const newest = () => SessionStore.getClosedWindowData()[0]?.closedId;
+  const before = newest();
+  const win = await BrowserTestUtils.openNewBrowserWindow();
+  const url = `${PAGE}?title=${encodeURIComponent(title)}`;
+  BrowserTestUtils.startLoadingURIString(win.gBrowser.selectedBrowser, url);
+  await BrowserTestUtils.browserLoaded(win.gBrowser.selectedBrowser, false, url);
+  await until(() => win.gBrowser.selectedBrowser.contentTitle === title, "titled");
+  await TabStateFlusher.flush(win.gBrowser.selectedBrowser);
+  await BrowserTestUtils.closeWindow(win);
+  await until(() => newest() !== before, "kept as closed");
+  await SimpleTest.promiseFocus(window);
+}
+
 /** @param {Window} win @param {number} n */
 function ctrlS(win = window, n = 1) {
   for (let i = 0; i < n; i++) EventUtils.synthesizeKey("s", { ctrlKey: true }, win);
@@ -567,6 +606,9 @@ add_task(async function results_name_their_tab_and_the_count_is_announced() {
 add_task(async function private_tabs_never_reach_a_normal_window_and_back() {
   await reset();
   await openFixture({ title: "Normal", t: "normal secretneedle" });
+  // Normal closed entries that match: the private window must list none of them.
+  await closeTitled("Normal gone secretneedle");
+  await closeWindowTitled("Normal window secretneedle");
   const priv = await BrowserTestUtils.openNewBrowserWindow({ private: true });
   const url = `${PAGE}?t=${encodeURIComponent("private secretneedle")}`;
   BrowserTestUtils.startLoadingURIString(priv.gBrowser.selectedBrowser, url);
@@ -575,10 +617,10 @@ add_task(async function private_tabs_never_reach_a_normal_window_and_back() {
   // A private tab closed in the private window: SessionStore keeps it for that window only.
   const closing = BrowserTestUtils.addTab(
     priv.gBrowser,
-    `${PAGE}?title=${encodeURIComponent("closed secretneedle")}`,
+    `${PAGE}?title=${encodeURIComponent("private closed secretneedle")}`,
   );
   await BrowserTestUtils.browserLoaded(closing.linkedBrowser);
-  await until(() => closing.linkedBrowser.contentTitle === "closed secretneedle", "titled");
+  await until(() => closing.linkedBrowser.contentTitle === "private closed secretneedle", "titled");
   await TabStateFlusher.flush(closing.linkedBrowser);
   BrowserTestUtils.removeTab(closing);
   await until(() => SessionStore.getClosedTabCountForWindow(priv) > 0, "kept as closed");
@@ -592,8 +634,24 @@ add_task(async function private_tabs_never_reach_a_normal_window_and_back() {
   await resultsSettle(1, priv);
   Assert.deepEqual(texts(priv), ["private secretneedle"], "all windows: the private ones only");
   ctrlS(priv);
+  await until(() => scopeTitle(priv).includes("closed"), "closed scope");
   await resultsSettle(2, priv);
-  Assert.equal(rows(priv)[1].dataset.kind, "closed", "its own closed tab is listed");
+  Assert.deepEqual(
+    rows(priv).map((r) => [
+      r.dataset.kind,
+      r.dataset.kind === "closed" ? closedTitle(r) : textOf(r),
+    ]),
+    [
+      ["match", "private secretneedle"],
+      ["closed", "private closed secretneedle"],
+    ],
+    "the private window: its own open and closed tabs, no normal closed tab or window",
+  );
+  Assert.equal(
+    scopeLines(priv).at(-1),
+    "recently closed: 1 tab, 0 windows · titles and URLs only",
+    "it counts only its own recently closed",
+  );
   EventUtils.synthesizeKey("KEY_Escape", {}, priv);
   EventUtils.synthesizeKey("KEY_Escape", {}, priv);
 
@@ -601,13 +659,22 @@ add_task(async function private_tabs_never_reach_a_normal_window_and_back() {
   await openGrep();
   type("secretneedle");
   await resultsSettle(1);
-  for (const scope of ["this window", "all windows", "all windows + closed"]) {
+  for (const scope of ["this window", "all windows"]) {
     EventUtils.synthesizeKey("s", { ctrlKey: true });
     await until(() => scopeTitle() === `Scope: ${scope} · ctrl+s`, scope);
     await resultsSettle(1);
     Assert.deepEqual(texts(), ["normal secretneedle"], `${scope}: never a private tab`);
     Assert.ok(!scopeLines().some((l) => l.startsWith("w2")), `${scope}: no private window`);
   }
+  EventUtils.synthesizeKey("s", { ctrlKey: true });
+  await until(() => scopeTitle().includes("closed"), "closed scope");
+  await resultsSettle(3);
+  Assert.deepEqual(
+    rows().map((r) => (r.dataset.kind === "closed" ? closedTitle(r) : textOf(r))),
+    ["normal secretneedle", "Normal gone secretneedle", "Normal window secretneedle"],
+    "closed: the normal side only, never the private closed tab",
+  );
+  Assert.ok(!scopeLines().some((l) => l.startsWith("w2")), "closed: no private window");
   EventUtils.synthesizeKey("KEY_Escape");
   EventUtils.synthesizeKey("KEY_Escape");
   await BrowserTestUtils.closeWindow(priv);
@@ -617,8 +684,11 @@ add_task(async function private_tabs_never_reach_a_normal_window_and_back() {
   type("secretneedle");
   ctrlS(window, 3);
   await until(() => scopeTitle().includes("closed"), "closed scope");
-  await resultsSettle(1);
-  Assert.deepEqual(texts(), ["normal secretneedle"], "nothing private from a closed window");
+  await resultsSettle(3);
+  Assert.ok(
+    rows().every((r) => !closedTitle(r).startsWith("private") && !textOf(r).startsWith("private")),
+    "nothing private from a closed window",
+  );
   EventUtils.synthesizeKey("KEY_Escape");
   EventUtils.synthesizeKey("KEY_Escape");
 });
@@ -807,6 +877,89 @@ add_task(async function a_catastrophic_pattern_on_closed_titles_never_freezes_th
   EventUtils.synthesizeKey("KEY_Escape");
 });
 
+add_task(async function the_closed_titles_have_one_matcher_key_until_close() {
+  await reset();
+  await closeTitled("Keyed closedkeyneedle");
+  const closedKeys = () => GrepMatcher.frames.filter((k) => k.startsWith("closed-"));
+  await openGrep();
+  ctrlS(window, 3);
+  await until(() => scopeTitle().includes("closed"), "closed scope");
+  type("closedkey");
+  await resultsSettle(1);
+  Assert.equal(closedKeys().length, 1, "the closed titles are held under one key");
+  type("needle");
+  await resultsSettle(1);
+  Assert.equal(closedKeys().length, 1, "a newer query replaces the older under the same key");
+  EventUtils.synthesizeKey("KEY_Escape");
+  EventUtils.synthesizeKey("KEY_Escape");
+  await until(() => closedKeys().length === 0, "closing the picker drops them");
+});
+
+add_task(async function enter_on_a_closed_row_already_gone_says_so() {
+  await reset();
+  await closeTitled("Stale staleneedle");
+  await openGrep();
+  ctrlS(window, 3);
+  await until(() => scopeTitle().includes("closed"), "closed scope");
+  type("staleneedle");
+  await resultsSettle(1);
+  const closedId = Number(rows()[0].dataset.tabId.split(":")[1]);
+  SessionStore.forgetClosedTabById(closedId);
+  const tabs = gBrowser.tabs.length;
+  EventUtils.synthesizeKey("KEY_Enter");
+  await until(() => noticeText() === "no longer in recently closed", "a notice says why");
+  Assert.equal(gBrowser.tabs.length, tabs, "nothing reopened");
+});
+
+add_task(async function the_grep_list_drops_a_closed_windows_lines() {
+  await reset();
+  await openFixture({ title: "Here", t: "winclosedneedle here" });
+  const other = await BrowserTestUtils.openNewBrowserWindow();
+  const url = `${PAGE}?title=There&t=${encodeURIComponent("winclosedneedle there")}`;
+  BrowserTestUtils.startLoadingURIString(other.gBrowser.selectedBrowser, url);
+  await BrowserTestUtils.browserLoaded(other.gBrowser.selectedBrowser, false, url);
+  await SimpleTest.promiseFocus(window);
+  await openGrep();
+  type("winclosedneedle");
+  ctrlS(window, 2);
+  await until(() => scopeTitle() === "Scope: all windows · ctrl+s", "all windows");
+  await resultsSettle(2);
+  EventUtils.synthesizeKey("KEY_Enter");
+  await until(() => !isOpen(), "jumped");
+  const session = VimmaHost._grep(window);
+  Assert.equal(session.list.rows.length, 2, "the list reaches both windows");
+  await BrowserTestUtils.closeWindow(other);
+  await SimpleTest.promiseFocus(window);
+  Assert.equal(session.list.rows.length, 1, "the closed window's lines are gone");
+  Assert.equal(session.watched.size, 1, "and the closed window is no longer watched");
+  await focusContent(gBrowser.selectedBrowser);
+  type("]q");
+  await until(() => noticeText() === "grep 1/1", "]q: one result left");
+  Assert.equal(Services.focus.activeWindow, window, "and it stays in this window");
+});
+
+add_task(async function a_window_sessionstore_does_not_track_is_skipped() {
+  await reset();
+  await closeWindowTitled("Tracked trackneedle");
+  const real = SessionStore.getClosedTabDataForWindow;
+  SessionStore.getClosedTabDataForWindow = (/** @type {Window} */ w) => {
+    if (w === window) throw new Error("Window is not tracked");
+    return real.call(SessionStore, w);
+  };
+  try {
+    await openGrep();
+    type("trackneedle");
+    ctrlS(window, 3);
+    await until(() => scopeTitle().includes("closed"), "closed scope");
+    await resultsSettle(1);
+    Assert.equal(rows()[0].dataset.kind, "closed", "the closed window is still listed");
+  } finally {
+    SessionStore.getClosedTabDataForWindow = real;
+    EventUtils.synthesizeKey("KEY_Escape");
+    EventUtils.synthesizeKey("KEY_Escape");
+  }
+});
+
 add_task(async function the_panel_starts_at_the_page_top_and_follows_the_toolbar() {
   await reset();
   const content = () => gBrowser.tabbox.getBoundingClientRect();
@@ -874,6 +1027,25 @@ add_task(async function page_text_with_markup_stays_text() {
     "the preview shows the line",
   );
   Assert.equal(dialog().querySelectorAll("img, b, i").length, 0, "nor in the preview");
+  EventUtils.synthesizeKey("KEY_Escape");
+  EventUtils.synthesizeKey("KEY_Escape");
+
+  // Closed rows, their preview and the preview's title are text too (L3).
+  const markup = '<img src=x onerror="alert(1)"><i>gone</i> markneedle';
+  await closeTitled(markup);
+  await closeWindowTitled(`<b>win</b> ${markup}`);
+  await openGrep();
+  type("markneedle");
+  ctrlS(window, 3);
+  await until(() => scopeTitle().includes("closed"), "closed scope");
+  await resultsSettle(2);
+  Assert.equal(closedTitle(rows()[0]), markup, "a closed title shows as text");
+  const body = dialog().querySelector(".vimma-grep-preview-body");
+  await until(() => body.textContent.includes(markup), "the closed tab's preview");
+  Assert.equal(dialog().querySelectorAll("img, b, i").length, 0, "no markup from a closed tab");
+  EventUtils.synthesizeKey("KEY_ArrowUp");
+  await until(() => body.textContent.includes("Recently closed window"), "the window's preview");
+  Assert.equal(dialog().querySelectorAll("img, b, i").length, 0, "nor from a closed window");
   EventUtils.synthesizeKey("KEY_Escape");
   EventUtils.synthesizeKey("KEY_Escape");
 });

@@ -8,6 +8,7 @@ import {
   grepListText,
   grepPickerKey,
   grepRows,
+  grepHost,
   grepScopeText,
   grepText,
   holdReplies,
@@ -692,6 +693,56 @@ describe("grepClosed: recently closed tabs and windows match on title and URL", 
     expect(rows.findIndex((r) => r.closedWindow)).toBe(25);
   });
 
+  test("a closed window takes the agent marking of the tab it shows", () => {
+    const win = closedTab(7, "W", "", {
+      closedWindow: true,
+      window: 0,
+      workspace: "",
+      tabs: [
+        { title: "mine", url: "https://a.test/" },
+        { title: "agent needle", url: "https://b.test/", workspace: "agent", agent: true },
+      ],
+    });
+    const mine = closedTab(1, "needle mine", "https://c.test/");
+    const rows = grepClosed([win, mine], must("needle"));
+    expect(rows.map((r) => [r.id, r.agent, r.workspace])).toEqual([
+      ["closed:1", false, "work"],
+      ["closedwin:7", true, "agent"],
+    ]);
+  });
+
+  test("a host-less URL gives no host, and a closed row's URL and host are cut", () => {
+    expect(grepHost(`about:blank#${"x".repeat(5000)}`)).toBe("");
+    expect(grepHost("data:text/html,hello")).toBe("");
+    expect(grepHost("https://docs.test/a")).toBe("docs.test");
+    expect(grepHost(`https://${"h".repeat(60)}.test/`).length).toBeLessThanOrEqual(64);
+    const [row] = grepClosed(
+      [closedTab(1, "needle", `about:blank#${"x".repeat(5000)}`)],
+      must("needle"),
+    );
+    expect(row?.host).toBe("");
+    expect(row?.url.length).toBeLessThanOrEqual(GREP_CAPS.context + 2);
+  });
+
+  test("one closed title matching a thousand times cannot crowd out the rest", () => {
+    const greedy = closedTab(0, "a".repeat(1000), "https://g.test/", { closedAt: 2000 });
+    const rest = Array.from({ length: 24 }, (_, i) =>
+      closedTab(i + 1, `a ${i}`, "https://t.test/"),
+    );
+    expect(grepClosed([greedy, ...rest], must("a"))).toHaveLength(25);
+  });
+
+  test("a closed window's tabs past 20 and fields past 1,000 characters are not matched", () => {
+    const tabs = Array.from({ length: 30 }, (_, i) => ({
+      title: i === 25 ? "late needle" : `tab ${i}`,
+      url: "https://w.test/",
+    }));
+    const win = closedTab(7, "W", "", { closedWindow: true, tabs });
+    expect(grepClosed([win], must("needle"))).toEqual([]);
+    const far = closedTab(1, `${"x".repeat(1500)} needle`, "https://f.test/");
+    expect(grepClosed([far], must("needle"))).toEqual([]);
+  });
+
   test("agent workspace rows are marked and come last", () => {
     const rows = grepClosed(
       [
@@ -736,6 +787,21 @@ describe("grepClosed: recently closed tabs and windows match on title and URL", 
       "Only their titles and URLs are searched.",
       "Enter reopens the window.",
     ]);
+  });
+});
+
+describe("grepText firstPerLine", () => {
+  test("takes the first match of each line and counts lines", () => {
+    const r = grepText("aaa\nbab\nccc", must("a"), {
+      ...GREP_CAPS,
+      listed: GREP_CAPS.counted,
+      firstPerLine: true,
+    });
+    expect(r.matches.map((m) => [m.line, m.start])).toEqual([
+      [1, 0],
+      [2, 5],
+    ]);
+    expect(r.count).toBe(2);
   });
 });
 

@@ -217,7 +217,9 @@ function stepOver(s, i) {
  * up to `counted`, the first `listed` with their line of context.
  * @param {string} text  the frame's text model
  * @param {GrepQuery} query
- * @param {{ listed: number, counted: number, context: number, before: number }} [caps]
+ * @param {{ listed: number, counted: number, context: number, before: number,
+ *   firstPerLine?: boolean }} [caps]  `firstPerLine`: one match a line, so that one long line
+ *   cannot use up the count (recently closed titles and URLs, one a line)
  * @returns {{ matches: GrepMatch[], count: number }}
  */
 export function grepText(text, query, caps = GREP_CAPS) {
@@ -257,7 +259,7 @@ export function grepText(text, query, caps = GREP_CAPS) {
             at,
           });
         }
-        if (++count >= caps.counted) break;
+        if (++count >= caps.counted || caps.firstPerLine) break;
       }
     }
     if (!brk) break;
@@ -539,6 +541,16 @@ export function grepRows(tabs, frames, caps = GREP_CAPS, closed = []) {
   return { rows, count, tabsWithMatches };
 }
 
+/**
+ * How closed titles and URLs are matched: every line may be listed, and only its first match,
+ * so that each entry can match whatever another's title holds.
+ */
+export const CLOSED_MATCH_CAPS = Object.freeze({
+  ...GREP_CAPS,
+  listed: GREP_CAPS.counted,
+  firstPerLine: true,
+});
+
 /** Recently closed tabs and windows searched, Firefox's `max_tabs_undo` and `max_windows_undo`. */
 export const GREP_CLOSED_CAPS = Object.freeze({
   tabs: 25,
@@ -559,7 +571,8 @@ export const GREP_CLOSED_CAPS = Object.freeze({
  * @property {number} window  the open window it was closed from, 0 for a closed window
  * @property {string} workspace
  * @property {boolean} agent
- * @property {{ title: string, url: string }[]} tabs  a closed window's tabs
+ * @property {{ title: string, url: string, workspace?: string, agent?: boolean }[]} tabs  a
+ *   closed window's tabs, each with the workspace its container belongs to
  */
 /**
  * The text the closed entries are matched in: one line per title and per URL, so that the same
@@ -570,13 +583,23 @@ export const GREP_CLOSED_CAPS = Object.freeze({
  * @property {{ start: number, entry: number, tab: number, field: "title" | "url" }[]} fields
  */
 
-/** @param {string} url */
-function hostOf(url) {
+/** The longest host a row shows; a real host name is far shorter. */
+const HOST_WIDTH = 64;
+
+/**
+ * A URL's host for a row, the preview title and an option's name: "" for a URL without one
+ * (`about:`, `data:`, `file:`), never the URL itself, which a page can make a megabyte long;
+ * cut to 64 characters.
+ * @param {string} url
+ */
+export function grepHost(url) {
+  let host;
   try {
-    return new URL(url).host || url;
+    host = new URL(url).host;
   } catch {
-    return url;
+    return "";
   }
+  return host.length > HOST_WIDTH ? `${host.slice(0, HOST_WIDTH - 1)}${ELLIPSIS}` : host;
 }
 
 /**
@@ -652,6 +675,8 @@ export function closedRows(closed, matches) {
     };
     const title = cut(shown?.title ?? "", hit.title);
     const url = cut(shown?.url ?? "", hit.url);
+    // A closed window's row is the agent's when the tab it shows is (decision 13).
+    const tab = e.closedWindow ? e.tabs[hit.tab] : undefined;
     const id = `${e.closedWindow ? "closedwin" : "closed"}:${e.closedId}`;
     rows.push({
       kind: "closed",
@@ -665,9 +690,9 @@ export function closedRows(closed, matches) {
       titleAt: title.at,
       url: url.text,
       urlAt: url.at,
-      host: hostOf(shown?.url ?? ""),
-      workspace: e.workspace,
-      agent: e.agent,
+      host: grepHost(oneLine(shown?.url ?? "", GREP_CLOSED_CAPS.field)),
+      workspace: tab?.workspace ?? e.workspace,
+      agent: tab?.agent ?? e.agent,
       tabCount: e.closedWindow ? e.tabs.length : 1,
       tabs: e.closedWindow
         ? e.tabs.slice(0, GREP_CAPS.previewLines).map((t) => ({
@@ -684,7 +709,7 @@ export function closedRows(closed, matches) {
         : [],
     });
   });
-  return rows;
+  return [...rows.filter((row) => !row.agent), ...rows.filter((row) => row.agent)];
 }
 
 /**
@@ -697,10 +722,7 @@ export function closedRows(closed, matches) {
  */
 export function grepClosed(entries, query) {
   const closed = closedSearchText(entries);
-  const { matches } = grepText(closed.text, query, {
-    ...GREP_CAPS,
-    listed: GREP_CAPS.counted,
-  });
+  const { matches } = grepText(closed.text, query, CLOSED_MATCH_CAPS);
   return closedRows(closed, matches);
 }
 

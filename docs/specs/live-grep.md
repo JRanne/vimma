@@ -376,7 +376,8 @@ match.
      first, as tab search marks them, so a row says where it is even in the widest scope;
    - the tab's number in its workspace (the number `ctrl+b 1..9` and the status bar use);
    - the tab's title cut to 24 characters, then its host, then `:line:`, the line number in its
-     frame;
+     frame. The host is cut to 64 characters and is empty for a URL without one (`about:`,
+     `data:`, `file:`), never the URL itself, because a page can make a URL a megabyte long;
    - the line, with its match in `<mark>`, starting at most 16 characters before the match so
      that the match stays in view in a narrow list; prefixed `↳ host` when the match is in a
      frame from another site, and `◇ agent` for an agent workspace tab (decision 13).
@@ -541,7 +542,12 @@ match.
       through the same `actors/grep-matcher.mjs`, with the same 1-second budget, because a
       title is page-controlled text and a backtracking pattern on it would otherwise freeze the
       browser's own window. At most 25 closed tabs and 5 closed windows (20 tabs each), as
-      Firefox keeps, are matched, each title and URL cut to 1,000 characters.
+      Firefox keeps, are matched, each title and URL cut to 1,000 characters, and only the first
+      match of each title or URL is taken, so that one title full of matches cannot use up the
+      count and hide the entries after it. A picker session sends them under one key, so a
+      newer query replaces the older one in the worker instead of queueing behind it, and
+      closing the picker drops them. A window SessionStore does not track yet (one that has only
+      just opened) is skipped, because SessionStore throws for it and it has nothing closed.
     - Budget, measured in a test: matching a query against 1,000,000 characters under 50 ms.
     - The parent holds only what it shows: a context line per listed match (at most 160
       characters) and the preview's lines. Page text is not written anywhere.
@@ -574,7 +580,10 @@ match.
     one row labelled `closed window`, showing the first of its tabs that matches. They come
     after the open tabs' matches, newest first, the agent's last. `Enter` reopens the tab in
     this window and selects it (`undoCloseById`, as tab search does), or reopens the window and
-    brings it to the front. A key of its own for reopening was rejected because `Enter` already
+    brings it to the front. An entry restored or dropped since the search reopens nothing, and a
+    notice says `no longer in recently closed`, so that `Enter` never fails silently. A closed
+    window's row is the agent's when the tab it shows was in the agent workspace's container,
+    so that an agent's closed page is marked as an open one is (decision 13). A key of its own for reopening was rejected because `Enter` already
     means "go there", and a closed tab has nowhere else to go. They never enter the grep list,
     because `]q` must not reopen a tab the user did not pick.
 
@@ -645,7 +654,10 @@ Written first and seen to fail.
   - `grepClosed`, `closedSearchText`, `closedRows`: a title or URL match is a closed row with the
     match marked; smart case and the literal fallback apply; a closed window matches through its
     tabs and shows the first that matches; newest first, at most 25 tabs and 5 windows; the
-    agent's last. `closedPreview` names the row and what `Enter` does.
+    agent's last, a closed window marked the agent's by the tab it shows. `closedPreview` names
+    the row and what `Enter` does. A host-less URL gives no host; a closed window's tabs past 20
+    and fields past 1,000 characters are not matched; one title with a thousand matches does
+    not hide the entries after it.
   - `grepScopeText`: one workspace; windows grouped with their workspaces and counts, the agent
     marked; the closed line; past five windows one summed line; no tabs.
   - `ctrl+s` cycles workspace → window → all windows → closed → workspace.
@@ -674,6 +686,13 @@ Written first and seen to fail.
     `closed window`; `Enter` reopens the tab and selects it, and reopens the window.
   - A catastrophic pattern against a closed tab's title answers `timed out` within the budget
     and the next query finds the title.
+  - The closed titles are held in the parent's worker under one key while the picker is open,
+    and under none once it closes.
+  - `Enter` on a closed row whose entry is gone since the search says so and reopens nothing.
+  - A grep list reaching two windows: closing the other drops its lines and stops watching it;
+    `]q` then says `grep 1/1`.
+  - A window SessionStore throws for is skipped, and the closed scope still lists the rest.
+  - Closed rows, their preview and the preview's title show markup in titles as text.
   - The dialog starts where the page area starts, and moves up with it when the navigation
     toolbar is collapsed.
   - `Enter` on the second tab's match selects that tab, the selection is the match text, the
@@ -695,8 +714,9 @@ Written first and seen to fail.
     is hidden in a dialog narrower than 900 pixels.
   - Stale generations: replies to an older query never appear after a newer query's results.
   - A private window: grep there lists only its own tabs and its own closed tab in every
-    scope, and grep in the normal window lists none of them, open or closed, in any scope, also
-    after the private window has closed.
+    scope, and none of the normal window's closed tabs or windows; grep in the normal window
+    lists none of the private ones, open or closed, in any scope, also after the private window
+    has closed.
   - An agent workspace tab's results appear only from the window scope on, marked `◇ agent`,
     last.
   - Accessibility: option names hold the line, the tab's title, its host and its workspace;
