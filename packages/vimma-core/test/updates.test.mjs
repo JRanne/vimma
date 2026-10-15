@@ -543,7 +543,7 @@ describe("updateSteps (:update and about:vimma)", () => {
 
   test("pkgbuild-release: the exact curl … && makepkg -si command (decision 24)", () => {
     expect(updateSteps("pkgbuild-release", offer, where).commands).toEqual([
-      "curl -LO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si",
+      "curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si",
     ]);
   });
 

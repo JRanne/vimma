@@ -1,4 +1,8 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import {
+  PKGBUILD_INSTALL_COMMAND as CORE_PKGBUILD_INSTALL_COMMAND,
+  updateSteps,
+} from "../../../packages/vimma-core/src/updates.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -378,6 +382,23 @@ describe("PKGBUILD and .SRCINFO", () => {
       "curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si",
     );
     expect(build).toContain(`\n#   ${PKGBUILD_INSTALL_COMMAND}\n`);
+  });
+
+  // docs/specs/m6a-updater.md decision 24: the updater's hint is this command, from one source.
+  it("is the command Vimma's update check shows a pkgbuild-release install", () => {
+    expect(CORE_PKGBUILD_INSTALL_COMMAND).toBe(PKGBUILD_INSTALL_COMMAND);
+    const offer = {
+      appVersion: "158.0.1",
+      buildId: "20261028031500",
+      displayVersion: "0.3.1",
+      detailsUrl: "https://github.com/vimma-browser/vimma/releases/tag/v0.3.1",
+      urgent: false,
+      advisories: [],
+    };
+    const where = { installDir: "/opt/vimma", appImage: null };
+    expect(updateSteps("pkgbuild-release", offer, where).commands).toEqual([
+      PKGBUILD_INSTALL_COMMAND,
+    ]);
   });
 
   it("is valid bash", () => {

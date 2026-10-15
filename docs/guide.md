@@ -1976,14 +1976,14 @@ accepted. It installs nothing; it tells you.
   `Vimma 0.1.0 is up to date`, or why the check failed.
 - **The commands, by install:**
 
-  | Installed with           | `:update` shows                                                                                    |
-  | ------------------------ | -------------------------------------------------------------------------------------------------- |
-  | The release's `PKGBUILD` | `curl -LO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si` |
-  | AUR `vimma-bin`          | `yay -Syu vimma-bin` (or your AUR helper's equivalent)                                             |
-  | `.deb`                   | `curl -LO …/vimma_X.Y.Z_amd64.deb && sudo apt install ./vimma_X.Y.Z_amd64.deb`                     |
-  | Tarball                  | quit Vimma, then `curl -L …/vimma-X.Y.Z-linux-x86_64.tar.xz \| tar -xJ -C <the install's parent>`  |
-  | AppImage                 | download the new AppImage next to yours and rename it over it; the next start runs it              |
-  | A build from source      | nothing: source builds never check (pull and rebuild)                                              |
+  | Installed with           | `:update` shows                                                                                     |
+  | ------------------------ | --------------------------------------------------------------------------------------------------- |
+  | The release's `PKGBUILD` | `curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si` |
+  | AUR `vimma-bin`          | `yay -Syu vimma-bin` (or your AUR helper's equivalent)                                              |
+  | `.deb`                   | `curl -LO …/vimma_X.Y.Z_amd64.deb && sudo apt install ./vimma_X.Y.Z_amd64.deb`                      |
+  | Tarball                  | quit Vimma, then `curl -L …/vimma-X.Y.Z-linux-x86_64.tar.xz \| tar -xJ -C <the install's parent>`   |
+  | AppImage                 | download the new AppImage next to yours and rename it over it; the next start runs it               |
+  | A build from source      | nothing: source builds never check (pull and rebuild)                                               |
 
 - **What a check sends:** a GET for
   `https://updates.vimma.dev/updates/browser/Linux_x86_64-gcc3/<channel>/update.xml`, with no

@@ -22,6 +22,12 @@ export const REFUSALS_SHOWN = 3;
 export const STALE_DAYS = Object.freeze({ release: 45, nightly: 7 });
 /** Where release assets are downloaded from (m6-packaging's file names). */
 export const RELEASES_URL = "https://github.com/vimma-browser/vimma/releases";
+/**
+ * The one command that installs or updates Vimma on Arch Linux from the latest release (spec
+ * m6a-updater decision 24): the pkgbuild-release hint, and the PKGBUILD's own header through
+ * tools/package/package.mjs, which re-exports it.
+ */
+export const PKGBUILD_INSTALL_COMMAND = `curl -fLO ${RELEASES_URL}/latest/download/PKGBUILD && makepkg -si`;
 
 /**
  * How Vimma was installed (spec §3): `source` is a build run from its objdir, `packaged` an
@@ -460,7 +466,7 @@ export function updateSteps(type, offer, where) {
     case "pkgbuild-release":
       return {
         text: "Build the package again from the latest release's PKGBUILD:",
-        commands: [`curl -LO ${RELEASES_URL}/latest/download/PKGBUILD && makepkg -si`],
+        commands: [PKGBUILD_INSTALL_COMMAND],
         link,
       };
     case "aur":

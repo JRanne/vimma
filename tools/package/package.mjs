@@ -31,6 +31,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { REPO } from "../repo.mjs";
+import { PKGBUILD_INSTALL_COMMAND } from "../../packages/vimma-core/src/updates.mjs";
 
 /** SemVer with an optional pre-release, as version-files.mjs accepts (plan §7). */
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/;
@@ -436,8 +437,11 @@ const INSTALL_SOURCES = ["pkgbuild-release", "aur"];
  */
 export const PACKAGED_APP_FILE = "is-packaged-app";
 
-/** The one command that installs or updates Vimma on Arch Linux from the latest release. */
-export const PKGBUILD_INSTALL_COMMAND = `curl -fLO https://github.com/${REPO}/releases/latest/download/PKGBUILD && makepkg -si`;
+/**
+ * The one command that installs or updates Vimma on Arch Linux from the latest release. Its
+ * source is vimma-core, so the update check's pkgbuild-release hint is the same text.
+ */
+export { PKGBUILD_INSTALL_COMMAND };
 
 /**
  * @typedef {{ version: string, maintainer: string, repo: string, tarballSha256: string,
