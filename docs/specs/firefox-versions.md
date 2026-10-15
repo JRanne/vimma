@@ -292,10 +292,11 @@ MOZ_APP_VERSION)` and keeps the copyright suffix. Both macros are already define
 
 ### Ownership and credentials
 
-17. **This spec owns the release half; m6a-updater (PR #143) owns only the bump half.** The job in
-    decisions 11 to 15 releases whatever is on `main` after a merged security bump. m6a-updater
-    keeps only auto-merging a green security bump PR, under its own variable
-    `AUTO_SECURITY_BUMP`. Releasing whatever is on `main` follows from releasing from `main` only
+17. **This spec owns the release half; spec upstream-bump-automation owns the bump half.** The
+    job in decisions 11 to 15 releases whatever is on `main` after a merged security bump.
+    Auto-merging a green bump PR belongs to upstream-bump-automation, under its variable
+    `AUTO_MERGE_UPSTREAM`; m6a-updater adds no auto-merge rule of its own (its decision 3).
+    Releasing whatever is on `main` follows from releasing from `main` only
     (decision 16). Separate variables let the release half be proven on drafts before bumps merge
     themselves. Rejected: m6a-updater owning both halves and auto-merging the release PR only
     when every entry in it is an `upstream:` line (a security fix would wait for a person
