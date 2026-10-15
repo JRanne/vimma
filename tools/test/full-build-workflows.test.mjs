@@ -113,6 +113,22 @@ describe("full builds (nightly.yml, release.yml)", () => {
     expect(at(block, "npx --no -- surfer build")).toBeGreaterThan(swap);
   });
 
+  // The nightly's token may write releases and issues: only the two steps that do so get it, never
+  // npm, Surfer, mach or the mochitests.
+  it("only the nightly's publish and failure-issue steps get GH_TOKEN", () => {
+    const block = BUILDS[0]?.block ?? "";
+    const steps = block.split(/\n(?= {6}- )/).slice(1);
+    const holders = steps
+      .filter((step) => /^ +GH_TOKEN:/m.test(step))
+      .map((step) => /- (?:name|uses): (.*)/.exec(step)?.[1]);
+    expect(holders).toEqual([
+      "Publish rolling nightly release",
+      "Open or update the failure issue",
+    ]);
+    const jobEnv = block.slice(0, block.indexOf("\n    steps:\n"));
+    expect(jobEnv).not.toMatch(/^ +GH_TOKEN:/m);
+  });
+
   it.each(BUILDS)("$name stops itself before GitHub's 6-hour job limit", ({ block }) => {
     const minutes = Number(/^ {4}timeout-minutes: (\d+)$/m.exec(block)?.[1]);
     expect(minutes).toBeGreaterThan(0);

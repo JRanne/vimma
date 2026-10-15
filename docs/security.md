@@ -389,7 +389,7 @@ Taskcluster index) and this repository. Nothing here runs code from a pull reque
 - G4. Nothing is **ever** reported on or built from a Firefox source tarball whose SHA-512
   differs from Mozilla's `SHA512SUMS`.
   [`nothing is built from a tarball whose SHA-512 Mozilla did not publish`](../tools/test/upstream-workflow.test.mjs),
-  [`test_mismatch_exits_one_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py)
+  [`test_mismatch_exits_one_naming_expected_and_actual`](../tools/upstream/test_verify_sha512.py),
   [`a tampered tarball already on disk fails like a downloaded one`](../tools/upstream/test/firefox-source.test.mjs),
   [`no workflow runs surfer download itself`](../tools/test/full-build-workflows.test.mjs)
 - G5. A bump PR is **never** opened ready for review unless every patch applies and the suites
@@ -683,7 +683,13 @@ release path held for review, with its published diff,
 in a `build` environment, and a watch on Mozilla's release key,
 [#225](https://github.com/vimma-browser/vimma/issues/225)). Until B1 lands, G4 holds for builds:
 every build gets its source through `tools/upstream/firefox-source.sh`, which checks the
-tarball's SHA-512.
+tarball's SHA-512. **⚠ gap:** that `SHA512SUMS` comes over HTTPS from the same
+archive.mozilla.org as the tarball, so the check catches corruption, truncation and a stale
+cached tarball, but not anyone who can serve both files (a compromised archive, mirror or CDN);
+Mozilla's signature on `SHA512SUMS` closes that with
+[#222](https://github.com/vimma-browser/vimma/issues/222). It also refuses a `surfer.json` with a
+`version.candidate`, which Surfer would fetch from `candidates/` unverified.
+[`refuses a surfer.json with a version.candidate, before anything is fetched`](../tools/upstream/test/firefox-source.test.mjs)
 
 - B2. A nightly or release build **never** builds from an `engine/` it did not extract in the
   same job from the tarball it verified, and **never** restores a tree, an objdir or a compiler

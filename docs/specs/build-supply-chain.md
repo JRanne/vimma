@@ -759,6 +759,9 @@ checkout's `node_modules/.bin`, where `npx --no` finds it):
 - `a missing tarball is downloaded by the script, never by Surfer`
 - `fails when the archive has no SHA512SUMS, before engine/ is touched`
 - `refuses surfer.json version … before it reaches a URL`
+- `refuses a surfer.json with a version.candidate, before anything is fetched` (Surfer downloads
+  a candidate from `candidates/` with no hash check, a file the script never verified)
+- `a SHA512SUMS that does not list the tarball exits 2, keeping the tarball and engine/`
 
 **vitest, `tools/upstream/test/source-check.test.mjs`** (extends the existing file):
 
@@ -794,6 +797,8 @@ checkout's `node_modules/.bin`, where `npx --no` finds it):
 - `<workflow> drops engine/'s empty repository between import and build`
 - `<workflow> adds a 16 GB swap file before building`
 - `<workflow> stops itself before GitHub's 6-hour job limit`
+- `only the nightly's publish and failure-issue steps get GH_TOKEN` (the token that can write
+  releases and issues never reaches npm, Surfer, mach or the mochitests)
 
 **vitest, `tools/test/self-hosted-runner.test.mjs`:**
 
