@@ -237,7 +237,7 @@ until an AUR account exists, and without it Arch users had no package at all.) E
 carries the `vimma-bin` `PKGBUILD` as an asset, and one command installs or updates Vimma:
 
 ```sh
-curl -LO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si
+curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si
 ```
 
 Engine paths were checked against Firefox 158.0 (`config/milestone.txt`).
@@ -245,7 +245,10 @@ Engine paths were checked against Firefox 158.0 (`config/milestone.txt`).
 1. **The PKGBUILD is a release asset.** Arch users get a pacman-managed install from the
    release itself, so that installing Vimma on Arch does not depend on an AUR account, which the
    `aur` job needs and the project does not have. `releases/latest/download/PKGBUILD` always
-   names the newest release, so the same command installs and updates. Rejected: a pacman
+   names the newest release, so the same command installs and updates. `curl -f` makes a missing
+   asset an error (exit 22) instead of a `PKGBUILD` that holds GitHub's "Not Found" page, so that
+   the hours between publishing a release and its upload, or a failed release build, leave the
+   user's previous `PKGBUILD` in place and stop before `makepkg` runs. Rejected: a pacman
    repository, because it needs hosting and a repository signing key of its own; telling Arch
    users to unpack the tarball, because pacman would then not own, upgrade or remove the files.
 2. **The PKGBUILD needs no other file.** Its only `source` is the release tarball, by URL with
@@ -253,8 +256,10 @@ Engine paths were checked against Firefox 158.0 (`config/milestone.txt`).
    here-documents (`cat > … <<'VIMMA_OPEN_EOF'`, nothing expanded), so that a PKGBUILD
    downloaded on its own builds, since makepkg looks for a bare file name in `source=()` next to
    the PKGBUILD. `pkgbuild()` refuses inline content without a final newline or with a line equal
-   to its delimiter, which would end the here-document early. The inline text is covered by the
-   PKGBUILD's own line in `SHA256SUMS` and its cosign bundle. Rejected: publishing the desktop
+   to its delimiter, which would end the here-document early, and accepts only `owner/name`
+   (`[A-Za-z0-9-]` and `[A-Za-z0-9._-]`) for the repository and `[A-Za-z0-9._-]` for the desktop
+   file ID, because both are placed in double-quoted shell words that makepkg runs. The inline
+   text is covered by the PKGBUILD's own line in `SHA256SUMS` and its cosign bundle. Rejected: publishing the desktop
    file and `vimma-open` as assets of their own, because that is two more downloads to name
    and keep in step for no gain; `raw.githubusercontent.com` URLs at the tag, because the package
    would then depend on the repository layout at that tag.

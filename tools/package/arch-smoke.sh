@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds and installs the release PKGBUILD on Arch Linux, as a user would with
-#   curl -LO …/releases/latest/download/PKGBUILD && makepkg -si
+#   curl -fLO …/releases/latest/download/PKGBUILD && makepkg -si
 # (spec m6-packaging, "Arch Linux without the AUR"), against the tarball in a local directory
 # served over HTTP instead of the GitHub Release, which does not exist yet when this runs.
 #
@@ -99,6 +99,6 @@ python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$dist" > /dev/null 
 server=$!
 trap 'kill "$server" 2> /dev/null || true; [ -z "$work" ] || rm -rf "$work"' EXIT
 
-docker run --rm --network host -e PORT="$PORT" \
+docker run --rm --network host -e ARCH_SMOKE_PORT="$PORT" \
   -v "$dist:/dist:ro" -v "$repo:/repo:ro" "$IMAGE" \
   bash /repo/tools/package/arch-smoke.sh --inside "$expected" "$real"

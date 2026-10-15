@@ -1211,7 +1211,7 @@ half a minute; the `pkgbuild.yml` workflow runs it on every change to `tools/pac
 **The two `PKGBUILD`s.** `package.mjs` writes one `vimma-bin` PKGBUILD in two variants that
 differ in one line, the install source it records in `/opt/vimma/is-packaged-app`:
 `dist/PKGBUILD` (`vimma-package=pkgbuild-release`) is the release asset that Arch users
-download with `curl -LO …/releases/latest/download/PKGBUILD && makepkg -si` (guide,
+download with `curl -fLO …/releases/latest/download/PKGBUILD && makepkg -si` (guide,
 "Arch Linux"), and `dist/aur/PKGBUILD` (`vimma-package=aur`) is what the `aur` job pushes. The
 desktop file and `vimma-open` are written inline in `package()`, so neither needs another file.
 

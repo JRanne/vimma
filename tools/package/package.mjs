@@ -437,7 +437,7 @@ const INSTALL_SOURCES = ["pkgbuild-release", "aur"];
 export const PACKAGED_APP_FILE = "is-packaged-app";
 
 /** The one command that installs or updates Vimma on Arch Linux from the latest release. */
-export const PKGBUILD_INSTALL_COMMAND = `curl -LO https://github.com/${REPO}/releases/latest/download/PKGBUILD && makepkg -si`;
+export const PKGBUILD_INSTALL_COMMAND = `curl -fLO https://github.com/${REPO}/releases/latest/download/PKGBUILD && makepkg -si`;
 
 /**
  * @typedef {{ version: string, maintainer: string, repo: string, tarballSha256: string,
@@ -459,8 +459,23 @@ const AUR_OPTDEPENDS = [
   "networkmanager: location detection via available Wi-Fi networks",
 ];
 
+/**
+ * `repo` and `desktopId` go into double-quoted shell words that makepkg runs (as root when
+ * pacman installs), so only the characters a GitHub `owner/name` and a desktop file ID use pass.
+ * @param {AurInput} input
+ */
+function checkShellWords(input) {
+  if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(input.repo)) {
+    throw new Error(`repo must be owner/name, got: ${JSON.stringify(input.repo)}`);
+  }
+  if (!/^[A-Za-z0-9._-]+$/.test(input.desktopId)) {
+    throw new Error(`desktop id must be [A-Za-z0-9._-]+, got: ${JSON.stringify(input.desktopId)}`);
+  }
+}
+
 /** @param {AurInput} input */
 function aurSource(input) {
+  checkShellWords(input);
   const v = aurVersion(input.version);
   const url = `https://github.com/${input.repo}/releases/download/v${v}/${APP}-${v}-linux-x86_64.tar.xz`;
   return { file: `${APP}-${v}-linux-x86_64.tar.xz`, url };
@@ -490,6 +505,7 @@ function heredoc(target, delimiter, content) {
  */
 export function pkgbuild(input) {
   checkMaintainer(input.maintainer);
+  checkShellWords(input);
   if (!INSTALL_SOURCES.includes(input.installSource)) {
     throw new Error(`unknown install source: ${String(input.installSource)}`);
   }

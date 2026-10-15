@@ -82,6 +82,13 @@ describe("release.yml", () => {
     expect(aur).toContain("git add PKGBUILD .SRCINFO\n");
   });
 
+  // The host serves on ARCH_SMOKE_PORT; the container must rewrite the PKGBUILD to the same port.
+  it("passes the smoke test's port into its container", () => {
+    const script = readFileSync(new URL("../arch-smoke.sh", import.meta.url), "utf8");
+    expect(script).toContain('docker run --rm --network host -e ARCH_SMOKE_PORT="$PORT"');
+    expect(script).not.toMatch(/-e PORT=/);
+  });
+
   // A draft release fires no `published` (spec release-versioning): only that type may start it.
   it("runs on a published release only, so a draft starts nothing", () => {
     const on = text.slice(text.indexOf("\non:\n"), text.indexOf("\npermissions:"));

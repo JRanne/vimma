@@ -69,7 +69,7 @@ restarts on its own.
    the new version under the same path.
 4. **`.deb`, the release PKGBUILD and AUR.** Vimma never touches the installed files. The
    status bar shows `⇡ <version> available`, and `:update` shows how to update: download the new
-   `.deb` from the release page, run `curl -LO
+   `.deb` from the release page, run `curl -fLO
 https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si` again
    for a `vimma-bin` built from the release's PKGBUILD (decision 24), or update `vimma-bin` with
    an AUR helper.
@@ -727,7 +727,7 @@ mar` needs the host `mar` tool from the same objdir. Nothing here can ship befor
     MAR to offer); keeping M6a open until the gate lifts, because the work that can be verified
     would wait on a decision unrelated to it.
 24. **A `vimma-bin` built from the release's PKGBUILD gets the exact command as its hint**:
-    `:update` shows `curl -LO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si`,
+    `:update` shows `curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si`,
     the command that installed it (`PKGBUILD_INSTALL_COMMAND` in `tools/package/package.mjs`),
     because rerunning it is the whole update and the user may not remember where it came from;
     the `vimma-package=pkgbuild-release` line that package writes (spec m6-packaging, "Arch

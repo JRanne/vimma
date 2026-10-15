@@ -103,7 +103,7 @@ to `/opt/vimma` with `vimma` and `vimma-open` on your `PATH`, a desktop entry an
 empty directory (makepkg leaves its build files there), run as your normal user:
 
 ```sh
-curl -LO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si
+curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si
 ```
 
 `makepkg -si` installs the libraries Vimma needs with pacman, asks for your password to install
@@ -113,8 +113,33 @@ version. Once the in-app updater arrives, it shows this command when a new relea
 ([spec m6a-updater](specs/m6a-updater.md)). `sudo pacman -R vimma-bin` removes Vimma; your
 profile stays in your home directory.
 
-The `PKGBUILD` is covered by `SHA256SUMS` and has its own cosign signature, like every other
-file of the release ("Verify a release" in [runbook.md](runbook.md#release-packages-releaseyml-spec-m6-packaging)).
+A new release counts as the latest as soon as it is published, but its files are uploaded about
+two hours later, when the release build finishes. In that window, or if that build failed,
+`curl` prints `curl: (22) The requested URL returned error: 404` and exits; the `PKGBUILD` you
+already have stays as it was and `makepkg` does not run. Try again later.
+
+To check the `PKGBUILD` before you build it, download it with the release's checksums and their
+signature, verify the signature with [cosign](https://github.com/sigstore/cosign), then the
+checksum:
+
+```sh
+base=https://github.com/vimma-browser/vimma/releases/latest/download
+curl -fL -O "$base/PKGBUILD" -O "$base/SHA256SUMS" -O "$base/SHA256SUMS.sigstore.json"
+cosign verify-blob --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/vimma-browser/vimma/\.github/workflows/release\.yml@refs/(heads/main|tags/v[0-9]+\.[0-9]+\.[0-9]+)$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS   # PKGBUILD: OK
+makepkg -si
+```
+
+The `PKGBUILD` pins the SHA-256 of the tarball it downloads, so checking the `PKGBUILD` covers
+what it installs. Every file of the release is in `SHA256SUMS` ("Verify a release" in
+[runbook.md](runbook.md#release-packages-releaseyml-spec-m6-packaging)).
+
+The package marks itself as installed by a package manager (`/opt/vimma/is-packaged-app`), as
+Firefox's own distribution packages do. Like them, it then does not show Firefox's warning that
+"some security features may offer less protection" when your kernel does not allow unprivileged
+user namespaces, which the content sandbox uses ([limits.md](limits.md#platforms-and-packaging)).
 The same package will be on the AUR as `vimma-bin` once it is published there; AUR helpers such
 as `yay -S vimma-bin` will then install and update it.
 

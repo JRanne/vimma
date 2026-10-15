@@ -45,6 +45,18 @@ const BRAND_DIR = fileURLToPath(new URL("../../../configs/branding/vimma/", impo
 const MAINTAINER = "Test Maintainer <test@example.invalid>";
 const REPO = "vimma-browser/vimma";
 
+/**
+ * The Markdown files these tests read, as literal URLs so tools/ci/docs-only.mjs's check finds
+ * this file among the tests a docs-only pull request runs.
+ * @type {Record<string, URL>}
+ */
+const DOCS = {
+  "docs/guide.md": new URL("../../../docs/guide.md", import.meta.url),
+  "docs/runbook.md": new URL("../../../docs/runbook.md", import.meta.url),
+  "docs/specs/m6-packaging.md": new URL("../../../docs/specs/m6-packaging.md", import.meta.url),
+  "docs/specs/m6a-updater.md": new URL("../../../docs/specs/m6a-updater.md", import.meta.url),
+};
+
 /** @param {string} cmd */
 const has = (cmd) => spawnSync("sh", ["-c", `command -v ${cmd}`]).status === 0;
 /** @param {string} path */
@@ -363,7 +375,7 @@ describe("PKGBUILD and .SRCINFO", () => {
 
   it("says in its header how to install it from the release", () => {
     expect(PKGBUILD_INSTALL_COMMAND).toBe(
-      "curl -LO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si",
+      "curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si",
     );
     expect(build).toContain(`\n#   ${PKGBUILD_INSTALL_COMMAND}\n`);
   });
@@ -404,6 +416,26 @@ describe("PKGBUILD and .SRCINFO", () => {
       /VIMMA_DESKTOP_EOF/,
     );
     expect(() => pkgbuild({ ...input, launcher: "no final newline" })).toThrow(/newline/);
+  });
+
+  // Both are interpolated into double-quoted shell words that makepkg runs, as root at install.
+  it.each(['x/y")$(touch /tmp/pwn)("', "x/$(id)", 'x/"y', "x/y\nz", "x", "x/y/z"])(
+    "refuses repo %j",
+    (repo) => {
+      expect(() => pkgbuild({ ...input, repo })).toThrow(/repo/);
+      expect(() => srcinfo({ ...input, repo })).toThrow(/repo/);
+    },
+  );
+
+  it.each(["$(touch /tmp/pwn)", "vimma`id`", 'vimma"', "vimma\nx", "a/b", ""])(
+    "refuses desktop id %j",
+    (desktopId) => {
+      expect(() => pkgbuild({ ...input, desktopId })).toThrow(/desktop id/);
+    },
+  );
+
+  it("accepts the repository and desktop id it is built with", () => {
+    expect(() => pkgbuild({ ...input, repo: "some-org/vimma.fork_2" })).not.toThrow();
   });
 
   it("refuses a pre-release: the AUR gets releases only", () => {
@@ -726,18 +758,21 @@ describe("cosign identity", () => {
     expect(re.test(identity)).toBe(false);
   });
 
-  it("is the regexp the runbook tells users to verify with", () => {
-    const runbook = readFileSync(new URL("../../../docs/runbook.md", import.meta.url), "utf8");
-    expect(runbook).toContain(`--certificate-identity-regexp '${IDENTITY_REGEXP}'`);
-    expect(runbook).toContain(
-      "--certificate-oidc-issuer https://token.actions.githubusercontent.com",
-    );
-  });
+  it.each(["docs/runbook.md", "docs/guide.md"])(
+    "is the regexp %s tells users to verify with",
+    (path) => {
+      const text = readFileSync(DOCS[path], "utf8");
+      expect(text).toContain(`--certificate-identity-regexp '${IDENTITY_REGEXP}'`);
+      expect(text).toContain(
+        "--certificate-oidc-issuer https://token.actions.githubusercontent.com",
+      );
+    },
+  );
 });
 
 describe("the documented Arch Linux command", () => {
   /** @param {string} path relative to the repository root */
-  const doc = (path) => readFileSync(new URL(`../../../${path}`, import.meta.url), "utf8");
+  const doc = (path) => readFileSync(DOCS[path], "utf8");
 
   it.each(["docs/guide.md", "docs/specs/m6a-updater.md", "docs/specs/m6-packaging.md"])(
     "%s gives the command the PKGBUILD's header gives",
