@@ -52,8 +52,8 @@ jobs:
           fi
 
       # Spec m0-safebrowsing-key. The secret goes to a mode-600 file in RUNNER_TEMP (emptied by
-      # the runner per job) through a shell builtin, so our steps never echo it nor put it on a command line (the build itself passes it
-      # to the preprocessor; see the spec);
+      # the runner per job) through a shell builtin, so our steps never echo it nor put it on a
+      # command line (the build itself passes it to the preprocessor; see the spec);
       # configs/common/mozconfig reads VIMMA_SAFEBROWSING_KEYFILE. It stays until every mach call
       # (build, tests, package) is done: mach re-reads the mozconfig, which fails on a missing file.
       - name: Safe Browsing key file

@@ -540,7 +540,7 @@ fn a_fresh_nonce_per_connection() {
     assert_ne!(first.lines()[0], second.lines()[0], "nonces differ");
 }
 
-/// The security review's `PoC` squatter: it bound a stale discovery file's port and answers the
+/// A squatter that bound a stale discovery file's port: it answers the
 /// challenge with an HMAC keyed by whatever token it has seen so far (none: the hello has no
 /// token), then accepts anything. vimma-ctl must send it nothing after the hello.
 #[test]

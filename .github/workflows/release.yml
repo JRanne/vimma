@@ -34,9 +34,10 @@ env:
 jobs:
   # Full build on the self-hosted machine (22 GB engine/; as nightly.yml). Read-only token, and
   # one secret, the Google Safe Browsing key, which ships inside the binaries anyway (spec
-  # m0-safebrowsing-key): what it produces is checked, signed and uploaded by hosted jobs below. It builds in
-  # a fresh objdir with an empty compiler cache of its own, so nothing a nightly (or anything
-  # else that ran on the runner) left behind reaches signed binaries; a cold build costs ~40 min.
+  # m0-safebrowsing-key): what it produces is checked, signed and uploaded by hosted jobs below.
+  # It builds in a fresh objdir with an empty compiler cache of its own, so nothing a nightly (or
+  # anything else that ran on the runner) left behind reaches signed binaries; a cold build costs
+  # ~40 min.
   build:
     if: >-
       vars.RELEASE_ENABLED == 'true' && github.repository == 'JRanne/vimma' &&

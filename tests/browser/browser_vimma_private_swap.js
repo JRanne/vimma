@@ -743,7 +743,8 @@ add_task(async function placement_window_sends_nothing() {
   Assert.ok(!parked(window));
 });
 
-// Getting back to the normal window must be instant: it is never left in special:vimma.
+// Going back to the normal window is always instant: whatever the user does with the private
+// window, the normal one is never left in special:vimma.
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 

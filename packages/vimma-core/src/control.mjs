@@ -26,7 +26,7 @@ export const RESERVED_COMMANDS = Object.freeze(["list-tabs", "screenshot", "relo
 /**
  * The agent role's commands (protocol 2; vimma-mcp decision 4). No other role runs them.
  * `agent-cancel` withdraws one of the connection's waiting questions (decision 17, MCP's
- * `notifications/cancelled`; sub-PR 3).
+ * `notifications/cancelled`).
  */
 export const AGENT_COMMANDS = Object.freeze([
   "agent-hello",

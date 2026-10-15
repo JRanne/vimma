@@ -2,15 +2,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// config.toml's `[search]` applied to Firefox's search engines (spec: docs/specs/search-engines.md).
-// One per app. ConfigHost hands over the resolved section on every change of the file; this
-// module reads the profile's engines, lets core's planSearch decide the steps, runs them on
-// SearchService and records what it did in one pref, so that removing a line puts back what
-// was there before. It runs again when engines are added or removed (an add-on's engine that
-// loads late can then be named). Templates become user engines with an `@alias` and no
-// suggestion URL; installed engines get a user alias; the default is set with reason USER.
-// Problems that depend on the profile's engines come back as config errors with their line.
-// It also keeps the `@aliases` the URL bar knows, for `:open @` completion.
+// config.toml's `[search]` applied to Firefox's search engines (spec:
+// docs/specs/search-engines.md). One per app. ConfigHost hands over the resolved section on every
+// change of the file; this module reads the profile's engines, lets core's planSearch decide the
+// steps, runs them on SearchService and records what it did in one pref, so that removing a line
+// puts back what was there before. It runs again when engines are added or removed (an add-on's
+// engine that loads late can then be named). Templates become user engines with an `@alias` and no
+// suggestion URL; installed engines get a user alias; the default is set with reason USER. Problems
+// that depend on the profile's engines come back as config errors with their line. It also keeps
+// the `@aliases` the URL bar knows, for `:open @` completion.
 
 import { parseSearchState, planSearch, searchCompletions } from "../core/search.mjs";
 import { formatPath } from "../core/toml.mjs";

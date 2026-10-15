@@ -384,8 +384,8 @@ export const VimmaActors = {
 
   /**
    * Copy mode (m1-copy-mode) in the focused frame: `enter`, a motion (caret.mjs), `toggle`,
-   * a selection op, `yank`, `yank_lines` or `exit`. The reply is from a content process: anything but the expected type
-   * counts as a failure (false, or "" for `yank`).
+   * a selection op, `yank`, `yank_lines` or `exit`. The reply is from a content process:
+   * anything but the expected type counts as a failure (false, or "" for `yank`).
    * @param {any} browser XULBrowserElement
    * @param {string} op
    * @param {number} [count]

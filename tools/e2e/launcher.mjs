@@ -107,7 +107,7 @@ export const PROFILE_PREFS = Object.freeze([
   ["browser.toolbars.bookmarks.visibility", "never"],
   ["focusmanager.testmode", true],
   // the same pixels on every machine: one device pixel per CSS pixel whatever the desktop's
-  // scaling, and a light theme whatever the desktop's (GDK_SCALE=2 would leak in)
+  // scaling, and a light theme whatever the desktop's (a desktop's GDK_SCALE=2 once leaked in)
   ["layout.css.devPixelsPerPx", "1.0"],
   ["ui.systemUsesDarkTheme", 0],
   ["layout.css.prefers-color-scheme.content-override", 1],

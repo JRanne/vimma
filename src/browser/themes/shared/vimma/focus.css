@@ -14,8 +14,9 @@
 @media not ((prefers-contrast) or (forced-colors)) {
   :root {
     /* !important: Firefox sets both for an add-on theme on a more specific selector
-     * (browser-colors.css, :root[lwtheme]:not([theme-in-app])) and inline (LightweightThemeConsumer),
-     * and Vimma's theme colours the chrome whichever Firefox theme is on. */
+     * (browser-colors.css, :root[lwtheme]:not([theme-in-app])) and inline
+     * (LightweightThemeConsumer), and Vimma's theme colours the chrome whichever Firefox theme
+     * is on. */
     --focus-outline-color: var(--vimma-focus, var(--color-accent-primary)) !important;
     --toolbar-field-border-color-focus: var(--vimma-focus, var(--color-accent-primary)) !important;
   }

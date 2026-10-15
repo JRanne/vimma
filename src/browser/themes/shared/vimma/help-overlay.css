@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* The prefix+? overlay (ui/help-overlay.mjs). M5's theme tokens (ui/theme-host.mjs loads them
+/* The prefix+? overlay (ui/help-overlay.mjs). The theme tokens (ui/theme-host.mjs loads them
    into every window), with the picker's surface (picker.css); legible system colours otherwise. */
 
 #vimma-help {

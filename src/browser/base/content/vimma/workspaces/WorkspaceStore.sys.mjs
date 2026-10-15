@@ -103,8 +103,8 @@ export class WorkspaceStoreImpl {
    * @param {{ path?: string, config?: readonly Workspace[],
    *   enabled?: () => boolean, saveDelayMs?: number, cachePref?: string | null,
    *   watch?: boolean, agent?: string | null, agentPref?: string | null }} [options]
-   *   `config` is the resolved `[workspaces]` (core `mergeWithDefaults(...).workspaces`); the M5
-   *   host passes it once it reads `config.toml`. `enabled` reads the containers pref.
+   *   `config` is the resolved `[workspaces]` (core `mergeWithDefaults(...).workspaces`);
+   *   ConfigHost passes it once it reads `config.toml`. `enabled` reads the containers pref.
    *   `cachePref` (the app's store only) caches `lastActive`'s container for the next start.
    *   `watch` (the app's store only) replaces a workspace's container deleted outside Vimma.
    *   `agent` is the agent workspace's name (`[mcp] workspace`), ensured at every reconcile

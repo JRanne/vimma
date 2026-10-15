@@ -59,7 +59,6 @@ function fieldText(target, id) {
 }
 
 /**
- * Waits for a field's text.
  * @param {XULBrowserElement | BrowsingContext} target
  * @param {string} id
  * @param {string} want

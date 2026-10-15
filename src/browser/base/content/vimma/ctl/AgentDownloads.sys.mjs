@@ -82,7 +82,8 @@ const OPENER_MS = 60_000;
  *   refused: boolean }} Tracked
  */
 
-/** The agent downloads let through the question, until they are done. @type {WeakMap<any, Tracked>} */
+/** The agent downloads let through the question, until they are done. */
+/** @type {WeakMap<any, Tracked>} */
 const tracked = new WeakMap();
 /**
  * The load an agent connection started in a tab (agent-open): a download is that connection's
@@ -459,7 +460,10 @@ async function contentDanger(path) {
   return zipVerdict(entries, { isExecutable });
 }
 
-/** Whether a file is owned by someone else: a no-op chmod fails on another's. @param {string} path */
+/**
+ * Whether a file is owned by someone else: a no-op chmod fails on another's.
+ * @param {string} path
+ */
 async function ownedByAnother(path) {
   try {
     const { permissions } = await IOUtils.stat(path);
@@ -570,7 +574,10 @@ async function check(download, base) {
     console.error("vimma: agent download check failed", e);
     return { kind: /** @type {const} */ ("archive"), text: "a file Vimma could not read" };
   });
-  /** Ask again, as the same agent (or the page), always: no grant covers it. @param {object} more */
+  /**
+   * Ask again, as the same agent (or the page), always: no grant covers it.
+   * @param {object} more
+   */
   const askAgain = (more) => {
     const what = { ...t.what, size, ...more };
     const options = { always: true };

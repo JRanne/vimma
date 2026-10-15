@@ -163,7 +163,6 @@ class Client {
     return this.read();
   }
 
-  /** Sends a request and returns its response. */
   async request(id, command, args = {}) {
     await this.send({ type: "request", id, command, args });
     const response = await this.read();
@@ -624,7 +623,8 @@ add_task(async function test_vimma_ctl_end_to_end() {
   const state = JSON.parse(out);
   Assert.equal(state.mode, "normal", "vimma-ctl reads the live state");
   Assert.equal(state.tabs.length, gBrowser.visibleTabs.length, "with every tab");
-  // The Omarchy hook's fallback (omarchy/vimma-theme-reload.sh); browser.toml pins the built-in theme here.
+  // The Omarchy hook's fallback (omarchy/vimma-theme-reload.sh); browser.toml pins the built-in
+  // theme here.
   const reload = await runVimmaCtl(bin, ["reload-theme"]);
   Assert.deepEqual(reload, { exitCode: 0, out: "unchanged\n" }, "vimma-ctl reload-theme");
 

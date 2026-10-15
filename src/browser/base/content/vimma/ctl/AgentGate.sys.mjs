@@ -255,7 +255,7 @@ export const AgentGate = {
   },
 
   /**
-   * The user's answer to question `id` (the prompt line, sub-PR 2b): `once`, `deny`, `mute`
+   * The user's answer to question `id` (the prompt line): `once`, `deny`, `mute`
    * (`x`), or `grant` for `minutes` (capped at `[mcp] grant_max_minutes`).
    * @param {number} id
    * @param {Answer | { kind: "grant", minutes: number | null }} answer

@@ -86,7 +86,6 @@ async function create(name) {
   return def(name);
 }
 
-/** Switches the window to workspace `name`. */
 async function switchTo(name) {
   ww().switchTo({ id: def(name).id });
   await until(() => active() === def(name).id, `switched to ${name}`);
