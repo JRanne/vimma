@@ -35,13 +35,14 @@ jobs:
     permissions:
       contents: write # publish the rolling `nightly` release
       issues: write # open an issue when the build fails
+    # GH_TOKEN (contents and issues: write) goes only to the two steps that publish or report:
+    # npm, Surfer, mach and the mochitests never see it.
     env:
-      GH_TOKEN: ${{ github.token }}
       LOG: ${{ github.workspace }}/nightly.log
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false # gh reads GH_TOKEN; git never pushes from here
+          persist-credentials: false # gh gets GH_TOKEN in its own steps; git never pushes
 
       # No `cache` input: a build restores nothing from the Actions cache (B2).
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -149,6 +150,7 @@ jobs:
 
       - name: Publish rolling nightly release
         env:
+          GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.sha }}
         run: |
           gh release delete nightly --cleanup-tag --yes || true
@@ -177,6 +179,7 @@ jobs:
       - name: Open or update the failure issue
         if: failure()
         env:
+          GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           gh label create nightly-failure --color B60205 \

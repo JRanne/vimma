@@ -701,6 +701,8 @@ in a `build` environment, and a watch on Mozilla's release key,
   `surfer.json`'s version (a record in `engine/.git`, which `firefox-source.sh` writes too). That
   record guards against building an unverified download, not against someone who can already
   write to `engine/`.
+  `firefox-source.sh` also refuses a `surfer.json` with a `version.candidate`, which Surfer would
+  fetch from `candidates/` unverified.
   [`test_good_signature_from_mozillas_current_subkey_passes`](../tools/upstream/test_verify_sha512.py),
   [`test_signature_by_the_revoked_compromised_subkey_fails`](../tools/upstream/test_verify_sha512.py),
   [`test_signature_by_another_key_fails`](../tools/upstream/test_verify_sha512.py),
@@ -715,7 +717,8 @@ in a `build` environment, and a watch on Mozilla's release key,
   [`fails a tampered tarball`](../tools/upstream/test/verify-source.test.mjs),
   [`--require refuses an engine/ never verified, or verified for another version`](../tools/upstream/test/verify-source.test.mjs),
   [`npm run import refuses an engine/ whose source was never verified`](../tools/test/upstream-workflow.test.mjs),
-  [`every verify-sha512.py call passes a signature`](../tools/test/upstream-workflow.test.mjs)
+  [`every verify-sha512.py call passes a signature`](../tools/test/upstream-workflow.test.mjs),
+  [`refuses a surfer.json with a version.candidate, before anything is fetched`](../tools/upstream/test/firefox-source.test.mjs)
 - B2. A nightly or release build **never** builds from an `engine/` it did not extract in the
   same job from the tarball it verified, and **never** restores a tree, an objdir or a compiler
   cache from the Actions cache; a release **must** build in a fresh objdir with an empty

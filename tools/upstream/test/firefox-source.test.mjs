@@ -205,6 +205,38 @@ describe("firefox-source.sh", () => {
     expect(surferCalls(where.work)).toEqual([]);
   }, 60_000);
 
+  // Surfer downloads version.candidate from candidates/ with no hash check, a file this script
+  // never verified: a candidate is refused before anything is fetched.
+  it("refuses a surfer.json with a version.candidate, before anything is fetched", () => {
+    const where = setup();
+    writeFileSync(
+      join(where.work, "surfer.json"),
+      JSON.stringify({ version: { product: "firefox", version: VERSION, candidate: "158.0.1" } }),
+    );
+    staleEngine(where.work);
+    const r = run(where);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/candidate/);
+    expect(existsSync(join(where.work, ".surfer"))).toBe(false);
+    expect(existsSync(join(where.work, "engine", "browser", "stale.txt"))).toBe(true);
+    expect(surferCalls(where.work)).toEqual([]);
+  }, 60_000);
+
+  it("a SHA512SUMS that does not list the tarball exits 2, keeping the tarball and engine/", () => {
+    const where = setup();
+    const sums = join(where.base.replace("file://", ""), VERSION, "SHA512SUMS");
+    writeFileSync(sums, `${"0".repeat(128)}  other\n`);
+    fakeSign(sums); // signed by Mozilla, so only the missing entry can fail it
+    staleEngine(where.work);
+    const r = run(where);
+    expect(r.status).toBe(2);
+    expect(r.stdout + r.stderr).toMatch(/does not list/);
+    expect(r.stdout + r.stderr).not.toMatch(/does not match/);
+    expect(existsSync(join(where.work, CACHED))).toBe(true);
+    expect(existsSync(join(where.work, "engine", "browser", "stale.txt"))).toBe(true);
+    expect(surferCalls(where.work)).toEqual([]);
+  }, 60_000);
+
   it.each(["", "158", "158.0;id", "../158.0", "159.0a1"])(
     "refuses surfer.json version %j before it reaches a URL",
     (version) => {
