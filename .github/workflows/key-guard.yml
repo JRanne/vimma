@@ -1,0 +1,50 @@
+# ADR-021, docs/security.md B1: a pull request that changes Mozilla's pinned release key
+# (tools/upstream/mozilla-release-key.asc), the fingerprint pinned in verify-sha512.py, or this
+# guard's own files (tools/ci/key-guard.mjs GUARD_PATHS) fails this check until a maintainer adds the `key-rotation-approved` label (docs/runbook.md,
+# "Mozilla's release key"). The ruleset on main requires the job below by its name.
+#
+# pull_request, never pull_request_target: nothing here needs a token that can write, and the
+# label is in the event payload for fork pull requests too. labeled and unlabeled re-run the
+# check when the label is added or removed; the newest run for the head commit is the one the
+# ruleset reads. The detection runs from the base branch's copy of tools/ci/key-guard.mjs; the
+# pull request's own copy runs only while the base has none.
+name: key-guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: key-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  key-guard:
+    name: Mozilla release key unchanged or approved
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the merge base of base and head
+          persist-credentials: false
+
+      # Event values reach the script through env, never through `${{ }}` in the script text.
+      - name: Key unchanged, or changed with the key-rotation-approved label
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          guard="$RUNNER_TEMP/key-guard.mjs"
+          git cat-file -e "$BASE^{commit}" || exit 2
+          if git cat-file -e "$BASE:tools/ci/key-guard.mjs"; then
+            git show "$BASE:tools/ci/key-guard.mjs" > "$guard"
+          else
+            echo "No key guard on the base: running the pull request's copy"
+            cp tools/ci/key-guard.mjs "$guard"
+          fi
+          node "$guard" --base "$BASE" --head "$HEAD"

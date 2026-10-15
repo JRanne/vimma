@@ -18,6 +18,8 @@ How to build, run and test Vimma, and how changes get in. For why Vimma exists, 
 ```sh
 npm ci                  # dev tools, including Surfer
 npx surfer download     # Firefox source for the version in surfer.json, into engine/
+npm run verify-source   # that tarball against Mozilla's signed SHA512SUMS (needs gpgv);
+                        # npm run import refuses an engine/ it has not verified
 npx surfer bootstrap    # Mozilla's toolchains into ~/.mozbuild (once)
 npm run import          # apply Vimma's files and patches, select the vimma brand
 npx surfer build        # full build
@@ -191,7 +193,8 @@ its Rust toolchain and the GitHub Actions current:
 
 - **Weekly, grouped.** On Monday mornings (Helsinki) it opens one PR per ecosystem with every
   minor and patch update, and one PR per major update. A release must be three days old first.
-  Titles read `build(deps): bump …`, which commitlint accepts.
+  Titles read `build(deps): Bump …`. Dependabot's casing and long release-note lines are not
+  configurable, so commitlint skips its commits and their squashes (`tools/commitlint`).
 - **Security fixes come at once.** A Dependabot alert gets its fix PR as soon as there is one,
   outside the schedule. When a parent package pins the vulnerable version, add an `overrides`
   entry to the root `package.json` instead (as for `sharp` and `qs`) and say why in the PR.

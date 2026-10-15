@@ -117,8 +117,9 @@ jobs:
           VERSION: ${{ needs.detect.outputs.version }}
         run: tools/upstream/source-check.sh "$VERSION"
 
+      # Only after a verified source check (result written), as upstream.yml (G10).
       - name: Upload the source check
-        if: always()
+        if: always() && steps.check.outputs.result != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: canary-source-check

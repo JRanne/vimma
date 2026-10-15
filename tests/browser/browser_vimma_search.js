@@ -388,6 +388,25 @@ add_task(async function a_malformed_state_is_discarded_and_search_still_applies(
   await until(async () => !(await engineByAlias("@t")), "the template's engine is removed");
 });
 
+add_task(async function about_vimma_lists_only_the_aliases_that_apply() {
+  await writeConfig(
+    "[search.aliases]",
+    `t = "${TEMPLATE}"`,
+    `${INSTALLED_ALIAS}x = "${INSTALLED}"`,
+    'w = "Vimma Instaled"',
+  );
+  await until(() => errorSegment()?.includes("search.aliases.w"), "the misspelt engine errs");
+  await until(async () => await engineByAlias("@t"), "the template's engine applies");
+  const data = await AboutVimma.collect(window);
+  Assert.deepEqual(
+    data.search.aliases.map((a) => a.alias),
+    ["@t", `@${INSTALLED_ALIAS}x`],
+    "the alias Vimma skipped is not listed as if it worked",
+  );
+  await writeConfig("[search]");
+  await until(async () => !(await engineByAlias("@t")), "the template's engine is removed");
+});
+
 add_task(async function an_unknown_engine_is_a_config_error_and_the_rest_applies() {
   await writeConfig("[search]", 'default = "Vimma Instaled"', "[keys]", 'new_tab = "prefix+t"');
   await until(() => ConfigHost.config?.keys.new_tab === "prefix+t", "the rest of the file applies");

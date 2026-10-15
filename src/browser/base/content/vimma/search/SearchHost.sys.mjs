@@ -12,7 +12,12 @@
 // that depend on the profile's engines come back as config errors with their line. It also keeps
 // the `@aliases` the URL bar knows, for `:open @` completion.
 
-import { parseSearchState, planSearch, searchCompletions } from "../core/search.mjs";
+import {
+  appliedAliases,
+  parseSearchState,
+  planSearch,
+  searchCompletions,
+} from "../core/search.mjs";
 import { formatPath } from "../core/toml.mjs";
 
 /** @import { ConfigError } from "../core/config.mjs" */
@@ -298,7 +303,7 @@ export const SearchHost = {
 
   /**
    * about:vimma's Search line (decision 14): the default and whether the file set it, the
-   * aliases with their engines.
+   * aliases that applied with their engines.
    */
   get status() {
     const s = lazy.SearchService;
@@ -309,7 +314,7 @@ export const SearchHost = {
       fromConfig: !!config?.default && !!state?.default && state.default.set === engine?.id,
       // An engine Vimma made is named after its template's host: the report names the alias.
       template: state?.created.find((c) => c.id === engine?.id)?.alias ?? null,
-      aliases: (config?.aliases ?? []).map((a) => ({
+      aliases: appliedAliases(config?.aliases ?? [], state).map((a) => ({
         alias: `@${a.alias}`,
         engine: a.kind === "engine" ? a.name : a.host,
         unencrypted: a.kind === "template" && /^http:/i.test(a.url),

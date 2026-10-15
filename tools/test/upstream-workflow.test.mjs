@@ -91,14 +91,64 @@ describe("upstream autopilot workflow", () => {
   });
 
   it("nothing is built from a tarball whose SHA-512 Mozilla did not publish", () => {
-    const download = e2e.indexOf("npx --no -- surfer download");
-    const verify = e2e.indexOf("python3 tools/upstream/verify-sha512.py");
+    // e2e.yml gets its source through firefox-source.sh, which verifies before Surfer unpacks.
+    const fetch = e2e.indexOf("tools/upstream/firefox-source.sh");
     const imp = e2e.indexOf("run: npm run import");
-    expect(download).toBeGreaterThan(0);
-    expect(verify).toBeGreaterThan(download);
-    expect(imp).toBeGreaterThan(verify);
+    expect(fetch).toBeGreaterThan(0);
+    expect(imp).toBeGreaterThan(fetch);
+    const script = readFileSync(new URL("../upstream/firefox-source.sh", import.meta.url), "utf8");
+    const verify = script.indexOf('python3 "$here/verify-sha512.py"');
+    expect(verify).toBeGreaterThan(0);
+    expect(script.indexOf("npx --no -- surfer download")).toBeGreaterThan(verify);
     expect(source).toContain('python3 "$here/verify-sha512.py"');
     expect(job(upstream, "patch-check")).toContain("tools/upstream/source-check.sh");
+  });
+
+  it("every verify-sha512.py call passes a signature", () => {
+    // B1: no caller may check a hash against an unsigned SHA512SUMS. Every workflow and every
+    // shell script under tools/ that calls the verifier fetches SHA512SUMS.asc and passes it.
+    const callers = [
+      ...readdirSync(dir).map((f) => [`.github/workflows/${f}`, workflow(f)]),
+      ...readdirSync(new URL("..", import.meta.url), { recursive: true, encoding: "utf8" })
+        .filter((f) => f.endsWith(".sh"))
+        .map((f) => [`tools/${f}`, readFileSync(new URL(`../${f}`, import.meta.url), "utf8")]),
+    ];
+    const calls = callers.flatMap(([name, text]) => {
+      const joined = text.replace(/\\\n\s*/g, " ");
+      const lines = joined.split("\n").filter((l) => /^\s*[^#\s].*verify-sha512\.py/.test(l));
+      return lines.map((line) => ({ name, text, line }));
+    });
+    expect(calls.map((c) => c.name).sort()).toEqual(
+      expect.arrayContaining([
+        "tools/upstream/firefox-source.sh",
+        "tools/upstream/source-check.sh",
+      ]),
+    );
+    for (const { name, text, line } of calls) {
+      expect(line, name).toMatch(/--signature "?\$[a-z_{}]+\/SHA512SUMS\.asc"?/);
+      expect(text, name).toMatch(/SHA512SUMS\.asc"? -o /);
+    }
+  });
+
+  it("a report on a tarball that failed verification is never uploaded", () => {
+    // source-check.sh writes `result` only after the signature and hash are verified, so an
+    // upload gated on it never publishes patch-check output from an unverified tarball (G4, G10).
+    for (const [name, step] of [
+      ["upstream.yml", "Upload the patch-check report"],
+      ["upstream-beta.yml", "Upload the source check"],
+    ]) {
+      const text = workflow(name);
+      const at = text.indexOf(`- name: ${step}`);
+      expect(at, name).toBeGreaterThan(0);
+      const cond = /\n\s+if: (.*)\n/.exec(text.slice(at))?.[1];
+      expect(cond, name).toBe("always() && steps.check.outputs.result != ''");
+    }
+  });
+
+  it("npm run import refuses an engine/ whose source was never verified", () => {
+    // B1 on a contributor's machine: import is the first step of every local build and lane.
+    const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
+    expect(pkg.scripts.import).toMatch(/^tools\/upstream\/verify-source\.sh --require && /);
   });
 
   it("upstream.yml checks the source through source-check.sh", () => {
