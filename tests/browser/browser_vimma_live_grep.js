@@ -38,6 +38,8 @@ const { GrepMatcher } = ChromeUtils.importESModule(
 const DIR = getRootDirectory(gTestPath).replace("chrome://mochitests/content", "");
 const PAGE = `https://example.com${DIR}file_vimma_grep.html`;
 const OTHER_SITE = `https://example.org${DIR}file_vimma_grep.html`;
+/** The iframe the fixture adds with `frame`: its fixed page on the other site. */
+const FRAME_URL = `${OTHER_SITE}?t=${encodeURIComponent("needle in frame")}`;
 const GREP_ID = "vimma-grep";
 const NOTICE_ID = "vimma-notice";
 const OTHER_WS = "grepother";
@@ -126,7 +128,7 @@ async function openFixture(params, base = PAGE) {
     await until(
       () =>
         tab.linkedBrowser.browsingContext.children[0]?.currentWindowGlobal?.documentURI?.spec ===
-        String(params.frame),
+        FRAME_URL,
       "the frame loaded",
     );
   }
@@ -372,8 +374,7 @@ add_task(async function the_grep_list_steps_with_bracket_q_and_grep_resumes() {
 
 add_task(async function a_cross_site_frame_and_shadow_roots_are_searched() {
   await reset();
-  const frameUrl = `${OTHER_SITE}?t=${encodeURIComponent("needle in frame")}`;
-  const tab = await openFixture({ title: "Framed", t: "top", frame: frameUrl, shadow: 1 });
+  const tab = await openFixture({ title: "Framed", t: "top", frame: 1, shadow: 1 });
   await openGrep();
   type("needle in");
   await resultsSettle(3);
@@ -752,7 +753,7 @@ add_task(async function rows_name_their_window_tab_and_host() {
   Assert.equal(row.querySelector(".vimma-grep-host")?.textContent, "example.com", "its host");
   const where = dialog().querySelector(".vimma-grep-preview .vimma-grep-title");
   await until(() => where.textContent.includes("Hosted"), "the preview names the result's tab");
-  Assert.ok(where.textContent.includes("example.com"), "and its host");
+  Assert.ok(where.textContent.split(" · ").includes("example.com"), "and its host");
   Assert.ok(where.textContent.includes("w1"), "and its window");
   EventUtils.synthesizeKey("KEY_Escape");
   EventUtils.synthesizeKey("KEY_Escape");
@@ -1065,8 +1066,7 @@ add_task(async function page_text_with_markup_stays_text() {
 
 add_task(async function closing_tells_every_searched_frame_to_drop_its_text() {
   await reset();
-  const frameUrl = `${OTHER_SITE}?t=${encodeURIComponent("needle in frame")}`;
-  await openFixture({ title: "Ends", t: "needle top", frame: frameUrl });
+  await openFixture({ title: "Ends", t: "needle top", frame: 1 });
   await openGrep();
   const session = VimmaHost._grep(window);
   const ask = session.ask;
@@ -1165,8 +1165,7 @@ add_task(async function frames_past_the_cap_are_not_searched() {
 
 add_task(async function a_jump_never_reaches_a_document_the_frame_navigated_to() {
   await reset();
-  const frameUrl = `${OTHER_SITE}?t=${encodeURIComponent("needle in frame")}`;
-  const tab = await openFixture({ title: "Moving", t: "needle top", frame: frameUrl });
+  const tab = await openFixture({ title: "Moving", t: "needle top", frame: 1 });
   await openGrep();
   type("needle");
   await resultsSettle(2);

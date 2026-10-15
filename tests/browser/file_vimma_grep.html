@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- Live grep fixture (docs/specs/live-grep.md). Query parameters: `title`; `t`, lines of text
      separated by `|`, one paragraph each; `pad`, filler paragraphs before and after them; `long`, a line of that many `a`s; `frames`, that many srcdoc iframes with a match each; `blank`, an iframe with no text;
-     `frame`, the URL of an iframe after them; `shadow`, an open and a closed shadow root with a match each. -->
+     `frame`, an iframe from another site after them, with the line `needle in frame`; `shadow`, an open and a closed shadow root with a match each. -->
 <html>
   <head>
     <meta charset="utf-8" />
@@ -10,6 +10,9 @@
   <body>
     <script>
       const p = new URLSearchParams(location.search);
+      const FRAME_URL =
+        "https://example.org/browser/browser/base/zen-components/tests/browser/" +
+        "file_vimma_grep.html?t=needle%20in%20frame";
       document.title = p.get("title") || "grep fixture";
       const pad = () => {
         for (let i = 0; i < Number(p.get("pad") || 0); i++) {
@@ -50,9 +53,11 @@
         frame.srcdoc = "<p> </p>";
         document.body.append(frame);
       }
-      if (p.get("frame")) {
+      if (p.has("frame")) {
+        // A fixed page on another site (the test server's example.org), never a URL from the
+        // query, so the fixture loads nothing a link could choose.
         const frame = document.createElement("iframe");
-        frame.src = p.get("frame");
+        frame.src = FRAME_URL;
         document.body.append(frame);
       }
     </script>
