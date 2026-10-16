@@ -14,7 +14,8 @@
  *   node tools/promo/record.mjs --out DIR --geometry 1080x1920 --shots keys,tiling,marks,theme
  *   node tools/promo/record.mjs --out DIR --pace 800            # slower: ms per beat
  *
- * Options: --scale (device pixels per CSS pixel, default 1.5), --fps (default 30), --build
+ * Options: --scale (device pixels per CSS pixel, default 1.5), --fps (default 30), --toolbar
+ * (`[ui] toolbar` for every shot: hidden, the default, or shown), --build
  * and --vimma-ctl (as npm run e2e; VIMMA_E2E_BUILD and VIMMA_CTL work too), --keep (keep the
  * profiles). Needs Xvfb and ffmpeg (with x11grab and libx264).
  *
@@ -66,6 +67,7 @@ const OPTIONS = /** @type {const} */ ({
   geometry: { type: "string", default: "1920x1080" },
   scale: { type: "string", default: "1.5" },
   pace: { type: "string", default: "700" },
+  toolbar: { type: "string", default: "hidden" },
   fps: { type: "string", default: "30" },
   shots: { type: "string" },
   build: { type: "string" },
@@ -118,22 +120,35 @@ function buildCheckout(binary) {
 }
 
 /**
- * Which built-in palette to name in `[theme] name`: "vimma" when the build's own vimma-core
- * (the copy its chrome files use, synced into its checkout's src/) takes the key, else null,
- * and the build's default built-in shows (Tokyo Night before the vimma palette landed). A build
- * whose checkout cannot be found gets no name either.
+ * The look config.toml gives every shot: which built-in palette to name in `[theme] name`,
+ * whether to pin its dark appearance, and `[ui] toolbar`. "vimma" when the build's own
+ * vimma-core (the copy its chrome files use, synced into its checkout's src/) takes the key,
+ * else null, and the build's default built-in shows (Tokyo Night before the vimma palette
+ * landed); "dark" when it also takes `[theme] appearance`, so the palette is dark whatever the
+ * system reports; `toolbar` (from --toolbar) when it takes `[ui] toolbar`. Each key is kept
+ * only if the build reads the config with it and without an error, since a config.toml with an
+ * error is not applied at all. A build whose checkout cannot be found gets none of them.
  * @param {string} binary
- * @returns {Promise<string | null>}
+ * @param {"hidden" | "shown"} toolbar
+ * @returns {Promise<{ name: string | null, appearance?: "dark", toolbar?: "hidden" | "shown" }>}
  */
-async function builtinThemeName(binary) {
+async function promoLook(binary, toolbar) {
   const checkout = buildCheckout(binary);
   const config = checkout && join(checkout, "src/browser/base/content/vimma/core/config.mjs");
-  if (!config || !existsSync(config)) return null;
+  if (!config || !existsSync(config)) return { name: null };
   try {
     const { parseConfig } = await import(pathToFileURL(config).href);
-    return supportsThemeName(parseConfig, "vimma") ? "vimma" : null;
+    if (!supportsThemeName(parseConfig, "vimma")) return { name: null };
+    /** @type {{ name: string, appearance?: "dark", toolbar?: "hidden" | "shown" }} */
+    const look = { name: "vimma" };
+    /** @param {object} more */
+    const reads = (more) =>
+      parseConfig(promoConfig({ source: "file", ...look, ...more })).errors.length === 0;
+    if (reads({ appearance: "dark" })) look.appearance = "dark";
+    if (reads({ toolbar })) look.toolbar = toolbar;
+    return look;
   } catch {
-    return null;
+    return { name: null };
   }
 }
 
@@ -260,15 +275,27 @@ async function finishClip(raw, clip) {
 export class Director {
   /**
    * @param {{ ctl: Ctl, pace: number, themeDir: string, track: KeyTrack,
-   *   configPath?: string, themeName?: string | null }} o
+   *   configPath?: string, themeName?: string | null, appearance?: "dark",
+   *   toolbar?: "hidden" | "shown" }} o
    */
-  constructor({ ctl, pace, themeDir, track, configPath = "", themeName = null }) {
+  constructor({
+    ctl,
+    pace,
+    themeDir,
+    track,
+    configPath = "",
+    themeName = null,
+    appearance,
+    toolbar,
+  }) {
     this.ctl = ctl;
     this.pace = pace;
     this.themeDir = themeDir;
     this.track = track;
     this.configPath = configPath;
     this.themeName = themeName;
+    this.appearance = appearance;
+    this.toolbar = toolbar;
     /** @type {Record<string, string>} hint labels worked out in setup */
     this.labels = {};
     /** @type {Record<string, { x: number, y: number }>} screen points for the video's zoom */
@@ -361,7 +388,15 @@ export class Director {
    * `theme:builtin`.
    */
   async builtinTheme() {
-    writeConfig(this.configPath, promoConfig({ source: "file", name: this.themeName }));
+    writeConfig(
+      this.configPath,
+      promoConfig({
+        source: "file",
+        name: this.themeName,
+        appearance: this.appearance,
+        toolbar: this.toolbar,
+      }),
+    );
     this.mark("theme:builtin");
   }
 
@@ -405,6 +440,9 @@ async function main() {
   const fps = Number(values.fps);
   if (!(pace >= 100 && pace <= 5000)) return usage("--pace is ms per beat, 100 to 5000");
   if (![24, 25, 30, 50, 60].includes(fps)) return usage("--fps is 24, 25, 30, 50 or 60");
+  const toolbarFlag = values.toolbar;
+  if (toolbarFlag !== "hidden" && toolbarFlag !== "shown")
+    return usage("--toolbar is hidden or shown");
   const names = values.shots ? values.shots.split(",") : SHOTS.map((s) => s.name);
   const shots = names.map((n) => {
     const shot = SHOTS.find((s) => s.name === n);
@@ -449,10 +487,11 @@ async function main() {
     const configDir = mkdtempSync(join(tmpdir(), "vimma-promo-config-"));
     cleanups.push(async () => rmSync(configDir, { recursive: true, force: true }));
     const configPath = join(configDir, "config.toml");
-    const themeName = await builtinThemeName(build.binary);
+    const { name: themeName, appearance, toolbar } = await promoLook(build.binary, toolbarFlag);
     console.log(
       themeName
-        ? `promo: built-in palette "${themeName}" ([theme] name)`
+        ? `promo: built-in palette "${themeName}" ([theme] name), ${appearance ?? "system"}` +
+            `, toolbar ${toolbar ?? "as the build starts"}`
         : "promo: this build has no [theme] name: its default built-in palette",
     );
     // our own Xvfb at the full screen size, with the window in CSS pixels: launch()'s own
@@ -473,7 +512,10 @@ async function main() {
       console.log(`promo: ${shot.name}`);
       // no Omarchy theme until a shot sets one; config.toml picks the source
       for (const f of readdirSync(themeDir)) rmSync(join(themeDir, f), { force: true });
-      writeConfig(configPath, promoConfig({ source: shot.theme ?? "file", name: themeName }));
+      writeConfig(
+        configPath,
+        promoConfig({ source: shot.theme ?? "file", name: themeName, appearance, toolbar }),
+      );
       /** @type {() => Promise<void>} */
       let teardown = async () => {};
       const session = await launch({
@@ -495,7 +537,16 @@ async function main() {
       const ctl = new Ctl({ bin: ctlBin, profile: session.profile });
       await ctl.ready();
       const track = new KeyTrack();
-      const director = new Director({ ctl, pace, themeDir, track, configPath, themeName });
+      const director = new Director({
+        ctl,
+        pace,
+        themeDir,
+        track,
+        configPath,
+        themeName,
+        appearance,
+        toolbar,
+      });
       await director.until((s) => s.workspace === "main", "the first window", 20_000);
       await shot.setup(director);
       const raw = join(out, `${shot.name}.raw.mkv`);
