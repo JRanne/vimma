@@ -2212,9 +2212,10 @@ line.** Vimma ships Firefox's release defaults for the developer tools: the page
 but the tools that run code with the browser's full privileges are off. Code typed there can read
 every file, cookie and password the browser can, so a page that asks you to paste something into
 the console is a scam. To turn them on deliberately, set `devtools.chrome.enabled` and
-`devtools.debugger.remote-enabled` to `true` in `about:config`; set them back to `false` when you
-are done. The Browser Toolbox still asks before it connects. A build started with `npm start`
-has them on.
+`devtools.debugger.remote-enabled` to `true` in `about:config`. When you are done, set them back
+to `false` and reset `devtools.selfxss.count` (its reset button in `about:config`): opening a
+console while they are on turns the paste warning off for good. The Browser Toolbox still asks
+before it connects. A build started with `npm start` has them on.
 
 **"List all tabs" is missing.** Firefox shows it only when the tab strip is visible. Show the
 strip, or move the "List all tabs" button to the toolbar in customize mode, or use Vimma's
