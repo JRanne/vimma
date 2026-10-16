@@ -7,6 +7,8 @@
   <a href="https://github.com/vimma-browser/vimma/stargazers"><img src="https://img.shields.io/github/stars/vimma-browser/vimma?labelColor=333333&color=666666&logo=github" alt="GitHub stars" /></a>
   <a href="https://github.com/vimma-browser/vimma/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/vimma-browser/vimma/ci.yml?branch=main&label=ci&labelColor=333333&color=666666" alt="CI status on main" /></a>
   <a href="surfer.json"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fvimma-browser%2Fvimma%2Fmain%2Fsurfer.json&query=%24.version.version&label=firefox&labelColor=333333&color=666666&logo=firefoxbrowser" alt="Firefox version Vimma is built on" /></a>
+  <a href="https://github.com/vimma-browser/vimma/releases/latest"><img src="https://img.shields.io/github/v/release/vimma-browser/vimma?label=release&labelColor=333333&color=666666" alt="Latest release" /></a>
+  <a href="https://github.com/vimma-browser/vimma/releases"><img src="https://img.shields.io/github/downloads/vimma-browser/vimma/total?labelColor=333333&color=666666" alt="Total downloads" /></a>
 </p>
 
 # Vimma
@@ -22,6 +24,28 @@ and workspaces, and your hands never leave the keyboard.
 - **Every key is yours:** every binding, the prefix and the leader can be remapped in
   `config.toml`, Firefox's own keys too: `ctrl+t`, `alt+left` and `F12` are Vimma bindings
   with Firefox's meaning, listed in `ctrl+b ?`.
+
+## Install
+
+Vimma runs on Linux x86_64. Download the files from the
+[latest release](https://github.com/vimma-browser/vimma/releases/latest).
+
+**Arch Linux:** run this as your normal user (not root) in an empty directory, since makepkg
+leaves its build files there. Running it again in the same directory updates Vimma.
+
+```sh
+curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si
+```
+
+**Debian 12+, Ubuntu 22.04+:** download `vimma_X.Y.Z_amd64.deb`, then
+`sudo apt install ./vimma_X.Y.Z_amd64.deb`.
+
+**Any other distribution:** download `vimma-X.Y.Z-x86_64.AppImage`, then
+`chmod +x vimma-X.Y.Z-x86_64.AppImage && ./vimma-X.Y.Z-x86_64.AppImage`.
+
+`X.Y.Z` is the Vimma version. The in-app updater is not active yet: to update, install the newer
+release the same way. The guide's [Installing](docs/guide.md#installing) section has the tarball
+and how to verify a download with `sha256sum` and cosign.
 
 ## Why
 
@@ -40,25 +64,11 @@ the hours slip by. It also happens to start with _Vim_.
 Early, Linux x86_64 only (macOS next). Releases are on
 [GitHub Releases](https://github.com/vimma-browser/vimma/releases), with a tarball, an AppImage, a
 `.deb` and an Arch Linux `PKGBUILD` ([Install](#install)); you can also
-[build it from source](CONTRIBUTING.md#build-and-run). The in-app updater is included but not
-active yet: to update, install the newer release the same way you installed Vimma.
+[build it from source](CONTRIBUTING.md#build-and-run).
 
 AI coding agents working on this repository follow [CLAUDE.md](CLAUDE.md); contributors read
 [CONTRIBUTING.md](CONTRIBUTING.md) before opening issues or pull requests.
 <!-- process-wording: points coding agents at their rules file -->
-
-## Install
-
-On Arch Linux, one command installs Vimma. Run it as your normal user
-(not root) in an empty directory, since makepkg leaves its build files there:
-
-```sh
-curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si
-```
-
-Running the same command again in the same directory updates Vimma to the newest release. The
-tarball, AppImage and `.deb`, and how to verify each download, are in the guide's
-[Installing](docs/guide.md#installing) section.
 
 ## Licence
 
