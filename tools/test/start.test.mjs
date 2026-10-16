@@ -8,6 +8,7 @@ import {
   READ_PATH_PREF,
   browserCommand,
   devPrefs,
+  startPrefs,
   mergeUserJs,
   parseStartArgs,
   prepareProfile,
@@ -106,6 +107,22 @@ describe("devPrefs", () => {
     const link = join(tempDir(), "link");
     symlinkSync(real, link);
     expect(devPrefs(link)[0]?.[1]).toBe(`${real}/src/`);
+  });
+});
+
+describe("startPrefs", () => {
+  it("turns on the browser toolbox, remote debugging and dump() for npm start only", () => {
+    const root = tempDir();
+    const prefs = new Map(startPrefs(root));
+    expect(prefs.get(READ_PATH_PREF)).toBe(`${root}/src/`);
+    expect(prefs.get("devtools.chrome.enabled")).toBe(true);
+    expect(prefs.get("devtools.debugger.remote-enabled")).toBe(true);
+    expect(prefs.get("browser.dom.window.dump.enabled")).toBe(true);
+    expect(prefs.get("devtools.console.stdout.chrome")).toBe(true);
+    // Left at the shipped 0: devtools.chrome.enabled already lifts the console's paste guard.
+    expect(prefs.has("devtools.selfxss.count")).toBe(false);
+    // devPrefs is shared with the e2e harness, which needs none of these.
+    expect(new Map(devPrefs(root)).has("devtools.chrome.enabled")).toBe(false);
   });
 });
 
