@@ -1118,7 +1118,7 @@ _Pages_ and _extensions_ cannot reach it.
   tarball carries the `is-packaged-app` marker with its package type, the release refuses a
   `./mach package` tarball that already has one, and only an install without a marker gets the
   tarball's command. The release workflow's smoke test checks the type of the installed `.deb`
-  and the extracted AppImage, and that the tarball has no marker.
+  and, without `$APPIMAGE`, of the extracted AppImage, and that the tarball has no marker.
   [`every package type except the tarball carries the marker`](../tools/package/test/package.test.mjs),
   [`gives each package type its own update hint, and only the tarball an untar`](../tools/package/test/package.test.mjs),
   [`a tarball that already carries an install-source marker`](../tools/package/test/package.test.mjs),

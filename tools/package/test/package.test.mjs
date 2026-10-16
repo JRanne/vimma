@@ -707,6 +707,7 @@ describe("packageRelease on a fake ./mach package tarball", () => {
     expect(type(join(result.debRoot, "usr/lib/vimma"))).toBe("deb\n");
     const appImage = { APPIMAGE: "/home/u/vimma-0.1.0-x86_64.AppImage" };
     expect(type(join(result.appDir, "usr/lib/vimma"), appImage)).toBe("appimage\n");
+    expect(type(join(result.appDir, "usr/lib/vimma"))).toBe("appimage\n");
     const unpacked = tempDir("vimma-unpacked-");
     execFileSync("tar", ["-xJf", join(out, "vimma-0.1.0-linux-x86_64.tar.xz"), "-C", unpacked]);
     expect(type(join(unpacked, "vimma"))).toBe("tarball\n");

@@ -361,9 +361,10 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
   `security.sandbox.warn_unprivileged_namespaces`), and about:support does not flag them as
   missing (`toolkit/content/aboutSupport.js:1551`; Firefox 158.0). The content sandbox is then
   weaker without saying so. That includes an AppImage or a `.deb` on Ubuntu 24.04, whose
-  AppArmor policy denies unprivileged user namespaces to programs without a profile. Only the
-  tarball has no marker and still warns
-  ([m6-packaging](specs/m6-packaging.md), "Arch Linux without the AUR", decision 4).
+  AppArmor policy lets a program without a profile create a user namespace but not use
+  capabilities in it, which Firefox counts as unavailable. Only the tarball has no marker and
+  still warns ([m6-packaging](specs/m6-packaging.md), "Arch Linux without the AUR", decision 4;
+  [m6a-updater](specs/m6a-updater.md), section 3 and decision 34).
 - `vimma-ctl` checks the discovery file's permissions on Unix only; on Windows `check_mode`
   does nothing (ACLs, not mode bits)
   ([m0-control-protocol-and-vimma-ctl](specs/m0-control-protocol-and-vimma-ctl.md)).

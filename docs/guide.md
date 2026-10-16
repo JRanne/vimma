@@ -152,7 +152,9 @@ Firefox's own distribution packages do; the `.deb` and the AppImage carry the sa
 commands to show, so a `.deb` is updated with apt and never by unpacking a tarball over the files
 dpkg owns. Like Firefox's packages, a marked install does not show Firefox's warning that "some
 security features may offer less protection" when your kernel does not allow unprivileged user
-namespaces, which the content sandbox uses ([limits.md](limits.md#platforms-and-packaging)).
+namespaces, which the content sandbox uses. On Ubuntu 24.04 that means the `.deb` and the
+AppImage run with a weaker content sandbox without saying so; the tarball still shows the warning
+([limits.md](limits.md#platforms-and-packaging)).
 The same package will be on the AUR as `vimma-bin` once it is published there; AUR helpers such
 as `yay -S vimma-bin` will then install and update it.
 

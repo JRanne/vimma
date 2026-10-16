@@ -421,13 +421,11 @@ describe("--version smoke checks", () => {
     expect(smoke).toContain('[ "$type" = deb ] || {');
     expect(smoke).toMatch(/--appimage-extract/);
     expect(smoke).toContain(
-      'type=$(APPIMAGE=$appimage node tools/package/install-type.mjs "$RUNNER_TEMP/squashfs-root/usr/lib/vimma")\n',
+      'type=$(env -u APPIMAGE node tools/package/install-type.mjs "$RUNNER_TEMP/squashfs-root/usr/lib/vimma")\n',
     );
     expect(smoke).toContain('[ "$type" = appimage ] || {');
-    expect(smoke).toContain(
-      'marked=$(tar -tJf "./dist/vimma-$v-linux-x86_64.tar.xz" | grep -c is-packaged-app || true)',
-    );
-    expect(smoke).toContain('[ "$marked" = 0 ] || {');
+    expect(smoke).toContain('listing=$(tar -tJf "./dist/vimma-$v-linux-x86_64.tar.xz")\n');
+    expect(smoke).toContain('case "$listing" in *is-packaged-app*) echo');
   });
 
   it("the release smoke check also ties the line to the tag", () => {
