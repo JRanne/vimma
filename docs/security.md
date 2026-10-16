@@ -1134,8 +1134,8 @@ _Pages_ and _extensions_ cannot reach it.
   DigestInfo with Cloud KMS and checks the signature with openssl. The job that builds the body
   holds no secret and installs no dependency. Before anything is pushed, a separate job checks
   the signed file with the verifier and the pinned key the browser uses and with openssl. Every
-  file named in the manifest **must** match the release's `SHA256SUMS` (and, with signing on,
-  `SHA256SUMS` **must** carry release.yml's cosign signature), and is downloaded again after
+  file named in the manifest **must** match the release's `SHA256SUMS`, which **must** carry
+  release.yml's cosign signature (an unsigned release gets no manifest), and is downloaded again after
   signing and checked against the signed size and SHA-512. A serial that is not newer than the
   published manifest's, a serial more than a day ahead of the clock, and an offer older than the
   published one are refused. The push uses a deploy key that can write only to
@@ -1144,14 +1144,18 @@ _Pages_ and _extensions_ cannot reach it.
   pushed unless `UPDATES_ENABLED` is `true`. **⚠ setting:** the environments' branch rules and the
   Workload Identity condition on `job_workflow_ref` (docs/runbook.md, "Update signing keys and
   the update host", step 7) are what keep another branch or workflow away from the key; the
-  workflow's own `refs/heads/main` guard only stops accidental runs.
+  workflow's own `refs/heads/main` guard only stops accidental runs. The signing job also
+  refuses a serial outside the last hour, and a dry run's real signature is kept one day.
+  **⚠ limit:** without a required reviewer on `update-signing`, anyone with write access can
+  start a run on `main` that re-signs a published release or offers nothing (withholding
+  updates).
   [`grants nothing by default, and each job only what it needs`](../tools/update/test/update-workflow.test.mjs),
   [`only sign mints an OIDC token, and only sign names the signing environment`](../tools/update/test/update-workflow.test.mjs),
   [`the signing job runs no repository code: no checkout, no node, no npm`](../tools/update/test/update-workflow.test.mjs),
   [`a published release only starts the run on main, and only with UPDATES_ENABLED`](../tools/update/test/update-workflow.test.mjs),
   [`%s runs only by hand on main, here, and with UPDATES_ENABLED or as a dry run`](../tools/update/test/update-workflow.test.mjs),
   [`checks that the release is published, not a pre-release, and on main`](../tools/update/test/update-workflow.test.mjs),
-  [`checks SHA256SUMS against release.yml's signature when signing is on`](../tools/update/test/update-workflow.test.mjs),
+  [`checks SHA256SUMS against release.yml's signature, and refuses an unsigned release`](../tools/update/test/update-workflow.test.mjs),
   [`the publish job verifies with the browser's verifier and with openssl before any push`](../tools/update/test/update-workflow.test.mjs),
   [`the deploy key lives in its own environment and reaches only the push step`](../tools/update/test/update-workflow.test.mjs),
   [`pushes one commit naming the version to main, never forced, to a pinned host key`](../tools/update/test/update-workflow.test.mjs),

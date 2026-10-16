@@ -15,7 +15,7 @@ import {
   spkiKeyId,
   verifyManifest,
 } from "../../../packages/vimma-core/src/updates.mjs";
-import { buildManifest } from "../manifest.mjs";
+import { buildManifest, serialAt } from "../manifest.mjs";
 
 const text = readFileSync(
   new URL("../../../.github/workflows/update-publish.yml", import.meta.url),
@@ -87,7 +87,9 @@ describe("update-publish.yml", () => {
 
   it("runs when a release is published, or by hand; never on a push or a pull request", () => {
     const on = text.slice(text.indexOf("\non:\n"), text.indexOf("\npermissions:"));
-    expect(on).toMatch(/^ {2}release:\n {4}types: \[published\]$/m);
+    // `released`: a release published as a full release, or a pre-release promoted to one;
+    // never a pre-release (which `published` would also start).
+    expect(on).toMatch(/^ {2}release:\n {4}types: \[released\]$/m);
     expect(on).toMatch(/^ {2}workflow_dispatch:$/m);
     expect(on).not.toMatch(/pull_request|push:|schedule|workflow_run/);
     for (const input of ["tag", "offer", "dry_run"]) expect(on).toContain(`\n      ${input}:\n`);
@@ -171,9 +173,26 @@ describe("update-publish.yml", () => {
     },
   );
 
+  it("keeps the signed manifest only a day: a dry run's signature is real", () => {
+    const sign = job("sign");
+    expect(sign.slice(sign.indexOf("name: manifest-signed"))).toMatch(
+      /retention-days: 1(?: #.*)?\n/,
+    );
+  });
+
+  it("checks tags with a whole-string match, and the version as a fixed string", () => {
+    expect(text).not.toMatch(/echo "\$TAG" \| grep/);
+    expect(text).toContain("[[ $TAG =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]");
+    expect(runOf(job("sign"), "Check what is about to be signed")).toContain(
+      String.raw`grep -qF " displayVersion=\"${"$"}{TAG#v}\" "`,
+    );
+  });
+
   it("runs one manifest at a time, never cancelling one half done", () => {
+    // Per event: the release event's run, which only starts another, never waits behind or
+    // displaces a signing run.
     expect(text).toMatch(
-      /^concurrency:\n {2}group: update-publish\n {2}cancel-in-progress: false$/m,
+      /^concurrency:\n {2}group: update-publish-\$\{\{ github\.event_name \}\}\n {2}cancel-in-progress: false$/m,
     );
   });
 
@@ -196,9 +215,13 @@ describe("update-publish.yml", () => {
     }
   });
 
-  it("checks SHA256SUMS against release.yml's signature when signing is on", () => {
+  it("checks SHA256SUMS against release.yml's signature, and refuses an unsigned release", () => {
     const step = stepOf(job("prepare"), "Verify the release's signature");
-    expect(step).toContain("vars.SIGNING_ENABLED == 'true'");
+    expect(step).not.toContain("SIGNING_ENABLED");
+    expect(job("prepare")).not.toMatch(/if: .*SIGNING_ENABLED/);
+    const download = runOf(job("prepare"), "Download the release's files");
+    expect(download).toContain("SHA256SUMS.sigstore.json");
+    expect(download).not.toContain("SIGNING_ENABLED");
     expect(step).toContain(`--certificate-identity-regexp '${IDENTITY_REGEXP}'`);
     expect(step).toContain("--certificate-oidc-issuer https://token.actions.githubusercontent.com");
   });
@@ -213,13 +236,17 @@ describe("update-publish.yml", () => {
     );
   });
 
-  it("without the deploy key, without UPDATES_ENABLED or in a dry run, stops with a notice", () => {
+  it("a dry run or UPDATES_ENABLED unset stops with a notice; enabled without the key fails", () => {
     const publish = job("publish");
-    const skip = stepOf(publish, "Without the deploy key, or in a dry run, push nothing");
-    expect(skip).toContain(
-      "if: env.UPDATES_DEPLOY_KEY_SET != 'true' || vars.UPDATES_ENABLED != 'true' || inputs.dry_run",
-    );
+    const skip = stepOf(publish, "Without UPDATES_ENABLED, or in a dry run, push nothing");
+    expect(skip).toContain("if: vars.UPDATES_ENABLED != 'true' || inputs.dry_run");
     expect(skip).toContain("::notice::");
+    const missing = stepOf(publish, "Enabled, but no deploy key");
+    expect(missing).toContain(
+      "if: env.UPDATES_DEPLOY_KEY_SET != 'true' && vars.UPDATES_ENABLED == 'true' && !inputs.dry_run",
+    );
+    expect(missing).toContain("::error::");
+    expect(missing).toContain("exit 1");
     for (const name of ["Push to vimma-updates", "Wait until the update host serves it"]) {
       expect(stepOf(publish, name)).toContain(
         "if: env.UPDATES_DEPLOY_KEY_SET == 'true' && vars.UPDATES_ENABLED == 'true' && !inputs.dry_run",
@@ -309,7 +336,7 @@ esac
 
   const offerBody = () =>
     buildManifest({
-      serial: "20261028041207",
+      serial: serialAt(new Date()),
       update: {
         appVersion: "158.0",
         buildId: "20261016111135",
@@ -357,6 +384,16 @@ esac
     ],
     ["an offer when nothing was asked for", (b) => b, "nothing"],
     [
+      "a serial far ahead of the clock",
+      (b) => b.replace(/vimmaSerial="\d{14}"/, 'vimmaSerial="29990101000000"'),
+      "release",
+    ],
+    [
+      "a serial from long ago",
+      (b) => b.replace(/vimmaSerial="\d{14}"/, 'vimmaSerial="20200101000000"'),
+      "release",
+    ],
+    [
       "more than 64 KiB",
       (b) => b.replace("</updates>", `<!-- ${"x".repeat(70_000)} -->\n</updates>`),
       "release",
@@ -372,7 +409,7 @@ esac
   );
 
   it("signs an empty manifest when nothing is offered", () => {
-    const { dir } = setUp(buildManifest({ serial: "20261028041207", update: null }));
+    const { dir } = setUp(buildManifest({ serial: serialAt(new Date()), update: null }));
     const check = run(dir, "Check what is about to be signed", { TAG: "", OFFER: "nothing" });
     expect(check.status).toBe(0);
   }, 60_000);

@@ -1533,8 +1533,8 @@ until the release gate lifts: an accepted serial is remembered, so a later manif
 **7. Publishing manifests** (`update-publish.yml`). When a release is published, the workflow's
 `start` job starts the same workflow on `main` with the tag; the jobs that sign and push run
 only there. `prepare` (no secret) checks that the release is published, not a pre-release and on
-`main`, downloads its tarball, AppImage and `.deb`, checks them against `SHA256SUMS` and, with
-`SIGNING_ENABLED`, `SHA256SUMS` against release.yml's cosign signature, and builds the manifest
+`main`, downloads its tarball, AppImage and `.deb`, checks them against `SHA256SUMS` and
+`SHA256SUMS` against release.yml's cosign signature (an unsigned release gets no manifest), and builds the manifest
 with `tools/update/manifest.mjs`: Firefox's version and the build ID from the tarball's
 `application.ini`, each file's size and SHA-512, the urgency, and a serial (the UTC time) that
 must be newer than the one `updates.vimma.dev` and `vimma-updates` have. `sign` (environment
@@ -1564,37 +1564,50 @@ id=$(gh api $R/environments/update-signing/deployment-branch-policies \
 gh api $R/environments/update-signing/deployment-branch-policies --jq '.branch_policies[].name'  # main
 
 # b. Recommended: Google Cloud also checks that the token comes from update-publish.yml on main,
-#    so no other workflow or branch can sign even with the environment.
+#    so no other workflow or branch can sign even with the environment. This replaces the
+#    provider's whole condition: a later workflow that signs (sub-PR 2's MAR signing in
+#    release.yml) needs its own job_workflow_ref added with ||.
 gcloud iam workload-identity-pools providers update-oidc vimma --location global \
   --workload-identity-pool github --attribute-condition "assertion.repository == 'vimma-browser/vimma' && assertion.job_workflow_ref == 'vimma-browser/vimma/.github/workflows/update-publish.yml@refs/heads/main'"
 
-# c. A dry run: signs with KMS and runs every check, pushes nothing (works before d and e).
-gh workflow run update-publish.yml -f tag=v0.1.2 -f dry_run=true   # a published release
-gh run watch "$(gh run list --workflow update-publish.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
-
-# d. The deploy key: write access to vimma-updates only, kept in an environment only main may use.
-ssh-keygen -t ed25519 -N '' -C update-publish -f updates_deploy
-gh repo deploy-key add updates_deploy.pub --repo vimma-browser/vimma-updates \
-  --allow-write --title "update-publish.yml (vimma-browser/vimma)"
+# c. The update-publish environment, main alone, before any run uses it (a run would otherwise
+#    create it with no branch rule).
 gh api -X PUT $R/environments/update-publish --input - <<'JSON'
 { "deployment_branch_policy": { "protected_branches": false, "custom_branch_policies": true } }
 JSON
 gh api -X POST $R/environments/update-publish/deployment-branch-policies -f name=main -f type=branch
+
+# d. A dry run: signs with KMS and runs every check, pushes nothing. The signature is real; the
+#    signed file stays a day in the run's artifacts. Needs a published, signed release.
+gh workflow run update-publish.yml -f tag=v0.1.2 -f dry_run=true
+gh run watch "$(gh run list --workflow update-publish.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+
+# e. The deploy key: write access to vimma-updates only.
+ssh-keygen -t ed25519 -N '' -C update-publish -f updates_deploy
+gh repo deploy-key add updates_deploy.pub --repo vimma-browser/vimma-updates \
+  --allow-write --title "update-publish.yml (vimma-browser/vimma)"
 gh secret set UPDATES_DEPLOY_KEY --env update-publish < updates_deploy
 rm updates_deploy updates_deploy.pub
 
-# e. Turn update notices on for every install (off: gh variable delete UPDATES_ENABLED).
+# f. Turn update notices on for every install (off: gh variable delete UPDATES_ENABLED).
 gh variable set UPDATES_ENABLED --body true
 ```
+
+Optional: a required reviewer on `update-signing` (Settings → Environments) makes every
+signature wait for a person's approval. Without one, anyone with write access to the repository
+can start a run on `main` that re-signs a published release or offers nothing; with a single
+maintainer the approval adds a click to every release and nothing else.
 
 A deploy key, not a token: it can write to `vimma-updates` and nothing else, belongs to no
 person's account and does not expire with one; a fine-grained token would act as the maintainer.
 The `vimma-updates` ruleset (step 1) blocks force pushes and deletion, so the key can only add
-commits. Until `UPDATES_DEPLOY_KEY` exists, or while `UPDATES_ENABLED` is not `true`, a run
-signs and verifies and then stops with a notice; with `UPDATES_ENABLED` unset, a published
-release starts nothing at all (its `start` job logs a notice).
+commits. While `UPDATES_ENABLED` is not `true`, a run signs and verifies and then stops with a
+notice, and a published release starts nothing at all (its `start` job logs a notice); with it
+`true`, a missing `UPDATES_DEPLOY_KEY` fails the run and opens the `release-failure` issue. A
+release published as a pre-release gets no manifest; promoting it to a full release starts the
+workflow (the `released` event).
 
-**What the maintainer sees on the next release** (with a–e done): publishing the draft starts
+**What the maintainer sees on the next release** (with a–f done): publishing the draft starts
 `aur.yml` and `update-publish.yml`; a second `update-publish` run on `main` follows within a
 minute and finishes in about 5 minutes. Then `vimma-updates` has a commit `vimma X.Y.Z: update
 manifest, serial …`, `curl -s https://updates.vimma.dev/updates/browser/Linux_x86_64-gcc3/vimma/update.xml`

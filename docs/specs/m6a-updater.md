@@ -582,7 +582,7 @@ path must use raw PKCS#1 KMS signing over a SHA-384 DigestInfo; `signmar -v` sti
 result.)
 
 (Since changed: the release manifest is published by a workflow of its own,
-`update-publish.yml`, on `release: published`, because a release has no MAR until sub-PR 2 and
+`update-publish.yml`, on `release: released`, because a release has no MAR until sub-PR 2 and
 "check and tell" (decision 26) needs only the manifest; `release.yml` gains the MAR steps with
 sub-PR 2. The published release's run only starts the workflow on `main`, so the
 `update-signing` environment admits `main` alone and a `v*` tag pushed on another commit cannot
