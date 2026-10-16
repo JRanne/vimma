@@ -8,7 +8,6 @@ import { HOSTS } from "./promo.mjs";
 
 const ARTICLE = `${HOSTS.handbook}modal-browsing.html`;
 const ARTICLE_TITLE = "Leave the mouse in the drawer · Handbook";
-const PANES = `${HOSTS.handbook}panes.html`;
 const PANES_TITLE = "Panes, the tmux way · Handbook";
 const NEWS = `${HOSTS.news}front.html`;
 const NEWS_TITLE = "Front page · news.example";
@@ -272,10 +271,11 @@ const tiling = {
 const marks = {
   name: "marks",
   async setup(d) {
-    await only(d, ARTICLE, ARTICLE_TITLE);
-    await also(d, `${HOSTS.mail}signin.html#personal`, inbox("personal"));
-    await also(d, NEWS, NEWS_TITLE);
-    await also(d, PANES, PANES_TITLE);
+    // the team's pages that tab search and live grep search later in the video
+    await only(d, RUNBOOK, RUNBOOK_TITLE);
+    await also(d, CHECKLIST, CHECKLIST_TITLE);
+    await also(d, INCIDENT, INCIDENT_TITLE);
+    await also(d, STANDUP, STANDUP_TITLE);
     await d.send("ctrl+b 1");
     await d.until((s) => s.tabs[0].selected && s.mode === "normal", "the first tab selected");
   },
@@ -285,7 +285,7 @@ const marks = {
     await d.until((s) => s.mode === "panel", "the side panel");
     await d.hold(1.2);
     d.mark("mark");
-    // marks the article, skips the inbox, marks the news and the panes page
+    // marks the runbook, skips the checklist, marks the incident and the standup notes
     await d.key("space", 0.8);
     await d.key("j", 0.8);
     await d.key("space", 0.8);
@@ -472,12 +472,12 @@ const help = {
 export const SHOTS = Object.freeze([
   keys,
   addons,
-  tabs,
-  grep,
-  tiling,
-  marks,
   flip,
   privateWorkspace,
+  tiling,
+  marks,
+  tabs,
+  grep,
   theme,
   help,
 ]);
