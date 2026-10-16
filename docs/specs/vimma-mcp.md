@@ -859,10 +859,13 @@ Found necessary in the security reviews of the protocol (#176) and the question 
     `opened in "<workspace>"`. The user sees their link next to their own logins, and no step
     depends on noticing which workspace was showing when they clicked.
 
-    The agent workspace is recognised by its name (`[mcp] workspace`), and also by the id of the
-    one Vimma made (`vimma.mcp.agentWorkspaceId`) and by the container the last save recorded
+    The agent workspace is recognised by its name (`[mcp] workspace`), and also by the id of the one
+    Vimma made (`vimma.mcp.agentWorkspaceId`) and by the container the last save recorded
     (`vimma.workspaces.startupAgentUserContextId`). The first tab of a start is set up before
-    config.toml is read, so a name other than the default is not known yet; the other two are.
+    config.toml is read, so a name other than the default is not known yet; the other two are. Once
+    config.toml is applied, a workspace Vimma made under an earlier name stops counting, as decision
+    8 makes it an ordinary workspace. When no workspace but the agent's has a container, such an
+    open gets no container (the default one) rather than the agent's.
 
     An extension's `tabs.create` without a `cookieStoreId`, and the second and later pages of a
     home page made of several, still take the workspace default: an extension the user installed

@@ -722,6 +722,7 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   [`a_route_rule_naming_the_agent_workspace_is_not_followed_from_outside`](../tests/browser/browser_vimma_agent_outside_opens.js),
   [`a_tab_sent_from_another_device_skips_the_agent_container`](../tests/browser/browser_vimma_agent_outside_opens.js),
   [`the_agent_workspace_is_known_before_config_toml_names_it`](../tests/browser/browser_vimma_agent_outside_opens.js),
+  [`config_toml_naming_the_agent_workspace_retires_the_recorded_one`](../tests/browser/browser_vimma_agent_outside_opens.js),
   [`a_control_socket_open_skips_the_agent_container`](../tests/browser/browser_vimma_agent_outside_opens.js),
   [`a_new_windows_first_tab_and_the_startup_cache_skip_the_agent`](../tests/browser/browser_vimma_agent_outside_opens.js),
   [`with_no_normal_workspace_used_yet_the_first_one_is_taken`](../tests/browser/browser_vimma_agent_outside_opens.js),

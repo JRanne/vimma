@@ -27,6 +27,9 @@ const { resolveRoutes } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/core/routes.mjs",
 );
 const { AppConstants } = ChromeUtils.importESModule("resource://gre/modules/AppConstants.sys.mjs");
+const { ConfigHost } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/config/ConfigHost.sys.mjs",
+);
 
 const LOGIN = "https://example.com/?login-token=secret";
 const STARTUP_PREF = "vimma.workspaces.startupUserContextId";
@@ -233,6 +236,7 @@ add_task(async function a_control_socket_open_skips_the_agent_container() {
   VimmaControl._commands.open({ url: LOGIN });
   let tab = await opened;
   Assert.equal(tab.userContextId, home.userContextId, "`open`: a new tab in oo-home");
+  await until(() => activeName() === "oo-home", "the window switches to oo-home");
 
   ww().switchTo({ id: agent().id });
   await until(() => gBrowser.selectedTab === agentTab, "the agent tab is selected again");
@@ -254,6 +258,11 @@ add_task(async function a_new_windows_first_tab_and_the_startup_cache_skip_the_a
     Services.prefs.getIntPref(STARTUP_PREF, 0),
     agent().userContextId,
     "the container cached for the next start is never the agent's",
+  );
+  Assert.equal(
+    Services.prefs.getIntPref("vimma.workspaces.startupAgentUserContextId", 0),
+    agent().userContextId,
+    "and the agent's container is cached beside it",
   );
   const url = "https://example.net/?window";
   const opened = BrowserTestUtils.waitForNewWindow({ url });
@@ -327,5 +336,33 @@ add_task(async function the_agent_workspace_is_known_before_config_toml_names_it
     tidy();
     await WorkspaceStore.deleteWorkspace(bots.id, { confirmed: true });
     await WorkspaceStore.deleteWorkspace(robots.id, { confirmed: true });
+  }
+});
+
+add_task(async function config_toml_naming_the_agent_workspace_retires_the_recorded_one() {
+  // Once config.toml has named the agent workspace, a workspace Vimma made earlier under
+  // another name is an ordinary one again (decision 8): outside opens may land there.
+  const ID_PREF = "vimma.mcp.agentWorkspaceId";
+  const savedId = Services.prefs.getStringPref(ID_PREF, "");
+  const old = WorkspaceStore.addWorkspace({ name: "oo-old-agent", color: "cyan", icon: "circle" });
+  const dir = await IOUtils.createUniqueDirectory(PathUtils.tempDir, "vimma-outside");
+  const file = PathUtils.join(dir, "config.toml");
+  await IOUtils.writeUTF8(file, "schema = 2\n");
+  try {
+    Services.prefs.setStringPref(ID_PREF, old.id);
+    Assert.ok(WorkspaceStore.isAgentContainer(old.userContextId), "recorded: the agent's");
+    await SpecialPowers.pushPrefEnv({ set: [["vimma.config.path", file]] });
+    await ConfigHost.reload();
+    await until(
+      () => !WorkspaceStore.isAgentContainer(old.userContextId),
+      "after config.toml is applied, only the named agent workspace counts",
+    );
+    Assert.ok(WorkspaceStore.isAgentContainer(agent().userContextId), "the named one still does");
+  } finally {
+    await SpecialPowers.popPrefEnv();
+    await ConfigHost.reload();
+    Services.prefs.setStringPref(ID_PREF, savedId);
+    await WorkspaceStore.deleteWorkspace(old.id, { confirmed: true });
+    await IOUtils.remove(dir, { recursive: true });
   }
 });

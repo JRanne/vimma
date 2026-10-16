@@ -515,10 +515,22 @@ export class WorkspaceStoreImpl {
     );
     this.definitions = definitions;
     this.#recordAgent(agentCreated);
+    this.#retireRecordedAgent();
     const containersChanged = this.#checkContainers();
     if (!changed && !containersChanged) return;
     this.#save();
     this.#notify(this.definitions.workspaces.map((w) => w.id));
+  }
+
+  /**
+   * config.toml has named the agent workspace: one Vimma made earlier under another name is an
+   * ordinary workspace again (vimma-mcp decision 8), so its recorded id stops counting.
+   */
+  #retireRecordedAgent() {
+    if (!this.#agentPref) return;
+    const made = Services.prefs.getStringPref(this.#agentPref, "");
+    const named = this.agent;
+    if (made && named && made !== named.id) Services.prefs.clearUserPref(this.#agentPref);
   }
 
   /**
@@ -570,7 +582,8 @@ export class WorkspaceStoreImpl {
    * decision 42): a link from another app, a URL from the control socket, a new window's first
    * tab. defaultUserContextId's, unless that is the agent workspace's: then the last workspace
    * used that is not the agent's, else the first one. Never the agent's, whose pages agents read:
-   * a login link landing there would hand them the session. Null where defaultUserContextId is.
+   * a login link landing there would hand them the session. Null where defaultUserContextId is;
+   * 0 (no container) when no workspace but the agent's has one.
    * @param {any} win
    * @returns {number | null}
    */
@@ -586,7 +599,8 @@ export class WorkspaceStoreImpl {
       this.#readSync();
     }
     if (!this.isAgentContainer(id)) return id;
-    return this.#userWorkspace()?.userContextId ?? null;
+    // No other workspace has a container: no container (0), never the agent's.
+    return this.#userWorkspace()?.userContextId ?? 0;
   }
 
   /**
@@ -595,6 +609,7 @@ export class WorkspaceStoreImpl {
    */
   isAgentContainer(userContextId) {
     if (!userContextId) return false;
+    this.ensureLoaded();
     const owner = this.definitions.workspaces.find((w) => w.userContextId === userContextId);
     return !!owner && this.#agentIds().has(owner.id);
   }
