@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow SemVer. From the first release on, release-please writes each release's entry from the Conventional Commits on `main` ([docs/runbook.md](docs/runbook.md), Releases).
 
+## [0.1.2](https://github.com/vimma-browser/vimma/compare/v0.1.1...v0.1.2) (2026-10-16)
+
+
+### Added
+
+* **promo:** record tab search, live grep and the private workspace ([#328](https://github.com/vimma-browser/vimma/issues/328)) ([6ea7509](https://github.com/vimma-browser/vimma/commit/6ea75092bc7d98b48a57122f691072f1b74e76ed))
+* **updates:** pin the primary update key ([#315](https://github.com/vimma-browser/vimma/issues/315)) ([2b99fb9](https://github.com/vimma-browser/vimma/commit/2b99fb9cc79a829b32ae5278283db6b5efb9b8e2))
+* **updates:** sign and publish the update manifest when a release is published ([#327](https://github.com/vimma-browser/vimma/issues/327)) ([afd32bf](https://github.com/vimma-browser/vimma/commit/afd32bf1e88447ebb99428f01baa746344135e61))
+
+
+### Fixed
+
+* **package:** mark the .deb and the AppImage as package installs ([#322](https://github.com/vimma-browser/vimma/issues/322)) ([86ebabc](https://github.com/vimma-browser/vimma/commit/86ebabc56df42a15de134066c311691bae3b59ee))
+* **release:** compare only stdout in the --version smoke checks ([#317](https://github.com/vimma-browser/vimma/issues/317)) ([1886493](https://github.com/vimma-browser/vimma/commit/188649323d50508f9916dbb1c689f370076f54a2))
+* **release:** release-title keeps a draft release on its tag ([#311](https://github.com/vimma-browser/vimma/issues/311)) ([0427489](https://github.com/vimma-browser/vimma/commit/0427489c1e26757940a6043c35a36decb3f096f3))
+* **security:** ship release firefox's devtools defaults ([#318](https://github.com/vimma-browser/vimma/issues/318)) ([798896b](https://github.com/vimma-browser/vimma/commit/798896b30798b21c200107a00d490fd4a71b999e))
+* **theme:** web pages follow the dark or light vimma shows ([#324](https://github.com/vimma-browser/vimma/issues/324)) ([80b5bdb](https://github.com/vimma-browser/vimma/commit/80b5bdb889104cd67d7847bfd1d3bff3b72ce2ac))
+* **workspaces:** links from other apps never open in the agent workspace ([#320](https://github.com/vimma-browser/vimma/issues/320)) ([8deab37](https://github.com/vimma-browser/vimma/commit/8deab3794889626f50676fce806a5e7faaff01e0))
+
 ## [0.1.1](https://github.com/vimma-browser/vimma/releases/tag/v0.1.1) · Firefox 158.0 (2026-10-16)
 
 The first release. The in-app updater is included but not active yet: there is no update host and no signing key, so Vimma does not tell you about new releases. Until it is, update by installing the newer release the way you installed this one: on Arch Linux, run `curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si` again in the same directory; otherwise install the newer `.deb`, AppImage or tarball.
