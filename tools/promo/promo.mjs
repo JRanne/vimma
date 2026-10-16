@@ -6,6 +6,9 @@ export const HOSTS = Object.freeze({
   handbook: "http://handbook.example/",
   news: "http://news.example/",
   mail: "http://mail.example/",
+  wiki: "http://wiki.example/",
+  notes: "http://notes.example/",
+  tracker: "http://tracker.example/",
 });
 
 /**
@@ -58,7 +61,9 @@ export function promoPrefs({ port, themeDir, configPath, scale }) {
     "network.proxy.allow_hijacking_localhost": true,
     "dom.security.https_first": false,
     "dom.security.https_first_schemeless": false,
-    "dom.securecontext.allowlist": "handbook.example,news.example,mail.example",
+    "dom.securecontext.allowlist": Object.values(HOSTS)
+      .map((u) => new URL(u).hostname)
+      .join(","),
     "security.insecure_connection_icon.enabled": false,
     "security.insecure_connection_text.enabled": false,
     "security.insecure_connection_text.pbmode.enabled": false,
@@ -81,14 +86,20 @@ export function promoPrefs({ port, themeDir, configPath, scale }) {
 
 /**
  * The config.toml a shot runs with: `[theme] source` ("file": the built-in palette, whatever
- * Omarchy theme the recording machine has; "omarchy": the theme directory the prefs name) and,
- * when the build knows the key, `name` (which built-in palette). Without `name` the build's
- * default built-in shows. `schema = 2`: `[theme] name` is a schema-2 key.
- * @param {{ source: "file" | "omarchy", name: string | null }} options
+ * Omarchy theme the recording machine has; "omarchy": the theme directory the prefs name),
+ * when the build knows the key, `name` (which built-in palette), and `appearance` when given:
+ * "dark" pins the built-in palette's dark variant, whatever light or dark the system reports;
+ * and `[ui] toolbar` when given: "hidden" records the page up to the window's top edge, with
+ * only the status bar around it. Without `name` the build's default built-in shows. `schema = 2`: `[theme] name` is a
+ * schema-2 key.
+ * @param {{ source: "file" | "omarchy", name: string | null, appearance?: "dark" | "light",
+ *   toolbar?: "hidden" | "shown" }} options
  */
-export function promoConfig({ source, name }) {
+export function promoConfig({ source, name, appearance, toolbar }) {
   const lines = ["schema = 2", "", "[theme]", `source = "${source}"`];
   if (name) lines.push(`name = "${name}"`);
+  if (appearance) lines.push(`appearance = "${appearance}"`);
+  if (toolbar) lines.push("", "[ui]", `toolbar = "${toolbar}"`);
   return `${lines.join("\n")}\n`;
 }
 

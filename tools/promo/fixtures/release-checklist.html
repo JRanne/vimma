@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- The promo video: a release checklist (http://wiki.example/release-checklist.html) for tab
+     search and live grep. -->
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Release checklist 4.2 · Wiki</title>
+  <link rel="stylesheet" href="promo.css" />
+  <header class="site">
+    <a class="brand" href="runbook.html">wiki.example</a>
+    <a href="release-checklist.html">Releases</a>
+    <a href="postmortem.html">Postmortems</a>
+    <a href="runbook.html#contacts">Contacts</a>
+  </header>
+  <main>
+    <p class="meta">Releases · version 4.2 · owner: Aino</p>
+    <h1>Release checklist 4.2</h1>
+    <h2>Before the release</h2>
+    <ul>
+      <li>Freeze the branch on Wednesday; only fixes for release blockers after that.</li>
+      <li>Run the load test against staging with the new cache settings.</li>
+      <li>Write down the rollback plan and test it once on staging.</li>
+      <li>Tell the support desk what changes for customers.</li>
+    </ul>
+    <h2>Release day</h2>
+    <ul>
+      <li>Deploy to 5 % of traffic, then 25 %, then everyone, an hour apart.</li>
+      <li>Watch checkout latency and the error rate at each step.</li>
+      <li>Any step over budget: stop, roll back, and write it up in the incident tracker.</li>
+    </ul>
+    <h2>After the release</h2>
+    <ul>
+      <li>Close the milestone and move what slipped to 4.3.</li>
+      <li>Post the release notes and thank everyone who contributed.</li>
+    </ul>
+  </main>
+</html>

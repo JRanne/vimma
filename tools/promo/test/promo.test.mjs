@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseConfig } from "../../../packages/vimma-core/src/config.mjs";
 import {
+  HOSTS,
   KeyTrack,
   cssWindow,
   parseGeometry,
@@ -49,6 +50,14 @@ describe("promoPrefs", () => {
     expect(prefs["vimma.config.path"]).toBe("/tmp/c/config.toml");
     expect(prefs["vimma.config.pollMs"]).toBeLessThanOrEqual(250);
   });
+  it("treats every fixture host as a secure context, the notes and tracker sites too", () => {
+    const prefs = promoPrefs({ port: 4321, themeDir: "/tmp/t", scale: 1.5 });
+    const allowed = String(prefs["dom.securecontext.allowlist"]).split(",");
+    const hosts = Object.values(HOSTS).map((u) => new URL(u).hostname);
+    expect(hosts).toEqual(expect.arrayContaining(["wiki.example", "notes.example"]));
+    expect(hosts).toContain("tracker.example");
+    expect(allowed.sort()).toEqual([...hosts].sort());
+  });
   it("sends HTTPS to the fixture server too, so no page reaches the network", () => {
     const prefs = promoPrefs({ port: 4321, themeDir: "/tmp/t", configPath: "/c", scale: 1.5 });
     expect(prefs["network.proxy.ssl"]).toBe("127.0.0.1");
@@ -65,6 +74,25 @@ describe("promoConfig", () => {
     expect(promoConfig({ source: "file", name: "vimma" })).toBe(
       'schema = 2\n\n[theme]\nsource = "file"\nname = "vimma"\n',
     );
+  });
+  it("pins the dark appearance when asked, so the system's light or dark never decides", () => {
+    const text = promoConfig({ source: "file", name: "vimma", appearance: "dark" });
+    expect(text).toBe(
+      'schema = 2\n\n[theme]\nsource = "file"\nname = "vimma"\nappearance = "dark"\n',
+    );
+    expect(parseConfig(text).errors).toEqual([]);
+  });
+  it("hides the toolbar when asked, for the keyboard-only look", () => {
+    const text = promoConfig({
+      source: "file",
+      name: "vimma",
+      appearance: "dark",
+      toolbar: "hidden",
+    });
+    expect(text).toBe(
+      'schema = 2\n\n[theme]\nsource = "file"\nname = "vimma"\nappearance = "dark"\n\n[ui]\ntoolbar = "hidden"\n',
+    );
+    expect(parseConfig(text).errors).toEqual([]);
   });
   it("leaves the name out for a build without it: its default built-in shows", () => {
     expect(promoConfig({ source: "omarchy", name: null })).toBe(

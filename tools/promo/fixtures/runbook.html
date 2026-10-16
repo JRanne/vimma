@@ -1,0 +1,47 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- The promo video: a team wiki page (http://wiki.example/runbook.html), one of the tabs that
+     tab search lists and live grep searches for "rollback". -->
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>On-call runbook · Wiki</title>
+  <link rel="stylesheet" href="promo.css" />
+  <header class="site">
+    <a class="brand" href="runbook.html">wiki.example</a>
+    <a href="release-checklist.html">Releases</a>
+    <a href="postmortem.html">Postmortems</a>
+    <a href="runbook.html#contacts">Contacts</a>
+  </header>
+  <main>
+    <p class="meta">Operations · updated last week</p>
+    <h1>On-call runbook</h1>
+    <p>
+      You are on call for the checkout service and the payments API from Monday 09:00 to the next
+      Monday 09:00. Keep the pager on, keep a laptop near, and hand over in writing.
+    </p>
+    <h2>When an alert fires</h2>
+    <ol>
+      <li>Acknowledge the page within five minutes, then open the incident channel.</li>
+      <li>Check the deploy log: most alerts start within an hour of a release.</li>
+      <li>If the last release is the likely cause, start a rollback before you debug.</li>
+      <li>Post a status line every thirty minutes, even when nothing has changed.</li>
+    </ol>
+    <h2>Rolling back</h2>
+    <p>
+      A rollback redeploys the previous build; it never reverts the database. Run
+      <code>deploy checkout --previous</code> and watch the error rate for ten minutes before you
+      call it done.
+    </p>
+    <p>
+      Schema migrations are forward-only. If a release changed the schema, the database keeps the
+      new columns, and the old code ignores them.
+    </p>
+    <h2>Escalation</h2>
+    <p>
+      Page the secondary after thirty minutes without a cause, and the team lead after an hour.
+      Customer-facing outages also go to the support desk.
+    </p>
+  </main>
+</html>

@@ -8,10 +8,21 @@ import { HOSTS } from "./promo.mjs";
 
 const ARTICLE = `${HOSTS.handbook}modal-browsing.html`;
 const ARTICLE_TITLE = "Leave the mouse in the drawer · Handbook";
-const PANES = `${HOSTS.handbook}panes.html`;
 const PANES_TITLE = "Panes, the tmux way · Handbook";
 const NEWS = `${HOSTS.news}front.html`;
 const NEWS_TITLE = "Front page · news.example";
+const RUNBOOK = `${HOSTS.wiki}runbook.html`;
+const RUNBOOK_TITLE = "On-call runbook · Wiki";
+const CHECKLIST = `${HOSTS.wiki}release-checklist.html`;
+const CHECKLIST_TITLE = "Release checklist 4.2 · Wiki";
+const POSTMORTEM = `${HOSTS.wiki}postmortem.html`;
+const POSTMORTEM_TITLE = "Postmortem: cache stampede · Wiki";
+const DRILL = `${HOSTS.wiki}rollback-drill.html`;
+const DRILL_TITLE = "Rollback drill, Q3 · Wiki";
+const INCIDENT = `${HOSTS.tracker}inc-1187.html`;
+const INCIDENT_TITLE = "INC-1187 Checkout slow after deploy · Tracker";
+const STANDUP = `${HOSTS.notes}standup.html`;
+const STANDUP_TITLE = "Standup, Tuesday · Notes";
 const START_URL = "chrome://browser/content/vimma/start/start.html";
 const ADDONS = "about:addons";
 const ADDONS_TITLE = "Add-ons Manager";
@@ -97,6 +108,68 @@ async function only(d, url, title) {
 async function also(d, url, title) {
   await d.open(url);
   await d.until((s) => selected(s)?.title === title && s.mode === "normal", `"${title}" loaded`);
+}
+
+/**
+ * Make a workspace (off camera) and go to it: `ctrl+b shift+n` and its name.
+ * @param {Director} d
+ * @param {string} name
+ */
+async function newWorkspace(d, name) {
+  await d.send("ctrl+b shift+n");
+  await d.until((s) => s.mode === "command", "the new-workspace prompt");
+  await d.send(`${[...name].join(" ")} enter`);
+  await d.until((s) => s.workspace === name, `the ${name} workspace`);
+}
+
+/**
+ * Load `url` in the selected tab with `:open` (off camera), so no tab is closed and nothing
+ * extra lands under tab search's Recently closed; wait for `title`.
+ * @param {Director} d
+ * @param {string} url
+ * @param {string} title
+ */
+async function openHere(d, url, title) {
+  await d.send("esc");
+  await d.send("esc");
+  await d.until((s) => s.mode === "normal", "focus in the page");
+  await d.send(":");
+  await d.until((s) => s.mode === "command", "the command line");
+  await d.send(
+    `${[..."open "]
+      .concat([...url])
+      .map((c) => (c === " " ? "space" : c))
+      .join(" ")} enter`,
+  );
+  await d.until((s) => selected(s)?.title === title && s.mode === "normal", `"${title}" loaded`);
+}
+
+/**
+ * The team's tabs for tab search and live grep (off camera): four in main, the standup notes
+ * selected; a postmortem and the news in a second workspace, "reading"; and, with `closed`, the
+ * rollback drill opened and closed again, so it is under Recently closed.
+ * @param {Director} d
+ * @param {{ closed: boolean }} o
+ */
+async function teamTabs(d, { closed }) {
+  await only(d, RUNBOOK, RUNBOOK_TITLE);
+  await also(d, CHECKLIST, CHECKLIST_TITLE);
+  await also(d, INCIDENT, INCIDENT_TITLE);
+  if (closed) {
+    await also(d, DRILL, DRILL_TITLE);
+    const count = (await d.state()).tabs.length;
+    await d.send("ctrl+b shift+x");
+    await d.until((s) => s.tabs.length === count - 1, "the drill tab closed");
+  }
+  await also(d, STANDUP, STANDUP_TITLE);
+  await newWorkspace(d, "reading");
+  await openHere(d, POSTMORTEM, POSTMORTEM_TITLE);
+  await also(d, NEWS, NEWS_TITLE);
+  await d.send("ctrl+b (");
+  await d.until(
+    (s) => s.workspace === "main" && selected(s)?.title === STANDUP_TITLE && s.mode === "normal",
+    "back in main, on the standup notes",
+  );
 }
 
 /** @type {Shot} j/k, link hints with two letters, / find with a match count */
@@ -198,10 +271,11 @@ const tiling = {
 const marks = {
   name: "marks",
   async setup(d) {
-    await only(d, ARTICLE, ARTICLE_TITLE);
-    await also(d, `${HOSTS.mail}signin.html#personal`, inbox("personal"));
-    await also(d, NEWS, NEWS_TITLE);
-    await also(d, PANES, PANES_TITLE);
+    // the team's pages that tab search and live grep search later in the video
+    await only(d, RUNBOOK, RUNBOOK_TITLE);
+    await also(d, CHECKLIST, CHECKLIST_TITLE);
+    await also(d, INCIDENT, INCIDENT_TITLE);
+    await also(d, STANDUP, STANDUP_TITLE);
     await d.send("ctrl+b 1");
     await d.until((s) => s.tabs[0].selected && s.mode === "normal", "the first tab selected");
   },
@@ -211,7 +285,7 @@ const marks = {
     await d.until((s) => s.mode === "panel", "the side panel");
     await d.hold(1.2);
     d.mark("mark");
-    // marks the article, skips the inbox, marks the news and the panes page
+    // marks the runbook, skips the checklist, marks the incident and the standup notes
     await d.key("space", 0.8);
     await d.key("j", 0.8);
     await d.key("space", 0.8);
@@ -282,6 +356,101 @@ const theme = {
   },
 };
 
+/**
+ * @type {Shot} tab search: every workspace's tabs and the recently closed ones; a tab in another
+ * workspace, then a closed one reopened
+ */
+const tabs = {
+  name: "tabs",
+  async setup(d) {
+    await teamTabs(d, { closed: true });
+  },
+  async run(d) {
+    await d.hold(1.2);
+    d.mark("search");
+    await d.key("b", 0);
+    await d.until((s) => s.mode === "help", "tab search");
+    await d.hold(2.6);
+    await d.type("post", 0.4);
+    await d.hold(1.4);
+    await d.key("enter", 0);
+    await d.until(
+      (s) => s.workspace === "reading" && selected(s)?.title === POSTMORTEM_TITLE,
+      "the postmortem, in the reading workspace",
+    );
+    await d.hold(1.8);
+    d.mark("closed");
+    await d.key("b", 0);
+    await d.until((s) => s.mode === "help", "tab search again");
+    await d.hold(0.8);
+    await d.type("drill", 0.4);
+    await d.hold(1.4);
+    await d.key("enter", 0);
+    await d.until(
+      (s) => s.mode === "normal" && selected(s)?.title === DRILL_TITLE,
+      "the closed drill page reopened",
+    );
+    await d.hold(2.0);
+  },
+};
+
+/**
+ * @type {Shot} live grep: "rollback" across the workspace's tabs, ctrl+s widening the scope to
+ * the window, ctrl+p and the preview, Enter to that match, ]q on to the next results, in other
+ * tabs
+ */
+const grep = {
+  name: "grep",
+  async setup(d) {
+    await teamTabs(d, { closed: false });
+  },
+  async run(d) {
+    await d.hold(1.2);
+    d.mark("grep");
+    await d.key("ctrl+b", 0.7);
+    await d.key("f", 0.3);
+    await d.key("g", 0);
+    await d.until((s) => s.mode === "help", "live grep");
+    await d.hold(1.0);
+    await d.type("rollback", 0.3);
+    await d.hold(2.6);
+    d.mark("scope");
+    await d.key("ctrl+s", 2.6);
+    d.mark("browse");
+    await d.key("ctrl+p", 0.9);
+    await d.key("ctrl+p", 1.6);
+    d.mark("jump");
+    await d.key("enter", 0);
+    await d.until(
+      (s) => s.mode === "normal" && selected(s)?.title === CHECKLIST_TITLE,
+      "the selected match, in the release checklist",
+    );
+    await d.hold(1.8);
+    d.mark("next");
+    await d.key("] q", 1.8);
+    await d.key("] q", 2.0);
+  },
+};
+
+/** @type {Shot} ctrl+b shift+p: the private workspace, and back */
+const privateWorkspace = {
+  name: "private",
+  async setup(d) {
+    await only(d, ARTICLE, ARTICLE_TITLE);
+  },
+  async run(d) {
+    await d.hold(1.2);
+    d.mark("private");
+    await d.prefix("shift+p");
+    await d.until((s) => s.private === true, "the private workspace", 20_000);
+    await d.hold(2.6);
+    d.mark("back");
+    await d.prefix("shift+p");
+    await d.until((s) => !s.private && s.workspace === "main", "back in main");
+    await d.hold(1.6);
+  },
+};
+
 /** @type {Shot} the ctrl+b ? overlay, filtered */
 const help = {
   name: "help",
@@ -300,4 +469,15 @@ const help = {
 };
 
 /** @type {readonly Shot[]} in storyboard order */
-export const SHOTS = Object.freeze([keys, addons, tiling, marks, flip, theme, help]);
+export const SHOTS = Object.freeze([
+  keys,
+  addons,
+  flip,
+  privateWorkspace,
+  tiling,
+  marks,
+  tabs,
+  grep,
+  theme,
+  help,
+]);

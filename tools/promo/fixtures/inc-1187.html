@@ -1,0 +1,38 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- The promo video: an incident ticket (http://tracker.example/inc-1187.html) for tab search
+     and live grep. -->
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>INC-1187 Checkout slow after deploy · Tracker</title>
+  <link rel="stylesheet" href="promo.css" />
+  <header class="site">
+    <a class="brand" href="inc-1187.html">tracker.example</a>
+    <a href="inc-1187.html#open">Open</a>
+    <a href="inc-1187.html#mine">Assigned to me</a>
+    <a href="inc-1187.html#board">Board</a>
+  </header>
+  <main>
+    <p class="meta">INC-1187 · severity 2 · resolved</p>
+    <h1>Checkout slow after deploy</h1>
+    <p>
+      After the 4.2 deploy reached 25 % of traffic, checkout latency at the 95th percentile rose
+      from 310 ms to 1.9 s. The error rate stayed flat.
+    </p>
+    <h2>Timeline</h2>
+    <ul>
+      <li>14:02 deploy to 25 % of traffic.</li>
+      <li>14:09 latency alert; Mateo acknowledges.</li>
+      <li>14:15 rollback started for the 25 % group.</li>
+      <li>14:24 rollback complete; latency back to normal.</li>
+      <li>16:40 cause found: the new cache settings expired every key at once.</li>
+    </ul>
+    <h2>Follow-up</h2>
+    <p>
+      Spread the cache expiry with jitter, add a latency check to the release checklist, and write
+      the postmortem by Friday.
+    </p>
+  </main>
+</html>

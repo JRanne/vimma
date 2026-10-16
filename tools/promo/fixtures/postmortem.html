@@ -1,0 +1,38 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- The promo video: a postmortem (http://wiki.example/postmortem.html) in the second
+     workspace, which tab search finds and live grep reaches once its scope is the window. -->
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Postmortem: cache stampede · Wiki</title>
+  <link rel="stylesheet" href="promo.css" />
+  <header class="site">
+    <a class="brand" href="runbook.html">wiki.example</a>
+    <a href="release-checklist.html">Releases</a>
+    <a href="postmortem.html">Postmortems</a>
+    <a href="runbook.html#contacts">Contacts</a>
+  </header>
+  <main>
+    <p class="meta">Postmortems · INC-1187 · blameless</p>
+    <h1>Postmortem: cache stampede</h1>
+    <h2>Summary</h2>
+    <p>
+      Release 4.2 changed the cache expiry from a sliding window to a fixed one. Every product page
+      expired at the same second, and the database served them all at once. Checkout slowed down for
+      22 minutes for a quarter of our customers.
+    </p>
+    <h2>What went well</h2>
+    <ul>
+      <li>The staged deploy kept three quarters of our customers on the old build.</li>
+      <li>The rollback took nine minutes, as the runbook says it should.</li>
+    </ul>
+    <h2>What we change</h2>
+    <ul>
+      <li>Cache expiry gets random jitter of up to a minute.</li>
+      <li>The load test runs with a cold cache as well as a warm one.</li>
+      <li>We practise a rollback every quarter, not only when we need one.</li>
+    </ul>
+  </main>
+</html>

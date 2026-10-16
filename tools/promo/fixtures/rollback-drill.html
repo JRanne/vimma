@@ -1,0 +1,34 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!-- The promo video: a page closed before the recording starts
+     (http://wiki.example/rollback-drill.html), so tab search lists it under Recently closed
+     and reopens it. -->
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Rollback drill, Q3 · Wiki</title>
+  <link rel="stylesheet" href="promo.css" />
+  <header class="site">
+    <a class="brand" href="runbook.html">wiki.example</a>
+    <a href="release-checklist.html">Releases</a>
+    <a href="postmortem.html">Postmortems</a>
+    <a href="runbook.html#contacts">Contacts</a>
+  </header>
+  <main>
+    <p class="meta">Operations · drill · every quarter</p>
+    <h1>Rollback drill, Q3</h1>
+    <p>
+      Once a quarter the person on call rolls back a harmless release on staging, with a timer
+      running, using only the runbook. The goal is under ten minutes from the decision to a healthy
+      service.
+    </p>
+    <h2>Steps</h2>
+    <ol>
+      <li>Deploy the drill build to staging and confirm it is live.</li>
+      <li>Start the timer and follow the runbook's "Rolling back" section word for word.</li>
+      <li>Stop the timer when the error rate and latency are back to normal.</li>
+      <li>Write down every step the runbook got wrong, and fix the runbook the same day.</li>
+    </ol>
+  </main>
+</html>
