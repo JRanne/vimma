@@ -19,6 +19,7 @@ import {
   setLastActive,
   withBookmarksFolder,
   withContainer,
+  userWorkspace,
   deleteBookmarksQuestion,
   AGENT_LOOKS,
 } from "../src/workspacedefs.mjs";
@@ -630,5 +631,42 @@ describe("the agent workspace", () => {
         "agent's cookies; its history and form data are lost. y/N",
     );
     expect(moveTabQuestion("main", agent)).toBe(moveTabQuestion("main"));
+  });
+});
+
+// docs/specs/vimma-mcp.md, decision 42: a tab you did not open inside the agent workspace (a
+// link from another app, a new window, the first tab at startup) never takes its container.
+describe("the workspace an outside open takes", () => {
+  const agent = { agent: "agent" };
+  /** main (1), work (2), agent (3), and a fourth with no container yet. */
+  function defs() {
+    let d = reconcileDefinitions(emptyDefinitions(), [], minter(), agent).definitions;
+    d = addRuntimeWorkspace(d, { id: "w", name: "work", color: "blue", icon: "circle" }, agent);
+    d = addRuntimeWorkspace(d, { id: "n", name: "new", color: "red", icon: "circle" }, agent);
+    d = withContainer(withContainer(withContainer(d, "ws-1", 1), "w", 2), "ws-2", 3);
+    return d;
+  }
+
+  test("the first wanted workspace that is not the agent's and has a container", () => {
+    expect(userWorkspace(defs(), ["w", "ws-1"], agent)?.name).toBe("work");
+    expect(userWorkspace(defs(), ["ws-2", "w"], agent)?.name).toBe("work");
+    expect(userWorkspace(defs(), [null, undefined, "gone", "n", "ws-1"], agent)?.name).toBe("main");
+  });
+
+  test("none wanted, or only the agent's: the first workspace that is not the agent's", () => {
+    expect(userWorkspace(defs(), ["ws-2"], agent)?.name).toBe("main");
+    expect(userWorkspace(defs(), [], agent)?.name).toBe("main");
+    const agentFirst = { ...defs(), workspaces: [...defs().workspaces].reverse() };
+    expect(userWorkspace(agentFirst, ["ws-2"], agent)?.name).toBe("work");
+  });
+
+  test("never the agent workspace, even when it is all there is with a container", () => {
+    const d = reconcileDefinitions(emptyDefinitions(), [], minter(), agent).definitions;
+    expect(userWorkspace(withContainer(d, "ws-2", 3), ["ws-2"], agent)).toBeNull();
+    expect(userWorkspace(withContainer(d, "ws-1", 1), ["ws-2"], agent)?.name).toBe("main");
+  });
+
+  test("with no agent workspace configured, the wanted one is taken as it is", () => {
+    expect(userWorkspace(defs(), ["ws-2"])?.name).toBe("agent");
   });
 });

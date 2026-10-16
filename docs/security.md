@@ -707,6 +707,19 @@ control's wording, the audit) enter this section with their tests in the sub-PR 
   [`the_token_never_leaves_the_handshake`](../tools/vimma-ctl/tests/mcp.rs),
   [`bad_arguments_never_reach_vimma`](../tools/vimma-ctl/tests/mcp.rs),
   [`bad_arguments_are_tool_errors_and_never_reach_vimma`](../tools/vimma-ctl/src/mcp.rs)
+- M24. A tab you did not open inside the agent workspace **never** takes its container: a link
+  from another app (the remote command line, `vimma-open`, Firefox's container guess, a
+  `[[routes]]` rule), the control socket's `open`, a new window's first tab and the container
+  cached for the next start. It opens in the last workspace used that is not the agent's (else
+  the first one), and the window switches to it; "the current tab" on an agent tab becomes a new
+  tab there. A login link clicked in a mail app is then never readable by an agent. What you
+  open from inside the agent workspace (ctrl+t, `:open`, the URL bar) stays there.
+  [`an_external_link_opens_in_the_last_normal_workspace_and_switches`](../tests/browser/browser_vimma_agent_outside_opens.js),
+  [`browser_dom_window_external_opens_skip_the_agent_container`](../tests/browser/browser_vimma_agent_outside_opens.js),
+  [`a_control_socket_open_skips_the_agent_container`](../tests/browser/browser_vimma_agent_outside_opens.js),
+  [`a_new_windows_first_tab_and_the_startup_cache_skip_the_agent`](../tests/browser/browser_vimma_agent_outside_opens.js),
+  [`with_no_normal_workspace_used_yet_the_first_one_is_taken`](../tests/browser/browser_vimma_agent_outside_opens.js),
+  [`never the agent workspace, even when it is all there is with a container`](../packages/vimma-core/test/workspacedefs.test.mjs)
 
 ## 13. Page modes (`actors/VimmaParent.sys.mjs`, `host/VimmaHost.sys.mjs`)
 

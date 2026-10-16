@@ -1,19 +1,34 @@
 diff --git a/browser/modules/BrowserDOMWindow.sys.mjs b/browser/modules/BrowserDOMWindow.sys.mjs
-index 21bd77185457ea204c198c8b5bc3a2401f3f0ffd..7bc6a2901916fe7a03e409e8a1aa04ff30853149 100644
+index dd54e29d87fb14b2f9d7183e36912f4ccfef1850..49e35584ca443c4c547feb6bd69415659ee5737b 100644
 --- a/browser/modules/BrowserDOMWindow.sys.mjs
 +++ b/browser/modules/BrowserDOMWindow.sys.mjs
-@@ -256,7 +256,13 @@ export class BrowserDOMWindow {
-     var openingUserContextId =
-+      // Vimma (workspace-routing): a [[routes]] rule for a link from another app comes first.
-+      (isExternal &&
-+        ChromeUtils.importESModule(
-+          "chrome://browser/content/vimma/workspaces/WorkspaceRouter.sys.mjs"
-+        ).WorkspaceRouter.externalUserContextId(aURI, this.win)) ||
-       (guessUserContextIdEnabled &&
-         lazy.URILoadingHelper.guessUserContextId(aURI)) ||
+@@ -254,10 +254,14 @@ export class BrowserDOMWindow {
+         "browser.link.force_default_user_context_id_for_external_opens",
+         false
+       );
+-    var openingUserContextId =
+-      (guessUserContextIdEnabled &&
+-        lazy.URILoadingHelper.guessUserContextId(aURI)) ||
 -      Ci.nsIScriptSecurityManager.DEFAULT_USER_CONTEXT_ID;
-+      // Vimma (m3-workspaces): no guess leaves it to addTab, which takes the workspace's.
-+      null;
++    // Vimma (workspace-routing, vimma-mcp): a link from another app: its [[routes]] rule, else
++    // the guess, else the workspace's, never the agent's; anything else is left to addTab.
++    const router = ChromeUtils.importESModule(
++      "chrome://browser/content/vimma/workspaces/WorkspaceRouter.sys.mjs"
++    ).WorkspaceRouter;
++    var openingUserContextId = isExternal
++      ? router.externalUserContextId(aURI, this.win, guessUserContextIdEnabled)
++      : null;
  
      if (aOpenWindowInfo && isExternal) {
        console.error(
+@@ -288,6 +292,10 @@ export class BrowserDOMWindow {
+         aWhere = Services.prefs.getIntPref("browser.link.open_newwindow");
+       }
+     }
++    // Vimma (vimma-mcp): a link from another app never loads into an agent tab.
++    if (isExternal) {
++      aWhere = router.externalWhere(aWhere, this.win);
++    }
+ 
+     let referrerInfo;
+     if (aFlags & Ci.nsIBrowserDOMWindow.OPEN_NO_REFERRER) {
