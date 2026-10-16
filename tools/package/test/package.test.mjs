@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   PKGBUILD_INSTALL_COMMAND as CORE_PKGBUILD_INSTALL_COMMAND,
+  installTypeFrom,
   updateSteps,
 } from "../../../packages/vimma-core/src/updates.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -104,11 +105,15 @@ MaxVersion=157.0.1
 
 /**
  * A fake `./mach package` tarball: one top-level vimma/ dir, as the real one.
- * @param {{ name?: string, omit?: string }} [options]
+ * @param {{ name?: string, omit?: string, extra?: Record<string, string> }} [options]
+ *   `extra`: more files under vimma/, path → content
  * @param {string} [dir] where to build it (default: a temp dir removed after the test)
  * @returns {string} the tarball's path
  */
-function fakeMachTarball({ name = "Vimma", omit } = {}, dir = tempDir("vimma-fake-dist-")) {
+function fakeMachTarball(
+  { name = "Vimma", omit, extra = {} } = {},
+  dir = tempDir("vimma-fake-dist-"),
+) {
   const app = join(dir, "vimma");
   mkdirSync(join(app, "browser/chrome/icons/default"), { recursive: true });
   /** @type {Record<string, [string, number]>} */
@@ -119,6 +124,7 @@ function fakeMachTarball({ name = "Vimma", omit } = {}, dir = tempDir("vimma-fak
     "libxul.so": ["not really an ELF\n", 0o755],
     "omni.ja": ["zip\n", 0o644],
   };
+  for (const [path, content] of Object.entries(extra)) files[path] = [content, 0o644];
   for (const size of [16, 32, 48, 64, 128]) {
     files[`browser/chrome/icons/default/default${size}.png`] = [`png ${size}\n`, 0o644];
   }
@@ -629,6 +635,84 @@ describe("packageRelease on a fake ./mach package tarball", () => {
     expect(contents).toMatch(/\.\/usr\/bin\/vimma -> \.\.\/lib\/vimma\/vimma/);
   });
 
+  // docs/specs/m6a-updater.md §3: Firefox only tests that the file exists; the line tells Vimma's
+  // update check which hint to show. A .deb without it was told to untar over /usr/lib.
+  it("every package type except the tarball carries the marker", () => {
+    const marker = (/** @type {string} */ root) => join(root, "usr/lib/vimma/is-packaged-app");
+    expect(readFileSync(marker(result.appDir), "utf8")).toBe("vimma-package=appimage\n");
+    expect(mode(marker(result.appDir))).toBe(0o644);
+    expect(readFileSync(marker(result.debRoot), "utf8")).toBe("vimma-package=deb\n");
+    expect(mode(marker(result.debRoot))).toBe(0o644);
+    expect(readFileSync(join(out, "PKGBUILD"), "utf8")).toContain(
+      `printf '%s\\n' 'vimma-package=pkgbuild-release' > "$pkgdir/opt/vimma/is-packaged-app"`,
+    );
+    const listing = execFileSync("tar", ["-tJf", join(out, "vimma-0.1.0-linux-x86_64.tar.xz")], {
+      encoding: "utf8",
+    });
+    expect(listing).toContain("vimma/omni.ja");
+    expect(listing).not.toContain("is-packaged-app");
+  });
+
+  it.skipIf(!deb)("puts the marker into the built .deb", () => {
+    const file = join(out, "vimma_0.1.0_amd64.deb");
+    const contents = execFileSync("dpkg-deb", ["--contents", file], { encoding: "utf8" });
+    expect(contents).toMatch(/^-rw-r--r-- root\/root .* \.\/usr\/lib\/vimma\/is-packaged-app$/m);
+    const x = tempDir("vimma-deb-x-");
+    execFileSync("dpkg-deb", ["-x", file, x]);
+    expect(readFileSync(join(x, "usr/lib/vimma/is-packaged-app"), "utf8")).toBe(
+      "vimma-package=deb\n",
+    );
+  });
+
+  it("gives each package type its own update hint, and only the tarball an untar", () => {
+    const offer = {
+      appVersion: "158.0.1",
+      buildId: "20261028031500",
+      displayVersion: "0.3.1",
+      detailsUrl: "https://github.com/vimma-browser/vimma/releases/tag/v0.3.1",
+      urgent: false,
+      advisories: [],
+    };
+    const read = (/** @type {string} */ root) =>
+      readFileSync(join(root, "usr/lib/vimma/is-packaged-app"), "utf8");
+    const deb = installTypeFrom({ packaged: true, marker: read(result.debRoot), appImage: null });
+    expect(deb).toBe("deb");
+    const debSteps = updateSteps(deb, offer, { installDir: "/usr/lib/vimma", appImage: null });
+    expect(debSteps.commands.join("\n")).toMatch(/sudo apt install \.\/vimma_0\.3\.1_amd64\.deb$/);
+    const appImage = "/home/u/Apps/vimma-0.1.0-x86_64.AppImage";
+    const app = installTypeFrom({ packaged: true, marker: read(result.appDir), appImage });
+    expect(app).toBe("appimage");
+    const appSteps = updateSteps(app, offer, {
+      installDir: "/tmp/.mount_x/usr/lib/vimma",
+      appImage,
+    });
+    expect(appSteps.commands.join("\n")).toContain("vimma-0.3.1-x86_64.AppImage");
+    for (const steps of [debSteps, appSteps]) {
+      expect(steps.commands.join("\n")).not.toMatch(/\btar\b/);
+    }
+    expect(installTypeFrom({ packaged: true, marker: null, appImage: null })).toBe("tarball");
+  });
+
+  it("install-type.mjs names each staged package as the update check would", () => {
+    const script = fileURLToPath(new URL("../install-type.mjs", import.meta.url));
+    const type = (/** @type {string} */ dir, /** @type {Record<string, string>} */ env = {}) => {
+      // Not inherited: a test run from inside an AppImage would otherwise set it.
+      const base = { ...process.env };
+      delete base.APPIMAGE;
+      return execFileSync(process.execPath, [script, dir], {
+        encoding: "utf8",
+        env: { ...base, ...env },
+      });
+    };
+    expect(type(join(result.debRoot, "usr/lib/vimma"))).toBe("deb\n");
+    const appImage = { APPIMAGE: "/home/u/vimma-0.1.0-x86_64.AppImage" };
+    expect(type(join(result.appDir, "usr/lib/vimma"), appImage)).toBe("appimage\n");
+    const unpacked = tempDir("vimma-unpacked-");
+    execFileSync("tar", ["-xJf", join(out, "vimma-0.1.0-linux-x86_64.tar.xz"), "-C", unpacked]);
+    expect(type(join(unpacked, "vimma"))).toBe("tarball\n");
+    expect(spawnSync(process.execPath, [script]).status).toBe(64);
+  });
+
   it("writes the release PKGBUILD and SRCINFO with the release tarball's SHA-256", () => {
     const tarSum = sha256(readFileSync(join(out, "vimma-0.1.0-linux-x86_64.tar.xz")));
     const build = readFileSync(join(out, "PKGBUILD"), "utf8");
@@ -745,6 +829,11 @@ describe("packageRelease refuses bad input", () => {
 
   it("a tarball without vimma/vimma", () => {
     expect(run(fakeMachTarball({ omit: "vimma" }))).toThrow(/vimma\/vimma/);
+  });
+
+  it("a tarball that already carries an install-source marker", () => {
+    const marked = fakeMachTarball({ extra: { "is-packaged-app": "vimma-package=deb\n" } });
+    expect(run(marked)).toThrow(/is-packaged-app/);
   });
 
   it("a tarball of another brand", () => {

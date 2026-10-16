@@ -414,6 +414,22 @@ describe("--version smoke checks", () => {
     for (const file of [nightly, release]) expect(file).not.toContain("Vimma Vimma");
   });
 
+  // docs/specs/m6a-updater.md §3: the install types the update check gives the built packages.
+  it("the .deb and AppImage smoke test checks each install type, and the tarball's lack of one", () => {
+    const smoke = step(workflow("release.yml"), "Smoke test the .deb and the AppImage");
+    expect(smoke).toContain("type=$(node tools/package/install-type.mjs /usr/lib/vimma)\n");
+    expect(smoke).toContain('[ "$type" = deb ] || {');
+    expect(smoke).toMatch(/--appimage-extract/);
+    expect(smoke).toContain(
+      'type=$(APPIMAGE=$appimage node tools/package/install-type.mjs "$RUNNER_TEMP/squashfs-root/usr/lib/vimma")\n',
+    );
+    expect(smoke).toContain('[ "$type" = appimage ] || {');
+    expect(smoke).toContain(
+      'marked=$(tar -tJf "./dist/vimma-$v-linux-x86_64.tar.xz" | grep -c is-packaged-app || true)',
+    );
+    expect(smoke).toContain('[ "$marked" = 0 ] || {');
+  });
+
   it("the release smoke check also ties the line to the tag", () => {
     expect(step(workflow("release.yml"), "Smoke check")).toContain('"Vimma ${TAG#v} · Firefox "');
   });

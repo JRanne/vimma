@@ -352,13 +352,17 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
   ([plan.md](../plan.md) §6, [macos-build](specs/macos-build.md)); Windows is not planned.
 - Releases carry a tarball, an AppImage, a `.deb` and a `PKGBUILD` for Linux x86_64 only. The
   AUR package `vimma-bin` is not published yet ([m6-packaging](specs/m6-packaging.md)).
-- The Arch Linux package (the release's `PKGBUILD`) writes `/opt/vimma/is-packaged-app`, the
-  file Firefox reads as "installed by a package manager". With it, Firefox skips the warning bar
+- The Arch Linux package (the release's `PKGBUILD`) writes `/opt/vimma/is-packaged-app`, and the
+  `.deb` and the AppImage carry `usr/lib/vimma/is-packaged-app`: the file Firefox reads as
+  "installed by a package manager", and the one Vimma's update check reads to pick its commands
+  ([m6a-updater](specs/m6a-updater.md), section 3). With it, Firefox skips the warning bar
   it otherwise shows in the first window when the kernel does not allow unprivileged user
   namespaces (`security/sandbox/common/SandboxUtils.sys.mjs:25`, pref
   `security.sandbox.warn_unprivileged_namespaces`), and about:support does not flag them as
   missing (`toolkit/content/aboutSupport.js:1551`; Firefox 158.0). The content sandbox is then
-  weaker without saying so. The tarball, the AppImage and the `.deb` do not write the file and still warn
+  weaker without saying so. That includes an AppImage or a `.deb` on Ubuntu 24.04, whose
+  AppArmor policy denies unprivileged user namespaces to programs without a profile. Only the
+  tarball has no marker and still warns
   ([m6-packaging](specs/m6-packaging.md), "Arch Linux without the AUR", decision 4).
 - `vimma-ctl` checks the discovery file's permissions on Unix only; on Windows `check_mode`
   does nothing (ACLs, not mode bits)

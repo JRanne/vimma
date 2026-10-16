@@ -597,6 +597,31 @@ describe("install type (§3)", () => {
   ])("%j → %s", (input, type) => {
     expect(installTypeFrom(input)).toBe(type);
   });
+
+  // The lines tools/package/package.mjs writes; only an unmarked install is a tarball, and only a
+  // tarball is told to unpack over its install directory (a .deb's belongs to dpkg).
+  test.each([
+    ["vimma-package=deb\n", null, "deb", /sudo apt install \.\/vimma_0\.3\.1_amd64\.deb$/],
+    ["vimma-package=appimage\n", "/home/u/V.AppImage", "appimage", /x86_64\.AppImage &&/],
+    ["vimma-package=pkgbuild-release\n", null, "pkgbuild-release", /makepkg -si$/],
+    ["vimma-package=aur\n", null, "aur", /^yay -Syu vimma-bin$/],
+    [null, null, "tarball", /\| tar -xJ -C \/usr\/lib$/],
+  ])("marker %j → %s's own hint", (marker, appImage, type, command) => {
+    const got = installTypeFrom({ packaged: true, marker, appImage });
+    expect(got).toBe(type);
+    const offer = {
+      appVersion: "158.0.1",
+      buildId: "20261028031500",
+      displayVersion: "0.3.1",
+      detailsUrl: "https://github.com/vimma-browser/vimma/releases/tag/v0.3.1",
+      urgent: false,
+      advisories: [],
+    };
+    const steps = updateSteps(got, offer, { installDir: "/usr/lib/vimma", appImage });
+    expect(steps.commands).toHaveLength(1);
+    expect(steps.commands[0]).toMatch(command);
+    expect(/\btar\b/.test(steps.commands[0] ?? "")).toBe(type === "tarball");
+  });
 });
 
 describe("updateSteps (:update and about:vimma)", () => {
