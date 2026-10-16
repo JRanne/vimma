@@ -89,6 +89,8 @@ export class WorkspaceStoreImpl {
   #enabled;
   /** @type {string | null} */
   #cachePref;
+  /** @type {string | null} */
+  #agentCachePref;
   #watch;
   #watching = false;
   /** @type {any} */
@@ -111,10 +113,12 @@ export class WorkspaceStoreImpl {
   /**
    * @param {{ path?: string, config?: readonly Workspace[],
    *   enabled?: () => boolean, saveDelayMs?: number, cachePref?: string | null,
-   *   watch?: boolean, agent?: string | null, agentPref?: string | null }} [options]
+   *   watch?: boolean, agent?: string | null, agentPref?: string | null,
+   *   agentCachePref?: string | null }} [options]
    *   `config` is the resolved `[workspaces]` (core `mergeWithDefaults(...).workspaces`);
    *   ConfigHost passes it once it reads `config.toml`. `enabled` reads the containers pref.
-   *   `cachePref` (the app's store only) caches `lastActive`'s container for the next start.
+   *   `cachePref` (the app's store only) caches, for the next start, the container of the last
+   *   workspace used that is not the agent's; `agentCachePref` the agent workspace's.
    *   `watch` (the app's store only) replaces a workspace's container deleted outside Vimma.
    *   `agent` is the agent workspace's name (`[mcp] workspace`), ensured at every reconcile
    *   (docs/specs/vimma-mcp.md, decision 8); null for none. `agentPref` records the id of one
@@ -126,6 +130,7 @@ export class WorkspaceStoreImpl {
     enabled = () => Services.prefs.getBoolPref(CONTAINERS_PREF, true),
     saveDelayMs,
     cachePref = null,
+    agentCachePref = null,
     watch = false,
     agent = null,
     agentPref = null,
@@ -133,6 +138,7 @@ export class WorkspaceStoreImpl {
     this.#agent = agent;
     this.#agentPref = agentPref;
     this.#cachePref = cachePref;
+    this.#agentCachePref = agentCachePref;
     this.#watch = watch;
     this.#path = path;
     this.#config = config;
@@ -277,7 +283,9 @@ export class WorkspaceStoreImpl {
     file.saveSoon();
     if (this.#cachePref) {
       Services.prefs.setIntPref(this.#cachePref, this.#userWorkspace()?.userContextId ?? 0);
-      Services.prefs.setIntPref(STARTUP_AGENT_PREF, this.agent?.userContextId ?? 0);
+      if (this.#agentCachePref) {
+        Services.prefs.setIntPref(this.#agentCachePref, this.agent?.userContextId ?? 0);
+      }
     }
   }
 
@@ -520,7 +528,7 @@ export class WorkspaceStoreImpl {
    */
   setActive(win, id) {
     if (win) this.#active.set(win, id);
-    if (id !== this.agent?.id) this.#lastUser = id;
+    if (!this.#agentIds().has(id)) this.#lastUser = id;
     const next = setLastActive(this.definitions, id);
     if (next !== this.definitions) {
       this.definitions = next;
@@ -571,13 +579,43 @@ export class WorkspaceStoreImpl {
     if (id === null) return null;
     if (!this.#file?.dataReady) {
       // A start: the cache is trusted only once a save has recorded the agent's container too.
-      const agentCached = Services.prefs.getIntPref(STARTUP_AGENT_PREF, -1);
-      if (this.#cachePref && agentCached >= 0 && id !== agentCached) return id;
+      const agentCached = this.#agentCachePref
+        ? Services.prefs.getIntPref(this.#agentCachePref, -1)
+        : -1;
+      if (agentCached >= 0 && id !== agentCached) return id;
       this.#readSync();
     }
-    const agent = this.agent;
-    if (!agent || agent.userContextId !== id) return id;
+    if (!this.isAgentContainer(id)) return id;
     return this.#userWorkspace()?.userContextId ?? null;
+  }
+
+  /**
+   * Whether `userContextId` is the agent workspace's container (any of #agentIds').
+   * @param {number | null | undefined} userContextId
+   */
+  isAgentContainer(userContextId) {
+    if (!userContextId) return false;
+    const owner = this.definitions.workspaces.find((w) => w.userContextId === userContextId);
+    return !!owner && this.#agentIds().has(owner.id);
+  }
+
+  /**
+   * The ids of the workspaces that count as the agent's: the one `[mcp] workspace` names; the
+   * one the store made (its recorded id), and the one whose container the last save recorded,
+   * both of which hold before config.toml is read and gives another name than the default.
+   * @returns {Set<string>}
+   */
+  #agentIds() {
+    const ids = new Set();
+    const named = this.agent;
+    if (named) ids.add(named.id);
+    const made = this.#agentPref ? Services.prefs.getStringPref(this.#agentPref, "") : "";
+    if (made) ids.add(made);
+    const cached = this.#agentCachePref ? Services.prefs.getIntPref(this.#agentCachePref, 0) : 0;
+    for (const w of this.definitions.workspaces) {
+      if (cached > 0 && w.userContextId === cached) ids.add(w.id);
+    }
+    return ids;
   }
 
   /** The workspace an outside open falls back to: the last one used that is not the agent's. */
@@ -587,7 +625,7 @@ export class WorkspaceStoreImpl {
     return userWorkspace(
       this.definitions,
       [this.#lastUser, this.definitions.lastActive, fromCache],
-      { agent: this.#agent },
+      { agent: this.#agent, exclude: [...this.#agentIds()] },
     );
   }
 
@@ -636,6 +674,7 @@ export class WorkspaceStoreImpl {
 /** The app's store. */
 export const WorkspaceStore = new WorkspaceStoreImpl({
   cachePref: STARTUP_PREF,
+  agentCachePref: STARTUP_AGENT_PREF,
   watch: true,
   agent: DEFAULT_AGENT_WORKSPACE,
   agentPref: AGENT_ID_PREF,

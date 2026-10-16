@@ -380,12 +380,13 @@ export function setLastActive(defs, id) {
  * pages are read by agents, so a login link landing there would hand them the session.
  * @param {Definitions} defs
  * @param {readonly (string | null | undefined)[]} wanted  workspace ids, most wanted first
- * @param {AgentOption} [options]
+ * @param {{ agent?: string | null, exclude?: readonly string[] }} [options]  `exclude`: ids
+ *   that are the agent workspace too, under a name not yet read from config.toml
  * @returns {WorkspaceDefinition | null}
  */
-export function userWorkspace(defs, wanted, { agent = null } = {}) {
+export function userWorkspace(defs, wanted, { agent = null, exclude = [] } = {}) {
   const usable = (/** @type {WorkspaceDefinition} */ w) =>
-    w.userContextId !== null && !isAgent(w, agent);
+    w.userContextId !== null && !isAgent(w, agent) && !exclude.includes(w.id);
   for (const id of wanted) {
     const w = id ? defs.workspaces.find((x) => x.id === id) : undefined;
     if (w && usable(w)) return w;

@@ -666,6 +666,11 @@ describe("the workspace an outside open takes", () => {
     expect(userWorkspace(withContainer(d, "ws-1", 1), ["ws-2"], agent)?.name).toBe("main");
   });
 
+  test("workspaces named in exclude are skipped too (an agent workspace under another name)", () => {
+    expect(userWorkspace(defs(), ["w", "ws-1"], { ...agent, exclude: ["w"] })?.name).toBe("main");
+    expect(userWorkspace(defs(), [], { ...agent, exclude: ["ws-1"] })?.name).toBe("work");
+  });
+
   test("with no agent workspace configured, the wanted one is taken as it is", () => {
     expect(userWorkspace(defs(), ["ws-2"])?.name).toBe("agent");
   });

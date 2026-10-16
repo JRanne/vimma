@@ -20,6 +20,12 @@ const { WindowWorkspaces } = ChromeUtils.importESModule(
 const { VimmaControl } = ChromeUtils.importESModule(
   "chrome://browser/content/vimma/ctl/VimmaControl.sys.mjs",
 );
+const { WorkspaceRouter } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/workspaces/WorkspaceRouter.sys.mjs",
+);
+const { resolveRoutes } = ChromeUtils.importESModule(
+  "chrome://browser/content/vimma/core/routes.mjs",
+);
 const { AppConstants } = ChromeUtils.importESModule("resource://gre/modules/AppConstants.sys.mjs");
 
 const LOGIN = "https://example.com/?login-token=secret";
@@ -154,6 +160,73 @@ add_task(async function tabs_loaded_from_outside_skip_the_agent_container() {
   tidy();
 });
 
+add_task(async function a_guess_for_another_workspace_still_counts() {
+  // Firefox guesses from visible tabs only: oo-other is shown in a second window.
+  const other = WorkspaceStore.addWorkspace({ name: "oo-other", color: "red", icon: "circle" });
+  const second = await BrowserTestUtils.openNewBrowserWindow();
+  ww(second).switchTo({ id: other.id });
+  await until(() => activeName(second) === "oo-other", "the second window shows oo-other");
+  for (const n of [1, 2]) {
+    await BrowserTestUtils.openNewForegroundTab(second.gBrowser, `https://example.org/?other-${n}`);
+  }
+  await inAgentAfterHome();
+  window.focus();
+  const opened = nextTab();
+  window.browserDOMWindow.openURI(
+    Services.io.newURI("https://example.org/?guessed-other"),
+    null,
+    Ci.nsIBrowserDOMWindow.OPEN_NEWTAB,
+    Ci.nsIBrowserDOMWindow.OPEN_EXTERNAL,
+    Services.scriptSecurityManager.getSystemPrincipal(),
+  );
+  const tab = await opened;
+  Assert.equal(tab.userContextId, other.userContextId, "Firefox's guess of oo-other is kept");
+  await BrowserTestUtils.closeWindow(second);
+  tidy();
+  await WorkspaceStore.deleteWorkspace(other.id, { confirmed: true });
+});
+
+add_task(async function a_route_rule_naming_the_agent_workspace_is_not_followed_from_outside() {
+  WorkspaceRouter.setRoutes(resolveRoutes([{ domain: "example.com", workspace: agent().name }]));
+  try {
+    await inAgentAfterHome();
+    const opened = nextTab();
+    window.browserDOMWindow.openURI(
+      Services.io.newURI(LOGIN),
+      null,
+      Ci.nsIBrowserDOMWindow.OPEN_NEWTAB,
+      Ci.nsIBrowserDOMWindow.OPEN_EXTERNAL,
+      Services.scriptSecurityManager.getSystemPrincipal(),
+    );
+    const tab = await opened;
+    Assert.equal(tab.userContextId, home.userContextId, "a link from another app: oo-home");
+
+    const url = "https://example.com/?window";
+    const win = BrowserTestUtils.waitForNewWindow({ url });
+    window.openDialog(AppConstants.BROWSER_CHROME_URL, "_blank", "chrome,all,dialog=no", url);
+    const w = await win;
+    Assert.equal(
+      w.gBrowser.selectedTab.userContextId,
+      home.userContextId,
+      "a new window's first URL: oo-home",
+    );
+    await BrowserTestUtils.closeWindow(w);
+  } finally {
+    WorkspaceRouter.setRoutes([]);
+    tidy();
+  }
+});
+
+add_task(async function a_tab_sent_from_another_device_skips_the_agent_container() {
+  await inAgentAfterHome();
+  const opened = nextTab();
+  const payload = { object: [{ uri: LOGIN, title: "login", sender: { name: "Phone" } }] };
+  Services.obs.notifyObservers({ wrappedJSObject: payload }, "fxaccounts:commands:open-uri");
+  const tab = await opened;
+  Assert.equal(tab.userContextId, home.userContextId, "Send Tab: oo-home, never the agent's");
+  tidy();
+});
+
 add_task(async function a_control_socket_open_skips_the_agent_container() {
   const agentTab = await inAgentAfterHome();
   let opened = nextTab();
@@ -216,4 +289,43 @@ add_task(async function with_no_normal_workspace_used_yet_the_first_one_is_taken
   );
   Assert.notEqual(tab.userContextId, agent().userContextId, "never the agent's");
   tidy();
+});
+
+add_task(async function the_agent_workspace_is_known_before_config_toml_names_it() {
+  // `[mcp] workspace = "bots"` is applied after the first tab; until then the workspace Vimma
+  // made (its recorded id) and the one whose container the last save recorded count too.
+  const ID_PREF = "vimma.mcp.agentWorkspaceId";
+  const CACHE_PREF = "vimma.workspaces.startupAgentUserContextId";
+  const savedId = Services.prefs.getStringPref(ID_PREF, "");
+  const savedCache = Services.prefs.getIntPref(CACHE_PREF, 0);
+  const bots = WorkspaceStore.addWorkspace({ name: "oo-bots", color: "cyan", icon: "circle" });
+  const robots = WorkspaceStore.addWorkspace({ name: "oo-robots", color: "cyan", icon: "circle" });
+  try {
+    ww().switchTo({ id: home.id });
+    /** A save records the agent's container again: set both after each switch. */
+    const pretend = () => {
+      Services.prefs.setStringPref(ID_PREF, bots.id);
+      Services.prefs.setIntPref(CACHE_PREF, robots.userContextId);
+    };
+    pretend();
+    Assert.ok(WorkspaceStore.isAgentContainer(bots.userContextId), "the recorded id counts");
+    Assert.ok(WorkspaceStore.isAgentContainer(robots.userContextId), "the cached container too");
+    Assert.ok(!WorkspaceStore.isAgentContainer(home.userContextId), "oo-home does not");
+    for (const ws of [bots, robots]) {
+      ww().switchTo({ id: ws.id });
+      await until(() => activeName() === ws.name, `${ws.name} is shown`);
+      pretend();
+      Assert.equal(
+        WorkspaceStore.nonAgentUserContextId(window),
+        home.userContextId,
+        `an outside open from ${ws.name} goes to oo-home`,
+      );
+    }
+  } finally {
+    Services.prefs.setStringPref(ID_PREF, savedId);
+    Services.prefs.setIntPref(CACHE_PREF, savedCache);
+    tidy();
+    await WorkspaceStore.deleteWorkspace(bots.id, { confirmed: true });
+    await WorkspaceStore.deleteWorkspace(robots.id, { confirmed: true });
+  }
 });

@@ -37,8 +37,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
  * @returns {number | null}
  */
 function notAgent(ucid) {
-  if (!ucid) return null;
-  return ucid === WorkspaceStore.agent?.userContextId ? null : ucid;
+  return !ucid || WorkspaceStore.isAgentContainer(ucid) ? null : ucid;
 }
 
 const FLAG = "vimma-from";
@@ -299,8 +298,14 @@ export const WorkspaceRouter = {
     } catch (e) {
       console.error("vimma: routing an external link failed", e);
     }
-    if (ucid === null && guess) ucid = notAgent(lazy.URILoadingHelper.guessUserContextId(uri));
-    return ucid ?? WorkspaceStore.nonAgentUserContextId(win);
+    try {
+      if (ucid === null && guess) ucid = notAgent(lazy.URILoadingHelper.guessUserContextId(uri));
+      return ucid ?? WorkspaceStore.nonAgentUserContextId(win);
+    } catch (e) {
+      // addTab still gets the link (as fromExternal), and its default skips the agent's too.
+      console.error("vimma: choosing an external link's container failed", e);
+      return null;
+    }
   },
 
   /**
@@ -313,8 +318,13 @@ export const WorkspaceRouter = {
   externalWhere(where, win) {
     const { OPEN_CURRENTWINDOW, OPEN_NEWTAB } = Ci.nsIBrowserDOMWindow;
     if (where !== OPEN_CURRENTWINDOW) return where;
-    const ucid = win.gBrowser?.selectedTab?.userContextId;
-    return ucid && ucid === WorkspaceStore.agent?.userContextId ? OPEN_NEWTAB : where;
+    try {
+      const ucid = win.gBrowser?.selectedTab?.userContextId;
+      return ucid && notAgent(ucid) === null ? OPEN_NEWTAB : where;
+    } catch (e) {
+      console.error("vimma: checking the current tab for a link from another app failed", e);
+      return OPEN_NEWTAB;
+    }
   },
 
   /**

@@ -344,8 +344,8 @@ const COMMANDS = {
     const principal = Services.scriptSecurityManager.getSystemPrincipal();
     // Never in the agent workspace (docs/specs/vimma-mcp.md, decision 42): agents read its
     // pages, and the URL may carry a login. "current" on an agent tab becomes a new tab.
-    const agent = WorkspaceStore.agent?.userContextId;
-    const current = where === "current" && !(agent && gBrowser.selectedTab.userContextId === agent);
+    const current =
+      where === "current" && !WorkspaceStore.isAgentContainer(gBrowser.selectedTab.userContextId);
     const tab = current
       ? gBrowser.selectedTab
       : gBrowser.addTab(uri.spec, {

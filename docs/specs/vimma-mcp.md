@@ -9,7 +9,8 @@ Status: accepted · Area: `tools/vimma-ctl` (`src/mcp.rs`, `src/mcp_serve.rs`, `
 `host/control-ops.mjs`, `host/workspace-ops.mjs`, `workspaces/WorkspaceStore.sys.mjs`,
 `workspaces/WorkspaceRouter.sys.mjs`, `config/ConfigHost.sys.mjs`, `about/AboutVimma.sys.mjs`;
 `tools/e2e` · Upstream patches: `BrowserDOMWindow-sys-mjs.patch`,
-`URILoadingHelper-sys-mjs.patch` and `Tabbrowser-sys-mjs.patch` (decision 42) · ADR: [ADR-019](../adr/019-agents-over-mcp.md)
+`URILoadingHelper-sys-mjs.patch`, `Tabbrowser-sys-mjs.patch` and `AccountsGlue-sys-mjs.patch`
+(decision 42) · ADR: [ADR-019](../adr/019-agents-over-mcp.md)
 
 Issues: [#229](https://github.com/vimma-browser/vimma/issues/229),
 [#230](https://github.com/vimma-browser/vimma/issues/230),
@@ -841,6 +842,7 @@ Found necessary in the security reviews of the protocol (#176) and the question 
     - a `[[routes]]` rule that names the agent workspace, for a link from another app or a new
       window's first URL;
     - the control socket's `open` (`vimma-ctl open`, scripts);
+    - a tab sent from another device (Send Tab, `AccountsGlue`'s `addWebTab`);
     - a new window's first tab, at a cold start or later, the other URLs of its command line
       (`addTab`'s `fromExternal`), and `openLinkIn` to a new window with no container;
     - the container cached for the next start (`vimma.workspaces.startupUserContextId`), which the
@@ -856,6 +858,16 @@ Found necessary in the security reviews of the protocol (#176) and the question 
     open (`browser.tabs.loadDivertedInBackground`) stays hidden there and the status bar says
     `opened in "<workspace>"`. The user sees their link next to their own logins, and no step
     depends on noticing which workspace was showing when they clicked.
+
+    The agent workspace is recognised by its name (`[mcp] workspace`), and also by the id of the
+    one Vimma made (`vimma.mcp.agentWorkspaceId`) and by the container the last save recorded
+    (`vimma.workspaces.startupAgentUserContextId`). The first tab of a start is set up before
+    config.toml is read, so a name other than the default is not known yet; the other two are.
+
+    An extension's `tabs.create` without a `cookieStoreId`, and the second and later pages of a
+    home page made of several, still take the workspace default: an extension the user installed
+    acts for the user and chooses its container through `cookieStoreId`, and the home pages are
+    URLs the user set.
 
     What is opened from inside the agent workspace stays there: ctrl+t, `:open`, `:tabnew`, the URL
     bar and a bookmark. These are typed while that workspace is shown, so it is where the page is
@@ -1016,12 +1028,12 @@ m7-a11y.
   download from a `work` tab is untouched; "always ask", "always open similar files", a frame's
   and a `blob:` download.
 - `browser_vimma_security_invariants.js`: the agent role never reaches `send-keys` or `state`.
-- `browser_vimma_agent_outside_opens.js` (decision 42): with the agent workspace shown, a link
-  from the remote command line, `BrowserDOMWindow`'s external open (Firefox's guess on an agent
-  tab's host, and "the current tab" on an agent tab), the control socket's `open` (also
-  `where: "current"`), tabs loaded from the command line and a new window's first tab land in
-  the last workspace used, and the window switches to it; the startup cache is never the
-  agent's container; with no other workspace used yet, the first one.
+- `browser_vimma_agent_outside_opens.js` (decision 42): with the agent workspace shown, a link from
+  the remote command line, `BrowserDOMWindow`'s external open (Firefox's guess on an agent tab's
+  host, and "the current tab" on an agent tab), the control socket's `open` (also `where:
+"current"`), a tab sent from another device, tabs loaded from the command line and a new window's
+  first tab land in the last workspace used, and the window switches to it; the startup cache is
+  never the agent's container; with no other workspace used yet, the first one.
 
 ### e2e (`tools/e2e`, under Xvfb)
 
