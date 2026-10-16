@@ -568,6 +568,13 @@ being configured). Every job below also keeps m6-packaging's gate (`release` eve
 | `update-publish` (new) | `ubuntu-24.04`                     | environment `update-site`; `SITE_DEPLOY_KEY` (write deploy key for the manifest repository only); no GitHub token | downloads the MAR and AppImage **from the release URLs** and checks size and hash against the signed XML, then commits `…/updates/browser/Linux_x86_64-gcc3/vimma/update.xml` to the manifest repository's `main` and pushes; polls the update host until the new serial is served (10 min timeout) |
 | `failure` (changed)    | `ubuntu-24.04`                     | `issues: write`                                                                                                   | as today, also for the new jobs                                                                                                                                                                                                                                                                     |
 
+(Since changed: `update-sign` signs both the MAR and the manifest by raw PKCS#1 KMS signing over a
+SHA-384 DigestInfo that the job builds itself, because the KMS key is `rsa-sign-raw-pkcs1-4096`
+(decision 16) and `signmar -s` signs only with a private key held in an NSS database, which a
+non-exportable KMS key cannot be placed in. This is a constraint on sub-PR 4: its MAR signing
+path must use raw PKCS#1 KMS signing over a SHA-384 DigestInfo; `signmar -v` still verifies the
+result.)
+
 - **Urgency** is computed in `update-sign` by `tools/update/urgency.mjs`: the release is urgent
   when any commit since the previous tag is an `upstream: firefox <version>` bump whose PR carried
   the `security` label, the same classification `tools/upstream/detect.mjs` applies (unknown
@@ -678,6 +685,13 @@ mar` needs the host `mar` tool from the same objdir. Nothing here can ship befor
     could copy the key out once and silently, and a copied key signs from anywhere with no log;
     it remains the fallback only if the KMS integration proves unworkable, which would reopen
     this decision in this spec.
+    (Since changed: the key's algorithm is `rsa-sign-raw-pkcs1-4096`, because Cloud KMS has no
+    RSA-4096 PKCS#1 v1.5 scheme with SHA-384 (its PKCS#1 signing algorithms are
+    `rsa-sign-pkcs1-{2048,3072,4096}-sha256`, `rsa-sign-pkcs1-4096-sha512` and
+    `rsa-sign-raw-pkcs1-{2048,3072,4096}`), while the manifest (`SIGNATURE_ALGORITHM` in
+    `updates.mjs`) and the MAR (§2) both need SHA-384. The signer hashes with SHA-384 itself and
+    sends KMS the DER DigestInfo, so the result is a standard RSASSA-PKCS1-v1_5 SHA-384
+    signature; `docs/runbook.md`, "Update signing keys and the update host", steps 3 and 6.)
 17. **The maintainer generates the cold secondary once, on an offline machine, and keeps its
     private half offline** (paper or a USB stick in a safe), because the secondary matters only
     when the primary is lost or leaked, and an offline copy held by the one person who already
