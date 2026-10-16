@@ -1136,7 +1136,11 @@ while the release gate is closed (below). Nothing is built or uploaded by releas
   - `release-title`, when a release was created: checks out its tag, titles it with
     `node tools/release/version-line.mjs` (`Vimma X.Y.Z · Firefox <version>`, which must start
     with the tag's version) and applies the same edit to its notes, through `GITHUB_TOKEN`
-    (`contents: write`). It changes only the name and the notes; a draft stays a draft.
+    (`contents: write`). It changes only the name and the notes; a draft stays a draft. The
+    edit resends the tag it verified (`tag_name`): GitHub detaches a draft from its tag when an
+    edit leaves `tag_name` out (it becomes `untagged-…`), and publishing that draft would create
+    a new tag on `main`'s head and build that commit. The job fails if the edited release names
+    any other tag.
 
   Check either by hand: `node tools/release/firefox-notes.mjs CHANGELOG.md --surfer surfer.json`
   prints the edited file, and `node tools/release/version-line.mjs` the title.

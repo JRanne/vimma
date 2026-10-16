@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow SemVer. From the first release on, release-please writes each release's entry from the Conventional Commits on `main` ([docs/runbook.md](docs/runbook.md), Releases).
 
-## [0.1.1](https://github.com/vimma-browser/vimma/compare/v0.1.0...v0.1.1) · Firefox 158.0 (2026-10-16)
+## [0.1.1](https://github.com/vimma-browser/vimma/releases/tag/v0.1.1) · Firefox 158.0 (2026-10-16)
 
 The first release. The in-app updater is included but not active yet: there is no update host and no signing key, so Vimma does not tell you about new releases. Until it is, update by installing the newer release the way you installed this one: on Arch Linux, run `curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si` again in the same directory; otherwise install the newer `.deb`, AppImage or tarball.
 

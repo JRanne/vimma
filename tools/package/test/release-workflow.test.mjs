@@ -276,10 +276,21 @@ describe("release-please.yml", () => {
     expect(title).toMatch(
       /gh api --method PATCH "repos\/\$GITHUB_REPOSITORY\/releases\/\$RELEASE_ID"/,
     );
-    // edits only the name and the body; the draft flag and the tag stay as release-please set them
-    expect(title).toContain("{name: $name, body: $body}");
+    // Edits the name and the body, and resends the tag it verified: a PATCH to a draft release
+    // that leaves out tag_name detaches the draft from its tag (tag_name becomes untagged-...),
+    // and publishing it then creates a new tag on the default branch. The draft flag stays as
+    // release-please set it.
+    expect(title).toMatch(
+      /if \[ "\$\(jq -r \.tag_name "\$dir\/release\.json"\)" != "\$TAG" \]; then/,
+    );
+    expect(title).toContain(
+      'jq -n --arg tag "$TAG" --arg name "$title" --rawfile body "$dir/new.md"',
+    );
+    expect(title).toContain("{tag_name: $tag, name: $name, body: $body}");
+    // and fails when GitHub's answer names another tag
+    expect(title).toContain('[ "$(jq -r .tag_name "$dir/edited.json")" = "$TAG" ] || exit 1');
     expect(title).not.toMatch(
-      /\bdraft\s*:\s*(?:true|false|\$)|tag_name:|make_latest|gh release (?:create|delete|upload|edit)/,
+      /\bdraft\s*:\s*(?:true|false|\$)|make_latest|target_commitish|gh release (?:create|delete|upload|edit)/,
     );
     expect(job("release-please")).toMatch(
       /^ {6}release_created: \$\{\{ steps\.release\.outputs\.release_created \}\}$/m,
