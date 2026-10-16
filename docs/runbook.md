@@ -1283,10 +1283,10 @@ release instead.
 
 Vimma checks `https://updates.vimma.dev/updates/browser/Linux_x86_64-gcc3/<channel>/update.xml`
 every 12 hours and accepts only a manifest signed by a key pinned in
-`packages/vimma-core/src/update-keys.mjs` (empty until step 5, so every manifest is refused and
-nothing is shown). These steps need the maintainer's accounts; do them once, in order. The
-pipeline that signs and publishes manifests comes in the spec's sub-PR 4; `UPDATES_ENABLED` stays
-unset until the release gate lifts (decision 23).
+`packages/vimma-core/src/update-keys.mjs` (step 5; a build with no pinned key refuses every
+manifest and shows nothing). These steps need the maintainer's accounts; do them once, in order.
+The pipeline that signs and publishes manifests comes in the spec's sub-PR 4; `UPDATES_ENABLED`
+stays unset until the release gate lifts (decision 23).
 
 **1. The manifest repository** (decision 18): it holds only manifests.
 
@@ -1374,8 +1374,9 @@ gh variable set GCP_KMS_KEY_VERSION --body \
 No secret is stored: the key never leaves KMS. To revoke: `gcloud kms keys versions disable 1
 --key update-primary --keyring vimma-updates --location "$LOCATION"`, or remove the IAM binding.
 
-**4. The offline secondary (recovery) key** (decision 17). On a machine with networking off
-(a live USB system), on removable media:
+**4. The offline secondary (recovery) key** (decision 17). Not done yet: the primary is pinned
+alone, and the secondary follows in a later release (step 5 says why). On a machine with
+networking off (a live USB system), on removable media:
 
 ```sh
 umask 077
@@ -1391,7 +1392,7 @@ a networked machine. Copy only `secondary.der` (the updater's certificate, sub-P
 `update-secondary.spki.der` off it. It signs only the one release that replaces a lost or leaked
 primary (spec §6, "If the primary leaks").
 
-**5. Pin both public keys** (an ordinary PR). For each SPKI DER:
+**5. Pin the public keys** (an ordinary PR). For each SPKI DER:
 
 ```sh
 openssl pkey -pubin -in update-primary.pem -outform DER -out update-primary.spki.der
@@ -1402,7 +1403,19 @@ done
 
 Add `{ id, slot: "primary" | "secondary", spki }` for each to `UPDATE_KEYS` in
 `packages/vimma-core/src/update-keys.mjs`; `npm test` checks that each is an RSA-4096 key whose
-id matches. Record both SHA-256 values here when they are pinned.
+id matches, and that the primary's SHA-256 is the one recorded here. Record each SHA-256 here
+when it is pinned.
+
+The primary is pinned on its own; the secondary is added in a later release. The secondary comes
+from the offline ceremony in step 4, which does not have to wait for the first release: pinning
+it is an ordinary release whose manifest the primary signs, so the primary alone can ship it.
+Until it is pinned, a lost or leaked primary cannot be replaced through the update check, and
+installs keep trusting it until they are updated by hand.
+
+| Slot      | Key                                                                                | id         | SHA-256 of the SPKI DER                                            |
+| --------- | ---------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------ |
+| primary   | Cloud KMS key ring `vimma-updates`, key `update-primary`, version 1, HSM, RSA-4096 | `fb4d33b6` | `fb4d33b6ea54ddb81a6a40ce50a61a6f9383b5850f27e2218045f5d3a07dab9a` |
+| secondary | not pinned yet (step 4)                                                            | -          | -                                                                  |
 
 **6. Check the chain end to end** before the pipeline exists: sign a manifest with KMS and serve
 it. The raw PKCS#1 key signs exactly the bytes it is sent, so the SHA-384 DigestInfo is built
@@ -1423,7 +1436,7 @@ printf '<!-- vimma-signature v1 key=%s sig=%s -->\n' "$ID" "$(base64 -w0 sig.bin
 ```
 
 That manifest offers nothing. Committed under `public/updates/browser/Linux_x86_64-gcc3/vimma/`
-in `vimma-updates`, a release build with the pinned keys shows "up to date" in about:vimma and
+in `vimma-updates`, a release build with the pinned primary shows "up to date" in about:vimma and
 the manifest's serial and key; a byte changed in the file makes it "refused". Remove it again
 until the release gate lifts: an accepted serial is remembered, so a later manifest must be newer.
 

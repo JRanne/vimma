@@ -325,9 +325,14 @@ async function runCheck() {
       signal: abort.signal,
     });
     if (!response.ok) {
+      // A 404 is what updates.vimma.dev answers until a release publishes a manifest for the
+      // channel; say that rather than a bare status code.
       return finish({
         outcome: "unreachable",
-        reason: `the update host answered ${response.status}`,
+        reason:
+          response.status === 404
+            ? "no update manifest is published for this channel (404)"
+            : `the update host answered ${response.status}`,
       });
     }
     const body = await readCapped(response, abort);
