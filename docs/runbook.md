@@ -1323,15 +1323,22 @@ curl -s https://updates.vimma.dev/robots.txt                                    
 ```
 
 **3. The primary key in Google Cloud KMS, reached through GitHub OIDC** (decision 16). About
-2.50 USD a month for an HSM RSA-4096 key version.
+2.50 USD a month for an HSM RSA-4096 key version. A project ID is globally unique across Google
+Cloud, so pick one of your own (for example `vimma-release-<name>`). KMS refuses requests until
+the project is linked to a billing account (`gcloud billing accounts list` shows its ID).
+
+The key's algorithm is `rsa-sign-raw-pkcs1-4096`: Cloud KMS offers no RSA-4096 PKCS#1 scheme with
+SHA-384, and raw PKCS#1 lets the signer supply the SHA-384 DigestInfo itself, so the signature is
+a standard RSASSA-PKCS1-v1_5 SHA-384 signature, the scheme the manifest and MAR verifiers expect.
 
 ```sh
-PROJECT=vimma-release LOCATION=europe-north1
+PROJECT=vimma-release-<name> LOCATION=europe-north1 BILLING=<billing-account-id>
 gcloud projects create "$PROJECT" && gcloud config set project "$PROJECT"
+gcloud billing projects link "$PROJECT" --billing-account "$BILLING"
 gcloud services enable cloudkms.googleapis.com iamcredentials.googleapis.com sts.googleapis.com
 gcloud kms keyrings create vimma-updates --location "$LOCATION"
 gcloud kms keys create update-primary --keyring vimma-updates --location "$LOCATION" \
-  --purpose asymmetric-signing --default-algorithm rsa-sign-pkcs1-4096-sha384 \
+  --purpose asymmetric-signing --default-algorithm rsa-sign-raw-pkcs1-4096 \
   --protection-level hsm
 gcloud kms keys versions get-public-key 1 --key update-primary --keyring vimma-updates \
   --location "$LOCATION" --output-file update-primary.pem
@@ -1398,15 +1405,19 @@ Add `{ id, slot: "primary" | "secondary", spki }` for each to `UPDATE_KEYS` in
 id matches. Record both SHA-256 values here when they are pinned.
 
 **6. Check the chain end to end** before the pipeline exists: sign a manifest with KMS and serve
-it.
+it. The raw PKCS#1 key signs exactly the bytes it is sent, so the SHA-384 DigestInfo is built
+locally: the fixed DER prefix for SHA-384 followed by the 48-byte hash.
 
 ```sh
 SERIAL=$(date -u +%Y%m%d%H%M%S)
 printf '<?xml version="1.0"?>\n<updates vimmaChannel="vimma" vimmaTarget="Linux_x86_64-gcc3" vimmaSerial="%s">\n</updates>\n' \
   "$SERIAL" > update.xml
 { printf 'vimma-update-xml-v1\n'; cat update.xml; } > signed.bin
+{ printf '\060\101\060\015\006\011\140\206\110\001\145\003\004\002\002\005\000\004\060'
+  openssl dgst -sha384 -binary signed.bin; } > digestinfo.bin
 gcloud kms asymmetric-sign --version 1 --key update-primary --keyring vimma-updates \
-  --location "$LOCATION" --digest-algorithm sha384 --input-file signed.bin --signature-file sig.bin
+  --location "$LOCATION" --input-file digestinfo.bin --signature-file sig.bin
+openssl dgst -sha384 -verify update-primary.pem -signature sig.bin signed.bin  # Verified OK
 ID=$(sha256sum update-primary.spki.der | cut -c1-8)
 printf '<!-- vimma-signature v1 key=%s sig=%s -->\n' "$ID" "$(base64 -w0 sig.bin)" >> update.xml
 ```
