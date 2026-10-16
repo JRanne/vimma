@@ -215,6 +215,69 @@ its Rust toolchain and the GitHub Actions current:
 - **By hand.** Node in `.nvmrc` (see the bench baseline in [docs/runbook.md](docs/runbook.md))
   and the Semgrep image digest in `semgrep.yml` are not covered; bump them in their own PR.
 
+## Known build and CI limits
+
+User-facing limits are in [docs/limits.md](docs/limits.md); these concern building and testing
+Vimma.
+
+- PR CI runs the mochitests on an artifact build, which cannot see compiled-in config: the C++
+  `--version` string, `MOZ_APP_NAME` and the crash-reporter flag
+  ([ADR-010](docs/adr/010-pr-artifact-builds.md), Known gaps). PR CI's builds also have no Google
+  Safe Browsing key, so Safe Browsing is off in them.
+- The nightly full build is not live: `nightly.yml` builds on GitHub-hosted runners (about 2
+  hours), but stays switched off until `NIGHTLY_ENABLED` is set
+  ([runbook](docs/runbook.md#full-builds-nightlyyml-releaseyml)). Until then
+  `skip-if = ["artifact"]` tests run only on local full builds. `RELEASE_ENABLED` is set, but each
+  release is a draft that runs no build until the maintainer publishes it
+  ([runbook](docs/runbook.md#releases-release-pleaseyml)). PRs that touch patches, `configs/`,
+  `moz.configure` or branding must report a full-build run
+  ([ADR-010](docs/adr/010-pr-artifact-builds.md), [runbook](docs/runbook.md)).
+- Nightly builds are not published as a release before the first release: each one is a
+  workflow artifact of its run, kept 7 days, with no release page or stable link. It is not
+  private: the repository is public, so anyone signed in to GitHub can download it for those 7
+  days ([runbook](docs/runbook.md#full-builds-nightlyyml-releaseyml);
+  [build-supply-chain](docs/specs/build-supply-chain.md), decision 23).
+- Artifact builds depend on Mozilla's Taskcluster index for the pinned release, which expires
+  after a year ([ADR-010](docs/adr/010-pr-artifact-builds.md)).
+- PRs opened by `GITHUB_TOKEN` (upstream bumps, Claude, release-please) do not trigger CI by
+  themselves ([runbook](docs/runbook.md)).
+- Firefox bumps are meant to need no manual step: the upstream autopilot detects a release,
+  dry-runs every patch, runs the suites and opens the bump PR
+  ([rebase playbook](docs/rebase.md), [m7-upstream-autopilot](docs/specs/m7-upstream-autopilot.md)).
+  Gaps that still need a person: merging a green bump PR, pasting a refreshed pref copy that
+  `upstream-prefs.mjs` reports, and re-exporting a patch that no longer applies
+  ([#259](https://github.com/vimma-browser/vimma/issues/259)); releasing the merged bump
+  ([#220](https://github.com/vimma-browser/vimma/issues/220),
+  [#224](https://github.com/vimma-browser/vimma/issues/224)).
+- The ASRouter `cfr` provider pref is a copy of upstream's value. The bump PR's suites fail when
+  it is stale, but the refreshed line is pasted by hand
+  ([runbook](docs/runbook.md#upstream-bumps-upstreamyml-the-upstream-autopilot);
+  [#259](https://github.com/vimma-browser/vimma/issues/259)).
+- Mozilla's signature on `SHA512SUMS` proves Mozilla built and signed the tarball, not that it is
+  the release: a superseded build candidate (`candidates/X-candidates/buildN/`) lists the same
+  file name in a `SHA512SUMS` signed by the same key, so someone who controls the connection to
+  archive.mozilla.org could serve an abandoned respin of the version `surfer.json` names
+  ([ADR-021](docs/adr/021-mozilla-release-key.md)).
+- `surfer import` stops at the first patch that fails, and `git apply` has no fuzz: a hunk whose
+  context drifted fails like one whose code is gone. `tools/upstream/patch-check.py` reports
+  every patch and hunk, and tells the two apart
+  ([m0-rebase-playbook](docs/specs/m0-rebase-playbook.md)).
+- A change to build config needs a full rebuild of 15–30 min on 16 threads: 927 s
+  ([m0-app-version](docs/specs/m0-app-version.md)), 977 s
+  ([m0-branding](docs/specs/m0-branding.md)), 1763 s
+  ([m0-mozilla-services](docs/specs/m0-mozilla-services.md)) and 1805 s (`m0-updater`, PR #15).
+  The first full build took 39 min ([runbook](docs/runbook.md)).
+- Builds from before the app-version change report `0.1.0` instead of the Firefox version as
+  their app version, so they see newer profiles as a downgrade and refuse them. Use a separate
+  `--profile` or `--allow-downgrade` ([runbook](docs/runbook.md#smoke-check)).
+- `vimma-ctl` checks the discovery file's permissions on Unix only; on Windows `check_mode` does
+  nothing (ACLs, not mode bits)
+  ([m0-control-protocol-and-vimma-ctl](docs/specs/m0-control-protocol-and-vimma-ctl.md)).
+- Packaged installs carry `is-packaged-app`, which turns off Firefox's warning about missing
+  unprivileged user namespaces (`security/sandbox/common/SandboxUtils.sys.mjs:25`) and its
+  `about:support` flag (`toolkit/content/aboutSupport.js:1551`; Firefox 158.0); the user-facing
+  effect is in [docs/limits.md](docs/limits.md#platforms-and-packaging).
+
 ## More
 
 - [docs/runbook.md](docs/runbook.md): builds, CI, e2e tests, parallel browser lanes and releases.
