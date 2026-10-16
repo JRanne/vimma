@@ -8,8 +8,9 @@ import { IDENTITY_REGEXP, pkgbuild, srcinfo } from "../package.mjs";
 // release.yml's gates (spec m6-packaging; docs/runbook.md, "Release packages"). It starts only
 // by workflow_dispatch: release-please.yml's release-build job starts it for the draft release it
 // just created, and the maintainer re-runs it by hand. A workflow_dispatch run executes the
-// release.yml of the branch it was started on, so every job must refuse anything but a run from
-// main: otherwise any pushed branch could sign and upload what it likes.
+// release.yml of the branch it was started on, so every job refuses anything but a run from
+// main. That guard stops accidental runs; what no other branch can obtain is the signature's
+// identity, release.yml at refs/heads/main.
 const text = readFileSync(
   new URL("../../../.github/workflows/release.yml", import.meta.url),
   "utf8",
@@ -83,7 +84,7 @@ describe("release.yml", () => {
   // Publishing the draft must not build it again: the assets are already on it.
   it("starts only by workflow_dispatch with a tag, so publishing a release rebuilds nothing", () => {
     expect(triggersOf(text)).toMatch(
-      /^\non:\n {2}workflow_dispatch:\n {4}inputs:\n {6}tag:\n(?: {8}.*\n)+$/,
+      /^\non:\n {2}workflow_dispatch:\n {4}inputs:\n {6}tag:\n(?: {8}.*\n)+ {6}replace_published:\n(?: {8}.*\n)+$/,
     );
     expect(text).not.toContain("github.event.release");
     expect(text).toMatch(/^ {2}TAG: \$\{\{ inputs\.tag \}\}$/m);
@@ -95,7 +96,7 @@ describe("release.yml", () => {
     const build = all.get("build") ?? "";
     const check = runOf(build, "The tag is on main");
     expect(check).toContain(
-      'gh api "repos/$GITHUB_REPOSITORY/compare/refs/tags/$TAG...refs/heads/main" --jq .status',
+      'gh api "repos/$GITHUB_REPOSITORY/compare/$sha...refs/heads/main" --jq .status',
     );
     expect(check).toMatch(/ahead\|identical\) ;;/);
     expect(build.indexOf("- name: Check the tag's form")).toBeLessThan(
@@ -108,6 +109,44 @@ describe("release.yml", () => {
     const head = build.slice(0, build.indexOf("\n    steps:\n"));
     expect(head).not.toMatch(/GH_TOKEN/);
     expect(build.match(/GH_TOKEN: \$\{\{ github\.token \}\}/g)).toHaveLength(1);
+  });
+
+  // The tag is resolved to one commit once, checked, and that commit is what every job checks
+  // out and publish re-checks: moving the tag during the two-hour build cannot swap the source.
+  it("builds, packages and publishes the one commit it checked", () => {
+    const build = all.get("build") ?? "";
+    const check = runOf(build, "The tag is on main");
+    expect(check).toContain(
+      'sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs/tags/$TAG" --jq .sha)',
+    );
+    expect(check).toContain(
+      'gh api "repos/$GITHUB_REPOSITORY/compare/$sha...refs/heads/main" --jq .status',
+    );
+    expect(check).toContain('echo "sha=$sha" >> "$GITHUB_OUTPUT"');
+    expect(build).toMatch(/^ {4}outputs:\n {6}sha: \$\{\{ steps\.tag\.outputs\.sha \}\}$/m);
+    expect(build).toContain("ref: ${{ steps.tag.outputs.sha }}");
+    expect(all.get("package")).toContain("ref: ${{ needs.build.outputs.sha }}");
+    expect(text).not.toContain("ref: refs/tags/");
+    const publish = all.get("publish") ?? "";
+    expect(publish).toMatch(/^ {4}needs: \[build, package, sign\]$/m);
+    expect(publish).toContain("SHA: ${{ needs.build.outputs.sha }}");
+    expect(runOf(publish, "Upload to the GitHub Release")).toContain(
+      '[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/refs/tags/$TAG" --jq .sha)" = "$SHA" ]',
+    );
+  });
+
+  // Builds are not bit-for-bit reproducible: new files under a published release would no longer
+  // match the PKGBUILD the AUR has or the SHA256SUMS users saved. Only a draft gets uploads,
+  // unless the run says replace_published.
+  it("uploads only to a draft unless told to replace a published release", () => {
+    expect(triggersOf(text)).toMatch(
+      / {6}replace_published:\n(?: {8}.*\n)*? {8}type: boolean\n(?: {8}.*\n)*? {8}default: false\n/,
+    );
+    const publish = all.get("publish") ?? "";
+    expect(publish).toContain("REPLACE_PUBLISHED: ${{ inputs.replace_published }}");
+    const upload = runOf(publish, "Upload to the GitHub Release");
+    expect(upload).toContain('if [ "$draft" != true ] && [ "$REPLACE_PUBLISHED" != true ]; then');
+    expect(upload.indexOf("REPLACE_PUBLISHED")).toBeLessThan(upload.indexOf("gh release upload"));
   });
 
   // The AUR is public at once: it gets a package only after the maintainer publishes (aur.yml).
@@ -125,7 +164,9 @@ describe("release.yml", () => {
     expect(notes).toMatch(
       /gh release view "\$TAG" --repo "\$GITHUB_REPOSITORY" --json tagName --jq \.tagName\)" = "\$TAG" \]/,
     );
-    expect(publish).not.toMatch(/gh api|tag_name|--draft|--tag/);
+    expect(publish).not.toMatch(/tag_name|--draft|--tag|--method/);
+    // its only API call reads the tag's commit
+    expect(publish.match(/gh api/g)).toHaveLength(1);
   });
 
   it("the failure issue tells how to re-run the same tag", () => {
@@ -205,6 +246,15 @@ describe("aur.yml", () => {
     expect(fetch).toMatch(/curl -fsSL/);
     expect(fetch).toMatch(/grep -E ' {2}\(PKGBUILD\|SRCINFO\)\$' SHA256SUMS/);
     expect(fetch).toContain("sha256sum -c -");
+    // a signed SHA256SUMS is not bound to its tag: the PKGBUILD must be this release's version
+    expect(fetch).toContain('grep -qx "pkgver=${TAG#v}" PKGBUILD');
+  });
+
+  // An environment limited to main and v* tags holds the AUR key, so a workflow on another
+  // branch cannot read it.
+  it("takes the AUR key from the aur environment", () => {
+    expect(job("aur")).toMatch(/^ {4}environment: aur$/m);
+    expect(job("failure")).not.toContain("environment:");
   });
 
   it("checks the release's signature against the documented identity when signing is on", () => {

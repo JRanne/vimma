@@ -1275,14 +1275,34 @@ neither needs another file.
    - Create an account at <https://aur.archlinux.org/register>.
    - Make a key for the workflow only: `ssh-keygen -t ed25519 -N '' -C vimma-release -f aur_key`;
      paste `aur_key.pub` into My Account → SSH Public Key.
-   - `gh secret set AUR_SSH_KEY < aur_key`, then delete `aur_key`. The first push creates
-     `vimma-bin`; its maintainer is that account.
+   - Store the key in the `aur` environment, which only `main` and `v*` tags may use, so no
+     workflow on another branch can read it (the `aur` job names that environment):
+
+     ```sh
+     R=repos/vimma-browser/vimma
+     gh api -X PUT $R/environments/aur --input - <<'JSON'
+     { "deployment_branch_policy": { "protected_branches": false, "custom_branch_policies": true } }
+     JSON
+     gh api -X POST $R/environments/aur/deployment-branch-policies -f name=main -f type=branch
+     gh api -X POST $R/environments/aur/deployment-branch-policies -f name='v*' -f type=tag
+     gh secret set AUR_SSH_KEY --env aur < aur_key
+     ```
+
+     Then delete `aur_key`. The first push creates `vimma-bin`; its maintainer is that account.
 7. Enable: `gh variable set RELEASE_ENABLED --body true` (disable: `gh variable delete
-RELEASE_ENABLED`). Try it on the next release, or re-run the last one with
-   `gh workflow run release.yml -f tag=vX.Y.Z` (assets are replaced, `--clobber`).
+RELEASE_ENABLED`). Try it on the next release.
+8. Recommended: a tag ruleset (Settings → Rules → Rulesets → New tag ruleset, target
+   `refs/tags/v*`, rules "Restrict updates" and "Restrict deletions", no bypass), so a release
+   tag cannot be moved once release-please has created it. `release.yml` builds the commit the
+   tag named when its build started and refuses to publish if the tag has moved since; the
+   ruleset stops the move itself.
 
 Release jobs cannot be started from a fork, and a manual run of `release.yml` does nothing
-unless started from `main`, nor for a tag whose commit is not on `main`. The release build uses its own fresh objdir (`engine/obj-release`) and an empty sccache
+unless started from `main`, nor for a tag whose commit is not on `main`. It uploads only to a
+draft: builds are not bit-for-bit reproducible, so new files under a published release would no
+longer match the `PKGBUILD` the AUR has or a `SHA256SUMS` users saved. To replace a published
+release's files anyway, run it with `-f replace_published=true`, then re-run `aur.yml` for that
+tag. The release build uses its own fresh objdir (`engine/obj-release`) and an empty sccache
 directory, so nothing left by a nightly or another job reaches signed binaries.
 
 **Verify a release** (the user guide's "Installing" points here):
@@ -1341,9 +1361,11 @@ manifest and changelog past it, and the release notes stay valid. If the fix cha
 built, release a patch version instead. A manual run, `gh workflow run release.yml -f tag=vX.Y.Z`,
 runs the workflow file from `main` (the jobs refuse any other branch) but checks out and builds
 the tag's source: a fix to the workflow file reaches the re-run, while a fix to the source or to a
-script under `tools/` does not, and needs a patch release (the failed draft can be deleted: its tag
-stays, as above, and release-please finds the release through the tag). An `aur.yml` failure also opens the issue; re-run it with
-`gh workflow run aur.yml -f tag=vX.Y.Z`. To pull a bad release: `gh release edit vX.Y.Z --draft`
+script under `tools/` does not, and needs a patch release (leave the failed draft unpublished;
+delete it once the patch release is out). An `aur.yml` failure also opens the issue; re-run it
+with `gh workflow run aur.yml -f tag=vX.Y.Z`. That manual run uses `main`'s `aur.yml`, while the
+run started by publishing uses the `aur.yml` at the release's tag, so a fix to `aur.yml` reaches
+an already tagged release only through the manual run. To pull a bad release: `gh release edit vX.Y.Z --draft`
 (hides it); the AUR package cannot go back a version without an `epoch`, so ship a fixed
 release instead.
 

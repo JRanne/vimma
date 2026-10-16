@@ -40,6 +40,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions: {}
+    # Holds AUR_SSH_KEY; its deployment refs are main and v* tags (docs/runbook.md, "Release
+    # packages", step 6), so no workflow on another branch can read the key.
+    environment: aur
     env:
       AUR_KEY_SET: ${{ secrets.AUR_SSH_KEY != '' }}
     steps:
@@ -65,10 +68,13 @@ jobs:
               exit 1
             }
           done
-          lines=$(grep -E '  (PKGBUILD|SRCINFO)$' SHA256SUMS)
+          lines=$(grep -E '  (PKGBUILD|SRCINFO)$' SHA256SUMS || true)
           [ "$(printf '%s\n' "$lines" | wc -l)" = 2 ] \
             || { echo "::error::SHA256SUMS does not list PKGBUILD and SRCINFO"; exit 1; }
           printf '%s\n' "$lines" | sha256sum -c -
+          # A signed SHA256SUMS is not bound to its tag; the PKGBUILD must be this release's.
+          grep -qx "pkgver=${TAG#v}" PKGBUILD \
+            || { echo "::error::PKGBUILD is not version ${TAG#v}"; exit 1; }
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         if: env.AUR_KEY_SET == 'true' && vars.SIGNING_ENABLED == 'true'

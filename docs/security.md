@@ -890,19 +890,25 @@ in a `build` environment, and a watch on Mozilla's release key,
   [`refuses repo %j`](../tools/package/test/package.test.mjs),
   [`refuses desktop id %j`](../tools/package/test/package.test.mjs)
 
-- B10. A release **must** be built, signed and uploaded only by `release.yml` run from `main`
-  through `workflow_dispatch`: `release-please.yml`'s `release-build` job dispatches it with
+- B10. A release **must** be signed only by `release.yml` run from `main` through
+  `workflow_dispatch`: `release-please.yml`'s `release-build` job dispatches it with
   `GITHUB_TOKEN` (`actions: write` only, no repository code) for the tag release-please just
-  created, and a manual re-run is the same dispatch. Every job of `release.yml` refuses any ref
-  but `refs/heads/main`, and its `build` job refuses a tag that is not `vX.Y.Z` or whose commit
-  is not on `main`, so every signature names one identity, `release.yml@refs/heads/main`
-  (`IDENTITY_REGEXP`), and covers only code that reached `main` through review. The assets go to
-  the release while it is still a draft, which only collaborators see; publishing it
-  **never** starts a build. The AUR, public the moment a push lands, **never** gets a package for
+  created, and a manual re-run is the same dispatch. Every signature names one identity,
+  `release.yml@refs/heads/main` (`IDENTITY_REGEXP`), which a workflow on another branch cannot
+  obtain; the jobs' `refs/heads/main` guard only stops accidental runs from a branch. The
+  `build` job refuses a tag that is not `vX.Y.Z`, resolves it to one commit and refuses that
+  commit unless it is on `main`, and every job checks out that commit, so only code that
+  reached `main` through review is signed; `publish` refuses to upload if the tag has moved
+  since. The assets go to the release while it is still a draft, which only collaborators see;
+  publishing it **never** starts a build, and `publish` refuses a published release unless the
+  run sets `replace_published`. **⚠ setting:** a tag ruleset on `refs/tags/v*` that restricts
+  updates and deletions (docs/runbook.md, "Release packages", step 8) keeps a release tag from
+  being moved at all. The AUR, public the moment a push lands, **never** gets a package for
   a draft: `aur.yml` runs when a release is published (or by hand), holds no GitHub token,
   takes the `PKGBUILD` and `SRCINFO` only from the release's public download URLs, which answer
-  404 for a draft, checks them against `SHA256SUMS`, and with signing on checks `SHA256SUMS`
-  against `IDENTITY_REGEXP` before it pushes. **⚠ limit:** a collaborator can publish a draft
+  404 for a draft, checks them against `SHA256SUMS` and the `PKGBUILD`'s version against the
+  tag, and with signing on checks `SHA256SUMS` against `IDENTITY_REGEXP` before it pushes. The
+  AUR key is a secret of the `aur` environment, which only `main` and `v*` tags may use. **⚠ limit:** a collaborator can publish a draft
   before its build has finished; the release is then public without its assets for that time,
   and `aur.yml` fails and opens a `release-failure` issue instead of pushing.
   [`starts only by workflow_dispatch with a tag, so publishing a release rebuilds nothing`](../tools/package/test/release-workflow.test.mjs),
@@ -915,7 +921,10 @@ in a `build` environment, and a watch on Mozilla's release key,
   [`runs when a release is published, or by hand with a tag; never for a draft`](../tools/package/test/release-workflow.test.mjs),
   [`takes the PKGBUILD from the published release only, with no GitHub token`](../tools/package/test/release-workflow.test.mjs),
   [`checks the release's signature against the documented identity when signing is on`](../tools/package/test/release-workflow.test.mjs),
-  [`uploads to the release by its tag and leaves the draft on that tag`](../tools/package/test/release-workflow.test.mjs)
+  [`uploads to the release by its tag and leaves the draft on that tag`](../tools/package/test/release-workflow.test.mjs),
+  [`builds, packages and publishes the one commit it checked`](../tools/package/test/release-workflow.test.mjs),
+  [`uploads only to a draft unless told to replace a published release`](../tools/package/test/release-workflow.test.mjs),
+  [`takes the AUR key from the aur environment`](../tools/package/test/release-workflow.test.mjs)
 
 ## 15. Live grep (`host/grep.mjs`, `actors/VimmaChild.sys.mjs`, `actors/grep-matcher.mjs`)
 
