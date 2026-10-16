@@ -1057,3 +1057,5 @@ Until then a lost or leaked primary cannot be replaced through the update check:
 trusting it until they are updated by hand. A leaked primary can announce a version that does
 not exist and link its details page anywhere over https, but the commands about:vimma shows
 still name only the project's own release downloads (UP5), and nothing is installed by the check.
+It can also mark such an offer as a security release, and hold back genuine manifests for up to a
+day by signing a serial ahead of the clock (UP2).

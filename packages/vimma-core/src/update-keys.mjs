@@ -10,11 +10,11 @@
  * recorded in docs/runbook.md ("Update signing keys").
  *
  * The primary is the Google Cloud KMS key update-primary (key ring vimma-updates, version 1,
- * RSA_SIGN_RAW_PKCS1_4096 in an HSM). The offline secondary
- * (recovery) key is added in a later release: it comes from an offline key ceremony, and pinning
- * it is an ordinary release announced by a manifest the primary signs, so the primary alone is
- * enough to ship it. Until it is pinned, a lost or leaked primary cannot be replaced through the
- * update check: installs keep trusting it until they are updated by hand.
+ * RSA_SIGN_RAW_PKCS1_4096 in an HSM). The offline secondary (recovery) key is added in a later
+ * release: it comes from an offline key ceremony, and pinning it is an ordinary release announced
+ * by a manifest the primary signs, so the primary alone is enough to ship it. Until it is pinned,
+ * a lost or leaked primary cannot be replaced through the update check: installs keep trusting it
+ * until they are updated by hand.
  * @type {readonly import("./updates.mjs").PinnedKey[]}
  */
 export const UPDATE_KEYS = Object.freeze([

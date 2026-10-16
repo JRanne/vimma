@@ -1,6 +1,7 @@
 // docs/specs/m6a-updater.md, delivery 1 ("check and tell"): the signed manifest, its rules, the
 // status-bar notice and the update steps per install type. Keys are generated here; no network.
 import { describe, test, expect, beforeAll } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   MANIFEST_PREFIX,
   MAX_MANIFEST_CHARS,
@@ -285,10 +286,13 @@ describe("pinned keys (update-keys.mjs)", () => {
     });
   });
 
-  test("a primary with no secondary yet is a valid set: the secondary is added in a later release", () => {
-    const slots = UPDATE_KEYS.map((k) => k.slot);
-    expect(slots).toContain("primary");
-    expect(slots.filter((s) => s === "secondary").length).toBeLessThanOrEqual(1);
+  test("the runbook records the pinned primary's id and SHA-256, and no secondary yet", () => {
+    const runbook = readFileSync(new URL("../../../docs/runbook.md", import.meta.url), "utf8");
+    const row = runbook.split("\n").find((l) => /^\| primary\s*\|/.test(l));
+    expect(row).toContain(`\`${PRIMARY_SHA256.slice(0, 8)}\``);
+    expect(row).toContain(`\`${PRIMARY_SHA256}\``);
+    // The secondary is pinned in a later release; until then the shipped set is the primary.
+    expect(UPDATE_KEYS.map((k) => k.slot)).toEqual(["primary"]);
   });
 
   test("a signature made as Cloud KMS makes it (raw PKCS#1 over a SHA-384 DigestInfo) verifies", async () => {

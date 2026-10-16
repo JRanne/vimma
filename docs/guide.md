@@ -98,9 +98,9 @@ vimma-vimma.desktop` does that. Next to the files are `SHA256SUMS`, a CycloneDX 
 (`vimma-X.Y.Z.cdx.json`) and cosign signatures (`*.sigstore.json`); how to check them is in
 [runbook.md](runbook.md#release-packages-releaseyml-spec-m6-packaging) ("Verify a release").
 
-**Updating.** The in-app updater is included but not active yet: there is no update host and no
-signing key, so Vimma does not tell you about new releases. Until it is, update by installing the
-newer release the way you installed this one: on Arch Linux, run the install command again in the
+**Updating.** Vimma checks for new releases and carries the key their announcements are signed
+with, but no release has been announced yet, so it does not tell you about new releases. Until one
+is, update by installing the newer release the way you installed this one: on Arch Linux, run the install command again in the
 same directory; otherwise, install the newer `.deb`, AppImage or tarball over the old one
 ([Updates](#updates) lists the commands).
 
@@ -2041,10 +2041,11 @@ every mode (`ctrl+q`, `ctrl+t`) still run.
 
 ## Updates
 
-**Not active yet.** Vimma has no update host and no signing key yet, so every check finds nothing
-and the status bar never shows a new version. Until that changes, update by hand with the
-commands in the table below ([Installing](#installing)). Once the host is live, this is how it
-works:
+**No releases announced yet.** Vimma has its signing key built in and checks `updates.vimma.dev`,
+but the host has no signed file yet, so every check finds nothing (about:vimma says `no manifest
+from the update host`) and the status bar never shows a new version. Until the first release is
+announced, update by hand with the commands in the table below ([Installing](#installing)). Once
+it is, this is how it works:
 
 Every 12 hours, and 30 seconds after startup if the last check is older, Vimma fetches one small
 signed file from `updates.vimma.dev` that names the newest release of its update channel. It
