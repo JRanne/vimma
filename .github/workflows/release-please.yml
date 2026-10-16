@@ -108,7 +108,8 @@ jobs:
   # Decision 8: the release release-please just created is titled `Vimma <x> · Firefox <y>`
   # (tools/release/version-line.mjs on the tag's surfer.json) and its notes' heading and bump
   # lines get the same edit as the changelog. The notes are transformed, never rewritten, so
-  # nothing another job added is lost. Only the name and body change: the release stays a draft.
+  # nothing another job added is lost. Only the name and body change (the PATCH resends the verified
+  # tag, which a draft otherwise loses): the release stays a draft.
   release-title:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
@@ -149,7 +150,15 @@ jobs:
             echo "$TAG is already titled \"$title\"."
             exit 0
           fi
-          jq -n --arg name "$title" --rawfile body "$dir/new.md" '{name: $name, body: $body}' |
+          # tag_name is resent on purpose: a PATCH to a draft that leaves it out detaches the draft
+          # from its tag (tag_name becomes untagged-...), and publishing it would then create a new
+          # tag on the default branch and build that instead. The response is checked as well.
+          jq -n --arg tag "$TAG" --arg name "$title" --rawfile body "$dir/new.md" \
+            '{tag_name: $tag, name: $name, body: $body}' |
             gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --input - \
-              --jq '"Edited " + .html_url + " (draft: " + (.draft | tostring) + ")"'
+              > "$dir/edited.json"
+          jq -r --arg tag "$TAG" 'if (.tag_name != $tag) then "::error::release left at " +
+            .tag_name else "Edited " + .html_url + " (draft: " + (.draft | tostring) + ")" end' \
+            "$dir/edited.json"
+          [ "$(jq -r .tag_name "$dir/edited.json")" = "$TAG" ] || exit 1
           echo "$TAG: \"$title\"" >> "$GITHUB_STEP_SUMMARY"

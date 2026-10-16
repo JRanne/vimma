@@ -369,10 +369,11 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
 - PR CI runs the mochitests on an artifact build, which cannot see compiled-in config: the C++
   `--version` string, `MOZ_APP_NAME` and the crash-reporter flag
   ([ADR-010](adr/010-pr-artifact-builds.md), Known gaps).
-- The nightly full build is not live: `nightly.yml` and `release.yml` build on GitHub-hosted
-  runners (about 2 hours each), but stay switched off until `NIGHTLY_ENABLED` and
-  `RELEASE_ENABLED` are set ([runbook](runbook.md), "Full builds"). Until then
-  `skip-if = ["artifact"]` tests run only on local full builds. PRs that touch patches, `configs/`,
+- The nightly full build is not live: `nightly.yml` builds on GitHub-hosted runners (about 2
+  hours), but stays switched off until `NIGHTLY_ENABLED` is set ([runbook](runbook.md), "Full
+  builds"). Until then `skip-if = ["artifact"]` tests run only on local full builds.
+  `RELEASE_ENABLED` is set, but each release is a draft that runs no build until the maintainer
+  publishes it ([runbook](runbook.md), "Releases"). PRs that touch patches, `configs/`,
   `moz.configure` or branding must report a full-build run
   ([ADR-010](adr/010-pr-artifact-builds.md), [runbook](runbook.md)).
 - Nightly builds are not published as a release before the release gate: each one is a workflow
