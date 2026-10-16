@@ -999,6 +999,7 @@ _Pages_ and _extensions_ cannot reach it.
   [`a signature over the body without the domain prefix fails`](../packages/vimma-core/test/updates.test.mjs),
   [`no pinned key at all refuses every manifest (before the key ceremony)`](../packages/vimma-core/test/updates.test.mjs),
   [`every pinned key is an RSA-4096 SPKI whose id matches, one per slot`](../packages/vimma-core/test/updates.test.mjs),
+  [`a signature made as Cloud KMS makes it (raw PKCS#1 over a SHA-384 DigestInfo) verifies`](../packages/vimma-core/test/updates.test.mjs),
   [`refusals_show_after_three_in_a_row`](../tests/browser/browser_vimma_update_check.js)
 - UP2. A verified manifest is **never** accepted for another channel or platform, with a serial
   older than one this profile accepted or than the running build's ID (replay), or with a serial
@@ -1048,4 +1049,13 @@ _Pages_ and _extensions_ cannot reach it.
 Google Cloud KMS key that only the release workflow's `update-signing` environment can ask to
 sign, through GitHub OIDC; the secondary is generated and kept offline by the maintainer. Their
 setup is in [runbook.md](runbook.md#update-signing-keys-and-the-update-host-spec-m6a-updater).
-Until both public keys are pinned in `update-keys.mjs`, every manifest is refused (UP1).
+The primary's public key is pinned in `update-keys.mjs` (its SHA-256 is recorded in the runbook
+and checked by
+[`the shipped primary: exactly one, RSA-4096, the recorded key, verifies RSASSA-PKCS1-v1_5 SHA-384`](../packages/vimma-core/test/updates.test.mjs));
+the secondary is pinned in a later release, an ordinary one whose manifest the primary signs.
+Until then a lost or leaked primary cannot be replaced through the update check: installs keep
+trusting it until they are updated by hand. A leaked primary can announce a version that does
+not exist and link its details page anywhere over https, but the commands about:vimma shows
+still name only the project's own release downloads (UP5), and nothing is installed by the check.
+It can also mark such an offer as a security release, and hold back genuine manifests for up to a
+day by signing a serial ahead of the clock (UP2).

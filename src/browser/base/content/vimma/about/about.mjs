@@ -63,7 +63,7 @@ const OUTCOMES = /** @type {Record<string, string>} */ ({
   never: "not checked yet",
   current: "up to date",
   offer: "a newer Vimma is available",
-  unreachable: "the update host did not answer",
+  unreachable: "no manifest from the update host",
   refused: "the manifest was refused",
   off: "checks are off",
   source: "not checked (source build)",
@@ -92,7 +92,14 @@ function renderUpdates(u) {
     ["Last check", u.checkedAt ? new Date(u.checkedAt).toLocaleString() : "never"],
     field("Result", OUTCOMES[u.outcome] ?? u.outcome, "update-result"),
   ];
-  if (u.reason) rows.push(["Reason", el("span", { class: "error" }, u.reason)]);
+  // Only a refused manifest is an error: a host that is offline or has nothing published yet
+  // is expected (decision 27).
+  if (u.reason) {
+    rows.push([
+      "Reason",
+      u.outcome === "refused" ? el("span", { class: "error" }, u.reason) : u.reason,
+    ]);
+  }
   if (u.offer) {
     rows.push(field("Available", u.offer.line, "update-offer"));
     rows.push([

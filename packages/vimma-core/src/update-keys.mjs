@@ -4,11 +4,32 @@
 
 /**
  * The public update keys this build trusts for the update manifest (docs/specs/m6a-updater.md
- * §6): the primary (Google Cloud KMS) and the offline secondary, each as base64 DER
- * SubjectPublicKeyInfo with its id, the first 8 hex digits of the SPKI's SHA-256. Empty until
- * the key ceremony in docs/runbook.md ("Update signing keys"); until then every manifest is
- * refused and nothing is shown. updates.test.mjs checks each entry (RSA-4096, the id matches,
- * one key per slot).
+ * §6), each as base64 DER SubjectPublicKeyInfo with its id, the first 8 hex digits of the SPKI's
+ * SHA-256. Signatures are RSASSA-PKCS1-v1_5 with SHA-384. updates.test.mjs checks each entry
+ * (RSA-4096, the id matches, one key per slot) and the primary's SHA-256 against the one
+ * recorded in docs/runbook.md ("Update signing keys").
+ *
+ * The primary is the Google Cloud KMS key update-primary (key ring vimma-updates, version 1,
+ * RSA_SIGN_RAW_PKCS1_4096 in an HSM). The offline secondary (recovery) key is added in a later
+ * release: it comes from an offline key ceremony, and pinning it is an ordinary release announced
+ * by a manifest the primary signs, so the primary alone is enough to ship it. Until it is pinned,
+ * a lost or leaked primary cannot be replaced through the update check: installs keep trusting it
+ * until they are updated by hand.
  * @type {readonly import("./updates.mjs").PinnedKey[]}
  */
-export const UPDATE_KEYS = Object.freeze([]);
+export const UPDATE_KEYS = Object.freeze([
+  Object.freeze({
+    id: "fb4d33b6",
+    slot: "primary",
+    spki:
+      "MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAlc02C1HIT/4VYsnDSH2unpKs1ivulLCvOWLmnt+5lvKr" +
+      "z8/SfbI40h3h9gp/9oq3NcCPJlVrfq1IX6K8Aumzk3nQSUy0kOv6WJSlCg4zz/SHQuA7s/65sp8E9ecmtF8iQZyy" +
+      "IeM4tHFaC435CSwYutOI7hxjMmey11ZcSuGCX8bmF7TrNeoVw/J0Pk4yhe+s9OlDCqE5P0zJaMI+XTyDGLEZSYS9" +
+      "gyw93jF2HGutrSOdCKQkLEmkIuAJANuTCXm4FFB4LtpwsvoE+0hJEg09nlt9NtZ7gxC0RRMjQBBRc2VYi5Kdun5n" +
+      "8Jtqx9N8amaKn3hIEihttJ/yd6zTyw4egApCuWy6aBtYlx6UmFxg6h5tT0TLHqWwCQbmpFoX6rz4l8aF7i1tweBa" +
+      "EyCxzX1lXVk7ig03hKQyv1HbvjXjUZISXKJGrtHdkWIz3pGxoSVPiX7O9j2ZoTlPNo8sFe2O3Y4ngyDRBDVRHNLD" +
+      "MdXKuho5w73snBdg8BK2MB2YfbwjJylwFlhzrCTYaKT60DhzYEiKGhTXyOlV1asBwnDVlVdJf0AuItTlpWYPXwnN" +
+      "AUrYmF7mJNq0Pt+QK0AmOV+rErXjLeT0PuR4TKkoBUbc0HlODPyUPEFHpj1f7XYU+diuvQQWhfzdSzdh7qHSjzli" +
+      "rz3yiJiTJf16nTSbgwyWrM8CAwEAAQ==",
+  }),
+]);

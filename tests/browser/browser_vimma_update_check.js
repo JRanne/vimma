@@ -245,6 +245,22 @@ add_task(async function a_host_that_does_not_answer_is_quiet() {
     Assert.ok(r.reason.includes("404"), r.reason);
   }
   Assert.equal(segment(), null, "nothing in the status bar");
+  // updates.vimma.dev answers 404 until a manifest is published: about:vimma says so plainly,
+  // as a fact rather than an error.
+  await BrowserTestUtils.withNewTab("about:vimma#updates", async (browser) => {
+    await until(
+      () => browser.contentDocument?.documentElement?.dataset.ready === "true",
+      "rendered",
+    );
+    const doc = browser.contentDocument;
+    Assert.equal(
+      doc.getElementById("update-result").textContent,
+      "no manifest from the update host",
+    );
+    const text = doc.getElementById("updates").textContent;
+    Assert.ok(text.includes("no update manifest is published for this channel (404)"), text);
+    Assert.equal(doc.querySelector("#updates .error"), null, "nothing shown as an error");
+  });
 });
 
 add_task(async function off_by_pref_or_config_sends_nothing() {
