@@ -8,12 +8,15 @@
  * for a tab or window being created (never moving a tab, so nothing here can loop):
  * - `routeLinkIn`, from URILoadingHelper-sys-mjs.patch: the URL bar, `:open`, bookmarks, and
  *   links a page opens in a new tab or window;
- * - `externalUserContextId`, from BrowserDOMWindow-sys-mjs.patch: links from other apps;
+ * - `externalUserContextId` and `externalWhere`, from BrowserDOMWindow-sys-mjs.patch: links
+ *   from other apps;
  * - `firstTab`, from Tabbrowser-sys-mjs.patch hunk 2 (through WorkspaceStore): a new window's
  *   first tab, with the app of a cold start.
  * The app that opened a link comes from vimma-open as `-vimma-from <app>` on the remote command
  * line (a handler registered here) or, at a cold start, as `VIMMA_FROM`. It is an untrusted
  * hint: a token or nothing, only ever compared with a rule's `app`.
+ * Links from other apps and new windows never take the agent workspace's container, not even
+ * by a rule (docs/specs/vimma-mcp.md, decision 42).
  */
 
 import { isAppToken, matchRoute } from "../core/routes.mjs";
@@ -25,7 +28,17 @@ import { WorkspaceStore } from "./WorkspaceStore.sys.mjs";
 const lazy = /** @type {any} */ ({});
 ChromeUtils.defineESModuleGetters(lazy, {
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
+  URILoadingHelper: "resource:///modules/URILoadingHelper.sys.mjs",
 });
+
+/**
+ * `ucid`, unless it is the agent workspace's container (or 0, no container): then null.
+ * @param {number | null | undefined} ucid
+ * @returns {number | null}
+ */
+function notAgent(ucid) {
+  return !ucid || WorkspaceStore.isAgentContainer(ucid) ? null : ucid;
+}
 
 const FLAG = "vimma-from";
 const ENV = "VIMMA_FROM";
@@ -266,19 +279,51 @@ export const WorkspaceRouter = {
   },
 
   /**
-   * BrowserDOMWindow, for a link from another app: the container a rule gives it, or null
-   * (Firefox's guess, then the workspace default).
+   * BrowserDOMWindow, for a link from another app: the container a rule gives it, else
+   * Firefox's guess (`guess`: unless `browser.link.force_default_user_context_id_for_external_opens`),
+   * else the window's workspace's; never the agent workspace's (vimma-mcp decision 42), so a
+   * login link clicked in a mail app is never readable by an agent. Null where the workspace
+   * default is null (a private window, containers off): addTab then does as upstream.
    * @param {any} uri  nsIURI
    * @param {any} win  the window it opens in
+   * @param {boolean} guess  whether Firefox's guess from the open tabs is on
    * @returns {number | null}
    */
-  externalUserContextId(uri, win) {
+  externalUserContextId(uri, win, guess) {
+    let ucid = null;
     try {
-      if (!routes.length || unroutable(win)) return null;
-      return this.userContextIdFor(uri.spec, pendingApp);
+      if (routes.length && !unroutable(win)) {
+        ucid = notAgent(this.userContextIdFor(uri.spec, pendingApp));
+      }
     } catch (e) {
       console.error("vimma: routing an external link failed", e);
+    }
+    try {
+      if (ucid === null && guess) ucid = notAgent(lazy.URILoadingHelper.guessUserContextId(uri));
+      return ucid ?? WorkspaceStore.nonAgentUserContextId(win);
+    } catch (e) {
+      // addTab still gets the link (as fromExternal), and its default skips the agent's too.
+      console.error("vimma: choosing an external link's container failed", e);
       return null;
+    }
+  },
+
+  /**
+   * BrowserDOMWindow, for a link from another app once `aWhere` is resolved: "the current tab"
+   * becomes a new tab when the selected tab is the agent workspace's (vimma-mcp decision 42).
+   * @param {number} where  an nsIBrowserDOMWindow OPEN_* value
+   * @param {any} win
+   * @returns {number}
+   */
+  externalWhere(where, win) {
+    const { OPEN_CURRENTWINDOW, OPEN_NEWTAB } = Ci.nsIBrowserDOMWindow;
+    if (where !== OPEN_CURRENTWINDOW) return where;
+    try {
+      const ucid = win.gBrowser?.selectedTab?.userContextId;
+      return ucid && notAgent(ucid) === null ? OPEN_NEWTAB : where;
+    } catch (e) {
+      console.error("vimma: checking the current tab for a link from another app failed", e);
+      return OPEN_NEWTAB;
     }
   },
 
@@ -297,7 +342,7 @@ export const WorkspaceRouter = {
       const url = singleUrl(win.arguments?.[0]);
       if (!url) return null;
       WorkspaceStore.ensureLoaded();
-      return this.userContextIdFor(fixup(url), app);
+      return notAgent(this.userContextIdFor(fixup(url), app));
     } catch (e) {
       console.error("vimma: routing a new window failed", e);
       return null;

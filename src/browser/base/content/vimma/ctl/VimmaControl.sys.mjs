@@ -31,6 +31,7 @@ import { parseKey } from "../core/keys.mjs";
 import { VimmaHost } from "../host/VimmaHost.sys.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
+import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
 import { MCP_CHANGED_TOPIC, MCP_ENABLED_PREF, McpHost } from "../host/mcp-ops.mjs";
 import { AgentGate } from "./AgentGate.sys.mjs";
 import { AgentError, forgetAgentConnection, runAgentCommand } from "./agent-commands.mjs";
@@ -341,11 +342,18 @@ const COMMANDS = {
     // lets the external-link prefs pick another window; `where` is explicit here.
     const { gBrowser } = win;
     const principal = Services.scriptSecurityManager.getSystemPrincipal();
-    const tab =
-      where === "current"
-        ? gBrowser.selectedTab
-        : gBrowser.addTab(uri.spec, { triggeringPrincipal: principal, inBackground: false });
-    if (where === "current") {
+    // Never in the agent workspace (docs/specs/vimma-mcp.md, decision 42): agents read its
+    // pages, and the URL may carry a login. "current" on an agent tab becomes a new tab.
+    const current =
+      where === "current" && !WorkspaceStore.isAgentContainer(gBrowser.selectedTab.userContextId);
+    const tab = current
+      ? gBrowser.selectedTab
+      : gBrowser.addTab(uri.spec, {
+          triggeringPrincipal: principal,
+          inBackground: false,
+          userContextId: WorkspaceStore.nonAgentUserContextId(win) ?? undefined,
+        });
+    if (current) {
       tab.linkedBrowser.loadURI(uri, { triggeringPrincipal: principal });
     }
     return { tab: String(tab.linkedBrowser.browserId) };

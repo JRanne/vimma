@@ -1,8 +1,8 @@
 diff --git a/browser/modules/URILoadingHelper.sys.mjs b/browser/modules/URILoadingHelper.sys.mjs
-index 6a3e36036256e198fd8951fd49de964391b7a5bc..9cb996b18a7c9c8865d5cdccdae254730e6710d8 100644
+index 10e9bb3ca932c9c0085a3d8fa4a398ff2c9c7105..ce28effe279a45223e33cfbd1ae9049637d00801 100644
 --- a/browser/modules/URILoadingHelper.sys.mjs
 +++ b/browser/modules/URILoadingHelper.sys.mjs
-@@ -538,6 +538,19 @@ export const URILoadingHelper = {
+@@ -538,6 +538,20 @@ export const URILoadingHelper = {
        forceNonPrivate
      );
  
@@ -11,13 +11,14 @@ index 6a3e36036256e198fd8951fd49de964391b7a5bc..9cb996b18a7c9c8865d5cdccdae25473
 +    userContextId = ChromeUtils.importESModule(
 +      "chrome://browser/content/vimma/workspaces/WorkspaceRouter.sys.mjs"
 +    ).WorkspaceRouter.routeLinkIn(window, url, where, params, w);
-+    // Vimma (m3-workspaces): a new window with no container: the opening page's, else the workspace's.
++    // Vimma (m3-workspaces): a new window with no container: the opening page's, else the
++    // workspace's, never the agent's (vimma-mcp).
 +    if ((!w || where == "window") && !params.private) {
 +      params.userContextId ??= triggeringPrincipal.isContentPrincipal
 +        ? triggeringPrincipal.originAttributes.userContextId
 +        : ChromeUtils.importESModule(
 +            "chrome://browser/content/vimma/workspaces/WorkspaceStore.sys.mjs"
-+          ).WorkspaceStore.defaultUserContextId(window);
++          ).WorkspaceStore.nonAgentUserContextId(window);
 +    }
      updatePrincipals(w, params);
  

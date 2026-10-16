@@ -373,6 +373,28 @@ export function setLastActive(defs, id) {
 }
 
 /**
+ * The workspace a tab you did not open inside the agent workspace takes: a link from another
+ * app, a new window's first tab, the first tab at startup (docs/specs/vimma-mcp.md, decision
+ * 42). The first of `wanted` that exists, has a container and is not the agent workspace, else
+ * the first such workspace in order, else null. The agent workspace is never returned: its
+ * pages are read by agents, so a login link landing there would hand them the session.
+ * @param {Definitions} defs
+ * @param {readonly (string | null | undefined)[]} wanted  workspace ids, most wanted first
+ * @param {{ agent?: string | null, exclude?: readonly string[] }} [options]  `exclude`: ids
+ *   that are the agent workspace too, under a name not yet read from config.toml
+ * @returns {WorkspaceDefinition | null}
+ */
+export function userWorkspace(defs, wanted, { agent = null, exclude = [] } = {}) {
+  const usable = (/** @type {WorkspaceDefinition} */ w) =>
+    w.userContextId !== null && !isAgent(w, agent) && !exclude.includes(w.id);
+  for (const id of wanted) {
+    const w = id ? defs.workspaces.find((x) => x.id === id) : undefined;
+    if (w && usable(w)) return w;
+  }
+  return defs.workspaces.find(usable) ?? null;
+}
+
+/**
  * Adds a runtime workspace (no container yet) at the end, or just before the agent workspace
  * when that is last (it sorts last, vimma-mcp decision 9).
  * @param {Definitions} defs

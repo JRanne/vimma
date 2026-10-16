@@ -21,6 +21,7 @@ import {
   removeWorkspaceDefinition,
   renameWorkspaceDefinition,
   setLastActive,
+  userWorkspace,
   withBookmarksFolder,
   withContainer,
 } from "../core/workspacedefs.mjs";
@@ -46,8 +47,13 @@ const CONTAINERS_PREF = "privacy.userContext.enabled";
 export const CONTAINERS_OFF_ALERT =
   "workspaces off: containers are disabled (set privacy.userContext.enabled to true, restart)";
 const DELETED_TOPIC = "contextual-identity-deleted";
-/** `lastActive`'s container, so a start routes its first tab without reading the file. */
+/**
+ * The container of the last workspace used that is not the agent's, so a start routes its first
+ * tab without reading the file (never the agent's: docs/specs/vimma-mcp.md, decision 42).
+ */
 const STARTUP_PREF = "vimma.workspaces.startupUserContextId";
+/** The agent workspace's container at the last save, so a start can trust STARTUP_PREF. */
+const STARTUP_AGENT_PREF = "vimma.workspaces.startupAgentUserContextId";
 /**
  * The id of the agent workspace Vimma made (docs/specs/vimma-mcp.md, decision 8): one of that
  * name with another id is the user's own, adopted, and `:mcp on` warns about it.
@@ -83,6 +89,8 @@ export class WorkspaceStoreImpl {
   #enabled;
   /** @type {string | null} */
   #cachePref;
+  /** @type {string | null} */
+  #agentCachePref;
   #watch;
   #watching = false;
   /** @type {any} */
@@ -95,6 +103,9 @@ export class WorkspaceStoreImpl {
   /** `[mcp] workspace`: the agent workspace's name, or null (a test's store has none). */
   /** @type {string | null} */
   #agent;
+  /** The last workspace a window switched to that is not the agent's, this session. */
+  /** @type {string | null} */
+  #lastUser = null;
   /** Where the store records the id of an agent workspace it made, or null. */
   /** @type {string | null} */
   #agentPref;
@@ -102,10 +113,12 @@ export class WorkspaceStoreImpl {
   /**
    * @param {{ path?: string, config?: readonly Workspace[],
    *   enabled?: () => boolean, saveDelayMs?: number, cachePref?: string | null,
-   *   watch?: boolean, agent?: string | null, agentPref?: string | null }} [options]
+   *   watch?: boolean, agent?: string | null, agentPref?: string | null,
+   *   agentCachePref?: string | null }} [options]
    *   `config` is the resolved `[workspaces]` (core `mergeWithDefaults(...).workspaces`);
    *   ConfigHost passes it once it reads `config.toml`. `enabled` reads the containers pref.
-   *   `cachePref` (the app's store only) caches `lastActive`'s container for the next start.
+   *   `cachePref` (the app's store only) caches, for the next start, the container of the last
+   *   workspace used that is not the agent's; `agentCachePref` the agent workspace's.
    *   `watch` (the app's store only) replaces a workspace's container deleted outside Vimma.
    *   `agent` is the agent workspace's name (`[mcp] workspace`), ensured at every reconcile
    *   (docs/specs/vimma-mcp.md, decision 8); null for none. `agentPref` records the id of one
@@ -117,6 +130,7 @@ export class WorkspaceStoreImpl {
     enabled = () => Services.prefs.getBoolPref(CONTAINERS_PREF, true),
     saveDelayMs,
     cachePref = null,
+    agentCachePref = null,
     watch = false,
     agent = null,
     agentPref = null,
@@ -124,6 +138,7 @@ export class WorkspaceStoreImpl {
     this.#agent = agent;
     this.#agentPref = agentPref;
     this.#cachePref = cachePref;
+    this.#agentCachePref = agentCachePref;
     this.#watch = watch;
     this.#path = path;
     this.#config = config;
@@ -267,8 +282,10 @@ export class WorkspaceStoreImpl {
     file.data = this.definitions;
     file.saveSoon();
     if (this.#cachePref) {
-      const last = this.definitions.workspaces.find((w) => w.id === this.definitions.lastActive);
-      Services.prefs.setIntPref(this.#cachePref, last?.userContextId ?? 0);
+      Services.prefs.setIntPref(this.#cachePref, this.#userWorkspace()?.userContextId ?? 0);
+      if (this.#agentCachePref) {
+        Services.prefs.setIntPref(this.#agentCachePref, this.agent?.userContextId ?? 0);
+      }
     }
   }
 
@@ -498,10 +515,22 @@ export class WorkspaceStoreImpl {
     );
     this.definitions = definitions;
     this.#recordAgent(agentCreated);
+    this.#retireRecordedAgent();
     const containersChanged = this.#checkContainers();
     if (!changed && !containersChanged) return;
     this.#save();
     this.#notify(this.definitions.workspaces.map((w) => w.id));
+  }
+
+  /**
+   * config.toml has named the agent workspace: one Vimma made earlier under another name is an
+   * ordinary workspace again (vimma-mcp decision 8), so its recorded id stops counting.
+   */
+  #retireRecordedAgent() {
+    if (!this.#agentPref) return;
+    const made = Services.prefs.getStringPref(this.#agentPref, "");
+    const named = this.agent;
+    if (made && named && made !== named.id) Services.prefs.clearUserPref(this.#agentPref);
   }
 
   /**
@@ -511,6 +540,7 @@ export class WorkspaceStoreImpl {
    */
   setActive(win, id) {
     if (win) this.#active.set(win, id);
+    if (!this.#agentIds().has(id)) this.#lastUser = id;
     const next = setLastActive(this.definitions, id);
     if (next !== this.definitions) {
       this.definitions = next;
@@ -523,10 +553,13 @@ export class WorkspaceStoreImpl {
    * workspace's, else the most recent browser window's, else `lastActive`'s. Null for private
    * windows and popups, and when workspaces are disabled, so upstream behaviour stays there.
    * Before init has loaded the file it reads it synchronously (as ContextualIdentityService does).
+   * `fromExternal` (addTab's flag: the command line's URLs) gives nonAgentUserContextId's.
    * @param {any} win
+   * @param {{ fromExternal?: boolean }} [options]
    * @returns {number | null}
    */
-  defaultUserContextId(win) {
+  defaultUserContextId(win, { fromExternal = false } = {}) {
+    if (fromExternal) return this.nonAgentUserContextId(win);
     if (this.disabled || !this.#enabled()) return null;
     if (win && (lazy.PrivateBrowsingUtils.isWindowPrivate(win) || win.toolbar?.visible === false)) {
       return null;
@@ -545,14 +578,87 @@ export class WorkspaceStoreImpl {
   }
 
   /**
+   * The container a tab you did not open inside the agent workspace takes (docs/specs/vimma-mcp.md,
+   * decision 42): a link from another app, a URL from the control socket, a new window's first
+   * tab. defaultUserContextId's, unless that is the agent workspace's: then the last workspace
+   * used that is not the agent's, else the first one. Never the agent's, whose pages agents read:
+   * a login link landing there would hand them the session. Null where defaultUserContextId is;
+   * 0 (no container) when no workspace but the agent's has one.
+   * @param {any} win
+   * @returns {number | null}
+   */
+  nonAgentUserContextId(win) {
+    const id = this.defaultUserContextId(win);
+    if (id === null) return null;
+    if (!this.#file?.dataReady) {
+      // A start: the cache is trusted only once a save has recorded the agent's container too.
+      const agentCached = this.#agentCachePref
+        ? Services.prefs.getIntPref(this.#agentCachePref, -1)
+        : -1;
+      if (agentCached >= 0 && id !== agentCached) return id;
+      this.#readSync();
+    }
+    if (!this.isAgentContainer(id)) return id;
+    // No other workspace has a container: no container (0), never the agent's.
+    return this.#userWorkspace()?.userContextId ?? 0;
+  }
+
+  /**
+   * Whether `userContextId` is the agent workspace's container (any of #agentIds').
+   * @param {number | null | undefined} userContextId
+   */
+  isAgentContainer(userContextId) {
+    if (!userContextId) return false;
+    this.ensureLoaded();
+    const owner = this.definitions.workspaces.find((w) => w.userContextId === userContextId);
+    return !!owner && this.#agentIds().has(owner.id);
+  }
+
+  /**
+   * The ids of the workspaces that count as the agent's: the one `[mcp] workspace` names; the
+   * one the store made (its recorded id), and the one whose container the last save recorded,
+   * both of which hold before config.toml is read and gives another name than the default.
+   * @returns {Set<string>}
+   */
+  #agentIds() {
+    const ids = new Set();
+    const named = this.agent;
+    if (named) ids.add(named.id);
+    const made = this.#agentPref ? Services.prefs.getStringPref(this.#agentPref, "") : "";
+    if (made) ids.add(made);
+    const cached = this.#agentCachePref ? Services.prefs.getIntPref(this.#agentCachePref, 0) : 0;
+    for (const w of this.definitions.workspaces) {
+      if (cached > 0 && w.userContextId === cached) ids.add(w.id);
+    }
+    return ids;
+  }
+
+  /** The workspace an outside open falls back to: the last one used that is not the agent's. */
+  #userWorkspace() {
+    const cached = this.#cachePref ? Services.prefs.getIntPref(this.#cachePref, 0) : 0;
+    const fromCache = this.definitions.workspaces.find((w) => w.userContextId === cached)?.id;
+    return userWorkspace(
+      this.definitions,
+      [this.#lastUser, this.definitions.lastActive, fromCache],
+      { agent: this.#agent, exclude: [...this.#agentIds()] },
+    );
+  }
+
+  /** Tests: as if no workspace but the agent's had been used this session. */
+  _forgetLastUserWorkspaceForTesting() {
+    this.#lastUser = null;
+  }
+
+  /**
    * A new window's first tab (Tabbrowser-sys-mjs.patch, hunk 2): the container a `[[routes]]`
-   * rule gives the window's URL (spec workspace-routing), else defaultUserContextId's. Null
-   * where that is null (private windows, popups, containers off).
+   * rule gives the window's URL (spec workspace-routing), else nonAgentUserContextId's: a new
+   * window never starts in the agent workspace. Null where that is null (private windows,
+   * popups, containers off).
    * @param {any} win  the window being set up
    * @returns {number | null}
    */
   firstTabUserContextId(win) {
-    const fallback = this.defaultUserContextId(win);
+    const fallback = this.nonAgentUserContextId(win);
     if (fallback === null || this !== WorkspaceStore) return fallback;
     return lazy.WorkspaceRouter.firstTab(win) ?? fallback;
   }
@@ -583,6 +689,7 @@ export class WorkspaceStoreImpl {
 /** The app's store. */
 export const WorkspaceStore = new WorkspaceStoreImpl({
   cachePref: STARTUP_PREF,
+  agentCachePref: STARTUP_AGENT_PREF,
   watch: true,
   agent: DEFAULT_AGENT_WORKSPACE,
   agentPref: AGENT_ID_PREF,

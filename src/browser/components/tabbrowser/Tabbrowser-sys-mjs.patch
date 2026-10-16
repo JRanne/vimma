@@ -1,8 +1,8 @@
 diff --git a/browser/components/tabbrowser/Tabbrowser.sys.mjs b/browser/components/tabbrowser/Tabbrowser.sys.mjs
-index e41d07a03d564b2c5960d5b70cd76f8e528e6532..213e1877fc660b7e906b6e498107349565b12aa1 100644
+index 241875edde94e674713d6651704e19a142c40b5d..8a157b4aac84a293881fb8b47bf28c7fe41e50d4 100644
 --- a/browser/components/tabbrowser/Tabbrowser.sys.mjs
 +++ b/browser/components/tabbrowser/Tabbrowser.sys.mjs
-@@ -698,6 +698,10 @@ export class Tabbrowser {
+@@ -701,6 +701,10 @@ export class Tabbrowser {
      if (openWindowInfo) {
        userContextId = openWindowInfo.originAttributes.userContextId;
      }
@@ -13,7 +13,7 @@ index e41d07a03d564b2c5960d5b70cd76f8e528e6532..213e1877fc660b7e906b6e4981073495
  
      let remoteTypeOptions = { window: this.documentGlobal, userContextId };
      if (triggeringRemoteType) {
-@@ -3771,6 +3775,14 @@ export class Tabbrowser {
+@@ -3769,6 +3773,14 @@ export class Tabbrowser {
        (openerBrowser && this.getTabForBrowser(openerBrowser)) ||
        (relatedToCurrent && this.selectedTab) ||
        null;
@@ -23,7 +23,7 @@ index e41d07a03d564b2c5960d5b70cd76f8e528e6532..213e1877fc660b7e906b6e4981073495
 +        openerTab?.userContextId ??
 +        ChromeUtils.importESModule(
 +          "chrome://browser/content/vimma/workspaces/WorkspaceStore.sys.mjs"
-+        ).WorkspaceStore.defaultUserContextId(this.documentGlobal);
++        ).WorkspaceStore.defaultUserContextId(this.documentGlobal, { fromExternal });
 +    }
  
      // When overflowing, new tabs are scrolled into view smoothly, which

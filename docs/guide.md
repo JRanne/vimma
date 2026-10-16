@@ -1076,6 +1076,14 @@ ever reaches this workspace, and every request asks you first. To let one in, se
   The old one then becomes an ordinary workspace.
 - **Sharing a tab with an agent is moving it** there (`m` in the picker, or `:wsmove agent`),
   after a `y/N`. The tab is reopened with the agent workspace's cookies, never yours.
+- **Links from other apps never open in it.** A link you click in your mail app, chat or terminal
+  (through `vimma-open` or `vimma <url>`), a `vimma-ctl open`, a tab sent from your phone, a new
+  window and the tab Vimma opens at startup go to the last workspace you used that is not the
+  agent's (or your first one), and the window switches there (a sent tab opens in the background,
+  and the status bar says `opened in "<workspace>"`). "Open links in the current tab" never replaces
+  an agent tab: the link gets a new tab in that workspace. A password-reset or login link is then
+  never in reach of an agent. What you open while in the agent workspace (`ctrl+t`, `:open`, the URL
+  bar, a bookmark) stays there.
 
 | Command          | What it does                                                                                             |
 | ---------------- | -------------------------------------------------------------------------------------------------------- |

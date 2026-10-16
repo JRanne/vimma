@@ -162,7 +162,9 @@ caller reaches the running Vimma.
      Firefox's own rule makes it a new tab; an untouched new-tab page left behind is closed (as
      Multi-Account Containers closes a just-created tab).
    - **External links**, through the existing `BrowserDOMWindow-sys-mjs.patch` line: a rule
-     (domain, url or app) first, then Firefox's guess, then the workspace default.
+     (domain, url or app) first, then Firefox's guess, then the workspace default. (Since
+     changed: none of the three may be the agent workspace's container; see
+     [vimma-mcp](vimma-mcp.md), decision 42.)
    - **A new window's first tab**, through hunk 2 of `Tabbrowser-sys-mjs.patch`, which now calls
      `WorkspaceStore.firstTabUserContextId(window)`: the window's single URL argument is routed
      (a cold start from a link, an external link opened as a window, `ctrl+n` to a routed home
