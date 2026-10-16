@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow SemVer. From the first release on, release-please writes each release's entry from the Conventional Commits on `main` ([docs/runbook.md](docs/runbook.md), Releases).
 
-## [0.1.1](https://github.com/vimma-browser/vimma/compare/v0.1.0...v0.1.1) (2026-10-16)
+## [0.1.1](https://github.com/vimma-browser/vimma/compare/v0.1.0...v0.1.1) · Firefox 158.0 (2026-10-16)
 
 
 ### ⚠ BREAKING CHANGES
@@ -160,7 +160,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 * and git-style Revert "..." commits now need a body like feat/fix; Closes #N, ([8a040ee](https://github.com/vimma-browser/vimma/commit/8a040ee1f71fae3983e15efb6af77c341142dfbd))
 * **core:** vendor smol-toml 1.9.0 as one generated module ([32e6310](https://github.com/vimma-browser/vimma/commit/32e6310b0dc4ebef242423f203d2a63f958d9f0d))
-* firefox 158.0 (MFSA 2026-106) ([#186](https://github.com/vimma-browser/vimma/issues/186)) ([d481400](https://github.com/vimma-browser/vimma/commit/d48140015506729f9097fd51031c9ba231cdff20))
+* Firefox 158.0 ([MFSA 2026-106](https://www.mozilla.org/en-US/security/advisories/mfsa2026-106/)) ([#186](https://github.com/vimma-browser/vimma/issues/186)) ([d481400](https://github.com/vimma-browser/vimma/commit/d48140015506729f9097fd51031c9ba231cdff20))
 
 ## [Unreleased]
 
