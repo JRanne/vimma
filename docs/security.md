@@ -1145,7 +1145,8 @@ _Pages_ and _extensions_ cannot reach it.
   Workload Identity condition on `job_workflow_ref` (docs/runbook.md, "Update signing keys and
   the update host", step 7) are what keep another branch or workflow away from the key; the
   workflow's own `refs/heads/main` guard only stops accidental runs. The signing job also
-  refuses a serial outside the last hour, and a dry run's real signature is kept one day.
+  refuses a serial outside the last hour, and a dry run's real signature is kept one day, as a
+  workflow artifact any signed-in GitHub user can download.
   **⚠ limit:** without a required reviewer on `update-signing`, anyone with write access can
   start a run on `main` that re-signs a published release or offers nothing (withholding
   updates).

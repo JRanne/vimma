@@ -1565,7 +1565,7 @@ gh api $R/environments/update-signing/deployment-branch-policies --jq '.branch_p
 
 # b. Recommended: Google Cloud also checks that the token comes from update-publish.yml on main,
 #    so no other workflow or branch can sign even with the environment. This replaces the
-#    provider's whole condition: a later workflow that signs (sub-PR 2's MAR signing in
+#    provider's whole condition: a later workflow that signs (for example MAR signing in
 #    release.yml) needs its own job_workflow_ref added with ||.
 gcloud iam workload-identity-pools providers update-oidc vimma --location global \
   --workload-identity-pool github --attribute-condition "assertion.repository == 'vimma-browser/vimma' && assertion.job_workflow_ref == 'vimma-browser/vimma/.github/workflows/update-publish.yml@refs/heads/main'"
@@ -1596,7 +1596,9 @@ gh variable set UPDATES_ENABLED --body true
 Optional: a required reviewer on `update-signing` (Settings → Environments) makes every
 signature wait for a person's approval. Without one, anyone with write access to the repository
 can start a run on `main` that re-signs a published release or offers nothing; with a single
-maintainer the approval adds a click to every release and nothing else.
+maintainer the approval adds a click to every release and nothing else. Approve within an hour:
+the signing job refuses a serial older than that, and re-running the failed job reuses the old
+body, so a late approval needs a new `gh workflow run`.
 
 A deploy key, not a token: it can write to `vimma-updates` and nothing else, belongs to no
 person's account and does not expire with one; a fine-grained token would act as the maintainer.
@@ -1620,6 +1622,9 @@ each with the file's SHA-512.
 - Re-publish a release's manifest (after a failure, or after `release.yml -f
 replace_published=true` changed its files, whose hashes the old manifest no longer matches):
   `gh workflow run update-publish.yml -f tag=vX.Y.Z`. Every run gets a new, newer serial.
+- After two releases in quick succession, check `gh run list --workflow update-publish.yml`:
+  GitHub keeps one waiting run per concurrency group, so a third run started meanwhile replaces
+  the waiting one, which ends cancelled without a `release-failure` issue; start it again by hand.
 - Pull a bad update (decision 22): `gh workflow run update-publish.yml -f offer=nothing`
   publishes a signed manifest that offers nothing. Installs that have not taken the release stop
   offering it at their next check; then ship a fixed release, whose manifest offers it.
