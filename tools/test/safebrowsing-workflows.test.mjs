@@ -48,7 +48,7 @@ describe("Safe Browsing key in CI", () => {
     expect(block).toContain('[ -f "$appconstants" ] || {');
     expect(block).toContain(`grep -q 'MOZ_GOOGLE_SAFEBROWSING_API_KEY' "$appconstants"`);
     expect(block).toContain(`grep -q '"no-google-safebrowsing-api-key"' "$appconstants"`);
-    for (const id of ["package", "sign", "publish", "aur", "failure"]) {
+    for (const id of ["package", "sign", "publish", "failure"]) {
       expect(job(text, id), id).not.toContain("SAFEBROWSING");
     }
   });

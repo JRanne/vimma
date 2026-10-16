@@ -225,7 +225,7 @@ describe("self-hosted runners", () => {
     expect(actionlint).toMatch(/^self-hosted-runner:\n {2}labels: \[\]$/m);
   });
 
-  it("each build job runs only from main or for a release", () => {
+  it("each build job runs only from main", () => {
     const nightly = jobs(workflow("nightly.yml")).get("build") ?? {};
     expect(nightly.if).toBe(
       "vars.NIGHTLY_ENABLED == 'true' && ((github.event_name == 'workflow_dispatch' && " +
@@ -235,8 +235,8 @@ describe("self-hosted runners", () => {
     const release = jobs(workflow("release.yml")).get("build") ?? {};
     expect(release.if).toBe(
       "vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' && " +
-        "(github.event_name == 'release' || github.ref == 'refs/heads/main')",
+        "github.ref == 'refs/heads/main'",
     );
-    expect(triggers(workflow("release.yml")).sort()).toEqual(["release", "workflow_dispatch"]);
+    expect(triggers(workflow("release.yml"))).toEqual(["workflow_dispatch"]);
   });
 });

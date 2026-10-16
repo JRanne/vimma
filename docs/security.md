@@ -744,7 +744,7 @@ reports move. Specs: [m1-actor-insert-scroll](specs/m1-actor-insert-scroll.md),
   [`after_esc_on_a_trapping_page_i_click_and_tab_enter_insert`](../tests/browser/browser_vimma_insert_focus.js),
   [`esc_right_after_tab_into_a_cross_origin_frame_stays_in_normal`](../tests/browser/browser_vimma_insert_focus.js)
 
-## 14. Build and release supply chain (`release.yml`, `nightly.yml`)
+## 14. Build and release supply chain (`release.yml`, `aur.yml`, `nightly.yml`)
 
 Vimma's binaries are built from Mozilla's Firefox source, this repository, and the npm packages
 that drive the build, chiefly Surfer. These rules keep what reaches a build pinned and reviewed.
@@ -843,8 +843,8 @@ in a `build` environment, and a watch on Mozilla's release key,
   that cannot be resolved to a hosted image fails. The test parses each workflow as YAML and
   fails on any shape it does not recognise. A job of a workflow that a pull request, a comment,
   an issue or another workflow run can trigger is held to this as the permanent guard; the build
-  jobs run only from `main` or for a release, and only once `NIGHTLY_ENABLED` or
-  `RELEASE_ENABLED` is set. **⚠ setting:** fork pull request approval is
+  jobs run only from `main` (the nightly also on its schedule), and only once `NIGHTLY_ENABLED`
+  or `RELEASE_ENABLED` is set. **⚠ setting:** fork pull request approval is
   `all_external_contributors`
   (`gh api repos/vimma-browser/vimma/actions/permissions/fork-pr-contributor-approval`), so a
   fork's own workflow files run only once a person approves the run; and the organization has
@@ -858,7 +858,7 @@ in a `build` environment, and a watch on Mozilla's release key,
   [`a matrix key is read only from the job's own strategy.matrix`](../tools/test/self-hosted-runner.test.mjs),
   [`triggers are read in every spelling YAML allows`](../tools/test/self-hosted-runner.test.mjs),
   [`no workflow names a self-hosted runner, and both build jobs run on ubuntu-24.04`](../tools/test/self-hosted-runner.test.mjs),
-  [`each build job runs only from main or for a release`](../tools/test/self-hosted-runner.test.mjs)
+  [`each build job runs only from main`](../tools/test/self-hosted-runner.test.mjs)
 - B8. The nightly **never** creates, replaces or deletes a release, and no job of it can write
   contents. Its `build` job, which runs npm, Surfer, `mach` and the mochitests, holds
   `contents: read` only and keeps its package as a workflow artifact for 7 days. The failure
@@ -889,6 +889,42 @@ in a `build` environment, and a watch on Mozilla's release key,
   [`needs nothing but itself: the tarball is its only source`](../tools/package/test/package.test.mjs),
   [`refuses repo %j`](../tools/package/test/package.test.mjs),
   [`refuses desktop id %j`](../tools/package/test/package.test.mjs)
+
+- B10. A release **must** be signed only by `release.yml` run from `main` through
+  `workflow_dispatch`: `release-please.yml`'s `release-build` job dispatches it with
+  `GITHUB_TOKEN` (`actions: write` only, no repository code) for the tag release-please just
+  created, and a manual re-run is the same dispatch. Every signature names one identity,
+  `release.yml@refs/heads/main` (`IDENTITY_REGEXP`), which a workflow on another branch cannot
+  obtain; the jobs' `refs/heads/main` guard only stops accidental runs from a branch. The
+  `build` job refuses a tag that is not `vX.Y.Z`, resolves it to one commit and refuses that
+  commit unless it is on `main`, and every job checks out that commit, so only code that
+  reached `main` through review is signed; `publish` refuses to upload if the tag has moved
+  since. The assets go to the release while it is still a draft, which only collaborators see;
+  publishing it **never** starts a build, and `publish` refuses a published release unless the
+  run sets `replace_published`. **⚠ setting:** a tag ruleset on `refs/tags/v*` that restricts
+  updates and deletions (docs/runbook.md, "Release packages", step 8) keeps a release tag from
+  being moved at all. The AUR, public the moment a push lands, **never** gets a package for
+  a draft: `aur.yml` runs when a release is published (or by hand), holds no GitHub token,
+  takes the `PKGBUILD` and `SRCINFO` only from the release's public download URLs, which answer
+  404 for a draft, checks them against `SHA256SUMS` and the `PKGBUILD`'s version against the
+  tag, and with signing on checks `SHA256SUMS` against `IDENTITY_REGEXP` before it pushes. The
+  AUR key is a secret of the `aur` environment, which only `main` and `v*` tags may use. **⚠ limit:** a collaborator can publish a draft
+  before its build has finished; the release is then public without its assets for that time,
+  and `aur.yml` fails and opens a `release-failure` issue instead of pushing.
+  [`starts only by workflow_dispatch with a tag, so publishing a release rebuilds nothing`](../tools/package/test/release-workflow.test.mjs),
+  [`job %s runs only when enabled, here, from main`](../tools/package/test/release-workflow.test.mjs),
+  [`builds only a vX.Y.Z tag whose commit is on main`](../tools/package/test/release-workflow.test.mjs),
+  [`release-build starts release.yml on main for the tag release-please just created`](../tools/package/test/release-workflow.test.mjs),
+  [`accepts release.yml at refs/heads/main`](../tools/package/test/package.test.mjs),
+  [`refuses %s`](../tools/package/test/package.test.mjs),
+  [`never pushes to the AUR`](../tools/package/test/release-workflow.test.mjs),
+  [`runs when a release is published, or by hand with a tag; never for a draft`](../tools/package/test/release-workflow.test.mjs),
+  [`takes the PKGBUILD from the published release only, with no GitHub token`](../tools/package/test/release-workflow.test.mjs),
+  [`checks the release's signature against the documented identity when signing is on`](../tools/package/test/release-workflow.test.mjs),
+  [`uploads to the release by its tag and leaves the draft on that tag`](../tools/package/test/release-workflow.test.mjs),
+  [`builds, packages and publishes the one commit it checked`](../tools/package/test/release-workflow.test.mjs),
+  [`uploads only to a draft unless told to replace a published release`](../tools/package/test/release-workflow.test.mjs),
+  [`takes the AUR key from the aur environment`](../tools/package/test/release-workflow.test.mjs)
 
 ## 15. Live grep (`host/grep.mjs`, `actors/VimmaChild.sys.mjs`, `actors/grep-matcher.mjs`)
 

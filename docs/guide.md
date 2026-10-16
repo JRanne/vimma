@@ -122,10 +122,11 @@ version. Once the in-app updater is active, it shows this command when a new rel
 ([spec m6a-updater](specs/m6a-updater.md)). `sudo pacman -R vimma-bin` removes Vimma; your
 profile stays in your home directory.
 
-A new release counts as the latest as soon as it is published, but its files are uploaded about
-two hours later, when the release build finishes. In that window, or if that build failed,
-`curl` prints `curl: (22) The requested URL returned error: 404` and exits; the `PKGBUILD` you
-already have stays as it was and `makepkg` does not run. Try again later.
+A release is built and its files are uploaded before it is published, so a published release
+has its `PKGBUILD` from the start. If `curl` prints `curl: (22) The requested URL returned
+error: 404`, the files are missing (no release is published yet, or one went out without them);
+`curl` then exits, the `PKGBUILD` you already have stays as it was and `makepkg` does not run.
+Try again later.
 
 To check the `PKGBUILD` before you build it, download it with the release's checksums and their
 signature, verify the signature with [cosign](https://github.com/sigstore/cosign), then the
@@ -135,7 +136,7 @@ checksum:
 base=https://github.com/vimma-browser/vimma/releases/latest/download
 curl -fL -O "$base/PKGBUILD" -O "$base/SHA256SUMS" -O "$base/SHA256SUMS.sigstore.json"
 cosign verify-blob --bundle SHA256SUMS.sigstore.json \
-  --certificate-identity-regexp '^https://github\.com/vimma-browser/vimma/\.github/workflows/release\.yml@refs/(heads/main|tags/v[0-9]+\.[0-9]+\.[0-9]+)$' \
+  --certificate-identity-regexp '^https://github\.com/vimma-browser/vimma/\.github/workflows/release\.yml@refs/heads/main$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS   # PKGBUILD: OK
 makepkg -si
