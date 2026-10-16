@@ -186,3 +186,28 @@ add_task(function test_security_services_stay_on() {
     "add-on metadata comes from AMO",
   );
 });
+
+/**
+ * MOZILLA_OFFICIAL is unset (configs/common/mozconfig), so all.js would give Vimma a local
+ * build's devtools defaults; the branding prefs put back release Firefox's. The harness profile
+ * sets user values for the dump pair, hence the default branch.
+ * @type {Array<[string, boolean]>}
+ */
+const OFFICIAL_DEVTOOLS_BOOL_PREFS = [
+  ["devtools.chrome.enabled", false],
+  ["devtools.debugger.remote-enabled", false],
+  ["browser.dom.window.dump.enabled", false],
+  ["devtools.console.stdout.chrome", false],
+];
+
+add_task(function test_devtools_defaults_match_official_firefox() {
+  for (const [name, value] of OFFICIAL_DEVTOOLS_BOOL_PREFS) {
+    Assert.strictEqual(defaultBool(name), value, `default ${name} is ${value}`);
+  }
+  // 0 keeps the web console's "allow pasting" guard (upstream's official brand); 5 disarms it.
+  Assert.strictEqual(
+    defaults.getIntPref("devtools.selfxss.count", -1),
+    0,
+    "default devtools.selfxss.count is 0",
+  );
+});

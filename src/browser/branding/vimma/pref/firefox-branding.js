@@ -38,9 +38,18 @@ pref("app.update.checkInstallTime.days", 2);
 // Give the user x seconds to reboot before showing a badge on the hamburger button.
 pref("app.update.badgeWaitTime", 0);
 
-// Number of usages of the web console.
-// If this is less than 5, then pasting code into the web console is disabled
-pref("devtools.selfxss.count", 5);
+// Developer tools as release Firefox ships them (docs/security.md, P8). MOZILLA_OFFICIAL stays
+// unset (configs/common/mozconfig), so all.js would give the local-build values: a Browser Console
+// that runs chrome-privileged code, remote debugging, and dump() from pages on stdout. npm start
+// turns these back on in its own profile (tools/start.mjs, DEVTOOLS_PREFS); anyone can in
+// about:config.
+pref("devtools.chrome.enabled", false);
+pref("devtools.debugger.remote-enabled", false);
+pref("browser.dom.window.dump.enabled", false);
+pref("devtools.console.stdout.chrome", false);
+// Number of usages of the web console. Below 5, pasting into the web console asks the user to
+// type "allow pasting" first; 0 is upstream's official brand, the unofficial ones ship 5.
+pref("devtools.selfxss.count", 0);
 
 // Mozilla services (spec m0-mozilla-services). Defaults only, never locked: the user can turn any
 // of these back on in about:config or Settings. Remote Settings (CRLite, blocklists), Safe

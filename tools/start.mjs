@@ -14,7 +14,8 @@
  * security.sandbox.content.read_path_whitelist = <repo>/src/: in a local objdir the
  * chrome files are symlinks into engine/, which `surfer import` links to this repo's src/, outside
  * the Firefox tree, so the content sandbox refuses to read them and VimmaChild never loads.
- * Packaged builds copy the files and do not need it. Other user.js lines are kept.
+ * Packaged builds copy the files and do not need it. It also turns on the developer tools a
+ * shipped build keeps off (DEVTOOLS_PREFS). Other user.js lines are kept.
  * Refuses to start when the profile is in use by a running instance.
  */
 import { spawn, spawnSync } from "node:child_process";
@@ -161,6 +162,28 @@ export function mergeUserJs(existing, prefs) {
 }
 
 /**
+ * Developer tools a shipped build keeps off (docs/security.md, P8): the Browser Toolbox and a
+ * chrome-privileged Browser Console, remote debugging, and dump() output on stdout. Only npm
+ * start's profile gets them; the e2e harness shares devPrefs and needs none.
+ * @type {ReadonlyArray<readonly [string, boolean]>}
+ */
+export const DEVTOOLS_PREFS = [
+  ["devtools.chrome.enabled", true],
+  ["devtools.debugger.remote-enabled", true],
+  ["browser.dom.window.dump.enabled", true],
+  ["devtools.console.stdout.chrome", true],
+];
+
+/**
+ * What npm start writes into its profile's user.js.
+ * @param {string} root the repository root
+ * @returns {Array<readonly [string, string | boolean]>}
+ */
+export function startPrefs(root) {
+  return [...devPrefs(root), ...DEVTOOLS_PREFS];
+}
+
+/**
  * @param {string} profile
  * @param {ReadonlyArray<readonly [string, string | number | boolean]>} prefs
  */
@@ -281,7 +304,7 @@ async function main() {
     );
     return 1;
   }
-  prepareProfile(profile, devPrefs(REPO));
+  prepareProfile(profile, startPrefs(REPO));
   const [bin, args] = browserCommand(build, profile, options.browserArgs);
   console.log(`start: ${build.kind} build ${bin}\nstart: profile ${profile}`);
   const child = spawn(bin, args, { stdio: "inherit", env: { ...process.env, ...build.env } });
