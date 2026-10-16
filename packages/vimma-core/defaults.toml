@@ -319,6 +319,11 @@ placement = "swap"
 [ui]
 toolbar = "shown"
 
+# Every 12 hours Vimma asks updates.vimma.dev whether a newer version exists. The request
+# names only the update channel and the platform. false stops every check.
+[updates]
+check = true
+
 # Local AI agents (Claude Code, Codex, opencode, Copilot) reach only the agent workspace, and
 # every request asks you first. Left out, :mcp on|off sets enabled and remembers it; set
 # here, it always wins. ask_timeout: seconds a request waits for you (10 to 300); a bare `a`

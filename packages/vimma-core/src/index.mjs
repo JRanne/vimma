@@ -40,4 +40,5 @@ export * from "./layouts.mjs";
 export * from "./privatews.mjs";
 export * from "./prompt-keys.mjs";
 export * from "./hyprswap.mjs";
+export * from "./updates.mjs";
 export * from "./grep.mjs";

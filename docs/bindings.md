@@ -129,6 +129,7 @@ shows as `space n` ([guide](guide.md#configtoml)).
 | Close the window               | `close_window`       | `ctrl+shift+w`            |
 | Reopen the last closed window  | `restore_window`     | `ctrl+shift+n`            |
 | Quit (asks first)              | `quit`               | `ctrl+q`                  |
+| Check for a newer Vimma        | `check_updates`      | —                         |
 | Reload, bypassing the cache    | `reload_hard`        | `ctrl+f5`, `ctrl+shift+r` |
 | Stop loading the page          | `stop_loading`       | `esc`                     |
 | Go to the home page            | `go_home`            | `alt+home`                |

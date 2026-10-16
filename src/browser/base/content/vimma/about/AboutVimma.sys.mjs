@@ -25,6 +25,7 @@ import { PrivateSwap } from "../host/private-swap.mjs";
 import { SearchHost } from "../search/SearchHost.sys.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
+import { VimmaUpdates } from "../updates/VimmaUpdates.sys.mjs";
 import { WindowWorkspaces } from "../workspaces/WindowWorkspaces.sys.mjs";
 import { WorkspaceRouter } from "../workspaces/WorkspaceRouter.sys.mjs";
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
@@ -72,6 +73,8 @@ const CONTRACT = "@mozilla.org/network/protocol/about;1?what=vimma";
  * @property {{ off: { chord: string, id: string, command: string }[], unmatched: string[] }}
  *   firefoxKeys  Firefox's own shortcuts that are off (docs/specs/key-handling-batch.md)
  * @property {RoutesData} routes
+ * @property {Awaited<ReturnType<typeof VimmaUpdates.describe>>} updates  the last update check
+ *   and how to update (docs/specs/m6a-updater.md)
  */
 
 /**
@@ -216,6 +219,21 @@ function workspacesOf(win) {
   });
 }
 
+/**
+ * The report's update line: on or off, the install type, the last result; no URL or path.
+ * @param {AboutData["updates"]} u
+ */
+function updatesLine(u) {
+  const when = u.checkedAt ? new Date(u.checkedAt).toISOString() : "never";
+  const result = u.offer
+    ? `offer ${u.offer.line}${u.offer.urgent ? " (security)" : ""}`
+    : u.outcome;
+  return (
+    `${u.enabled ? "on" : `off (${u.from})`}, ${u.installType}, channel ${u.channel}, ` +
+    `last check ${when}: ${result}${u.reason ? ` (${u.reason})` : ""}`
+  );
+}
+
 export const AboutVimma = {
   /** Once per process (vimma.js): about:vimma resolves from then on. */
   register() {
@@ -253,6 +271,7 @@ export const AboutVimma = {
         buildId: Services.appinfo.appBuildID,
         channel: app.MOZ_UPDATE_CHANNEL,
       },
+      updates: await VimmaUpdates.describe(),
       patches: await fetchJson(PATCHES_URL),
       modes: windows.map((w, i) => ({
         window: i + 1,
@@ -310,6 +329,7 @@ export const AboutVimma = {
     const lines = [
       "about:vimma report",
       `Vimma ${v.vimma} (Firefox ${v.firefox}, build ${v.buildId}, channel ${v.channel})`,
+      `Updates: ${updatesLine(data.updates)}`,
       `Upstream patches: ${data.patches ? `${data.patches.patches.length} (${data.patches.hunks} hunks)` : "unknown"}`,
       ...(data.patches?.patches ?? []).map((p) => `  ${p.path} (${p.hunks})`),
       `Modes: ${data.modes.map((m) => `window ${m.window} ${m.mode}`).join(", ")}`,

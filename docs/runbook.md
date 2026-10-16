@@ -1272,6 +1272,143 @@ built, release a patch version instead. To pull a bad release: `gh release edit 
 (hides it); the AUR package cannot go back a version without an `epoch`, so ship a fixed
 release instead.
 
+### Update signing keys and the update host (spec m6a-updater)
+
+Vimma checks `https://updates.vimma.dev/updates/browser/Linux_x86_64-gcc3/<channel>/update.xml`
+every 12 hours and accepts only a manifest signed by a key pinned in
+`packages/vimma-core/src/update-keys.mjs` (empty until step 5, so every manifest is refused and
+nothing is shown). These steps need the maintainer's accounts; do them once, in order. The
+pipeline that signs and publishes manifests comes in the spec's sub-PR 4; `UPDATES_ENABLED` stays
+unset until the release gate lifts (decision 23).
+
+**1. The manifest repository** (decision 18): it holds only manifests.
+
+```sh
+gh repo create vimma-browser/vimma-updates --public \
+  --description "Signed update manifests for Vimma, served at updates.vimma.dev"
+git clone git@github.com:vimma-browser/vimma-updates.git && cd vimma-updates
+mkdir -p public/updates
+cat > wrangler.jsonc <<'JSON'
+{
+  "name": "vimma-updates",
+  "compatibility_date": "2026-10-15",
+  "workers_dev": false,
+  "assets": { "directory": "./public" }
+}
+JSON
+printf '/updates/*\n  Cache-Control: no-cache\n  X-Content-Type-Options: nosniff\n' > public/_headers
+printf 'User-agent: *\nDisallow: /\n' > public/robots.txt
+git add -A && git commit -m "chore: static update host" && git push
+```
+
+In the repository's settings add a ruleset on `main`: block force pushes and deletion. Do not
+require pull requests: the release workflow pushes manifests with a deploy key (sub-PR 4).
+
+**2. The Worker and DNS.** Cloudflare dashboard → Workers & Pages → Create → Import a
+repository → `vimma-browser/vimma-updates` (Workers Builds, deploy command `npx wrangler deploy`,
+no build command). Then the Worker → Settings → Domains & Routes → Add → Custom domain →
+`updates.vimma.dev`; the `vimma.dev` zone is on Cloudflare, so the DNS record and certificate
+are created with it. Check:
+
+```sh
+curl -sI https://updates.vimma.dev/updates/browser/Linux_x86_64-gcc3/vimma/update.xml  # 404 until a manifest exists
+curl -s https://updates.vimma.dev/robots.txt                                             # served by the Worker
+```
+
+**3. The primary key in Google Cloud KMS, reached through GitHub OIDC** (decision 16). About
+2.50 USD a month for an HSM RSA-4096 key version.
+
+```sh
+PROJECT=vimma-release LOCATION=europe-north1
+gcloud projects create "$PROJECT" && gcloud config set project "$PROJECT"
+gcloud services enable cloudkms.googleapis.com iamcredentials.googleapis.com sts.googleapis.com
+gcloud kms keyrings create vimma-updates --location "$LOCATION"
+gcloud kms keys create update-primary --keyring vimma-updates --location "$LOCATION" \
+  --purpose asymmetric-signing --default-algorithm rsa-sign-pkcs1-4096-sha384 \
+  --protection-level hsm
+gcloud kms keys versions get-public-key 1 --key update-primary --keyring vimma-updates \
+  --location "$LOCATION" --output-file update-primary.pem
+
+NUMBER=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
+gcloud iam workload-identity-pools create github --location global --display-name GitHub
+gcloud iam workload-identity-pools providers create-oidc vimma --location global \
+  --workload-identity-pool github --issuer-uri https://token.actions.githubusercontent.com \
+  --attribute-mapping 'google.subject=assertion.sub,attribute.repository=assertion.repository' \
+  --attribute-condition "assertion.repository == 'vimma-browser/vimma'"
+gcloud kms keys add-iam-policy-binding update-primary --keyring vimma-updates \
+  --location "$LOCATION" --role roles/cloudkms.signerVerifier \
+  --member "principal://iam.googleapis.com/projects/$NUMBER/locations/global/workloadIdentityPools/github/subject/repo:vimma-browser/vimma:environment:update-signing"
+```
+
+Only a job in the `update-signing` environment of `vimma-browser/vimma` gets that subject. Turn
+on Data Access audit logs (Data read and Data write) for Cloud Key Management Service in IAM &
+Admin → Audit Logs, so every signature is logged. In GitHub:
+
+```sh
+R=repos/vimma-browser/vimma
+gh api -X PUT $R/environments/update-signing --input - <<'JSON'
+{ "deployment_branch_policy": { "protected_branches": false, "custom_branch_policies": true } }
+JSON
+gh api -X POST $R/environments/update-signing/deployment-branch-policies -f name=main -f type=branch
+gh api -X POST $R/environments/update-signing/deployment-branch-policies -f name='v*' -f type=tag
+gh variable set GCP_WORKLOAD_IDENTITY_PROVIDER \
+  --body "projects/$NUMBER/locations/global/workloadIdentityPools/github/providers/vimma"
+gh variable set GCP_KMS_KEY_VERSION --body \
+  "projects/$PROJECT/locations/$LOCATION/keyRings/vimma-updates/cryptoKeys/update-primary/cryptoKeyVersions/1"
+```
+
+No secret is stored: the key never leaves KMS. To revoke: `gcloud kms keys versions disable 1
+--key update-primary --keyring vimma-updates --location "$LOCATION"`, or remove the IAM binding.
+
+**4. The offline secondary (recovery) key** (decision 17). On a machine with networking off
+(a live USB system), on removable media:
+
+```sh
+umask 077
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out update-secondary.key.pem
+openssl req -new -x509 -key update-secondary.key.pem -sha384 -days 36500 \
+  -subj "/CN=Vimma update signing secondary" -outform DER -out secondary.der
+openssl pkey -in update-secondary.key.pem -pubout -outform DER -out update-secondary.spki.der
+sha256sum secondary.der update-secondary.spki.der
+```
+
+Keep `update-secondary.key.pem` on two encrypted USB sticks in separate safe places, and never on
+a networked machine. Copy only `secondary.der` (the updater's certificate, sub-PR 2) and
+`update-secondary.spki.der` off it. It signs only the one release that replaces a lost or leaked
+primary (spec §6, "If the primary leaks").
+
+**5. Pin both public keys** (an ordinary PR). For each SPKI DER:
+
+```sh
+openssl pkey -pubin -in update-primary.pem -outform DER -out update-primary.spki.der
+for f in update-primary.spki.der update-secondary.spki.der; do
+  echo "$f id=$(sha256sum "$f" | cut -c1-8) spki=$(base64 -w0 "$f")"
+done
+```
+
+Add `{ id, slot: "primary" | "secondary", spki }` for each to `UPDATE_KEYS` in
+`packages/vimma-core/src/update-keys.mjs`; `npm test` checks that each is an RSA-4096 key whose
+id matches. Record both SHA-256 values here when they are pinned.
+
+**6. Check the chain end to end** before the pipeline exists: sign a manifest with KMS and serve
+it.
+
+```sh
+SERIAL=$(date -u +%Y%m%d%H%M%S)
+printf '<?xml version="1.0"?>\n<updates vimmaChannel="vimma" vimmaTarget="Linux_x86_64-gcc3" vimmaSerial="%s">\n</updates>\n' \
+  "$SERIAL" > update.xml
+{ printf 'vimma-update-xml-v1\n'; cat update.xml; } > signed.bin
+gcloud kms asymmetric-sign --version 1 --key update-primary --keyring vimma-updates \
+  --location "$LOCATION" --digest-algorithm sha384 --input-file signed.bin --signature-file sig.bin
+ID=$(sha256sum update-primary.spki.der | cut -c1-8)
+printf '<!-- vimma-signature v1 key=%s sig=%s -->\n' "$ID" "$(base64 -w0 sig.bin)" >> update.xml
+```
+
+That manifest offers nothing. Committed under `public/updates/browser/Linux_x86_64-gcc3/vimma/`
+in `vimma-updates`, a release build with the pinned keys shows "up to date" in about:vimma and
+the manifest's serial and key; a byte changed in the file makes it "refused". Remove it again
+until the release gate lifts: an accepted serial is remembered, so a later manifest must be newer.
+
 ### vimma.dev's keys (`site-dispatch.yml`, spec site-keys-mirror)
 
 `npm run gen-docs` writes `docs/bindings.json`, which vimma.dev mirrors on its keys page and in

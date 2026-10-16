@@ -137,6 +137,8 @@ export const COMMANDS = Object.freeze([
     aliases: ["vimma"],
     text: "about:vimma",
   }),
+  // docs/specs/m6a-updater.md: checks now; an update opens about:vimma's steps.
+  cmd("update", "none", "app.update_check", "Check for a newer Vimma and how to update"),
   cmd("bug", "none", "tab.new", "Copy a redacted about:vimma report", {
     text: "about:vimma#bug",
   }),

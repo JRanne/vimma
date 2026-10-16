@@ -416,6 +416,7 @@ describe("mergeWithDefaults", () => {
         downloadMaxMb: 200,
       },
       ui: { toolbar: "shown" },
+      updates: { check: true },
       search: null,
     });
   });

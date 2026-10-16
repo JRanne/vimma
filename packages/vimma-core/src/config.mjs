@@ -72,6 +72,8 @@ import { resolveSearch, validateSearch } from "./search.mjs";
  * @property {{ toolbar: ToolbarSetting }} ui             `[ui]` (schema 2), toolbar-toggle
  * @property {ResolvedSearch | null} search              `[search]` (schema 2), null without it;
  *   docs/specs/search-engines.md
+ * @property {{ check: boolean }} updates                `[updates]` (schema 2),
+ *   docs/specs/m6a-updater.md
  */
 
 /**
@@ -174,6 +176,7 @@ const TOP_KEYS = [
   "mcp",
   "ui",
   "search",
+  "updates",
 ];
 const KEYMAP_SECTIONS = new Set(["keys", "modal", "unbind"]);
 const WORKSPACE_KEYS = ["color", "icon", "home", "autofill"];
@@ -205,6 +208,7 @@ const SCHEMA_2_KEYS = [
   "mcp",
   "ui",
   "search",
+  "updates",
 ];
 /** `[bookmarks]` (docs/specs/bookmarks.md, decision 2). */
 const BOOKMARKS_KEYS = ["root"];
@@ -218,6 +222,8 @@ export const TOOLBAR_SETTINGS = Object.freeze(
   /** @type {ToolbarSetting[]} */ (["shown", "hidden"]),
 );
 const UI_KEYS = ["toolbar"];
+/** `[updates]` (docs/specs/m6a-updater.md, Security and privacy, "Off"). */
+const UPDATES_KEYS = ["check"];
 /** `[mcp]` (docs/specs/vimma-mcp.md, decision 26) and its bounds. */
 const MCP_KEYS = [
   "enabled",
@@ -529,6 +535,14 @@ function validate(raw, declared) {
     }
   }
 
+  if (declared >= 2 && isTable(raw.updates)) {
+    for (const [key, v] of Object.entries(raw.updates)) {
+      const path = ["updates", key];
+      if (key !== "check") unknownKey(path, key, UPDATES_KEYS);
+      else if (typeof v !== "boolean") typeError(path, v, "a boolean");
+    }
+  }
+
   if (declared >= 2 && isTable(raw.mcp)) validateMcp(raw.mcp, { fail, typeError, unknownKey });
 
   // docs/specs/search-engines.md, decision 2.
@@ -792,6 +806,7 @@ export function mergeWithDefaults(user, workspaceOrder, siteOrder) {
     mcp: resolveMcp(user.mcp),
     ui: { toolbar: user.ui?.toolbar ?? "shown" },
     search: resolveSearch(user.search),
+    updates: { check: user.updates?.check ?? true },
   };
 }
 
@@ -893,6 +908,21 @@ export function reloadConfig(active, text) {
     return { active: { config: r.config, keymap: r.keymap }, errors: [], kept: false };
   const fallback = active ?? { config: mergeWithDefaults({}), keymap: compileKeymap() };
   return { active: fallback, errors: r.errors, kept: true };
+}
+
+/**
+ * `[updates] check` as the file says it, even when the file as a whole has errors elsewhere
+ * (docs/specs/m6a-updater.md decision 31): a boolean, or null when the TOML does not parse or
+ * the key is missing or not a boolean.
+ * @param {string} text
+ * @returns {boolean | null}
+ */
+export function rawUpdatesCheck(text) {
+  const parsed = parseToml(text, { integersAsBigInt: true });
+  if (!parsed.ok) return null;
+  const updates = parsed.value.updates;
+  const check = isTable(updates) ? updates.check : undefined;
+  return typeof check === "boolean" ? check : null;
 }
 
 /**

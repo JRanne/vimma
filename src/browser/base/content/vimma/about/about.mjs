@@ -48,6 +48,82 @@ function fill(id, ...body) {
 
 const win = /** @type {Window} */ (window.browsingContext.topChromeWindow);
 
+/** What each install type is called on the page (docs/specs/m6a-updater.md §3). */
+const INSTALL_TYPES = /** @type {Record<string, string>} */ ({
+  source: "source build (never checks)",
+  tarball: "tarball",
+  appimage: "AppImage",
+  deb: ".deb",
+  aur: "AUR vimma-bin",
+  "pkgbuild-release": "the release's PKGBUILD",
+  packaged: "a package this version does not know",
+});
+
+const OUTCOMES = /** @type {Record<string, string>} */ ({
+  never: "not checked yet",
+  current: "up to date",
+  offer: "a newer Vimma is available",
+  unreachable: "the update host did not answer",
+  refused: "the manifest was refused",
+  off: "checks are off",
+  source: "not checked (source build)",
+});
+
+/**
+ * The Updates section: the switch, the last check and its result, and for an offer the exact
+ * steps for this install (`:update` opens the page here).
+ * @param {import("./AboutVimma.sys.mjs").AboutData["updates"]} u
+ */
+function renderUpdates(u) {
+  /** @type {[string, string | Node][]} */
+  const rows = [
+    [
+      "Checks",
+      u.enabled
+        ? `on, every ${u.intervalHours} hours`
+        : u.from === "config-errors"
+          ? "off until config.toml's errors are fixed"
+          : u.from === "config"
+            ? "off ([updates] check = false in config.toml)"
+            : "off (vimma.update.enabled)",
+    ],
+    ["Install type", INSTALL_TYPES[u.installType] ?? u.installType],
+    ["Channel", u.channel],
+    ["Last check", u.checkedAt ? new Date(u.checkedAt).toLocaleString() : "never"],
+    field("Result", OUTCOMES[u.outcome] ?? u.outcome, "update-result"),
+  ];
+  if (u.reason) rows.push(["Reason", el("span", { class: "error" }, u.reason)]);
+  if (u.offer) {
+    rows.push(field("Available", u.offer.line, "update-offer"));
+    rows.push([
+      "Urgency",
+      u.offer.urgent
+        ? el(
+            "span",
+            { class: "error" },
+            `security${u.offer.advisories.length ? `: ${u.offer.advisories.join(", ")}` : ""}`,
+          )
+        : "normal",
+    ]);
+  }
+  rows.push(
+    ["Manifest serial", u.serial ?? "-"],
+    ["Signed by", u.key ? `${u.key.id} (${u.key.slot} key)` : "-"],
+  );
+  if (!u.pinnedKeys) rows.push(["Pinned keys", "none in this build: every manifest is refused"]);
+  const body = [dl(rows)];
+  if (u.offer) {
+    const steps = u.offer.steps;
+    body.push(
+      el("h3", {}, "How to update"),
+      el("p", {}, steps.text),
+      ...steps.commands.map((c) => el("pre", { class: "command" }, el("code", {}, c))),
+      el("p", {}, "Release notes: ", el("a", { href: steps.link }, steps.link)),
+    );
+  }
+  fill("updates", ...body);
+}
+
 /** @param {import("./AboutVimma.sys.mjs").AboutData} d */
 function render(d) {
   const v = d.version;
@@ -60,6 +136,8 @@ function render(d) {
       ["Update channel", v.channel],
     ]),
   );
+
+  renderUpdates(d.updates);
 
   if (d.patches) {
     fill(

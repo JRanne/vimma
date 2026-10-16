@@ -110,3 +110,25 @@ ul {
   margin: 0;
   padding-inline-start: 1.5rem;
 }
+
+h3 {
+  margin: 1rem 0 0.25rem;
+  font-size: 0.95rem;
+  color: var(--vimma-fg-bright, #c0caf5);
+}
+
+/* The exact update command (docs/specs/m6a-updater.md): selectable, wrapped, never cut. */
+pre.command {
+  margin: 0.25rem 0;
+  padding: 0.4rem 0.6rem;
+  background: var(--vimma-bg-dark, #16161e);
+  border: 1px solid var(--vimma-muted, #565f89);
+  border-radius: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+a {
+  color: var(--vimma-text-accent, #1bf587);
+}

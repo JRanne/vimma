@@ -39,3 +39,31 @@ describe("Vimma branding prefs", () => {
     },
   );
 });
+
+/**
+ * A pref's value as written in the defaults file.
+ * @param {string} name
+ */
+function prefValue(name) {
+  const text = readFileSync(OURS, "utf8");
+  const m = new RegExp(
+    `^\\s*pref\\(\\s*"${name.replaceAll(".", "\\.")}"\\s*,\\s*(.+?)\\s*\\);`,
+    "m",
+  ).exec(text);
+  return m?.[1];
+}
+
+// docs/specs/m6a-updater.md, decision 13 and "Security and privacy".
+describe("update checks", () => {
+  it("run every 12 hours, on by default", () => {
+    expect(prefValue("app.update.interval")).toBe("43200");
+    expect(prefValue("vimma.update.enabled")).toBe("true");
+  });
+
+  it("ask updates.vimma.dev with the platform and channel only", () => {
+    const url = JSON.parse(/** @type {string} */ (prefValue("vimma.update.url")));
+    expect(url).toBe(
+      "https://updates.vimma.dev/updates/browser/%BUILD_TARGET%/%CHANNEL%/update.xml",
+    );
+  });
+});

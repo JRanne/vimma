@@ -63,7 +63,14 @@ declare const Services: {
     ): { readonly preferredURI: { spec: string } | null };
   };
   // engine/xpcom/system/nsIXULRuntime.idl
-  appinfo: { readonly processID: number; readonly version: string; readonly appBuildID: string };
+  appinfo: {
+    readonly processID: number;
+    readonly version: string;
+    readonly appBuildID: string;
+    readonly OS: string;
+  };
+  // engine/xpcom/base/nsIVersionComparator.idl
+  vc: { compare(a: string, b: string): number };
   // engine/xpcom/ds/nsIObserverService.idl
   obs: {
     addObserver(

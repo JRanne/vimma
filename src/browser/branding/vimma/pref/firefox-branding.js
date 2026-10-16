@@ -17,8 +17,10 @@ pref("startup.homepage_welcome_url.additional", "");
 pref("browser.startup.homepage", "chrome://browser/content/vimma/start/start.html");
 pref("vimma.startpage.newtab", true);
 
-// The time interval between checks for a new version (in seconds)
-pref("app.update.interval", 86400); // 24 hours
+// The time interval between checks for a new version (in seconds): 12 hours, Mozilla's release
+// value, so a security release reaches a running install within half a day (m6a-updater, decision
+// 13). Vimma's own manifest check (vimma/updates/VimmaUpdates.sys.mjs) uses it too.
+pref("app.update.interval", 43200);
 // Give the user x seconds to react before showing the big UI. default=24 hours
 pref("app.update.promptWaitTime", 86400);
 pref("app.update.url.manual", "https://github.com/vimma-browser/vimma");
@@ -109,6 +111,14 @@ pref("vimma.ui.tabstrip.hidden", true);
 // Firefox's navigation toolbar (spec toolbar-toggle): shown by default. ctrl+b u, :toolbar and
 // config.toml's [ui] toolbar set it for every window, live.
 pref("vimma.ui.toolbar.hidden", false);
+
+// Vimma's update check (spec m6a-updater): on by default; false, or [updates] check = false in
+// config.toml, stops every request. The URL may use only %BUILD_TARGET% and %CHANNEL%, so a
+// check names nothing but the platform and the update channel.
+pref("vimma.update.enabled", true);
+// One line: Prettier would split it with a trailing comma, which libpref's parser rejects.
+// prettier-ignore
+pref("vimma.update.url", "https://updates.vimma.dev/updates/browser/%BUILD_TARGET%/%CHANNEL%/update.xml");
 
 // Control socket (spec m0-control-server, ADR-007): off in every build. When on, Vimma listens on
 // 127.0.0.1 and writes <profile>/vimma-control.json (0600) for vimma-ctl; live on change.

@@ -16,10 +16,12 @@
 import {
   appendRouteText,
   formatConfigError,
+  rawUpdatesCheck,
   reloadConfig,
   resolveSourcePath,
 } from "../core/config.mjs";
 import { formatConfigTemplate } from "../core/defaults.mjs";
+import { updatesCheckAfterRead } from "../core/updates.mjs";
 import { locateKeys } from "../core/toml.mjs";
 import { CONFIG_EDIT_TOPIC, CONFIG_RELOAD_TOPIC, VimmaHost } from "../host/VimmaHost.sys.mjs";
 import { openUrl } from "../host/tab-ops.mjs";
@@ -29,6 +31,7 @@ import { SearchHost } from "../search/SearchHost.sys.mjs";
 import { PaneViews } from "../split/PaneView.mjs";
 import { ThemeHost } from "../ui/theme-host.mjs";
 import { Toolbar } from "../ui/toolbar.mjs";
+import { VimmaUpdates } from "../updates/VimmaUpdates.sys.mjs";
 import { WorkspaceRouter } from "../workspaces/WorkspaceRouter.sys.mjs";
 import { WorkspaceStore } from "../workspaces/WorkspaceStore.sys.mjs";
 
@@ -71,6 +74,8 @@ function configPath() {
 
 /** @type {ActiveConfig | null} the config in force; null until the first read */
 let active = null;
+/** The config in force is the defaults standing in for a file with errors, never applied. */
+let fallback = false;
 /** @type {ConfigError[]} the last read's errors; [] when it was applied */
 let errors = [];
 /** The file `errors` are about: config.toml, or the file `:source <path>` named. */
@@ -195,6 +200,16 @@ function use(path, text) {
   const r = reloadConfig(active, text);
   active = r.active;
   if (active !== previous) apply(active, text);
+  // A file with errors never turns update checks on (docs/specs/m6a-updater.md decision 31).
+  VimmaUpdates.configure(
+    updatesCheckAfterRead({
+      errors: r.errors.length,
+      inForce: active.config.updates.check,
+      raw: r.errors.length ? rawUpdatesCheck(text) : null,
+      hadConfig: previous !== null && !fallback,
+    }),
+  );
+  fallback = previous === null ? r.errors.length > 0 : fallback && r.errors.length > 0;
   report(path, r.errors, previous !== null);
   return r.errors.length === 0;
 }

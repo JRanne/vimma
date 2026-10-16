@@ -30,6 +30,7 @@ import { DEFAULT_THEME_NAME } from "./theme.mjs";
  *   (docs/specs/bookmarks.md)
  * @property {{ placement?: "swap" | "window" }} [private]  where the private workspace is shown
  *   (docs/specs/private-swap.md)
+ * @property {{ check?: boolean }} [updates]  update checks (docs/specs/m6a-updater.md)
  * @property {{ toolbar?: "shown" | "hidden" }} [ui]  Firefox's toolbar at startup
  *   (docs/specs/toolbar-toggle.md)
  * @property {{ enabled?: boolean, workspace?: string, ask_timeout?: number,
@@ -350,6 +351,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   bookmarks: { root: /** @type {const} */ ("workspace") },
   private: { placement: /** @type {const} */ ("swap") },
   ui: { toolbar: /** @type {const} */ ("shown") },
+  updates: { check: true },
   // docs/specs/vimma-mcp.md, decision 26. No `enabled`: left out, `:mcp on|off` decides.
   mcp: {
     workspace: "agent",
@@ -459,6 +461,11 @@ export function formatDefaultsToml() {
     "# Hidden, focusing the address bar shows it; ctrl+b u and :toolbar toggle it until restart.",
     "[ui]",
     `toolbar = ${tomlString(DEFAULT_CONFIG.ui?.toolbar ?? "shown")}`,
+    "",
+    "# Every 12 hours Vimma asks updates.vimma.dev whether a newer version exists. The request",
+    "# names only the update channel and the platform. false stops every check.",
+    "[updates]",
+    `check = ${DEFAULT_CONFIG.updates?.check === false ? "false" : "true"}`,
     "",
     ...mcpLines(),
     "",
