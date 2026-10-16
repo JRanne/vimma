@@ -37,7 +37,11 @@ the hours slip by. It also happens to start with _Vim_.
 
 ## Status
 
-Pre-release, Linux x86_64 (macOS next), no published release yet: [build it from source](CONTRIBUTING.md#build-and-run).
+Early, Linux x86_64 only (macOS next). Releases are on
+[GitHub Releases](https://github.com/vimma-browser/vimma/releases), with a tarball, an AppImage, a
+`.deb` and an Arch Linux `PKGBUILD` ([Install](#install)); you can also
+[build it from source](CONTRIBUTING.md#build-and-run). The in-app updater is included but not
+active yet: to update, install the newer release the same way you installed Vimma.
 
 AI coding agents working on this repository follow [CLAUDE.md](CLAUDE.md); contributors read
 [CONTRIBUTING.md](CONTRIBUTING.md) before opening issues or pull requests.
@@ -45,7 +49,7 @@ AI coding agents working on this repository follow [CLAUDE.md](CLAUDE.md); contr
 
 ## Install
 
-On Arch Linux, from the first release on, one command installs Vimma. Run it as your normal user
+On Arch Linux, one command installs Vimma. Run it as your normal user
 (not root) in an empty directory, since makepkg leaves its build files there:
 
 ```sh
@@ -54,7 +58,7 @@ curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUI
 
 Running the same command again in the same directory updates Vimma to the newest release. The
 tarball, AppImage and `.deb`, and how to verify each download, are in the guide's
-[Installing](docs/guide.md#installing-planned-not-yet-released) section.
+[Installing](docs/guide.md#installing) section.
 
 ## Licence
 

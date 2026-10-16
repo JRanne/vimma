@@ -294,10 +294,11 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
 - Safe Browsing's `goog-harmful-proto` list is requested but did not arrive in the smoke run
   with our key (phishing, malware and unwanted did); treat it as unavailable. See
   [m0-safebrowsing-key](specs/m0-safebrowsing-key.md).
-- Vimma checks for a newer release and shows how to update, but installs nothing itself yet:
+- Vimma's update check only shows how to update; it installs nothing itself yet:
   Firefox's updater, staged updates and the AppImage replacing its own file are M6a's later
-  sub-PRs ([m6a-updater](specs/m6a-updater.md), Delivery). No signed manifest is published
-  until the first public release, so until then a check finds nothing.
+  sub-PRs ([m6a-updater](specs/m6a-updater.md), Delivery). The update check is not active yet:
+  there is no update host and no pinned signing key, so a check finds nothing and users update by
+  installing the newer release themselves.
 - The "no news for N days" warning counts from the last manifest Vimma accepted: an install
   that has never accepted one (its host always failed, or withheld the feed from the start)
   shows nothing, because a host that does not answer is kept quiet (m6a-updater, decision 27).
@@ -349,8 +350,8 @@ clients`) still see both windows; elsewhere both are visible windows. There is o
 
 - Only Linux x86_64 is built and tested. aarch64 and macOS come later
   ([plan.md](../plan.md) §6, [macos-build](specs/macos-build.md)); Windows is not planned.
-- No binaries, packages or releases: build from source. Tarball, AppImage, `.deb` and AUR are M6
-  ([plan.md](../plan.md) §6).
+- Releases carry a tarball, an AppImage, a `.deb` and a `PKGBUILD` for Linux x86_64 only. The
+  AUR package `vimma-bin` is not published yet ([m6-packaging](specs/m6-packaging.md)).
 - The Arch Linux package (the release's `PKGBUILD`) writes `/opt/vimma/is-packaged-app`, the
   file Firefox reads as "installed by a package manager". With it, Firefox skips the warning bar
   it otherwise shows in the first window when the kernel does not allow unprivileged user

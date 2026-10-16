@@ -37,8 +37,9 @@ What works today, each with the section that explains it:
   take your own colours.
 - **[Accessible](#accessibility):** Vimma's own UI works with a screen reader and meets WCAG AA
   contrast in dark and light themes.
-- **[Update checks](#updates):** the status bar says when a newer Vimma exists (red for a
-  security release), and `:update` shows the exact commands for how you installed it.
+- **[Update checks](#updates)**, not active yet: once the update host is live, the status bar
+  will say when a newer Vimma exists (red for a security release), and `:update` will show the
+  exact commands for how you installed it.
 - **Firefox underneath** ([privacy defaults](#privacy-defaults)): the same user agent and
   [add-on](#add-ons) compatibility as Firefox; no studies, sponsored content or telemetry
   uploads; Safe Browsing on.
@@ -70,18 +71,18 @@ details, and [bindings.md](bindings.md) lists every action's config name with it
 
 ### Install
 
-There are no packages or binaries yet. Tarballs, an AppImage, a `.deb` and AUR `vimma-bin` are
-planned for M6. Until then, build from source as [CONTRIBUTING.md](../CONTRIBUTING.md#build-and-run)
-describes: `npm ci`, `npx surfer download`, `npx surfer bootstrap`, `npm run import`,
-`npx surfer build`. The first build takes about 40 minutes on a 16-thread machine and needs
+Each [GitHub Release](https://github.com/vimma-browser/vimma/releases) carries a tarball, an
+AppImage, a `.deb` and an Arch Linux `PKGBUILD` ([Installing](#installing)). To build from
+source instead, follow [CONTRIBUTING.md](../CONTRIBUTING.md#build-and-run): `npm ci`,
+`npx surfer download`, `npx surfer bootstrap`, `npm run import`, `npx surfer build`. The first build takes about 40 minutes on a 16-thread machine and needs
 about 35 GB of disk space (`engine/` 27 GB, the sccache compiler cache 6.8 GB, `~/.mozbuild`
 3.1 GB, `.surfer/` 0.8 GB).
 
-### Installing (planned, not yet released)
+### Installing
 
-**Planned for M6; no release has these files yet.** Each GitHub Release is titled with both
+Each [GitHub Release](https://github.com/vimma-browser/vimma/releases) is titled with both
 versions, such as `Vimma 0.5.2 · Firefox 158.0`, and its notes link the Mozilla security
-advisories of the Firefox it moves to. It will carry, for Linux x86_64 (`X.Y.Z` is the Vimma
+advisories of the Firefox it moves to. It carries, for Linux x86_64 (`X.Y.Z` is the Vimma
 version):
 
 | File                              | Install                                                                 |
@@ -93,10 +94,15 @@ version):
 
 The `.deb` and the Arch package add Vimma to your application menu and offer it for web links,
 but never make it your default browser on their own: `xdg-settings set default-web-browser
-vimma-vimma.desktop` does that. Vimma checks for newer releases and tells you how to update each
-of these, the Arch command included ([Updates](#updates)); it does not yet install them itself. Next to the files are `SHA256SUMS`, a CycloneDX SBOM
+vimma-vimma.desktop` does that. Next to the files are `SHA256SUMS`, a CycloneDX SBOM
 (`vimma-X.Y.Z.cdx.json`) and cosign signatures (`*.sigstore.json`); how to check them is in
 [runbook.md](runbook.md#release-packages-releaseyml-spec-m6-packaging) ("Verify a release").
+
+**Updating.** The in-app updater is included but not active yet: there is no update host and no
+signing key, so Vimma does not tell you about new releases. Until it is, update by installing the
+newer release the way you installed this one: on Arch Linux, run the install command again in the
+same directory; otherwise, install the newer `.deb`, AppImage or tarball over the old one
+([Updates](#updates) lists the commands).
 
 #### Arch Linux
 
@@ -112,7 +118,7 @@ curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUI
 `makepkg -si` installs the libraries Vimma needs with pacman, asks for your password to install
 the package, and refuses to run as root. To update, run the same command again in the same
 directory: it fetches the newest release's `PKGBUILD`, and pacman replaces the installed
-version. Once the in-app updater arrives, it shows this command when a new release is out
+version. Once the in-app updater is active, it shows this command when a new release is out
 ([spec m6a-updater](specs/m6a-updater.md)). `sudo pacman -R vimma-bin` removes Vimma; your
 profile stays in your home directory.
 
@@ -2035,6 +2041,11 @@ every mode (`ctrl+q`, `ctrl+t`) still run.
 
 ## Updates
 
+**Not active yet.** Vimma has no update host and no signing key yet, so every check finds nothing
+and the status bar never shows a new version. Until that changes, update by hand with the
+commands in the table below ([Installing](#installing)). Once the host is live, this is how it
+works:
+
 Every 12 hours, and 30 seconds after startup if the last check is older, Vimma fetches one small
 signed file from `updates.vimma.dev` that names the newest release of its update channel. It
 checks the file's signature against the keys built into Vimma and refuses anything else: a file
@@ -2187,7 +2198,8 @@ default (see [Safe Browsing](#safe-browsing)). A build without a key fetches no 
 malware lists; Settings then shows "Block dangerous and deceptive content" unticked, and ticking
 it does not help. Mozilla's tracking-protection lists update either way.
 
-**Does Vimma update itself?** Not yet. It checks for a newer release and tells you how to update
+**Does Vimma update itself?** Not yet. Its update check is not active yet either, so install each
+new release yourself ([Installing](#installing)); once the check is active it tells you how
 ([Updates](#updates)); installing updates itself is planned for M6a ([limits.md](limits.md)).
 Firefox's updater is not built into Vimma, so it never asks Mozilla's update server
 (`aus5.mozilla.org`) for a Firefox build.
