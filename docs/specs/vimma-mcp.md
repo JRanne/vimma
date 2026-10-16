@@ -8,8 +8,8 @@ Status: accepted · Area: `tools/vimma-ctl` (`src/mcp.rs`, `src/mcp_serve.rs`, `
 `ctl/AgentDownloads.sys.mjs`, `ui/agent-prompt.mjs`, `host/agent-ui.mjs`, `host/mcp-ops.mjs`,
 `host/control-ops.mjs`, `host/workspace-ops.mjs`, `workspaces/WorkspaceStore.sys.mjs`,
 `workspaces/WorkspaceRouter.sys.mjs`, `config/ConfigHost.sys.mjs`, `about/AboutVimma.sys.mjs`;
-`tools/e2e` · Upstream patches: `BrowserDOMWindow-sys-mjs.patch` and
-`URILoadingHelper-sys-mjs.patch` (decision 42) · ADR: [ADR-019](../adr/019-agents-over-mcp.md)
+`tools/e2e` · Upstream patches: `BrowserDOMWindow-sys-mjs.patch`,
+`URILoadingHelper-sys-mjs.patch` and `Tabbrowser-sys-mjs.patch` (decision 42) · ADR: [ADR-019](../adr/019-agents-over-mcp.md)
 
 Issues: [#229](https://github.com/vimma-browser/vimma/issues/229),
 [#230](https://github.com/vimma-browser/vimma/issues/230),
@@ -841,8 +841,8 @@ Found necessary in the security reviews of the protocol (#176) and the question 
     - a `[[routes]]` rule that names the agent workspace, for a link from another app or a new
       window's first URL;
     - the control socket's `open` (`vimma-ctl open`, scripts);
-    - a new window's first tab, at a cold start or later, and `openLinkIn` to a new window with no
-      container;
+    - a new window's first tab, at a cold start or later, the other URLs of its command line
+      (`addTab`'s `fromExternal`), and `openLinkIn` to a new window with no container;
     - the container cached for the next start (`vimma.workspaces.startupUserContextId`), which the
       first tab takes before the workspaces file is read.
 
@@ -857,11 +857,12 @@ Found necessary in the security reviews of the protocol (#176) and the question 
     `opened in "<workspace>"`. The user sees their link next to their own logins, and no step
     depends on noticing which workspace was showing when they clicked.
 
-    What is opened from inside the agent workspace stays there: ctrl+t, `:open`, `:tabnew`, the
-    URL bar and a bookmark. These are typed while that workspace is shown, so it is where the page
-    is meant to go, and showing an agent a page is a reason to be there. A restored session keeps each tab in the container it was saved
-    with. Workspace routing's own rules for opens from the URL bar and `:open` are unchanged, so a
-    rule naming the agent workspace still applies to what the user types.
+    What is opened from inside the agent workspace stays there: ctrl+t, `:open`, `:tabnew`, the URL
+    bar and a bookmark. These are typed while that workspace is shown, so it is where the page is
+    meant to go, and showing an agent a page is a reason to be there. A restored session keeps each
+    tab in the container it was saved with. Workspace routing's own rules for opens from the URL bar
+    and `:open` are unchanged, so a rule naming the agent workspace still applies to what the user
+    types.
 
 ## Security and privacy
 
@@ -1018,9 +1019,9 @@ m7-a11y.
 - `browser_vimma_agent_outside_opens.js` (decision 42): with the agent workspace shown, a link
   from the remote command line, `BrowserDOMWindow`'s external open (Firefox's guess on an agent
   tab's host, and "the current tab" on an agent tab), the control socket's `open` (also
-  `where: "current"`) and a new window's first tab land in the last workspace used, and the
-  window switches to it; the startup cache is never the agent's container; with no other
-  workspace used yet, the first one.
+  `where: "current"`), tabs loaded from the command line and a new window's first tab land in
+  the last workspace used, and the window switches to it; the startup cache is never the
+  agent's container; with no other workspace used yet, the first one.
 
 ### e2e (`tools/e2e`, under Xvfb)
 

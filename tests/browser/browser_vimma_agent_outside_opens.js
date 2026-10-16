@@ -139,6 +139,21 @@ add_task(async function browser_dom_window_external_opens_skip_the_agent_contain
   tidy();
 });
 
+add_task(async function tabs_loaded_from_outside_skip_the_agent_container() {
+  await inAgentAfterHome();
+  // `vimma <url1> <url2>` starting a window: browser-init's loadTabs, marked fromExternal.
+  const tabs = gBrowser.loadTabs(["https://example.com/?one", "https://example.net/?two"], {
+    inBackground: true,
+    fromExternal: true,
+    triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+  });
+  Assert.equal(tabs.length, 2, "two tabs");
+  for (const tab of tabs) {
+    Assert.equal(tab.userContextId, home.userContextId, "each in oo-home, never the agent's");
+  }
+  tidy();
+});
+
 add_task(async function a_control_socket_open_skips_the_agent_container() {
   const agentTab = await inAgentAfterHome();
   let opened = nextTab();

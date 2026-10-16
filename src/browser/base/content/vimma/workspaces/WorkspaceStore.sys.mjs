@@ -533,10 +533,13 @@ export class WorkspaceStoreImpl {
    * workspace's, else the most recent browser window's, else `lastActive`'s. Null for private
    * windows and popups, and when workspaces are disabled, so upstream behaviour stays there.
    * Before init has loaded the file it reads it synchronously (as ContextualIdentityService does).
+   * `fromExternal` (addTab's flag: the command line's URLs) gives nonAgentUserContextId's.
    * @param {any} win
+   * @param {{ fromExternal?: boolean }} [options]
    * @returns {number | null}
    */
-  defaultUserContextId(win) {
+  defaultUserContextId(win, { fromExternal = false } = {}) {
+    if (fromExternal) return this.nonAgentUserContextId(win);
     if (this.disabled || !this.#enabled()) return null;
     if (win && (lazy.PrivateBrowsingUtils.isWindowPrivate(win) || win.toolbar?.visible === false)) {
       return null;
