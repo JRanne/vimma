@@ -43,6 +43,19 @@ AI coding agents working on this repository follow [CLAUDE.md](CLAUDE.md); contr
 [CONTRIBUTING.md](CONTRIBUTING.md) before opening issues or pull requests.
 <!-- process-wording: points coding agents at their rules file -->
 
+## Install
+
+On Arch Linux, from the first release on, one command installs Vimma. Run it as your normal user
+(not root) in an empty directory, since makepkg leaves its build files there:
+
+```sh
+curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si
+```
+
+Running the same command again in the same directory updates Vimma to the newest release. The
+tarball, AppImage and `.deb`, and how to verify each download, are in the guide's
+[Installing](docs/guide.md#installing-planned-not-yet-released) section.
+
 ## Licence
 
 [MPL-2.0](LICENSE), like Firefox; the vendored [smol-toml](https://github.com/squirrelchat/smol-toml) parser is BSD-3-Clause ([ADR-012](docs/adr/012-toml-parser-smol-toml.md)).
