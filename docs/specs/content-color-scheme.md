@@ -86,8 +86,8 @@ The token sheet `ui/theme-host.mjs` injects into every window gains one token,
 Decisions:
 
 1. **Vimma's fixed scheme wins over the system for pages.** When the theme is fixed dark or
-   light, pages get that scheme, because the user chose it for what they look at, and a light
-   page inside dark chrome (or the reverse) is what the choice was meant to avoid. On Omarchy,
+   light, pages get that scheme, because a fixed appearance is a setting for the whole window, and
+   a light page inside dark chrome (or the reverse) is what fixing it is meant to avoid. On Omarchy,
    `omarchy-theme-set` sets the desktop's scheme from the same theme, so the two agree whenever
    the portal answers; where it does not, the theme on screen is the better guide. Rejected:
    leaving pages on the system's scheme, because `:theme` then changes only half the window.
