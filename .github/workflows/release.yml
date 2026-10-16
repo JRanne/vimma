@@ -140,7 +140,10 @@ jobs:
 
       - name: Smoke check
         run: |
-          version=$("$MOZ_OBJDIR/dist/bin/vimma" --version 2>&1)
+          # stdout alone: on ubuntu-24.04 AppArmor denies unprivileged user namespaces, and the
+          # sandbox's probe writes "Sandbox: CanCreateUserNamespace() ... EPERM" to stderr, which
+          # stays in the step log. A failing or crashing binary still fails here (bash -e).
+          version=$("$MOZ_OBJDIR/dist/bin/vimma" --version)
           # "Vimma <vimma> · Firefox <firefox>" from surfer.json (spec firefox-versions), and the
           # tag must be its Vimma version.
           expected=$(node tools/release/version-line.mjs)

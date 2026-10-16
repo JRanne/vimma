@@ -39,6 +39,11 @@ timeout 20 $bin --headless --no-remote --profile "$p" about:blank || true   # fi
 $bin --headless --no-remote --profile "$p" --screenshot /tmp/shot.png "data:text/html,<h1>ok</h1>"
 ```
 
+Where unprivileged user namespaces are denied (ubuntu-24.04 runners, through AppArmor), `--version`
+also writes `Sandbox: CanCreateUserNamespace() ... EPERM` to stderr. The version line is on stdout,
+so scripts compare stdout alone; release.yml and nightly.yml do
+(tools/release/test/smoke-check.test.mjs).
+
 The brand is `vimma` (spec m0-branding): `npm run import` selects it (`surfer config brand vimma`)
 and rewrites `engine/mozconfig`, so `npm run import && (cd engine && ./mach build)` builds it.
 Changing branding needs a full `./mach build`, not `--ui`. Profiles now live under the Vimma
@@ -1275,7 +1280,10 @@ The regexp is `IDENTITY_REGEXP` in `tools/package/package.mjs`, and a test keeps
 **When it fails:** a `release-failure` issue links the run. Fix on `main`, then re-run for the
 same tag. The tag is not deleted (plan §4 said so): release-please has already moved its
 manifest and changelog past it, and the release notes stay valid. If the fix changes what is
-built, release a patch version instead. To pull a bad release: `gh release edit vX.Y.Z --draft`
+built, release a patch version instead. A manual run, `gh workflow run release.yml -f tag=vX.Y.Z`,
+runs the workflow file from `main` (the jobs refuse any other branch) but checks out and builds
+the tag's source: a fix to the workflow file reaches the re-run, while a fix to the source or to a
+script under `tools/` does not, and needs a patch release. To pull a bad release: `gh release edit vX.Y.Z --draft`
 (hides it); the AUR package cannot go back a version without an `epoch`, so ship a fixed
 release instead.
 
