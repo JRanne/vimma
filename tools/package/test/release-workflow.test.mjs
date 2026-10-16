@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { IDENTITY_REGEXP, pkgbuild, srcinfo } from "../package.mjs";
 
-// release.yml's gates (spec m6-packaging). A workflow_dispatch run executes the release.yml of
-// the branch it was started on, so every job must refuse anything but a published release or a
-// run from main: otherwise any pushed branch could sign and upload what it likes.
+// release.yml's gates (spec m6-packaging; docs/runbook.md, "Release packages"). It starts only
+// by workflow_dispatch: release-please.yml's release-build job starts it for the draft release it
+// just created, and the maintainer re-runs it by hand. A workflow_dispatch run executes the
+// release.yml of the branch it was started on, so every job must refuse anything but a run from
+// main: otherwise any pushed branch could sign and upload what it likes.
 const text = readFileSync(
   new URL("../../../.github/workflows/release.yml", import.meta.url),
   "utf8",
@@ -19,6 +25,27 @@ function jobs() {
   return map;
 }
 
+/**
+ * The `on:` block of a workflow.
+ * @param {string} file
+ */
+const triggersOf = (file) => file.slice(file.indexOf("\non:\n"), file.indexOf("\npermissions:"));
+
+/**
+ * The `run:` script of the step called `name` in `block`, unindented.
+ * @param {string} block
+ * @param {string} name
+ */
+function runOf(block, name) {
+  const start = block.indexOf(`- name: ${name}\n`);
+  expect(start, name).toBeGreaterThan(-1);
+  const rest = block.slice(start + 1);
+  const end = rest.search(/\n {6}- (?:name|uses):/);
+  const step = end === -1 ? rest : rest.slice(0, end);
+  const lines = step.slice(step.indexOf("run: |\n") + 8).split("\n");
+  return lines.map((l) => l.replace(/^ {10}/, "")).join("\n");
+}
+
 /** @param {string} block */
 function condition(block) {
   const match = /^ {4}if: (>-\n(?: {6}.*\n)+|.*\n)/m.exec(block);
@@ -29,18 +56,17 @@ describe("release.yml", () => {
   const all = jobs();
 
   it("has the jobs the spec lists", () => {
-    expect([...all.keys()]).toEqual(["build", "package", "sign", "publish", "aur", "failure"]);
+    expect([...all.keys()]).toEqual(["build", "package", "sign", "publish", "failure"]);
   });
 
-  it.each([...jobs().keys()])(
-    "job %s runs only when enabled, here, from a release or main",
-    (id) => {
-      const cond = condition(all.get(id) ?? "");
-      expect(cond).toContain("vars.RELEASE_ENABLED == 'true'");
-      expect(cond).toContain("github.repository == 'vimma-browser/vimma'");
-      expect(cond).toContain("(github.event_name == 'release' || github.ref == 'refs/heads/main')");
-    },
-  );
+  it.each([...jobs().keys()])("job %s runs only when enabled, here, from main", (id) => {
+    const cond = condition(all.get(id) ?? "");
+    expect(cond).toContain(
+      "vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' && " +
+        "github.ref == 'refs/heads/main'",
+    );
+    expect(cond).not.toContain("event_name");
+  });
 
   it("only sign mints an OIDC token, only publish writes contents", () => {
     for (const [id, block] of all) {
@@ -51,8 +77,59 @@ describe("release.yml", () => {
   });
 
   it("has no pull_request, pull_request_target or push trigger", () => {
-    const on = text.slice(text.indexOf("\non:\n"), text.indexOf("\npermissions:"));
-    expect(on).not.toMatch(/pull_request|push:/);
+    expect(triggersOf(text)).not.toMatch(/pull_request|push:/);
+  });
+
+  // Publishing the draft must not build it again: the assets are already on it.
+  it("starts only by workflow_dispatch with a tag, so publishing a release rebuilds nothing", () => {
+    expect(triggersOf(text)).toMatch(
+      /^\non:\n {2}workflow_dispatch:\n {4}inputs:\n {6}tag:\n(?: {8}.*\n)+$/,
+    );
+    expect(text).not.toContain("github.event.release");
+    expect(text).toMatch(/^ {2}TAG: \$\{\{ inputs\.tag \}\}$/m);
+  });
+
+  // Every signature names release.yml at refs/heads/main, whatever the tag points to, so the
+  // build refuses a tag whose commit is not on main before anything else runs.
+  it("builds only a vX.Y.Z tag whose commit is on main", () => {
+    const build = all.get("build") ?? "";
+    const check = runOf(build, "The tag is on main");
+    expect(check).toContain(
+      'gh api "repos/$GITHUB_REPOSITORY/compare/refs/tags/$TAG...refs/heads/main" --jq .status',
+    );
+    expect(check).toMatch(/ahead\|identical\) ;;/);
+    expect(build.indexOf("- name: Check the tag's form")).toBeLessThan(
+      build.indexOf("- name: The tag is on main"),
+    );
+    expect(build.indexOf("- name: The tag is on main")).toBeLessThan(
+      build.indexOf("uses: actions/checkout@"),
+    );
+    // the token is the step's, never the job's, so npm, Surfer and mach never see it
+    const head = build.slice(0, build.indexOf("\n    steps:\n"));
+    expect(head).not.toMatch(/GH_TOKEN/);
+    expect(build.match(/GH_TOKEN: \$\{\{ github\.token \}\}/g)).toHaveLength(1);
+  });
+
+  // The AUR is public at once: it gets a package only after the maintainer publishes (aur.yml).
+  it("never pushes to the AUR", () => {
+    expect(text).not.toMatch(/aur\.archlinux\.org|AUR_SSH_KEY|git push/);
+  });
+
+  // gh release edit resends the tag of a draft (#311); the job checks the draft is still on it.
+  it("uploads to the release by its tag and leaves the draft on that tag", () => {
+    const publish = all.get("publish") ?? "";
+    const notes = runOf(publish, "Append the third-party notice to the release notes");
+    expect(notes).toContain(
+      'gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md',
+    );
+    expect(notes).toMatch(
+      /gh release view "\$TAG" --repo "\$GITHUB_REPOSITORY" --json tagName --jq \.tagName\)" = "\$TAG" \]/,
+    );
+    expect(publish).not.toMatch(/gh api|tag_name|--draft|--tag/);
+  });
+
+  it("the failure issue tells how to re-run the same tag", () => {
+    expect(all.get("failure")).toContain("gh workflow run release.yml -f tag=$TAG");
   });
 
   // Arch users install from the release with only the PKGBUILD (spec m6-packaging, "Arch Linux
@@ -73,26 +150,143 @@ describe("release.yml", () => {
     expect(pkg).toContain("tools/package/arch-smoke.sh");
   });
 
-  it("pushes only the PKGBUILD and .SRCINFO to the AUR, removing the old source files", () => {
-    const aur = all.get("aur") ?? "";
-    expect(aur).toContain("cp dist/aur/PKGBUILD dist/aur/.SRCINFO aur/");
-    expect(aur).toContain(
-      "git rm -q --ignore-unmatch vimma.desktop vimma-vimma.desktop vimma-open",
-    );
-    expect(aur).toContain("git add PKGBUILD .SRCINFO\n");
-  });
-
   // The host serves on ARCH_SMOKE_PORT; the container must rewrite the PKGBUILD to the same port.
   it("passes the smoke test's port into its container", () => {
     const script = readFileSync(new URL("../arch-smoke.sh", import.meta.url), "utf8");
     expect(script).toContain('docker run --rm --network host -e ARCH_SMOKE_PORT="$PORT"');
     expect(script).not.toMatch(/-e PORT=/);
   });
+});
 
-  // A draft release fires no `published` (spec release-versioning): only that type may start it.
-  it("runs on a published release only, so a draft starts nothing", () => {
-    const on = text.slice(text.indexOf("\non:\n"), text.indexOf("\npermissions:"));
+// aur.yml: pushes vimma-bin to the AUR, which is public at once, so only for a published
+// release. Its only source is the published release's own files.
+describe("aur.yml", () => {
+  const file = readFileSync(new URL("../../../.github/workflows/aur.yml", import.meta.url), "utf8");
+  const all = new Map();
+  {
+    const body = file.slice(file.indexOf("\njobs:\n") + 7);
+    const parts = body.split(/^ {2}([a-z][a-z0-9-]*):\n/m).slice(1);
+    for (let i = 0; i < parts.length; i += 2) all.set(parts[i] ?? "", parts[i + 1] ?? "");
+  }
+  /** @param {string} id */
+  const job = (id) => /** @type {string} */ (all.get(id) ?? "");
+
+  it("has the aur job and its failure report", () => {
+    expect([...all.keys()]).toEqual(["aur", "failure"]);
+    expect(job("failure")).toMatch(/^ {4}needs: aur$/m);
+  });
+
+  it("runs when a release is published, or by hand with a tag; never for a draft", () => {
+    const on = triggersOf(file);
     expect(on).toMatch(/^ {2}release:\n {4}types: \[published\]\n/m);
+    expect(on).toMatch(/^ {2}workflow_dispatch:\n {4}inputs:\n {6}tag:\n/m);
+    expect(on).not.toMatch(/pull_request|push:|created|prereleased/);
+    expect(file).toMatch(/^permissions: \{\}$/m);
+  });
+
+  it.each(["aur", "failure"])(
+    "job %s runs only when enabled, here, for a release or main",
+    (id) => {
+      expect(condition(job(id))).toContain(
+        "vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' && " +
+          "(github.event_name == 'release' || github.ref == 'refs/heads/main')",
+      );
+    },
+  );
+
+  // releases/download/<tag>/ serves a published release's assets only: a draft's are a 404, so
+  // the job cannot push a draft's PKGBUILD even when started by hand for its tag.
+  it("takes the PKGBUILD from the published release only, with no GitHub token", () => {
+    const aur = job("aur");
+    expect(aur).toMatch(/^ {4}permissions: \{\}$/m);
+    expect(aur).not.toMatch(/github\.token|GH_TOKEN|gh release|gh api|actions\/checkout/);
+    const fetch = runOf(aur, "Download the published release's PKGBUILD");
+    expect(fetch).toContain('base="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"');
+    expect(fetch).toMatch(/curl -fsSL/);
+    expect(fetch).toMatch(/grep -E ' {2}\(PKGBUILD\|SRCINFO\)\$' SHA256SUMS/);
+    expect(fetch).toContain("sha256sum -c -");
+  });
+
+  it("checks the release's signature against the documented identity when signing is on", () => {
+    const aur = job("aur");
+    expect(aur).toContain(`--certificate-identity-regexp '${IDENTITY_REGEXP}'`);
+    expect(aur).toContain("--certificate-oidc-issuer https://token.actions.githubusercontent.com");
+    expect(aur).toMatch(/if: env\.AUR_KEY_SET == 'true' && vars\.SIGNING_ENABLED == 'true'/);
+  });
+
+  it("checks the tag's form before anything is fetched", () => {
+    const aur = job("aur");
+    expect(aur).toContain("grep -Eqx 'v[0-9]+\\.[0-9]+\\.[0-9]+'");
+    expect(aur.indexOf("Check the tag's form")).toBeLessThan(aur.indexOf("curl -fsSL"));
+  });
+
+  it("the AUR key reaches only the push step", () => {
+    expect(file.match(/secrets\.AUR_SSH_KEY/g)).toHaveLength(2);
+    expect(job("aur")).toMatch(/^ {6}AUR_KEY_SET: \$\{\{ secrets\.AUR_SSH_KEY != '' \}\}$/m);
+    const push = job("aur").slice(job("aur").indexOf("- name: Push vimma-bin"));
+    expect(push).toMatch(/^ {10}AUR_SSH_KEY: \$\{\{ secrets\.AUR_SSH_KEY \}\}$/m);
+  });
+
+  it("pushes only the PKGBUILD and .SRCINFO to the AUR, removing the old source files", () => {
+    const aur = job("aur");
+    expect(aur).toContain("cp aur-files/PKGBUILD aur-files/.SRCINFO aur/");
+    expect(aur).toContain(
+      "git rm -q --ignore-unmatch vimma.desktop vimma-vimma.desktop vimma-open",
+    );
+    expect(aur).toContain("git add PKGBUILD .SRCINFO\n");
+  });
+
+  describe("the AUR variant step", () => {
+    const input = {
+      version: "0.1.2",
+      maintainer: "A Maintainer <a@example.org>",
+      repo: "vimma-browser/vimma",
+      tarballSha256: "0".repeat(64),
+      desktop: "[Desktop Entry]\nName=Vimma\n",
+      desktopId: "vimma-vimma",
+      launcher: '#!/bin/sh\nexec vimma "$@"\n',
+    };
+    /** @type {"pkgbuild-release"} */
+    const release = "pkgbuild-release";
+    /** @param {string} pkg */
+    const variant = (pkg) => {
+      const dir = mkdtempSync(join(tmpdir(), "aur-variant-"));
+      try {
+        writeFileSync(join(dir, "PKGBUILD"), pkg);
+        writeFileSync(join(dir, "SRCINFO"), srcinfo({ ...input, installSource: release }));
+        execFileSync("bash", ["-e", "-c", runOf(job("aur"), "Make the AUR variant")], {
+          cwd: dir,
+          stdio: "pipe",
+        });
+        return {
+          pkgbuild: readFileSync(join(dir, "aur-files/PKGBUILD"), "utf8"),
+          srcinfo: readFileSync(join(dir, "aur-files/.SRCINFO"), "utf8"),
+        };
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    };
+
+    it("turns the release's PKGBUILD into the one package.mjs writes for the AUR", () => {
+      const out = variant(pkgbuild({ ...input, installSource: release }));
+      expect(out.pkgbuild).toBe(pkgbuild({ ...input, installSource: "aur" }));
+      expect(out.srcinfo).toBe(srcinfo({ ...input, installSource: "aur" }));
+    });
+
+    it("fails on a PKGBUILD without exactly one install-source line", () => {
+      const aurAlready = pkgbuild({ ...input, installSource: "aur" });
+      expect(() => variant(aurAlready)).toThrow();
+      const twice = pkgbuild({ ...input, installSource: release }).replace(
+        "pkgrel=1\n",
+        "pkgrel=1\n# vimma-package=pkgbuild-release\n",
+      );
+      expect(() => variant(twice)).toThrow();
+    });
+  });
+
+  it("the failure issue tells how to re-run the AUR push", () => {
+    expect(job("failure")).toContain("gh workflow run aur.yml -f tag=$TAG");
+    expect(job("failure")).toMatch(/^ {6}issues: write/m);
   });
 });
 
@@ -121,7 +315,9 @@ describe("release-please-config.json", () => {
     expect(config.packages["."]["release-as"]).toBeUndefined();
   });
 
-  it("creates draft releases, with their tag, until the release gate opens", () => {
+  // release.yml builds and uploads to the draft; publishing it is the maintainer's click, and
+  // aur.yml's trigger. A release created published would be public before its assets exist.
+  it("creates every release as a draft, with its tag", () => {
     expect(config.draft).toBe(true);
     expect(config["force-tag-creation"]).toBe(true);
     expect(config.prerelease).toBeUndefined();
@@ -198,8 +394,14 @@ describe("release-please.yml", () => {
       .filter(Boolean);
   };
 
-  it("has the release-please job and the two Firefox post-steps", () => {
-    expect([...all.keys()]).toEqual(["release-please", "firefox-notes", "release-title"]);
+  it("has the release-please job, the two Firefox post-steps and the release build start", () => {
+    expect([...all.keys()]).toEqual([
+      "release-please",
+      "firefox-notes",
+      "release-title",
+      "release-build",
+    ]);
+    expect(job("release-build")).toMatch(/^ {4}needs: release-please$/m);
     expect(job("firefox-notes")).toMatch(/^ {4}needs: release-please$/m);
     expect(job("release-title")).toMatch(/^ {4}needs: release-please$/m);
   });
@@ -213,6 +415,25 @@ describe("release-please.yml", () => {
     ]);
     expect(permissions("firefox-notes")).toEqual(["contents: read", "pull-requests: read"]);
     expect(permissions("release-title")).toEqual(["contents: write"]);
+    expect(permissions("release-build")).toEqual(["actions: write"]);
+  });
+
+  // GITHUB_TOKEN's events start no workflow, except workflow_dispatch: the draft's build starts
+  // without RELEASE_PLEASE_TOKEN, and runs release.yml from main, the identity users verify.
+  it("release-build starts release.yml on main for the tag release-please just created", () => {
+    const start = job("release-build");
+    expect(condition(start)).toBe(
+      "needs.release-please.outputs.release_created == 'true' && vars.RELEASE_ENABLED == 'true'",
+    );
+    expect(start).toContain("TAG: ${{ needs.release-please.outputs.tag_name }}");
+    expect(start).toContain("GH_TOKEN: ${{ github.token }}");
+    expect(start).toContain("grep -Eqx 'v[0-9]+\\.[0-9]+\\.[0-9]+'");
+    expect(start).toContain(
+      'gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/release.yml/dispatches" \\',
+    );
+    expect(start).toContain('-f ref=main -f "inputs[tag]=$TAG"');
+    // it runs no repository code
+    expect(start).not.toMatch(/actions\/checkout|setup-node|node /);
   });
 
   it("only release-title holds contents: write from GITHUB_TOKEN besides release-please", () => {
@@ -247,6 +468,7 @@ describe("release-please.yml", () => {
 
   it("RELEASE_PLEASE_TOKEN reaches only release-please and the changelog push", () => {
     expect(job("release-title")).not.toContain("RELEASE_PLEASE_TOKEN");
+    expect(job("release-build")).not.toContain("RELEASE_PLEASE_TOKEN");
     const notes = job("firefox-notes");
     expect(notes.match(/secrets\.RELEASE_PLEASE_TOKEN/g)).toHaveLength(1);
     // as an env var of the step, never in a `with:` or the checkout

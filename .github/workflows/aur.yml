@@ -1,0 +1,152 @@
+# Spec m6-packaging: push AUR vimma-bin (PKGBUILD and .SRCINFO) for a published release.
+# The AUR is public the moment a push lands, so this runs only once a release is published:
+# release.yml builds and uploads to the draft, the maintainer publishes it, and that click starts
+# this. It runs nothing from the repository. Its only input is the published release's own
+# PKGBUILD and SRCINFO, fetched from releases/download/<tag>/, which serves a published release
+# only (a draft's files are a 404 there), checked against the release's SHA256SUMS and, with
+# signing on, SHA256SUMS against release.yml's signature. Then the one install-source line is
+# switched to `aur` (the variant package.mjs writes to dist/aur/; a test keeps the two equal).
+# Nothing runs until RELEASE_ENABLED is `true`; skipped (green, with a notice) until the
+# AUR_SSH_KEY secret exists. Retry: gh workflow run aur.yml -f tag=vX.Y.Z (docs/runbook.md,
+# "Release packages").
+name: aur
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Published release tag to push to the AUR (vX.Y.Z)"
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: aur-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  # No GitHub token at all: the files come from public download URLs, and the push uses the AUR
+  # key alone.
+  aur:
+    if: >-
+      vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' &&
+      (github.event_name == 'release' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions: {}
+    env:
+      AUR_KEY_SET: ${{ secrets.AUR_SSH_KEY != '' }}
+    steps:
+      - name: Without AUR_SSH_KEY, skip
+        if: env.AUR_KEY_SET != 'true'
+        run: echo "::notice::AUR_SSH_KEY is not set; vimma-bin was not pushed (docs/runbook.md, Releases)"
+
+      - name: Check the tag's form
+        if: env.AUR_KEY_SET == 'true'
+        run: |
+          echo "$TAG" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+' \
+            || { echo "::error::'$TAG' is not a vX.Y.Z release tag"; exit 1; }
+
+      - name: Download the published release's PKGBUILD
+        if: env.AUR_KEY_SET == 'true'
+        run: |
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
+          for f in PKGBUILD SRCINFO SHA256SUMS SHA256SUMS.sigstore.json; do
+            # The bundle exists only when the release was signed; the next step needs it then.
+            curl -fsSL -o "$f" "$base/$f" || {
+              [ "$f" = SHA256SUMS.sigstore.json ] && continue
+              echo "::error::$base/$f: not found; is $TAG published, with its assets?"
+              exit 1
+            }
+          done
+          lines=$(grep -E '  (PKGBUILD|SRCINFO)$' SHA256SUMS)
+          [ "$(printf '%s\n' "$lines" | wc -l)" = 2 ] \
+            || { echo "::error::SHA256SUMS does not list PKGBUILD and SRCINFO"; exit 1; }
+          printf '%s\n' "$lines" | sha256sum -c -
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        if: env.AUR_KEY_SET == 'true' && vars.SIGNING_ENABLED == 'true'
+
+      # The identity users verify (IDENTITY_REGEXP in tools/package/package.mjs; a test keeps
+      # the two equal), so the AUR gets only what release.yml built and signed.
+      - name: Verify the release's signature
+        if: env.AUR_KEY_SET == 'true' && vars.SIGNING_ENABLED == 'true'
+        run: |
+          cosign verify-blob --bundle SHA256SUMS.sigstore.json \
+            --certificate-identity-regexp '^https://github\.com/vimma-browser/vimma/\.github/workflows/release\.yml@refs/heads/main$' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            SHA256SUMS
+
+      # The release's PKGBUILD records `vimma-package=pkgbuild-release`; the AUR's records `aur`
+      # (spec m6a-updater, section 3). Both share one .SRCINFO.
+      - name: Make the AUR variant
+        if: env.AUR_KEY_SET == 'true'
+        run: |
+          [ "$(grep -c 'vimma-package=' PKGBUILD)" = 1 ] \
+            && [ "$(grep -c "'vimma-package=pkgbuild-release'" PKGBUILD)" = 1 ] \
+            || { echo "::error::PKGBUILD lacks its one install-source line"; exit 1; }
+          mkdir -p aur-files
+          sed "s/'vimma-package=pkgbuild-release'/'vimma-package=aur'/" PKGBUILD > aur-files/PKGBUILD
+          cp SRCINFO aur-files/.SRCINFO
+
+      - name: Push vimma-bin
+        if: env.AUR_KEY_SET == 'true'
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+          MAINTAINER: ${{ vars.PACKAGE_MAINTAINER }}
+          # aur.archlinux.org's Ed25519 host key; fingerprint
+          # SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4 as published on https://aur.archlinux.org/
+          AUR_HOST_KEY: aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          printf '%s\n' "$AUR_HOST_KEY" > ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          git clone ssh://aur@aur.archlinux.org/vimma-bin.git aur
+          cp aur-files/PKGBUILD aur-files/.SRCINFO aur/
+          cd aur
+          name=$(printf '%s' "$MAINTAINER" | sed -E 's/ *<.*//')
+          email=$(printf '%s' "$MAINTAINER" | sed -E 's/.*<(.*)>.*/\1/')
+          # Earlier PKGBUILDs listed these as sources; the current one writes them inline.
+          git rm -q --ignore-unmatch vimma.desktop vimma-vimma.desktop vimma-open
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "::notice::vimma-bin already at ${TAG#v}"
+          else
+            git -c user.name="$name" -c user.email="$email" commit -m "Update to ${TAG#v}"
+            git push origin HEAD:master
+          fi
+
+  failure:
+    needs: aur
+    if: >-
+      failure() && vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' &&
+      (github.event_name == 'release' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write # open or comment on the release-failure issue
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Open or update the failure issue
+        run: |
+          gh label create release-failure --repo "$GITHUB_REPOSITORY" --color B60205 \
+            --description "release.yml or aur.yml failed" --force
+          body="AUR push for $TAG failed: $RUN_URL. Fix, then re-run: \`gh workflow run aur.yml -f tag=$TAG\`."
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --label release-failure --state open \
+            --json number --jq '.[0].number')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "AUR push for $TAG failed" \
+              --label release-failure --body "$body"
+          fi

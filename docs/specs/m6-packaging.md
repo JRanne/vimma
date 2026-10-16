@@ -174,12 +174,19 @@ packages are dev tools only and never ship, so they are not listed.
 `release.yml` in `vimma-browser/vimma`, run for a `vX.Y.Z` tag or from `main`. Users verify with
 `--certificate-identity-regexp` `IDENTITY_REGEXP` (`package.mjs`; anchored, exact repo, only
 `refs/tags/vX.Y.Z` or `refs/heads/main`) and `--certificate-oidc-issuer
-https://token.actions.githubusercontent.com`; a test keeps the runbook's command equal to it. Only the `sign` job gets `id-token: write`; it runs
+https://token.actions.githubusercontent.com`; a test keeps the runbook's command equal to it.
+(Since changed: `IDENTITY_REGEXP` accepts only `refs/heads/main`, since `release.yml` runs only
+from `main`; docs/runbook.md, "Verify a release".) Only the `sign` job gets `id-token: write`; it runs
 on a GitHub-hosted runner with no repository code except the downloaded artifacts.
 
 Each file is signed with `cosign sign-blob --yes --bundle <file>.sigstore.json <file>`.
 
 ## Release workflow (`release.yml`)
+
+(Since changed: `release.yml` starts only by `workflow_dispatch` on `main`, from
+`release-please.yml`'s `release-build` job for the draft release-please creates, or by hand. It
+uploads to the draft, and publishing rebuilds nothing. The `aur` job moved to `aur.yml`, which
+runs when the release is published; docs/runbook.md, "Release packages".)
 
 **Trigger: `release: types: [published]`**, plus `workflow_dispatch` with a `tag` input.
 

@@ -15,7 +15,9 @@ Releases count up by the patch version: 0.1.1, 0.1.2, 0.1.3 and so on.
 - As the maintainer, merging a release PR before I have daily-driven Vimma publishes nothing:
   release-please makes a **draft** GitHub Release that only collaborators see, and the tag
   `vX.Y.Z`. `release.yml` does not run for a draft. When the release gate opens, I publish the
-  draft (or turn drafts off), and the release goes out as before.
+  draft (or turn drafts off), and the release goes out as before. (Since changed: `release.yml`
+  now builds and uploads to the draft, started by `release-please.yml`'s `release-build` job,
+  and drafts stay on after the gate opens; docs/runbook.md, "Releases".)
 - As the maintainer, no one-off setting pins every future release to one version.
 
 ## Research (release-please 17.6.0, bundled in release-please-action v5.0.0, pinned by SHA)
@@ -41,7 +43,9 @@ Releases count up by the patch version: 0.1.1, 0.1.2, 0.1.3 and so on.
   release) closes that gap, so it is on with `draft`.
 - `release.yml` runs on `release: published` only. GitHub fires no `published` for a draft, and
   no workflow for the `created`/`edited`/`deleted` events of a draft. The tag is created with
-  the release-please token through the API; no workflow here runs on tag pushes.
+  the release-please token through the API; no workflow here runs on tag pushes. (Since changed:
+  `release.yml` starts only by `workflow_dispatch`, and `aur.yml` runs on `release: published`;
+  docs/runbook.md, "Release packages".)
 
 ## Scope
 

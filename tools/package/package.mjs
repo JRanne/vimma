@@ -157,11 +157,13 @@ function aurVersion(version) {
 }
 
 /**
- * cosign keyless identity of a genuine release signature: release.yml of this repo, run for a
- * vX.Y.Z tag (a published release) or from main (a manual re-run). docs/runbook.md uses it.
+ * cosign keyless identity of a genuine release signature: release.yml of this repo, run from
+ * main. release.yml starts only by workflow_dispatch on main (release-please.yml's release-build
+ * job, or a manual re-run), and v0.1.1, the first signed release, was signed the same way, so no
+ * other ref is accepted. docs/runbook.md, docs/guide.md and aur.yml use it.
  */
 export const IDENTITY_REGEXP =
-  "^https://github\\.com/vimma-browser/vimma/\\.github/workflows/release\\.yml@refs/(heads/main|tags/v[0-9]+\\.[0-9]+\\.[0-9]+)$";
+  "^https://github\\.com/vimma-browser/vimma/\\.github/workflows/release\\.yml@refs/heads/main$";
 
 /** The AppImage runtime release fetch-appimagetool.sh pins (its single source). */
 export const RUNTIME_RELEASE = (() => {

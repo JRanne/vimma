@@ -59,6 +59,7 @@ const DOCS = {
   "docs/runbook.md": new URL("../../../docs/runbook.md", import.meta.url),
   "docs/specs/m6-packaging.md": new URL("../../../docs/specs/m6-packaging.md", import.meta.url),
   "docs/specs/m6a-updater.md": new URL("../../../docs/specs/m6a-updater.md", import.meta.url),
+  ".github/workflows/aur.yml": new URL("../../../.github/workflows/aur.yml", import.meta.url),
 };
 
 /** @param {string} cmd */
@@ -762,11 +763,18 @@ describe("cosign identity", () => {
   const re = new RegExp(IDENTITY_REGEXP);
   const wf = "https://github.com/vimma-browser/vimma/.github/workflows/release.yml@";
 
-  it.each(["refs/tags/v0.1.0", "refs/tags/v12.34.56", "refs/heads/main"])("accepts %s", (ref) => {
-    expect(re.test(wf + ref)).toBe(true);
+  // release-please.yml starts release.yml on main (workflow_dispatch), and so does a manual
+  // re-run: every release since v0.1.1 is signed by release.yml at refs/heads/main, and nothing
+  // else may pass, a tag ref included.
+  it("accepts release.yml at refs/heads/main", () => {
+    expect(re.test(`${wf}refs/heads/main`)).toBe(true);
   });
 
   it.each([
+    [`${wf}refs/tags/v0.1.0`],
+    [`${wf}refs/tags/v12.34.56`],
+    ["https://github.com/vimma-browser/vimma/.github/workflows/release-please.yml@refs/heads/main"],
+    ["https://github.com/vimma-browser/vimma/.github/workflows/aur.yml@refs/heads/main"],
     [`${wf}refs/heads/evil`],
     [`${wf}refs/heads/main-evil`],
     [`${wf}refs/tags/v0.1.0-rc.1`],
@@ -779,7 +787,7 @@ describe("cosign identity", () => {
     expect(re.test(identity)).toBe(false);
   });
 
-  it.each(["docs/runbook.md", "docs/guide.md"])(
+  it.each(["docs/runbook.md", "docs/guide.md", ".github/workflows/aur.yml"])(
     "is the regexp %s tells users to verify with",
     (path) => {
       const text = readFileSync(DOCS[path], "utf8");

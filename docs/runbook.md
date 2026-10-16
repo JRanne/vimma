@@ -1083,8 +1083,9 @@ Plan §4/§7: [release-please](https://github.com/googleapis/release-please-acti
 by SHA) keeps one release PR open, `chore(main): release X.Y.Z`, updated on every push to `main`.
 It holds the next version and that release's `CHANGELOG.md` entry. **Merging it is the release**:
 release-please tags `vX.Y.Z` and creates the GitHub Release with the same notes, **as a draft**
-while the release gate is closed (below). Nothing is built or uploaded by release-please itself;
-`release.yml` does that (below, "Release packages").
+(below). Its `release-build` job then starts `release.yml`, which builds, signs and uploads the
+packages to that draft (below, "Release packages"). Publishing the finished draft is the
+maintainer's one click.
 
 - **Version source:** `surfer.json` `brands.vimma.release.displayVersion`, the version
   `vimma --version` and the About dialog show (spec m0-app-version). The release
@@ -1111,19 +1112,20 @@ while the release gate is closed (below). Nothing is built or uploaded by releas
   and every later release PR proposes 0.2.0 again. If the footer was not picked up (the release
   PR still shows the old next version), look at the squash commit's message on `main`:
   `Release-As:` must be in its last paragraph.
-- **Drafts keep the release gate** (no public release until the maintainer has daily-driven
-  Vimma). `"draft": true` makes each GitHub Release a draft: only collaborators see it, and
-  `release.yml` does not run (it starts on `release: published`, which a draft never fires).
-  GitHub creates no tag for a draft, so `"force-tag-creation": true` makes release-please create
-  `vX.Y.Z` first; without the tag, the next release PR would not find this release and would list
-  every commit since the first one. To ship one draft: Releases → the draft → Edit → "Publish
-  release" (published from your account, it starts `release.yml` when `RELEASE_ENABLED` is
-  `true`).
-- **When the gate opens:** in a PR, remove `"draft"` from `release-please-config.json` (keep
-  `force-tag-creation`; it is harmless for a published release), and drop that test line in
-  `release-workflow.test.mjs`. Publish any drafts still waiting, oldest first. Packaging is
-  already on (`RELEASE_ENABLED`, below, "Release packages", step 7), so each publish starts its
-  build.
+- **Every release starts as a draft.** `"draft": true` makes each GitHub Release a draft: only
+  collaborators see it, and its download URLs answer 404 to everyone else. `release.yml` fills
+  it with the packages while it is a draft, so a failed build is found before anything is public,
+  and publishing it is one click on a release that already has its files. GitHub creates no tag
+  for a draft, so `"force-tag-creation": true` makes release-please create `vX.Y.Z` first;
+  without the tag, the next release PR would not find this release and would list every commit
+  since the first one, and `release.yml` would have nothing to build. To ship a draft once its
+  build is green: Releases → the draft → Edit → "Publish release". Publishing builds nothing;
+  it starts `aur.yml`, which pushes the AUR package (below, "Release packages").
+- **Keep drafts on, also once the release gate opens** (no public release until the maintainer
+  has daily-driven Vimma). The gate is the click on "Publish release", not the config. Without
+  `"draft"`, release-please would create a published release two hours before its files exist,
+  and `aur.yml`, started by that publish, would fail on the missing files. A test keeps `draft`
+  and `force-tag-creation` on.
 - **The changelog line is the commit subject; the body explains why** (CONTRIBUTING.md). release-please
   writes subjects only. Firefox bumps are `upstream: firefox X.Y.Z (MFSA YYYY-N)` (upstream.yml),
   so a security dot release alone still produces a release PR (ADR-015: merged within 3 days).
@@ -1174,21 +1176,38 @@ One-time setup:
    `gh workflow run ci.yml --ref release-please--branches--main` before merging, or store a
    fine-grained token for this repo only (Contents, Pull requests and Issues: read/write) as
    `gh secret set RELEASE_PLEASE_TOKEN`; the workflow uses it when present.
-3. Tags and releases created with `GITHUB_TOKEN` trigger no workflows, so `release.yml`
-   (on `release: published`) runs by itself only with `RELEASE_PLEASE_TOKEN` set; without it,
-   start it by hand (see "Release packages").
+3. Nothing more for the release build: tags and releases created with `GITHUB_TOKEN` trigger no
+   workflows, but `release-build` starts `release.yml` with a `workflow_dispatch`, which
+   `GITHUB_TOKEN` may send ([GitHub Docs, "Triggering a workflow from a
+   workflow"](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow)),
+   so `RELEASE_PLEASE_TOKEN` is not needed for it.
 
 The release-please job's token has `contents`, `pull-requests` and `issues: write` (labels go
 through the issues API); it runs no repository code. `firefox-notes` reads with `contents` and
 `pull-requests: read` and writes only through `RELEASE_PLEASE_TOKEN`; `release-title` has
 `contents: write` and nothing else. Both run only `main`'s `tools/release/` (the tag is a commit
 on `main`), never code from the release branch, and keep no token in their checkout.
+`release-build` has `actions: write` and nothing else, runs no repository code, and only sends
+the `workflow_dispatch` for `release.yml` on `main` with the new tag; it runs only when a release
+was created and `RELEASE_ENABLED` is `true`.
 
 ### Release packages (`release.yml`, spec m6-packaging)
 
-When a GitHub Release is published (release-please, above), `release.yml` builds Vimma, packages
-it on a hosted runner, signs, uploads to that release and pushes AUR `vimma-bin`. Its `build` job
-builds on `ubuntu-24.04` from freshly verified source in about 2 hours ("Full builds" above). **Every job is off until `RELEASE_ENABLED` is `true`**, manual runs included.
+When release-please creates a draft release (above), its `release-build` job starts `release.yml`
+on `main` with the new tag (`workflow_dispatch`). `release.yml` builds Vimma, packages it on a
+hosted runner, signs, and uploads to that draft. Its `build` job builds on `ubuntu-24.04` from
+freshly verified source in about 2 hours ("Full builds" above). When the maintainer publishes
+the draft, `aur.yml` pushes AUR `vimma-bin`; publishing builds nothing. **Every job of both
+workflows is off until `RELEASE_ENABLED` is `true`**, manual runs included.
+
+`release.yml` starts only by `workflow_dispatch` and only from `main`, because the alternatives
+are weaker. A draft fires no `release` event, and a tag pushed with `GITHUB_TOKEN` starts no
+workflow. `push: tags: v*` with the tag pushed by `RELEASE_PLEASE_TOKEN` would also start a
+signed build for any hand-pushed `v*` tag, and would depend on a personal token. Calling
+`release.yml` as a reusable workflow from `release-please.yml` would run the two-hour build
+inside that workflow's run, holding back release-please on every push to `main` in the meantime,
+and would hand the caller job every permission of every release job at once. A dispatch is the
+same call as the manual re-run, so one path is exercised every time.
 
 | Asset                             | What                                                            |
 | --------------------------------- | --------------------------------------------------------------- |
@@ -1201,11 +1220,14 @@ builds on `ubuntu-24.04` from freshly verified source in about 2 hours ("Full bu
 | `SHA256SUMS`                      | checksums of the six files above                                |
 | `*.sigstore.json`                 | cosign keyless bundles, one per file above (when signing is on) |
 
-Jobs: `build` (read-only token, no secrets) → `package` (AppImage, `.deb`, `PKGBUILD`, the
+Jobs: `build` (read-only token and the Safe Browsing key; first checks that the tag is
+`vX.Y.Z` and that its commit is on `main`) → `package` (AppImage, `.deb`, `PKGBUILD`, the
 AUR variant, checksums; installs the `.deb` and starts it headless, and runs `makepkg -si` on
 the `PKGBUILD` in an Arch Linux container with `tools/package/arch-smoke.sh`) → `sign` (only job with
-`id-token: write`) → `publish` (only job with `contents: write`) → `aur` (no GitHub token; the
-SSH key only) → `failure` (opens a `release-failure` issue). Locally, from a mach tarball:
+`id-token: write`) → `publish` (only job with `contents: write`; uploads to the draft by its tag
+and checks that the draft is still on that tag after the notes edit) → `failure` (opens a
+`release-failure` issue). `aur.yml`, on publish: `aur` (no GitHub token; the SSH key only) →
+`failure`. Locally, from a mach tarball:
 
 ```sh
 tools/package/fetch-appimagetool.sh /tmp/ait
@@ -1223,27 +1245,31 @@ half a minute; the `pkgbuild.yml` workflow runs it on every change to `tools/pac
 differ in one line, the install source it records in `/opt/vimma/is-packaged-app`:
 `dist/PKGBUILD` (`vimma-package=pkgbuild-release`) is the release asset that Arch users
 download with `curl -fLO …/releases/latest/download/PKGBUILD && makepkg -si` (guide,
-"Arch Linux"), and `dist/aur/PKGBUILD` (`vimma-package=aur`) is what the `aur` job pushes. The
-desktop file and `vimma-open` are written inline in `package()`, so neither needs another file.
+"Arch Linux"), and `dist/aur/PKGBUILD` (`vimma-package=aur`) is what goes to the AUR. `aur.yml`
+runs after the build's artifacts may have expired, so it makes that variant again from the
+published release's `PKGBUILD` by switching the one install-source line, and pushes it with the
+release's `SRCINFO` (both variants share one); a test checks that the result equals
+`dist/aur/PKGBUILD`. The desktop file and `vimma-open` are written inline in `package()`, so
+neither needs another file.
 
 **Enable it (one time):**
 
 1. Hosted build: done ([#224](https://github.com/vimma-browser/vimma/issues/224), "Full builds"
    above); the `build` job runs on `ubuntu-24.04`.
-2. Trigger: `gh secret set RELEASE_PLEASE_TOKEN` (fine-grained, this repo only: Contents, Pull
-   requests and Issues read/write), so the release release-please creates starts `release.yml`.
-   Without it, run it by hand after each release: `gh workflow run release.yml -f tag=vX.Y.Z`.
+2. Trigger: nothing to set. `release-please.yml`'s `release-build` job starts `release.yml`
+   with `GITHUB_TOKEN`. The maintainer's publish, from a personal account, starts `aur.yml`.
 3. Safe Browsing key: the `SAFEBROWSING_API_KEY` secret ("Google Safe Browsing key" above);
    the `build` job fails without it, and its smoke check fails a build that lacks the key.
 4. Maintainer line for the `.deb` and the PKGBUILD:
    `gh variable set PACKAGE_MAINTAINER --body 'Your Name <you@example.org>'` (public in every
    package; the `package` job fails without it).
 5. Signing (recommended: keyless, no key to keep): `gh variable set SIGNING_ENABLED --body true`.
-   Each signature records `vimma-browser/vimma`'s `release.yml` and the tag in the public Rekor log.
+   Each signature records `vimma-browser/vimma`'s `release.yml` at `refs/heads/main` in the
+   public Rekor log.
    Without the variable, `sign` is skipped and the assets go up unsigned.
-6. AUR (optional; skipped with a notice until the secret exists). Arch users do not need it:
-   the release's `PKGBUILD` installs Vimma without the AUR, and the `aur` job stays dormant
-   until an AUR account and its key exist:
+6. AUR (optional; `aur.yml` is skipped with a notice until the secret exists). Arch users do
+   not need it: the release's `PKGBUILD` installs Vimma without the AUR, and the `aur` job stays
+   dormant until an AUR account and its key exist:
    - Check the name is free: `curl -s 'https://aur.archlinux.org/rpc/v5/info?arg[]=vimma-bin'`
      must say `"resultcount":0` (and look at `vimma` too, which `vimma-bin` provides).
    - Create an account at <https://aur.archlinux.org/register>.
@@ -1255,35 +1281,69 @@ desktop file and `vimma-open` are written inline in `package()`, so neither need
 RELEASE_ENABLED`). Try it on the next release, or re-run the last one with
    `gh workflow run release.yml -f tag=vX.Y.Z` (assets are replaced, `--clobber`).
 
-Release jobs cannot be started from a fork, and a manual run does nothing unless started from
-`main`. The release build uses its own fresh objdir (`engine/obj-release`) and an empty sccache
+Release jobs cannot be started from a fork, and a manual run of `release.yml` does nothing
+unless started from `main`, nor for a tag whose commit is not on `main`. The release build uses its own fresh objdir (`engine/obj-release`) and an empty sccache
 directory, so nothing left by a nightly or another job reaches signed binaries.
 
 **Verify a release** (the user guide's "Installing" points here):
 
 ```sh
-v=0.1.0
+v=0.1.1
 gh release download "v$v" -R vimma-browser/vimma
 sha256sum -c SHA256SUMS              # every file OK
 cosign verify-blob --bundle SHA256SUMS.sigstore.json \
-  --certificate-identity-regexp '^https://github\.com/vimma-browser/vimma/\.github/workflows/release\.yml@refs/(heads/main|tags/v[0-9]+\.[0-9]+\.[0-9]+)$' \
+  --certificate-identity-regexp '^https://github\.com/vimma-browser/vimma/\.github/workflows/release\.yml@refs/heads/main$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   SHA256SUMS                         # "Verified OK"
 ```
 
-The identity accepts only this repository's `release.yml`, run for a `vX.Y.Z` tag (a published
-release) or from `main` (a manual re-run); `release.yml` refuses to run from any other branch.
+The identity accepts only this repository's `release.yml` run from `main`: `release.yml` starts
+only by `workflow_dispatch` and refuses any other branch, and every signed release, `v0.1.1`
+included, was signed so.
 The issuer pins GitHub Actions' OIDC. Checking `SHA256SUMS`'s signature and then `sha256sum -c`
 covers every file; each asset also has its own `<file>.sigstore.json`, verified the same way.
 The regexp is `IDENTITY_REGEXP` in `tools/package/package.mjs`, and a test keeps the two equal.
 
-**When it fails:** a `release-failure` issue links the run. Fix on `main`, then re-run for the
-same tag. The tag is not deleted (plan §4 said so): release-please has already moved its
+**What the maintainer sees on a release** (from `0.1.2` on):
+
+1. Merge the release PR `chore(main): release 0.1.2`. Within a minute, `release-please.yml`
+   creates the tag `v0.1.2` and a draft release, `release-title` titles it
+   `Vimma 0.1.2 · Firefox <version>`, and `release-build` shows "Started release.yml for v0.1.2"
+   in its summary.
+2. Actions → `release` has a new `workflow_dispatch` run on `main`, titled `release`. It takes
+   a little over two hours (2 h 12 min for `v0.1.1`). The draft has no files until its `publish` job, near the end,
+   uploads them all and appends the third-party notice to the notes.
+3. When the run is green, the draft lists the tarball, AppImage, `.deb`, SBOM, `PKGBUILD`,
+   `SRCINFO`, `SHA256SUMS` and, with signing on, a `.sigstore.json` for each. Optionally check
+   them as in "Verify a release" (above), with `gh release download v0.1.2` (it finds drafts).
+4. Publish: Releases → the draft → Edit → "Publish release". Nothing is rebuilt; `aur.yml` runs
+   for a minute and pushes `vimma-bin` (or logs a notice while `AUR_SSH_KEY` is unset).
+
+Publish only after `release` is green: a draft published earlier is public without its files
+until the build finishes, and `aur.yml` fails on the missing files (re-run it afterwards).
+
+**If the build does not start** (no `release` run a few minutes after the draft appears): look
+at the `release-please` run of the merge. `release-build` is skipped when `RELEASE_ENABLED` is
+not `true` or no release was created, and fails if the dispatch is refused. Then start it by
+hand, from `main`; it is the same call:
+
+```sh
+gh workflow run release.yml -R vimma-browser/vimma --ref main -f tag=v0.1.2
+gh run list -R vimma-browser/vimma -w release.yml -L 1   # the new run
+```
+
+If the draft has lost its tag (`gh release view v0.1.2` does not find it, and the releases list
+shows `untagged-…`), reattach it first, as in "Releases" above, so the upload finds it.
+
+**When it fails:** a `release-failure` issue links the run, while the release is still a draft.
+Fix on `main`, then re-run for the same tag. The tag is not deleted (plan §4 said so): release-please has already moved its
 manifest and changelog past it, and the release notes stay valid. If the fix changes what is
 built, release a patch version instead. A manual run, `gh workflow run release.yml -f tag=vX.Y.Z`,
 runs the workflow file from `main` (the jobs refuse any other branch) but checks out and builds
 the tag's source: a fix to the workflow file reaches the re-run, while a fix to the source or to a
-script under `tools/` does not, and needs a patch release. To pull a bad release: `gh release edit vX.Y.Z --draft`
+script under `tools/` does not, and needs a patch release (the failed draft can be deleted: its tag
+stays, as above, and release-please finds the release through the tag). An `aur.yml` failure also opens the issue; re-run it with
+`gh workflow run aur.yml -f tag=vX.Y.Z`. To pull a bad release: `gh release edit vX.Y.Z --draft`
 (hides it); the AUR package cannot go back a version without an `epoch`, so ship a fixed
 release instead.
 
