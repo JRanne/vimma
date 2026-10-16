@@ -1,7 +1,11 @@
 // docs/specs/m6a-updater.md, delivery 1 ("check and tell"): the signed manifest, its rules, the
 // status-bar notice and the update steps per install type. Keys are generated here; no network.
 import { describe, test, expect, beforeAll } from "vitest";
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   MANIFEST_PREFIX,
   MAX_MANIFEST_CHARS,
@@ -9,6 +13,7 @@ import {
   base64Encode,
   installTypeFrom,
   judgeManifest,
+  offerAssets,
   parseManifest,
   shellQuote,
   signatureComment,
@@ -341,6 +346,7 @@ describe("parseManifest", () => {
           detailsUrl: "https://github.com/vimma-browser/vimma/releases/tag/v0.3.1",
           urgent: true,
           advisories: ["MFSA 2026-110"],
+          assets: {},
         },
       },
     });
@@ -354,6 +360,49 @@ describe("parseManifest", () => {
     const selfClosing =
       '<?xml version="1.0"?>\n<updates vimmaChannel="vimma" vimmaTarget="t" vimmaSerial="20261028041207"/>\n';
     expect(parseManifest(selfClosing)).toMatchObject({ ok: true, manifest: { update: null } });
+  });
+
+  const H = (/** @type {string} */ c) => c.repeat(128);
+  const DL = "https://github.com/vimma-browser/vimma/releases/download/v0.3.1";
+  /** @param {string} children */
+  const withAssets = (children) => manifest().replace(/ {4}<patch [^\n]*\n/, children);
+  const tarball = `    <vimmaTarball size="86804240" hashFunction="sha512" hashValue="${H("a")}" URL="${DL}/vimma-0.3.1-linux-x86_64.tar.xz"/>\n`;
+  const appimage = `    <vimmaAppImage size="111966712" hashFunction="sha512" hashValue="${H("b")}" URL="${DL}/vimma-0.3.1-x86_64.AppImage"/>\n`;
+  const deb = `    <vimmaDeb size="87718612" hashFunction="sha512" hashValue="${H("c")}" URL="${DL}/vimma_0.3.1_amd64.deb"/>\n`;
+
+  test("reads each package's size and SHA-512 (the release pipeline's asset elements)", () => {
+    const r = /** @type {any} */ (parseManifest(withAssets(tarball + appimage + deb)));
+    expect(r.manifest.update.assets).toEqual({
+      tarball: { size: 86804240, sha512: H("a") },
+      appimage: { size: 111966712, sha512: H("b") },
+      deb: { size: 87718612, sha512: H("c") },
+    });
+    const one = /** @type {any} */ (parseManifest(withAssets(deb)));
+    expect(one.manifest.update.assets).toEqual({ deb: { size: 87718612, sha512: H("c") } });
+  });
+
+  test.each([
+    ["another hash function", deb.replace('"sha512"', '"sha256"')],
+    ["a hash that is not 128 hex digits", deb.replace(H("c"), "c".repeat(64))],
+    ["an upper-case hash", deb.replace(H("c"), "C".repeat(128))],
+    ["a size that is not digits", deb.replace('"87718612"', '"-1"')],
+    ["a download on plain http", deb.replace("https://", "http://")],
+    ["the same package twice", deb + deb],
+    ["no hash", deb.replace(/ hashValue="[^"]*"/, "")],
+  ])("refuses an asset with %s", (_name, children) => {
+    const r = parseManifest(withAssets(children));
+    expect(r.ok).toBe(false);
+    expect(/** @type {any} */ (r).reason).toMatch(/^manifest: /);
+  });
+
+  test("offerAssets keeps only well-formed entries (a saved result read back)", () => {
+    const good = { size: 1, sha512: H("d") };
+    expect(offerAssets({ deb: good, tarball: { size: "1", sha512: H("d") }, x: good })).toEqual({
+      deb: good,
+    });
+    expect(offerAssets({ appimage: { size: 1, sha512: "d".repeat(64) } })).toEqual({});
+    expect(offerAssets(null)).toEqual({});
+    expect(offerAssets([good])).toEqual({});
   });
 
   test("entities in attributes are decoded", () => {
@@ -605,7 +654,7 @@ describe("install type (§3)", () => {
     ["vimma-package=appimage\n", "/home/u/V.AppImage", "appimage", /x86_64\.AppImage &&/],
     ["vimma-package=pkgbuild-release\n", null, "pkgbuild-release", /makepkg -si$/],
     ["vimma-package=aur\n", null, "aur", /^yay -Syu vimma-bin$/],
-    [null, null, "tarball", /\| tar -xJ -C \/usr\/lib$/],
+    [null, null, "tarball", / && tar -xJf vimma-0\.3\.1-linux-x86_64\.tar\.xz -C \/usr\/lib$/],
   ])("marker %j → %s's own hint", (marker, appImage, type, command) => {
     const got = installTypeFrom({ packaged: true, marker, appImage });
     expect(got).toBe(type);
@@ -616,6 +665,7 @@ describe("install type (§3)", () => {
       detailsUrl: "https://github.com/vimma-browser/vimma/releases/tag/v0.3.1",
       urgent: false,
       advisories: [],
+      assets: {},
     };
     const steps = updateSteps(got, offer, { installDir: "/usr/lib/vimma", appImage });
     expect(steps.commands).toHaveLength(1);
@@ -625,6 +675,7 @@ describe("install type (§3)", () => {
 });
 
 describe("updateSteps (:update and about:vimma)", () => {
+  /** @type {import("../src/updates.mjs").Offer} */
   const offer = {
     appVersion: "158.0.1",
     buildId: "20261028031500",
@@ -632,9 +683,21 @@ describe("updateSteps (:update and about:vimma)", () => {
     detailsUrl: "https://github.com/vimma-browser/vimma/releases/tag/v0.3.1",
     urgent: false,
     advisories: [],
+    assets: {},
+  };
+  const H = (/** @type {string} */ c) => c.repeat(128);
+  /** @type {import("../src/updates.mjs").Offer} */
+  const hashed = {
+    ...offer,
+    assets: {
+      tarball: { size: 3, sha512: H("a") },
+      appimage: { size: 4, sha512: H("b") },
+      deb: { size: 5, sha512: H("c") },
+    },
   };
   const where = { installDir: "/home/u/apps/vimma", appImage: null };
   const dl = "https://github.com/vimma-browser/vimma/releases/download/v0.3.1";
+  const curl = "curl -fL --proto =https";
 
   test("pkgbuild-release: the exact curl … && makepkg -si command (decision 24)", () => {
     expect(updateSteps("pkgbuild-release", offer, where).commands).toEqual([
@@ -648,35 +711,89 @@ describe("updateSteps (:update and about:vimma)", () => {
     expect(s.commands).toEqual(["yay -Syu vimma-bin"]);
   });
 
-  test("deb: download the new .deb and install it with apt", () => {
-    expect(updateSteps("deb", offer, where).commands).toEqual([
-      `curl -LO ${dl}/vimma_0.3.1_amd64.deb && sudo apt install ./vimma_0.3.1_amd64.deb`,
+  test("deb: download, check the signed manifest's SHA-512, then install it with apt", () => {
+    expect(updateSteps("deb", hashed, where).commands).toEqual([
+      `${curl} -o vimma_0.3.1_amd64.deb ${dl}/vimma_0.3.1_amd64.deb` +
+        ` && echo '${H("c")}  vimma_0.3.1_amd64.deb' | sha512sum -c -` +
+        " && sudo apt install ./vimma_0.3.1_amd64.deb",
     ]);
     const pre = { ...offer, displayVersion: "0.4.0-rc.1" };
     expect(updateSteps("deb", pre, where).commands[0]).toContain("vimma_0.4.0~rc.1_amd64.deb");
   });
 
-  test("tarball: quit, then unpack over the install's parent directory, quoted", () => {
-    const s = updateSteps("tarball", offer, {
+  test("tarball: quit, download and check it, then unpack over the install's parent, quoted", () => {
+    const s = updateSteps("tarball", hashed, {
       installDir: "/home/u/my apps/vimma",
       appImage: null,
     });
     expect(s.text).toMatch(/^Quit Vimma/);
     expect(s.commands).toEqual([
-      `curl -L ${dl}/vimma-0.3.1-linux-x86_64.tar.xz | tar -xJ -C '/home/u/my apps'`,
+      `${curl} -o vimma-0.3.1-linux-x86_64.tar.xz ${dl}/vimma-0.3.1-linux-x86_64.tar.xz` +
+        ` && echo '${H("a")}  vimma-0.3.1-linux-x86_64.tar.xz' | sha512sum -c -` +
+        ` && tar -xJf vimma-0.3.1-linux-x86_64.tar.xz -C '/home/u/my apps'`,
     ]);
   });
 
-  test("appimage: download next to the file and rename it over, quoted", () => {
-    const s = updateSteps("appimage", offer, {
+  test("appimage: download next to the file, check it, and rename it over, quoted", () => {
+    const s = updateSteps("appimage", hashed, {
       installDir: "/tmp/.mount",
       appImage: "/home/u/it's.AppImage",
     });
+    const next = "'/home/u/it'\\''s.AppImage.new'";
     expect(s.commands).toEqual([
-      `curl -L -o '/home/u/it'\\''s.AppImage.new' ${dl}/vimma-0.3.1-x86_64.AppImage` +
-        ` && chmod +x '/home/u/it'\\''s.AppImage.new'` +
-        ` && mv '/home/u/it'\\''s.AppImage.new' '/home/u/it'\\''s.AppImage'`,
+      `${curl} -o ${next} ${dl}/vimma-0.3.1-x86_64.AppImage` +
+        ` && echo '${H("b")}  /home/u/it'\\''s.AppImage.new' | sha512sum -c -` +
+        ` && chmod +x ${next} && mv ${next} '/home/u/it'\\''s.AppImage'`,
     ]);
+  });
+
+  test("every download fails on an HTTP error and refuses anything but https (V-07)", () => {
+    for (const type of /** @type {const} */ (["deb", "tarball", "appimage"])) {
+      for (const o of [offer, hashed]) {
+        const [command = ""] = updateSteps(type, o, where).commands;
+        expect(command.startsWith(`${curl} -o `), `${type}: ${command}`).toBe(true);
+        expect(command).not.toMatch(/\| *(?:tar|sh|bash)\b/);
+      }
+    }
+  });
+
+  test("without a hash in the manifest the download is still checked for errors, not hashed", () => {
+    expect(updateSteps("deb", offer, where).commands).toEqual([
+      `${curl} -o vimma_0.3.1_amd64.deb ${dl}/vimma_0.3.1_amd64.deb` +
+        " && sudo apt install ./vimma_0.3.1_amd64.deb",
+    ]);
+    const onlyDeb = { ...offer, assets: { deb: hashed.assets.deb } };
+    expect(updateSteps("tarball", onlyDeb, where).commands[0]).not.toContain("sha512sum");
+  });
+
+  test("the checked commands run: a matching file installs, a different one stops before", () => {
+    const dir = mkdtempSync(join(tmpdir(), "vimma-steps-"));
+    try {
+      const file = join(dir, "x.AppImage");
+      writeFileSync(file, "old");
+      const body = "new appimage";
+      const sha512 = createHash("sha512").update(body).digest("hex");
+      const fake = join(dir, "curl");
+      // A curl that writes the "download" to its -o argument.
+      writeFileSync(
+        fake,
+        `#!/bin/sh\nwhile [ "$1" != -o ]; do shift; done\nprintf '%s' "$BODY" > "$2"\n`,
+        { mode: 0o755 },
+      );
+      const run = (/** @type {string} */ hash) => {
+        const o = { ...offer, assets: { appimage: { size: body.length, sha512: hash } } };
+        const [cmd = ""] = updateSteps("appimage", o, { installDir: dir, appImage: file }).commands;
+        return spawnSync("sh", ["-c", cmd], {
+          env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, BODY: body },
+        }).status;
+      };
+      expect(run(H("0"))).not.toBe(0);
+      expect(readFileSync(file, "utf8")).toBe("old");
+      expect(run(sha512)).toBe(0);
+      expect(readFileSync(file, "utf8")).toBe(body);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("an unknown package and a source build: words and the release page only", () => {

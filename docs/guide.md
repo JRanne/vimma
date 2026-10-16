@@ -2067,15 +2067,17 @@ accepted. It installs nothing; it tells you.
 - **`:update`** checks at once. When a newer version exists it opens `about:vimma` at its
   Updates section, with the exact commands for how you installed Vimma; otherwise it says
   `Vimma 0.1.0 is up to date`, or why the check failed.
-- **The commands, by install:**
+- **The commands, by install:** each download fails on an HTTP error and goes over https only,
+  and is checked against the SHA-512 the signed file gives for it (`sha512sum -c`) before
+  anything is installed or replaced, so a file changed on the release page stops the command.
 
   | Installed with           | `:update` shows                                                                                     |
   | ------------------------ | --------------------------------------------------------------------------------------------------- |
   | The release's `PKGBUILD` | `curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si` |
   | AUR `vimma-bin`          | `yay -Syu vimma-bin` (or your AUR helper's equivalent)                                              |
-  | `.deb`                   | `curl -LO …/vimma_X.Y.Z_amd64.deb && sudo apt install ./vimma_X.Y.Z_amd64.deb`                      |
-  | Tarball                  | quit Vimma, then `curl -L …/vimma-X.Y.Z-linux-x86_64.tar.xz \| tar -xJ -C <the install's parent>`   |
-  | AppImage                 | download the new AppImage next to yours and rename it over it; the next start runs it               |
+  | `.deb`                   | download `vimma_X.Y.Z_amd64.deb`, check it, then `sudo apt install ./vimma_X.Y.Z_amd64.deb`         |
+  | Tarball                  | quit Vimma, download the tarball, check it, then `tar -xJf` it into the install's parent directory  |
+  | AppImage                 | download the new AppImage next to yours, check it, and rename it over yours; the next start runs it |
   | A build from source      | nothing: source builds never check (pull and rebuild)                                               |
 
 - **What a check sends:** a GET for

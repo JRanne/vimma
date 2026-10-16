@@ -1,6 +1,6 @@
 # Spec: m6a-updater
 
-Status: accepted (sub-PR 1 implemented; sub-PRs 2 to 5 open) · Area: `configs/common/mozconfig`, `src/browser/branding/vimma/pref/firefox-branding.js`,
+Status: accepted (sub-PR 1 and sub-PR 4's release manifest implemented; sub-PRs 2, 3 and 5, and sub-PR 4's MAR and nightly parts open) · Area: `configs/common/mozconfig`, `src/browser/branding/vimma/pref/firefox-branding.js`,
 `src/browser/base/content/vimma/updates/` (new), `packages/vimma-core/src/updates.mjs` (new),
 `packages/vimma-core/src/update-keys.mjs` (new), `vimma/about/`,
 `config.mjs`, `actions.mjs`, `cmdline.mjs`, `statusbar.mjs`, `tools/package/`, `tools/update/`
@@ -359,6 +359,12 @@ nightly --prerelease`), and its schedule does nothing until the repository varia
 
 (Values are illustrative.)
 
+(Since changed: until sub-PR 2 builds the updater in, a release has no MAR, so the manifest has
+no `<patch>`; it carries `<vimmaTarball>`, `<vimmaAppImage>` and `<vimmaDeb>`, each with `size`,
+`hashFunction="sha512"`, `hashValue` and `URL`, and the commands `:update` shows check the
+download against that SHA-512 before installing it (docs/security.md UP8);
+`tools/update/manifest.mjs`.)
+
 - One `<update>`, the newest build of the channel; an `<updates>` with no `<update>` (still
   signed, still with its channel, target and serial) means "nothing offered". The channel,
   target and serial sit on `<updates>` (decision 25). Nightlies use `displayVersion="0.3.1-nightly.20261028"`.
@@ -574,6 +580,20 @@ SHA-384 DigestInfo that the job builds itself, because the KMS key is `rsa-sign-
 non-exportable KMS key cannot be placed in. This is a constraint on sub-PR 4: its MAR signing
 path must use raw PKCS#1 KMS signing over a SHA-384 DigestInfo; `signmar -v` still verifies the
 result.)
+
+(Since changed: the release manifest is published by a workflow of its own,
+`update-publish.yml`, on `release: released`, because a release has no MAR until sub-PR 2 and
+"check and tell" (decision 26) needs only the manifest; `release.yml` gains the MAR steps with
+sub-PR 2. The published release's run only starts the workflow on `main`, so the
+`update-signing` environment admits `main` alone and a `v*` tag pushed on another commit cannot
+reach the key. Its jobs are `prepare` (no secret: release checks, `SHA256SUMS` and cosign, the
+body from `tools/update/manifest.mjs`, which also holds the urgency rule), `sign` (no repository
+code) and `publish`, whose deploy key is `UPDATES_DEPLOY_KEY` in the environment `update-publish`
+rather than `SITE_DEPLOY_KEY` in `update-site`, names that cannot be confused with
+`vimma-browser/vimma-site`'s. The urgency also counts a `fix(security)` commit and any pull
+request with the `security` label, because a Vimma security fix needs the same prompt restart as
+a Firefox one. docs/runbook.md, "Update signing keys and the update host", step 7, and
+docs/security.md UP7.)
 
 - **Urgency** is computed in `update-sign` by `tools/update/urgency.mjs`: the release is urgent
   when any commit since the previous tag is an `upstream: firefox <version>` bump whose PR carried

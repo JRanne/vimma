@@ -1375,8 +1375,9 @@ Vimma checks `https://updates.vimma.dev/updates/browser/Linux_x86_64-gcc3/<chann
 every 12 hours and accepts only a manifest signed by a key pinned in
 `packages/vimma-core/src/update-keys.mjs` (step 5; a build with no pinned key refuses every
 manifest and shows nothing). These steps need the maintainer's accounts; do them once, in order.
-The pipeline that signs and publishes manifests comes in the spec's sub-PR 4; `UPDATES_ENABLED`
-stays unset until the release gate lifts (decision 23).
+Steps 1 to 6 are done. Step 7 sets up `update-publish.yml`, which signs and publishes a manifest
+for every published release; nothing is published until the repository variable
+`UPDATES_ENABLED` is `true`, and setting it is what turns update notices on for every install.
 
 **1. The manifest repository** (decision 18): it holds only manifests.
 
@@ -1454,7 +1455,6 @@ gh api -X PUT $R/environments/update-signing --input - <<'JSON'
 { "deployment_branch_policy": { "protected_branches": false, "custom_branch_policies": true } }
 JSON
 gh api -X POST $R/environments/update-signing/deployment-branch-policies -f name=main -f type=branch
-gh api -X POST $R/environments/update-signing/deployment-branch-policies -f name='v*' -f type=tag
 gh variable set GCP_WORKLOAD_IDENTITY_PROVIDER \
   --body "projects/$NUMBER/locations/global/workloadIdentityPools/github/providers/vimma"
 gh variable set GCP_KMS_KEY_VERSION --body \
@@ -1529,6 +1529,114 @@ That manifest offers nothing. Committed under `public/updates/browser/Linux_x86_
 in `vimma-updates`, a release build with the pinned primary shows "up to date" in about:vimma and
 the manifest's serial and key; a byte changed in the file makes it "refused". Remove it again
 until the release gate lifts: an accepted serial is remembered, so a later manifest must be newer.
+
+**7. Publishing manifests** (`update-publish.yml`). When a release is published, the workflow's
+`start` job starts the same workflow on `main` with the tag; the jobs that sign and push run
+only there. `prepare` (no secret) checks that the release is published, not a pre-release and on
+`main`, downloads its tarball, AppImage and `.deb`, checks them against `SHA256SUMS` and
+`SHA256SUMS` against release.yml's cosign signature (an unsigned release gets no manifest), and builds the manifest
+with `tools/update/manifest.mjs`: Firefox's version and the build ID from the tarball's
+`application.ini`, each file's size and SHA-512, the urgency, and a serial (the UTC time) that
+must be newer than the one `updates.vimma.dev` and `vimma-updates` have. `sign` (environment
+`update-signing`, `id-token: write` only, no repository code) checks the body's shape, signs it
+with Cloud KMS and checks the signature with openssl. `publish` (environment `update-publish`)
+downloads the files again, checks the signed file with the browser's own verifier and pinned
+key and with openssl, then commits it to `vimma-updates` and pushes (never forced; one commit
+per manifest, `vimma X.Y.Z: update manifest, serial S`), and waits up to 10 minutes until
+`updates.vimma.dev` serves the new serial. A failure opens or comments on the
+`release-failure` issue.
+
+The urgency is `security` when a commit since the previous published release is a Firefox bump
+(`upstream: firefox …`) whose subject names advisories (they go into `vimmaAdvisories`) or whose
+pull request has the `security` label (the autopilot puts it on a bump whose advisories it could
+not read), a `fix(security)` commit, or any change whose pull request has the `security` label.
+Installs then show the update in red (`⇡ X.Y.Z security: :update`).
+
+One-time setup, in order (each step can be checked before the next):
+
+```sh
+R=repos/vimma-browser/vimma
+# a. update-signing admits main alone: every signing job runs from main (the release's tag
+#    only starts the run there), so a v* tag pushed on another commit cannot reach the key.
+id=$(gh api $R/environments/update-signing/deployment-branch-policies \
+  --jq '.branch_policies[] | select(.name == "v*") | .id')
+[ -n "$id" ] && gh api -X DELETE $R/environments/update-signing/deployment-branch-policies/$id
+gh api $R/environments/update-signing/deployment-branch-policies --jq '.branch_policies[].name'  # main
+
+# b. Recommended: Google Cloud also checks that the token comes from update-publish.yml on main,
+#    so no other workflow or branch can sign even with the environment. This replaces the
+#    provider's whole condition: a later workflow that signs (for example MAR signing in
+#    release.yml) needs its own job_workflow_ref added with ||.
+gcloud iam workload-identity-pools providers update-oidc vimma --location global \
+  --workload-identity-pool github --attribute-condition "assertion.repository == 'vimma-browser/vimma' && assertion.job_workflow_ref == 'vimma-browser/vimma/.github/workflows/update-publish.yml@refs/heads/main'"
+
+# c. The update-publish environment, main alone, before any run uses it (a run would otherwise
+#    create it with no branch rule).
+gh api -X PUT $R/environments/update-publish --input - <<'JSON'
+{ "deployment_branch_policy": { "protected_branches": false, "custom_branch_policies": true } }
+JSON
+gh api -X POST $R/environments/update-publish/deployment-branch-policies -f name=main -f type=branch
+
+# d. A dry run: signs with KMS and runs every check, pushes nothing. The signature is real; the
+#    signed file stays a day in the run's artifacts. Needs a published, signed release.
+gh workflow run update-publish.yml -f tag=v0.1.2 -f dry_run=true
+gh run watch "$(gh run list --workflow update-publish.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+
+# e. The deploy key: write access to vimma-updates only.
+ssh-keygen -t ed25519 -N '' -C update-publish -f updates_deploy
+gh repo deploy-key add updates_deploy.pub --repo vimma-browser/vimma-updates \
+  --allow-write --title "update-publish.yml (vimma-browser/vimma)"
+gh secret set UPDATES_DEPLOY_KEY --env update-publish < updates_deploy
+rm updates_deploy updates_deploy.pub
+
+# f. Turn update notices on for every install (off: gh variable delete UPDATES_ENABLED).
+gh variable set UPDATES_ENABLED --body true
+```
+
+Optional: a required reviewer on `update-signing` (Settings → Environments) makes every
+signature wait for a person's approval. Without one, anyone with write access to the repository
+can start a run on `main` that re-signs a published release or offers nothing; with a single
+maintainer the approval adds a click to every release and nothing else. Approve within an hour:
+the signing job refuses a serial older than that, and re-running the failed job reuses the old
+body, so a late approval needs a new `gh workflow run`.
+
+A deploy key, not a token: it can write to `vimma-updates` and nothing else, belongs to no
+person's account and does not expire with one; a fine-grained token would act as the maintainer.
+The `vimma-updates` ruleset (step 1) blocks force pushes and deletion, so the key can only add
+commits. While `UPDATES_ENABLED` is not `true`, a run signs and verifies and then stops with a
+notice, and a published release starts nothing at all (its `start` job logs a notice); with it
+`true`, a missing `UPDATES_DEPLOY_KEY` fails the run and opens the `release-failure` issue. A
+release published as a pre-release gets no manifest; promoting it to a full release starts the
+workflow (the `released` event).
+
+**What the maintainer sees on the next release** (with a–f done): publishing the draft starts
+`aur.yml` and `update-publish.yml`; a second `update-publish` run on `main` follows within a
+minute and finishes in about 5 minutes. Then `vimma-updates` has a commit `vimma X.Y.Z: update
+manifest, serial …`, `curl -s https://updates.vimma.dev/updates/browser/Linux_x86_64-gcc3/vimma/update.xml`
+shows it, and an install of an older version (0.1.2 or later; earlier ones pin no key) shows
+`⇡ X.Y.Z available` within 12 hours, or at once on `:update`; about:vimma shows the commands,
+each with the file's SHA-512.
+
+**Re-run, pull an update, and serials.**
+
+- Re-publish a release's manifest (after a failure, or after `release.yml -f
+replace_published=true` changed its files, whose hashes the old manifest no longer matches):
+  `gh workflow run update-publish.yml -f tag=vX.Y.Z`. Every run gets a new, newer serial.
+- After two releases in quick succession, check `gh run list --workflow update-publish.yml`:
+  GitHub keeps one waiting run per concurrency group, so a third run started meanwhile replaces
+  the waiting one, which ends cancelled without a `release-failure` issue; start it again by hand.
+- Pull a bad update (decision 22): `gh workflow run update-publish.yml -f offer=nothing`
+  publishes a signed manifest that offers nothing. Installs that have not taken the release stop
+  offering it at their next check; then ship a fixed release, whose manifest offers it.
+- Committing an older `update.xml` again does not undo a manifest: every install remembers the
+  newest serial it accepted and refuses an older one (spec §4 rule 3), and the workflow refuses to
+  sign a serial that is not newer than the published one. A serial more than a day ahead of a
+  client's clock is refused by that client, so the runner's clock (the serial) must be right.
+- The workflow also refuses to offer a version older than the one the published manifest offers;
+  to go back to an older release, pull the update first (`offer=nothing`), then publish it.
+- Turning `UPDATES_ENABLED` off stops new manifests but leaves the published one in place, and
+  with it off no run pushes; to withdraw the offer too, run `-f offer=nothing` first, then
+  delete the variable.
 
 ### vimma.dev's keys (`site-dispatch.yml`, spec site-keys-mirror)
 
