@@ -1048,7 +1048,7 @@ Rules:
   a frame that has navigated since gets nothing, and the notice says the match is gone.
   [`a_jump_never_reaches_a_document_the_frame_navigated_to`](../tests/browser/browser_vimma_live_grep.js)
 
-## 16. Update check (`updates/VimmaUpdates.sys.mjs`)
+## 16. Update check (`updates/VimmaUpdates.sys.mjs`, `update-publish.yml`)
 
 Spec: [m6a-updater](specs/m6a-updater.md) (delivery 1). Vimma fetches one signed manifest from
 `updates.vimma.dev` every 12 hours and on `:update`, and tells the status bar and about:vimma
@@ -1110,7 +1110,7 @@ _Pages_ and _extensions_ cannot reach it.
   [`an_oversized_or_compressed_bomb_response_is_refused`](../tests/browser/browser_vimma_update_check.js),
   [`an oversized manifest is refused before any crypto`](../packages/vimma-core/test/updates.test.mjs),
   [`shellQuote leaves plain paths alone and quotes the rest`](../packages/vimma-core/test/updates.test.mjs),
-  [`tarball: quit, then unpack over the install's parent directory, quoted`](../packages/vimma-core/test/updates.test.mjs),
+  [`tarball: quit, download and check it, then unpack over the install's parent, quoted`](../packages/vimma-core/test/updates.test.mjs),
   [`a pinned key that is not a valid SPKI refuses, never throws`](../packages/vimma-core/test/updates.test.mjs),
   [`a_damaged_saved_result_is_dropped_not_thrown`](../tests/browser/browser_vimma_update_check.js)
 - UP6. A package manager's install (the `.deb`, the release `PKGBUILD`, the AUR's `vimma-bin`)
@@ -1124,9 +1124,60 @@ _Pages_ and _extensions_ cannot reach it.
   [`a tarball that already carries an install-source marker`](../tools/package/test/package.test.mjs),
   [`the .deb and AppImage smoke test checks each install type, and the tarball's lack of one`](../tools/package/test/release-workflow.test.mjs)
 
+- UP7. A manifest is **only** signed by `update-publish.yml` run from `main`, and **only** for a
+  release that is published (not a draft or a pre-release) and whose tag is on `main`, or as an
+  empty manifest that offers nothing. Publishing a release starts a job that holds only
+  `actions: write` and runs no repository code; it starts the workflow again on `main`, so the
+  file that signs is always `main`'s, never a tag's. The signing job is the **only** job with
+  `id-token: write`, uses the `update-signing` environment (deployment branch `main` alone), and
+  runs no repository code: it checks the body's shape with the shell, signs the SHA-384
+  DigestInfo with Cloud KMS and checks the signature with openssl. The job that builds the body
+  holds no secret and installs no dependency. Before anything is pushed, a separate job checks
+  the signed file with the verifier and the pinned key the browser uses and with openssl. Every
+  file named in the manifest **must** match the release's `SHA256SUMS` (and, with signing on,
+  `SHA256SUMS` **must** carry release.yml's cosign signature), and is downloaded again after
+  signing and checked against the signed size and SHA-512. A serial that is not newer than the
+  published manifest's, a serial more than a day ahead of the clock, and an offer older than the
+  published one are refused. The push uses a deploy key that can write only to
+  `vimma-updates`, kept in the `update-publish` environment (deployment branch `main` alone),
+  reached only by the push step, to a pinned github.com host key, and **never** forced; nothing is
+  pushed unless `UPDATES_ENABLED` is `true`. **⚠ setting:** the environments' branch rules and the
+  Workload Identity condition on `job_workflow_ref` (docs/runbook.md, "Update signing keys and
+  the update host", step 7) are what keep another branch or workflow away from the key; the
+  workflow's own `refs/heads/main` guard only stops accidental runs.
+  [`grants nothing by default, and each job only what it needs`](../tools/update/test/update-workflow.test.mjs),
+  [`only sign mints an OIDC token, and only sign names the signing environment`](../tools/update/test/update-workflow.test.mjs),
+  [`the signing job runs no repository code: no checkout, no node, no npm`](../tools/update/test/update-workflow.test.mjs),
+  [`a published release only starts the run on main, and only with UPDATES_ENABLED`](../tools/update/test/update-workflow.test.mjs),
+  [`%s runs only by hand on main, here, and with UPDATES_ENABLED or as a dry run`](../tools/update/test/update-workflow.test.mjs),
+  [`checks that the release is published, not a pre-release, and on main`](../tools/update/test/update-workflow.test.mjs),
+  [`checks SHA256SUMS against release.yml's signature when signing is on`](../tools/update/test/update-workflow.test.mjs),
+  [`the publish job verifies with the browser's verifier and with openssl before any push`](../tools/update/test/update-workflow.test.mjs),
+  [`the deploy key lives in its own environment and reaches only the push step`](../tools/update/test/update-workflow.test.mjs),
+  [`pushes one commit naming the version to main, never forced, to a pinned host key`](../tools/update/test/update-workflow.test.mjs),
+  [`signs the body so that the browser's verifier accepts it under the KMS key`](../tools/update/test/update-workflow.test.mjs),
+  [`refuses to sign %s`](../tools/update/test/update-workflow.test.mjs),
+  [`every asset must be listed with the hash of the file that was downloaded`](../tools/update/test/manifest.test.mjs),
+  [`must be newer than the published manifest's; equal or older is refused`](../tools/update/test/manifest.test.mjs),
+  [`checkSigned refuses another key, a changed file, an older serial and another version`](../tools/update/test/manifest.test.mjs),
+  [`refuses to offer an older version than the published manifest does`](../tools/update/test/manifest.test.mjs)
+- UP8. A command about:vimma shows **never** installs or replaces anything with a file it has not
+  checked: every download uses `curl -f` (an HTTP error stops it) and `--proto =https`, and when
+  the signed manifest gives the file's SHA-512, `sha512sum -c` checks it before `apt`, `tar` or
+  `mv` runs. A tarball is downloaded to a file and checked before it is unpacked, never piped
+  into `tar`. Asset hashes are read only from the signed manifest, only as 128 lower-case hex
+  digits, and a saved result keeps only well-formed ones. **⚠ limit:** the release `PKGBUILD`'s
+  command still fetches `latest/download/PKGBUILD` without a hash of its own; `makepkg` checks
+  the tarball against the SHA-256 that `PKGBUILD` pins.
+  [`every download fails on an HTTP error and refuses anything but https (V-07)`](../packages/vimma-core/test/updates.test.mjs),
+  [`the checked commands run: a matching file installs, a different one stops before`](../packages/vimma-core/test/updates.test.mjs),
+  [`reads each package's size and SHA-512 (the release pipeline's asset elements)`](../packages/vimma-core/test/updates.test.mjs),
+  [`offerAssets keeps only well-formed entries (a saved result read back)`](../packages/vimma-core/test/updates.test.mjs),
+  [`update_command_opens_the_steps`](../tests/browser/browser_vimma_update_check.js)
+
 **Key custody** (spec §6, decisions 16 and 17): the primary manifest key is a non-exportable
-Google Cloud KMS key that only the release workflow's `update-signing` environment can ask to
-sign, through GitHub OIDC; the secondary is generated and kept offline by the maintainer. Their
+Google Cloud KMS key that only `update-publish.yml`'s signing job on `main`, in the `update-signing` environment, can
+ask to sign, through GitHub OIDC (UP7); the secondary is generated and kept offline by the maintainer. Their
 setup is in [runbook.md](runbook.md#update-signing-keys-and-the-update-host-spec-m6a-updater).
 The primary's public key is pinned in `update-keys.mjs` (its SHA-256 is recorded in the runbook
 and checked by

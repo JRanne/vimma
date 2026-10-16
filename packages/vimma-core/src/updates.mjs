@@ -54,7 +54,10 @@ export const PKGBUILD_INSTALL_COMMAND = `curl -fLO ${RELEASES_URL}/latest/downlo
  * @property {string} detailsUrl      the release page
  * @property {boolean} urgent         `vimmaUrgency="security"`
  * @property {string[]} advisories    MFSA IDs
+ * @property {Assets} assets          each package's size and SHA-512, as the manifest signs them
  */
+/** @typedef {{ size: number, sha512: string }} Asset */
+/** @typedef {{ tarball?: Asset, appimage?: Asset, deb?: Asset }} Assets */
 /**
  * @typedef {{ channel: string, target: string, serial: string, update: Offer | null }} Manifest
  */
@@ -278,6 +281,68 @@ const FIREFOX_VERSION = /^\d+\.\d+(?:\.\d+)?(?:[ab]\d+)?$/;
 const BUILD_ID = /^\d{1,16}$/;
 const SERIAL = /^\d{14}$/;
 const ADVISORY = /^MFSA \d{4}-\d{1,4}$/;
+const SHA512_HEX = /^[0-9a-f]{128}$/;
+const SIZE = /^\d{1,15}$/;
+/**
+ * The element that carries each package's download in `<update>` (spec §2), by the key it has in
+ * Offer.assets. Firefox's own parser reads only `<patch>` and ignores these.
+ */
+export const ASSET_ELEMENTS = Object.freeze({
+  tarball: "vimmaTarball",
+  appimage: "vimmaAppImage",
+  deb: "vimmaDeb",
+});
+
+/**
+ * The asset elements in an `<update>`'s content: at most one of each, each with a whole-number
+ * size, `hashFunction="sha512"`, a lower-case hex SHA-512 and an https URL.
+ * @param {string} content
+ * @returns {{ ok: true, assets: Assets } | { ok: false, why: string }}
+ */
+function readAssets(content) {
+  /** @type {Assets} */
+  const assets = {};
+  for (const [key, element] of Object.entries(ASSET_ELEMENTS)) {
+    const tags = startTags(content, element);
+    if (!tags) return { ok: false, why: `<${element}> is not closed` };
+    if (tags.length === 0) continue;
+    if (tags.length > 1) return { ok: false, why: `more than one <${element}>` };
+    const attrs = attributes(/** @type {string} */ (tags[0]));
+    if (!attrs) return { ok: false, why: `<${element}> has malformed attributes` };
+    const size = attrs.get("size") ?? "";
+    const hash = attrs.get("hashValue") ?? "";
+    if (!SIZE.test(size)) return { ok: false, why: `<${element}> size is not a whole number` };
+    if (attrs.get("hashFunction") !== "sha512") {
+      return { ok: false, why: `<${element}> hashFunction is not sha512` };
+    }
+    if (!SHA512_HEX.test(hash)) return { ok: false, why: `<${element}> hashValue is not SHA-512` };
+    if (!(attrs.get("URL") ?? "").startsWith("https://")) {
+      return { ok: false, why: `<${element}> URL is not https` };
+    }
+    assets[/** @type {keyof Assets} */ (key)] = { size: Number(size), sha512: hash };
+  }
+  return { ok: true, assets };
+}
+
+/**
+ * The well-formed entries of a saved offer's assets (the pref `vimma.update.last`, which anyone
+ * can edit): anything else is dropped, so a command never carries a hash that is not SHA-512 hex.
+ * @param {unknown} value
+ * @returns {Assets}
+ */
+export function offerAssets(value) {
+  /** @type {Assets} */
+  const out = {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) return out;
+  const record = /** @type {Record<string, any>} */ (value);
+  for (const key of /** @type {(keyof Assets)[]} */ (Object.keys(ASSET_ELEMENTS))) {
+    const a = record[key];
+    if (a && Number.isSafeInteger(a.size) && a.size >= 0 && SHA512_HEX.test(a.sha512)) {
+      out[key] = { size: a.size, sha512: a.sha512 };
+    }
+  }
+  return out;
+}
 
 /**
  * Reads the manifest's body (after rule 1, so only signed text reaches it). Accepts exactly the
@@ -313,6 +378,8 @@ export function parseManifest(body) {
     return { ok: true, manifest: { channel, target, serial, update: null } };
   }
   if (updates.length > 1) return bad("more than one <update>");
+  const read = readAssets(content);
+  if (!read.ok) return bad(read.why);
   const attrs = attributes(/** @type {string} */ (updates[0]));
   if (!attrs) return bad("<update> has malformed attributes");
   const appVersion = attrs.get("appVersion") ?? "";
@@ -343,6 +410,7 @@ export function parseManifest(body) {
         detailsUrl,
         urgent: urgency === "security",
         advisories,
+        assets: read.assets,
       },
     },
   };
@@ -489,6 +557,17 @@ export function updateSteps(type, offer, where) {
   const v = offer.displayVersion;
   const dl = `${RELEASES_URL}/download/v${v}`;
   const link = offer.detailsUrl;
+  /**
+   * Downloads `url` to `file`, failing on an HTTP error and on anything but https (redirects
+   * included), then checks the SHA-512 the signed manifest gives for it, when it gives one.
+   * @param {string} url
+   * @param {string} file
+   * @param {Asset | undefined} asset
+   */
+  const fetchChecked = (url, file, asset) =>
+    `curl -fL --proto =https -o ${shellQuote(file)} ${url}` +
+    (asset ? ` && echo ${shellQuote(`${asset.sha512}  ${file}`)} | sha512sum -c -` : "");
+  const assets = offer.assets ?? {};
   switch (type) {
     case "pkgbuild-release":
       return {
@@ -506,28 +585,32 @@ export function updateSteps(type, offer, where) {
       const file = `vimma_${v.replace("-", "~")}_amd64.deb`;
       return {
         text: "Download the new .deb and install it over this one:",
-        commands: [`curl -LO ${dl}/${file} && sudo apt install ./${file}`],
+        commands: [
+          `${fetchChecked(`${dl}/${file}`, file, assets.deb)} && sudo apt install ./${file}`,
+        ],
         link,
       };
     }
     case "tarball": {
       const parent = where.installDir.replace(/\/[^/]*\/?$/, "") || "/";
+      const file = `vimma-${v}-linux-x86_64.tar.xz`;
       return {
         text: "Quit Vimma, then unpack the new tarball over this install:",
         commands: [
-          `curl -L ${dl}/vimma-${v}-linux-x86_64.tar.xz | tar -xJ -C ${shellQuote(parent)}`,
+          `${fetchChecked(`${dl}/${file}`, file, assets.tarball)}` +
+            ` && tar -xJf ${file} -C ${shellQuote(parent)}`,
         ],
         link,
       };
     }
     case "appimage": {
       const file = where.appImage ?? "Vimma.AppImage";
-      const next = shellQuote(`${file}.new`);
+      const next = `${file}.new`;
       return {
         text: "Download the new AppImage and rename it over this one; the next start runs it:",
         commands: [
-          `curl -L -o ${next} ${dl}/vimma-${v}-x86_64.AppImage && chmod +x ${next}` +
-            ` && mv ${next} ${shellQuote(file)}`,
+          `${fetchChecked(`${dl}/vimma-${v}-x86_64.AppImage`, next, assets.appimage)}` +
+            ` && chmod +x ${shellQuote(next)} && mv ${shellQuote(next)} ${shellQuote(file)}`,
         ],
         link,
       };

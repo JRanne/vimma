@@ -60,6 +60,7 @@ let serial = Number(
  */
 async function manifest({
   update = {},
+  children = "",
   channel = CHANNEL,
   signer = key,
   sign = true,
@@ -80,7 +81,7 @@ async function manifest({
     };
     body += `  <update ${Object.entries(attrs)
       .map(([k, v]) => `${k}="${v}"`)
-      .join(" ")}>\n  </update>\n`;
+      .join(" ")}>\n${children}  </update>\n`;
   }
   body += "</updates>\n";
   if (!sign) return body;
@@ -293,7 +294,15 @@ add_task(async function a_source_build_checks_nothing() {
 });
 
 add_task(async function update_command_opens_the_steps() {
-  await serve(await manifest());
+  // The tarball's SHA-512, as the release pipeline signs it (tools/update/manifest.mjs).
+  const sha512 = "5".repeat(128);
+  await serve(
+    await manifest({
+      children:
+        `    <vimmaTarball size="1" hashFunction="sha512" hashValue="${sha512}"` +
+        ' URL="https://github.com/vimma-browser/vimma/releases/download/v9.9.9/vimma-9.9.9-linux-x86_64.tar.xz"/>\n',
+    }),
+  );
   await BrowserTestUtils.withNewTab("https://example.com/", async () => {
     const opened = BrowserTestUtils.waitForNewTab(gBrowser, "about:vimma#updates", true);
     runCommand("update");
@@ -307,8 +316,13 @@ add_task(async function update_command_opens_the_steps() {
     Assert.ok(text.includes("Vimma 9.9.9 · Firefox 999.0"), "the version line");
     Assert.ok(text.includes("tarball"), "the install type");
     Assert.ok(
-      text.includes("vimma-9.9.9-linux-x86_64.tar.xz | tar -xJ -C"),
-      "the tarball's exact command",
+      text.includes(
+        "curl -fL --proto =https -o vimma-9.9.9-linux-x86_64.tar.xz " +
+          "https://github.com/vimma-browser/vimma/releases/download/v9.9.9/vimma-9.9.9-linux-x86_64.tar.xz" +
+          ` && echo '${sha512}  vimma-9.9.9-linux-x86_64.tar.xz' | sha512sum -c -` +
+          " && tar -xJf vimma-9.9.9-linux-x86_64.tar.xz -C",
+      ),
+      "the tarball's exact command, checked against the signed SHA-512",
     );
     Assert.ok(text.includes(key.id), "the key that signed it");
     Assert.ok(text.includes(String(serial)), "the manifest serial");
