@@ -76,3 +76,19 @@
     }
   }
 }
+
+/* Web pages in the theme's colour scheme (docs/specs/content-color-scheme.md). A tab's page takes
+ * prefers-color-scheme from its <browser> element's color-scheme (nsSubDocumentFrame.cpp,
+ * MaybeUpdateEmbedderColorScheme), which Firefox sets to the content scheme
+ * (content-area.css). While the theme fixes dark or light, the token sheet sets
+ * --vimma-content-color-scheme and the page gets that; a theme that follows the system leaves
+ * it unset, and Firefox's choice stands. Settings → Website appearance other than Automatic
+ * (content-override 0 or 1) and forced colours keep Firefox's own. */
+@media -moz-pref("layout.css.prefers-color-scheme.content-override", 2) and (not (forced-colors)) {
+  #tabbrowser-tabpanels browser[type="content"]:not([smartwindow-content]) {
+    color-scheme: var(
+      --vimma-content-color-scheme,
+      env(-moz-content-preferred-color-scheme)
+    ) !important;
+  }
+}

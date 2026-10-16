@@ -52,6 +52,9 @@ Decisions:
 
 The built-in `vimma` palette (`VIMMA_DARK` / `VIMMA_LIGHT`) follows `prefers-color-scheme`.
 
+(Since changed: web pages now get the scheme an appearance or an Omarchy theme fixes, unless
+Firefox's Website appearance is set; [content-color-scheme](content-color-scheme.md).)
+
 Decisions:
 
 1. **Config:** `[theme] appearance = "system" | "dark" | "light"` (schema 2, as `[theme] name`).
