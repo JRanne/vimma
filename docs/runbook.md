@@ -840,7 +840,7 @@ removing preinstalled toolsets (`/usr/local/lib/android` alone is about 9 GB) is
 ```sh
 gh workflow run nightly.yml --ref main                # one manual nightly from main, to check it
 gh variable set NIGHTLY_ENABLED --body true           # then the 03:00 UTC schedule
-gh variable set RELEASE_ENABLED --body true           # releases: only at the release gate
+gh variable set RELEASE_ENABLED --body true           # releases (set; drafts keep the gate)
 ```
 
 What the nightly does once it runs: a full build of `main`, the full mochitest suite on it, the
@@ -1116,8 +1116,9 @@ while the release gate is closed (below). Nothing is built or uploaded by releas
   `true`).
 - **When the gate opens:** in a PR, remove `"draft"` from `release-please-config.json` (keep
   `force-tag-creation`; it is harmless for a published release), and drop that test line in
-  `release-workflow.test.mjs`. Publish any drafts still waiting, oldest first. Then turn on
-  packaging (below, "Release packages", step 7).
+  `release-workflow.test.mjs`. Publish any drafts still waiting, oldest first. Packaging is
+  already on (`RELEASE_ENABLED`, below, "Release packages", step 7), so each publish starts its
+  build.
 - **The changelog line is the commit subject; the body explains why** (CONTRIBUTING.md). release-please
   writes subjects only. Firefox bumps are `upstream: firefox X.Y.Z (MFSA YYYY-N)` (upstream.yml),
   so a security dot release alone still produces a release PR (ADR-015: merged within 3 days).
@@ -1140,7 +1141,9 @@ while the release gate is closed (below). Nothing is built or uploaded by releas
     edit resends the tag it verified (`tag_name`): GitHub detaches a draft from its tag when an
     edit leaves `tag_name` out (it becomes `untagged-…`), and publishing that draft would create
     a new tag on `main`'s head and build that commit. The job fails if the edited release names
-    any other tag.
+    any other tag. To reattach a detached draft (`gh release edit` cannot find it by tag), find
+    its id with `gh api repos/vimma-browser/vimma/releases --jq '.[] | [.id, .tag_name]'` and run
+    `gh api --method PATCH repos/vimma-browser/vimma/releases/<id> -f tag_name=vX.Y.Z`.
 
   Check either by hand: `node tools/release/firefox-notes.mjs CHANGELOG.md --surfer surfer.json`
   prints the edited file, and `node tools/release/version-line.mjs` the title.

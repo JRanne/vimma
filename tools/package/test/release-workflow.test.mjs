@@ -287,6 +287,8 @@ describe("release-please.yml", () => {
       'jq -n --arg tag "$TAG" --arg name "$title" --rawfile body "$dir/new.md"',
     );
     expect(title).toContain("{tag_name: $tag, name: $name, body: $body}");
+    // and no other tag_name anywhere in the job
+    expect(title).not.toMatch(/tag_name: (?!\$tag\b)/);
     // and fails when GitHub's answer names another tag
     expect(title).toContain('[ "$(jq -r .tag_name "$dir/edited.json")" = "$TAG" ] || exit 1');
     expect(title).not.toMatch(
