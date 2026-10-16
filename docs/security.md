@@ -1113,6 +1113,16 @@ _Pages_ and _extensions_ cannot reach it.
   [`tarball: quit, then unpack over the install's parent directory, quoted`](../packages/vimma-core/test/updates.test.mjs),
   [`a pinned key that is not a valid SPKI refuses, never throws`](../packages/vimma-core/test/updates.test.mjs),
   [`a_damaged_saved_result_is_dropped_not_thrown`](../tests/browser/browser_vimma_update_check.js)
+- UP6. A package manager's install (the `.deb`, the release `PKGBUILD`, the AUR's `vimma-bin`)
+  is **never** told to unpack a tarball over its install directory: every package except the
+  tarball carries the `is-packaged-app` marker with its package type, the release refuses a
+  `./mach package` tarball that already has one, and only an install without a marker gets the
+  tarball's command. The release workflow's smoke test checks the type of the installed `.deb`
+  and, without `$APPIMAGE`, of the extracted AppImage, and that the tarball has no marker.
+  [`every package type except the tarball carries the marker`](../tools/package/test/package.test.mjs),
+  [`gives each package type its own update hint, and only the tarball an untar`](../tools/package/test/package.test.mjs),
+  [`a tarball that already carries an install-source marker`](../tools/package/test/package.test.mjs),
+  [`the .deb and AppImage smoke test checks each install type, and the tarball's lack of one`](../tools/package/test/release-workflow.test.mjs)
 
 **Key custody** (spec §6, decisions 16 and 17): the primary manifest key is a non-exportable
 Google Cloud KMS key that only the release workflow's `update-signing` environment can ask to

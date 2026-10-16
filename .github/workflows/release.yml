@@ -272,6 +272,13 @@ jobs:
           [ "$(vimma --version)" = "$line" ] || { echo "::error::.deb: $(vimma --version)"; exit 1; }
           desktop-file-validate /usr/share/applications/vimma-vimma.desktop
           test -x /usr/bin/vimma-open
+          # The update check's install type (spec m6a-updater §3): a .deb is updated by apt, an
+          # AppImage by a new AppImage; only the unmarked tarball is told to unpack over itself.
+          type=$(node tools/package/install-type.mjs /usr/lib/vimma)
+          [ "$type" = deb ] || { echo "::error::.deb: install type $type"; exit 1; }
+          # A separate assignment, so a tar failure stops the step under bash -e.
+          listing=$(tar -tJf "./dist/vimma-$v-linux-x86_64.tar.xz")
+          case "$listing" in *is-packaged-app*) echo "::error::the tarball carries is-packaged-app"; exit 1 ;; esac
           p=$(mktemp -d)
           # First run creates the profile; --screenshot on a fresh profile races the bookmarks
           # import (docs/runbook.md, Smoke check). timeout exits 124.
@@ -280,6 +287,11 @@ jobs:
           test -s "$RUNNER_TEMP/shot.png"
           out=$(APPIMAGE_EXTRACT_AND_RUN=1 "./dist/vimma-$v-x86_64.AppImage" --version)
           [ "$out" = "$line" ] || { echo "::error::AppImage: $out"; exit 1; }
+          appimage="$PWD/dist/vimma-$v-x86_64.AppImage"
+          (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract > /dev/null)
+          # Without $APPIMAGE, so the type comes from the AppDir's marker alone (decision 34).
+          type=$(env -u APPIMAGE node tools/package/install-type.mjs "$RUNNER_TEMP/squashfs-root/usr/lib/vimma")
+          [ "$type" = appimage ] || { echo "::error::AppImage: install type $type"; exit 1; }
 
       # makepkg -si in an Arch Linux container, with the tarball served from dist/ on localhost
       # (the draft has no assets yet, and a draft's download URLs answer 404 to anyone); the

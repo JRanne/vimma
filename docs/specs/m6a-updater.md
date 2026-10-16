@@ -801,6 +801,17 @@ mar` needs the host `mar` tool from the same objdir. Nothing here can ship befor
 33. **A serial more than a day ahead of the clock is refused**, because the replay rule would
     otherwise let one manifest signed with a wrong clock lock every profile that accepted it out
     of every later manifest; a day leaves room for a client clock that is slightly behind.
+34. **The AppImage carries the `is-packaged-app` marker too**, because it is the only sign that
+    belongs to the AppImage build itself: `$APPIMAGE` is inherited by every program an AppImage
+    starts, so a tarball Vimma launched from another AppImage sees it as well. The marker lets
+    detection require the AppDir's own `vimma-package=appimage` before it offers to replace
+    `$APPIMAGE`; today `installTypeFrom` still accepts `$APPIMAGE` without a marker, and making
+    the marker required is a separate change. The cost is that Firefox, which reads the marker
+    as "packaged app" (`isPackagedApp`), stops showing its warning that the content sandbox runs
+    without unprivileged user namespaces (`security/sandbox/common/SandboxUtils.sys.mjs:25`,
+    Firefox 158.0), as it already does for the `.deb` and the PKGBUILD; `docs/limits.md` states
+    this. Rejected: an AppImage without the marker, detected by `$APPIMAGE` only, because nothing
+    would then tell this build's AppImage from a tarball started by another AppImage.
 
 ### 9. Not in this spec
 

@@ -427,7 +427,8 @@ License: MPL-2.0
 /**
  * How the package was installed, written to /opt/vimma/is-packaged-app as `vimma-package=<it>`
  * so the updater can show the matching hint (spec m6a-updater, section 3): `pkgbuild-release`
- * for the PKGBUILD downloaded from the release, `aur` for the copy pushed to the AUR.
+ * for the PKGBUILD downloaded from the release, `aur` for the copy pushed to the AUR. The .deb
+ * and the AppImage carry `deb` and `appimage` (packageMarker); the tarball carries none.
  * @typedef {"pkgbuild-release" | "aur"} InstallSource
  */
 const INSTALL_SOURCES = ["pkgbuild-release", "aur"];
@@ -438,6 +439,14 @@ const INSTALL_SOURCES = ["pkgbuild-release", "aur"];
  * python/mozbuild/mozbuild/repackaging/deb.py). Its content is Vimma's.
  */
 export const PACKAGED_APP_FILE = "is-packaged-app";
+
+/**
+ * The marker's content for a package type, the line the PKGBUILD's package() also writes.
+ * @param {"deb" | "appimage" | InstallSource} type
+ */
+export function packageMarker(type) {
+  return `vimma-package=${type}\n`;
+}
 
 /**
  * The one command that installs or updates Vimma on Arch Linux from the latest release. Its
@@ -725,6 +734,11 @@ function packageIn(work, options) {
   if (ini.name !== "Vimma") {
     throw new Error(`${options.tarball}: application.ini has Name=${ini.name}, want Vimma`);
   }
+  // Unmarked is what makes an install a tarball for the update check; a marker here would also
+  // be copied into every package below, under the wrong type.
+  if (existsSync(join(app, PACKAGED_APP_FILE))) {
+    throw new Error(`${options.tarball} has ${APP}/${PACKAGED_APP_FILE}: the tarball carries none`);
+  }
   const desktop = desktopEntry({ wmClass: ini.remotingName });
   // Desktop file ID = RemotingName (X11 WM_CLASS, Wayland app_id, MPRIS), so shells match the
   // window to it without guessing (spec m6-packaging, Settled).
@@ -745,6 +759,7 @@ function packageIn(work, options) {
   mkdirSync(appDir, { recursive: true, mode: 0o755 });
   copyApp(app, join(appDir, `usr/lib/${APP}`));
   installLauncher(join(appDir, `usr/lib/${APP}/${LAUNCHER_NAME}`));
+  writeFile(join(appDir, `usr/lib/${APP}/${PACKAGED_APP_FILE}`), packageMarker("appimage"));
   installShare(appDir, options.brandDir, desktop, desktopId);
   writeFile(join(appDir, "AppRun"), appRun(), 0o755);
   writeFile(join(appDir, `${desktopId}.desktop`), desktop);
@@ -772,6 +787,7 @@ function packageIn(work, options) {
   mkdirSync(join(debRoot, "usr/bin"), { recursive: true, mode: 0o755 });
   symlinkSync(`../lib/${APP}/${APP}`, join(debRoot, `usr/bin/${APP}`));
   installLauncher(join(debRoot, `usr/lib/${APP}/${LAUNCHER_NAME}`));
+  writeFile(join(debRoot, `usr/lib/${APP}/${PACKAGED_APP_FILE}`), packageMarker("deb"));
   symlinkSync(`../lib/${APP}/${LAUNCHER_NAME}`, join(debRoot, `usr/bin/${LAUNCHER_NAME}`));
   writeFile(join(debRoot, `usr/share/doc/${APP}/copyright`), COPYRIGHT);
   const size = installedKiB(debRoot);
