@@ -568,6 +568,11 @@ Firefox's own high-contrast colours. Pages that Firefox loads in a web content p
   says to change the file.
 - `[theme.colors] mode = "dark"` (or `"light"`) also keeps the palette dark or light; it is an
   override on top of any palette, so it wins over `appearance`.
+- Web pages follow it too: a site with a dark mode is dark while Vimma shows dark, and light
+  while Vimma shows light (`prefers-color-scheme`). With `:theme system` they follow the system,
+  as Vimma does. On Omarchy they follow your Omarchy theme's dark or light. Firefox's Settings →
+  General → Website appearance, set to Dark or Light, wins over Vimma for web pages; Automatic
+  (the default) leaves them to Vimma.
 
 **Picking the built-in palette.** `[theme] name` in [config.toml](#configtoml) chooses it:
 `"vimma"` (the default) or `"tokyo-night"`, a Tokyo Night palette that is dark only (so

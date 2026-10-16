@@ -367,7 +367,9 @@ describe("resolveTheme", () => {
         const tokens = resolveTheme({
           theme: themeCfg({ source: "file", appearance }),
         }).tokens;
-        expect(r.css).toBe(tokensToCss(tokens, ":root"));
+        // The fixed scheme is also the one web pages get (spec content-color-scheme).
+        const page = { "--vimma-content-color-scheme": appearance };
+        expect(r.css).toBe(tokensToCss({ ...tokens, ...page }, ":root"));
       }
     });
 
@@ -669,6 +671,35 @@ describe("themeStylesheet", () => {
       expect(r.css).not.toContain("@media");
       expect(r.css.match(/\{/g)).toHaveLength(1);
     }
+  });
+
+  test("a fixed scheme is passed to web pages; one that follows the system is not", () => {
+    const fixed = [
+      [themeStylesheet({ theme: themeCfg({ source: "file", appearance: "light" }) }), "light"],
+      [themeStylesheet({ theme: themeCfg({ source: "file", appearance: "dark" }) }), "dark"],
+      [themeStylesheet({ theme: tokyoCfg({ source: "file" }) }), "dark"],
+      [themeStylesheet({ theme: themeCfg(), omarchy: fixture("light.colors.toml") }), "light"],
+      [
+        themeStylesheet({ theme: themeCfg({ source: "file", colors: { mode: "light" } }) }),
+        "light",
+      ],
+    ];
+    for (const [r, mode] of fixed) {
+      expect(r.css).toContain(`  --vimma-content-color-scheme: ${mode};\n`);
+      expect(r.css).toContain(`  --vimma-color-scheme: ${mode};\n`);
+    }
+    for (const r of [
+      themeStylesheet({ theme: themeCfg({ source: "file" }) }),
+      themeStylesheet({ theme: themeCfg() }),
+      themeStylesheet({ theme: themeCfg({ source: "file", appearance: "system" }) }),
+    ]) {
+      expect(r.css).not.toContain("--vimma-content-color-scheme");
+    }
+  });
+
+  test("tokensToCss takes only dark or light for the content colour scheme", () => {
+    expect(tokensToCss({ "--vimma-content-color-scheme": "light" })).toContain(": light;");
+    expect(() => tokensToCss({ "--vimma-content-color-scheme": "normal" })).toThrow(TypeError);
   });
 
   test("a selector reaches both blocks; light-only contrast warnings say so", () => {

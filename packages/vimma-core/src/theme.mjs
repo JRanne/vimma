@@ -778,9 +778,16 @@ export function resolveTheme({ theme, omarchy = null, omarchyLightMode = false, 
 }
 
 /**
+ * The colour scheme web pages are given (spec content-color-scheme): set only while the theme
+ * fixes dark or light, so that a theme following the system leaves pages on Firefox's own choice.
+ */
+export const CONTENT_SCHEME_TOKEN = "--vimma-content-color-scheme";
+
+/**
  * The stylesheet for the configured theme. A built-in with a light variant (vimma) gives its
  * dark tokens, then its light ones under `@media (prefers-color-scheme: light)`, so the page
- * switches with the browser's colour scheme, live, with no script. Anything else is one block.
+ * switches with the browser's colour scheme, live, with no script. Anything else is one block,
+ * with CONTENT_SCHEME_TOKEN for web pages.
  * Warnings only the light variant has start with "light: ".
  * @param {{ theme: ThemeConfig, omarchy?: string | null, omarchyLightMode?: boolean,
  *   selector?: string }} input  as resolveTheme; selector as tokensToCss
@@ -788,7 +795,10 @@ export function resolveTheme({ theme, omarchy = null, omarchyLightMode = false, 
  */
 export function themeStylesheet({ selector = ":root", ...input }) {
   const dark = resolveTheme({ ...input, scheme: "dark" });
-  let css = tokensToCss(dark.tokens, selector);
+  const tokens = dark.adaptive
+    ? dark.tokens
+    : { ...dark.tokens, [CONTENT_SCHEME_TOKEN]: dark.mode };
+  let css = tokensToCss(tokens, selector);
   const warnings = [...dark.warnings];
   if (dark.adaptive) {
     const light = resolveTheme({ ...input, scheme: "light" });
@@ -809,7 +819,9 @@ const FONT_LIST = new RegExp(`^${FONT_ITEM}(?:, ${FONT_ITEM})*$`);
  */
 function safeToken(name, value) {
   if (!/^--vimma-[a-z0-9-]+$/.test(name) || typeof value !== "string") return false;
-  if (name === "--vimma-color-scheme") return value === "dark" || value === "light";
+  if (name === "--vimma-color-scheme" || name === CONTENT_SCHEME_TOKEN) {
+    return value === "dark" || value === "light";
+  }
   if (name === "--vimma-font") return FONT_LIST.test(value);
   return /^#[0-9a-f]{6}$/.test(value);
 }
