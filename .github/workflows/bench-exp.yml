@@ -1,0 +1,40 @@
+name: bench-exp
+on:
+  push:
+    branches: [exp/bench-342-noise]
+permissions:
+  contents: read
+jobs:
+  sample:
+    name: sample (${{ matrix.i }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        i: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: cpu
+        run: grep -m1 "model name" /proc/cpuinfo; nproc
+      - name: new gate, identical code (base HEAD), quiet
+        run: node tools/bench/bench.mjs --base HEAD --json idle-same.json || true
+      - name: new gate vs baseline commit, quiet
+        run: node tools/bench/bench.mjs --json idle-base.json || true
+      - name: old and new measure, same-vs-base, under the coverage pool
+        run: |
+          mkdir -p old && git archive origin/main tools/bench packages/vimma-core/src packages/vimma-core/bench | tar -x -C old
+          (for k in 1 2 3 4; do npx vitest run --coverage --exclude 'tools/bench/**' >/dev/null 2>&1; done) &
+          LOAD=$!
+          for k in 1 2 3; do
+            W=$PWD/old N=1 node tools/bench/exp/exp.mjs | sed 's/^/OLD /'
+            W=$PWD N=1 node tools/bench/exp/exp.mjs | sed 's/^/NEW /'
+          done
+          kill $LOAD || true
