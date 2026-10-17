@@ -11,7 +11,7 @@ the [user guide](guide.md); planned work is on the
 - Extension pages (`moz-extension:`), `data:`, `view-source:` and `blob:` pages have no Vim keys;
   the prefix and chords such as `ctrl+t` still work.
 - Link hints label only real elements: canvas apps (Google Docs, Figma, maps, games) get no
-  hints, and image-map links can be missed.
+  hints.
 - The command line has no `:set`, ranges or counts, and does not complete URLs. Its history lasts
   until Vimma quits.
 - Firefox's shortcuts on keys Vimma uses (`ctrl+w`, `ctrl+u`, `ctrl+h`, `ctrl+d`, `ctrl+o`,
@@ -92,7 +92,7 @@ the [user guide](guide.md); planned work is on the
 
 ## Platforms and packaging
 
-- Only Linux x86_64 is built and tested.
+- Vimma is released for Linux x86_64 only.
 - The AUR package `vimma-bin` is not published yet; use the release's `PKGBUILD`.
 - The `.deb`, the AppImage and the Arch package mark themselves as package-manager installs, so,
   like Firefox's own packages, they do not warn when the kernel blocks the unprivileged user
