@@ -17,9 +17,15 @@ const HTML_NS = "http://www.w3.org/1999/xhtml";
 /** @import { Part } from "../core/agent-prompt.mjs" */
 
 export class AgentPrompt {
-  /** @param {Window} win  a browser window */
-  constructor(win) {
+  /**
+   * @param {Window} win  a browser window
+   * @param {{ id?: string, color?: string }} [look]  the update question
+   *   (docs/specs/update-notices.md) is the same line with its own id and colour
+   */
+  constructor(win, { id = AGENT_PROMPT_ID, color = "var(--vimma-text-cyan)" } = {}) {
     this.win = win;
+    this.id = id;
+    this.color = color;
     /** @type {HTMLElement | null} */
     this.el = null;
     /** @type {HTMLElement | null} */
@@ -129,7 +135,7 @@ export class AgentPrompt {
       return node;
     };
     const container = el("div");
-    container.id = AGENT_PROMPT_ID;
+    container.id = this.id;
     container.hidden = true;
     // An alertdialog that does not take focus: a screen reader hears it as it appears.
     container.setAttribute("role", "alertdialog");
@@ -137,7 +143,7 @@ export class AgentPrompt {
     const panel = el("div", "vimma-cmdline-panel");
     const row = el("div", "vimma-cmdline-row");
     const text = el("span", "vimma-cmdline-prompt vimma-agent-prompt-text");
-    text.style.color = "var(--vimma-text-cyan)";
+    text.style.color = this.color;
     const count = el("span", "vimma-agent-prompt-count");
     count.style.color = "var(--vimma-fg-bright)";
     const hint = el("span", "vimma-agent-prompt-hint");

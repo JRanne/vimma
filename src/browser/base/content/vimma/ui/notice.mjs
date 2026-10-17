@@ -39,11 +39,12 @@ export class Notice {
    * it, and Firefox's own chrome is hidden there too (`inDOMFullscreen` on the root, set by
    * browser-fullScreenAndPointerLock.js).
    * @param {string} text
-   * @param {{ error?: boolean }} [options]  error: something was refused or failed; said
-   *   assertively
+   * @param {{ error?: boolean, ms?: number }} [options]  error: something was refused or failed;
+   *   said assertively. ms: how long it stays (NOTICE_MS unless given)
+   * @returns {boolean} whether it is shown
    */
-  show(text, { error = false } = {}) {
-    if (this.win.document.documentElement.hasAttribute("inDOMFullscreen")) return;
+  show(text, { error = false, ms = NOTICE_MS } = {}) {
+    if (this.win.document.documentElement.hasAttribute("inDOMFullscreen")) return false;
     const fresh = !this.el;
     const el = this.el ?? this.build();
     const shown = el.matches(":popover-open");
@@ -56,7 +57,8 @@ export class Notice {
     el.textContent = text;
     if (!shown) el.showPopover();
     if (this.timer !== null) this.win.clearTimeout(this.timer);
-    this.timer = this.win.setTimeout(() => this.hide(), NOTICE_MS);
+    this.timer = this.win.setTimeout(() => this.hide(), ms);
+    return true;
   }
 
   hide() {

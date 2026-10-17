@@ -81,8 +81,9 @@
   );
   ConfigHost.init(window);
 
-  // Update checks (spec m6a-updater), once per process: the first one 30 s after startup, then
-  // every 12 hours. config.toml's [updates] check comes with ConfigHost above.
+  // Update checks (spec m6a-updater), once per process: one a few seconds after the first
+  // window is ready when due (spec update-notices), then every 12 hours. config.toml's
+  // [updates] check comes with ConfigHost above.
   const { VimmaUpdates } = ChromeUtils.importESModule(
     "chrome://browser/content/vimma/updates/VimmaUpdates.sys.mjs",
   );

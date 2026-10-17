@@ -1050,9 +1050,11 @@ Rules:
 
 ## 16. Update check (`updates/VimmaUpdates.sys.mjs`, `update-publish.yml`)
 
-Spec: [m6a-updater](specs/m6a-updater.md) (delivery 1). Vimma fetches one signed manifest from
-`updates.vimma.dev` every 12 hours and on `:update`, and tells the status bar and about:vimma
-whether a newer release exists. It downloads and installs nothing. Who can reach it: whoever
+Spec: [m6a-updater](specs/m6a-updater.md) (delivery 1) and [update-notices](specs/update-notices.md).
+Vimma fetches one signed manifest from `updates.vimma.dev` every 12 hours, at startup when a check
+is due, and on `:update`, and tells the status bar, about:vimma and, once per version, a short
+message whether a newer release exists; a security release also asks once per session whether
+to show the update command. It downloads and installs nothing. Who can reach it: whoever
 controls the update host or the network path (TLS stops the path), _you_ through `about:config`
 and `config.toml`, and the control socket's full role (`app.update_check`, as it can run
 `app.quit`). The agent role reaches no action, so a local AI agent cannot trigger a check.
@@ -1093,10 +1095,16 @@ _Pages_ and _extensions_ cannot reach it.
   [`redirects_are_not_followed`](../tests/browser/browser_vimma_update_check.js),
   [`ask updates.vimma.dev with the platform and channel only`](../tools/branding/test/branding-prefs.test.mjs)
 - UP4. With `[updates] check = false` or `vimma.update.enabled` = `false`, and in a build run from
-  its objdir, Vimma **never** makes an update request. A `config.toml` with errors **never**
-  turns checks on: a `check = false` still readable in it holds, and while only the defaults
-  stand in for the broken file no check runs.
+  its objdir, Vimma **never** makes an update request, and shows no update message or question.
+  A `config.toml` with errors **never** turns checks on: a `check = false` still readable in it
+  holds, and while only the defaults stand in for the broken file no check runs. Apart from
+  `:update`, an attempt that got no answer is **never** repeated within 10 minutes, so restarts
+  send no burst of requests.
   [`off_by_pref_or_config_sends_nothing`](../tests/browser/browser_vimma_update_check.js),
+  [`nothing_at_all_with_checks_off`](../tests/browser/browser_vimma_update_notices.js),
+  [`checks off or a source build: never due`](../packages/vimma-core/test/update-notices.test.mjs),
+  [`a failed attempt does not count as a check, but is not retried within 10 minutes`](../packages/vimma-core/test/update-notices.test.mjs),
+  [`startup_checks_when_due_and_not_when_fresh`](../tests/browser/browser_vimma_update_notices.js),
   [`a_source_build_checks_nothing`](../tests/browser/browser_vimma_update_check.js),
   [`a_config_with_errors_still_turns_checks_off`](../tests/browser/browser_vimma_update_check.js),
   [`a file with errors: a readable check = false holds; else the config in force, or held`](../packages/vimma-core/test/updates.test.mjs)
@@ -1179,6 +1187,19 @@ _Pages_ and _extensions_ cannot reach it.
   [`reads each package's size and SHA-512 (the release pipeline's asset elements)`](../packages/vimma-core/test/updates.test.mjs),
   [`offerAssets keeps only well-formed entries (a saved result read back)`](../packages/vimma-core/test/updates.test.mjs),
   [`update_command_opens_the_steps`](../tests/browser/browser_vimma_update_check.js)
+- UP9. The security update question (`Show the update command? (y/N)`) is **never** answered by
+  a key pressed before it armed: keys count only `security.dialog_enable_delay` (1,000 ms) after
+  it appears or after its window comes to the front or leaves it, an earlier key starts the
+  delay again, and a held key never answers. It **never** takes focus, **never** opens while
+  focus is in a field, while another Vimma overlay or the agent question is open, or in a
+  private window, and `y` **only** opens about:vimma's Updates section: nothing is installed or
+  run. The one-time message is a notice that takes no focus and no keys.
+  [`a_security_update_asks_once_per_session`](../tests/browser/browser_vimma_update_notices.js),
+  [`y_shows_the_update_steps_and_esc_dismisses`](../tests/browser/browser_vimma_update_notices.js),
+  [`the_question_waits_while_the_user_types`](../tests/browser/browser_vimma_update_notices.js),
+  [`no_question_in_a_private_window`](../tests/browser/browser_vimma_update_notices.js),
+  [`a_new_version_is_announced_once`](../tests/browser/browser_vimma_update_notices.js),
+  [`y or Y shows the steps; n, Esc, Enter and any other key dismiss`](../packages/vimma-core/test/update-notices.test.mjs)
 
 **Key custody** (spec §6, decisions 16 and 17): the primary manifest key is a non-exportable
 Google Cloud KMS key that only `update-publish.yml`'s signing job on `main`, in the `update-signing` environment, can
