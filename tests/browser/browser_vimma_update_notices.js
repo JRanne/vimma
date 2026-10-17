@@ -423,14 +423,29 @@ add_task(async function closing_the_window_hands_the_question_on() {
 
 add_task(async function a_pref_of_the_wrong_type_breaks_nothing() {
   freshSession();
+  // An offer not announced yet, so the next look reads the pref.
+  await serve(await manifest({ version: "9.9.11" }));
+  Assert.equal((await VimmaUpdates.check()).outcome, "offer");
   // An about:config edit can give the pref another type; getStringPref then throws.
   Services.prefs.setIntPref(ANNOUNCED, 3);
   try {
     UpdateUi._sync();
     Assert.ok(true, "a look with a mistyped pref does not throw");
+    // A new window registers with the notices during its setup; its keys must still work.
+    const other = await BrowserTestUtils.openNewBrowserWindow();
+    try {
+      await SimpleTest.promiseFocus(other);
+      const { VimmaHost } = ChromeUtils.importESModule(
+        "chrome://browser/content/vimma/host/VimmaHost.sys.mjs",
+      );
+      Assert.ok(VimmaHost.status(other), "the new window was set up");
+    } finally {
+      await BrowserTestUtils.closeWindow(other);
+    }
   } finally {
     Services.prefs.clearUserPref(ANNOUNCED);
   }
+  await SimpleTest.promiseFocus(window);
   freshSession();
 });
 

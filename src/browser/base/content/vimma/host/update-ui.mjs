@@ -69,6 +69,8 @@ let asked = [];
 /** The question on screen. @type {{ win: Window, version: string } | null} */
 let current = null;
 let poll = /** @type {any} */ (null);
+/** The delay of the pending poll. */
+let pollMs = POLL_MS;
 let listening = false;
 /** @type {(() => boolean) | null} */
 let removeListener = null;
@@ -166,15 +168,18 @@ function sync() {
     // A pref of the wrong type (an about:config edit) must not break the window it runs in.
     console.error("vimma: update notices", e);
   }
-  if (waiting && windows.size) {
-    poll ??= lazy.setTimeout(
-      () => {
-        poll = null;
-        sync();
-      },
-      focusedWindow() ? POLL_MS : POLL_AWAY_MS,
-    );
+  if (!waiting || !windows.size) return;
+  const ms = focusedWindow() ? POLL_MS : POLL_AWAY_MS;
+  // A window came to the front during a slow wait: look again soon, not 5 s later.
+  if (poll && ms < pollMs) {
+    lazy.clearTimeout(poll);
+    poll = null;
   }
+  pollMs = ms;
+  poll ??= lazy.setTimeout(() => {
+    poll = null;
+    sync();
+  }, ms);
 }
 
 /**

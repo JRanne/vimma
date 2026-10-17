@@ -8,9 +8,9 @@
 // `:update` checks at once, and a start checks a few seconds after the first window is ready
 // when the last good check is older than the interval (docs/specs/update-notices.md). It
 // downloads and installs nothing. The request is anonymous (no cookies, no cache) and its URL may
-// carry only the platform and the update channel. A host that
-// does not answer is logged and otherwise quiet; a manifest that fails verification is refused
-// and, three times in a row, shown. Pure rules live in core/updates.mjs.
+// carry only the platform and the update channel. A host that does not answer is logged and
+// otherwise quiet; a manifest that fails verification is refused and, three times in a row,
+// shown. Pure rules live in core/updates.mjs.
 
 import {
   MAX_RESPONSE_BYTES,
