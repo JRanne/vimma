@@ -195,8 +195,8 @@ New windows and new tabs open Vimma's start page: the logo, and under it the thr
 from (`ctrl+b ?` keys, `:` commands, `f` hints), and, unless the colours are your Omarchy
 theme's, `:theme light/dark` to [switch the colours](#colours-and-themes). The address bar is empty and focused, so you can type an
 address straight away; click the page to use `:` and the other keys there. At the bottom, a small
-line shows which Vimma you run and the Firefox release it is built on (`Vimma 0.1.0 · Firefox
-158.0`). It is a local page (`chrome://browser/content/vimma/start/start.html`); nothing loads
+line shows which Vimma you run and the Firefox release it is built on (`Vimma X.Y.Z · Firefox
+N`). It is a local page (`chrome://browser/content/vimma/start/start.html`); nothing loads
 from the network.
 
 To change it back:
@@ -696,7 +696,7 @@ keys. A `[panel]` after a key means it works only in that mode.
 | `ctrl+b r`                                                                              | Resize mode ([below](#resize-mode)): `h j k l` move the pane's divider, `Esc` leaves. `ctrl+w < > + -` resize directly in normal mode.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `ctrl+b enter`                                                                          | A new pane along the focused pane's longer side: side by side when it is wide, stacked when it is tall ([Layouts](#layouts)). `[panes] layout = "manual"`: as `ctrl+b v`.                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `ctrl+b space`                                                                          | Cycles the layout presets, as tmux does; the status bar names the one you get ([Layouts](#layouts)). `:layout tiled` picks one.                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `ctrl+b shift+x`, `x`, `ctrl+F4`                                                        | Closes the tab, as Firefox's `ctrl+w` did: on a pinned tab it selects the first unpinned tab instead; the last tab closes the window. `x` in normal mode. `ctrl+shift+t` reopens the last closed tab, in every mode.                                                                                                                                                                                                                                                                                                                                                                      |
+| `ctrl+b shift+x`, `x`, `ctrl+F4`                                                        | Closes the tab, as Firefox's `ctrl+w` did: on a pinned tab it selects the first unpinned tab instead; closing the last tab opens a new tab and keeps the window ([Firefox behaviour Vimma changes](#firefox-behaviour-vimma-changes)). `x` in normal mode. `ctrl+shift+t` reopens the last closed tab, in every mode.                                                                                                                                                                                                                                                                     |
 | `ctrl+b` then anything else                                                             | Never leaks to the page. A binding without a command shows "… not implemented yet" for 1.5 s; an unbound key does nothing. Firefox's `ctrl+b` bookmarks sidebar is off.                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Firefox's keys                                                                          | Vimma bindings with Firefox's meaning ([below](#firefoxs-keys-are-vimma-bindings)): `ctrl+n` / `ctrl+shift+w` new / close window, `ctrl+shift+n` reopen it, `ctrl+q` quit (Firefox asks first), `ctrl+plus` / `ctrl+minus` / `ctrl+0` page zoom, `F11` full screen, `ctrl+s` save, `ctrl+p` print, `ctrl+m` mute the tab, `alt+home` home page, `ctrl+shift+y` downloads, `ctrl+shift+a` add-ons, `ctrl+shift+h` / `ctrl+shift+o` history / bookmarks (the Library), `ctrl+}` Picture-in-Picture, `ctrl+alt+r` Reader View, `ctrl+shift+s` screenshot, `ctrl+shift+delete` clear history. |
 | Developer tools                                                                         | Exactly as in Firefox: `F12` / `ctrl+shift+i` the toolbox, `ctrl+shift+c` Inspector, `ctrl+shift+k` Web Console, `ctrl+shift+z` Debugger (in a text field: redo), `ctrl+shift+e` Network, `shift+F7` Style Editor, `shift+F5` Performance, `shift+F9` Storage, `shift+F12` Accessibility, `ctrl+shift+m` Responsive Design Mode, `ctrl+shift+j` Browser Console, `ctrl+alt+shift+i` Browser Toolbox. Each is an action you can rebind in `[keys]`.                                                                                                                                        |
@@ -2150,8 +2150,8 @@ need.
 
 Sites see Firefox 158's user agent, with no Vimma token, and add-ons see Firefox's version
 (`runtime.getBrowserInfo()`), so Vimma is treated like Firefox. The About dialog shows Vimma's own
-version (`0.1.0`); `vimma --version` and the start page show it with the Firefox release it is
-built on, `Vimma 0.1.0 · Firefox 158.0`.
+version; `vimma --version` and the start page show it with the Firefox release it is built on,
+for example `Vimma X.Y.Z · Firefox N`.
 
 ### Safe Browsing
 
@@ -2242,8 +2242,7 @@ it does not help. Mozilla's tracking-protection lists update either way.
 **Does Vimma update itself?** No. Install each new release yourself ([Installing](#installing));
 from 0.1.2 on, Vimma's update check tells you when one is out and how to install it
 ([Updates](#updates)). Vimma 0.1.1 shows no notice: update it once by hand.
-Installing updates from inside Vimma is planned
-([limits.md](limits.md#privacy-security-and-services)).
+Vimma notifies you and shows the command; it does not install updates itself.
 Firefox's updater is not built into Vimma, so it never asks Mozilla's update server
 (`aus5.mozilla.org`) for a Firefox build.
 
