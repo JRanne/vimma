@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 // How an update reaches the user without a modal window (docs/specs/update-notices.md): when a
 // check is due, the one-time message for a new version, and the once-per-session question for a
 // security update. Pure rules; the host (updates/VimmaUpdates.sys.mjs, host/update-ui.mjs)
