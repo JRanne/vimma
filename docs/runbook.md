@@ -1244,7 +1244,8 @@ half a minute; the `pkgbuild.yml` workflow runs it on every change to `tools/pac
 **The two `PKGBUILD`s.** `package.mjs` writes one `vimma-bin` PKGBUILD in two variants that
 differ in one line, the install source it records in `/opt/vimma/is-packaged-app`:
 `dist/PKGBUILD` (`vimma-package=pkgbuild-release`) is the release asset that Arch users
-download with `curl -fLO …/releases/latest/download/PKGBUILD && makepkg -si` (guide,
+download with `mkdir -p ~/.cache/vimma-build && cd ~/.cache/vimma-build && curl -fLO
+…/releases/latest/download/PKGBUILD && makepkg -si` (guide,
 "Arch Linux"), and `dist/aur/PKGBUILD` (`vimma-package=aur`) is what goes to the AUR. `aur.yml`
 runs after the build's artifacts may have expired, so it makes that variant again from the
 published release's `PKGBUILD` by switching the one install-source line, and pushes it with the

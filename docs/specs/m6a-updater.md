@@ -766,7 +766,9 @@ mar` needs the host `mar` tool from the same objdir. Nothing here can ship befor
 24. **A `vimma-bin` built from the release's PKGBUILD gets the exact command as its hint**:
     `:update` shows `curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si`,
     the command that installed it (`PKGBUILD_INSTALL_COMMAND` in `tools/package/package.mjs`),
-    because rerunning it is the whole update and the user may not remember where it came from;
+    because rerunning it is the whole update and the user may not remember where it came from
+    (since changed: the command is now `mkdir -p ~/.cache/vimma-build && cd ~/.cache/vimma-build && curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si`, which works from any directory; described in
+    docs/guide.md, "Arch Linux");
     the `vimma-package=pkgbuild-release` line that package writes (spec m6-packaging, "Arch
     Linux without the AUR", decision 4) tells it apart from an AUR install, whose users update
     with their AUR helper instead. Rejected: one hint for both, because "update with your AUR

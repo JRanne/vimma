@@ -56,6 +56,7 @@ const REPO = "vimma-browser/vimma";
  * @type {Record<string, URL>}
  */
 const DOCS = {
+  "README.md": new URL("../../../README.md", import.meta.url),
   "docs/guide.md": new URL("../../../docs/guide.md", import.meta.url),
   "docs/runbook.md": new URL("../../../docs/runbook.md", import.meta.url),
   "docs/specs/m6-packaging.md": new URL("../../../docs/specs/m6-packaging.md", import.meta.url),
@@ -386,7 +387,7 @@ describe("PKGBUILD and .SRCINFO", () => {
 
   it("says in its header how to install it from the release", () => {
     expect(PKGBUILD_INSTALL_COMMAND).toBe(
-      "curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si",
+      "mkdir -p ~/.cache/vimma-build && cd ~/.cache/vimma-build && curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si",
     );
     expect(build).toContain(`\n#   ${PKGBUILD_INSTALL_COMMAND}\n`);
   });
@@ -893,10 +894,12 @@ describe("the documented Arch Linux command", () => {
   /** @param {string} path relative to the repository root */
   const doc = (path) => readFileSync(DOCS[path], "utf8");
 
-  it.each(["docs/guide.md", "docs/specs/m6a-updater.md", "docs/specs/m6-packaging.md"])(
-    "%s gives the command the PKGBUILD's header gives",
-    (path) => {
-      expect(doc(path).replace(/\n\s*/g, " ")).toContain(PKGBUILD_INSTALL_COMMAND);
-    },
-  );
+  it.each([
+    "README.md",
+    "docs/guide.md",
+    "docs/specs/m6a-updater.md",
+    "docs/specs/m6-packaging.md",
+  ])("%s gives the command the PKGBUILD's header gives", (path) => {
+    expect(doc(path).replace(/\n\s*/g, " ")).toContain(PKGBUILD_INSTALL_COMMAND);
+  });
 });

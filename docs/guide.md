@@ -88,7 +88,7 @@ vimma-vimma.desktop` does that. Next to the files are `SHA256SUMS`, a CycloneDX 
 [runbook.md](runbook.md#release-packages-releaseyml-spec-m6-packaging) ("Verify a release").
 
 **Updating.** Install the newer release the way you installed this one: on Arch Linux, run the
-install command again in the same directory; otherwise, install the newer `.deb`, AppImage or
+install command again; otherwise, install the newer `.deb`, AppImage or
 tarball over the old one. From 0.1.2 on, Vimma tells you when a new release is out and shows the
 command for your install ([Updates](#updates)); Vimma 0.1.1 never does, so update it this way once.
 
@@ -101,20 +101,21 @@ build takes about 40 minutes on a 16-thread machine and needs about 35 GB of dis
 
 Each release carries a `PKGBUILD` for the `vimma-bin` package. It needs no other file: it
 downloads the release tarball, checks it against the SHA-256 written into it, and installs Vimma
-to `/opt/vimma` with `vimma` and `vimma-open` on your `PATH`, a desktop entry and icons. In an
-empty directory (makepkg leaves its build files there), run as your normal user:
+to `/opt/vimma` with `vimma` and `vimma-open` on your `PATH`, a desktop entry and icons. Run
+this as your normal user, from any directory:
 
 ```sh
-curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si
+mkdir -p ~/.cache/vimma-build && cd ~/.cache/vimma-build && curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si
 ```
 
 `makepkg -si` installs the libraries Vimma needs with pacman, asks for your password to install
-the package, and refuses to run as root. To update, run the same command again in the same
-directory: it fetches the newest release's `PKGBUILD`, and pacman replaces the installed
-version. `:update` shows this command when a new release is out ([Updates](#updates)).
-`sudo pacman -R vimma-bin` removes Vimma; your
-
-profile stays in your home directory.
+the package, and refuses to run as root. A first install and every update use the same
+command: it builds in `~/.cache/vimma-build`, so it leaves nothing in the directory you run it
+from, fetches the newest release's `PKGBUILD` each time, and pacman replaces the installed
+version. The folder holds the build files and the last package built (about 450 MB during a
+build), and you can delete it at any time. `:update` shows this command when a new release is
+out ([Updates](#updates)). `sudo pacman -R vimma-bin` removes Vimma; your profile stays in your
+home directory.
 
 A release is built and its files are uploaded before it is published, so a published release
 has its `PKGBUILD` from the start. If `curl` prints `curl: (22) The requested URL returned
@@ -127,6 +128,7 @@ signature, verify the signature with [cosign](https://github.com/sigstore/cosign
 checksum:
 
 ```sh
+mkdir -p ~/.cache/vimma-build && cd ~/.cache/vimma-build
 base=https://github.com/vimma-browser/vimma/releases/latest/download
 curl -fL -O "$base/PKGBUILD" -O "$base/SHA256SUMS" -O "$base/SHA256SUMS.sigstore.json"
 cosign verify-blob --bundle SHA256SUMS.sigstore.json \
@@ -2077,14 +2079,14 @@ accepted. It installs nothing; it tells you.
   and is checked against the SHA-512 the signed file gives for it (`sha512sum -c`) before
   anything is installed or replaced, so a file changed on the release page stops the command.
 
-  | Installed with           | `:update` shows                                                                                     |
-  | ------------------------ | --------------------------------------------------------------------------------------------------- |
-  | The release's `PKGBUILD` | `curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si` |
-  | AUR `vimma-bin`          | `yay -Syu vimma-bin` (or your AUR helper's equivalent)                                              |
-  | `.deb`                   | download `vimma_X.Y.Z_amd64.deb`, check it, then `sudo apt install ./vimma_X.Y.Z_amd64.deb`         |
-  | Tarball                  | quit Vimma, download the tarball, check it, then `tar -xJf` it into the install's parent directory  |
-  | AppImage                 | download the new AppImage next to yours, check it, and rename it over yours; the next start runs it |
-  | A build from source      | nothing: source builds never check (pull and rebuild)                                               |
+  | Installed with           | `:update` shows                                                                                                                                                 |
+  | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | The release's `PKGBUILD` | `mkdir -p ~/.cache/vimma-build && cd ~/.cache/vimma-build && curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si` |
+  | AUR `vimma-bin`          | `yay -Syu vimma-bin` (or your AUR helper's equivalent)                                                                                                          |
+  | `.deb`                   | download `vimma_X.Y.Z_amd64.deb`, check it, then `sudo apt install ./vimma_X.Y.Z_amd64.deb`                                                                     |
+  | Tarball                  | quit Vimma, download the tarball, check it, then `tar -xJf` it into the install's parent directory                                                              |
+  | AppImage                 | download the new AppImage next to yours, check it, and rename it over yours; the next start runs it                                                             |
+  | A build from source      | nothing: source builds never check (pull and rebuild)                                                                                                           |
 
 - **What a check sends:** a GET for
   `https://updates.vimma.dev/updates/browser/Linux_x86_64-gcc3/<channel>/update.xml`, with no

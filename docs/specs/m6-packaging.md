@@ -247,6 +247,9 @@ carries the `vimma-bin` `PKGBUILD` as an asset, and one command installs or upda
 curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si
 ```
 
+(Since changed: the command now builds in a fixed folder, so that it works from any directory and
+leaves no build files in the current one: `mkdir -p ~/.cache/vimma-build && cd ~/.cache/vimma-build && curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si`; described in docs/guide.md, "Arch Linux".)
+
 Engine paths were checked against Firefox 158.0 (`config/milestone.txt`).
 
 1. **The PKGBUILD is a release asset.** Arch users get a pacman-managed install from the
