@@ -693,6 +693,18 @@ describe("grepClosed: recently closed tabs and windows match on title and URL", 
     expect(rows.findIndex((r) => r.closedWindow)).toBe(25);
   });
 
+  test("entries closed in the same millisecond come last closed first", () => {
+    const rows = grepClosed(
+      [
+        closedTab(4, "needle a", "https://t.test/", { closedAt: 7 }),
+        closedTab(5, "needle b", "https://t.test/", { closedAt: 7 }),
+        closedTab(6, "needle c", "https://t.test/", { closedAt: 7 }),
+      ],
+      must("needle"),
+    );
+    expect(rows.map((r) => r.closedId)).toEqual([6, 5, 4]);
+  });
+
   test("a closed window takes the agent marking of the tab it shows", () => {
     const win = closedTab(7, "W", "", {
       closedWindow: true,

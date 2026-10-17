@@ -12,6 +12,12 @@
 // Firefox's own for these prompts (security.notification_enable_delay), whose buttons also
 // refuse a click before it (PopupNotifications._onButtonEvent). A line in the prompt names the
 // keys once it is armed.
+//
+// The delay counts from Firefox's own clock for the prompt, `notification.timeShown`, which
+// Firefox moves forward whenever the panel is repositioned or resized ("popuppositioned") or the
+// window is activated. A key armed on a clock of our own could reach a button Firefox still
+// refuses, and the key would be lost. For the same reason the keys line keeps its place in the
+// panel while hidden: showing it must not resize the panel and so restart Firefox's delay.
 
 import { doorhangerHint, doorhangerKey } from "../core/prompt-keys.mjs";
 import { chordFromEvent, formatKey } from "../core/keys.mjs";
@@ -20,7 +26,10 @@ const DELAY_PREF = "security.notification_enable_delay";
 const DEFAULT_DELAY_MS = 500;
 const PANEL_ID = "notification-popup";
 const HINT_CLASS = "vimma-prompt-keys";
+/** On the keys line once the prompt is armed; without it the line is invisible, not gone. */
+const ARMED_ATTR = "armed";
 const HTML_NS = "http://www.w3.org/1999/xhtml";
+const EVENTS = ["popupshowing", "popupshown", "popuppositioned", "popuphidden", "activate"];
 
 /**
  * What the keys need from VimmaHost.
@@ -46,22 +55,18 @@ export class PromptKeys {
   constructor(win, host) {
     this.win = win;
     this.host = host;
-    /** when the open prompt showed */
-    this.shownAt = 0;
-    /** the last key while it was open */
+    /** the last key while it was open, on ChromeUtils.now()'s clock as `timeShown` is */
     this.lastKeyAt = 0;
     this.armTimer = 0;
     this.onPopup = (/** @type {Event} */ e) => this.popup(e);
   }
 
   init() {
-    this.win.addEventListener("popupshown", this.onPopup, true);
-    this.win.addEventListener("popuphidden", this.onPopup, true);
+    for (const type of EVENTS) this.win.addEventListener(type, this.onPopup, true);
   }
 
   uninit() {
-    this.win.removeEventListener("popupshown", this.onPopup, true);
-    this.win.removeEventListener("popuphidden", this.onPopup, true);
+    for (const type of EVENTS) this.win.removeEventListener(type, this.onPopup, true);
     this.win.clearTimeout(this.armTimer);
   }
 
@@ -71,24 +76,66 @@ export class PromptKeys {
 
   /** The prompt shown in the open doorhanger panel, or null. @returns {any} */
   get notification() {
+    return this.topmost("open");
+  }
+
+  /**
+   * The topmost prompt, the one Firefox's own Esc answers (PopupNotifications), while the panel
+   * is in `state`.
+   * @param {string} state
+   * @returns {any}
+   */
+  topmost(state) {
     const panel = /** @type {any} */ (this.win.document.getElementById(PANEL_ID));
-    if (panel?.state !== "open") return null;
-    // The topmost prompt, the one Firefox's own Esc answers (PopupNotifications).
+    if (panel?.state !== state) return null;
     const n = panel.firstElementChild;
     return n?.localName === "popupnotification" ? n : null;
   }
 
+  /**
+   * When `n` is armed, on ChromeUtils.now()'s clock: Firefox's delay from when it last showed
+   * the prompt, and ours from the last key. Infinity while Firefox has not stamped it.
+   * @param {any} n
+   */
+  armedAt(n) {
+    const shown = n.notification?.timeShown;
+    if (typeof shown !== "number") return Infinity;
+    return Math.max(shown, this.lastKeyAt) + this.delay;
+  }
+
   /** @param {Event} e */
   popup(e) {
+    if (e.type === "activate") {
+      // Firefox restarts its delay for an open prompt when the window is activated.
+      const n = this.notification;
+      if (n) this.arm(n);
+      return;
+    }
     if (/** @type {Element} */ (e.target).id !== PANEL_ID) return;
     if (e.type === "popuphidden") {
       this.win.clearTimeout(this.armTimer);
       return;
     }
-    this.shownAt = Date.now();
-    this.lastKeyAt = 0;
+    if (e.type === "popupshowing") {
+      // Firefox has filled the panel by now. The line goes in before it lays out, so that the
+      // panel opens at its final size.
+      this.lastKeyAt = 0;
+      const n = this.topmost("showing");
+      if (n) this.hintFor(n);
+      return;
+    }
+    // popupshown, and popuppositioned: Firefox has just restarted its delay.
     const n = this.notification;
-    if (!n) return;
+    if (n) this.arm(n);
+  }
+
+  /**
+   * The keys line in `n`, made and labelled after its buttons if need be; hidden while it is
+   * made.
+   * @param {any} n
+   * @returns {HTMLElement}
+   */
+  hintFor(n) {
     let hint = n.querySelector(`.${HINT_CLASS}`);
     if (!hint) {
       hint = this.win.document.createElementNS(HTML_NS, "div");
@@ -98,24 +145,34 @@ export class PromptKeys {
       (n.buttonGroup ?? n).before(hint);
     }
     const secondaryHidden = n.hasAttribute("secondarybuttonhidden");
-    hint.textContent = doorhangerHint({
+    const text = doorhangerHint({
       main: n.getAttribute("buttonlabel") ?? "",
       secondary: secondaryHidden ? "" : (n.getAttribute("secondarybuttonlabel") ?? ""),
     });
-    this.arm(hint);
+    if (hint.textContent !== text) {
+      hint.removeAttribute(ARMED_ATTR);
+      hint.textContent = text;
+    }
+    return hint;
   }
 
   /**
-   * Hides the keys line and shows it again once the prompt is armed.
-   * @param {HTMLElement | null} hint
+   * Hides the keys line of `n` and shows it again once the prompt is armed.
+   * @param {any} n
    */
-  arm(hint) {
-    if (!hint) return;
+  arm(n) {
     this.win.clearTimeout(this.armTimer);
-    hint.hidden = true;
-    this.armTimer = this.win.setTimeout(() => {
-      hint.hidden = false;
-    }, this.delay);
+    const hint = this.hintFor(n);
+    const check = () => {
+      // Firefox may have restarted its delay meanwhile; wait for the later deadline.
+      const left = this.armedAt(n) - ChromeUtils.now();
+      if (left <= 0) hint.setAttribute(ARMED_ATTR, "");
+      else if (left !== Infinity) this.armTimer = this.win.setTimeout(check, Math.ceil(left));
+    };
+    hint.removeAttribute(ARMED_ATTR);
+    // The first look waits for the end of the event at hand: Firefox restamps `timeShown` in its
+    // own listeners for the same events, which may run after this one.
+    this.armTimer = this.win.setTimeout(check, 0);
   }
 
   /**
@@ -128,10 +185,10 @@ export class PromptKeys {
     if (!n) return false;
     const chord = chordFromEvent(e);
     if (!chord) return false; // a bare modifier
-    const now = Date.now();
-    const armed = now - Math.max(this.shownAt, this.lastKeyAt) >= this.delay;
+    const now = ChromeUtils.now();
+    const armed = now >= this.armedAt(n);
     this.lastKeyAt = now;
-    this.arm(n.querySelector(`.${HINT_CLASS}`));
+    this.arm(n);
     if (this.host.otherOpen()) return false;
     const focused = /** @type {any} */ (this.win.document).commandDispatcher?.focusedElement;
     const inPrompt = hostChain(focused).includes(n);

@@ -53,6 +53,31 @@ const closedTab = (closedId, extra = {}) => ({
 });
 
 describe("tab search lists (docs/specs/tab-search.md, decisions 3 and 5)", () => {
+  test("tabs closed in the same millisecond list the last closed first", () => {
+    // SessionStore keeps such ties oldest first (it inserts before the first strictly older
+    // entry) and stamps closedAt in whole milliseconds; closedId grows with every close.
+    const items = tabSearchItems({
+      private: false,
+      windows: [{ private: false, items: here }],
+      closedTabs: [
+        closedTab(4, { closedAt: 7 }),
+        closedTab(5, { closedAt: 7 }),
+        closedTab(6, { closedAt: 7 }),
+      ],
+      closedWindows: [
+        { closedId: 8, title: "A", tabCount: 1, closedAt: 9 },
+        { closedId: 9, title: "B", tabCount: 1, closedAt: 9 },
+      ],
+    });
+    expect(items.filter((i) => i.closed).map((i) => i.tabId)).toEqual([
+      "closed:6",
+      "closed:5",
+      "closed:4",
+      "closedwin:9",
+      "closedwin:8",
+    ]);
+  });
+
   test("this window, then other windows, then recently closed newest first, then windows", () => {
     const items = tabSearchItems({
       private: false,

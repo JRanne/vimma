@@ -93,6 +93,17 @@ export function closedWindowItem(c) {
 }
 
 /**
+ * Sorts recently closed tabs or windows newest first. SessionStore stamps `closedAt` in whole
+ * milliseconds and keeps entries closed in the same one oldest first, so ties go by `closedId`,
+ * which it hands out in closing order.
+ * @param {{ closedAt: number, closedId: number }} a
+ * @param {{ closedAt: number, closedId: number }} b
+ */
+export function newestClosedFirst(a, b) {
+  return b.closedAt - a.closedAt || b.closedId - a.closedId;
+}
+
+/**
  * Everything tab search lists, in order (decision 3): this window's tabs, the other windows',
  * then "Recently closed": closed tabs newest first, then closed windows. A normal window never
  * lists a private tab, open or closed, and a private window lists private ones only (decision 5).
@@ -106,13 +117,13 @@ export function tabSearchItems(input) {
   );
   const tabs = input.closedTabs
     .filter((c) => c.private === input.private)
-    .sort((a, b) => b.closedAt - a.closedAt)
+    .sort(newestClosedFirst)
     .slice(0, CLOSED_TAB_CAP)
     .map(closedTabItem);
   const windows = input.private
     ? []
     : [...input.closedWindows]
-        .sort((a, b) => b.closedAt - a.closedAt)
+        .sort(newestClosedFirst)
         .slice(0, CLOSED_WINDOW_CAP)
         .map(closedWindowItem);
   return [...open, ...tabs, ...windows];

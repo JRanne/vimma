@@ -570,6 +570,10 @@ Numbered decisions, each with its reason and the alternatives rejected.
       the window in between; any key restarts the delay, and `y` or `n` before it is swallowed.
       A page that raises a prompt while the user is typing for the page therefore never gets an
       answer from that typing. Firefox's own check in `_onButtonEvent` still applies on top.
+      (Since changed: the delay counts from Firefox's `notification.timeShown`, which Firefox
+      restarts when the panel moves or resizes or the window is activated, and the keys line
+      keeps its place while hidden so that showing it does not resize the panel; see
+      `host/prompt-keys.mjs` and docs/security.md.)
     - **Never from a field.** In insert mode (focus in a page's or the chrome's text field) the
       keys are the field's.
     - **`Tab`** (focus in the page, not in a field) moves focus onto the prompt's first button,

@@ -10,6 +10,7 @@
 import { AGENT_GLYPH } from "./agent.mjs";
 import { scoreField, typedChar } from "./picker.mjs";
 import { deleteWordBackward } from "./strings.mjs";
+import { newestClosedFirst } from "./tabsearch.mjs";
 
 /**
  * The limits of decision 14: matches listed and counted per frame, rows in the list, a row's
@@ -618,7 +619,7 @@ export function closedSearchText(entries, caps = GREP_CLOSED_CAPS) {
   const newest = (/** @type {boolean} */ win, /** @type {number} */ cap) =>
     entries
       .filter((e) => e.closedWindow === win)
-      .sort((a, b) => b.closedAt - a.closedAt)
+      .sort(newestClosedFirst)
       .slice(0, cap);
   const picked = [...newest(false, caps.tabs), ...newest(true, caps.windows)];
   const ordered = [...picked.filter((e) => !e.agent), ...picked.filter((e) => e.agent)];

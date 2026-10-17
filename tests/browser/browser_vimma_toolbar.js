@@ -508,6 +508,78 @@ add_task(async function permission_prompts_answer_y_and_n() {
   await show();
 });
 
+// 5b: the keys follow Firefox's own delay for the prompt (notification.timeShown), which it
+// restarts when the panel is repositioned or resized and when the window is activated. A key
+// armed earlier would click a button Firefox still refuses, and be lost.
+add_task(async function prompt_keys_arm_on_firefoxs_own_delay() {
+  const DELAY = 400;
+  await SpecialPowers.pushPrefEnv({ set: [["security.notification_enable_delay", DELAY]] });
+  const tab = await openPage();
+  await hide();
+  const browser = tab.linkedBrowser;
+  const panel = PopupNotifications.panel;
+  const principal = () => browser.contentPrincipal;
+  const geo = () => SitePermissions.getForPrincipal(principal(), "geo", browser).state;
+  const forget = () => SitePermissions.removeFromPrincipal(principal(), "geo", browser);
+  const ask = async () => {
+    const shown = BrowserTestUtils.waitForEvent(panel, "popupshown");
+    await SpecialPowers.spawn(browser, [], () => {
+      content.navigator.geolocation.getCurrentPosition(
+        () => {},
+        () => {},
+      );
+    });
+    await shown;
+    return /** @type {any} */ (panel.firstElementChild);
+  };
+  /** Resolves with the time the keys line shows, taken as it shows. */
+  const hintShows = (n) =>
+    new Promise((resolve) => {
+      const observer = new MutationObserver(() => {
+        const hint = n.querySelector(".vimma-prompt-keys");
+        if (!shows(hint)) return;
+        observer.disconnect();
+        resolve(ChromeUtils.now());
+      });
+      observer.observe(n, { attributes: true, childList: true, subtree: true });
+    });
+  const frames = () =>
+    new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+
+  // Showing the line must not restart Firefox's delay (a resize of the panel does).
+  let n = await ask();
+  let at = await hintShows(n);
+  await frames();
+  Assert.greaterOrEqual(
+    at - n.notification.timeShown,
+    DELAY,
+    "the keys line shows once Firefox's delay has run, and showing it does not restart it",
+  );
+  EventUtils.synthesizeKey("y");
+  await until(() => panel.state === "closed", "y as the keys show answers");
+  Assert.equal(geo(), SitePermissions.ALLOW, "y allows");
+  forget();
+
+  // The window is activated while the prompt waits: Firefox's delay starts over, so do the keys.
+  n = await ask();
+  await new Promise((r) => setTimeout(r, DELAY / 2));
+  window.dispatchEvent(new Event("activate"));
+  at = await hintShows(n);
+  Assert.greaterOrEqual(
+    at - n.notification.timeShown,
+    DELAY,
+    "after an activation the keys line waits for Firefox's restarted delay",
+  );
+  EventUtils.synthesizeKey("n");
+  await until(() => panel.state === "closed", "n as the keys show answers");
+  Assert.equal(geo(), SitePermissions.BLOCK, "n blocks");
+  forget();
+
+  await SpecialPowers.popPrefEnv();
+  gBrowser.removeTab(tab);
+  await show();
+});
+
 // 6: the site's identity panel (Firefox's trust panel, or the identity panel where that is
 // off) opens with a click on the site's identity in the prompt bar, hangs from it and keeps the
 // prompt bar up while open. The minimal bar has no identity to click; the full toolbar has.

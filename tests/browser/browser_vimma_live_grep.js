@@ -846,8 +846,13 @@ add_task(async function closed_tabs_and_windows_match_on_title_and_url_and_enter
   await until(() => body.textContent.includes("Recently closed tab"), "the closed preview");
 
   const opened = BrowserTestUtils.waitForEvent(gBrowser.tabContainer, "TabOpen");
+  // SessionStore labels the tab from its saved state before the page loads; the restore then
+  // replaces the browser's first document, and a SpecialPowers.spawn into that one (openGrep's
+  // focus check) aborts. Wait for the restore itself, listened for before it can happen.
+  const restored = BrowserTestUtils.waitForEvent(gBrowser.tabContainer, "SSTabRestored");
   EventUtils.synthesizeKey("KEY_Enter");
   const reopened = (await opened).target;
+  Assert.equal((await restored).target, reopened, "the reopened tab is restored");
   await until(() => gBrowser.selectedTab === reopened, "Enter reopens it and goes there");
   await until(() => reopened.label === "Zulu closedneedle", "the closed tab is back");
 
