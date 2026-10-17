@@ -238,7 +238,7 @@ Rules: test names are sentences from the spec; `vimma-core` imports nothing from
 
 Weeks are evenings-and-weekends ordering estimates, not dates. Each milestone ends with a nightly you use daily. Order from here: M7's security work first, then M6a, then M6 once Vimma has been daily-driven; macOS comes later, and Windows is not planned.
 
-The backlog is GitHub issues, one per planned feature: [`label:planned`](https://github.com/vimma-browser/vimma/issues?q=is%3Aissue+is%3Aopen+label%3Aplanned), tracked on the [Vimma roadmap](https://github.com/users/JRanne/projects/2) board (Draft, Decided, Building, Done). Each issue links its spec and lists the spec's open questions; `docs/specs/README.md` describes the lifecycle. This section keeps the milestones and the order only.
+The backlog is GitHub issues, one per planned feature: [`label:planned`](https://github.com/vimma-browser/vimma/issues?q=is%3Aissue+is%3Aopen+label%3Aplanned), tracked on the [Vimma roadmap](https://github.com/orgs/vimma-browser/projects/1) board (Planned, In progress, Done). Each issue links its spec and lists the spec's open questions; `docs/specs/README.md` describes the lifecycle. This section keeps the milestones and the order only.
 
 | | Milestone | Status | Scope | Gate |
 | --- | --- | --- | --- | --- |

@@ -1,0 +1,81 @@
+name: Bug report
+description: Something in Vimma does not work as the guide describes.
+labels: [needs-triage, bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Search the [open issues](https://github.com/vimma-browser/vimma/issues) first; if one matches, add to it instead.
+
+        A security problem goes to a [private report](https://github.com/vimma-browser/vimma/security/advisories/new), never to a public issue.
+  - type: input
+    id: version
+    attributes:
+      label: Vimma version
+      description: Open `about:vimma` and copy the Vimma, Firefox and Build ID lines.
+      placeholder: "Vimma 0.1.2, Firefox 158.0, Build ID 20261015000000"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install type
+      options:
+        - Arch PKGBUILD
+        - AUR
+        - .deb
+        - AppImage
+        - Tarball
+        - Built from source
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Linux distribution and desktop
+      description: The distribution, and the desktop or window manager, with Wayland or X11 if you know it.
+      placeholder: "Omarchy 4 (Arch), Hyprland, Wayland"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, including any message in the status bar or the Browser Console.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: From a fresh start where possible, with the exact keys you pressed.
+      placeholder: |
+        1. Open a new tab with `ctrl+b c`
+        2. Press `f`
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: input
+    id: site
+    attributes:
+      label: Site or page
+      description: The address where it happens, if it depends on the page. Leave out anything private in the address.
+  - type: textarea
+    id: config
+    attributes:
+      label: config.toml excerpt
+      description: >-
+        The part of `~/.config/vimma/config.toml` that matters, if any. Do not paste secrets, tokens
+        or personal data.
+      render: toml
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag images here if they help. Check that they show nothing private.

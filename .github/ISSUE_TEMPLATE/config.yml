@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability → report privately
+    url: https://github.com/vimma-browser/vimma/security/advisories/new
+    about: Report a vulnerability privately, never in a public issue (see SECURITY.md).
+  - name: Question or idea → Discussions
+    url: https://github.com/vimma-browser/vimma/discussions
+    about: Ask how something works, or talk through an idea before it becomes a request.
+  - name: Documentation
+    url: https://vimma.dev/docs/
+    about: The user guide, the key bindings and the known limits.
