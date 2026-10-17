@@ -1191,10 +1191,14 @@ _Pages_ and _extensions_ cannot reach it.
   a key pressed before it armed: keys count only `security.dialog_enable_delay` (1,000 ms) after
   it appears or after its window comes to the front or leaves it, an earlier key starts the
   delay again, and a held key never answers. It **never** takes focus, **never** opens while
-  focus is in a field, while another Vimma overlay or the agent question is open, or in a
-  private window, and `y` **only** opens about:vimma's Updates section: nothing is installed or
+  focus is in a field, while another Vimma overlay, the agent question or a Firefox permission
+  prompt is open, or in a private window; a key that arrives while focus is in a field or a page
+  is in DOM full screen is **never** taken as an answer; and `y` **only** opens about:vimma's Updates section: nothing is installed or
   run. The one-time message is a notice that takes no focus and no keys.
   [`a_security_update_asks_once_per_session`](../tests/browser/browser_vimma_update_notices.js),
+  [`early_and_held_keys_never_answer`](../tests/browser/browser_vimma_update_notices.js),
+  [`another_window_in_front_arms_it_again`](../tests/browser/browser_vimma_update_notices.js),
+  [`the_question_waits_for_an_open_overlay`](../tests/browser/browser_vimma_update_notices.js),
   [`y_shows_the_update_steps_and_esc_dismisses`](../tests/browser/browser_vimma_update_notices.js),
   [`the_question_waits_while_the_user_types`](../tests/browser/browser_vimma_update_notices.js),
   [`no_question_in_a_private_window`](../tests/browser/browser_vimma_update_notices.js),

@@ -33,8 +33,8 @@ update segment (spec [m6a-updater](m6a-updater.md) §5) stays the lasting remind
    not count, but no attempt follows within 10 minutes of the last one, except on `:update`.
 2. **One-time message.** The first time an offer for a version is seen, the focused browser
    window shows `Vimma 0.1.3 is available · :update shows the command` for 6 seconds in the
-   notice area above the status bar; for a security release `Vimma 0.1.3 fixes security issues
-· :update shows the command`. It never takes focus. It is shown once per version, across
+   notice area above the status bar; for a security release
+   `Vimma 0.1.3 fixes security issues · :update shows the command`. It never takes focus. It is shown once per version, across
    restarts (the pref `vimma.update.announced`); a newer version is announced again. With no
    browser window focused, or a page in DOM full screen, it waits.
 3. **Security question.** An offer with `vimmaUrgency="security"` asks, once per session and
@@ -44,7 +44,8 @@ update segment (spec [m6a-updater](m6a-updater.md) §5) stays the lasting remind
      other key dismiss it for the session. Chords with ctrl, alt or meta, and the rest of a
      `ctrl+b` sequence, go to the bindings as usual.
    - It opens by itself only in a focused normal (non-private) window, out of insert mode, after
-     1,500 ms without a key, with no picker, prompt, panel, command line or agent question open,
+     1,500 ms without a key, with no picker, prompt, panel, command line, agent question or
+     Firefox permission prompt open,
      and not over a page in DOM full screen. Otherwise it waits.
    - It never takes focus. Focus moving into a field, or a picker or prompt opening over it,
      closes it back to waiting.
@@ -72,7 +73,7 @@ update segment (spec [m6a-updater](m6a-updater.md) §5) stays the lasting remind
   keys from VimmaHost's capture listener, opens by itself only under `mayOpenByItself`
   (`packages/vimma-core/src/agent-prompt.mjs`) and arms after `security.dialog_enable_delay`.
   The `y/N` questions of `ui/rename-prompt.mjs` (closing a workspace, `:private close`) focus
-  an input instead, because the user asked for them by a key. The notice (`ui/notice.mjs`) is a
+  an input instead, because each one follows the key that opened it. The notice (`ui/notice.mjs`) is a
   popover that never takes focus and is read by screen readers through live regions.
 
 ## Design
@@ -97,8 +98,13 @@ colour. VimmaHost hands it each keydown after the agent question and before the 
    or a host outage does not postpone the next check by 12 hours. A failed attempt is not
    repeated within 10 minutes, so that restarting Vimma in a loop sends no burst of requests;
    the hourly timer retries in a running session. A refused manifest does not count either,
-   because the next one may be valid. A last good check in the future (the clock was set back)
-   makes a check due, so that a wrong clock never stops checks.
+   because the next one may be valid; three refusals in a row therefore show
+   `updates: check failed` after about three hours instead of 36, which is intended, since a
+   feed that keeps failing verification is worth knowing about sooner. A last good check in the
+   future (the clock was set back) makes a check due, so that a wrong clock never stops checks.
+   No check runs before config.toml has been read, because its `[updates] check = false` is not
+   known until then; a check due earlier runs once it is read, and an unreadable file holds
+   checks off.
 3. **The message is the existing notice, shown for 6 seconds**, because it is already the place
    where Vimma says things without taking focus, and screen readers hear it. Six seconds is long
    enough to read a line of about 60 characters and short enough not to linger. Rejected: the
@@ -122,7 +128,11 @@ colour. VimmaHost hands it each keydown after the agent question and before the 
    [#323](https://github.com/vimma-browser/vimma/issues/323)). The 1,000 ms dialog delay is used
    rather than the 500 ms doorhanger delay, so that both of Vimma's self-opening lines arm alike.
 8. **Any key but `y` dismisses the question for the session**, as in every `y/N` in Vimma,
-   because a question that ignored keys would block the user until they found the right one.
+   because a question that ignored keys would block the user until they found the right one. A
+   key that arrives while focus is in a field, while another overlay or a Firefox permission
+   prompt is open, or while a page is in DOM full screen (where the line is hidden) is not the
+   question's: the line closes back to waiting and the key goes on, so that a key is never read
+   as an answer to a question the user cannot see or did not mean.
    `y` only opens the steps: Vimma installs nothing (m6a-updater decision 11).
 9. **Once per session and version**, because the red segment stays and the steps need the user
    to act outside Vimma (a terminal, a package manager); asking again in the same session would
@@ -157,8 +167,10 @@ colour. VimmaHost hands it each keydown after the agent question and before the 
   `startup_checks_when_due_and_not_when_fresh`, `a_new_version_is_announced_once`,
   `a_security_update_asks_once_per_session` (keys within the delay ignored, `n` dismisses, not
   asked again), `y_shows_the_update_steps_and_esc_dismisses`,
-  `the_question_waits_while_the_user_types`, `no_question_in_a_private_window`,
-  `nothing_at_all_with_checks_off`.
+  `the_question_waits_while_the_user_types`, `early_and_held_keys_never_answer`,
+  `another_window_in_front_arms_it_again`, `the_question_waits_for_an_open_overlay`,
+  `closing_the_window_hands_the_question_on`, `a_pref_of_the_wrong_type_breaks_nothing`,
+  `no_question_in_a_private_window`, `nothing_at_all_with_checks_off`.
 
 ## Docs and changelog
 

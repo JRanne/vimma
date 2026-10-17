@@ -36,8 +36,10 @@ export const ANNOUNCED_PREF = "vimma.update.announced";
 const ARMING_PREF = "security.dialog_enable_delay";
 /** How long the message stays: long enough to read, short enough not to linger. */
 export const ANNOUNCE_MS = 6000;
-/** How often a waiting message or question checks whether it may show now. */
+/** How often a waiting message or question checks whether it may show now, with a Vimma window
+ * focused; slower while none is, so a session spent in another application costs few wakeups. */
 const POLL_MS = 500;
+const POLL_AWAY_MS = 5000;
 /** Window events after which the line must arm again, as the agent question's. */
 const REARM_EVENTS = ["activate", "deactivate", "focus", "blur"];
 
@@ -51,7 +53,8 @@ const REARM_EVENTS = ["activate", "deactivate", "focus", "blur"];
  * @property {() => boolean} pending  a key sequence is under way (after ctrl+b)
  * @property {(text: string) => boolean} notice  the message; false when it cannot show (full
  *   screen)
- * @property {() => void} hideNotice  hides the notice: the question says what the message said
+ * @property {(text: string) => void} hideNotice  hides the notice if it shows `text`: the
+ *   question says what the message said
  * @property {() => void} openSteps  what `:update` opens: about:vimma's Updates section
  */
 
@@ -92,6 +95,9 @@ function offerState() {
   return { enabled: status.enabled, offer: status.offer, installType: VimmaUpdates.installType };
 }
 
+/** The last message shown, so the question hides that one and no other notice. */
+let lastMessage = "";
+
 /** The message for a version not announced yet, in the focused window; true while one waits. */
 function announce() {
   const { enabled, offer, installType } = offerState();
@@ -102,6 +108,7 @@ function announce() {
   const win = focusedWindow();
   const w = win && windows.get(win);
   if (!w || !w.notice(text)) return true;
+  lastMessage = text;
   Services.prefs.setStringPref(ANNOUNCED_PREF, offer.displayVersion);
   return false;
 }
@@ -112,7 +119,7 @@ function open(win, version, question) {
   if (!w) return false;
   const line = { parts: [{ text: question }], hint: QUESTION_HINT, label: question };
   if (!w.prompt.show(line, armMs())) return false;
-  w.hideNotice();
+  if (lastMessage) w.hideNotice(lastMessage);
   current = { win, version };
   return true;
 }
@@ -152,12 +159,21 @@ function ask() {
 
 /** Shows what is due and may show; looks again shortly while something waits. */
 function sync() {
-  const waiting = [announce(), ask()].some(Boolean);
+  let waiting = false;
+  try {
+    waiting = [announce(), ask()].some(Boolean);
+  } catch (e) {
+    // A pref of the wrong type (an about:config edit) must not break the window it runs in.
+    console.error("vimma: update notices", e);
+  }
   if (waiting && windows.size) {
-    poll ??= lazy.setTimeout(() => {
-      poll = null;
-      sync();
-    }, POLL_MS);
+    poll ??= lazy.setTimeout(
+      () => {
+        poll = null;
+        sync();
+      },
+      focusedWindow() ? POLL_MS : POLL_AWAY_MS,
+    );
   }
 }
 
@@ -170,6 +186,8 @@ function onWindowChange(win, e) {
   if ((e.type === "focus" || e.type === "blur") && e.target !== win) return;
   lastKey.set(win, Date.now());
   if (current?.win === win) windows.get(win)?.prompt.rearm(armMs());
+  // A window come to the front may now show what waits, without waiting for the slow poll.
+  else if (e.type === "activate") sync();
 }
 
 export const UpdateUi = {
@@ -193,9 +211,12 @@ export const UpdateUi = {
   unregister(win) {
     const rearm = rearmers.get(win);
     if (rearm) for (const type of REARM_EVENTS) win.removeEventListener(type, rearm, true);
-    if (current?.win === win) current = null;
+    const wasAsking = current?.win === win;
+    if (wasAsking) current = null;
     windows.get(win)?.prompt.destroy();
     windows.delete(win);
+    // The question goes on to the window left in front.
+    if (wasAsking && windows.size) sync();
     if (!windows.size) {
       listening = false;
       removeListener?.();
@@ -221,8 +242,10 @@ export const UpdateUi = {
     if (!chord) return false; // a bare modifier: shift for `Y`
     if (chord.ctrl || chord.alt || chord.meta) return false;
     if (w.pending()) return false;
-    // Something opened over the line takes the keys; the question comes back when it closes.
-    if (w.otherOpen()) {
+    // Something opened over the line, focus went into a field (a page's focus report can come
+    // after the key), or the page went full screen (which hides the line): the key is not the
+    // question's, and the question comes back when it may.
+    if (w.otherOpen() || w.inField() || isFullscreen(win)) {
       close();
       sync();
       return false;

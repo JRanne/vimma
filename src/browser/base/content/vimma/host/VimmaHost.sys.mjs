@@ -1317,10 +1317,13 @@ export const VimmaHost = {
         state.panel.isOpen ||
         state.bookmarks.isOpen ||
         state.find.typing ||
-        state.agentPrompt.isOpen,
+        state.agentPrompt.isOpen ||
+        !!state.promptKeys?.notification,
       pending: () => state.dispatcher.pending().length > 0,
       notice: (text) => state.notice.show(text, { ms: ANNOUNCE_MS }),
-      hideNotice: () => state.notice.hide(),
+      hideNotice: (text) => {
+        if (state.notice.el?.textContent === text) state.notice.hide();
+      },
       openSteps: () => openOrSay(state, "about:vimma#updates", "tab"),
     });
     // After the page and in the system group, as Tabbrowser's own key handling: text-field keys

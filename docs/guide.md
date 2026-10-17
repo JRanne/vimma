@@ -2065,10 +2065,11 @@ and never shows a notice. Update it once by hand, the way you installed it: the 
 the table below and in [Installing](#installing). From 0.1.2 on, the status bar tells you.
 
 Every 12 hours, and a few seconds after startup when the last successful check is older, Vimma
-fetches one small signed file from `updates.vimma.dev` that names the newest release of its update channel. It
-checks the file's signature against the keys built into Vimma and refuses anything else: a file
-signed by another key, one for another channel or platform, or one older than a file it already
-accepted. It installs nothing; it tells you.
+fetches one small signed file from `updates.vimma.dev` that names the newest release of its
+update channel. A check that fails is tried again every hour while Vimma runs. Vimma checks the
+file's signature against the keys built into Vimma and refuses anything else: a file signed by
+another key, one for another channel or platform, or one older than a file it already accepted.
+It installs nothing; it tells you.
 
 - **A newer version:** the status bar's right side shows `⇡ 0.3.1 available`, dim. A release that
   carries a Firefox security fix shows `⇡ 0.3.1 security: :update` in the error colour.
@@ -2110,8 +2111,7 @@ accepted. It installs nothing; it tells you.
   (7 for nightly builds) shows `updates: no news for N days`.
 - **Off:** `[updates] check = false` in [config.toml](#configtoml), or `vimma.update.enabled` =
   `false` in `about:config`, stops every request, the message and the question; `about:vimma`
-  then says checks are off. A
-  `config.toml` with errors never turns checks back on: its `check = false` still holds, and
+  then says checks are off. A `config.toml` with errors never turns checks back on: its `check = false` still holds, and
   while Vimma runs on its defaults because of the errors, it does not check at all.
 
 ## Privacy defaults

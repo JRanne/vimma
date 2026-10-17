@@ -329,6 +329,111 @@ add_task(async function the_question_waits_while_the_user_types() {
   freshSession();
 });
 
+/** An urgent offer in a fresh session, the question shown in this window; resolves at its show. */
+async function askNow(browser) {
+  freshSession();
+  Services.prefs.setStringPref(ANNOUNCED, "9.9.9");
+  browser.focus();
+  await serve(await manifest({ urgent: true }));
+  Assert.equal((await VimmaUpdates.check()).outcome, "offer");
+  await until(lineShown, "the question shows");
+  return Date.now();
+}
+
+add_task(async function early_and_held_keys_never_answer() {
+  await BrowserTestUtils.withNewTab(PLAIN, async (browser) => {
+    const shown = await askNow(browser);
+    // A key shortly before the delay ends starts it again.
+    await pause(Math.max(0, shown + ARM_MS - 250 - Date.now()));
+    EventUtils.synthesizeKey("j");
+    await pause(Math.max(0, shown + ARM_MS + 150 - Date.now()));
+    Assert.ok(!armed(), "an early key started the delay again");
+    Assert.ok(lineShown(), "and did not answer");
+    await until(armed, "armed after a quiet delay");
+    // A key held down from before never answers.
+    const tabs = gBrowser.tabs.length;
+    EventUtils.synthesizeKey("y", { repeat: true });
+    Assert.ok(lineShown(), "a repeated y does not answer");
+    Assert.equal(gBrowser.tabs.length, tabs, "no tab opened");
+    EventUtils.synthesizeKey("n");
+    await until(() => !lineShown(), "n closes it");
+  });
+  freshSession();
+});
+
+add_task(async function another_window_in_front_arms_it_again() {
+  await BrowserTestUtils.withNewTab(PLAIN, async (browser) => {
+    await askNow(browser);
+    await until(armed, "armed");
+    const other = await BrowserTestUtils.openNewBrowserWindow();
+    await SimpleTest.promiseFocus(other);
+    await BrowserTestUtils.closeWindow(other);
+    await SimpleTest.promiseFocus(window);
+    Assert.ok(!armed(), "coming back to the window arms the line again");
+    await until(armed, "armed after the delay");
+    EventUtils.synthesizeKey("KEY_Escape");
+    await until(() => !lineShown(), "closed");
+  });
+  freshSession();
+});
+
+add_task(async function the_question_waits_for_an_open_overlay() {
+  await BrowserTestUtils.withNewTab(PLAIN, async (browser) => {
+    freshSession();
+    Services.prefs.setStringPref(ANNOUNCED, "9.9.9");
+    browser.focus();
+    EventUtils.synthesizeKey(":", { shiftKey: true });
+    await until(() => VimmaHostMode() === "command", "the command line is open");
+    await serve(await manifest({ urgent: true }));
+    Assert.equal((await VimmaUpdates.check()).outcome, "offer");
+    await pause(2500);
+    Assert.ok(!lineShown(), "no question over the command line");
+    EventUtils.synthesizeKey("KEY_Escape");
+    await until(() => VimmaHostMode() === "normal", "the command line closed");
+    await until(lineShown, "asked once it closed");
+  });
+  freshSession();
+});
+
+add_task(async function closing_the_window_hands_the_question_on() {
+  freshSession();
+  // A page in the window left behind, so it is in normal mode when it comes back to the front.
+  await BrowserTestUtils.openNewForegroundTab(gBrowser, PLAIN);
+  Services.prefs.setStringPref(ANNOUNCED, "9.9.9");
+  const other = await BrowserTestUtils.openNewBrowserWindow();
+  try {
+    await SimpleTest.promiseFocus(other);
+    // A page in front, in normal mode: the new window's empty tab has the address bar focused.
+    const tab = await BrowserTestUtils.openNewForegroundTab(other.gBrowser, PLAIN);
+    tab.linkedBrowser.focus();
+    await serve(await manifest({ urgent: true }));
+    Assert.equal((await VimmaUpdates.check()).outcome, "offer");
+    await until(() => lineShown(other), "asked in the window in front");
+  } finally {
+    await BrowserTestUtils.closeWindow(other);
+  }
+  await SimpleTest.promiseFocus(window);
+  gBrowser.selectedBrowser.focus();
+  await until(() => VimmaHostMode() === "normal", "normal mode in the window left");
+  await until(lineShown, "asked again in the window left");
+  EventUtils.synthesizeKey("KEY_Escape");
+  BrowserTestUtils.removeTab(gBrowser.selectedTab);
+  freshSession();
+});
+
+add_task(async function a_pref_of_the_wrong_type_breaks_nothing() {
+  freshSession();
+  // An about:config edit can give the pref another type; getStringPref then throws.
+  Services.prefs.setIntPref(ANNOUNCED, 3);
+  try {
+    UpdateUi._sync();
+    Assert.ok(true, "a look with a mistyped pref does not throw");
+  } finally {
+    Services.prefs.clearUserPref(ANNOUNCED);
+  }
+  freshSession();
+});
+
 add_task(async function no_question_in_a_private_window() {
   freshSession();
   Services.prefs.setStringPref(ANNOUNCED, "9.9.9");

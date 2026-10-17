@@ -5,9 +5,10 @@
 // Vimma's update check (spec: docs/specs/m6a-updater.md, delivery 1). Every 12 hours it fetches
 // the signed manifest from updates.vimma.dev, verifies it against the keys pinned in this build
 // (core/update-keys.mjs) and tells the status bar and about:vimma whether a newer Vimma exists;
-// `:update` checks at once, and a start checks a few seconds after the first window is ready when
-// the last good check is older than the interval (docs/specs/update-notices.md). It downloads and installs nothing. The request is anonymous (no
-// cookies, no cache) and its URL may carry only the platform and the update channel. A host that
+// `:update` checks at once, and a start checks a few seconds after the first window is ready
+// when the last good check is older than the interval (docs/specs/update-notices.md). It
+// downloads and installs nothing. The request is anonymous (no cookies, no cache) and its URL may
+// carry only the platform and the update channel. A host that
 // does not answer is logged and otherwise quiet; a manifest that fails verification is refused
 // and, three times in a row, shown. Pure rules live in core/updates.mjs.
 
@@ -396,9 +397,17 @@ async function runCheck() {
   });
 }
 
+/** A due check found config.toml not read yet: configure() runs it. */
+let waitingForConfig = false;
+
 /** Checks when one is due (core checkDue): at startup and on the hourly timer. */
 async function maybeCheck() {
   const where = await installInfo();
+  // Before config.toml is read, its `[updates] check = false` is unknown: no request until it is.
+  if (configCheck === null && !held) {
+    waitingForConfig = true;
+    return;
+  }
   const due = checkDue({
     enabled: enabled(),
     installType: where.type,
@@ -445,6 +454,10 @@ export const VimmaUpdates = {
     configCheck = updates.check;
     held = heldNow;
     notify();
+    if (waitingForConfig) {
+      waitingForConfig = false;
+      maybeCheck().catch((e) => console.error("vimma: update check failed", e));
+    }
   },
 
   /**
