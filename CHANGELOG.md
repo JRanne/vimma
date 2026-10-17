@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow SemVer. From the first release on, release-please writes each release's entry from the Conventional Commits on `main` ([docs/runbook.md](docs/runbook.md), Releases).
 
+## [0.1.5](https://github.com/vimma-browser/vimma/compare/v0.1.4...v0.1.5) (2026-10-17)
+
+
+### Fixed
+
+* **keys:** keep a capital letter whose lower case is two characters as typed ([#349](https://github.com/vimma-browser/vimma/issues/349)) ([8d17eb0](https://github.com/vimma-browser/vimma/commit/8d17eb0ef4fa04c8903406a7ee290ab6d53ff438)), closes [#313](https://github.com/vimma-browser/vimma/issues/313)
+* **prompt-keys:** arm y and n on firefox's own prompt delay, and fix two test races ([#346](https://github.com/vimma-browser/vimma/issues/346)) ([d100a04](https://github.com/vimma-browser/vimma/commit/d100a04c37135c7647c1e7b07c85dcfd829bd405)), closes [#334](https://github.com/vimma-browser/vimma/issues/334) [#307](https://github.com/vimma-browser/vimma/issues/307)
+
 ## [0.1.4](https://github.com/vimma-browser/vimma/compare/v0.1.3...v0.1.4) · Firefox 158.0 (2026-10-17)
 
 
