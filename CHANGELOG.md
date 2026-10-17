@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow SemVer. From the first release on, release-please writes each release's entry from the Conventional Commits on `main` ([docs/runbook.md](docs/runbook.md), Releases).
 
+## [0.1.3](https://github.com/vimma-browser/vimma/compare/v0.1.2...v0.1.3) (2026-10-17)
+
+
+### Added
+
+* **theme:** the vimma logo follows the theme's colours ([#338](https://github.com/vimma-browser/vimma/issues/338)) ([ea67716](https://github.com/vimma-browser/vimma/commit/ea67716008d553270244fbe19f8da78990d2520e))
+* **updates:** announce new versions once and ask about security updates per session ([#337](https://github.com/vimma-browser/vimma/issues/337)) ([2941983](https://github.com/vimma-browser/vimma/commit/29419831ab6927e3e59c3d345bd7e80d2cf51eb2)), closes [#336](https://github.com/vimma-browser/vimma/issues/336)
+
+
+### Fixed
+
+* **install:** build the arch linux package in ~/.cache/vimma-build from any directory ([#333](https://github.com/vimma-browser/vimma/issues/333)) ([e4135c5](https://github.com/vimma-browser/vimma/commit/e4135c535cf8375d28b5059971bf71f46a231ec0))
+
 ## [0.1.2](https://github.com/vimma-browser/vimma/compare/v0.1.1...v0.1.2) · Firefox 158.0 (2026-10-16)
 
 
