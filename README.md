@@ -30,11 +30,11 @@ and workspaces, and your hands never leave the keyboard.
 Vimma runs on Linux x86_64. Download the files from the
 [latest release](https://github.com/vimma-browser/vimma/releases/latest).
 
-**Arch Linux:** run this as your normal user (not root) in an empty directory, since makepkg
-leaves its build files there. Running it again in the same directory updates Vimma.
+**Arch Linux:** run this as your normal user (not root), from any directory. It builds in
+`~/.cache/vimma-build`, and the same command updates Vimma.
 
 ```sh
-curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si
+mkdir -p ~/.cache/vimma-build && cd ~/.cache/vimma-build && curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si
 ```
 
 **Debian 12+, Ubuntu 22.04+:** download `vimma_X.Y.Z_amd64.deb`, then

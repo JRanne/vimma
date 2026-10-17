@@ -1,5 +1,6 @@
 #!/bin/bash
 # Builds and installs the release PKGBUILD on Arch Linux, as a user would with
+#   mkdir -p ~/.cache/vimma-build && cd ~/.cache/vimma-build &&
 #   curl -fLO …/releases/latest/download/PKGBUILD && makepkg -si
 # (spec m6-packaging, "Arch Linux without the AUR"), against the tarball in a local directory
 # served over HTTP instead of the GitHub Release, which does not exist yet when this runs.

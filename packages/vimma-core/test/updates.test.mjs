@@ -699,9 +699,9 @@ describe("updateSteps (:update and about:vimma)", () => {
   const dl = "https://github.com/vimma-browser/vimma/releases/download/v0.3.1";
   const curl = "curl -fL --proto =https";
 
-  test("pkgbuild-release: the exact curl … && makepkg -si command (decision 24)", () => {
+  test("pkgbuild-release: the exact mkdir … && makepkg -si command (decision 24)", () => {
     expect(updateSteps("pkgbuild-release", offer, where).commands).toEqual([
-      "curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si",
+      "mkdir -p ~/.cache/vimma-build && cd ~/.cache/vimma-build && curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUILD && makepkg -si",
     ]);
   });
 
