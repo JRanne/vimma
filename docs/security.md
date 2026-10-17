@@ -894,12 +894,13 @@ release path held for review, with its published diff,
   [`no workflow names a self-hosted runner, and both build jobs run on ubuntu-24.04`](../tools/test/self-hosted-runner.test.mjs),
   [`each build job runs only from main`](../tools/test/self-hosted-runner.test.mjs)
 - B6. The Safe Browsing key **must** be available only to jobs in the `build` environment,
-  deployable only from `main` and `v*` tags, and only the two build jobs (`nightly.yml` and
+  deployable only from `main`, and only the two build jobs (`nightly.yml` and
   `release.yml`) use it. The environment's deployment rule is enforced by GitHub, outside any
-  workflow file, so a branch's edited workflow cannot read the key by dropping an `if:`. The key
+  workflow file, so a branch's or tag's edited workflow cannot read the key by dropping an
+  `if:`. No tag may deploy: a tag ruleset restricts moving a tag, not creating one. The key
   still ships inside every keyed binary (spec m0-safebrowsing-key): this limits who can use it
-  from CI, not who can read it. **⚠ setting:** the `build` environment with its two deployment
-  rules holds `SAFEBROWSING_API_KEY`, and no repository secret of that name exists
+  from CI, not who can read it. **⚠ setting:** the `build` environment, with `main` as its only
+  deployment rule, holds `SAFEBROWSING_API_KEY`, and no repository secret of that name exists
   (`gh api repos/vimma-browser/vimma/actions/secrets`; docs/runbook.md, "Google Safe Browsing
   key"). While a repository secret of that name remains, any job of any branch can read it.
   [`the Safe Browsing key comes only from the build environment, in the two build jobs`](../tools/test/build-supply-chain.test.mjs)

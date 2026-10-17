@@ -953,18 +953,18 @@ The local artifact build copies the same mozconfig, so it is keyed too (rebuild 
 on purpose.
 
 **In CI**, the key is the secret `SAFEBROWSING_API_KEY` of the `build` environment, which only
-`main` and `v*` tags may deploy from; only the `build` jobs of `nightly.yml` and `release.yml`
+`main` may deploy from (no tag: anyone who can push a tag could otherwise deploy an edited
+workflow from it); only the `build` jobs of `nightly.yml` and `release.yml`
 name that environment (docs/security.md, B6). A repository administrator sets it up once, in
 this order (until step 3, the jobs keep reading the old repository secret, so nothing breaks):
 
 ```sh
 R=repos/vimma-browser/vimma
-# 1. The environment, deployable only from main and v* tags.
+# 1. The environment, deployable only from main.
 gh api -X PUT $R/environments/build --input - <<'JSON'
 { "deployment_branch_policy": { "protected_branches": false, "custom_branch_policies": true } }
 JSON
 gh api -X POST $R/environments/build/deployment-branch-policies -f name=main -f type=branch
-gh api -X POST $R/environments/build/deployment-branch-policies -f name='v*' -f type=tag
 # 2. The key as an environment secret.
 gh secret set SAFEBROWSING_API_KEY --env build < ~/.config/vimma/keys/safebrowsing
 # 3. Delete the repository secret, so no other job can read it.

@@ -49,8 +49,8 @@ jobs:
     if: >-
       vars.RELEASE_ENABLED == 'true' && github.repository == 'vimma-browser/vimma' &&
       github.ref == 'refs/heads/main'
-    # The Safe Browsing key is a secret of the `build` environment, which only main and v* tags
-    # may deploy from (docs/security.md, B6): GitHub enforces that outside this file.
+    # The Safe Browsing key is a secret of the `build` environment, which only main may deploy
+    # from (docs/security.md, B6): GitHub enforces that outside this file.
     environment: build
     runs-on: ubuntu-24.04
     # About 1.5 times the measured job, 117 min (docs/runbook.md, "Full builds"), well under
