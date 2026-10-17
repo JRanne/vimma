@@ -36,9 +36,8 @@ What works today, each with the section that explains it:
   take your own colours.
 - **[Accessible](#accessibility):** Vimma's own UI works with a screen reader and meets WCAG AA
   contrast in dark and light themes.
-- **[Update checks](#updates)** (not active until the first release is announced): the status
-  bar says when a newer Vimma exists (red for a security release), and `:update` shows the exact
-  commands for how you installed it.
+- **[Update checks](#updates)** (from 0.1.2): the status bar says when a newer Vimma exists (red
+  for a security release), and `:update` shows the exact commands for how you installed it.
 - **Firefox underneath** ([privacy defaults](#privacy-defaults)): the same user agent and
   [add-on](#add-ons) compatibility as Firefox; no studies, sponsored content or telemetry
   uploads; Safe Browsing on.
@@ -90,8 +89,8 @@ vimma-vimma.desktop` does that. Next to the files are `SHA256SUMS`, a CycloneDX 
 
 **Updating.** Install the newer release the way you installed this one: on Arch Linux, run the
 install command again in the same directory; otherwise, install the newer `.deb`, AppImage or
-tarball over the old one. [Updates](#updates) lists the commands and says when Vimma tells you
-about a new release.
+tarball over the old one. From 0.1.2 on, Vimma tells you when a new release is out and shows the
+command for your install ([Updates](#updates)); Vimma 0.1.1 never does, so update it this way once.
 
 **Building from source.** Follow [CONTRIBUTING.md](../CONTRIBUTING.md#build-and-run): `npm ci`,
 `npx surfer download`, `npx surfer bootstrap`, `npm run import`, `npx surfer build`. The first
@@ -2055,11 +2054,13 @@ slots busy. Turn the pref off to stop either.
 
 ## Updates
 
-**Not active until the first release is announced.** Vimma has its signing key built in and
-checks `updates.vimma.dev`, but the host has no signed file yet, so every check finds nothing
-(`about:vimma` says `no manifest from the update host`) and the status bar never shows a new
-version. Until then, update by hand with the commands in the table below
-([Installing](#installing)). Once a release is announced, this is how it works:
+Vimma 0.1.2 and later tell you when a newer release is out; Linux x86_64 builds are the only
+ones checked, since they are the only ones released. Vimma notifies you and shows the command; it
+does not install the update itself.
+
+**Coming from 0.1.1?** Vimma 0.1.1 has no signing key built in, so it refuses every update file
+and never shows a notice. Update it once by hand, the way you installed it: the commands are in
+the table below and in [Installing](#installing). From 0.1.2 on, the status bar tells you.
 
 Every 12 hours, and 30 seconds after startup if the last check is older, Vimma fetches one small
 signed file from `updates.vimma.dev` that names the newest release of its update channel. It
@@ -2218,7 +2219,8 @@ malware lists; Settings then shows "Block dangerous and deceptive content" untic
 it does not help. Mozilla's tracking-protection lists update either way.
 
 **Does Vimma update itself?** No. Install each new release yourself ([Installing](#installing));
-Vimma's update check tells you when one is out and how to install it ([Updates](#updates)).
+from 0.1.2 on, Vimma's update check tells you when one is out and how to install it
+([Updates](#updates)). Vimma 0.1.1 shows no notice: update it once by hand.
 Installing updates from inside Vimma is planned
 ([limits.md](limits.md#privacy-security-and-services)).
 Firefox's updater is not built into Vimma, so it never asks Mozilla's update server

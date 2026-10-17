@@ -286,12 +286,17 @@ These are the trade-offs the workspaces' design accepts on purpose
 - Safe Browsing's `goog-harmful-proto` list is requested but did not arrive when Vimma's key was
   tested (the phishing, malware and unwanted-software lists did); treat it as unavailable
   ([design notes](specs/m0-safebrowsing-key.md)).
-- Vimma's update check only shows how to update; it installs nothing itself. Installing
-  through Firefox's updater, staged updates and an AppImage that replaces its own file are
-  planned ([design notes](specs/m6a-updater.md)). Vimma carries the pinned key that
-  update manifests are signed with, but `updates.vimma.dev` publishes no manifest yet, so a check
-  finds nothing and stays quiet, and you update by installing the newer release
-  yourself ([guide](guide.md#updates)).
+- Vimma's update check only notifies: it shows the newer version and the command for your
+  install, and installs nothing itself. Installing through Firefox's updater, staged updates and
+  an AppImage that replaces its own file are planned ([design notes](specs/m6a-updater.md)).
+- Update notices start with Vimma 0.1.2, the first release that pins the key update manifests
+  are signed with; `updates.vimma.dev` publishes a signed manifest for each release. Vimma 0.1.1
+  pins no key, refuses every manifest and never shows a notice: update it once by hand
+  ([guide](guide.md#updates)).
+- Only one update signing key is pinned. The offline secondary key that would replace a lost or
+  leaked primary is not made yet; until a release pins it, replacing the primary means every
+  install updates by hand once ([runbook](runbook.md#update-signing-keys-and-the-update-host-spec-m6a-updater)).
+- Update manifests are published for Linux x86_64 only, the one platform Vimma is released for.
 - The "no news for N days" warning counts from the last manifest (the signed file that
   announces a release) Vimma accepted: an install that has never accepted one (its host always
   failed, or withheld the feed from the start) shows nothing, because a host that does not answer is kept quiet

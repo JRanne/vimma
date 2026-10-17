@@ -1375,9 +1375,10 @@ Vimma checks `https://updates.vimma.dev/updates/browser/Linux_x86_64-gcc3/<chann
 every 12 hours and accepts only a manifest signed by a key pinned in
 `packages/vimma-core/src/update-keys.mjs` (step 5; a build with no pinned key refuses every
 manifest and shows nothing). These steps need the maintainer's accounts; do them once, in order.
-Steps 1 to 6 are done. Step 7 sets up `update-publish.yml`, which signs and publishes a manifest
-for every published release; nothing is published until the repository variable
-`UPDATES_ENABLED` is `true`, and setting it is what turns update notices on for every install.
+All steps but 4 (the offline secondary key) are done. Step 7 sets up `update-publish.yml`, which
+signs and publishes a manifest for every published release; nothing is published while the
+repository variable `UPDATES_ENABLED` is not `true`. It is `true`, so update notices are on for
+every install of 0.1.2 or later (0.1.1 pins no key and never shows one).
 
 **1. The manifest repository** (decision 18): it holds only manifests.
 
@@ -1406,7 +1407,21 @@ require pull requests: the release workflow pushes manifests with a deploy key (
 repository → `vimma-browser/vimma-updates` (Workers Builds, deploy command `npx wrangler deploy`,
 no build command). Then the Worker → Settings → Domains & Routes → Add → Custom domain →
 `updates.vimma.dev`; the `vimma.dev` zone is on Cloudflare, so the DNS record and certificate
-are created with it. Check:
+are created with it.
+
+The Worker must stay connected to `vimma-browser/vimma-updates` through Workers Builds (the Worker's
+settings list the repository and its `main` branch under Build). Workers Builds is
+what deploys a manifest: `update-publish.yml` only pushes a commit to `vimma-updates`, and without
+the Git connection that push changes nothing on `updates.vimma.dev`, so the run fails at its last
+step, which waits until the new serial is served. To recover, connect the repository again, then
+deploy the current `main` by hand from a checkout of `vimma-updates`, with an API token limited to
+Workers ("Edit Cloudflare Workers" template), and re-run the failed job:
+
+```sh
+git pull && CLOUDFLARE_API_TOKEN=<workers-token> CLOUDFLARE_ACCOUNT_ID=<account-id> npx wrangler deploy
+```
+
+Check:
 
 ```sh
 curl -sI https://updates.vimma.dev/updates/browser/Linux_x86_64-gcc3/vimma/update.xml  # 404 until a manifest exists
@@ -1438,12 +1453,25 @@ NUMBER=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
 gcloud iam workload-identity-pools create github --location global --display-name GitHub
 gcloud iam workload-identity-pools providers create-oidc vimma --location global \
   --workload-identity-pool github --issuer-uri https://token.actions.githubusercontent.com \
-  --attribute-mapping 'google.subject=assertion.sub,attribute.repository=assertion.repository' \
+  --attribute-mapping 'google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.job_workflow_ref=assertion.job_workflow_ref' \
   --attribute-condition "assertion.repository == 'vimma-browser/vimma'"
+read OWNER_ID REPO_ID < <(gh api repos/vimma-browser/vimma --jq '"\(.owner.id) \(.id)"')
+SUBJECT="repo:vimma-browser@$OWNER_ID/vimma@$REPO_ID:environment:update-signing"
 gcloud kms keys add-iam-policy-binding update-primary --keyring vimma-updates \
   --location "$LOCATION" --role roles/cloudkms.signerVerifier \
-  --member "principal://iam.googleapis.com/projects/$NUMBER/locations/global/workloadIdentityPools/github/subject/repo:vimma-browser/vimma:environment:update-signing"
+  --member "principal://iam.googleapis.com/projects/$NUMBER/locations/global/workloadIdentityPools/github/subject/$SUBJECT"
 ```
+
+For this repository the member is
+`principal://iam.googleapis.com/projects/<NUMBER>/locations/global/workloadIdentityPools/github/subject/repo:vimma-browser@342851495/vimma@1411511592:environment:update-signing`.
+
+GitHub's OIDC token for this repository carries its subject (`sub`) in the immutable-ID form:
+the owner and the repository are each followed by `@` and their numeric ID. IDs never change
+and are never reused, unlike names, so a repository that later takes the name
+`vimma-browser/vimma` (after a rename, transfer or deletion) cannot match this binding. The binding must name the subject exactly as the token carries it. A binding for the
+name-only form (`repo:vimma-browser/vimma:environment:update-signing`) matches no token, and
+signing fails with `PERMISSION_DENIED` on `cloudkms.cryptoKeyVersions.useToSign`. The IDs come
+from `gh api repos/vimma-browser/vimma --jq '.owner.id, .id'` (owner first).
 
 Only a job in the `update-signing` environment of `vimma-browser/vimma` gets that subject. Turn
 on Data Access audit logs (Data read and Data write) for Cloud Key Management Service in IAM &
@@ -1563,10 +1591,11 @@ id=$(gh api $R/environments/update-signing/deployment-branch-policies \
 [ -n "$id" ] && gh api -X DELETE $R/environments/update-signing/deployment-branch-policies/$id
 gh api $R/environments/update-signing/deployment-branch-policies --jq '.branch_policies[].name'  # main
 
-# b. Recommended: Google Cloud also checks that the token comes from update-publish.yml on main,
+# b. In force: Google Cloud also checks that the token comes from update-publish.yml on main,
 #    so no other workflow or branch can sign even with the environment. This replaces the
 #    provider's whole condition: a later workflow that signs (for example MAR signing in
-#    release.yml) needs its own job_workflow_ref added with ||.
+#    release.yml) needs its own job_workflow_ref added with ||. Keep the attribute mapping
+#    from step 3, which maps attribute.job_workflow_ref next to attribute.repository.
 gcloud iam workload-identity-pools providers update-oidc vimma --location global \
   --workload-identity-pool github --attribute-condition "assertion.repository == 'vimma-browser/vimma' && assertion.job_workflow_ref == 'vimma-browser/vimma/.github/workflows/update-publish.yml@refs/heads/main'"
 

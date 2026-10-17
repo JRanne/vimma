@@ -1182,7 +1182,7 @@ _Pages_ and _extensions_ cannot reach it.
 
 **Key custody** (spec §6, decisions 16 and 17): the primary manifest key is a non-exportable
 Google Cloud KMS key that only `update-publish.yml`'s signing job on `main`, in the `update-signing` environment, can
-ask to sign, through GitHub OIDC (UP7); the secondary is generated and kept offline by the maintainer. Their
+ask to sign, through GitHub OIDC (UP7); the secondary is to be generated and kept offline by the maintainer (not made yet). Their
 setup is in [runbook.md](runbook.md#update-signing-keys-and-the-update-host-spec-m6a-updater).
 The primary's public key is pinned in `update-keys.mjs` (its SHA-256 is recorded in the runbook
 and checked by
