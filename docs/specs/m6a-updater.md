@@ -477,6 +477,10 @@ updater state, offered and running versions, urgency, last check, now); the host
 | Stale feed (rule 5)                                          | `updates: no news for N days`                           | `--vimma-text-yellow`                   | once a day                                                                                                                |
 | Checks off                                                   | `updates: off`                                          | `--vimma-fg-dim`                        | once per session                                                                                                          |
 
+(Since changed: an offer is also announced once per version by a short message, and an urgent
+offer asks `Show the update command? (y/N)` once per session; spec
+[update-notices](update-notices.md).)
+
 - The urgent question uses the command line's `y/N` form, as the add-on picker's removal
   question does (`packages/vimma-core/src/addons.mjs:100`). `y` runs `app.restart`.
 - `:restart` (action `app.restart`) is Firefox's restart path: `quit-application-requested`
@@ -488,6 +492,9 @@ updater state, offered and running versions, urgency, last check, now); the host
 - **Interval**: `app.update.interval` becomes 43200 (12 h, Mozilla's release branding value)
   instead of 86400, so urgent releases are seen within 12 h of publication, plus the 30 s
   first-run timer. Vimma's own fetch (packaged installs) uses the same pref (decision 13).
+  (Since changed: Vimma's fetch checks 5 s after the first window's delayed startup instead of
+  30 s after load, and only a check with a verified answer resets the interval; spec
+  [update-notices](update-notices.md).)
 
 ### 6. Signing and keys
 

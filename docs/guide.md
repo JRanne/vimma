@@ -37,7 +37,9 @@ What works today, each with the section that explains it:
 - **[Accessible](#accessibility):** Vimma's own UI works with a screen reader and meets WCAG AA
   contrast in dark and light themes.
 - **[Update checks](#updates)** (from 0.1.2): the status bar says when a newer Vimma exists (red
-  for a security release), and `:update` shows the exact commands for how you installed it.
+  for a security release), a short message announces each new version once, a security release
+  asks once per session whether to show the update command, and `:update` shows the exact
+  commands for how you installed it.
 - **Firefox underneath** ([privacy defaults](#privacy-defaults)): the same user agent and
   [add-on](#add-ons) compatibility as Firefox; no studies, sponsored content or telemetry
   uploads; Safe Browsing on.
@@ -2070,14 +2072,25 @@ does not install the update itself.
 and never shows a notice. Update it once by hand, the way you installed it: the commands are in
 the table below and in [Installing](#installing). From 0.1.2 on, the status bar tells you.
 
-Every 12 hours, and 30 seconds after startup if the last check is older, Vimma fetches one small
-signed file from `updates.vimma.dev` that names the newest release of its update channel. It
-checks the file's signature against the keys built into Vimma and refuses anything else: a file
-signed by another key, one for another channel or platform, or one older than a file it already
-accepted. It installs nothing; it tells you.
+Every 12 hours, and a few seconds after startup when the last successful check is older, Vimma
+fetches one small signed file from `updates.vimma.dev` that names the newest release of its
+update channel. A check that fails is tried again every hour while Vimma runs. Vimma checks the
+file's signature against the keys built into Vimma and refuses anything else: a file signed by
+another key, one for another channel or platform, or one older than a file it already accepted.
+It installs nothing; it tells you.
 
 - **A newer version:** the status bar's right side shows `⇡ 0.3.1 available`, dim. A release that
   carries a Firefox security fix shows `⇡ 0.3.1 security: :update` in the error colour.
+- **The first time a version is offered**, a message above the status bar says
+  `Vimma 0.3.1 is available · :update shows the command` (or `fixes security issues` for a
+  security release) for a few seconds. It takes no focus and no keys, and is not shown again for
+  that version, even after a restart.
+- **A security release also asks**, once per session:
+  `Vimma 0.3.1 fixes security issues. Show the update command? (y/N)`. `y` shows the update steps,
+  as `:update` does; `n`, Esc or any other key dismisses it until the next start. The question
+  waits until you are not typing in a field and have not pressed a key for a moment, never takes
+  focus, and is not asked in a private window. Keys pressed in its first second are ignored, so a
+  key you were already typing, or one a page asked you to press, cannot answer it.
 - **`:update`** checks at once. When a newer version exists it opens `about:vimma` at its
   Updates section, with the exact commands for how you installed Vimma; otherwise it says
   `Vimma 0.1.0 is up to date`, or why the check failed.
@@ -2105,8 +2118,8 @@ accepted. It installs nothing; it tells you.
   checks three times in a row shows `updates: check failed`, and one that is older than 45 days
   (7 for nightly builds) shows `updates: no news for N days`.
 - **Off:** `[updates] check = false` in [config.toml](#configtoml), or `vimma.update.enabled` =
-  `false` in `about:config`, stops every request; `about:vimma` then says checks are off. A
-  `config.toml` with errors never turns checks back on: its `check = false` still holds, and
+  `false` in `about:config`, stops every request, the message and the question; `about:vimma`
+  then says checks are off. A `config.toml` with errors never turns checks back on: its `check = false` still holds, and
   while Vimma runs on its defaults because of the errors, it does not check at all.
 
 ## Privacy defaults

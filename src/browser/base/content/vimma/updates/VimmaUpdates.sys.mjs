@@ -5,10 +5,12 @@
 // Vimma's update check (spec: docs/specs/m6a-updater.md, delivery 1). Every 12 hours it fetches
 // the signed manifest from updates.vimma.dev, verifies it against the keys pinned in this build
 // (core/update-keys.mjs) and tells the status bar and about:vimma whether a newer Vimma exists;
-// `:update` checks at once. It downloads and installs nothing. The request is anonymous (no
-// cookies, no cache) and its URL may carry only the platform and the update channel. A host that
-// does not answer is logged and otherwise quiet; a manifest that fails verification is refused
-// and, three times in a row, shown. Pure rules live in core/updates.mjs.
+// `:update` checks at once, and a start checks a few seconds after the first window is ready
+// when the last good check is older than the interval (docs/specs/update-notices.md). It
+// downloads and installs nothing. The request is anonymous (no cookies, no cache) and its URL may
+// carry only the platform and the update channel. A host that does not answer is logged and
+// otherwise quiet; a manifest that fails verification is refused and, three times in a row,
+// shown. Pure rules live in core/updates.mjs.
 
 import {
   MAX_RESPONSE_BYTES,
@@ -24,6 +26,7 @@ import {
   verifyManifest,
 } from "../core/updates.mjs";
 import { UPDATE_KEYS } from "../core/update-keys.mjs";
+import { checkDue } from "../core/update-notices.mjs";
 
 /** @import { InstallType, Offer, PinnedKey, UpdateNotice } from "../core/updates.mjs" */
 
@@ -48,8 +51,11 @@ const INTERVAL_PREF = "app.update.interval";
 /** Test-only, honoured only in automation: extra pinned keys, and the install type. */
 const TEST_KEYS_PREF = "vimma.update.testKeys";
 const TEST_TYPE_PREF = "vimma.update.installType";
-/** As Firefox's own first update check (`app.update.timerFirstInterval`, firefox.js). */
-const FIRST_CHECK_MS = 30_000;
+/**
+ * After the first window's delayed startup (`browser-delayed-startup-finished`): late enough not
+ * to compete with session restore, early enough that a due check is not hours away.
+ */
+const STARTUP_CHECK_MS = 5_000;
 /** How often the timer asks whether a check is due. */
 const POLL_MS = 3_600_000;
 const FETCH_TIMEOUT_MS = 30_000;
@@ -65,7 +71,8 @@ const MARKER = "is-packaged-app";
  */
 /**
  * @typedef {object} UpdateState
- * @property {number | null} checkedAt    ms since the epoch
+ * @property {number | null} checkedAt    ms since the epoch, of the last attempt
+ * @property {number | null} okAt         of the last check that got a verified answer
  * @property {Outcome} outcome
  * @property {string | null} reason      why it was unreachable or refused
  * @property {Offer | null} offer
@@ -80,6 +87,7 @@ const OUTCOMES = ["never", "current", "offer", "unreachable", "refused", "off", 
 /** @returns {UpdateState} */
 const fresh = () => ({
   checkedAt: null,
+  okAt: null,
   outcome: "never",
   reason: null,
   offer: null,
@@ -108,6 +116,8 @@ const listeners = new Set();
 let started = false;
 /** @type {unknown} */
 let firstTimer = null;
+/** @type {((subject: unknown, topic: string) => void) | null} */
+let firstWindow = null;
 /** @type {unknown} */
 let pollTimer = null;
 
@@ -136,7 +146,10 @@ function enabled() {
 /** Where the install lives, and how it was installed (spec §3). */
 function installInfo() {
   install ??= detectInstall().then((where) => {
+    const first = knownType === null;
     knownType = where.type;
+    // The status bar and the notices wait for the install type: tell them it is known.
+    if (first) notify();
     return where;
   });
   return install;
@@ -232,10 +245,18 @@ function load() {
       offer.detailsUrl.startsWith("https://") &&
       typeof offer.urgent === "boolean" &&
       Array.isArray(offer.advisories);
+    const checkedAt = Number.isFinite(saved.checkedAt) ? saved.checkedAt : null;
+    const outcome = OUTCOMES.includes(saved.outcome) ? saved.outcome : "never";
     state = {
       ...fresh(),
-      checkedAt: Number.isFinite(saved.checkedAt) ? saved.checkedAt : null,
-      outcome: OUTCOMES.includes(saved.outcome) ? saved.outcome : "never",
+      checkedAt,
+      // A result saved before okAt existed: its check counts if it got an answer.
+      okAt: Number.isFinite(saved.okAt)
+        ? saved.okAt
+        : outcome === "current" || outcome === "offer"
+          ? checkedAt
+          : null,
+      outcome,
       reason: typeof saved.reason === "string" ? saved.reason : null,
       offer: valid && !alreadyHave(offer) ? { ...offer, assets: offerAssets(offer.assets) } : null,
       serial: /^\d{14}$/.test(saved.serial) ? saved.serial : null,
@@ -253,7 +274,9 @@ function load() {
  * @param {Partial<UpdateState>} next
  */
 function finish(next) {
-  state = { ...state, ...next, checkedAt: Date.now() };
+  const now = Date.now();
+  const answered = next.outcome === "current" || next.outcome === "offer";
+  state = { ...state, ...next, checkedAt: now, okAt: answered ? now : state.okAt };
   if (state.outcome === "unreachable" || state.outcome === "refused") {
     console.warn(`vimma: update check ${state.outcome}: ${state.reason}`);
   }
@@ -374,25 +397,48 @@ async function runCheck() {
   });
 }
 
-/** Checks when one is due: checks on, not a source build, the interval passed. */
+/** A due check found config.toml not read yet: configure() runs it. */
+let waitingForConfig = false;
+
+/** Checks when one is due (core checkDue): at startup and on the hourly timer. */
 async function maybeCheck() {
   const where = await installInfo();
-  if (!enabled() || where.type === "source") return;
-  const interval = Math.max(3600, Services.prefs.getIntPref(INTERVAL_PREF, 43200)) * 1000;
-  if (state.checkedAt !== null && Date.now() - state.checkedAt < interval) return;
-  await VimmaUpdates.check();
+  // Before config.toml is read, its `[updates] check = false` is unknown: no request until it is.
+  if (configCheck === null && !held) {
+    waitingForConfig = true;
+    return;
+  }
+  const due = checkDue({
+    enabled: enabled(),
+    installType: where.type,
+    okAt: state.okAt,
+    triedAt: state.checkedAt,
+    now: Date.now(),
+    intervalSeconds: Services.prefs.getIntPref(INTERVAL_PREF, 43200),
+  });
+  if (due) await VimmaUpdates.check();
 }
 
 export const VimmaUpdates = {
-  /** Once per process (vimma.js): the saved result now, the first check after 30 s. */
+  /**
+   * Once per process (vimma.js): the saved result now; a check STARTUP_CHECK_MS after the first
+   * window's delayed startup if one is due, then the hourly question whether one is due.
+   */
   init() {
     if (started) return;
     started = true;
     load();
     const tick = () => maybeCheck().catch((e) => console.error("vimma: update check failed", e));
-    firstTimer = lazy.setTimeout(tick, FIRST_CHECK_MS);
+    firstWindow = () => {
+      if (firstWindow) Services.obs.removeObserver(firstWindow, "browser-delayed-startup-finished");
+      firstWindow = null;
+      firstTimer = lazy.setTimeout(tick, STARTUP_CHECK_MS);
+    };
+    Services.obs.addObserver(firstWindow, "browser-delayed-startup-finished");
     pollTimer = lazy.setInterval(tick, POLL_MS);
     Services.obs.addObserver(() => {
+      if (firstWindow) Services.obs.removeObserver(firstWindow, "browser-delayed-startup-finished");
+      firstWindow = null;
       lazy.clearTimeout(firstTimer);
       lazy.clearInterval(pollTimer);
     }, "quit-application");
@@ -408,6 +454,10 @@ export const VimmaUpdates = {
     configCheck = updates.check;
     held = heldNow;
     notify();
+    if (waitingForConfig) {
+      waitingForConfig = false;
+      maybeCheck().catch((e) => console.error("vimma: update check failed", e));
+    }
   },
 
   /**
@@ -460,6 +510,11 @@ export const VimmaUpdates = {
     };
   },
 
+  /** How this copy was installed, once known (null before the first look). */
+  get installType() {
+    return knownType;
+  },
+
   /** Vimma's own version (version_display.txt), as about:vimma shows it. */
   get runningVersion() {
     return /** @type {string} */ (lazy.AppConstants.MOZ_APP_VERSION_DISPLAY);
@@ -484,6 +539,11 @@ export const VimmaUpdates = {
   _load() {
     load();
     notify();
+  },
+
+  /** Test-only: what the startup check does, without its delay. */
+  _startupCheck() {
+    return maybeCheck();
   },
 
   /** Test-only: forget every result and the cached install type. */

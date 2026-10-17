@@ -146,6 +146,8 @@ add_task(async function setup() {
     VimmaUpdates._reset();
     Services.prefs.clearUserPref("vimma.update.serial");
     Services.prefs.clearUserPref("vimma.update.last");
+    // The offers here were announced (docs/specs/update-notices.md); later tests start clean.
+    Services.prefs.clearUserPref("vimma.update.announced");
     await IOUtils.remove(dir, { recursive: true });
   });
 });

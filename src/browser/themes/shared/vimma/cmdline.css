@@ -7,11 +7,13 @@
 
 /* A zero-height row in the chrome body's flex column, after #browser (before the status bar):
    the panel overlays the bottom of the content, so opening the line never reflows the page.
-   The tab rename prompt (ui/rename-prompt.mjs) and the agent question (ui/agent-prompt.mjs,
-   docs/specs/vimma-mcp.md) are the same row. */
+   The tab rename prompt (ui/rename-prompt.mjs), the agent question (ui/agent-prompt.mjs,
+   docs/specs/vimma-mcp.md) and the security update question (docs/specs/update-notices.md) are
+   the same row. */
 #vimma-cmdline,
 #vimma-rename,
-#vimma-agent-prompt {
+#vimma-agent-prompt,
+#vimma-update-prompt {
   position: relative;
   flex: none;
   height: 0;
@@ -26,7 +28,8 @@
 /* A fullscreen page (a video) gets the whole screen, as the status bar does (statusbar.css). */
 :root[inDOMFullscreen] #vimma-cmdline,
 :root[inDOMFullscreen] #vimma-rename,
-:root[inDOMFullscreen] #vimma-agent-prompt {
+:root[inDOMFullscreen] #vimma-agent-prompt,
+:root[inDOMFullscreen] #vimma-update-prompt {
   display: none !important;
 }
 

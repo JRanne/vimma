@@ -110,6 +110,7 @@ import { ControlHost } from "./control-ops.mjs";
 import { AgentUi } from "./agent-ui.mjs";
 import { PromptKeys } from "./prompt-keys.mjs";
 import { AgentPrompt } from "../ui/agent-prompt.mjs";
+import { ANNOUNCE_MS, UpdateUi } from "./update-ui.mjs";
 import { parsePrivateCommand } from "../core/privatews.mjs";
 import { findWorkspace } from "../core/workspaces.mjs";
 import { KeyLog } from "../about/key-log.mjs";
@@ -211,7 +212,10 @@ const PAGE_FIRST_MAX = 16;
  * @property {GrepSession} grep  prefix+f g, `:grep`, `]q`/`[q` (docs/specs/live-grep.md)
  * @property {RenamePrompt} rename  the prefix+shift+t prompt (m2-picker-rename)
  * @property {AgentPrompt} agentPrompt  the agent question line (docs/specs/vimma-mcp.md)
- * @property {() => void} onFocus  focus moved in the window: the agent line may go back to waiting
+ * @property {AgentPrompt} updatePrompt  the security update question
+ *   (docs/specs/update-notices.md)
+ * @property {() => void} onFocus  focus moved in the window: a question line may go back to
+ *   waiting
  * @property {SidePanel} panel  prefix+b, `panel` mode while open (m3-workspaces 6)
  * @property {BookmarksPanel} bookmarks  prefix+shift+b, in the side panel's slot
  *   and `panel` mode (docs/specs/bookmarks.md)
@@ -1215,7 +1219,14 @@ export const VimmaHost = {
       }),
       find: new Find(win, () => this._emit(state)),
       agentPrompt: new AgentPrompt(win),
-      onFocus: () => AgentUi.onFocusChange(win),
+      updatePrompt: new AgentPrompt(win, {
+        id: "vimma-update-prompt",
+        color: "var(--vimma-text-error)",
+      }),
+      onFocus: () => {
+        AgentUi.onFocusChange(win);
+        UpdateUi.onFocusChange(win);
+      },
       panel: new SidePanel(win, {
         // A private window lists its tabs as the private workspace (private-workspace 6).
         model: () => {
@@ -1283,11 +1294,37 @@ export const VimmaHost = {
         state.rename.isOpen ||
         state.panel.isOpen ||
         state.bookmarks.isOpen ||
-        state.find.typing,
+        state.find.typing ||
+        UpdateUi.isOpen(win),
       pending: () => state.dispatcher.pending().length > 0,
       notice: (text) => state.notice.show(text),
       ask: (question, yes) => state.rename.ask(question, yes),
       emit: () => this._emit(state),
+    });
+    // The update message and the security update question (docs/specs/update-notices.md): the
+    // same guards as the agent question, which goes first.
+    UpdateUi.register(win, {
+      prompt: state.updatePrompt,
+      inField: () => this._mode(state) === "insert",
+      otherOpen: () =>
+        state.help.isOpen ||
+        state.picker.isOpen ||
+        state.wsPicker.isOpen ||
+        state.addonPicker.isOpen ||
+        state.grep.isOpen ||
+        state.cmdline.isOpen ||
+        state.rename.isOpen ||
+        state.panel.isOpen ||
+        state.bookmarks.isOpen ||
+        state.find.typing ||
+        state.agentPrompt.isOpen ||
+        !!state.promptKeys?.notification,
+      pending: () => state.dispatcher.pending().length > 0,
+      notice: (text) => state.notice.show(text, { ms: ANNOUNCE_MS }),
+      hideNotice: (text) => {
+        if (state.notice.el?.textContent === text) state.notice.hide();
+      },
+      openSteps: () => openOrSay(state, "about:vimma#updates", "tab"),
     });
     // After the page and in the system group, as Tabbrowser's own key handling: text-field keys
     // the page left alone (key-handling-batch § 2).
@@ -1341,7 +1378,8 @@ export const VimmaHost = {
           state.rename.isOpen ||
           state.panel.isOpen ||
           state.bookmarks.isOpen ||
-          state.agentPrompt.isOpen,
+          state.agentPrompt.isOpen ||
+          UpdateUi.isOpen(win),
         pending: () => state.dispatcher.pending().length > 0,
       });
       promptKeys.init();
@@ -1393,6 +1431,7 @@ export const VimmaHost = {
     win.removeEventListener("keydown", state.onKeyDown, true);
     win.removeEventListener("focus", state.onFocus, true);
     AgentUi.unregister(win);
+    UpdateUi.unregister(win);
     win.removeEventListener("keydown", state.onKeyDownAfter, SYSTEM_GROUP);
     win.removeEventListener("keypress", state.onKeyPress, SYSTEM_GROUP_CAPTURE);
     win.removeEventListener("keypress", state.onKeyPressAfter, SYSTEM_GROUP);
@@ -1608,8 +1647,10 @@ export const VimmaHost = {
     const win = browser?.ownerDocument?.defaultView;
     const state = win && states.get(win);
     if (state) VimmaHost._emit(state);
-    // Into a field: the agent question goes back to waiting (vimma-mcp decision 14).
+    // Into a field: the agent question goes back to waiting (vimma-mcp decision 14), and so
+    // does the update question.
     if (state) AgentUi.onFocusChange(win);
+    if (state) UpdateUi.onFocusChange(win);
   },
 
   /**
@@ -1708,6 +1749,11 @@ export const VimmaHost = {
     if (/** @type {ChromeKeyEvent} */ (e).isReplyEventFromRemoteContent) return;
     // The agent question takes its keys first, and only while it shows (vimma-mcp 13-14).
     if (AgentUi.onKey(win, e)) {
+      this._emit(state);
+      return;
+    }
+    // Then the security update question's (docs/specs/update-notices.md).
+    if (UpdateUi.onKey(win, e)) {
       this._emit(state);
       return;
     }

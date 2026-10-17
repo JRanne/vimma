@@ -226,7 +226,11 @@ async function check(force) {
     try {
       text = await IOUtils.readUTF8(path);
     } catch (e) {
-      if (!notFound(e)) throw e;
+      if (!notFound(e)) {
+        // An unreadable config.toml may say `[updates] check = false`: hold checks off.
+        VimmaUpdates.configure({ check: false, held: true });
+        throw e;
+      }
       signature = "missing"; // removed between stat and read: the defaults, silently
     }
   }
