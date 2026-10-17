@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 
 // Issue #125: the gate must still catch a real regression. The dispatcher is wrapped so a flag can
 // make every dispatch() do extra work, as a slower dispatcher would; the bench cases build their
@@ -25,10 +28,13 @@ vi.mock("../../../packages/vimma-core/src/dispatcher.mjs", async (importOriginal
 });
 
 const { CASES, reference } = await import("../../../packages/vimma-core/bench/cases.mjs");
-const { childArgs, measure, PROCESSES } = await import("../bench.mjs");
-const { baselineEntry, combine, compare } = await import("../compare.mjs");
+const { childArgs, extractCommit, measure, PROCESSES, ROUNDS, SAMPLES } =
+  await import("../bench.mjs");
+const { combine, compare } = await import("../compare.mjs");
+const { tempDir } = await import("../../test/temp-dir.mjs");
 
 const MACHINE = "test machine | x64 | node 22.0.0";
+const BASELINE = new URL("../../../packages/vimma-core/bench/baseline.json", import.meta.url);
 const KEY_CASE = "single key: j → scroll.down";
 
 describe("bench processes", () => {
@@ -39,6 +45,56 @@ describe("bench processes", () => {
     expect(new Set(seeds).size).toBe(PROCESSES);
     expect(Array.from({ length: PROCESSES }, (_, p) => childArgs(p))).toEqual(args);
     for (const a of args) expect(a).toContain("--child");
+  });
+});
+
+describe("measure", () => {
+  it("interleaves the cases sample by sample, so the variants it compares share the runner's state (issue #342)", () => {
+    // Measured case after case, each case's 51 samples took a block of time of their own, and a
+    // change in the runner's load between two blocks (another test file starting on the sibling
+    // hyperthread) moved one variant against the other: unchanged code read +26.8 % on a sequence
+    // and +31.2 % on the apply case against its own baseline in the coverage pool.
+    /** @type {string[]} */
+    const order = [];
+    /** @param {string} name */
+    const probe = (name) => ({
+      name,
+      run: () => {
+        if (order.at(-1) !== name) order.push(name);
+        return name;
+      },
+    });
+    // Three cases: with two, the rotating order puts the same case at the end of one sweep and
+    // the start of the next, and the probe counts that as one stretch.
+    measure([probe("a"), probe("b"), probe("c")], reference);
+    expect(order.length).toBeGreaterThanOrEqual(ROUNDS * SAMPLES * 2);
+  });
+});
+
+describe("extractCommit", () => {
+  it("writes a commit's core and its bench cases to a directory, to measure them alongside the working tree", async () => {
+    const head = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+    const dir = tempDir("vimma-bench-base-");
+    const cases = extractCommit(head, dir);
+    /** @type {typeof import("../../../packages/vimma-core/bench/cases.mjs")} */
+    const base = await import(pathToFileURL(cases).href);
+    expect(base.CASES.map((c) => c.name)).toEqual(CASES.map((c) => c.name));
+    for (const c of base.CASES) expect(c.run()).toEqual(c.expected);
+  });
+
+  it("refuses something that is not a commit", () => {
+    expect(() => extractCommit("not-a-commit-0000", tempDir("vimma-bench-base-"))).toThrow(
+      /not-a-commit-0000/,
+    );
+  });
+});
+
+describe("the baseline", () => {
+  it("names a commit of this branch's history, the code every run is measured against", () => {
+    const { commit } = JSON.parse(readFileSync(BASELINE, "utf8"));
+    expect(commit).toMatch(/^[0-9a-f]{40}$/);
+    const ancestor = spawnSync("git", ["merge-base", "--is-ancestor", commit, "HEAD"]);
+    expect(ancestor.status, `${commit} is not an ancestor of HEAD`).toBe(0);
   });
 });
 
@@ -120,11 +176,6 @@ describe("the gate on a real measurement", () => {
     }
     slow.iterations = 0;
     const before = of(runs, "base|");
-    const baseline = {
-      machines: {
-        [MACHINE]: baselineEntry(before, { date: "-", notes: "-", source: "this test" }),
-      },
-    };
     const slower = of(runs, "slow|");
 
     // The dispatcher is at least 20 % slower: every case that dispatches, not the apply case, so
@@ -135,10 +186,10 @@ describe("the gate on a real measurement", () => {
     // in all three A/Bs, which says nothing about the gate (issue #202).
     const gate = { budgetUs: Infinity };
     expect(keyRatio(slower) / keyRatio(before)).toBeGreaterThanOrEqual(1.15);
-    const regressed = compare(slower, baseline, gate);
+    const regressed = compare(slower, before, gate);
     expect(regressed.ok, regressed.failures.join("\n")).toBe(false);
     expect(regressed.failures.join("\n")).toMatch(/^suite: \+/);
-    const unchanged = compare(of(runs, "same|"), baseline, gate);
+    const unchanged = compare(of(runs, "same|"), before, gate);
     expect(unchanged.ok, unchanged.failures.join("\n")).toBe(true);
   }, 180_000);
 });
