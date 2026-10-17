@@ -309,7 +309,7 @@ add_task(async function x_closes_the_selected_tab_and_the_panel_stays_open_on_th
 });
 
 add_task(async function x_never_closes_a_pinned_tab() {
-  // Pinned tabs belong to no workspace (limits.md), so the panel never lists them.
+  // Pinned tabs belong to no workspace (docs/guide.md, "Workspaces"), so the panel never lists them.
   const pinned = await openPage("x-pinned");
   gBrowser.pinTab(pinned);
   const other = await openPage("x-unpinned");

@@ -917,8 +917,13 @@ build. `configs/common/mozconfig` passes it to configure only when the key file 
 Browsing off, so Settings shows it unticked. The key is a secret: never echo, log or commit it.
 
 Get a key: Google Cloud console → a project → enable the **Safe Browsing API** → Credentials →
-Create API key → restrict it to that API. Its use is free but non-commercial; Google's quota is
-per key (see [limits.md](limits.md)).
+Create API key → restrict it to that API. Its use is free but non-commercial, and every keyed
+build shares the one key and its per-project quota (Google Cloud console → Quotas); a large user
+base or commercial use needs a quota increase or Google's Web Risk API. The key is compiled into
+the binaries and can be extracted from them, as Firefox's own is. Google serves the download
+lists (`goog-badbinurl-proto`, `goog-downloadwhite-proto`) and the remote download check only to
+Mozilla's key, so Vimma requests neither. `goog-harmful-proto` is requested but did not arrive
+when the key was tested; treat it as unavailable.
 
 **Locally**, store it without it reaching the terminal or the shell history, then rebuild:
 
