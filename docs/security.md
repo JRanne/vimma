@@ -303,9 +303,10 @@ text that pages, add-ons and bookmarks choose.
     not** answer it before it has shown for `security.notification_enable_delay` with no key in
     between (any key restarts the wait), **never** from a text field, and go through Firefox's
     own buttons, so Firefox's click delay still applies. The wait counts from Firefox's own time
-    for the prompt (`timeShown`), which Firefox restarts when the panel moves or resizes or the
-    window is activated, so an armed key never meets a button Firefox still refuses. The prompt
-    **never** takes focus by itself; `Tab` focuses the secondary (Block) button first.
+    for the prompt (`timeShown`), which Firefox moves later on its own (for example when the panel
+    moves or resizes, the window is activated or another prompt takes the panel), so an armed key
+    never meets a button Firefox's delay still refuses. The prompt **never** takes focus by
+    itself; `Tab` focuses the secondary (Block) button first.
     [`doorhangerKey`](../packages/vimma-core/test/prompt-keys.test.mjs),
     [`permission_prompts_answer_y_and_n`](../tests/browser/browser_vimma_toolbar.js),
     [`prompt_keys_arm_on_firefoxs_own_delay`](../tests/browser/browser_vimma_toolbar.js)
