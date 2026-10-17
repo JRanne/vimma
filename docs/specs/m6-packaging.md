@@ -338,6 +338,12 @@ The first release that publishes assets adds two more, in the same style:
 An AUR version badge (`https://img.shields.io/aur/version/vimma-bin`, same style) follows once the
 `aur` job has pushed `vimma-bin`.
 
+(Since changed: the badges use Vimma's own palette instead of grey, so the README matches the
+browser and vimma.dev: `labelColor=0a0f12` (the background) with `color=163327` (the selection
+green), and the latest-release badge in the mint accent, `color=1bf587`, as the one value a visitor
+looks for first. The CI badge keeps shields.io's status colours, which carry meaning. The AUR
+badge takes the same palette.)
+
 1. **The release badges wait for the first release.** Before a release both would read "0" or
    "no releases", which tells a reader nothing, so they are added with the first published
    release and not earlier.
