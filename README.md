@@ -43,8 +43,10 @@ curl -fLO https://github.com/vimma-browser/vimma/releases/latest/download/PKGBUI
 **Any other distribution:** download `vimma-X.Y.Z-x86_64.AppImage`, then
 `chmod +x vimma-X.Y.Z-x86_64.AppImage && ./vimma-X.Y.Z-x86_64.AppImage`.
 
-`X.Y.Z` is the Vimma version. The in-app updater is not active yet: to update, install the newer
-release the same way. The guide's [Installing](docs/guide.md#installing) section has the tarball
+`X.Y.Z` is the Vimma version. To update, install the newer release the same way. From 0.1.2 on,
+the status bar says when a new release is out and `:update` shows the command for your install;
+Vimma 0.1.1 does not, so update it once by hand
+([Updates](docs/guide.md#updates)). The guide's [Installing](docs/guide.md#installing) section has the tarball
 and how to verify a download with `sha256sum` and cosign.
 
 ## Why
@@ -64,7 +66,9 @@ the hours slip by. It also happens to start with _Vim_.
 Early, Linux x86_64 only (macOS next). Releases are on
 [GitHub Releases](https://github.com/vimma-browser/vimma/releases), with a tarball, an AppImage, a
 `.deb` and an Arch Linux `PKGBUILD` ([Install](#install)); you can also
-[build it from source](CONTRIBUTING.md#build-and-run).
+[build it from source](CONTRIBUTING.md#build-and-run). Update notices are live: Vimma 0.1.2 and
+later check a signed update file every 12 hours and show a newer release in the status bar. They
+notify only; installing the update is up to you.
 
 AI coding agents working on this repository follow [CLAUDE.md](CLAUDE.md); contributors read
 [CONTRIBUTING.md](CONTRIBUTING.md) before opening issues or pull requests.
