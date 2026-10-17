@@ -251,7 +251,7 @@ shows as `space n` ([guide](guide.md#configtoml)).
 | Apply the marks (the marked tabs become the panes), then go to the selected row | `panel_open`      | `enter [panel]` |
 | End the range, clear or restore the marks, or close the side panel              | `panel_close`     | `esc [panel]`   |
 | Close the selected tab; the panel stays open                                    | `panel_close_tab` | `x [panel]`     |
-| Mark or unmark the selected tab and move down                                   | `panel_mark`      | `space [panel]` |
+| Mark or unmark the selected tab                                                 | `panel_mark`      | `space [panel]` |
 | Start a range of rows to mark, or mark it                                       | `panel_visual`    | `V [panel]`     |
 
 ## Bookmarks

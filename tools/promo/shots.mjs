@@ -285,10 +285,13 @@ const marks = {
     await d.until((s) => s.mode === "panel", "the side panel");
     await d.hold(1.2);
     d.mark("mark");
-    // marks the runbook, skips the checklist, marks the incident and the standup notes
+    // marks the runbook, skips the checklist, marks the incident and the standup notes; space
+    // leaves the highlight on the row it marks, so j moves to the next one
     await d.key("space", 0.8);
+    await d.key("j", 0.4);
     await d.key("j", 0.8);
     await d.key("space", 0.8);
+    await d.key("j", 0.8);
     await d.key("space", 1.2);
     d.mark("together");
     await d.key("enter", 0);

@@ -2164,7 +2164,7 @@
         },
         {
           "name": "panel_mark",
-          "description": "Mark or unmark the selected tab and move down",
+          "description": "Mark or unmark the selected tab",
           "keys": [
             {
               "keys": "space",

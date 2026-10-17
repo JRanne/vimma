@@ -13,8 +13,10 @@ selected tabs become a split, three or more are arranged as a split or dwindle l
 
 ## User stories
 
-- As a user, in the side panel (`ctrl+b b`) `space` marks the highlighted tab and moves down,
-  as ranger and neo-tree do; `space` on a marked row unmarks it.
+- As a user, in the side panel (`ctrl+b b`) `space` marks the highlighted tab and moves down, as
+  ranger and neo-tree do; `space` on a marked row unmarks it. (Since changed: `space` leaves the
+  highlight on the row it marks, because the next row to mark may be above or below; docs/guide.md,
+  "Side panel".)
 - As a user, `V` starts a line-wise range: `j` / `k` stretch it, and `space` or `V` marks every
   row in it.
 - As a user, `Enter` with marks shows the marked tabs together as the panes of this workspace,
@@ -60,7 +62,9 @@ selected tabs become a split, three or more are arranged as a split or dwindle l
    below, so one binding still does "go" and "back". The bookmarks panel ignores both new
    actions, as it ignores `x`.
 2. **`space`:** toggles the mark on the highlighted row, then moves down one row (stays on the
-   last). In a range it marks the range instead and ends it.
+   last). In a range it marks the range instead and ends it. (Since changed: `space` leaves the
+   highlight on the row it marks, because the next row to mark may be above or below; docs/guide.md,
+   "Side panel".)
 3. **`V`:** starts a range anchored on the highlighted row; `j` / `k` move the highlight and the
    range is anchor..highlight. `V` or `space` again marks every row in it (a union: rows already
    marked stay marked) and ends it. `Enter` in a range marks it and then acts as below.

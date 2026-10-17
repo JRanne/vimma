@@ -160,6 +160,7 @@ async function toggle(...names) {
     const was = markedTitles().includes(n);
     EventUtils.synthesizeKey(" ", {});
     await until(() => markedTitles().includes(n) !== was, `${n} is ${was ? "un" : ""}marked`);
+    Assert.equal(titleOf(selected()), n, `the highlight stays on ${n}`);
   }
 }
 
@@ -261,12 +262,13 @@ add_task(async function unmarking_a_pane_keeps_the_others_shape_and_the_tab_afte
   Assert.equal(count().textContent, "split: 4 → 3", "the header says what Enter will do");
   Assert.equal(gutterOf("c"), "○", "c shows it will leave");
   Assert.equal(rowOf("c").getAttribute("aria-checked"), "false", "c is unchecked");
+  await goTo("d");
   await enter();
 
   await until(() => shape() === shape(want), `the rest keep their shape: ${shape(want)}`);
   Assert.deepEqual(ratios(view().panes.root), ratios(want.root), "and their sizes");
   Assert.equal(view().panes.layout, before.layout, "the stored preset is kept");
-  Assert.equal(focusedName(), "d", "Enter goes to the highlighted row: d, below c, a pane");
+  Assert.equal(focusedName(), "d", "Enter goes to the highlighted row: d, a pane");
   Assert.ok(tab("c").isConnected && !tab("c").closing, "c is still open");
   Assert.ok(!tab("c").splitview, "c left the split");
   const order = gBrowser.tabs;
@@ -302,10 +304,11 @@ add_task(async function marking_a_tab_adds_it_and_the_set_is_arranged_afresh() {
   await openPanel();
   await toggle("c");
   const [p, q, r, s] = markedTitles();
+  await goTo("d");
   await enter();
   const want = `x[${p},y[${q},x[${r},${s}]]]`;
   await until(() => shape() === want, `a dwindle of four, in row order: ${want}`);
-  Assert.equal(focusedName(), "d", "the highlighted row (d, below c) has focus");
+  Assert.equal(focusedName(), "d", "the highlighted row (d) has focus");
   await assertNotReloaded(all, kept, "add one");
 });
 
@@ -343,6 +346,7 @@ add_task(async function unmarking_down_to_one_ends_the_split() {
   await openPanel();
   await toggle("a", "c");
   Assert.equal(count().textContent, "split: 3 → 1 (unsplit)");
+  await goTo("b");
   await enter();
   await until(() => !view().panes, "no split");
   Assert.equal(gBrowser.selectedTab, tab("b"), "b is shown alone");

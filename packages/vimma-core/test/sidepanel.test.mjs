@@ -351,14 +351,27 @@ describe("marks", () => {
     expect(markSummary(s)).toBe("");
   });
 
-  test("space marks the highlighted row and moves down; space again on it unmarks", () => {
-    let { state } = press(open(), [SPACE, SPACE]);
+  test("space marks the highlighted row and leaves the highlight on it", () => {
+    const { state } = press(open(), [SPACE]);
+    expect(state.marked).toEqual(["t2"]);
+    expect(state.selected).toBe(0);
+    expect(markSummary(state)).toBe("1 marked");
+  });
+
+  test("space again on the same row unmarks it, the highlight still there", () => {
+    const { state } = press(open(), [J, SPACE, SPACE]);
+    expect(state.marked).toEqual([]);
+    expect(state.selected).toBe(1);
+  });
+
+  test("only j / k move the highlight between marks", () => {
+    let { state } = press(open(), [SPACE, J, SPACE]);
     expect(state.marked).toEqual(["t2", "t3"]);
-    expect(state.selected).toBe(2);
+    expect(state.selected).toBe(1);
     expect(markSummary(state)).toBe("2 marked");
     ({ state } = press(state, [K, SPACE]));
-    expect(state.marked).toEqual(["t2"]);
-    expect(markSummary(state)).toBe("1 marked");
+    expect(state.marked).toEqual(["t3"]);
+    expect(state.selected).toBe(0);
   });
 
   test("space on the last row marks it and stays there", () => {
@@ -388,7 +401,7 @@ describe("marks", () => {
   });
 
   test("a range upward, ended by space, adds to the marks already there", () => {
-    const { state } = press(open(), [SPACE, J, V, K, SPACE]);
+    const { state } = press(open(), [SPACE, J, J, V, K, SPACE]);
     expect(state.marked).toEqual(["t2", "t3", "t4"]);
     expect(state.anchor).toBeNull();
     expect(state.selected).toBe(1);
@@ -401,12 +414,12 @@ describe("marks", () => {
   });
 
   test("the summary counts the range and the marks while both exist", () => {
-    const { state } = press(open(), [SPACE, V, J]);
+    const { state } = press(open(), [SPACE, J, V, J]);
     expect(markSummary(state)).toBe("range: 2 · 1 marked");
   });
 
   test("Esc ends the range first, then clears the marks, then closes", () => {
-    let r = press(open(), [SPACE, V, J, ESC]);
+    let r = press(open(), [SPACE, J, V, J, ESC]);
     expect(r.state.anchor).toBeNull();
     expect(r.state.marked).toEqual(["t2"]);
     expect(r.effect).toBeNull();
@@ -418,19 +431,19 @@ describe("marks", () => {
   });
 
   test("Enter with two marks or more shows them together, in row order", () => {
-    const { effect } = press(open(), [J, J, SPACE, K, K, K, SPACE, ENTER]);
+    const { effect } = press(open(), [J, J, SPACE, K, K, SPACE, J, ENTER]);
     expect(effect).toEqual({ type: "together", ids: ["t2", "t4"], focus: "t2" });
   });
 
   test("Enter focuses the highlighted row when it is marked, else the first marked", () => {
-    const on = press(open(), [SPACE, SPACE, SPACE, K, K, ENTER]).effect;
+    const on = press(open(), [SPACE, J, SPACE, J, SPACE, K, ENTER]).effect;
     expect(on).toEqual({ type: "together", ids: ["t2", "t3", "t4"], focus: "t3" });
-    const off = press(open(), [J, SPACE, SPACE, ENTER]).effect;
+    const off = press(open(), [J, SPACE, J, SPACE, J, ENTER]).effect;
     expect(off).toEqual({ type: "together", ids: ["t3", "t4"], focus: "t3" });
   });
 
   test("Enter with one mark goes to that tab, as Enter on its row", () => {
-    const { effect } = press(open(), [J, SPACE, J, ENTER]);
+    const { effect } = press(open(), [J, SPACE, J, J, ENTER]);
     expect(effect).toEqual({ type: "select", id: "t3" });
   });
 
@@ -441,14 +454,14 @@ describe("marks", () => {
 
   test("Enter without marks still goes to the highlighted tab; a digit ignores the marks", () => {
     expect(press(open(), [J, ENTER]).effect).toEqual({ type: "select", id: "t3" });
-    expect(press(open(), [SPACE, SPACE, { id: "panel.select", arg: 4 }]).effect).toEqual({
+    expect(press(open(), [SPACE, J, SPACE, J, { id: "panel.select", arg: 4 }]).effect).toEqual({
       type: "select",
       id: "t5",
     });
   });
 
   test("x keeps the marks of the other rows; the refresh drops a closed tab's mark", () => {
-    let { state } = press(open(), [SPACE, SPACE, K]);
+    let { state } = press(open(), [SPACE, J, SPACE]);
     expect(state.marked).toEqual(["t2", "t3"]);
     ({ state } = press(state, [{ id: "panel.close_tab" }]));
     state = refreshPanel(state, withTabs(["t2", "t4", "t5", "t6"]), info5);
@@ -456,7 +469,7 @@ describe("marks", () => {
   });
 
   test("a refresh in the same workspace keeps marks and the range on listed tabs", () => {
-    const s = press(open(), [SPACE, V]).state;
+    const s = press(open(), [SPACE, J, V]).state;
     const next = refreshPanel(s, five, info5);
     expect(next.marked).toEqual(["t2"]);
     expect(next.anchor).toBe("t3");
@@ -468,7 +481,7 @@ describe("marks", () => {
   });
 
   test("marks follow their tabs when the order changes, and stay in row order", () => {
-    const s = press(open(), [SPACE, J, SPACE]).state;
+    const s = press(open(), [SPACE, J, J, SPACE]).state;
     expect(s.marked).toEqual(["t2", "t4"]);
     expect(refreshPanel(s, withTabs(["t4", "t3", "t2", "t5", "t6"]), info5).marked).toEqual([
       "t4",
@@ -477,14 +490,14 @@ describe("marks", () => {
   });
 
   test("another workspace (ctrl+b )) clears the marks and the range", () => {
-    const s = press(open(), [SPACE, V]).state;
+    const s = press(open(), [SPACE, J, V]).state;
     const next = refreshPanel(s, { ...five, active: "w1" }, info5);
     expect(next.marked).toEqual([]);
     expect(next.anchor).toBeNull();
   });
 
   test("markedRows lists the marked rows in row order", () => {
-    const s = press(open(), [J, J, SPACE, K, K, K, SPACE]).state;
+    const s = press(open(), [J, J, SPACE, K, K, SPACE]).state;
     expect(markedRows(s).map((r) => r.tabId)).toEqual(["t2", "t4"]);
   });
 
@@ -568,13 +581,13 @@ describe("a split in the panel", () => {
   });
 
   test("space unmarks a pane and marks another tab; the header says what Enter will do", () => {
-    let { state } = press(open(), [SPACE]);
+    let { state } = press(open(), [SPACE, J]);
     expect(state.marked).toEqual(["t2", "t4"]);
     expect(markSummary(state)).toBe("split: 3 → 2");
     ({ state } = press(state, [J, SPACE]));
     expect(state.marked).toEqual(["t2", "t4", "t5"]);
     expect(markSummary(state)).toBe("split: 3 → 3");
-    ({ state } = press(state, [K, K, K, K, SPACE, J, SPACE]));
+    ({ state } = press(state, [K, K, K, K, SPACE, J, J, SPACE, J]));
     expect(state.marked).toEqual(["t5"]);
     expect(markSummary(state)).toBe("split: 3 → 1 (unsplit)");
     ({ state } = press(state, [SPACE]));
@@ -583,7 +596,7 @@ describe("a split in the panel", () => {
   });
 
   test("marking back to the panes reads as unchanged", () => {
-    const { state } = press(open(), [SPACE, K, SPACE]);
+    const { state } = press(open(), [SPACE, SPACE]);
     expect(state.marked).toEqual(["t2", "t3", "t4"]);
     expect(markSummary(state)).toBe("split: 3 panes");
   });
@@ -594,7 +607,7 @@ describe("a split in the panel", () => {
   });
 
   test("the gutter: ● marked, ○ a pane that will leave, │ in a range, else blank", () => {
-    let { state } = press(open(), [SPACE]);
+    let { state } = press(open(), [SPACE, J]);
     expect([0, 1, 2, 3, 4].map((i) => gutterOf(state, i))).toEqual(["●", "○", "●", "", ""]);
     ({ state } = press(state, [J, V, J]));
     expect([0, 1, 2, 3, 4].map((i) => gutterOf(state, i))).toEqual(["●", "○", "●", "│", "│"]);
@@ -603,52 +616,52 @@ describe("a split in the panel", () => {
   test("Enter with the marks unchanged goes to the highlighted tab (decision 12)", () => {
     expect(press(open(), [ENTER]).effect).toEqual({ type: "select", id: "t3" });
     expect(press(open(), [J, J, ENTER]).effect).toEqual({ type: "select", id: "t5" });
-    expect(press(open(), [SPACE, K, SPACE, ENTER]).effect).toEqual({
+    expect(press(open(), [SPACE, SPACE, J, ENTER]).effect).toEqual({
       type: "select",
       id: "t4",
     });
   });
 
   test("Enter after unmarking a pane shows the rest; the focused pane keeps focus", () => {
-    const { effect } = press(open(), [J, SPACE, ENTER]);
+    const { effect } = press(open(), [J, SPACE, J, ENTER]);
     expect(effect).toEqual({ type: "together", ids: ["t2", "t3"], focus: "t3" });
   });
 
   test("the focused pane unmarked: focus on the highlighted row if marked, else the first", () => {
-    const on = press(open(), [SPACE, J, SPACE, K, ENTER]).effect;
+    const on = press(open(), [SPACE, J, J, SPACE, ENTER]).effect;
     expect(on).toEqual({ type: "together", ids: ["t2", "t4", "t5"], focus: "t5" });
-    const off = press(open(), [SPACE, J, J, ENTER]).effect;
+    const off = press(open(), [SPACE, J, J, J, ENTER]).effect;
     expect(off).toEqual({ type: "together", ids: ["t2", "t4"], focus: "t2" });
   });
 
   test("Enter after marking another tab adds it", () => {
-    const { effect } = press(open(), [J, J, SPACE, ENTER]);
+    const { effect } = press(open(), [J, J, SPACE, J, ENTER]);
     expect(effect).toEqual({ type: "together", ids: ["t2", "t3", "t4", "t5"], focus: "t3" });
   });
 
   test("Enter after removing one and adding another applies both at once", () => {
-    const { effect } = press(open(), [K, SPACE, J, J, SPACE, ENTER]);
+    const { effect } = press(open(), [K, SPACE, J, J, J, SPACE, J, ENTER]);
     expect(effect).toEqual({ type: "together", ids: ["t3", "t4", "t5"], focus: "t3" });
   });
 
   test("Enter with one mark left ends the split and shows that tab alone", () => {
-    const { effect } = press(open(), [K, SPACE, J, SPACE, ENTER]);
+    const { effect } = press(open(), [K, SPACE, J, J, SPACE, J, ENTER]);
     expect(effect).toEqual({ type: "alone", id: "t3" });
   });
 
   // Decision 25: Enter applies the marks, then goes to the highlighted row.
   test("the user's flow: space on pane C, Enter on C: C alone, the rest a hidden view", () => {
-    const { effect } = press(open(), [J, SPACE, K, ENTER]);
+    const { effect } = press(open(), [J, SPACE, ENTER]);
     expect(effect).toEqual({ type: "together", ids: ["t2", "t3"], focus: "t3", alone: "t4" });
   });
 
   test("one mark left with the highlight on a removed pane: that pane shows alone", () => {
-    const { effect } = press(open(), [K, SPACE, J, SPACE, K, ENTER]);
+    const { effect } = press(open(), [K, SPACE, J, J, SPACE, ENTER]);
     expect(effect).toEqual({ type: "alone", id: "t4" });
   });
 
   test("the highlighted row has focus when it is marked, before the kept focused pane", () => {
-    const { effect } = press(open(), [J, J, SPACE, K, ENTER]);
+    const { effect } = press(open(), [J, J, SPACE, ENTER]);
     expect(effect).toEqual({ type: "together", ids: ["t2", "t3", "t4", "t5"], focus: "t5" });
   });
 
@@ -662,7 +675,7 @@ describe("a split in the panel", () => {
   });
 
   test("Enter with no mark left ends the split and shows the highlighted tab alone", () => {
-    const { effect } = press(open(), [K, SPACE, SPACE, SPACE, J, ENTER]);
+    const { effect } = press(open(), [K, SPACE, J, SPACE, J, SPACE, J, J, ENTER]);
     expect(effect).toEqual({ type: "alone", id: "t6" });
   });
 
@@ -676,7 +689,7 @@ describe("a split in the panel", () => {
   });
 
   test("a digit still goes to its row, whatever is marked", () => {
-    expect(press(open(), [SPACE, { id: "panel.select", arg: 5 }]).effect).toEqual({
+    expect(press(open(), [SPACE, J, { id: "panel.select", arg: 5 }]).effect).toEqual({
       type: "select",
       id: "t6",
     });
@@ -687,7 +700,7 @@ describe("a split in the panel", () => {
   });
 
   test("Esc with changed marks puts the panes' marks back, then closes", () => {
-    let r = press(open(), [SPACE, SPACE, ESC]);
+    let r = press(open(), [SPACE, J, SPACE, J, ESC]);
     expect(r.state.marked).toEqual(["t2", "t3", "t4"]);
     expect(r.effect).toBeNull();
     r = press(r.state, [ESC]);
@@ -709,7 +722,7 @@ describe("a split in the panel", () => {
   });
 
   test("a refresh keeps the user's changes, dropping tabs no longer listed", () => {
-    const s = press(open(), [SPACE, J, SPACE]).state;
+    const s = press(open(), [SPACE, J, J, SPACE]).state;
     expect(s.marked).toEqual(["t2", "t4", "t5"]);
     const fewer = {
       ...five,
