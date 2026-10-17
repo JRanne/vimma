@@ -103,8 +103,8 @@ Every planned feature has one GitHub issue. It is the backlog entry, and the roa
   the spec.
 - **Labels:** `planned`, and `spec:draft` or `spec:accepted` to match the spec; `ready` once it
   can be built; others such as `security` where they apply. A milestone is optional.
-- **Board:** the [Vimma roadmap](https://github.com/users/JRanne/projects/2) project tracks each
-  issue as Draft, Decided, Building or Done.
+- **Board:** the [Vimma roadmap](https://github.com/orgs/vimma-browser/projects/1) project tracks
+  each issue as Planned, In progress or Done.
 
 The maintainer answers the questions in a comment on the issue. The answers then go into the
 spec as above, and the issue's labels follow the spec's status. The implementing pull requests

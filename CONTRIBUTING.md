@@ -13,6 +13,32 @@ How to build, run and test Vimma, and how changes get in. For why Vimma exists, 
 - Time: the first full build took 39 min on a 16-thread Ryzen with 58 GB RAM. The Firefox source
   download took 12.5 min. See [docs/runbook.md](docs/runbook.md).
 
+## Reporting bugs and requesting features
+
+- **Use the forms.** [New issue](https://github.com/vimma-browser/vimma/issues/new/choose)
+  offers a bug report and a feature request form; blank issues are turned off. A bug report needs
+  the Vimma version from `about:vimma`, the install type and the steps to reproduce.
+- **Security goes private.** Report a vulnerability through
+  [private vulnerability reporting](https://github.com/vimma-browser/vimma/security/advisories/new),
+  as [SECURITY.md](SECURITY.md) describes, never in a public issue.
+- **Questions go to Discussions.** How something works, or an idea that is not yet a concrete
+  request, goes to [Discussions](https://github.com/vimma-browser/vimma/discussions).
+
+**Triage.** Every new issue carries `needs-triage` until the maintainer has read it. Triage
+reproduces a bug or asks for what is missing, closes duplicates and requests outside Vimma's
+scope with a reason, and removes `needs-triage`. An issue moves onto the
+[roadmap](https://github.com/orgs/vimma-browser/projects/1) in three steps:
+
+1. **Triage:** the issue is read and kept, labelled `bug` or `enhancement`.
+2. **Accepted:** the maintainer decides Vimma should have it. A bug fix is accepted as it is; a
+   feature gets a draft spec ([docs/specs/README.md](docs/specs/README.md)) and the label
+   `spec:draft`, then `spec:accepted` once its questions are answered.
+3. **Planned:** it gets the label `planned` and a card in the board's Planned column; the card
+   moves to In progress when work starts, and to Done when the last pull request closes it.
+
+Labels are set by the maintainer only: a reporter's issue gets the form's labels and nothing
+more, and no workflow reads labels from an issue's title or text.
+
 ## Build and run
 
 ```sh
@@ -115,7 +141,7 @@ Vimma follows a spec-first, test-first loop ([plan.md](plan.md) §4–§5):
 
 - **Issues.** Every planned feature has one GitHub issue (label `planned`) with a short reason,
   a link to its spec and the spec's open questions. The issues are the backlog; the
-  [Vimma roadmap](https://github.com/users/JRanne/projects/2) board tracks them, and
+  [Vimma roadmap](https://github.com/orgs/vimma-browser/projects/1) board tracks them, and
   [plan.md](plan.md) §6 keeps only the milestones and their order.
 - **Specs.** Every feature starts as `docs/specs/<feature>.md`, written to
   [docs/specs/README.md](docs/specs/README.md). A spec merges to `main` at once as a draft with

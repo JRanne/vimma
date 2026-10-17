@@ -70,6 +70,8 @@ Early, Linux x86_64 only (macOS next). Releases are on
 later check a signed update file every 12 hours and show a newer release in the status bar. They
 notify only; installing the update is up to you.
 
+Roadmap: <https://github.com/orgs/vimma-browser/projects/1>
+
 AI coding agents working on this repository follow [CLAUDE.md](CLAUDE.md); contributors read
 [CONTRIBUTING.md](CONTRIBUTING.md) before opening issues or pull requests.
 <!-- process-wording: points coding agents at their rules file -->
