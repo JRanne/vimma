@@ -30,13 +30,16 @@ async function openStartTab() {
   return loaded;
 }
 
-/** The logo in `browser`'s start page, once it has decoded. */
+/** The logo in `browser`'s start page (its colours: browser_vimma_logo_theme.js). */
 function logoState(browser) {
   return SpecialPowers.spawn(browser, [], async () => {
-    const img = content.document.querySelector("img");
-    if (!img) return null;
-    await img.decode().catch(() => {});
-    return { width: img.naturalWidth, alt: img.alt, hint: content.document.body.textContent };
+    const logo = content.document.querySelector(".vimma-logo");
+    if (!logo) return null;
+    return {
+      width: logo.getBoundingClientRect().width,
+      label: logo.getAttribute("aria-label"),
+      hint: content.document.body.textContent,
+    };
   });
 }
 
@@ -47,9 +50,9 @@ add_task(async function new_tab_is_the_start_page() {
   Assert.equal(browser.currentURI.spec, START, "the new tab shows the start page");
 
   const logo = await logoState(browser);
-  Assert.ok(logo, "the page has the logo image");
-  Assert.greater(logo.width, 0, "the logo loads (naturalWidth > 0)");
-  Assert.equal(logo.alt, "Vimma", "the logo has alt text");
+  Assert.ok(logo, "the page has the logo");
+  Assert.greater(logo.width, 0, "the logo takes up room");
+  Assert.equal(logo.label, "Vimma", "the logo has an accessible name");
   Assert.stringContains(logo.hint, "f hints", "the key hint is under the logo");
 
   await TestUtils.waitForCondition(() => gURLBar.focused, "the URL bar is focused");
@@ -126,7 +129,7 @@ add_task(async function the_page_shows_the_vimma_and_firefox_versions() {
     const vimma = doc.getElementById("vimma-version");
     const firefox = doc.getElementById("firefox-version");
     const style = (el) => content.getComputedStyle(el);
-    const logo = doc.querySelector("img").getBoundingClientRect();
+    const logo = doc.querySelector(".vimma-logo").getBoundingClientRect();
     const box = footer.getBoundingClientRect();
     return {
       footer: footer.textContent.replace(/\s+/g, " ").trim(),
@@ -159,29 +162,22 @@ add_task(async function the_page_shows_the_vimma_and_firefox_versions() {
   BrowserTestUtils.removeTab(tab);
 });
 
-add_task(async function the_logo_is_transparent_with_a_tile_only_under_a_light_theme() {
+add_task(async function the_logo_sits_on_the_page_with_no_tile_in_any_scheme() {
   const tab = await openStartTab();
   const state = await SpecialPowers.spawn(tab.linkedBrowser, [], async () => {
     const doc = content.document;
-    const img = doc.querySelector("img");
-    await img.decode();
-    const canvas = doc.createElement("canvas");
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0);
-    const corner = ctx.getImageData(2, 2, 1, 1).data[3];
+    const logo = doc.querySelector(".vimma-logo");
     const tile = (scheme) => {
       doc.documentElement.style.setProperty("--vimma-color-scheme", scheme);
-      return content.getComputedStyle(img).backgroundColor;
+      return content.getComputedStyle(logo).backgroundColor;
     };
     const dark = tile("dark");
     const light = tile("light");
     doc.documentElement.style.removeProperty("--vimma-color-scheme");
-    return { corner, dark, light };
+    return { dark, light };
   });
-  Assert.equal(state.corner, 0, "the logo's corner is transparent, so no square shows");
+  // The wordmark takes the text colour under a light theme, so no dark tile is needed there.
   Assert.equal(state.dark, "rgba(0, 0, 0, 0)", "a dark theme shows the page behind the logo");
-  Assert.equal(state.light, "rgb(8, 12, 16)", "a light theme gets a dark tile for the wordmark");
+  Assert.equal(state.light, "rgba(0, 0, 0, 0)", "and so does a light one");
   BrowserTestUtils.removeTab(tab);
 });

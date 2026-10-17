@@ -145,6 +145,8 @@ support-files = ["file_vimma_grep.html"]
 
 ["browser_vimma_start_page.js"]
 
+["browser_vimma_logo_theme.js"]
+
 ["browser_vimma_workspace_store.js"]
 
 ["browser_vimma_workspace_routes.js"]
