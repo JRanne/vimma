@@ -470,8 +470,12 @@ Taskcluster index) and this repository. Nothing here runs code from a pull reque
   [`lists the conflicting files and hunks, fuzz included`](../tools/upstream/test/autopilot.test.mjs)
 - G6. The autopilot's jobs **must** run with least privilege: nothing by default, write access
   only in the job that publishes, no secret in detection, the patch check or the suites, no
-  `pull_request_target`, every action pinned by commit SHA.
+  `pull_request_target`, every action pinned by commit SHA. The Beta canary's issues reach the
+  bump PR through `detect`'s existing `issues: read`; only their numbers and states reach its
+  body, so no issue text is rendered there.
   [`grants nothing by default and each job only what it needs`](../tools/test/upstream-workflow.test.mjs),
+  [`detect finds the canary's issues for the release's major, open and closed`](../tools/test/upstream-workflow.test.mjs),
+  [`reads the issue list from upstream.yml and keeps only issue numbers and states`](../tools/upstream/test/autopilot.test.mjs),
   [`no secret reaches detection, the patch check or the suites`](../tools/test/upstream-workflow.test.mjs),
   [`no workflow runs on pull_request_target`](../tools/test/upstream-workflow.test.mjs),
   [`every action it uses is pinned by a full commit SHA`](../tools/test/upstream-workflow.test.mjs)

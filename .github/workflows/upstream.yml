@@ -41,7 +41,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read # surfer.json, tools/upstream; the branch lookup
-      issues: read # the tracking and drift issues
+      issues: read # the tracking and drift issues; the Beta canary's issues
     outputs:
       version: ${{ steps.detect.outputs.version }}
       labels: ${{ steps.detect.outputs.labels }}
@@ -52,6 +52,7 @@ jobs:
       rebase: ${{ steps.state.outputs.rebase }}
       issue: ${{ steps.state.outputs.issue }}
       track: ${{ steps.state.outputs.track }}
+      beta-issues: ${{ steps.beta.outputs.beta-issues }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -99,6 +100,31 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Branch $branch: rebase=$rebase; tracking issue: ${number:-none} (track=$track)" \
             | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # The Beta canary's issues for this major, open or closed: the canary closes them once the
+      # release is out, possibly before this run, and a closed one still says what was found
+      # (spec upstream-beta-canary, decision 11). The bump PR only names them, so a failed
+      # lookup leaves the list empty instead of stopping a security bump.
+      - name: The Beta canary's issues for this release
+        id: beta
+        if: steps.detect.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.detect.outputs.version }}
+        run: |
+          major=${VERSION%%.*}
+          title="Firefox $major beta: canary findings"
+          if [[ $major =~ ^[0-9]+$ ]] &&
+            list=$(gh issue list --repo "$GITHUB_REPOSITORY" --state all --label upstream-beta \
+              --limit 20 --search "\"$title\" in:title" --json number,state,title) &&
+            found=$(jq -c --arg t "$title" '[.[] | select(.title == $t) | {number, state}]' <<< "$list"); then
+            :
+          else
+            echo "::warning::Could not list the Beta canary's issues for Firefox $major"
+            found='[]'
+          fi
+          echo "beta-issues=$found" >> "$GITHUB_OUTPUT"
+          echo "Beta canary issues for Firefox $major: $found" >> "$GITHUB_STEP_SUMMARY"
 
   track:
     needs: detect
@@ -213,6 +239,7 @@ jobs:
       VERSION: ${{ needs.detect.outputs.version }}
       LABELS: ${{ needs.detect.outputs.labels }}
       ISSUE: ${{ needs.track.outputs.issue || needs.detect.outputs.issue }}
+      BETA_ISSUES: ${{ needs.detect.outputs.beta-issues }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -255,7 +282,8 @@ jobs:
               --audit "$pc/patch-audit.txt" --patch-result "$PATCH_RESULT" \
               --artifacts "$ARTIFACTS" --artifacts-note "$ARTIFACTS_NOTE" --tests "$TESTS" \
               --has-token "$HAS_TOKEN" --issue "$ISSUE" --branch "$branch" \
-              --repo "$GITHUB_REPOSITORY" --run-url "$RUN_URL" --error "$RUNNER_TEMP/pr-error.txt"
+              --repo "$GITHUB_REPOSITORY" --run-url "$RUN_URL" --error "$RUNNER_TEMP/pr-error.txt" \
+              --beta-issues "$BETA_ISSUES"
           }
           body pr > "$RUNNER_TEMP/pr.md"
           title=$(body title)
