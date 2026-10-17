@@ -29,14 +29,10 @@ main {
   gap: 1.5rem;
 }
 
-img {
-  width: 40vmin;
-  height: 40vmin;
-  object-fit: contain;
-  /* the logo is transparent, so it sits on the theme's background; its white wordmark needs a
-     dark tile under a light theme (light-dark() follows color-scheme, set from the theme) */
-  background: light-dark(#080c10, transparent);
-  border-radius: 8%;
+/* the logo (logo.css) straight on the theme's background, in its colours; 27.6vmin is the
+   artwork's share of the 40vmin square the logo filled as a padded image */
+.vimma-logo {
+  width: 27.6vmin;
 }
 
 .hint {

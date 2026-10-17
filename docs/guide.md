@@ -557,6 +557,12 @@ button without Firefox's mascot. With your system's high-contrast setting on, th
 Firefox's own high-contrast colours. Pages that Firefox loads in a web content process, such as
 `about:logins` and Firefox's error pages, keep Firefox's colours.
 
+The Vimma logo on the start page and on `about:vimma` follows the theme too: the window and the
+brushstroke V are the theme's accent colour, and the "imma" lettering is white with a dark theme
+and the theme's text colour with a light one. It changes with the rest of the theme, and with
+your system's high-contrast setting on it is drawn in the high-contrast text colour. The app
+icon and Firefox's About dialog keep the logo's own colours.
+
 **Dark, light or the system's: `:theme`.** The start page says it too:
 
 - `:theme dark` or `:theme light` keeps the built-in palette dark or light whatever the system

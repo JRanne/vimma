@@ -12,14 +12,19 @@
     <meta name="color-scheme" content="dark light" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src chrome:; style-src chrome: 'unsafe-inline'; connect-src chrome:; object-src 'none'"
+      content="default-src 'none'; script-src chrome:; style-src chrome: 'unsafe-inline'; connect-src chrome:; img-src chrome:; object-src 'none'"
     />
     <title>about:vimma</title>
+    <link rel="stylesheet" href="chrome://browser/skin/vimma/logo.css" />
     <link rel="stylesheet" href="chrome://browser/skin/vimma/about.css" />
     <script type="module" src="chrome://browser/content/vimma/about/about.mjs"></script>
   </head>
   <body>
     <header>
+      <div class="vimma-logo" role="img" aria-label="Vimma">
+        <span class="vimma-logo-mark" aria-hidden="true"></span>
+        <span class="vimma-logo-wordmark" aria-hidden="true"></span>
+      </div>
       <h1>about:vimma</h1>
       <button id="refresh" type="button">Refresh</button>
       <button id="copy" type="button">Copy redacted report</button>

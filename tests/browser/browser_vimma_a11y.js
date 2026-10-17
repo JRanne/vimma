@@ -542,7 +542,8 @@ function pageAccessibles(browser) {
       const acc = of(s);
       return { role: acc?.role ?? null, name: acc?.name ?? null };
     });
-    const img = of(doc.querySelector("img"));
+    // The logo is a role="img" box painted through masks (logo.css), not an <img>.
+    const img = of(doc.querySelector('img, [role="img"]'));
     return {
       lang: doc.documentElement.lang,
       title: doc.title,
@@ -568,6 +569,8 @@ add_task(async function about_vimma_has_a_main_landmark_and_regions_named_by_hea
   const tab = await BrowserTestUtils.openNewForegroundTab(gBrowser, "about:vimma");
   const page = await pageAccessibles(tab.linkedBrowser);
   Assert.ok(page.main, "a main landmark");
+  Assert.equal(page.img?.role, Role.ROLE_GRAPHIC, "the logo at its head is an image");
+  Assert.equal(page.img?.name, "Vimma", "named Vimma");
   Assert.greater(page.regions.length, 5, "the sections");
   for (const r of page.regions) {
     Assert.equal(r.role, Role.ROLE_REGION, `a section is a region: ${r.name}`);

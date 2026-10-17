@@ -18,7 +18,32 @@ quieter still.
 
 - **Asset.** The Vimma logo (`Mint Brushstroke V Browser Logo.png`, 1254×1254), resized to 512 px
   and stripped of metadata with ImageMagick (`magick … -strip -resize 512x512`), 82 KB, at
-  `vimma/start/vimma-logo.png`. `docs/assets/vimma-logo.png` (the README's) stays.
+  `vimma/start/vimma-logo.png`. `docs/assets/vimma-logo.png` (the README's) stays. The page
+  no longer shows that file itself: it is the source of the two masks below.
+- **Logo colours.** The logo is drawn in the theme's colours: the window+V mark and the
+  brushstroke V in `--vimma-accent`, the "imma" wordmark white under a dark theme and
+  `--vimma-fg` under a light one. White is the artwork's own colour and reads on every dark
+  background; on a light background it would vanish, and the text colour is the theme's choice
+  for legible text there. The markup is `<div class="vimma-logo" role="img" aria-label="Vimma">`
+  with two `aria-hidden` spans, each a box filled with one colour through a CSS `mask-image`
+  (`themes/shared/vimma/logo.css`, `chrome://browser/skin/vimma/logo.css`). The masks,
+  `vimma/start/vimma-logo-mark.png` and `vimma/start/vimma-logo-wordmark.png` (353×291, cropped to
+  the artwork), come from `vimma-logo.png` with `tools/branding/logo-masks.sh` (ImageMagick): the
+  parts are split by HSV saturation (the mint is saturated, the wordmark white), and coverage is
+  the source alpha times brightness, so the brush texture survives on any background. Masks
+  instead of recoloured copies of the image: a theme can have any accent, and the colour is a CSS
+  value, so the theme host's live rewrite of the tokens recolours the logo with no script (an
+  Omarchy theme change, `:theme`, `[theme] appearance`). Dark or light is
+  `--vimma-color-scheme`, the signal the content colour scheme and every other surface use,
+  through `light-dark()` with `color-scheme` set on the logo. The dark tile the logo had under a
+  light theme, for its white wordmark, is gone. With forced colours both parts are `CanvasText`
+  (`forced-color-adjust: none`, or the backgrounds would be forced to `Canvas` and the logo would
+  vanish). Gecko supports unprefixed `mask-image` (Firefox 53), so no `-webkit-` form is needed.
+  about:vimma shows the same logo at the head of the page, 3 rem tall, with `img-src chrome:`
+  added to its CSP for the masks. The app icons (`configs/branding/vimma/logo*.png`) keep their
+  fixed colours, and so does Firefox's About dialog: it is a window of its own that the theme
+  host does not reach, its logo a background image in `aboutDialog.css`; masking it would need
+  the theme host to theme that window first.
 - **The page:** `chrome://browser/content/vimma/start/start.html`, registered in our `jar.mn`.
   Mechanism chosen after grepping the engine: Firefox's own blank new tab and blank home page are
   the chrome page `chrome://browser/content/blanktab.html` (`AboutNewTabRedirector`,
@@ -28,7 +53,8 @@ quieter still.
   process, with a CSP that allows only `chrome:` scripts and images, and `chrome:` or inline
   styles. Its one script (`start.mjs`) sets the theme tokens from `core/theme.mjs` as the status
   bar does; `start.css` (`chrome://browser/skin/vimma/start.css`) falls back to the same built-in
-  values, so the first paint has them. Logo `40vmin`, `object-fit: contain`; hint in
+  values, so the first paint has them. Logo `27.6vmin` wide (the artwork's share of the 40vmin
+  square the padded image filled); hint in
   `--vimma-fg-dim` with the keys in `--vimma-fg`; background `--vimma-bg`. No animation.
 - **Version line:** a `<footer>` under `<main>`, `position: fixed` at the bottom centre, so the logo
   and hint stay where they were and nothing scrolls. `start.mjs` fills in `#vimma-version` from
@@ -60,8 +86,8 @@ quieter still.
 
 `tests/browser/browser_vimma_start_page.js`:
 
-- A new tab (`BrowserCommands.openTab`) loads the start page; the logo decodes
-  (`naturalWidth > 0`, alt `Vimma`); the hint is there; the URL bar is focused and empty; typing
+- A new tab (`BrowserCommands.openTab`) loads the start page; the logo is there with a size and
+  the accessible name `Vimma`; the hint is there; the URL bar is focused and empty; typing
   a URL and Enter navigates.
 - The default home page is the start page, and with `browser.startup.page` = 1 a new window
   opens it with an empty URL bar.
@@ -70,6 +96,16 @@ quieter still.
   it is in the hint's colour, smaller than the hint (the Firefox part smaller still), below the
   logo and in view, and the page still does not scroll. Red before the version line:
   `start.mjs has filled in the version` timed out.
+
+- The logo has no background in either scheme (no tile, no box).
+
+`tests/browser/browser_vimma_logo_theme.js` (Logo colours), on the start page and about:vimma:
+under a dark theme the mark's computed `background-color` is the theme's accent (and the page's
+`--vimma-accent`) and the wordmark's is white; switched live to a light theme, the mark is the
+new accent and the wordmark the theme's `--vimma-fg`; back to dark, white again. Both parts are
+masked by their PNGs, the logo is `role="img"` named `Vimma` with its parts hidden. With
+`browser.display.document_color_use` = 2 (forced colours) both parts are `CanvasText`. Red before
+the change: `the page has the logo - timed out` on both pages.
 
 Red before the implementation: `"about:newtab" == "chrome://browser/content/vimma/start/start.html"`
 and a timeout waiting for the new tab. Mutation check: without the actor match, the keys task fails

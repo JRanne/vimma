@@ -16,12 +16,16 @@
       content="default-src 'none'; script-src chrome:; style-src chrome: 'unsafe-inline'; img-src chrome:; object-src 'none'"
     />
     <title>Vimma</title>
+    <link rel="stylesheet" href="chrome://browser/skin/vimma/logo.css" />
     <link rel="stylesheet" href="chrome://browser/skin/vimma/start.css" />
     <script type="module" src="chrome://browser/content/vimma/start/start.mjs"></script>
   </head>
   <body>
     <main>
-      <img src="chrome://browser/content/vimma/start/vimma-logo.png" alt="Vimma" />
+      <div class="vimma-logo" role="img" aria-label="Vimma">
+        <span class="vimma-logo-mark" aria-hidden="true"></span>
+        <span class="vimma-logo-wordmark" aria-hidden="true"></span>
+      </div>
       <p class="hint">
         <kbd>ctrl+b ?</kbd> keys · <kbd>:</kbd> commands · <kbd>f</kbd> hints<span
           id="vimma-theme-tip"

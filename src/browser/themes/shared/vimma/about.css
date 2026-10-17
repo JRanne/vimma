@@ -25,6 +25,12 @@ header {
   flex-wrap: wrap;
 }
 
+/* the logo (logo.css) at the head of the page, in the theme's colours */
+header .vimma-logo {
+  height: 3rem;
+  align-self: center;
+}
+
 h1 {
   margin: 0;
   font-size: 1.4rem;

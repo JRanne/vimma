@@ -1,0 +1,45 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* The Vimma logo in the theme's colours (spec start-page, "Logo colours"), for every Vimma page
+   that shows it: <div class="vimma-logo" role="img" aria-label="Vimma"> holding the two parts
+   below. Each part is a box painted in one colour through a mask whose alpha carries the brush
+   texture (tools/branding/logo-masks.sh), so the theme recolours it and the tokens' live rewrite
+   (ui/theme-host.mjs) changes it with no script here. The page sets the size: width or height. */
+
+.vimma-logo {
+  display: grid;
+  /* the masks' own size, so they fill the box with no letterboxing */
+  aspect-ratio: 353 / 291;
+  /* light-dark() below follows the theme's scheme, not the page's default */
+  color-scheme: var(--vimma-color-scheme, dark);
+}
+
+.vimma-logo > span {
+  grid-area: 1 / 1;
+  mask-size: 100% 100%;
+  mask-repeat: no-repeat;
+}
+
+/* the window+V and the brushstroke V: the accent, in every theme */
+.vimma-logo-mark {
+  mask-image: url("chrome://browser/content/vimma/start/vimma-logo-mark.png");
+  background-color: var(--vimma-accent, #1bf587);
+}
+
+/* "imma": white on a dark theme, as the artwork has it; the text colour on a light one, where
+   white would not read */
+.vimma-logo-wordmark {
+  mask-image: url("chrome://browser/content/vimma/start/vimma-logo-wordmark.png");
+  background-color: light-dark(var(--vimma-fg, #1d2924), #fff);
+}
+
+/* High contrast: the system's text colour for both parts, which reads on its Canvas. Without
+   forced-color-adjust the backgrounds would be forced to Canvas and the logo would vanish. */
+@media (forced-colors: active) {
+  .vimma-logo > span {
+    forced-color-adjust: none;
+    background-color: CanvasText;
+  }
+}
