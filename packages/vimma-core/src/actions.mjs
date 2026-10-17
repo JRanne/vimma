@@ -314,7 +314,7 @@ group("Side panel", [
     "End the range, clear or restore the marks, or close the side panel",
   ],
   ["panel_close_tab", "panel.close_tab", "Close the selected tab; the panel stays open"],
-  ["panel_mark", "panel.mark", "Mark or unmark the selected tab and move down"],
+  ["panel_mark", "panel.mark", "Mark or unmark the selected tab"],
   ["panel_visual", "panel.visual", "Start a range of rows to mark, or mark it"],
 ]);
 

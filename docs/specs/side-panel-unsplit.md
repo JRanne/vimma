@@ -252,10 +252,12 @@ Decisions 1–11 follow the goal above. Decisions 12–19 are the answers to the
     - without a split, one mark goes to that tab (multiselect decision 5).
 
     A simpler rule, "then it goes to the highlighted row" in every case, was rejected. Taken
-    literally, multiselect's documented flow (`space` on each of three tabs, `Enter`) would show
-    the row below the last mark alone and hide the new view, because `space` moves down; and
-    marking one or more panes is meant to create a view. So an unrelated
-    unmarked row under the highlight does not hide a view the marks just created or changed.
+    literally, multiselect's documented flow (`space` on each of three tabs, `Enter`) would show the
+    row below the last mark alone and hide the new view, because `space` moves down; and marking one
+    or more panes is meant to create a view. So an unrelated unmarked row under the highlight does
+    not hide a view the marks just created or changed. (Since changed: `space` leaves the highlight
+    on the row it marks, because the next row to mark may be above or below; docs/guide.md, "Side
+    panel".)
 
 26. **The panel and a hidden view.** The panel lists a hidden view's tabs marked, as a shown one's,
     and the header says `split: 3 panes (hidden)` while the marks match it.

@@ -2,8 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Spec: docs/specs/m4-side-panel-multiselect.md. In the side panel `space` marks a row and moves
-// down, `V` starts a range that `space` / `V` marks, `Esc` ends the range, then clears the marks,
+// Spec: docs/specs/m4-side-panel-multiselect.md. In the side panel `space` marks a row and leaves
+// the highlight on it (only `j` / `k` move it), `V` starts a range that `space` / `V` marks, `Esc` ends the range, then clears the marks,
 // then closes; `Enter` with marks shows the marked tabs together as the workspace's panes, in the
 // workspace's layout, without reloading a page. Past `[panes] max` it is refused.
 // With a split the panel opens with its panes marked (docs/specs/side-panel-unsplit.md, tested in
@@ -160,6 +160,7 @@ async function mark(...names) {
     await goTo(n);
     EventUtils.synthesizeKey(" ", {});
     await until(() => markedTitles().includes(n), `${n} is marked`);
+    Assert.equal(titleOf(selected()), n, `the highlight stays on ${n}`);
   }
 }
 
@@ -172,6 +173,7 @@ async function unmarkPanes() {
     await goTo(n);
     EventUtils.synthesizeKey(" ", {});
     await until(() => !markedTitles().includes(n), `${n} is unmarked`);
+    Assert.equal(titleOf(selected()), n, `the highlight stays on ${n}`);
   }
 }
 
@@ -213,7 +215,7 @@ add_task(async function setup_five_pages() {
   await BrowserTestUtils.switchTab(gBrowser, byName.get("a"));
 });
 
-add_task(async function space_marks_and_moves_down_with_a_marker_not_only_colour() {
+add_task(async function space_marks_in_place_with_a_marker_not_only_colour() {
   await openPanel();
   Assert.equal(list().getAttribute("aria-multiselectable"), null, "still single-select");
   Assert.ok(!rows().some((r) => r.hasAttribute("aria-checked")), "no checked state unmarked");
@@ -224,8 +226,15 @@ add_task(async function space_marks_and_moves_down_with_a_marker_not_only_colour
   EventUtils.synthesizeKey(" ", {});
   await until(() => markedTitles().length === 1, "space marks b");
   Assert.deepEqual(markedTitles(), ["b"], "b is aria-checked");
-  Assert.equal(titleOf(selected()), "c", "and the highlight moved down to c");
+  Assert.equal(titleOf(selected()), "b", "and the highlight stays on b");
+  EventUtils.synthesizeKey("j", {});
+  await until(() => titleOf(selected()) === "c", "j moves the highlight down to c");
   Assert.equal(selected().getAttribute("aria-checked"), "false", "c is checkable, unchecked");
+  EventUtils.synthesizeKey("k", {});
+  await until(() => titleOf(selected()) === "b", "k moves it back up to b");
+  EventUtils.synthesizeKey("k", {});
+  await until(() => titleOf(selected()) === "a", "and k again to a, above the mark");
+  Assert.deepEqual(markedTitles(), ["b"], "moving changes no mark");
   const b = rows().find((r) => titleOf(r) === "b");
   const gutter = b.querySelector(".vimma-panel-mark");
   Assert.equal(gutter?.textContent, "●", "a ● in the gutter, readable without colour");
@@ -248,6 +257,7 @@ add_task(async function space_marks_and_moves_down_with_a_marker_not_only_colour
   await goTo("b");
   EventUtils.synthesizeKey(" ", {});
   await until(() => markedTitles().length === 0, "space on b again unmarks it");
+  Assert.equal(titleOf(selected()), "b", "the highlight stays on b");
   Assert.ok(!rows().some((r) => r.hasAttribute("aria-checked")), "no checked state again");
   Assert.equal(VimmaHost.status(window).mode, "panel", "still in panel mode");
 });

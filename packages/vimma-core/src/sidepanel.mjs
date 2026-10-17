@@ -320,14 +320,8 @@ export function panelKey(state, action) {
       if (row.pinned) return { state, effect: { type: "refuse", text: PINNED_MARK_TEXT } };
       const ids = new Set(state.marked);
       if (!ids.delete(row.tabId)) ids.add(row.tabId);
-      return {
-        state: Object.freeze({
-          ...state,
-          marked: inRowOrder(state, ids),
-          selected: Math.min(last, state.selected + 1),
-        }),
-        effect: null,
-      };
+      // The highlight stays on the row: the next mark may be above or below, so j / k choose.
+      return { state: Object.freeze({ ...state, marked: inRowOrder(state, ids) }), effect: null };
     }
     case "panel.visual": {
       if (state.anchor !== null) return { state: markRange(state), effect: null };

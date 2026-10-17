@@ -1327,7 +1327,7 @@ highlighted and its number coloured; a tab playing sound shows `♪`, one from a
 | `j` / `k`               | Move the highlight down / up.                                                                                                                                                                              |
 | `Enter`                 | Go to the highlighted tab and close the panel. With marks, show the marked tabs together ([below](#showing-tabs-together)); with a split, apply your changes to it ([below](#changing-or-ending-a-split)). |
 | `1` … `9`               | Go to that row's tab and close the panel.                                                                                                                                                                  |
-| `space`                 | Mark the highlighted tab (or unmark it) and move down.                                                                                                                                                     |
+| `space`                 | Mark the highlighted tab (or unmark it). The highlight stays on it.                                                                                                                                        |
 | `V`                     | Start a range: `j` / `k` stretch it, and `V` or `space` marks every row in it.                                                                                                                             |
 | `x`                     | Close the highlighted tab; the highlight moves to the next row and the panel stays open, so `x x x` closes three.                                                                                          |
 | `ctrl+shift+t`          | Reopen the last closed tab, as in Firefox.                                                                                                                                                                 |
@@ -1353,10 +1353,10 @@ you add there (`toggle_sidebar = ["prefix+b", "<leader>n"]`) closes it too.
 
 Mark the tabs you want side by side, then press `Enter`: they become the panes of this
 workspace, replacing its split, and the panel closes. Say you want your editor, the docs and a
-preview at once: `ctrl+b b`, `space` on each of the three, `Enter`.
+preview at once: `ctrl+b b`, `space` on each of the three (`j` / `k` between them), `Enter`.
 
-- **Marking.** `space` marks the highlighted row and moves down, like ranger; `space` on a
-  marked row unmarks it. `V` starts a range as in Vim's line-wise visual mode; `j` / `k` stretch
+- **Marking.** `space` marks the highlighted row and leaves the highlight on it; `space` on a
+  marked row unmarks it. Move to the next row you want with `j` or `k`, above or below. `V` starts a range as in Vim's line-wise visual mode; `j` / `k` stretch
   it, and `V` or `space` marks the rows in it (`Enter` marks them and goes on). A marked row has
   a `●` before its number and a green bar on its edge; a row in an open range shows `│`. Below
   the head the panel says `3 marked` (or `range: 2 · 3 marked`).
