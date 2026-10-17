@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow SemVer. From the first release on, release-please writes each release's entry from the Conventional Commits on `main` ([docs/runbook.md](docs/runbook.md), Releases).
 
+## [0.1.4](https://github.com/vimma-browser/vimma/compare/v0.1.3...v0.1.4) (2026-10-17)
+
+
+### Fixed
+
+* **panel:** space marks a row and leaves the highlight on it ([#340](https://github.com/vimma-browser/vimma/issues/340)) ([c24ac76](https://github.com/vimma-browser/vimma/commit/c24ac76d9e4af30a3ee9ad37bcc81c25cf84cc73))
+
 ## [0.1.3](https://github.com/vimma-browser/vimma/compare/v0.1.2...v0.1.3) · Firefox 158.0 (2026-10-17)
 
 
